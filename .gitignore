@@ -162,4 +162,4 @@ cython_debug/
 # Replit
 .replit
 replit.nix
-.db  # ignore SQLite dbs
+*.db  # ignore SQLite dbs
