@@ -65,16 +65,8 @@ class SMTPEmailSender(EmailSenderInterface):
                 server.login(username, password)
                 server.send_message(msg)
 
-        except Exception as e:
-            return EmailResponse(
-                status="error",
-                message=Message.FAILED,
-                data=e
-            )
+        except Exception as err:
+            return EmailResponse("error", Message.FAILED, err)
         else:
-            return EmailResponse(
-                status="ok",
-                message=Message.SUCCESS,
-                data=None
-            )
+            return EmailResponse("ok", Message.SUCCESS)
 
