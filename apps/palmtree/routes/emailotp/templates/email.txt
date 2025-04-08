@@ -1,0 +1,5 @@
+Your One-Time Password (OTP) for {{ service }} is: {{ otp }}
+
+This OTP will expire in 2 minutes.
+
+Note: This email is auto-generated. Please do not reply to this email.

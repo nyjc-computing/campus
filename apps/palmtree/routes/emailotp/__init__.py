@@ -4,6 +4,8 @@ from apps.palmtree.models import otp
 from common.schema import Message
 from common.services.email import create_email_sender
 
+from . import template
+
 bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
 
 otp_auth = otp.OTPAuth()
@@ -36,10 +38,15 @@ def request_otp():
 
     # Send OTP via email
     email_sender = create_email_sender()
-    resp = email_sender.send_email
+    resp = email_sender.send_email(
+        recipient=email,
+        subject=template.subject("Campus", otp_code),
+        body=template.body("Campus", otp_code),
+        html_body=template.html_body("Campus", otp_code)
+    )
     match resp:
-        case ("error", msg, _):
-            return {"error": msg}, 500
+        case ("error", msg, err):
+            return {"error": f"{msg}: {err}"}, 500
         case ("ok", Message.SUCCESS, _):
             return {"message": "OTP sent"}, 200
         case _:
