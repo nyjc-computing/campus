@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        branches: [dev]  # Add new branches here
+        branches: [palmtree]  # Add new branches here
     steps:
       - name: Checkout Main Branch
         uses: actions/checkout@v3
