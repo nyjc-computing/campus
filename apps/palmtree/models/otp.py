@@ -6,16 +6,13 @@ passwords (OTPs) used in email authentication. It includes functionality
 generating, hashing, verifying, and managing OTPs securely.
 """
 
-from datetime import datetime
-import logging
 import secrets
-from typing import Any, NamedTuple, Literal
+from typing import Any, Literal, NamedTuple
 
 import bcrypt
+
 from common.drum import sqlite
 from common.utils import utc_time
-
-logger = logging.getLogger('palmtree.emailauth')
 
 
 def init_db():
@@ -94,8 +91,8 @@ class OTP(NamedTuple):
     """
     email: str
     otp_hash: str
-    created_at: datetime
-    expires_at: datetime
+    created_at: utc_time.datetime
+    expires_at: utc_time.datetime
 
 
 class OTPResponse(NamedTuple):
@@ -113,8 +110,7 @@ class OTPAuth:
     """
 
     def __init__(self):
-        """
-        Initialize the OTP model with a storage interface.
+        """Initialize the OTP model with a storage interface.
 
         Args:
             storage: Implementation of StorageInterface for database operations.
