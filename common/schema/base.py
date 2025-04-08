@@ -15,14 +15,15 @@ class Response(Protocol):
 
 class Message:
     """Constants of common response messages."""
-    CREATED = "Created"
-    UPDATED = "Updated"
-    DELETED = "Deleted"
-    EXPIRED = "Expired"
-    FAILED = "Failed"
-    FOUND = "Found"
-    INVALID = "Invalid"
-    NOT_FOUND = "Not found"
-    SUCCESS = "Success"
-    VALID = "Valid"
+    COMPLETED = "Completed"  # Completed without errors
+    CREATED = "Created"  # Successfully created
+    UPDATED = "Updated"  # Successfully updated
+    DELETED = "Deleted"  # Successfully deleted
+    EXPIRED = "Expired"  # Datetime is past
+    FAILED = "Failed"  # Failed to complete
+    FOUND = "Found"  # Record or data found
+    INVALID = "Invalid"  # Invalid input or data
+    NOT_FOUND = "Not found"  # Record or data not found
+    SUCCESS = "Success"  # Request successfully fulfilled
+    VALID = "Valid"  # Input or data is valid
 
