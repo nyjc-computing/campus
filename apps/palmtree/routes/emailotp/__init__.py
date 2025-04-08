@@ -10,6 +10,8 @@ bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
 
 otp_auth = otp.OTPAuth()
 
+EMAIL_PROVIDER = "smtp"
+
 
 def init_app(app) -> None:
     otp.init_db()
@@ -37,7 +39,7 @@ def request_otp():
             raise ValueError(f"Unexpected case: {resp}")
 
     # Send OTP via email
-    email_sender = create_email_sender()
+    email_sender = create_email_sender(EMAIL_PROVIDER)
     resp = email_sender.send_email(
         recipient=email,
         subject=template.subject("Campus", otp_code),
