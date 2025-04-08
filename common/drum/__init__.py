@@ -9,3 +9,5 @@ Common assumptions across storage types:
 - timestamps are stored as RFC3339 strings
 - records/documents are grouped by collections/tables
 """
+
+from .base import DrumResponse

@@ -2,9 +2,13 @@
 
 import sqlite3
 from collections.abc import Callable
-from typing import Any, Literal, NamedTuple
+from typing import Any
+
+from .base import DrumResponse
 
 Record = dict[str, Any]
+Update = dict[str, Any]
+Condition = dict[str, Any]
 
 
 def dict_factory(cursor, row) -> Record:
@@ -24,13 +28,6 @@ def get_conn() -> sqlite3.Connection:
     conn.execute('PRAGMA foreign_keys = ON')
     conn.row_factory = dict_factory
     return conn
-
-
-class DrumResponse(NamedTuple):
-    """Represents a response from a Drum operation."""
-    status: Literal["ok", "error"]
-    message: str
-    data: Any | None = None
 
 
 class SqliteDrum:
@@ -112,3 +109,46 @@ class SqliteDrum:
             case ("ok", _, cursor):
                 assert cursor is not None
                 return DrumResponse("ok", "Record inserted", cursor.lastrowid)
+
+    def update(self, group: str, id: str, updates: Update) -> DrumResponse:
+        """Update a record in the table by its id"""
+        assert "id" not in updates, "Updates must not include id"
+        set_clause = ", ".join(
+            f"{field} = ?" for field in updates
+        )
+        resp = self._execute_callback(
+            f"""UPDATE {group} SET {set_clause} WHERE id = ?""",
+            tuple(updates.values()) + (id,),
+        )
+        match resp:
+            case ("error", msg, _):
+                return DrumResponse("error", msg)
+            case ("ok", _, cursor):
+                assert cursor is not None
+                if cursor.rowcount == 0:
+                    return DrumResponse("ok", "Record not found")
+                else:
+                    return DrumResponse("ok", "Record updated")
+            case _:
+                raise ValueError(f"Unexpected case: {resp}")
+
+    def set_by_id(self, group: str, id: str, record: Record) -> DrumResponse:
+        """Update an existing record, or insert a new one if it doesn't exist"""
+        assert "id" in record, "Record must have an id"
+        assert record["id"] == id, "Record id must match id argument"
+        resp = self._execute_callback(
+            f"""INSERT INTO {group} ({", ".join(record.keys())})
+                VALUES ({", ".join("?" * len(record))})
+                ON CONFLICT(id) DO UPDATE SET {", ".join(f"{field} = ?" for field in record)}
+            """,
+            tuple(record.values()) * 2
+        )
+        match resp:
+            case ("error", msg, _):
+                return DrumResponse("error", msg)
+            case ("ok", _, cursor):
+                assert cursor is not None
+                return DrumResponse("ok", "Record set", cursor.lastrowid)
+            case _:
+                raise ValueError(f"Unexpected case: {resp}")
+
