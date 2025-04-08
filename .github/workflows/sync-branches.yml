@@ -36,5 +36,4 @@ jobs:
             git push origin $TARGET_BRANCH || echo "Failed to push $TARGET_BRANCH"
           fi
           git reset --hard main
-          git push origin $TARGET_BRANCH --force || echo "Failed to force push $TARGET_BR
-          ANCH"
+          git push origin $TARGET_BRANCH --force || echo "Failed to force push $TARGET_BRANCH"
