@@ -29,3 +29,30 @@ class Message:
     SUCCESS = "Success"  # Request successfully fulfilled
     VALID = "Valid"  # Input or data is valid
 
+
+def translate_response(
+        resp: Response,
+        responseMap: dict[str, Response]
+) -> Response | None:
+    """Translate a response using a mapping of messages to responses.
+
+    As responses bubble up the call stack, they may be translated to more
+    specific responses using this function.
+
+    Error statuses are returned as-is, as it is not expected for an
+    error to be translated to a success. There is currently no mechanism
+    to handle responses by status, only by message.
+
+    Args:
+        resp: The response to translate.
+        responseMap: A mapping of messages to responses.
+
+    Returns:
+        The translated response, or None if no translation is found.
+    """
+    if resp.status == "error":
+        return resp
+    if resp.message in responseMap:
+        return responseMap[resp.message]
+    return None
+
