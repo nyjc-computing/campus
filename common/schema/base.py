@@ -19,6 +19,7 @@ class Message:
     CREATED = "Created"  # Successfully created
     UPDATED = "Updated"  # Successfully updated
     DELETED = "Deleted"  # Successfully deleted
+    EMPTY = "Empty"  # Record is empty
     EXPIRED = "Expired"  # Datetime is past
     FAILED = "Failed"  # Failed to complete
     FOUND = "Found"  # Record or data found

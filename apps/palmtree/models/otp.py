@@ -12,6 +12,7 @@ from typing import Any, Literal, NamedTuple
 import bcrypt
 
 from common.drum import sqlite
+from common.schema import Message
 from common.utils import utc_time
 
 
@@ -131,22 +132,16 @@ class OTPAuth:
         """
         # Generate a new OTP
         plain_otp = _plainOTP.generate()
-
         # Hash the OTP for secure storage
         otp_hash = plain_otp.hash()
-
-        logger.info("Creating or updating OTP for email: %s", email)
-
         # Set expiration and creation times
         created_at = utc_time.now()
         expires_at = utc_time.after(minutes=expiry_minutes)
-        
 
         # Delete any existing OTP for this email
         resp = self.storage.delete_by_id('otp_codes', email)
         if resp.status == "error":
             return OTPResponse("error", resp.message)
-
         # Insert new OTP
         otp_code = OTP(
             email=email,
@@ -176,9 +171,11 @@ class OTPAuth:
         match resp:
             case ("error", msg, _):
                 return OTPResponse("error", msg)
-            case ("ok", "Not found", _):
+            case ("ok", Message.NOT_FOUND, _):
                 return OTPResponse("error", "OTP not found")
-        record = resp.data
+
+        _, _, record = resp
+        assert isinstance(record, dict)  # appeasing mypy gods
         hashed_otp = _hashedOTP(record['otp_hash'])
         expires_at = record['expires_at']
 
@@ -207,7 +204,7 @@ class OTPAuth:
         match resp:
             case ("error", msg, _):
                 return OTPResponse("error", msg)
-            case ("ok", "Not found", _):
+            case ("ok", Message.NOT_FOUND, _):
                 return OTPResponse("ok", "OTP not found")
             case ("ok", _, _):
                 return OTPResponse("ok", "OTP deleted")
