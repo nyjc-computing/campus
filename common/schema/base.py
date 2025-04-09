@@ -24,6 +24,7 @@ class Message:
     FAILED = "Failed"  # Failed to complete
     FOUND = "Found"  # Record or data found
     INVALID = "Invalid"  # Invalid input or data
+    NOT_ALLOWED = "Not allowed"  # Operation not allowed
     NOT_FOUND = "Not found"  # Record or data not found
     SUCCESS = "Success"  # Request successfully fulfilled
     VALID = "Valid"  # Input or data is valid

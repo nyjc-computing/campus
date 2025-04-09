@@ -6,7 +6,7 @@ and API keys for Campus services.
 """
 import os
 from collections.abc import Sequence
-from typing import Any, Literal, NamedTuple
+from typing import Any, Literal, NamedTuple, TypedDict
 
 from common.drum import sqlite
 from common.schema import Message
@@ -15,6 +15,8 @@ from common.utils.diff import diff_list
 from common.validation import name as validname
 from common.validation.record import validate_keys
 
+APIName = str
+APIKey = str
 Email = str
 
 
@@ -51,26 +53,33 @@ def init_db():
     conn.close()
 
 
-class Client(NamedTuple):
-    """
-    Data model for a client application.
-    """
+class ClientRequest(NamedTuple):
+    """Data model for a client key request."""
+    name: str
+    description: str
+    admins: list[Email]
+    created_on: utc_time.datetime
+    status: Literal["review", "rejected", "approved"] = "review"
+
+
+class ClientRecord(TypedDict):
+    """Data model for a complete client record."""
     client_id: str
     secret_hash: str
     name: str
     description: str
-    admins: Sequence[Email]
+    admins: list[Email]
+    api_keys: dict[APIName, APIKey]
     created_on: utc_time.datetime
-    status: Literal["review", "rejected", "approved"]
 
 
-class APIKey(NamedTuple):
+class APIKeyRecord(NamedTuple):
     """
     Data model for an API key.
     """
     client_id: str
-    name: str
-    key: str
+    name: APIName
+    key: APIKey
 
 
 class ClientResponse(NamedTuple):
@@ -102,22 +111,25 @@ class ClientModel:
             secret_hash=secret.hash_client_secret(client_secret, os.environ["PALMTREE_SECRET_KEY"]),
             name=fields["name"],
             description=fields["description"],
+            admins=fields["admins"],
             created_on=utc_time.now(),
             status="review"
         )
-        admin_record = [
-            {"client_id": client_id, "admin_email": admin}
-            for admin in fields["admins"]
-        ]
 
         # Registering a client involves multiple database operations
         # We use a transaction to ensure atomicity, i.e. all operations are
         # committed together, or none are.
-        resps = []
-        with self.storage.use_transaction() as conn:
-            self.storage.insert("clients", client_record)
-            for admin_row in admin_record:
-                self.storage.insert("client_admins", admin_row)
+        with self.storage.use_transaction():
+            # admins are inserted in junction table and not in clients table
+            self.storage.insert(
+                "clients",
+                {k: v for k, v in client_record.items() if k != "admins"}
+            )
+            for admin in client_record["admins"]:
+                self.storage.insert(
+                    "client_admins",
+                    {"client_id": client_id, "admin_email": admin}
+                )
             # Check for failed operations
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
@@ -125,13 +137,13 @@ class ClientModel:
                 return ClientResponse("error", Message.FAILED, responses)
             else:
                 self.storage.commit_transaction()
-                client_record["admins"] = fields["admins"]
                 return ClientResponse("ok", Message.SUCCESS, client_record)
         # transaction is automatically closed
 
     def update_client(self, client_id: str, updates: dict) -> ClientResponse:
-        """Update an existing client application."""
-        validate_keys(updates, Client._fields, required=False)
+        """Update an existing client record."""
+        if not updates:
+            return ClientResponse("ok", Message.EMPTY)
         resp = self.get_client(client_id)
         match resp:
             case ("error", _, _):
@@ -142,35 +154,75 @@ class ClientModel:
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
+        # Client requests under review may not be updated
+        if client_record["status"] != "approved":
+            return ClientResponse("error", Message.NOT_ALLOWED, "Client may not be updated (create a new request instead)")
+        validate_keys(updates, ClientRecord.__required_keys__, required=False)
+        if "admins" in updates:
+            return ClientResponse("error", Message.NOT_ALLOWED, "Admins may not be updated directly (use add/remove admin endpoints instead)")
 
-        # admins is a list, check for updates
-        update_admins = updates.pop("admins", [])
-        existing_admins = client_record["admins"]
-        removed_admins, added_admins = diff_list(existing_admins, update_admins)
-        with self.storage.use_transaction() as conn:
-            if updates:
-                self.storage.update("clients", client_id, updates)
-            if removed_admins:
-                for admin_email in removed_admins:
-                    self.storage.delete_matching(
-                        "client_admins",
-                        {"client_id": client_id, "admin_email": admin_email}
-                    )
-            if added_admins:
-                for admin_email in added_admins:
-                    self.storage.insert(
-                        "client_admins",
-                        {"client_id": client_id, "admin_email": admin_email}
-                    )
-            # Check for failed operations
-            responses = self.storage.transaction_responses()
-            if any(resp.status == "error" for resp in responses):
-                self.storage.rollback_transaction()
-                return ClientResponse("error", Message.FAILED, responses)
-            else:
-                self.storage.commit_transaction()
+        resp = self.storage.update("clients", client_id, updates)
+        match resp:
+            case ("error", _, _):
+                return ClientResponse("error", Message.FAILED)
+            case ("ok", Message.UPDATED, _):
                 return ClientResponse("ok", Message.SUCCESS)
-        # transaction is automatically closed
+        raise ValueError(f"Unexpected response: {resp}")
+
+    def add_client_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
+        """Add an admin to a client application."""
+        resp = self.storage.insert(
+            "client_admins",
+            {"client_id": client_id, "admin_email": admin_email}
+        )
+        match resp:
+            case ("error", _, _):
+                return ClientResponse("error", Message.FAILED)
+            case ("ok", _, _):
+                return ClientResponse("ok", Message.SUCCESS)
+            case _:
+                raise ValueError(f"Unexpected response: {resp}")
+
+    def remove_client_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
+        """Remove an admin from a client application."""
+        # Check if client is approved
+        resp = self.storage.get_by_id("clients", client_id)
+        match resp:
+            case ("error", _, _):
+                return ClientResponse("error", Message.FAILED)
+            case ("ok", Message.NOT_FOUND, _):
+                return ClientResponse("error", Message.NOT_FOUND)
+            case ("ok", Message.FOUND, client):
+                assert isinstance(client, dict)
+                if client["status"] != "approved":
+                    return ClientResponse("error", Message.NOT_ALLOWED, "Client not (yet) approved")
+            case _:
+                raise ValueError(f"Unexpected response: {resp}")
+
+        # Check if admin_email is the last admin
+        resp = self.storage.get_matching("client_admins", {"client_id": client_id})
+        match resp:
+            case ("error", _, _):
+                return ClientResponse("error", Message.FAILED)
+            case ("ok", Message.EMPTY, _):
+                return ClientResponse("error", Message.NOT_FOUND, "Client has no admins")
+            case ("ok", Message.FOUND, result):
+                assert isinstance(result, list)
+                if len(result) == 1 and result[0]["admin_email"] == admin_email:
+                    return ClientResponse("error", Message.NOT_ALLOWED, "Cannot remove last client admin")
+
+        resp = self.storage.delete_matching(
+            "client_admins",
+            {"client_id": client_id, "admin_email": admin_email}
+        )
+        match resp:
+            case ("error", _, _):
+                return ClientResponse("error", Message.FAILED)
+            case ("ok", Message.NOT_FOUND, _):
+                return ClientResponse("error", Message.NOT_FOUND)
+            case ("ok", Message.DELETED, _):
+                return ClientResponse("ok", Message.SUCCESS)
+        raise ValueError(f"Unexpected response: {resp}")
 
     def get_client(self, client_id: str) -> ClientResponse:
         """Retrieve a client application by its ID, including its admins."""
@@ -249,7 +301,7 @@ class ClientModel:
         """
         if not validname.is_valid_label(name):
             return ClientResponse("error", "Invalid API key name")
-        api_key = APIKey(
+        api_key = APIKeyRecord(
             client_id=client_id,
             name=name,
             key=secret.generate_api_key()
