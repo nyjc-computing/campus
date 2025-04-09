@@ -17,6 +17,7 @@ GroupName = str
 StrId = str
 Record = dict[str, Any]  # Complete set of fields for a record
 Update = dict[str, Any]  # Partial set of fields to update
+Condition = dict[str, Any]  # Conditions for querying records
 
 PK = "id"
 
@@ -49,8 +50,23 @@ class DrumInterface(ABC):
     def set(self, group: GroupName, record: Record) -> DrumResponse:
         """Update an existing record, or insert a new one if it doesn't exist"""
         ...
-        
+
     @abstractmethod
     def update(self, group: GroupName, id: StrId, updates: Update) -> DrumResponse:
         """Update a record in the table by its id"""
+        ...
+
+    @abstractmethod
+    def get_all(self, group: GroupName) -> DrumResponse:
+        """Retrieve all records from table"""
+        ...
+
+    @abstractmethod
+    def get_matching(self, group: GroupName, condition: Condition) -> DrumResponse:
+        """Retrieve records from table that match the condition"""
+        ...
+
+    @abstractmethod
+    def delete_matching(self, group: GroupName, condition: Condition) -> DrumResponse:
+        """Delete records from table that match the condition"""
         ...
