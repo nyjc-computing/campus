@@ -65,7 +65,7 @@ def init_db():
 
 class ClientRequest(TypedDict):
     """Data model for a client key request (apply for a client id)."""
-    owner: Email
+    requester: Email
     name: str
     description: str
     created_on: NotRequired[utc_time.datetime]
@@ -122,7 +122,19 @@ class ClientIdRequest:
             case ("error", _, _):
                 return ClientResponse("error", Message.FAILED)
             case ("ok", _, _):
-                return ClientResponse("ok", Message.SUCCESS, request)
+                return ClientResponse("ok", Message.CREATED, request)
+        raise ValueError(f"Unexpected response: {resp}")
+
+    def get_client_request(self, requester: Email) -> ClientResponse:
+        """Retrieve a client request by its requester email."""
+        resp = self.storage.get_by_id("client_requests", requester)
+        match resp:
+            case ("error", _, _):
+                return ClientResponse("error", Message.FAILED)
+            case ("ok", Message.NOT_FOUND, _):
+                return ClientResponse("error", Message.NOT_FOUND)
+            case ("ok", Message.FOUND, result):
+                return ClientResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
 
     def revoke_client_request(self, requester: Email) -> ClientResponse:
