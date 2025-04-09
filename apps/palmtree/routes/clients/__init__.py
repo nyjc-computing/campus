@@ -5,6 +5,12 @@ from common.schema import Message
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 
+# Feature flags
+GET = True
+PATCH = False
+POST = False
+
+# Database Models
 client_requests = client.ClientIdRequest()
 clients = client.Client()
 api_keys = client.ClientAPIKey()
@@ -19,6 +25,8 @@ def init_app(app) -> None:
 @bp.post('/')
 def apply_for_client():
     """Apply for a client id and secret."""
+    if not POST:
+        return {"message": "Not implemented"}, 501
     # TODO: validate request
     data = request.get_json()
     resp = client_requests.submit_client_request(**data)
@@ -33,13 +41,24 @@ def apply_for_client():
 @bp.patch('/')
 def edit_client():
     """Edit name, description, or admins of client."""
+    if not PATCH:
+        return {"message": "Not implemented"}, 501
     # TODO: validate request, authenticate
-    return {"message": "not implemented"}, 501
+    data = request.get_json()
+    resp = clients.update_client(**data)
+    match resp:
+        case ("error", msg, _):
+            return {"error": msg}, 500
+        case ("ok", Message.UPDATED, _):
+            return {"message": "Client updated"}, 200
+    return {"message": "unexpected error occurred"}, 500
 
 
 @bp.get('/applications/<string:requester_id>')
 def get_application_status(requester_id: str):
     """Get the status of a client application."""
+    if not GET:
+        return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
     resp = client_requests.get_client_request(requester_id)
     match resp:
