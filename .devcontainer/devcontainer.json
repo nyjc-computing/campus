@@ -1,6 +1,6 @@
 {
 	"name": "Python DevContainer",
-	"image": "mcr.microsoft.com/devcontainers/python:3.9",
+	"image": "mcr.microsoft.com/devcontainers/python:3.11",
 	"customizations": {
 		"vscode": {
 			"settings": {
@@ -12,6 +12,6 @@
 			]
 		}
 	},
-	"postCreateCommand": "./.devcontainer/post-create.sh",
+	"postCreateCommand": "bash .devcontainer/post-create.sh",
 	"remoteUser": "vscode"
 }
