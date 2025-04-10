@@ -242,7 +242,7 @@ class SqliteDrum:
                 assert cursor is not None
                 return DrumResponse("ok", Message.SUCCESS, cursor.lastrowid)
 
-    def update(self, group: str, id: str, updates: Update) -> DrumResponse:
+    def update_by_id(self, group: str, id: str, updates: Update) -> DrumResponse:
         """Update a record in the table by its id"""
         assert PK not in updates, f"Updates must not include a {PK} field"
         set_clause = ", ".join(
@@ -261,6 +261,42 @@ class SqliteDrum:
                     return DrumResponse("ok", Message.NOT_FOUND)
                 else:
                     return DrumResponse("ok", Message.UPDATED, cursor.lastrowid)
+            case _:
+                raise ValueError(f"Unexpected case: {resp}")
+            
+    def update_matching(
+            self,
+            group: str,
+            updates: Update,
+            condition: Condition,
+    ) -> DrumResponse:
+        """Update records from table that match the condition"""
+        if not condition:
+            raise ValueError("Condition must not be empty")
+        if PK in updates:
+            raise ValueError(
+                f"Updates must not include a {PK} field\n"
+                "Hint: use set() to update a record by id"
+            )
+        set_clause = ", ".join(
+            f"{key} = ?" for key in updates
+        )
+        where_clause = " AND ".join(
+            f"{key} = ?" for key in condition
+        )
+        resp = self._execute_callback(
+            f"""UPDATE {group} SET {set_clause} WHERE {where_clause};""",
+            tuple(updates.values()) + tuple(condition.values())
+        )
+        match resp:
+            case ("error", msg, _):
+                return DrumResponse("error", msg)
+            case ("ok", _, cursor):
+                assert cursor is not None
+                if cursor.rowcount == 0:
+                    return DrumResponse("ok", Message.NOT_FOUND)
+                else:
+                    return DrumResponse("ok", Message.UPDATED, cursor.rowcount)
             case _:
                 raise ValueError(f"Unexpected case: {resp}")
 
@@ -283,6 +319,6 @@ class SqliteDrum:
                     for key, value in record.items()
                     if existing_record.get(key) != value
                 }
-                return self.update(group, record[PK], updates)
+                return self.update_by_id(group, record[PK], updates)
             case _:
                 raise ValueError(f"Unexpected case: {resp}")
