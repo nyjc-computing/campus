@@ -1,4 +1,4 @@
-"""
+"""apps.palmtree.models.otp.py
 OTP Models for Email Authentication
 
 This module provides classes and utilities for handling one-time
@@ -12,6 +12,7 @@ from typing import Any, Literal, NamedTuple
 import bcrypt
 
 from common.drum import sqlite
+from common.schema import Message, Response
 from common.utils import utc_time
 
 
@@ -86,20 +87,15 @@ class _hashedOTP(str):
 
 
 class OTP(NamedTuple):
-    """
-    Data model for OTP
-    """
+    """Data model for OTP"""
     email: str
     otp_hash: str
     created_at: utc_time.datetime
     expires_at: utc_time.datetime
 
 
-class OTPResponse(NamedTuple):
+class OTPResponse(Response):
     """Represents an OTP verification response"""
-    status: Literal["ok", "error"]
-    message: str
-    data: Any = None
 
 
 class OTPAuth:
@@ -131,22 +127,16 @@ class OTPAuth:
         """
         # Generate a new OTP
         plain_otp = _plainOTP.generate()
-
         # Hash the OTP for secure storage
         otp_hash = plain_otp.hash()
-
-        logger.info("Creating or updating OTP for email: %s", email)
-
         # Set expiration and creation times
         created_at = utc_time.now()
         expires_at = utc_time.after(minutes=expiry_minutes)
-        
 
         # Delete any existing OTP for this email
         resp = self.storage.delete_by_id('otp_codes', email)
         if resp.status == "error":
             return OTPResponse("error", resp.message)
-
         # Insert new OTP
         otp_code = OTP(
             email=email,
@@ -155,10 +145,12 @@ class OTPAuth:
             expires_at=expires_at,
         )
         resp = self.storage.insert('otp_codes', otp_code._asdict())
-        if resp.status == "error":
-            return OTPResponse("error", resp.message)
-        else:
-            return OTPResponse("ok", "OTP created", plain_otp)
+        match resp:
+            case Response(status="error"):
+                return OTPResponse(*resp)
+            case Response(status="ok", message=Message.CREATED):
+                return OTPResponse("ok", "OTP created", plain_otp)
+        raise ValueError(f"Unexpected response from storage: {resp}")
 
     def verify(self, email: str, plain_otp: str) -> OTPResponse:
         """
@@ -174,11 +166,13 @@ class OTPAuth:
         # Get the latest OTP for this email
         resp = self.storage.get_by_id('otp_codes', email)
         match resp:
-            case ("error", msg, _):
-                return OTPResponse("error", msg)
-            case ("ok", "Not found", _):
+            case Response(status="error"):
+                return OTPResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return OTPResponse("error", "OTP not found")
-        record = resp.data
+
+        _, _, record = resp
+        assert isinstance(record, dict)  # appeasing mypy gods
         hashed_otp = _hashedOTP(record['otp_hash'])
         expires_at = record['expires_at']
 
@@ -205,11 +199,11 @@ class OTPAuth:
         """
         resp = self.storage.delete_by_id('otp_codes', email)
         match resp:
-            case ("error", msg, _):
-                return OTPResponse("error", msg)
-            case ("ok", "Not found", _):
+            case Response(status="error"):
+                return OTPResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return OTPResponse("ok", "OTP not found")
-            case ("ok", _, _):
+            case Response(status="ok", message=Message.DELETED):
                 return OTPResponse("ok", "OTP deleted")
             case _:
                 raise ValueError(f"Unexpected case: {resp}")

@@ -10,4 +10,4 @@ Common assumptions across storage types:
 - records/documents are grouped by collections/tables
 """
 
-from .base import DrumResponse
+from .base import DrumError, DrumResponse
