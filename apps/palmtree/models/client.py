@@ -8,7 +8,7 @@ import os
 from typing import Any, Literal, NamedTuple, NotRequired, TypedDict
 
 from common.drum import sqlite
-from common.schema import Message
+from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
 from common.validation import name as validname
 from common.validation.record import validate_keys
@@ -76,8 +76,7 @@ class ClientRequest(TypedDict):
 
 class ClientRecord(TypedDict):
     """Data model for a complete client record."""
-    # client_id and secret_hash will be generated and need not be
-    # provided
+    # client_id and secret_hash will be generated and need not be provided
     client_id: NotRequired[str]
     secret_hash: NotRequired[str]
     name: str
@@ -88,20 +87,14 @@ class ClientRecord(TypedDict):
 
 
 class APIKeyRecord(TypedDict):
-    """
-    Data model for an API key.
-    """
+    """Data model for an API key."""
     client_id: str
     name: APIName
-    # API key will be generated and need not be provided
-    key: NotRequired[APIKey]
+    key: APIKey
 
 
-class ClientResponse(NamedTuple):
+class ClientResponse(Response):
     """Represents a client operation response."""
-    status: Literal["ok", "error"]
-    message: str
-    data: Any = None
 
 
 class ClientIdRequest:
@@ -123,9 +116,9 @@ class ClientIdRequest:
         )
         resp = self.storage.insert("client_requests", request)
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", _, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok"):
                 return ClientResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -133,11 +126,11 @@ class ClientIdRequest:
         """Retrieve a client request by its ID."""
         resp = self.storage.get_by_id("client_requests", client_request_id)
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.FOUND, result):
+            case Response(status="ok", message=Message.FOUND, data=result):
                 return ClientResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -145,11 +138,11 @@ class ClientIdRequest:
         """Revoke a client request by its ID."""
         resp = self.storage.delete_by_id("client_requests", client_request_id)
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.DELETED, _):
+            case Response(status="ok", message=Message.DELETED):
                 return ClientResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -161,11 +154,11 @@ class ClientIdRequest:
             {"status": "rejected"}
         )
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.UPDATED, _):
+            case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -177,11 +170,11 @@ class ClientIdRequest:
             {"status": "approved"}
         )
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.UPDATED, _):
+            case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -189,11 +182,11 @@ class ClientIdRequest:
         """List all client requests."""
         resp = self.storage.get_all("client_requests")
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.FOUND, result):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.FOUND, data=result):
                 return ClientResponse("ok", Message.FOUND, result)
-            case ("ok", Message.EMPTY, _):
+            case Response(status="ok", message=Message.EMPTY):
                 return ClientResponse("ok", Message.EMPTY, [])
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -261,11 +254,11 @@ class Client:
 
         resp = self.storage.update_by_id("clients", client_id, updates)
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.UPDATED, _):
+            case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.UPDATED)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -276,9 +269,9 @@ class Client:
             {"client_id": client_id, "admin_email": admin_email}
         )
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", _, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.CREATED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -290,11 +283,11 @@ class Client:
             {"client_id": client_id}
         )
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.EMPTY, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.EMPTY):
                 return ClientResponse("error", Message.NOT_FOUND, "Client not found")
-            case ("ok", Message.FOUND, result):
+            case Response(status="ok", message=Message.FOUND, data=result):
                 if (
                         result and len(result) == 1
                         and result[0]["admin_email"] == admin_email
@@ -306,11 +299,11 @@ class Client:
             {"client_id": client_id, "admin_email": admin_email}
         )
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.DELETED, _):
+            case Response(status="ok", message=Message.DELETED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -318,9 +311,9 @@ class Client:
         """Retrieve a client application by its ID, including its admins."""
         resp = self.storage.get_by_id("clients", client_id)
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", _, None):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND, data=None):
                 return ClientResponse("error", Message.NOT_FOUND)
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
         client_record = resp.data
@@ -328,9 +321,9 @@ class Client:
 
         resp = self.storage.get_matching("client_admins", {"client_id": client_id})
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", _, None):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", data=None):
                 # client has no admins
                 return ClientResponse("error", Message.INVALID)
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
@@ -351,9 +344,9 @@ class Client:
         """Delete a client application by its ID."""
         resp = self.get_client(client_id)
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", _, None):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", data=None):
                 return ClientResponse("error", Message.NOT_FOUND)
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
         client_record = resp.data
@@ -389,11 +382,11 @@ class Client:
             )}
         )
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.UPDATED, _):
+            case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS, client_secret)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -426,9 +419,9 @@ class ClientAPIKey:
         )
         resp = self.storage.insert("api_keys", record)
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", _, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.CREATED):
                 return ClientResponse("ok", "API key created", record["key"])
             case _:
                 raise ValueError(f"Unexpected response: {resp}")
@@ -437,11 +430,11 @@ class ClientAPIKey:
         """Retrieve all API keys for a client."""
         resp = self.storage.get_matching("api_keys", {"client_id": client_id})
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.FOUND, result):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.FOUND, data=result):
                 return ClientResponse("ok", Message.SUCCESS, result)
-            case ("ok", Message.EMPTY, _):
+            case Response(status="ok", message=Message.EMPTY):
                 return ClientResponse("ok", Message.EMPTY, [])
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -452,10 +445,10 @@ class ClientAPIKey:
             {"client_id": client_id, "name": name}
         )
         match resp:
-            case ("error", _, _):
-                return ClientResponse("error", Message.FAILED)
-            case ("ok", Message.NOT_FOUND, _):
+            case Response(status="error"):
+                return ClientResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
-            case ("ok", Message.DELETED, _):
+            case Response(status="ok", message=Message.DELETED):
                 return ClientResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
