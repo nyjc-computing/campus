@@ -5,7 +5,7 @@ This module provides classes and utilities for handling client applications
 and API keys for Campus services.
 """
 import os
-from typing import Any, Literal, NamedTuple, NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from common.drum import sqlite
 from common.schema import Message, Response
@@ -450,5 +450,5 @@ class ClientAPIKey:
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.DELETED):
-                return ClientResponse("ok", Message.DELETED)
+                return ClientResponse(*resp)
         raise ValueError(f"Unexpected response: {resp}")
