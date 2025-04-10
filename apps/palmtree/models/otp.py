@@ -1,4 +1,4 @@
-"""
+"""apps.palmtree.models.otp.py
 OTP Models for Email Authentication
 
 This module provides classes and utilities for handling one-time

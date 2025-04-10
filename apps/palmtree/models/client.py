@@ -192,8 +192,7 @@ class ClientIdRequest:
 
 
 class Client:
-    """Model for database operations related to client applications.
-    """
+    """Model for database operations related to client applications."""
 
     def __init__(self):
         """Initialize the Client model with a storage interface."""
@@ -423,8 +422,7 @@ class ClientAPIKey:
                 return ClientResponse(*resp)
             case Response(status="ok", message=Message.CREATED):
                 return ClientResponse("ok", "API key created", record["key"])
-            case _:
-                raise ValueError(f"Unexpected response: {resp}")
+        raise ValueError(f"Unexpected response: {resp}")
 
     def get_api_keys(self, client_id: str) -> ClientResponse:
         """Retrieve all API keys for a client."""
@@ -452,3 +450,4 @@ class ClientAPIKey:
             case Response(status="ok", message=Message.DELETED):
                 return ClientResponse(*resp)
         raise ValueError(f"Unexpected response: {resp}")
+

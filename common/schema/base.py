@@ -99,4 +99,3 @@ def translate_response(
     if resp.message in responseMap:
         return responseMap[resp.message]
     return None
-
