@@ -37,7 +37,7 @@ class User:
 
     def activate(self, user_id: str) -> DrumResponse:
         """Actions to perform upon first sign-in."""
-        return self.storage.update(
+        return self.storage.update_by_id(
             'user',
             user_id,
             {'activated_at': utc_time.now()}
@@ -49,4 +49,4 @@ class User:
 
     def update(self, user_id: str, updates: dict) -> DrumResponse:
         """Update a user by id."""
-        return self.storage.update('user', user_id, updates)
+        return self.storage.update_by_id('user', user_id, updates)

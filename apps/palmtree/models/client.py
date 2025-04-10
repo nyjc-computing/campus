@@ -23,7 +23,8 @@ def init_db():
     conn = sqlite.get_conn()
     conn.execute("""
         CREATE TABLE IF NOT EXISTS client_requests (
-            requester TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY,
+            requester TEXT NOT NULL,
             name TEXT NOT NULL,
             description TEXT,
             created_on TEXT NOT NULL,
@@ -33,7 +34,7 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS clients (
-            client_id TEXT PRIMARY KEY,
+            id TEXT PRIMARY KEY,
             client_secret TEXT NOT NULL,
             name TEXT NOT NULL,
             description TEXT,
@@ -42,7 +43,7 @@ def init_db():
     """)
     # Note that junction tables violate the assumption of a single-column
     # string primary key, as they are not expected to be directly queried
-    # by end users
+    # by end users.
     conn.execute("""
         CREATE TABLE IF NOT EXISTS client_admins (
             client_id TEXT NOT NULL,
@@ -65,6 +66,7 @@ def init_db():
 
 class ClientRequest(TypedDict):
     """Data model for a client key request (apply for a client id)."""
+    client_request_id: NotRequired[str]
     requester: Email
     name: str
     description: str
@@ -112,7 +114,9 @@ class ClientIdRequest:
     def submit_client_request(self, **fields) -> ClientResponse:
         """Submit a request for a new client id."""
         validate_keys(fields, ClientRecord.__required_keys__)
+        client_request_id = uid.generate_category_uid("client_request")
         request = ClientRequest(
+            client_request_id=client_request_id,
             **fields,
             created_on=utc_time.now(),
             status="review"
@@ -125,9 +129,9 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get_client_request(self, requester: Email) -> ClientResponse:
-        """Retrieve a client request by its requester email."""
-        resp = self.storage.get_by_id("client_requests", requester)
+    def get_client_request(self, client_request_id: str) -> ClientResponse:
+        """Retrieve a client request by its ID."""
+        resp = self.storage.get_by_id("client_requests", client_request_id)
         match resp:
             case ("error", _, _):
                 return ClientResponse("error", Message.FAILED)
@@ -137,9 +141,9 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def revoke_client_request(self, requester: Email) -> ClientResponse:
-        """Revoke a client request by its requester email."""
-        resp = self.storage.delete_by_id("client_requests", requester)
+    def revoke_client_request(self, client_request_id: str) -> ClientResponse:
+        """Revoke a client request by its ID."""
+        resp = self.storage.delete_by_id("client_requests", client_request_id)
         match resp:
             case ("error", _, _):
                 return ClientResponse("error", Message.FAILED)
@@ -149,11 +153,11 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def reject_client_request(self, requester: Email) -> ClientResponse:
-        """Reject a client request by its requester email."""
-        resp = self.storage.update(
+    def reject_client_request(self, client_request_id: str) -> ClientResponse:
+        """Reject a client request by its ID."""
+        resp = self.storage.update_by_id(
             "client_requests",
-            requester,
+            client_request_id,
             {"status": "rejected"}
         )
         match resp:
@@ -165,11 +169,11 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def approve_client_request(self, requester: Email) -> ClientResponse:
-        """Approve a client request by its requester email."""
-        resp = self.storage.update(
+    def approve_client_request(self, client_request_id: str) -> ClientResponse:
+        """Approve a client request by its ID."""
+        resp = self.storage.update_by_id(
             "client_requests",
-            requester,
+            client_request_id,
             {"status": "approved"}
         )
         match resp:
@@ -255,7 +259,7 @@ class Client:
             return ClientResponse("error", Message.NOT_ALLOWED, "Admins may not be updated directly (use add/remove admin endpoints instead)")
         validate_keys(updates, ClientRecord.__required_keys__, required=False)
 
-        resp = self.storage.update("clients", client_id, updates)
+        resp = self.storage.update_by_id("clients", client_id, updates)
         match resp:
             case ("error", _, _):
                 return ClientResponse("error", Message.FAILED)

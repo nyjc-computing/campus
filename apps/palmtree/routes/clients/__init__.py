@@ -54,13 +54,13 @@ def edit_client():
     return {"message": "unexpected error occurred"}, 500
 
 
-@bp.get('/applications/<string:requester_id>')
-def get_application_status(requester_id: str):
+@bp.get('/applications/<string:client_request_id>')
+def get_application_status(client_request_id: str):
     """Get the status of a client application."""
     if not GET:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = client_requests.get_client_request(requester_id)
+    resp = client_requests.get_client_request(client_request_id)
     match resp:
         case ("error", msg, _):
             return {"error": msg}, 500
@@ -68,15 +68,15 @@ def get_application_status(requester_id: str):
             return result, 200
     return {"message": "unexpected error occurred"}, 500
 
-@bp.post('/applications/<string:requester_id>/approve')
-def approve_application(requester_id: str):
+@bp.post('/applications/<string:client_request_id>/approve')
+def approve_application(client_request_id: str):
     """Approve a client application."""
     # TODO: validate, authenticate
     return {"message": "not implemented"}, 501
 
 
 @bp.post('/applications/<string:application_id>/reject')
-def reject_application(requester_id: str):
+def reject_application(client_request_id: str):
     """Reject a client application."""
     return {"message": "not implemented"}, 501
 
