@@ -9,6 +9,7 @@ bp = Blueprint('clients', __name__, url_prefix='/clients')
 GET = True
 PATCH = False
 POST = False
+DELETE = False
 
 # Database Models
 client_requests = client.ClientIdRequest()
@@ -71,19 +72,38 @@ def get_application_status(client_request_id: str):
 @bp.post('/applications/<string:client_request_id>/approve')
 def approve_application(client_request_id: str):
     """Approve a client application."""
+    if not POST:
+        return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    return {"message": "not implemented"}, 501
+    resp = client_requests.approve_client_request(client_request_id)
+    match resp:
+        case ("error", msg, _):
+            return {"error": msg}, 500
+        case ("ok", Message.CREATED, result):
+            return result, 201
+    return {"message": "unexpected error occurred"}, 500
 
 
 @bp.post('/applications/<string:application_id>/reject')
 def reject_application(client_request_id: str):
     """Reject a client application."""
-    return {"message": "not implemented"}, 501
+    if not POST:
+        return {"message": "Not implemented"}, 501
+    # TODO: validate, authenticate
+    resp = client_requests.reject_client_request(client_request_id)
+    match resp:
+        case ("error", msg, _):
+            return {"error": msg}, 500
+        case ("ok", Message.CREATED, result):
+            return result, 201
+    return {"message": "unexpected error occurred"}, 500
 
 
 @bp.get('/<string:client_id>')
 def get_client_details(client_id: str):
     """Get details of a client."""
+    if not GET:
+        return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
     resp = clients.get_client(client_id)
     match resp:
@@ -97,12 +117,23 @@ def get_client_details(client_id: str):
 @bp.post('/<string:client_id>/revoke')
 def revoke_client(client_id: str):
     """Revoke a client id and secret, and reissue them."""
-    return {"message": "not implemented"}, 501
+    if not POST:
+        return {"message": "Not implemented"}, 501
+    # TODO: validate, authenticate
+    resp = clients.revoke_client(client_id)
+    match resp:
+        case ("error", msg, _):
+            return {"error": msg}, 500
+        case ("ok", Message.CREATED, result):
+            return result, 201
+    return {"message": "unexpected error occurred"}, 500
 
 
 @bp.get('/<string:client_id>/api_keys/')
 def get_client_api_keys(client_id: str):
     """Get API keys requested by client admin."""
+    if not GET:
+        return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
     resp = api_keys.get_api_keys(client_id)
     match resp:
@@ -116,10 +147,30 @@ def get_client_api_keys(client_id: str):
 @bp.post('/<string:client_id>/api_keys/create')
 def create_client_api_key(client_id: str):
     """Create a new API key for the client."""
-    return {"message": "not implemented"}, 501
+    if not POST:
+        return {"message": "not implemented"}, 501
+    # TODO: validate, authenticate
+    data = request.get_json()
+    resp = api_keys.create_api_key(client_id, **data)
+    match resp:
+        case ("error", msg, _):
+            return {"error": msg}, 500
+        case ("ok", Message.CREATED, result):
+            return result, 201
+    return {"message": "unexpected error occurred"}, 500
 
 
 @bp.delete('/<string:client_id>/api_keys/<string:name>')
 def delete_client_api_key(client_id: str, name: str):
     """Delete an API key for the client."""
-    return {"message": "not implemented"}, 501
+    if not DELETE:
+        return {"message": "not implemented"}, 501
+    # TODO: validate, authenticate
+    resp = api_keys.delete_api_key(client_id, name)
+    match resp:
+        case ("error", msg, _):
+            return {"error": msg}, 500
+        case ("ok", Message.DELETED, result):
+            return result, 200
+    return {"message": "unexpected error occurred"}, 500
+
