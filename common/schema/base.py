@@ -14,20 +14,36 @@ class Response(Protocol):
 
 
 class Message:
-    """Constants of common response messages."""
-    COMPLETED = "Completed"  # Completed without errors
-    CREATED = "Created"  # Successfully created
-    UPDATED = "Updated"  # Successfully updated
-    DELETED = "Deleted"  # Successfully deleted
-    EMPTY = "Empty"  # Record is empty
-    EXPIRED = "Expired"  # Datetime is past
-    FAILED = "Failed"  # Failed to complete
-    FOUND = "Found"  # Record or data found
-    INVALID = "Invalid"  # Invalid input or data
-    NOT_ALLOWED = "Not allowed"  # Operation not allowed
-    NOT_FOUND = "Not found"  # Record or data not found
-    SUCCESS = "Success"  # Request successfully fulfilled
-    VALID = "Valid"  # Input or data is valid
+    """Constants of common response messages.
+    
+    These messages are used to differentiate the possible outcomes of "ok" or "error" responses.
+    """
+    # Operation completed without errors (in absence of more specific message)
+    COMPLETED = "Completed"
+    # Successfully created
+    CREATED = "Created"
+    # Successfully updated
+    UPDATED = "Updated"
+    # Successfully deleted
+    DELETED = "Deleted"
+    # Successful with empty result
+    EMPTY = "Empty"
+    # Datetime is past
+    EXPIRED = "Expired"
+    # Failed to complete - standard message for "error"
+    FAILED = "Failed"
+    # Record or data found
+    FOUND = "Found"
+    # Invalid input or data
+    INVALID = "Invalid"
+    # Operation possible but not allowed
+    NOT_ALLOWED = "Not allowed"
+    # Record or data not found
+    NOT_FOUND = "Not found"
+    # Request successfully fulfilled (all operations complete)
+    SUCCESS = "Success"
+    # Input or data is valid
+    VALID = "Valid"
 
 
 def translate_response(
