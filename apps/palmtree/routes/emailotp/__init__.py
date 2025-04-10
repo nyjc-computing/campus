@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 
 from apps.palmtree.models import otp
-from common.schema import Message
+from common.schema import Message, Response
 from common.services.email import create_email_sender
 
 from . import template
@@ -31,9 +31,9 @@ def request_otp():
     # TODO: Check if email is already registered
     resp = otp_auth.create(email)
     match resp:
-        case ("error", msg, _):
-            return {"error": msg}, 500
-        case ("ok", Message.CREATED, otp_code):
+        case Response(status="error", message=msg, data=err):
+            return {"error": f"{msg}: {err}"}, 500
+        case Response(status="ok", message=Message.CREATED, data=otp_code):
             otp_code = str(otp_code)
         case _:
             raise ValueError(f"Unexpected case: {resp}")
@@ -47,9 +47,9 @@ def request_otp():
         html_body=template.html_body("Campus", otp_code)
     )
     match resp:
-        case ("error", msg, err):
+        case Response(status="error", message=msg, data=err):
             return {"error": f"{msg}: {err}"}, 500
-        case ("ok", Message.SUCCESS, _):
+        case Response(status="ok", message=Message.SUCCESS, data=_):
             return {"message": "OTP sent"}, 200
         case _:
             raise ValueError(f"Unexpected case: {resp}")
@@ -68,9 +68,9 @@ def verify_otp():
     # TODO: Validate OTP format
     resp = otp_auth.verify(email, otp_code)
     match resp:
-        case ("error", msg, _):
-            return {"error": msg}, 400
-        case ("ok", Message.VALID, _):
+        case Response(status="error", message=msg, data=err):
+            return {"error": f"{msg}: {err}"}, 500
+        case Response(status="ok", message=Message.VALID, data=_):
             return {"message": "OTP verified"}, 200
         case _:
             raise ValueError(f"Unexpected case: {resp}")

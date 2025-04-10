@@ -6,14 +6,13 @@ Base classes for email sending services.
 from abc import abstractmethod
 from typing import Any, Literal, NamedTuple, Protocol, Sequence
 
+from common.schema import Message, Response
+
 EmailAddress = str
 
 
-class EmailResponse(NamedTuple):
+class EmailResponse(Response):
     """Represents a response from an email sending operation."""
-    status: Literal["ok", "error"]
-    message: str
-    data: Any | None = None
 
 
 class EmailSenderInterface(Protocol):

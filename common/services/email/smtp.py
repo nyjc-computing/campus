@@ -8,7 +8,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from common.schema import Message
+from common.schema import Message, Response
 
 from .base import EmailResponse, EmailSenderInterface
 
