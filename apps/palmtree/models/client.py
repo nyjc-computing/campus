@@ -404,7 +404,7 @@ class ClientAPIKey:
     def __init__(self):
         self.storage = sqlite.SqliteDrum()
 
-    def create_api_key(self, *, client_id: str, name: str) -> ClientResponse:
+    def create_api_key(self, client_id: str, *, name: str) -> ClientResponse:
         """Create a new API key for a client.
 
         Validate name first before calling this function.
