@@ -48,7 +48,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS client_admins (
             client_id TEXT NOT NULL,
             admin_id TEXT NOT NULL,
-            PRIMARY KEY (client_id, admin_email),
+            PRIMARY KEY (client_id, admin_id),
             FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
         )
     """)
