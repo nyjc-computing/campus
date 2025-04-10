@@ -377,6 +377,27 @@ class Client:
                 return ClientResponse("ok", Message.SUCCESS)
         # transaction is automatically closed
 
+    def revoke_client(self, client_id: str) -> ClientResponse:
+        """Revoke a client secret by its ID, and issue a new secret."""
+        client_secret = secret.generate_client_secret()
+        resp = self.storage.update_by_id(
+            "clients",
+            client_id,
+            {"secret_hash": secret.hash_client_secret(
+                client_secret,
+                os.environ["PALMTREE_SECRET_KEY"]
+            )}
+        )
+        match resp:
+            case ("error", _, _):
+                return ClientResponse("error", Message.FAILED)
+            case ("ok", Message.NOT_FOUND, _):
+                return ClientResponse("error", Message.NOT_FOUND)
+            case ("ok", Message.UPDATED, _):
+                return ClientResponse("ok", Message.SUCCESS, client_secret)
+        raise ValueError(f"Unexpected response: {resp}")
+
+
 class ClientAPIKey:
     """Model for database operations related to client API keys."""
 
