@@ -11,22 +11,25 @@ Common assumptions across storage types:
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Literal, NamedTuple
+from typing import Any, MutableMapping
+
+from common.schema import Response
 
 GroupName = str
 StrId = str
-Record = dict[str, Any]  # Complete set of fields for a record
+Record = MutableMapping[str, Any]  # Complete set of fields for a record
 Update = dict[str, Any]  # Partial set of fields to update
 Condition = dict[str, Any]  # Conditions for querying records
 
 PK = "id"
 
 
-class DrumResponse(NamedTuple):
+class DrumError(Exception):
+    """Base class for all Drum-related errors."""
+
+
+class DrumResponse(Response):
     """Represents a response from a Drum operation."""
-    status: Literal["ok", "error"]
-    message: str
-    data: Any | None = None
 
 
 class DrumInterface(ABC):

@@ -5,7 +5,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from typing import Any, Generator
 
-from common.schema import Message
+from common.schema import Message, Response
 
 from .base import PK, Condition, DrumResponse, Record, Update
 
@@ -107,7 +107,7 @@ class SqliteDrum:
         try:
             cursor = conn.execute(*args)
         except sqlite3.DatabaseError as e:
-            return DrumResponse('error', str(e), e)
+            return DrumResponse('error', Message.FAILED, str(e))
         # Don't catch other kinds of errors
         else:
             if callback:
@@ -133,9 +133,9 @@ class SqliteDrum:
             callback=lambda cursor: cursor.fetchall()
         )
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, records):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=records):
                 if records:
                     return DrumResponse("ok", Message.FOUND, records)
                 else:
@@ -150,11 +150,11 @@ class SqliteDrum:
             callback=lambda cursor: cursor.fetchone()
         )
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, None):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=None):
                 return DrumResponse("error", Message.NOT_FOUND)
-            case ("ok", _, record):
+            case Response(status="ok", data=record):
                 return DrumResponse("ok", Message.FOUND, record)
         raise ValueError(f"Unexpected case: {resp}")
             
@@ -174,9 +174,9 @@ class SqliteDrum:
             callback=lambda cursor: cursor.fetchall()
         )
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, records):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=records):
                 if records:
                     return DrumResponse("ok", Message.FOUND, records)
                 else:
@@ -190,9 +190,9 @@ class SqliteDrum:
             (id,)
         )
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, cursor):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=cursor):
                 assert cursor is not None
                 if cursor.rowcount == 0:
                     return DrumResponse("ok", Message.NOT_FOUND)
@@ -216,9 +216,9 @@ class SqliteDrum:
         else:
             resp = self._execute_callback(f"""DELETE FROM {group};""")
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, cursor):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=cursor):
                 assert cursor is not None
                 if cursor.rowcount == 0:
                     return DrumResponse("ok", Message.NOT_FOUND)
@@ -236,11 +236,12 @@ class SqliteDrum:
             tuple(record.values())
         )
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, cursor):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=cursor):
                 assert cursor is not None
                 return DrumResponse("ok", Message.SUCCESS, cursor.lastrowid)
+        raise ValueError(f"Unexpected case: {resp}")
 
     def update_by_id(self, group: str, id: str, updates: Update) -> DrumResponse:
         """Update a record in the table by its id"""
@@ -253,9 +254,9 @@ class SqliteDrum:
             tuple(updates.values()) + (id,)
         )
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, cursor):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=cursor):
                 assert cursor is not None
                 if cursor.rowcount == 0:
                     return DrumResponse("ok", Message.NOT_FOUND)
@@ -289,16 +290,15 @@ class SqliteDrum:
             tuple(updates.values()) + tuple(condition.values())
         )
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", _, cursor):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=cursor):
                 assert cursor is not None
                 if cursor.rowcount == 0:
                     return DrumResponse("ok", Message.NOT_FOUND)
                 else:
                     return DrumResponse("ok", Message.UPDATED, cursor.rowcount)
-            case _:
-                raise ValueError(f"Unexpected case: {resp}")
+        raise ValueError(f"Unexpected case: {resp}")
 
     def set(self, group: str, record: Record) -> DrumResponse:
         """Update an existing record, or insert a new one if it doesn't exist"""
@@ -306,12 +306,12 @@ class SqliteDrum:
         # Check if the record exists
         resp = self.get_by_id(group, record[PK])
         match resp:
-            case ("error", msg, _):
-                return DrumResponse("error", msg)
-            case ("ok", Message.COMPLETED, None):
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", message=Message.NOT_FOUND):
                 # Record does not exist, perform an insert
                 return self.insert(group, record)
-            case ("ok", Message.COMPLETED, existing_record):
+            case Response(status="ok", message=Message.FOUND, data=existing_record):
                 assert isinstance(existing_record, dict)  # appease mypy gods
                 # Record exists, perform an update
                 updates = {
@@ -320,5 +320,4 @@ class SqliteDrum:
                     if existing_record.get(key) != value
                 }
                 return self.update_by_id(group, record[PK], updates)
-            case _:
-                raise ValueError(f"Unexpected case: {resp}")
+        raise ValueError(f"Unexpected case: {resp}")
