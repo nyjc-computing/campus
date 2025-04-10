@@ -3,14 +3,42 @@
 Base schema definitions, enums, and constants for Campus.
 """
 
-from typing import Any, Literal, Protocol
+from typing import Any, Iterable, Iterator, Literal, Mapping
+
+ResponseStatus = Literal["ok", "error"]
 
 
-class Response(Protocol):
-    """Common interface for all responses."""
-    status: Literal["ok", "error"]
-    message: str
-    data: Any | None = None
+class Response(Mapping, Iterable):
+    """Base interface for all responses.
+
+    Responses support iteration (for unpacking) and property access.
+
+    Modules using a Response object pattern should inherit from this class
+    and override the `data` property to return the appropriate type(s).
+    """
+    # Use slots for performance purposes, since this class is used in many
+    # places and is expected to be lightweight.
+    # See https://docs.python.org/3.11/reference/datamodel.html#object.__slots__
+    __slots__ = ("__",)
+
+    def __init__(self, status: ResponseStatus, message: str, data: Any | None = None) -> None:
+        self.__ = (status, message, data)
+
+    @property
+    def status(self) -> ResponseStatus:
+        return self.__[0]
+    
+    @property
+    def message(self) -> str:
+        return self.__[1]
+    
+    @property
+    def data(self) -> Any:
+        return self.__[2]
+    
+    def __iter__(self) -> Iterator:
+        """Iterate over the response."""
+        return iter(self.__)
 
 
 class Message:
