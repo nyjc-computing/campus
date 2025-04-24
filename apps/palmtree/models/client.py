@@ -130,7 +130,10 @@ class ClientIdRequest:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client request not found",
+                     client_request_id=client_request_id
+                )
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ClientResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
@@ -142,7 +145,10 @@ class ClientIdRequest:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client request not found",
+                     client_request_id=client_request_id
+                )
             case Response(status="ok", message=Message.DELETED):
                 return ClientResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
@@ -158,7 +164,10 @@ class ClientIdRequest:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client request not found",
+                     client_request_id=client_request_id
+                )
             case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
@@ -174,7 +183,10 @@ class ClientIdRequest:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client request not found",
+                     client_request_id=client_request_id
+                )
             case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
@@ -260,7 +272,10 @@ class Client:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client not found",
+                     client_id=client_id
+                )
             case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.UPDATED)
         raise ValueError(f"Unexpected response: {resp}")
@@ -289,13 +304,19 @@ class Client:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.EMPTY):
-                return ClientResponse("error", Message.NOT_FOUND, "Client not found")
+                raise api_errors.ConflictError(
+                    "Client has no admins",
+                     client_id=client_id
+                )
             case Response(status="ok", message=Message.FOUND, data=result):
                 if (
                         result and len(result) == 1
                         and result[0]["admin_email"] == admin_email
                 ):
-                    return ClientResponse("error", Message.NOT_ALLOWED, "Cannot remove last client admin")
+                    raise api_errors.UnauthorizedError(
+                        "Cannot remove last client admin",
+                        client_id=client_id
+                    )
 
         resp = self.storage.delete_matching(
             "client_admins",
@@ -305,7 +326,10 @@ class Client:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client not found",
+                     client_id=client_id
+                )
             case Response(status="ok", message=Message.DELETED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
@@ -317,7 +341,10 @@ class Client:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND, data=None):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client not found",
+                     client_id=client_id
+                )
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
@@ -328,7 +355,10 @@ class Client:
                 raise api_errors.InternalError()
             case Response(status="ok", data=None):
                 # client has no admins
-                return ClientResponse("error", Message.INVALID)
+                raise api_errors.ConflictError(
+                    "Client has no admins",
+                     client_id=client_id
+                )
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
         admin_records = resp.data
         assert isinstance(admin_records, list)
@@ -350,7 +380,10 @@ class Client:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", data=None):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client not found",
+                     client_id=client_id
+                )
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
@@ -388,7 +421,10 @@ class Client:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "Client not found",
+                     client_id=client_id
+                )
             case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS, client_secret)
         raise ValueError(f"Unexpected response: {resp}")
@@ -453,7 +489,10 @@ class ClientAPIKey:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
-                return ClientResponse("error", Message.NOT_FOUND)
+                raise api_errors.ConflictError(
+                    "API key not found",
+                     client_id=client_id, name=name
+                )
             case Response(status="ok", message=Message.DELETED):
                 return ClientResponse(*resp)
         raise ValueError(f"Unexpected response: {resp}")
