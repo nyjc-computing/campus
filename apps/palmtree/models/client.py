@@ -7,6 +7,7 @@ and API keys for Campus services.
 import os
 from typing import Literal, NotRequired, TypedDict
 
+from apps.palmtree.errors import api_errors
 from common.drum import sqlite
 from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
@@ -117,7 +118,7 @@ class ClientIdRequest:
         resp = self.storage.insert("client_requests", request)
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok"):
                 return ClientResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
@@ -127,7 +128,7 @@ class ClientIdRequest:
         resp = self.storage.get_by_id("client_requests", client_request_id)
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.FOUND, data=result):
@@ -139,7 +140,7 @@ class ClientIdRequest:
         resp = self.storage.delete_by_id("client_requests", client_request_id)
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.DELETED):
@@ -155,7 +156,7 @@ class ClientIdRequest:
         )
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.UPDATED):
@@ -171,7 +172,7 @@ class ClientIdRequest:
         )
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.UPDATED):
@@ -183,7 +184,7 @@ class ClientIdRequest:
         resp = self.storage.get_all("client_requests")
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ClientResponse("ok", Message.FOUND, result)
             case Response(status="ok", message=Message.EMPTY):
@@ -232,7 +233,7 @@ class Client:
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
                 self.storage.rollback_transaction()
-                return ClientResponse("error", Message.FAILED, responses)
+                raise api_errors.InternalError("Some operations failed")
             else:
                 self.storage.commit_transaction()
                 return ClientResponse("ok", Message.SUCCESS, record)
@@ -248,13 +249,16 @@ class Client:
         if not updates:
             return ClientResponse("ok", Message.EMPTY, "Nothing to update")
         if "admins" in updates:
-            return ClientResponse("error", Message.NOT_ALLOWED, "Admins may not be updated directly (use add/remove admin endpoints instead)")
+            raise api_errors.InvalidRequestError(
+                message="Admins may not be updated directly (use add/remove admin endpoints instead)",
+                invalid_fields=["admins"]
+            )
         validate_keys(updates, ClientRecord.__required_keys__, required=False)
 
         resp = self.storage.update_by_id("clients", client_id, updates)
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.UPDATED):
@@ -269,7 +273,7 @@ class Client:
         )
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.CREATED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
@@ -283,7 +287,7 @@ class Client:
         )
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.EMPTY):
                 return ClientResponse("error", Message.NOT_FOUND, "Client not found")
             case Response(status="ok", message=Message.FOUND, data=result):
@@ -299,7 +303,7 @@ class Client:
         )
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.DELETED):
@@ -311,7 +315,7 @@ class Client:
         resp = self.storage.get_by_id("clients", client_id)
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND, data=None):
                 return ClientResponse("error", Message.NOT_FOUND)
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
@@ -321,7 +325,7 @@ class Client:
         resp = self.storage.get_matching("client_admins", {"client_id": client_id})
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", data=None):
                 # client has no admins
                 return ClientResponse("error", Message.INVALID)
@@ -344,7 +348,7 @@ class Client:
         resp = self.get_client(client_id)
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", data=None):
                 return ClientResponse("error", Message.NOT_FOUND)
         assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
@@ -363,7 +367,7 @@ class Client:
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
                 self.storage.rollback_transaction()
-                return ClientResponse("error", Message.FAILED, responses)
+                raise api_errors.InternalError("Some operations failed")
             else:
                 self.storage.commit_transaction()
                 return ClientResponse("ok", Message.SUCCESS)
@@ -382,7 +386,7 @@ class Client:
         )
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.UPDATED):
@@ -409,7 +413,10 @@ class ClientAPIKey:
             A ClientResponse indicating the result of the operation.
         """
         if not validname.is_valid_label(name):
-            return ClientResponse("error", "Invalid API key name")
+            raise api_errors.InvalidRequestError(
+                message="Invalid API key name",
+                invalid_values=["name"]
+            )
         api_key = secret.generate_api_key()
         record = APIKeyRecord(
             client_id=client_id,
@@ -419,7 +426,7 @@ class ClientAPIKey:
         resp = self.storage.insert("api_keys", record)
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.CREATED):
                 return ClientResponse("ok", "API key created", record["key"])
         raise ValueError(f"Unexpected response: {resp}")
@@ -429,7 +436,7 @@ class ClientAPIKey:
         resp = self.storage.get_matching("api_keys", {"client_id": client_id})
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ClientResponse("ok", Message.SUCCESS, result)
             case Response(status="ok", message=Message.EMPTY):
@@ -444,7 +451,7 @@ class ClientAPIKey:
         )
         match resp:
             case Response(status="error"):
-                return ClientResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 return ClientResponse("error", Message.NOT_FOUND)
             case Response(status="ok", message=Message.DELETED):
