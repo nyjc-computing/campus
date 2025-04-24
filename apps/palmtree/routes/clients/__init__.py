@@ -1,6 +1,7 @@
 from flask import Blueprint, request
 
 from apps.palmtree.models import client, user
+from apps.palmtree.errors import api_errors
 from common.schema import Message, Response
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
@@ -30,22 +31,29 @@ def apply_for_client():
     if not POST:
         return {"message": "Not implemented"}, 501
     data = request.get_json()
-    # TODO: validate field data
+    missing_fields = list(
+        filter(
+            lambda field: field not in data,
+            ("requester", "name", "description")
+        )
+    )
+    if missing_fields:
+        raise api_errors.InvalidRequestError(
+            message="Required fields missing",
+            missing_fields=missing_fields
+        )
     # TODO: use token to authenticate user
-    for field in ("requester", "name", "description"):
-        assert field in data
     resp = users.get(data["requester"])
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.NOT_FOUND):
-            return {"error": "Requester not found"}, 400
+            # This case shouldn't exist because eventually the requester
+            # will be identified by auth token in the request instead of
+            # passing the requester in the request body
+            return {"error": "Requester not found"}, 403
         case Response(status="ok", message=Message.FOUND):
             pass
     resp = client_requests.submit_client_request(**data)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.CREATED):
             return {"message": "Client request submitted"}, 201
     return {"message": "unexpected error occurred"}, 500
@@ -60,8 +68,6 @@ def edit_client():
     data = request.get_json()
     resp = clients.update_client(**data)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.UPDATED):
             return {"message": "Client updated"}, 200
     return {"message": "unexpected error occurred"}, 500
@@ -75,8 +81,6 @@ def get_application_status(client_request_id: str):
     # TODO: validate, authenticate
     resp = client_requests.get_client_request(client_request_id)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.FOUND, data=result):
             return result, 200
     return {"message": "unexpected error occurred"}, 500
@@ -89,8 +93,6 @@ def approve_application(client_request_id: str):
     # TODO: validate, authenticate
     resp = client_requests.approve_client_request(client_request_id)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.CREATED, data=result):
             return result, 201
     return {"message": "unexpected error occurred"}, 500
@@ -104,8 +106,6 @@ def reject_application(client_request_id: str):
     # TODO: validate, authenticate
     resp = client_requests.reject_client_request(client_request_id)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.CREATED, data=result):
             return result, 201
     return {"message": "unexpected error occurred"}, 500
@@ -119,8 +119,6 @@ def get_client_details(client_id: str):
     # TODO: validate, authenticate
     resp = clients.get_client(client_id)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.FOUND, data=result):
             return result, 200
     return {"message": "unexpected error occurred"}, 500
@@ -134,8 +132,6 @@ def revoke_client(client_id: str):
     # TODO: validate, authenticate
     resp = clients.revoke_client(client_id)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.CREATED, data=result):
             return result, 201
     return {"message": "unexpected error occurred"}, 500
@@ -149,8 +145,6 @@ def get_client_api_keys(client_id: str):
     # TODO: validate, authenticate
     resp = api_keys.get_api_keys(client_id)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.FOUND, data=result):
             return result, 200
     return {"message": "unexpected error occurred"}, 500
@@ -165,8 +159,6 @@ def create_client_api_key(client_id: str):
     data = request.get_json()
     resp = api_keys.create_api_key(client_id, **data)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.CREATED, data=result):
             return result, 201
     return {"message": "unexpected error occurred"}, 500
@@ -180,8 +172,6 @@ def delete_client_api_key(client_id: str, name: str):
     # TODO: validate, authenticate
     resp = api_keys.delete_api_key(client_id, name)
     match resp:
-        case Response(status="error", data=err):
-            return {"error": err}, 500
         case Response(status="ok", message=Message.DELETED, data=result):
             return result, 200
     return {"message": "unexpected error occurred"}, 500
