@@ -13,6 +13,7 @@ JsonDict = dict[str, JsonValues]
 
 
 class ErrorConstant(str):
+    CONFLICT = "CONFLICT"
     INVALID_REQUEST = "INVALID_REQUEST"
     SERVER_ERROR = "SERVER_ERROR"
 

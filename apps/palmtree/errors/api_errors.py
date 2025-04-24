@@ -55,3 +55,22 @@ class UnauthorizedError(APIError):
             **details
     ) -> None:
         super().__init__(message, error_code, **details)
+
+
+class ConflictError(APIError):
+    """Conflict error.
+
+    Error indicates that the request conflicts with the current state of the
+    server.
+    E.g. trying to create a resource that already exists, delete a resource
+      that does not exist, etc.
+    """
+    status_code: int = 409
+
+    def __init__(
+            self,
+            message: str = "Conflict",
+            error_code: str = ErrorConstant.CONFLICT,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
