@@ -148,7 +148,7 @@ class OTPAuth:
         resp = self.storage.insert('otp_codes', otp_code._asdict())
         match resp:
             case Response(status="error"):
-                return OTPResponse(*resp)
+                raise api_errors.InternalError(resp.message)
             case Response(status="ok", message=Message.CREATED):
                 return OTPResponse("ok", "OTP created", plain_otp)
         raise ValueError(f"Unexpected response from storage: {resp}")
@@ -168,7 +168,7 @@ class OTPAuth:
         resp = self.storage.get_by_id('otp_codes', email)
         match resp:
             case Response(status="error"):
-                return OTPResponse(*resp)
+                raise api_errors.InternalError(resp.message)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError("OTP not found")
 
@@ -201,9 +201,9 @@ class OTPAuth:
         resp = self.storage.delete_by_id('otp_codes', email)
         match resp:
             case Response(status="error"):
-                return OTPResponse(*resp)
+                raise api_errors.InternalError(resp.message)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return OTPResponse("ok", "OTP not found")
+                raise api_errors.ConflictError("OTP not found")
             case Response(status="ok", message=Message.DELETED):
                 return OTPResponse("ok", "OTP deleted")
             case _:

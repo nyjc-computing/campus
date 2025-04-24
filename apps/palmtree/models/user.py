@@ -64,7 +64,10 @@ class User:
             case Response(status="ok", message=Message.FOUND):
                 return UserResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return UserResponse(*resp)
+                raise api_errors.ConflictError(
+                    message="User not found",
+                    user_id=user_id
+                )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
     def update(self, user_id: str, updates: dict) -> UserResponse:
@@ -76,6 +79,9 @@ class User:
             case Response(status="ok", message=Message.UPDATED):
                 return UserResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return UserResponse(*resp)
+                raise api_errors.ConflictError(
+                    message="User not found",
+                    user_id=user_id
+                )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
