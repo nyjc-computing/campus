@@ -11,6 +11,7 @@ from typing import Any, Literal, NamedTuple
 
 import bcrypt
 
+from apps.palmtree.errors import api_errors
 from common.drum import sqlite
 from common.schema import Message, Response
 from common.utils import utc_time
@@ -136,7 +137,7 @@ class OTPAuth:
         # Delete any existing OTP for this email
         resp = self.storage.delete_by_id('otp_codes', email)
         if resp.status == "error":
-            return OTPResponse("error", resp.message)
+            raise api_errors.InternalError(resp.message)
         # Insert new OTP
         otp_code = OTP(
             email=email,
@@ -169,7 +170,7 @@ class OTPAuth:
             case Response(status="error"):
                 return OTPResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return OTPResponse("error", "OTP not found")
+                raise api_errors.ConflictError("OTP not found")
 
         _, _, record = resp
         assert isinstance(record, dict)  # appeasing mypy gods
@@ -182,13 +183,13 @@ class OTPAuth:
 
         # Check if OTP is expired
         if utc_time.is_expired(expires_at):
-            return OTPResponse("error", "OTP expired")
+            raise api_errors.UnauthorizedError("OTP expired")
 
         # Verify OTP
         if hashed_otp.verify(_plainOTP(plain_otp)):
             return OTPResponse("ok", "OTP verified")
         else:
-            return OTPResponse("error", "Invalid OTP")
+            raise api_errors.UnauthorizedError("Invalid OTP")
 
     def revoke(self, email: str) -> OTPResponse:
         """
