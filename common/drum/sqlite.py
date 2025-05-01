@@ -1,9 +1,13 @@
+"""common/drum/sqlite.py
+
+SQLite implementation of the Drum interface.
+"""
 # Use a hardcoded db file for testing
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, Generator, TypedDict
+from typing import Any, TypedDict
 
 from common.schema import Message, Response
 
@@ -30,7 +34,8 @@ class CursorResult(TypedDict):
     lastrowid: int | None
     rowcount: int
     result: list[Record] | Record | None
-    
+
+
 class SqliteDrum:
     """SQLite implementation of the Drum interface."""
     def __init__(self):
