@@ -7,7 +7,7 @@ and API keys for Campus services.
 import os
 from typing import Literal, NotRequired, TypedDict
 
-from common.drum import sqlite
+from common.drum import postgres
 from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
 from common.validation import name as validname
@@ -20,8 +20,9 @@ Email = str
 
 def init_db():
     """Initialize the database with the necessary tables."""
-    conn = sqlite.get_conn()
-    conn.execute("""
+    conn = postgres.get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS client_requests (
             id TEXT PRIMARY KEY,
             requester TEXT NOT NULL,
@@ -32,19 +33,20 @@ def init_db():
             CHECK (status IN ('review', 'rejected', 'approved'))
         )
     """)
-    conn.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS clients (
             id TEXT PRIMARY KEY,
             client_secret TEXT NOT NULL,
             name TEXT NOT NULL,
             description TEXT,
-            created_on TEXT NOT NULL
+            created_on TEXT NOT NULL,
+            UNIQUE (client_secret),
         )
     """)
     # Note that junction tables violate the assumption of a single-column
     # string primary key, as they are not expected to be directly queried
     # by end users.
-    conn.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS client_admins (
             client_id TEXT NOT NULL,
             admin_id TEXT NOT NULL,
@@ -52,15 +54,17 @@ def init_db():
             FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
         )
     """)
-    conn.execute("""
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS api_keys (
             client_id TEXT NOT NULL,
             name TEXT NOT NULL,
             key TEXT NOT NULL,
             PRIMARY KEY (client_id, name),
+            UNIQUE (key),
             FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
         )
     """)
+    conn.commit()
     conn.close()
 
 
@@ -102,7 +106,7 @@ class ClientIdRequest:
 
     def __init__(self):
         """Initialize the Client model with a storage interface."""
-        self.storage = sqlite.SqliteDrum()
+        self.storage = postgres.PostgresDrum()
 
     def submit_client_request(self, **fields) -> ClientResponse:
         """Submit a request for a new client id."""
@@ -196,7 +200,7 @@ class Client:
 
     def __init__(self):
         """Initialize the Client model with a storage interface."""
-        self.storage = sqlite.SqliteDrum()
+        self.storage = postgres.PostgresDrum()
 
     def create_client(self, **fields) -> ClientResponse:
         """Create a new client with associated admins."""
@@ -208,7 +212,7 @@ class Client:
             client_id=client_id,
             secret_hash=secret.hash_client_secret(
                 client_secret,
-                os.environ["PALMTREE_SECRET_KEY"]
+                os.environ["SECRET_KEY"]
             ),
             **fields,
             created_on=utc_time.now(),
@@ -314,7 +318,7 @@ class Client:
                 return ClientResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND, data=None):
                 return ClientResponse("error", Message.NOT_FOUND)
-        assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
+        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
 
@@ -325,7 +329,7 @@ class Client:
             case Response(status="ok", data=None):
                 # client has no admins
                 return ClientResponse("error", Message.INVALID)
-        assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
+        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
         admin_records = resp.data
         assert isinstance(admin_records, list)
         assert all(
@@ -347,7 +351,7 @@ class Client:
                 return ClientResponse(*resp)
             case Response(status="ok", data=None):
                 return ClientResponse("error", Message.NOT_FOUND)
-        assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
+        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
 
@@ -394,7 +398,7 @@ class ClientAPIKey:
     """Model for database operations related to client API keys."""
 
     def __init__(self):
-        self.storage = sqlite.SqliteDrum()
+        self.storage = postgres.PostgresDrum()
 
     def create_api_key(self, client_id: str, *, name: str) -> ClientResponse:
         """Create a new API key for a client.
