@@ -1,7 +1,8 @@
 from flask import Blueprint, request
 
 from apps.palmtree.models import user
-from common.schema import Message
+from apps.palmtree.errors import api_errors
+from common.schema import Message, Response
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 
@@ -26,11 +27,8 @@ def get_authenticated_user():
 def get_user(user_id: str):
     """Get a single user's summary."""
     summary = {}
-    resp, status = get_user_profile(user_id)
-    if status != 200:
-        return resp, status
-    else:
-        summary['profile'] = resp
+    resp, _ = get_user_profile(user_id)
+    summary['profile'] = resp.data
     # future calls for other user info go here
     return summary, 200
 
@@ -41,25 +39,18 @@ def patch_user_profile(user_id: str):
         return {"error": "Request must be JSON"}, 400
     update = request.get_json()
     resp = users.update(user_id, update)
-    match resp:
-        case ("error", msg, _):
-            return {"error": msg}, 500
-        case ("ok", Message.UPDATED, _):
-            return {"message": "Profile updated"}, 200
-        case _:
-            raise ValueError(f"Unexpected case: {resp}")
+    return {"message": "Profile updated"}, 200
 
 @bp.get('/<string:user_id>/profile')
 def get_user_profile(user_id: str):
     """Get a single user's profile."""
     resp = users.get(user_id)
     match resp:
-        case ("error", msg, _):
-            return {"error": msg}, 500
-        case ("ok", msg, None):
-            return {"error": msg}, 404
-        case ("ok", Message.FOUND, user):
+        case Response(status="ok", message=msg, data=None):
+            raise api_errors.ConflictError(
+                message="User not found"
+            )
+        case Response(status="ok", message=Message.FOUND, data=user):
             return user, 200
-        case _:
-            raise ValueError(f"Unexpected case: {resp}")
+    raise ValueError(f"Unexpected response: {resp}")
 
