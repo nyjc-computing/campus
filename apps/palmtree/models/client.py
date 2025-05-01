@@ -212,7 +212,7 @@ class Client:
             client_id=client_id,
             secret_hash=secret.hash_client_secret(
                 client_secret,
-                os.environ["PALMTREE_SECRET_KEY"]
+                os.environ["SECRET_KEY"]
             ),
             **fields,
             created_on=utc_time.now(),
