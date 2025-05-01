@@ -1,32 +1,25 @@
-"""common/drum/sqlite.py
+"""common/drum/postgres.py
 
-SQLite implementation of the Drum interface.
+PostgreSQL implementation of the Drum interface.
 """
-# Use a hardcoded db file for testing
 
-import sqlite3
+import os
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Any, TypedDict
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 from common.schema import Message, Response
 
 from .base import PK, Condition, DrumResponse, Record, Update
 
 
-def dict_factory(cursor, row) -> Record:
-    """An sqlite3 row factory that returns a dictionary."""
-    d = {
-        col[0]: row[idx]
-        for idx, col in enumerate(cursor.description)
-    }
-    return d
-
-def get_conn() -> sqlite3.Connection:
-    """Get a prepared connection to the sqlite3 database."""
-    conn = sqlite3.connect('test.db')
-    conn.execute('PRAGMA foreign_keys = ON')
-    conn.row_factory = dict_factory
+def get_conn() -> psycopg2.extensions.connection:
+    """Get a prepared connection to the PostgreSQL database."""
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    conn.autocommit = False
     return conn
 
 
@@ -36,14 +29,14 @@ class CursorResult(TypedDict):
     result: list[Record] | Record | None
 
 
-class SqliteDrum:
-    """SQLite implementation of the Drum interface."""
+class PostgresDrum:
+    """PostgreSQL implementation of the Drum interface."""
     def __init__(self):
         self.transaction = None
         self._responses = None
 
     @contextmanager
-    def use_transaction(self) -> Generator[sqlite3.Connection, None, None]:
+    def use_transaction(self) -> Generator[psycopg2.extensions.connection, None, None]:
         self.begin_transaction()
         assert self.transaction is not None
         try:
@@ -88,9 +81,9 @@ class SqliteDrum:
     def _execute_callback(
             self,
             *args,
-            callback: Callable[[sqlite3.Cursor], Any] | None = None,
+            callback: Callable[[psycopg2.extensions.cursor], Any] | None = None,
             commit: bool = True,
-            conn: sqlite3.Connection | None = None,
+            conn: psycopg2.extensions.connection | None = None,
     ) -> DrumResponse:
         """Execute a typical query, using a callback to handle the cursor.
 
@@ -111,55 +104,52 @@ class SqliteDrum:
                 "A transaction is in progress, cannot commit\n"
                 "Hint: unset commit keyword argument"
             )
-        # We allow callback while a transaction is in progress, since it is used
-        # to perform SELECT queries and should not affect the transaction.
         conn = self.transaction or get_conn()
         try:
-            cursor = conn.execute(*args)
-        except sqlite3.DatabaseError as e:
-            return DrumResponse('error', Message.FAILED, str(e))
-        # Don't catch other kinds of errors
-        else:
-            if callback:
-                result = callback(cursor)
-                return DrumResponse(
-                    'ok',
-                    Message.COMPLETED,
-                    CursorResult(
-                        lastrowid=cursor.lastrowid,
-                        rowcount=cursor.rowcount,
-                        result=result
-                    )
-                )
-            if self.transaction:
-                assert isinstance(self._responses, list)
-                self._responses.append(
-                    DrumResponse(
+            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(*args)
+                if callback:
+                    result = callback(cursor)
+                    return DrumResponse(
                         'ok',
                         Message.COMPLETED,
                         CursorResult(
-                            lastrowid=cursor.lastrowid,
+                            lastrowid=cursor.lastrowid if cursor.lastrowid else None,
+                            rowcount=cursor.rowcount,
+                            result=result
+                        )
+                    )
+                if self.transaction:
+                    assert isinstance(self._responses, list)
+                    self._responses.append(
+                        DrumResponse(
+                            'ok',
+                            Message.COMPLETED,
+                            CursorResult(
+                                lastrowid=cursor.lastrowid if cursor.lastrowid else None,
+                                rowcount=cursor.rowcount,
+                                result=None
+                            )
+                        )
+                    )
+                elif commit:
+                    conn.commit()
+                    return DrumResponse(
+                        'ok',
+                        Message.COMPLETED,
+                        CursorResult(
+                            lastrowid=cursor.lastrowid if cursor.lastrowid else None,
                             rowcount=cursor.rowcount,
                             result=None
                         )
                     )
-                )
-            elif commit:
-                conn.commit()
-                return DrumResponse(
-                    'ok',
-                    Message.COMPLETED,
-                    CursorResult(
-                        lastrowid=cursor.lastrowid,
-                        rowcount=cursor.rowcount,
-                        result=None
-                    )
-                )
+        except psycopg2.DatabaseError as e:
+            return DrumResponse('error', Message.FAILED, str(e))
         finally:
             if not self.transaction:
                 conn.close()
         raise AssertionError("unreachable")
-    
+
     def get_all(self, group: str) -> DrumResponse:
         """Retrieve all records from table"""
         resp = self._execute_callback(
@@ -179,7 +169,7 @@ class SqliteDrum:
     def get_by_id(self, group: str, id: str) -> DrumResponse:
         """Retrieve a record from table by its id"""
         resp = self._execute_callback(
-            f"""SELECT FROM {group} WHERE {PK} = ?""",
+            f"""SELECT * FROM {group} WHERE {PK} = %s""",
             (id,),
             callback=lambda cursor: cursor.fetchone()
         )
@@ -191,17 +181,84 @@ class SqliteDrum:
             case Response(status="ok", data=record):
                 return DrumResponse("ok", Message.FOUND, record)
         raise ValueError(f"Unexpected case: {resp}")
-            
+
+    def insert(self, group: str, record: Record) -> DrumResponse:
+        """Insert a new record into the table"""
+        assert PK in record, f"Record must have a {PK} field"
+        keys = ", ".join(record.keys())
+        placeholders = ", ".join("%s" for _ in record)
+        resp = self._execute_callback(
+            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders})""",
+            tuple(record.values())
+        )
+        match resp:
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=result):
+                assert result["rowcount"] == 1  # confirm one row inserted
+                return DrumResponse("ok", Message.SUCCESS)
+        raise ValueError(f"Unexpected case: {resp}")
+
+    def delete_by_id(self, group: str, id: str) -> DrumResponse:
+        """Delete a record from table by its id"""
+        resp = self._execute_callback(
+            f"""DELETE FROM {group} WHERE {PK} = %s""",
+            (id,)
+        )
+        match resp:
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=result):
+                if result["rowcount"] == 0:
+                    return DrumResponse("ok", Message.NOT_FOUND)
+                else:
+                    return DrumResponse("ok", Message.DELETED, result["rowcount"])
+        raise ValueError(f"Unexpected case: {resp}")
+
+    def update_by_id(self, group: str, id: str, updates: Update) -> DrumResponse:
+        """Update a record in the table by its id"""
+        assert PK not in updates, f"Updates must not include a {PK} field"
+        set_clause = ", ".join(f"{field} = %s" for field in updates)
+        resp = self._execute_callback(
+            f"""UPDATE {group} SET {set_clause} WHERE {PK} = %s""",
+            tuple(updates.values()) + (id,)
+        )
+        match resp:
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", data=result):
+                if result["rowcount"] == 0:
+                    return DrumResponse("ok", Message.NOT_FOUND)
+                else:
+                    assert result["rowcount"] == 1
+                    return DrumResponse("ok", Message.UPDATED)
+        raise ValueError(f"Unexpected case: {resp}")
+
+    def set(self, group: str, record: Record) -> DrumResponse:
+        """Update an existing record, or insert a new one if it doesn't exist"""
+        assert PK in record, f"Record must have a {PK} field"
+        resp = self.get_by_id(group, record[PK])
+        match resp:
+            case Response(status="error", message=Message.FAILED, data=err):
+                return DrumResponse("error", Message.FAILED, err)
+            case Response(status="ok", message=Message.NOT_FOUND):
+                return self.insert(group, record)
+            case Response(status="ok", message=Message.FOUND, data=result):
+                existing_record = result["result"]
+                assert isinstance(existing_record, dict)
+                updates = {
+                    key: value
+                    for key, value in record.items()
+                    if existing_record.get(key) != value
+                }
+                return self.update_by_id(group, record[PK], updates)
+        raise ValueError(f"Unexpected case: {resp}")
+
     def get_matching(self, group: str, condition: Condition) -> DrumResponse:
         """Retrieve records from table that match the condition"""
         if not condition:
-            raise ValueError(
-                "Condition must not be empty\n"
-                "Hint: use get_all() to retrieve all records"
-                )
-        where_clause = " AND ".join(
-            f"{key} = ?" for key in condition
-        )
+            raise ValueError("Condition must not be empty")
+        where_clause = " AND ".join(f"{key} = %s" for key in condition)
         resp = self._execute_callback(
             f"""SELECT * FROM {group} WHERE {where_clause}""",
             tuple(condition.values()),
@@ -217,36 +274,15 @@ class SqliteDrum:
                     return DrumResponse("ok", Message.EMPTY, records)
         raise ValueError(f"Unexpected case: {resp}")
 
-    def delete_by_id(self, group: str, id: str) -> DrumResponse:
-        """Delete a record from table by its id"""
-        resp = self._execute_callback(
-            f"""DELETE FROM {group} WHERE {PK} = ?;""",
-            (id,)
-        )
-        match resp:
-            case Response(status="error", message=Message.FAILED, data=err):
-                return DrumResponse("error", Message.FAILED, err)
-            case Response(status="ok", data=result):
-                if result["rowcount"] == 0:
-                    return DrumResponse("ok", Message.NOT_FOUND)
-                else:
-                    return DrumResponse("ok", Message.DELETED, result["rowcount"])
-        raise ValueError(f"Unexpected case: {resp}")
-
     def delete_matching(self, group: str, condition: Condition) -> DrumResponse:
         """Delete records from table that match the condition"""
         if not condition:
             raise ValueError("Condition must not be empty")
-        where_clause = " AND ".join(
-            f"{key} = ?" for key in condition
+        where_clause = " AND ".join(f"{key} = %s" for key in condition)
+        resp = self._execute_callback(
+            f"""DELETE FROM {group} WHERE {where_clause}""",
+            tuple(condition.values())
         )
-        if condition:
-            resp = self._execute_callback(
-                f"""DELETE FROM {group} WHERE {where_clause};""",
-                tuple(condition.values())
-            )
-        else:
-            resp = self._execute_callback(f"""DELETE FROM {group};""")
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
@@ -257,66 +293,16 @@ class SqliteDrum:
                     return DrumResponse("ok", Message.DELETED, result["rowcount"])
         raise ValueError(f"Unexpected case: {resp}")
 
-    def insert(self, group: str, record: Record) -> DrumResponse:
-        """Insert a new record into the table"""
-        assert PK in record, f"Record must have a {PK} field"
-        keys = ", ".join(record.keys())
-        placeholders = ", ".join("?" * len(record))
-        resp = self._execute_callback(
-            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders})""",
-            tuple(record.values())
-        )
-        match resp:
-            case Response(status="error", message=Message.FAILED, data=err):
-                return DrumResponse("error", Message.FAILED, err)
-            case Response(status="ok", data=result):
-                assert result["rowcount"] == 1  # confirm one row inserted
-                return DrumResponse("ok", Message.SUCCESS)
-        raise ValueError(f"Unexpected case: {resp}")
-
-    def update_by_id(self, group: str, id: str, updates: Update) -> DrumResponse:
-        """Update a record in the table by its id"""
-        assert PK not in updates, f"Updates must not include a {PK} field"
-        set_clause = ", ".join(
-            f"{field} = ?" for field in updates
-        )
-        resp = self._execute_callback(
-            f"""UPDATE {group} SET {set_clause} WHERE {PK} = ?""",
-            tuple(updates.values()) + (id,)
-        )
-        match resp:
-            case Response(status="error", message=Message.FAILED, data=err):
-                return DrumResponse("error", Message.FAILED, err)
-            case Response(status="ok", data=result):
-                if result["rowcount"] == 0:
-                    return DrumResponse("ok", Message.NOT_FOUND)
-                else:
-                    assert result["rowcount"] == 1
-                    return DrumResponse("ok", Message.UPDATED)
-        raise ValueError(f"Unexpected case: {resp}")
-            
-    def update_matching(
-            self,
-            group: str,
-            updates: Update,
-            condition: Condition,
-    ) -> DrumResponse:
+    def update_matching(self, group: str, updates: Update, condition: Condition) -> DrumResponse:
         """Update records from table that match the condition"""
         if not condition:
             raise ValueError("Condition must not be empty")
         if PK in updates:
-            raise ValueError(
-                f"Updates must not include a {PK} field\n"
-                "Hint: use set() to update a record by id"
-            )
-        set_clause = ", ".join(
-            f"{key} = ?" for key in updates
-        )
-        where_clause = " AND ".join(
-            f"{key} = ?" for key in condition
-        )
+            raise ValueError(f"Updates must not include a {PK} field")
+        set_clause = ", ".join(f"{key} = %s" for key in updates)
+        where_clause = " AND ".join(f"{key} = %s" for key in condition)
         resp = self._execute_callback(
-            f"""UPDATE {group} SET {set_clause} WHERE {where_clause};""",
+            f"""UPDATE {group} SET {set_clause} WHERE {where_clause}""",
             tuple(updates.values()) + tuple(condition.values())
         )
         match resp:
@@ -327,27 +313,4 @@ class SqliteDrum:
                     return DrumResponse("ok", Message.NOT_FOUND)
                 else:
                     return DrumResponse("ok", Message.UPDATED, result["rowcount"])
-        raise ValueError(f"Unexpected case: {resp}")
-
-    def set(self, group: str, record: Record) -> DrumResponse:
-        """Update an existing record, or insert a new one if it doesn't exist"""
-        assert PK in record, f"Record must have a {PK} field"
-        # Check if the record exists
-        resp = self.get_by_id(group, record[PK])
-        match resp:
-            case Response(status="error", message=Message.FAILED, data=err):
-                return DrumResponse("error", Message.FAILED, err)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                # Record does not exist, perform an insert
-                return self.insert(group, record)
-            case Response(status="ok", message=Message.FOUND, data=result):
-                existing_record = result["result"]
-                assert isinstance(existing_record, dict)  # appease mypy gods
-                # Record exists, perform an update
-                updates = {
-                    key: value
-                    for key, value in record.items()
-                    if existing_record.get(key) != value
-                }
-                return self.update_by_id(group, record[PK], updates)
         raise ValueError(f"Unexpected case: {resp}")

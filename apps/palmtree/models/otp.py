@@ -7,20 +7,21 @@ generating, hashing, verifying, and managing OTPs securely.
 """
 
 import secrets
-from typing import Any, Literal, NamedTuple
+from typing import Any, NamedTuple
 
 import bcrypt
 
 from apps.palmtree.errors import api_errors
-from common.drum import sqlite
+from common.drum import postgres
 from common.schema import Message, Response
 from common.utils import utc_time
 
 
 def init_db():
     """Initialize the database with the necessary tables."""
-    conn = sqlite.get_conn()
-    conn.execute("""
+    conn = postgres.get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS otp_codes (
             email TEXT PRIMARY KEY,
             otp_hash TEXT NOT NULL,
@@ -28,6 +29,7 @@ def init_db():
             expires_at TEXT NOT NULL
         )
     """)
+    conn.commit()
     conn.close()
 
 
@@ -112,7 +114,7 @@ class OTPAuth:
         Args:
             storage: Implementation of StorageInterface for database operations.
         """
-        self.storage = sqlite.SqliteDrum()
+        self.storage = postgres.PostgresDrum()
 
     def create(self, email: str, expiry_minutes: int | float = 5) -> OTPResponse:
         """
