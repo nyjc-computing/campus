@@ -6,7 +6,7 @@ API error handling for Palmtree.
 from werkzeug.exceptions import HTTPException, InternalServerError
 
 from .base import APIError, JsonDict
-from .api_errors import InvalidRequestError
+from . import api_errors
 
 
 def handle_api_error(err: APIError) -> tuple[JsonDict, int]:
@@ -28,7 +28,7 @@ def handle_werkzeug_error(err: HTTPException) -> tuple[JsonDict, int]:
     """
     match err:
         case InternalServerError():
-            return InvalidRequestError().to_dict(), 500
+            return api_errors.InvalidRequestError().to_dict(), 500
         case _:
             raise err
 
