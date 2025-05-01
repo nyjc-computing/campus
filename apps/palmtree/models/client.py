@@ -38,7 +38,8 @@ def init_db():
             client_secret TEXT NOT NULL,
             name TEXT NOT NULL,
             description TEXT,
-            created_on TEXT NOT NULL
+            created_on TEXT NOT NULL,
+            UNIQUE (client_secret),
         )
     """)
     # Note that junction tables violate the assumption of a single-column
@@ -58,6 +59,7 @@ def init_db():
             name TEXT NOT NULL,
             key TEXT NOT NULL,
             PRIMARY KEY (client_id, name),
+            UNIQUE (key),
             FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
         )
     """)
