@@ -4,15 +4,16 @@ User Models
 This module provides classes for managing Campus users.
 """
 
-from common.drum import sqlite
+from common.drum import postgres
 from common.schema import Message, Response
 from common.utils import utc_time
 
 
 def init_db():
     """Initialize the database with the necessary tables."""
-    conn = sqlite.get_conn()
-    conn.execute("""
+    conn = postgres.get_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS user (
             id VARCHAR(255) PRIMARY KEY,
             email TEXT NOT NULL,
@@ -20,6 +21,7 @@ def init_db():
             activated_at TEXT NOT NULL
         )
     """)
+    conn.commit()
     conn.close()
 
 
@@ -38,7 +40,7 @@ class User:
             storage: Implementation of StorageInterface for database
             operations.
         """
-        self.storage = sqlite.SqliteDrum()
+        self.storage = postgres.PostgresDrum()
 
     def activate(self, user_id: str) -> UserResponse:
         """Actions to perform upon first sign-in."""
