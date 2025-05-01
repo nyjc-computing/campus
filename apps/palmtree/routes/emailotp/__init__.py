@@ -30,13 +30,7 @@ def request_otp():
     # TODO: Validate email format
     # TODO: Check if email is already registered
     resp = otp_auth.create(email)
-    match resp:
-        case Response(status="error", message=msg, data=err):
-            return {"error": f"{msg}: {err}"}, 500
-        case Response(status="ok", message=Message.CREATED, data=otp_code):
-            otp_code = str(otp_code)
-        case _:
-            raise ValueError(f"Unexpected case: {resp}")
+    otp_code = str(resp.data)
 
     # Send OTP via email
     email_sender = create_email_sender(EMAIL_PROVIDER)
@@ -46,13 +40,7 @@ def request_otp():
         body=template.body("Campus", otp_code),
         html_body=template.html_body("Campus", otp_code)
     )
-    match resp:
-        case Response(status="error", message=msg, data=err):
-            return {"error": f"{msg}: {err}"}, 500
-        case Response(status="ok", message=Message.SUCCESS, data=_):
-            return {"message": "OTP sent"}, 200
-        case _:
-            raise ValueError(f"Unexpected case: {resp}")
+    return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
 def verify_otp():
@@ -67,11 +55,4 @@ def verify_otp():
     # TODO: Validate email format
     # TODO: Validate OTP format
     resp = otp_auth.verify(email, otp_code)
-    match resp:
-        case Response(status="error", message=msg, data=err):
-            return {"error": f"{msg}: {err}"}, 500
-        case Response(status="ok", message=Message.VALID, data=_):
-            return {"message": "OTP verified"}, 200
-        case _:
-            raise ValueError(f"Unexpected case: {resp}")
-
+    return {"message": "OTP verified"}, 200

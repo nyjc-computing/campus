@@ -11,6 +11,7 @@ from typing import Any, NamedTuple
 
 import bcrypt
 
+from apps.palmtree.errors import api_errors
 from common.drum import postgres
 from common.schema import Message, Response
 from common.utils import utc_time
@@ -138,7 +139,7 @@ class OTPAuth:
         # Delete any existing OTP for this email
         resp = self.storage.delete_by_id('otp_codes', email)
         if resp.status == "error":
-            return OTPResponse("error", resp.message)
+            raise api_errors.InternalError(resp.message)
         # Insert new OTP
         otp_code = OTP(
             email=email,
@@ -149,7 +150,7 @@ class OTPAuth:
         resp = self.storage.insert('otp_codes', otp_code._asdict())
         match resp:
             case Response(status="error"):
-                return OTPResponse(*resp)
+                raise api_errors.InternalError(resp.message)
             case Response(status="ok", message=Message.CREATED):
                 return OTPResponse("ok", "OTP created", plain_otp)
         raise ValueError(f"Unexpected response from storage: {resp}")
@@ -169,9 +170,9 @@ class OTPAuth:
         resp = self.storage.get_by_id('otp_codes', email)
         match resp:
             case Response(status="error"):
-                return OTPResponse(*resp)
+                raise api_errors.InternalError(resp.message)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return OTPResponse("error", "OTP not found")
+                raise api_errors.ConflictError("OTP not found")
 
         _, _, record = resp
         assert isinstance(record, dict)  # appeasing mypy gods
@@ -184,13 +185,13 @@ class OTPAuth:
 
         # Check if OTP is expired
         if utc_time.is_expired(expires_at):
-            return OTPResponse("error", "OTP expired")
+            raise api_errors.UnauthorizedError("OTP expired")
 
         # Verify OTP
         if hashed_otp.verify(_plainOTP(plain_otp)):
             return OTPResponse("ok", "OTP verified")
         else:
-            return OTPResponse("error", "Invalid OTP")
+            raise api_errors.UnauthorizedError("Invalid OTP")
 
     def revoke(self, email: str) -> OTPResponse:
         """
@@ -202,9 +203,9 @@ class OTPAuth:
         resp = self.storage.delete_by_id('otp_codes', email)
         match resp:
             case Response(status="error"):
-                return OTPResponse(*resp)
+                raise api_errors.InternalError(resp.message)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return OTPResponse("ok", "OTP not found")
+                raise api_errors.ConflictError("OTP not found")
             case Response(status="ok", message=Message.DELETED):
                 return OTPResponse("ok", "OTP deleted")
             case _:
