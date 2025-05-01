@@ -3,6 +3,7 @@
 PostgreSQL implementation of the Drum interface.
 """
 
+import os
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from typing import Any, TypedDict
@@ -17,13 +18,7 @@ from .base import PK, Condition, DrumResponse, Record, Update
 
 def get_conn() -> psycopg2.extensions.connection:
     """Get a prepared connection to the PostgreSQL database."""
-    conn = psycopg2.connect(
-        dbname="testdb",
-        user="testuser",
-        password="testpassword",
-        host="localhost",
-        port="5432"
-    )
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
     conn.autocommit = False
     return conn
 
