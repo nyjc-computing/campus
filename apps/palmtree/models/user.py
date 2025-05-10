@@ -56,6 +56,23 @@ class User:
             case Response(status="ok", message=Message.UPDATED):
                 return UserResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")
+    
+    def new(self, user_id: str, email: str) -> UserResponse:
+        """Create a new user."""
+        resp = self.storage.insert(
+            'user',
+            {
+                'id': user_id,
+                'email': email,
+                'activated_at': utc_time.now()
+            }
+        )
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok", message=Message.CREATED):
+                return UserResponse(**resp)
+        raise ValueError(f"Unexpected response from storage: {resp}")
 
     def get(self, user_id: str) -> UserResponse:
         """Get a user by id."""

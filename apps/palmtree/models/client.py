@@ -345,7 +345,7 @@ class Client:
                     "Client not found",
                      client_id=client_id
                 )
-        assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
+        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
 
@@ -359,7 +359,7 @@ class Client:
                     "Client has no admins",
                      client_id=client_id
                 )
-        assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
+        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
         admin_records = resp.data
         assert isinstance(admin_records, list)
         assert all(
@@ -384,7 +384,7 @@ class Client:
                     "Client not found",
                      client_id=client_id
                 )
-        assert isinstance(resp, sqlite.DrumResponse)  # appease mypy
+        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
 
