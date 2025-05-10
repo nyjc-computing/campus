@@ -56,7 +56,7 @@ def init_db():
         )
     """)
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS api_keys (
+        CREATE TABLE IF NOT EXISTS apikeys (
             client_id TEXT NOT NULL,
             name TEXT NOT NULL,
             key TEXT NOT NULL,
@@ -84,11 +84,11 @@ class ClientRecord(TypedDict):
     # client_id and secret_hash will be generated and need not be provided
     client_id: NotRequired[str]
     secret_hash: NotRequired[str]
+    created_on: NotRequired[utc_time.datetime]
+    apikeys: NotRequired[dict[APIName, APIKey]]
     name: str
     description: str
     admins: list[Email]
-    created_on: NotRequired[utc_time.datetime]
-    api_keys: NotRequired[dict[APIName, APIKey]]
 
 
 class APIKeyRecord(TypedDict):
@@ -219,7 +219,7 @@ class Client:
         """Create a new client with associated admins."""
         # Use Client model to validate keyword arguments
         validate_keys(fields, ClientRequest.__required_keys__)
-        client_id = uid.generate_category_uid("client")
+        client_id = uid.generate_category_uid("client", length=6)
         client_secret = secret.generate_client_secret()
         record = ClientRecord(
             client_id=client_id,
@@ -227,8 +227,9 @@ class Client:
                 client_secret,
                 os.environ["SECRET_KEY"]
             ),
-            **fields,
             created_on=utc_time.now(),
+            apikeys={},
+            **fields,
         )
 
         # Registering a client involves multiple database operations
@@ -473,7 +474,7 @@ class ClientAPIKey:
             name=name,
             key=api_key
         )
-        resp = self.storage.insert("api_keys", record)
+        resp = self.storage.insert("apikeys", record)
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
@@ -481,9 +482,9 @@ class ClientAPIKey:
                 return ClientResponse("ok", "API key created", record["key"])
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get_api_keys(self, client_id: str) -> ClientResponse:
+    def get_apikeys(self, client_id: str) -> ClientResponse:
         """Retrieve all API keys for a client."""
-        resp = self.storage.get_matching("api_keys", {"client_id": client_id})
+        resp = self.storage.get_matching("apikeys", {"client_id": client_id})
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
@@ -496,7 +497,7 @@ class ClientAPIKey:
     def delete_api_key(self, client_id: str, name: str) -> ClientResponse:
         """Delete an API key for a client."""
         resp = self.storage.delete_matching(
-            "api_keys",
+            "apikeys",
             {"client_id": client_id, "name": name}
         )
         match resp:
