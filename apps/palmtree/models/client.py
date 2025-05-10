@@ -218,7 +218,7 @@ class Client:
     def new(self, **fields) -> ClientResponse:
         """Create a new client with associated admins."""
         # Use Client model to validate keyword arguments
-        validate_keys(fields, ClientRequest.__required_keys__)
+        validate_keys(fields, ClientRecord.__required_keys__)
         client_id = uid.generate_category_uid("client", length=6)
         client_secret = secret.generate_client_secret()
         record = ClientRecord(
