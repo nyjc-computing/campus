@@ -10,6 +10,7 @@ bp = Blueprint('clients', __name__, url_prefix='/clients')
 GET = True
 PATCH = False
 POST = False
+PUT = False
 DELETE = False
 
 # Database Models
@@ -25,69 +26,23 @@ def init_app(app) -> None:
     return app
 
 
-@bp.post('/applications')
-def apply_for_client():
-    """Apply for a client id and secret."""
+@bp.post('/')
+def create_client():
+    """Create a new client id and secret."""
     if not POST:
-        return {"message": "Not implemented"}, 501
-    data = request.get_json()
-    missing_fields = list(
-        filter(
-            lambda field: field not in data,
-            ("requester", "name", "description")
-        )
-    )
-    if missing_fields:
-        raise api_errors.InvalidRequestError(
-            message="Required fields missing",
-            missing_fields=missing_fields
-        )
-    # Check requester exists
-    # TODO: use token to authenticate user
-    resp = users.get(data["requester"])  # raises APIError
-    resp = client_requests.submit_client_request(**data)
-    return {"message": "Client request submitted"}, 201
-
-
-@bp.patch('/')
-def edit_client():
-    """Edit name, description, or admins of client."""
-    if not PATCH:
         return {"message": "Not implemented"}, 501
     # TODO: validate request, authenticate
     data = request.get_json()
-    clients.update_client(**data)  # raises APIError
-    return {"message": "Client updated"}, 200
+    clients.create_client(**data)  # raises APIError
+    return {"message": "Client created"}, 201
 
-
-@bp.get('/applications/<string:client_request_id>')
-def get_application_status(client_request_id: str):
-    """Get the status of a client application."""
-    if not GET:
+@bp.delete('/<string:client_id>')
+def delete_client(client_id: str):
+    """Delete a client id and secret."""
+    if not DELETE:
         return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = client_requests.get_client_request(client_request_id)  # raises APIError
-    return resp.data, 200
-
-@bp.post('/applications/<string:client_request_id>/approve')
-def approve_application(client_request_id: str):
-    """Approve a client application."""
-    if not POST:
-        return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = client_requests.approve_client_request(client_request_id)  # raises APIError
-    return resp.data, 201
-
-
-@bp.post('/applications/<string:application_id>/reject')
-def reject_application(client_request_id: str):
-    """Reject a client application."""
-    if not POST:
-        return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = client_requests.reject_client_request(client_request_id)  # raises APIError
-    return resp.data, 201
-
+    clients.delete_client(client_id)  # raises APIError
+    return {"message": "Client deleted"}, 200
 
 @bp.get('/<string:client_id>')
 def get_client_details(client_id: str):
@@ -98,14 +53,83 @@ def get_client_details(client_id: str):
     resp = clients.get_client(client_id)  # raises APIError
     return resp.data, 200
 
+@bp.patch('/<string:client_id>')
+def edit_client():
+    """Edit name, description, or admins of client."""
+    if not PATCH:
+        return {"message": "Not implemented"}, 501
+    # TODO: validate request, authenticate
+    data = request.get_json()
+    clients.update_client(**data)  # raises APIError
+    return {"message": "Client updated"}, 200
 
-@bp.post('/<string:client_id>/revoke')
+@bp.post('/<string:client_id>/replace')
 def revoke_client(client_id: str):
     """Revoke a client id and secret, and reissue them."""
     if not POST:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
     resp = clients.revoke_client(client_id)  # raises APIError
+    return resp.data, 201
+
+@bp.get('/applications')
+def get_client_applications():
+    """Get all client applications."""
+    if not GET:
+        return {"message": "Not implemented"}, 501
+    data = request.get_json()
+    resp = client_requests.list_client_requests(**data)  # raises APIError
+    return resp.data, 200
+
+@bp.post('/applications')
+def submit_client_application():
+    """Apply for a client id and secret."""
+    if not POST:
+        return {"message": "Not implemented"}, 501
+    data = request.get_json()
+    missing_fields = list(
+        filter(
+            lambda field: field not in data,
+            ("owner", "name", "description")
+        )
+    )
+    if missing_fields:
+        raise api_errors.InvalidRequestError(
+            message="Required fields missing",
+            missing_fields=missing_fields
+        )
+    # Check owner exists
+    # TODO: use token to authenticate user
+    resp = users.get(data["owner"])  # raises APIError
+    resp = client_requests.submit_client_request(**data)
+    return {"message": "Client request submitted"}, 201
+
+
+@bp.get('/applications/<string:client_application_id>')
+def get_application_status(client_application_id: str):
+    """Get the status of a client application."""
+    if not GET:
+        return {"message": "Not implemented"}, 501
+    # TODO: validate, authenticate
+    resp = client_requests.get_client_request(client_application_id)  # raises APIError
+    return resp.data, 200
+
+@bp.put('/applications/<string:client_application_id>/approve')
+def approve_application(client_application_id: str):
+    """Approve a client application."""
+    if not PUT:
+        return {"message": "Not implemented"}, 501
+    # TODO: validate, authenticate
+    resp = client_requests.approve_client_request(client_application_id)  # raises APIError
+    return resp.data, 201
+
+@bp.put('/applications/<string:application_id>/reject')
+def reject_application(client_application_id: str):
+    """Reject a client application."""
+    if not PUT:
+        return {"message": "Not implemented"}, 501
+    # TODO: validate, authenticate
+    resp = client_requests.reject_client_request(client_application_id)  # raises APIError
     return resp.data, 201
 
 
