@@ -109,33 +109,33 @@ def revoke_client(client_id: str):
     return resp.data, 201
 
 
-@bp.get('/<string:client_id>/api_keys/')
-def get_client_api_keys(client_id: str):
-    """Get API keys requested by client admin."""
-    if not GET:
-        return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = api_keys.get_api_keys(client_id)  # raises APIError
-    return resp.data, 200
+# @bp.get('/<string:client_id>/api_keys/')
+# def get_client_api_keys(client_id: str):
+#     """Get API keys requested by client admin."""
+#     if not GET:
+#         return {"message": "Not implemented"}, 501
+#     # TODO: validate, authenticate
+#     resp = api_keys.get_api_keys(client_id)  # raises APIError
+#     return resp.data, 200
 
 
-@bp.post('/<string:client_id>/api_keys/create')
-def create_client_api_key(client_id: str):
-    """Create a new API key for the client."""
-    if not POST:
-        return {"message": "not implemented"}, 501
-    # TODO: validate, authenticate
-    data = request.get_json()
-    resp = api_keys.create_api_key(client_id, **data)  # raises APIError
-    return resp.data, 201
+# @bp.post('/<string:client_id>/api_keys/create')
+# def create_client_api_key(client_id: str):
+#     """Create a new API key for the client."""
+#     if not POST:
+#         return {"message": "not implemented"}, 501
+#     # TODO: validate, authenticate
+#     data = request.get_json()
+#     resp = api_keys.create_api_key(client_id, **data)  # raises APIError
+#     return resp.data, 201
 
 
-@bp.delete('/<string:client_id>/api_keys/<string:name>')
-def delete_client_api_key(client_id: str, name: str):
-    """Delete an API key for the client."""
-    if not DELETE:
-        return {"message": "not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = api_keys.delete_api_key(client_id, name)  # raises APIError
-    return resp.data, 200
+# @bp.delete('/<string:client_id>/api_keys/<string:name>')
+# def delete_client_api_key(client_id: str, name: str):
+#     """Delete an API key for the client."""
+#     if not DELETE:
+#         return {"message": "not implemented"}, 501
+#     # TODO: validate, authenticate
+#     resp = api_keys.delete_api_key(client_id, name)  # raises APIError
+#     return resp.data, 200
 
