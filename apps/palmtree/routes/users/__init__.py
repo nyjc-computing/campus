@@ -23,6 +23,28 @@ def get_authenticated_user():
     # TODO: Get user id from auth token
     return {"message": "not implemented"}, 501
 
+
+@bp.post('/')
+def create_user():
+    """Create a new user."""
+    if not request.is_json:
+        return {"error": "Request must be JSON"}, 400
+    data = request.get_json()
+    resp = users.new(**data)
+    if resp.status == "ok":
+        return {"message": "User created"}, 201
+    else:
+        return {"error": resp.message}, 400
+    
+@bp.delete('/<string:user_id>')
+def delete_user(user_id: str):
+    """Delete a user."""
+    resp = users.delete(user_id)
+    if resp.status == "ok":
+        return {"message": "User deleted"}, 200
+    else:
+        return {"error": resp.message}, 400
+
 @bp.get('/<string:user_id>')
 def get_user(user_id: str):
     """Get a single user's summary."""

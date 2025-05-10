@@ -19,7 +19,7 @@ def init_db():
             id VARCHAR(255) PRIMARY KEY,
             email TEXT NOT NULL,
             nric_name TEXT NOT NULL,
-            activated_at TEXT NOT NULL
+            activated_at TEXT DEFAULT NULL
         )
     """)
     conn.commit()
@@ -61,17 +61,28 @@ class User:
         """Create a new user."""
         resp = self.storage.insert(
             'user',
-            {
-                'id': user_id,
-                'email': email,
-                'activated_at': utc_time.now()
-            }
+            {'id': user_id, 'email': email}
         )
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.CREATED):
                 return UserResponse(**resp)
+        raise ValueError(f"Unexpected response from storage: {resp}")
+    
+    def delete(self, user_id: str) -> UserResponse:
+        """Delete a user by id."""
+        resp = self.storage.delete_by_id('user', user_id)
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok", message=Message.DELETED):
+                return UserResponse(**resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    message="User not found",
+                    user_id=user_id
+                )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
     def get(self, user_id: str) -> UserResponse:
