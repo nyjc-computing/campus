@@ -25,7 +25,7 @@ def init_app(app) -> None:
     return app
 
 
-@bp.post('/')
+@bp.post('/applications')
 def apply_for_client():
     """Apply for a client id and secret."""
     if not POST:
