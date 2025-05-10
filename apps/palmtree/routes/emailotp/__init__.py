@@ -1,12 +1,15 @@
 from flask import Blueprint, request
 
 from apps.palmtree.models import otp
-from common.schema import Message, Response
+from common.auth import authenticate_client
 from common.services.email import create_email_sender
 
 from . import template
 
 bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
+# All routes in this blueprint can be called by a client without a user token
+# but must be authenticated with a client id and secret
+bp.before_request(authenticate_client)
 
 otp_auth = otp.OTPAuth()
 
