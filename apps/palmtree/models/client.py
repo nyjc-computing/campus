@@ -414,7 +414,7 @@ class Client:
             client_id,
             {"secret_hash": secret.hash_client_secret(
                 client_secret,
-                os.environ["PALMTREE_SECRET_KEY"]
+                os.environ["SECRET_KEY"]
             )}
         )
         match resp:
@@ -439,7 +439,7 @@ class Client:
                 return False
             case Response(status="ok", message=Message.FOUND, data=client):
                 return client["secret_hash"] == secret.hash_client_secret(
-                    client_secret, os.environ["PALMTREE_SECRET_KEY"]
+                    client_secret, os.environ["SECRET_KEY"]
                 )
         return False
 
