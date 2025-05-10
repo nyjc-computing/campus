@@ -116,10 +116,9 @@ class OTPAuth:
         """
         self.storage = postgres.PostgresDrum()
 
-    def create(self, email: str, expiry_minutes: int | float = 5) -> OTPResponse:
+    def new(self, email: str, expiry_minutes: int | float = 5) -> OTPResponse:
         """
-        Generate a new OTP for the given email, store or update it in the database, and
-        return it.
+        Generate a new OTP for the given email, store or update it in the database, and return it.
 
         Args:
             email: Email address to associate with the OTP.

@@ -29,7 +29,7 @@ def request_otp():
     email = payload['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
-    resp = otp_auth.create(email)
+    resp = otp_auth.new(email)
     otp_code = str(resp.data)
 
     # Send OTP via email
