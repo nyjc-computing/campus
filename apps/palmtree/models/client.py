@@ -109,7 +109,7 @@ class ClientIdRequest:
         """Initialize the Client model with a storage interface."""
         self.storage = postgres.PostgresDrum()
 
-    def submit_client_request(self, **fields) -> ClientResponse:
+    def new(self, **fields) -> ClientResponse:
         """Submit a request for a new client id."""
         validate_keys(fields, ClientRecord.__required_keys__)
         client_request_id = uid.generate_category_uid("client_request")
@@ -127,7 +127,7 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get_client_request(self, client_request_id: str) -> ClientResponse:
+    def get(self, client_request_id: str) -> ClientResponse:
         """Retrieve a client request by its ID."""
         resp = self.storage.get_by_id("client_requests", client_request_id)
         match resp:
@@ -142,7 +142,7 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def revoke_client_request(self, client_request_id: str) -> ClientResponse:
+    def replace(self, client_request_id: str) -> ClientResponse:
         """Revoke a client request by its ID."""
         resp = self.storage.delete_by_id("client_requests", client_request_id)
         match resp:
@@ -157,7 +157,7 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def reject_client_request(self, client_request_id: str) -> ClientResponse:
+    def reject(self, client_request_id: str) -> ClientResponse:
         """Reject a client request by its ID."""
         resp = self.storage.update_by_id(
             "client_requests",
@@ -176,7 +176,7 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def approve_client_request(self, client_request_id: str) -> ClientResponse:
+    def approve(self, client_request_id: str) -> ClientResponse:
         """Approve a client request by its ID."""
         resp = self.storage.update_by_id(
             "client_requests",
@@ -195,7 +195,7 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def list_client_requests(self) -> ClientResponse:
+    def list(self) -> ClientResponse:
         """List all client requests."""
         resp = self.storage.get_all("client_requests")
         match resp:
@@ -215,7 +215,7 @@ class Client:
         """Initialize the Client model with a storage interface."""
         self.storage = postgres.PostgresDrum()
 
-    def create_client(self, **fields) -> ClientResponse:
+    def new(self, **fields) -> ClientResponse:
         """Create a new client with associated admins."""
         # Use Client model to validate keyword arguments
         validate_keys(fields, ClientRequest.__required_keys__)
@@ -255,11 +255,7 @@ class Client:
                 return ClientResponse("ok", Message.SUCCESS, record)
         # transaction is automatically closed
 
-    def update_client(
-            self,
-            client_id: str,
-            updates: dict
-    ) -> ClientResponse:
+    def update(self, client_id: str, updates: dict) -> ClientResponse:
         """Update an existing client record."""
         # Validate arguments first to avoid unnecessary database operations
         if not updates:
@@ -284,7 +280,7 @@ class Client:
                 return ClientResponse("ok", Message.UPDATED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def add_client_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
+    def add_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
         """Add an admin to a client application."""
         resp = self.storage.insert(
             "client_admins",
@@ -297,7 +293,7 @@ class Client:
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def remove_client_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
+    def remove_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
         """Remove an admin from a client application."""
         # Check if admin_email is the last admin
         resp = self.storage.get_matching(
@@ -338,7 +334,7 @@ class Client:
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get_client(self, client_id: str) -> ClientResponse:
+    def get(self, client_id: str) -> ClientResponse:
         """Retrieve a client application by its ID, including its admins."""
         resp = self.storage.get_by_id("clients", client_id)
         match resp:
@@ -377,9 +373,9 @@ class Client:
         ]
         return ClientResponse("ok", Message.SUCCESS, client_record)
 
-    def delete_client(self, client_id: str) -> ClientResponse:
+    def delete(self, client_id: str) -> ClientResponse:
         """Delete a client application by its ID."""
-        resp = self.get_client(client_id)
+        resp = self.get(client_id)
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
@@ -410,7 +406,7 @@ class Client:
                 return ClientResponse("ok", Message.SUCCESS)
         # transaction is automatically closed
 
-    def revoke_client(self, client_id: str) -> ClientResponse:
+    def replace(self, client_id: str) -> ClientResponse:
         """Revoke a client secret by its ID, and issue a new secret."""
         client_secret = secret.generate_client_secret()
         resp = self.storage.update_by_id(

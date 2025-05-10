@@ -33,7 +33,7 @@ def create_client():
         return {"message": "Not implemented"}, 501
     # TODO: validate request, authenticate
     data = request.get_json()
-    clients.create_client(**data)  # raises APIError
+    clients.new(**data)  # raises APIError
     return {"message": "Client created"}, 201
 
 @bp.delete('/<string:client_id>')
@@ -41,7 +41,7 @@ def delete_client(client_id: str):
     """Delete a client id and secret."""
     if not DELETE:
         return {"message": "Not implemented"}, 501
-    clients.delete_client(client_id)  # raises APIError
+    clients.delete(client_id)  # raises APIError
     return {"message": "Client deleted"}, 200
 
 @bp.get('/<string:client_id>')
@@ -50,7 +50,7 @@ def get_client_details(client_id: str):
     if not GET:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = clients.get_client(client_id)  # raises APIError
+    resp = clients.get(client_id)  # raises APIError
     return resp.data, 200
 
 @bp.patch('/<string:client_id>')
@@ -60,7 +60,7 @@ def edit_client():
         return {"message": "Not implemented"}, 501
     # TODO: validate request, authenticate
     data = request.get_json()
-    clients.update_client(**data)  # raises APIError
+    clients.update(**data)  # raises APIError
     return {"message": "Client updated"}, 200
 
 @bp.post('/<string:client_id>/replace')
@@ -69,7 +69,7 @@ def revoke_client(client_id: str):
     if not POST:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = clients.revoke_client(client_id)  # raises APIError
+    resp = clients.replace(client_id)  # raises APIError
     return resp.data, 201
 
 @bp.get('/applications')
@@ -78,7 +78,7 @@ def get_client_applications():
     if not GET:
         return {"message": "Not implemented"}, 501
     data = request.get_json()
-    resp = client_requests.list_client_requests(**data)  # raises APIError
+    resp = client_requests.list(**data)  # raises APIError
     return resp.data, 200
 
 @bp.post('/applications')
@@ -101,7 +101,7 @@ def submit_client_application():
     # Check owner exists
     # TODO: use token to authenticate user
     resp = users.get(data["owner"])  # raises APIError
-    resp = client_requests.submit_client_request(**data)
+    resp = client_requests.new(**data)
     return {"message": "Client request submitted"}, 201
 
 
@@ -111,7 +111,7 @@ def get_application_status(client_application_id: str):
     if not GET:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = client_requests.get_client_request(client_application_id)  # raises APIError
+    resp = client_requests.get(client_application_id)  # raises APIError
     return resp.data, 200
 
 @bp.put('/applications/<string:client_application_id>/approve')
@@ -120,7 +120,7 @@ def approve_application(client_application_id: str):
     if not PUT:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = client_requests.approve_client_request(client_application_id)  # raises APIError
+    resp = client_requests.approve(client_application_id)  # raises APIError
     return resp.data, 201
 
 @bp.put('/applications/<string:application_id>/reject')
@@ -129,7 +129,7 @@ def reject_application(client_application_id: str):
     if not PUT:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = client_requests.reject_client_request(client_application_id)  # raises APIError
+    resp = client_requests.reject(client_application_id)  # raises APIError
     return resp.data, 201
 
 
