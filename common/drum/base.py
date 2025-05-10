@@ -11,13 +11,13 @@ Common assumptions across storage types:
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, MutableMapping
+from typing import Any, MutableMapping, TypedDict
 
 from common.schema import Response
 
 GroupName = str
 StrId = str
-Record = MutableMapping[str, Any]  # Complete set of fields for a record
+Record = TypedDict | MutableMapping[str, Any]  # Complete set of fields for a record
 Update = dict[str, Any]  # Partial set of fields to update
 Condition = dict[str, Any]  # Conditions for querying records
 

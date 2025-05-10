@@ -4,6 +4,7 @@ User Models
 This module provides classes for managing Campus users.
 """
 
+from apps.palmtree.errors import api_errors
 from common.drum import postgres
 from common.schema import Message, Response
 from common.utils import utc_time
@@ -51,7 +52,7 @@ class User:
         )
         match resp:
             case Response(status="error"):
-                return UserResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.UPDATED):
                 return UserResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")
@@ -61,11 +62,14 @@ class User:
         resp = self.storage.get_by_id('user', user_id)
         match resp:
             case Response(status="error"):
-                return UserResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.FOUND):
                 return UserResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return UserResponse(*resp)
+                raise api_errors.ConflictError(
+                    message="User not found",
+                    user_id=user_id
+                )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
     def update(self, user_id: str, updates: dict) -> UserResponse:
@@ -73,10 +77,13 @@ class User:
         resp = self.storage.update_by_id('user', user_id, updates)
         match resp:
             case Response(status="error"):
-                return UserResponse(*resp)
+                raise api_errors.InternalError()
             case Response(status="ok", message=Message.UPDATED):
                 return UserResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return UserResponse(*resp)
+                raise api_errors.ConflictError(
+                    message="User not found",
+                    user_id=user_id
+                )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
