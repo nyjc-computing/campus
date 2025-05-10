@@ -2,9 +2,12 @@ from flask import Blueprint, request
 
 from apps.palmtree.models import user
 from apps.common.errors import api_errors
+from common.auth import authenticate_client
 from common.schema import Message, Response
 
 bp = Blueprint('users', __name__, url_prefix='/users')
+bp.before_request(authenticate_client)
+
 
 users = user.User()
 
@@ -64,6 +67,7 @@ def patch_user_profile(user_id: str):
     return {"message": "Profile updated"}, 200
 
 @bp.get('/<string:user_id>/profile')
+# TODO: require client auth or token auth
 def get_user_profile(user_id: str):
     """Get a single user's profile."""
     resp = users.get(user_id)

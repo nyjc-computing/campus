@@ -7,7 +7,7 @@ from common.services.email import create_email_sender
 from . import template
 
 bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
-# All routes in this blueprint can be called by a client without a user token
+# All routes in this blueprint can be called by a client without token auth
 # but must be authenticated with a client id and secret
 bp.before_request(authenticate_client)
 

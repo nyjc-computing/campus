@@ -2,9 +2,11 @@ from flask import Blueprint, request
 
 from apps.palmtree.models import client, user
 from apps.common.errors import api_errors
+from common.auth import authenticate_client
 from common.schema import Message, Response
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
+bp.before_request(authenticate_client)
 
 # Feature flags
 GET = True
