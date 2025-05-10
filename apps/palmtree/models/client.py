@@ -24,7 +24,7 @@ def init_db():
     conn = postgres.get_conn()
     cursor = conn.cursor()
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS client_requests (
+        CREATE TABLE IF NOT EXISTS client_applications (
             id TEXT PRIMARY KEY,
             requester TEXT NOT NULL,
             name TEXT NOT NULL,
@@ -71,7 +71,7 @@ def init_db():
 
 class ClientRequest(TypedDict):
     """Data model for a client key request (apply for a client id)."""
-    client_request_id: NotRequired[str]
+    client_application_id: NotRequired[str]
     requester: Email
     name: str
     description: str
@@ -112,14 +112,14 @@ class ClientIdRequest:
     def new(self, **fields) -> ClientResponse:
         """Submit a request for a new client id."""
         validate_keys(fields, ClientRecord.__required_keys__)
-        client_request_id = uid.generate_category_uid("client_request")
+        client_application_id = uid.generate_category_uid("client_application", length=6)
         request = ClientRequest(
-            client_request_id=client_request_id,
+            client_application_id=client_application_id,
             **fields,
             created_on=utc_time.now(),
             status="review"
         )
-        resp = self.storage.insert("client_requests", request)
+        resp = self.storage.insert("client_applications", request)
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
@@ -127,41 +127,41 @@ class ClientIdRequest:
                 return ClientResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get(self, client_request_id: str) -> ClientResponse:
+    def get(self, client_application_id: str) -> ClientResponse:
         """Retrieve a client request by its ID."""
-        resp = self.storage.get_by_id("client_requests", client_request_id)
+        resp = self.storage.get_by_id("client_applications", client_application_id)
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
-                     client_request_id=client_request_id
+                     client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ClientResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def replace(self, client_request_id: str) -> ClientResponse:
+    def replace(self, client_application_id: str) -> ClientResponse:
         """Revoke a client request by its ID."""
-        resp = self.storage.delete_by_id("client_requests", client_request_id)
+        resp = self.storage.delete_by_id("client_applications", client_application_id)
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
-                     client_request_id=client_request_id
+                     client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.DELETED):
                 return ClientResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def reject(self, client_request_id: str) -> ClientResponse:
+    def reject(self, client_application_id: str) -> ClientResponse:
         """Reject a client request by its ID."""
         resp = self.storage.update_by_id(
-            "client_requests",
-            client_request_id,
+            "client_applications",
+            client_application_id,
             {"status": "rejected"}
         )
         match resp:
@@ -170,17 +170,17 @@ class ClientIdRequest:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
-                     client_request_id=client_request_id
+                     client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def approve(self, client_request_id: str) -> ClientResponse:
+    def approve(self, client_application_id: str) -> ClientResponse:
         """Approve a client request by its ID."""
         resp = self.storage.update_by_id(
-            "client_requests",
-            client_request_id,
+            "client_applications",
+            client_application_id,
             {"status": "approved"}
         )
         match resp:
@@ -189,7 +189,7 @@ class ClientIdRequest:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
-                     client_request_id=client_request_id
+                     client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS)
@@ -197,7 +197,7 @@ class ClientIdRequest:
 
     def list(self) -> ClientResponse:
         """List all client requests."""
-        resp = self.storage.get_all("client_requests")
+        resp = self.storage.get_all("client_applications")
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
