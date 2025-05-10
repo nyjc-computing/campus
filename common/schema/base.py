@@ -70,6 +70,8 @@ class Message:
     NOT_FOUND = "Not found"
     # Request successfully fulfilled (all operations complete)
     SUCCESS = "Success"
+    # Client did not provide valid authentication credentials
+    UNAUTHORIZED = "Unauthorized"
     # Input or data is valid
     VALID = "Valid"
 

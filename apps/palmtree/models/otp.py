@@ -11,7 +11,7 @@ from typing import Any, NamedTuple
 
 import bcrypt
 
-from apps.palmtree.errors import api_errors
+from apps.common.errors import api_errors
 from common.drum import postgres
 from common.schema import Message, Response
 from common.utils import utc_time

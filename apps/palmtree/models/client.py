@@ -7,7 +7,7 @@ and API keys for Campus services.
 import os
 from typing import Literal, NotRequired, TypedDict
 
-from apps.palmtree.errors import api_errors
+from apps.common.errors import api_errors
 from common.drum import postgres
 from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
@@ -428,6 +428,20 @@ class Client:
             case Response(status="ok", message=Message.UPDATED):
                 return ClientResponse("ok", Message.SUCCESS, client_secret)
         raise ValueError(f"Unexpected response: {resp}")
+
+    def validate_credentials(self, client_id: str, client_secret: str) -> bool:
+        """Validate client_id and client_secret."""
+        resp = self.storage.get_by_id("clients", client_id)
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok", message=Message.NOT_FOUND):
+                return False
+            case Response(status="ok", message=Message.FOUND, data=client):
+                return client["secret_hash"] == secret.hash_client_secret(
+                    client_secret, os.environ["PALMTREE_SECRET_KEY"]
+                )
+        return False
 
 
 class ClientAPIKey:

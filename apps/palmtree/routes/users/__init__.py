@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 
 from apps.palmtree.models import user
-from apps.palmtree.errors import api_errors
+from apps.common.errors import api_errors
 from common.schema import Message, Response
 
 bp = Blueprint('users', __name__, url_prefix='/users')
