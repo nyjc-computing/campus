@@ -184,11 +184,10 @@ class PostgresDrum:
 
     def insert(self, group: str, record: Record) -> DrumResponse:
         """Insert a new record into the table"""
-        assert PK in record, f"Record must have a {PK} field"
         keys = ", ".join(record.keys())
         placeholders = ", ".join("%s" for _ in record)
         resp = self._execute_callback(
-            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders})""",
+            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders}) RETURNING {PK}""",
             tuple(record.values())
         )
         match resp:
