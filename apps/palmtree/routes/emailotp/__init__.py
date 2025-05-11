@@ -32,7 +32,7 @@ def request_otp():
     email = payload['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
-    resp = otp_auth.new(email)
+    resp = otp_auth.request(email)
     otp_code = str(resp.data)
 
     # Send OTP via email

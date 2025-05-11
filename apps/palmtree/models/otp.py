@@ -137,7 +137,7 @@ class OTPAuth:
         """
         self.storage = get_drum()
 
-    def new(self, email: str, expiry_minutes: int | float = 5) -> OTPResponse:
+    def request(self, email: str, expiry_minutes: int | float = 5) -> OTPResponse:
         """
         Generate a new OTP for the given email, store or update it in the database, and return it.
 
