@@ -6,9 +6,22 @@ Authentication and authorization service for Campus.
 from flask import Blueprint, Flask
 
 from apps.common import errors
-from .routes import clients
-from .routes import emailotp
-from .routes import users
+
+from . import routes
+# These aliased imports allow the palmtree package to be used similarly to the
+# Campus API
+# e.g. palmtree.clients.new(), palmtree.emailotp.request()
+from routes.clients import clients
+from routes.emailotp import emailotp
+from routes.users import users
+
+__all__ = [
+    'create_app',
+    'init_app',
+    'clients',
+    'emailotp',
+    'users'
+]
 
 
 def create_app() -> Flask:
@@ -27,7 +40,7 @@ def init_app(app: Flask) -> None:
     bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
     # Users need to be initialised first as other blueprints
     # rely on user table
-    users.init_app(bp)
-    clients.init_app(bp)
-    emailotp.init_app(bp)
+    routes.users.init_app(bp)
+    routes.clients.init_app(bp)
+    routes.emailotp.init_app(bp)
     app.register_blueprint(bp)

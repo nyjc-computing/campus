@@ -16,7 +16,6 @@ PUT = False
 DELETE = False
 
 # Database Models
-client_requests = client.ClientApplication()
 clients = client.Client()
 # apikeys = client.ClientAPIKey()
 users = user.User()
@@ -80,7 +79,7 @@ def get_client_applications():
     if not GET:
         return {"message": "Not implemented"}, 501
     data = request.get_json()
-    resp = client_requests.list(**data)  # raises APIError
+    resp = clients.applications.list(**data)  # raises APIError
     return resp.data, 200
 
 @bp.post('/applications')
@@ -103,7 +102,7 @@ def submit_client_application():
     # Check owner exists
     # TODO: use token to authenticate user
     resp = users.get(data["owner"])  # raises APIError
-    resp = client_requests.new(**data)
+    resp = clients.applications.new(**data)
     return {"message": "Client request submitted"}, 201
 
 
@@ -113,7 +112,7 @@ def get_application_status(client_application_id: str):
     if not GET:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = client_requests.get(client_application_id)  # raises APIError
+    resp = clients.applications.get(client_application_id)  # raises APIError
     return resp.data, 200
 
 @bp.put('/applications/<string:client_application_id>/approve')
@@ -122,7 +121,7 @@ def approve_application(client_application_id: str):
     if not PUT:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = client_requests.approve(client_application_id)  # raises APIError
+    resp = clients.applications.approve(client_application_id)  # raises APIError
     return resp.data, 201
 
 @bp.put('/applications/<string:application_id>/reject')
@@ -131,7 +130,7 @@ def reject_application(client_application_id: str):
     if not PUT:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
-    resp = client_requests.reject(client_application_id)  # raises APIError
+    resp = clients.applications.reject(client_application_id)  # raises APIError
     return resp.data, 201
 
 
