@@ -8,7 +8,7 @@ from typing import Any, Iterable, Iterator, Literal, Mapping
 ResponseStatus = Literal["ok", "error"]
 
 
-class Response(Mapping, Iterable):
+class Response(Iterable):
     """Base interface for all responses.
 
     Responses support iteration (for unpacking) and property access.
