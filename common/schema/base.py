@@ -3,12 +3,13 @@
 Base schema definitions, enums, and constants for Campus.
 """
 
+from collections.abc import ItemsView
 from typing import Any, Iterable, Iterator, Literal, Mapping
 
 ResponseStatus = Literal["ok", "error"]
 
 
-class Response(Iterable):
+class Response(Mapping, Iterable):
     """Base interface for all responses.
 
     Responses support iteration (for unpacking) and property access.
@@ -36,9 +37,21 @@ class Response(Iterable):
     def data(self) -> Any:
         return self.__[2]
     
+    def __getitem__(self, key: int) -> Any:
+        """Get an item by index."""
+        return self.__[key]
+    
     def __iter__(self) -> Iterator:
         """Iterate over the response."""
         return iter(self.__)
+    
+    def items(self) -> ItemsView[str, Any]:
+        """Get the items of the response as an ItemsView."""
+        return ItemsView({
+            "status": self.status,
+            "message": self.message,
+            "data": self.data
+        })
 
 
 class Message:
