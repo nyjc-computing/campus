@@ -45,6 +45,10 @@ class Response(Mapping, Iterable):
         """Iterate over the response."""
         return iter(self.__)
     
+    def __len__(self) -> int:
+        """Required by Mapping interface."""
+        return len(self.__)
+    
     def items(self) -> ItemsView[str, Any]:
         """Get the items of the response as an ItemsView."""
         return ItemsView({
