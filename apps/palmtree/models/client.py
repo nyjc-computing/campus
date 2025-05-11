@@ -144,7 +144,6 @@ class ClientApplication:
         resp = self.storage.insert("client_applications", request)
         match resp:
             case Response(status="error"):
-                breakpoint()
                 raise api_errors.InternalError()
             case Response(status="ok"):
                 return ClientResponse("ok", Message.CREATED, request)
