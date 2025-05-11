@@ -31,7 +31,7 @@ def init_db():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS user (
+            CREATE TABLE IF NOT EXISTS "user" (
                 id VARCHAR(255) PRIMARY KEY,
                 email TEXT NOT NULL,
                 nric_name TEXT NOT NULL,

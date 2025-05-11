@@ -57,8 +57,8 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 description TEXT,
                 created_on TEXT NOT NULL,
-                UNIQUE (client_secret),
-            )
+                UNIQUE (client_secret)
+            );
         """)
         # Note that junction tables violate the assumption of a single-column
         # string primary key, as they are not expected to be directly queried
@@ -68,19 +68,19 @@ def init_db() -> None:
                 client_id TEXT NOT NULL,
                 admin_id TEXT NOT NULL,
                 PRIMARY KEY (client_id, admin_id),
-                FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
+                FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
             )
         """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS apikeys (
-                client_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                key TEXT NOT NULL,
-                PRIMARY KEY (client_id, name),
-                UNIQUE (key),
-                FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
-            )
-        """)
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS apikeys (
+        #         client_id TEXT NOT NULL,
+        #         name TEXT NOT NULL,
+        #         key TEXT NOT NULL,
+        #         PRIMARY KEY (client_id, name),
+        #         UNIQUE (key),
+        #         FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
+        #     )
+        # """)
     except Exception:
         # init_db() is not expected to be called in production, so we don't
         # need to handle errors gracefully.
