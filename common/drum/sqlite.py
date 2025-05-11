@@ -29,6 +29,10 @@ def get_conn() -> sqlite3.Connection:
     conn.row_factory = dict_factory
     return conn
 
+def get_drum() -> 'SqliteDrum':
+    """Get a prepared Drum instance."""
+    return SqliteDrum()
+
 
 class CursorResult(TypedDict):
     lastrowid: int | None
