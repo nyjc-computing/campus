@@ -3,6 +3,7 @@ User Models
 
 This module provides classes for managing Campus users.
 """
+import os
 
 from apps.common.errors import api_errors
 from common.drum import postgres
@@ -11,7 +12,17 @@ from common.utils import utc_time
 
 
 def init_db():
-    """Initialize the database with the necessary tables."""
+    """Initialize the tables needed by the model.
+
+    This function is intended to be called only in a test environment (using a
+    local-only db like SQLite), or in a staging environment before upgrading to
+    production.
+    """
+    # TODO: Refactor into decorator
+    if os.getenv('ENV', 'development') == 'production':
+        raise AssertionError(
+            "Database initialization detected in production environment"
+        )
     conn = postgres.get_conn()
     cursor = conn.cursor()
     cursor.execute("""

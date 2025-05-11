@@ -5,9 +5,9 @@ This module provides classes and utilities for handling one-time
 passwords (OTPs) used in email authentication. It includes functionality
 generating, hashing, verifying, and managing OTPs securely.
 """
-
+import os
 import secrets
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import bcrypt
 
@@ -18,7 +18,17 @@ from common.utils import utc_time
 
 
 def init_db():
-    """Initialize the database with the necessary tables."""
+    """Initialize the tables needed by the model.
+
+    This function is intended to be called only in a test environment (using a
+    local-only db like SQLite), or in a staging environment before upgrading to
+    production.
+    """
+    # TODO: Refactor into decorator
+    if os.getenv('ENV', 'development') == 'production':
+        raise AssertionError(
+            "Database initialization detected in production environment"
+        )
     conn = postgres.get_conn()
     cursor = conn.cursor()
     cursor.execute("""

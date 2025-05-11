@@ -20,7 +20,17 @@ Email = str
 
 
 def init_db():
-    """Initialize the database with the necessary tables."""
+    """Initialize the tables needed by the model.
+
+    This function is intended to be called only in a test environment (using a
+    local-only db like SQLite), or in a staging environment before upgrading to
+    production.
+    """
+    # TODO: Refactor into decorator
+    if os.getenv('ENV', 'development') == 'production':
+        raise AssertionError(
+            "Database initialization detected in production environment"
+        )
     conn = postgres.get_conn()
     cursor = conn.cursor()
     cursor.execute("""
@@ -249,10 +259,10 @@ class Client:
             # Check for failed operations
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
-                self.storage.rollback_transaction()
+                breakpoint()
                 raise api_errors.InternalError("Some operations failed")
             else:
-                self.storage.commit_transaction()
+                breakpoint()
                 return ClientResponse("ok", Message.SUCCESS, record)
         # transaction is automatically closed
 
