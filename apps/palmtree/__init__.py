@@ -18,6 +18,7 @@ from routes.users import users
 __all__ = [
     'create_app',
     'init_app',
+    'init_db',
     'clients',
     'emailotp',
     'users'
@@ -44,3 +45,16 @@ def init_app(app: Flask) -> None:
     routes.clients.init_app(bp)
     routes.emailotp.init_app(bp)
     app.register_blueprint(bp)
+
+def init_db() -> None:
+    """Initialise the tables needed by Palmtree.
+    
+    This convenience function makes it easier to initialise tables for all
+    models.
+    """
+    # These imports do not appear at the top of the file to avoid namespace
+    # pollution, as they are typically only used in staging.
+    from .models import client, otp, user
+
+    for model in (client, otp, user):
+        model.init_db()
