@@ -16,7 +16,7 @@ PUT = False
 DELETE = False
 
 # Database Models
-client_requests = client.ClientIdRequest()
+client_requests = client.ClientApplication()
 clients = client.Client()
 apikeys = client.ClientAPIKey()
 users = user.User()

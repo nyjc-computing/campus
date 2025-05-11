@@ -112,7 +112,7 @@ class ClientResponse(Response):
     """Represents a client operation response."""
 
 
-class ClientIdRequest:
+class ClientApplication:
     """Model for database operations related to client id requests."""
 
     def __init__(self):
