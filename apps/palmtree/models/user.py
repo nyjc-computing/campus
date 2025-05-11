@@ -6,7 +6,11 @@ This module provides classes for managing Campus users.
 import os
 
 from apps.common.errors import api_errors
-from common.drum import postgres
+from common import devops
+if devops.ENV in (devops.STAGING, devops.PRODUCTION):
+    from common.drum.postgres import get_conn, get_drum
+else:
+    from common.drum.sqlite import get_conn, get_drum
 from common.schema import Message, Response
 from common.utils import utc_time
 
@@ -23,18 +27,25 @@ def init_db():
         raise AssertionError(
             "Database initialization detected in production environment"
         )
-    conn = postgres.get_conn()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user (
-            id VARCHAR(255) PRIMARY KEY,
-            email TEXT NOT NULL,
-            nric_name TEXT NOT NULL,
-            activated_at TEXT DEFAULT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
+    conn = get_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user (
+                id VARCHAR(255) PRIMARY KEY,
+                email TEXT NOT NULL,
+                nric_name TEXT NOT NULL,
+                activated_at TEXT DEFAULT NULL
+            )
+        """)
+    except Exception:
+        # init_db() is not expected to be called in production, so we don't
+        # need to handle errors gracefully.
+        raise
+    else:
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class UserResponse(Response):
@@ -52,7 +63,7 @@ class User:
             storage: Implementation of StorageInterface for database
             operations.
         """
-        self.storage = postgres.PostgresDrum()
+        self.storage = get_drum()
 
     def activate(self, user_id: str) -> UserResponse:
         """Actions to perform upon first sign-in."""

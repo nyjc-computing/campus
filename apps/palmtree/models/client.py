@@ -8,7 +8,12 @@ import os
 from typing import Literal, NotRequired, TypedDict
 
 from apps.common.errors import api_errors
-from common.drum import postgres
+from common import devops
+from common.drum import DrumResponse
+if devops.ENV in (devops.STAGING, devops.PRODUCTION):
+    from common.drum.postgres import get_conn, get_drum
+else:
+    from common.drum.sqlite import get_conn, get_drum
 from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
 from common.validation import name as validname
@@ -19,7 +24,7 @@ APIKey = str
 Email = str
 
 
-def init_db():
+def init_db() -> None:
     """Initialize the tables needed by the model.
 
     This function is intended to be called only in a test environment (using a
@@ -31,52 +36,59 @@ def init_db():
         raise AssertionError(
             "Database initialization detected in production environment"
         )
-    conn = postgres.get_conn()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS client_applications (
-            id TEXT PRIMARY KEY,
-            requester TEXT NOT NULL,
-            name TEXT NOT NULL,
-            description TEXT,
-            created_on TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'review',
-            CHECK (status IN ('review', 'rejected', 'approved'))
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS clients (
-            id TEXT PRIMARY KEY,
-            client_secret TEXT NOT NULL,
-            name TEXT NOT NULL,
-            description TEXT,
-            created_on TEXT NOT NULL,
-            UNIQUE (client_secret),
-        )
-    """)
-    # Note that junction tables violate the assumption of a single-column
-    # string primary key, as they are not expected to be directly queried
-    # by end users.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS client_admins (
-            client_id TEXT NOT NULL,
-            admin_id TEXT NOT NULL,
-            PRIMARY KEY (client_id, admin_id),
-            FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS apikeys (
-            client_id TEXT NOT NULL,
-            name TEXT NOT NULL,
-            key TEXT NOT NULL,
-            PRIMARY KEY (client_id, name),
-            UNIQUE (key),
-            FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
-        )
-    """)
-    conn.commit()
-    conn.close()
+    conn = get_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS client_applications (
+                id TEXT PRIMARY KEY,
+                requester TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                created_on TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'review',
+                CHECK (status IN ('review', 'rejected', 'approved'))
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                id TEXT PRIMARY KEY,
+                client_secret TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                created_on TEXT NOT NULL,
+                UNIQUE (client_secret),
+            )
+        """)
+        # Note that junction tables violate the assumption of a single-column
+        # string primary key, as they are not expected to be directly queried
+        # by end users.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS client_admins (
+                client_id TEXT NOT NULL,
+                admin_id TEXT NOT NULL,
+                PRIMARY KEY (client_id, admin_id),
+                FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS apikeys (
+                client_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                key TEXT NOT NULL,
+                PRIMARY KEY (client_id, name),
+                UNIQUE (key),
+                FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
+            )
+        """)
+    except Exception:
+        # init_db() is not expected to be called in production, so we don't
+        # need to handle errors gracefully.
+        raise
+    else:
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class ClientRequest(TypedDict):
@@ -117,7 +129,7 @@ class ClientApplication:
 
     def __init__(self):
         """Initialize the Client model with a storage interface."""
-        self.storage = postgres.PostgresDrum()
+        self.storage = get_drum()
 
     def new(self, **fields) -> ClientResponse:
         """Submit a request for a new client id."""
@@ -220,10 +232,12 @@ class ClientApplication:
 
 class Client:
     """Model for database operations related to client applications."""
+    # Nested attribute follows Campus API schema
+    applications = ClientApplication()
 
     def __init__(self):
         """Initialize the Client model with a storage interface."""
-        self.storage = postgres.PostgresDrum()
+        self.storage = get_drum()
 
     def new(self, **fields) -> ClientResponse:
         """Create a new client with associated admins."""
@@ -356,7 +370,7 @@ class Client:
                     "Client not found",
                      client_id=client_id
                 )
-        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
+        assert isinstance(resp, DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
 
@@ -370,7 +384,7 @@ class Client:
                     "Client has no admins",
                      client_id=client_id
                 )
-        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
+        assert isinstance(resp, DrumResponse)  # appease mypy
         admin_records = resp.data
         assert isinstance(admin_records, list)
         assert all(
@@ -395,7 +409,7 @@ class Client:
                     "Client not found",
                      client_id=client_id
                 )
-        assert isinstance(resp, postgres.DrumResponse)  # appease mypy
+        assert isinstance(resp, DrumResponse)  # appease mypy
         client_record = resp.data
         assert isinstance(client_record, dict)
 
@@ -455,70 +469,70 @@ class Client:
         return False
 
 
-class ClientAPIKey:
-    """Model for database operations related to client API keys."""
+# class ClientAPIKey:
+#     """Model for database operations related to client API keys."""
 
-    def __init__(self):
-        self.storage = postgres.PostgresDrum()
+#     def __init__(self):
+#         self.storage = get_drum()
 
-    def create_api_key(self, client_id: str, *, name: str) -> ClientResponse:
-        """Create a new API key for a client.
+#     def create_api_key(self, client_id: str, *, name: str) -> ClientResponse:
+#         """Create a new API key for a client.
 
-        Validate name first before calling this function.
+#         Validate name first before calling this function.
 
-        Args:
-            client_id: The ID of the client.
-            name: The name of the API key.
+#         Args:
+#             client_id: The ID of the client.
+#             name: The name of the API key.
         
-        Returns:
-            A ClientResponse indicating the result of the operation.
-        """
-        if not validname.is_valid_label(name):
-            raise api_errors.InvalidRequestError(
-                message="Invalid API key name",
-                invalid_values=["name"]
-            )
-        api_key = secret.generate_api_key()
-        record = APIKeyRecord(
-            client_id=client_id,
-            name=name,
-            key=api_key
-        )
-        resp = self.storage.insert("apikeys", record)
-        match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
-            case Response(status="ok", message=Message.CREATED):
-                return ClientResponse("ok", "API key created", record["key"])
-        raise ValueError(f"Unexpected response: {resp}")
+#         Returns:
+#             A ClientResponse indicating the result of the operation.
+#         """
+#         if not validname.is_valid_label(name):
+#             raise api_errors.InvalidRequestError(
+#                 message="Invalid API key name",
+#                 invalid_values=["name"]
+#             )
+#         api_key = secret.generate_api_key()
+#         record = APIKeyRecord(
+#             client_id=client_id,
+#             name=name,
+#             key=api_key
+#         )
+#         resp = self.storage.insert("apikeys", record)
+#         match resp:
+#             case Response(status="error"):
+#                 raise api_errors.InternalError()
+#             case Response(status="ok", message=Message.CREATED):
+#                 return ClientResponse("ok", "API key created", record["key"])
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def get_apikeys(self, client_id: str) -> ClientResponse:
-        """Retrieve all API keys for a client."""
-        resp = self.storage.get_matching("apikeys", {"client_id": client_id})
-        match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
-            case Response(status="ok", message=Message.FOUND, data=result):
-                return ClientResponse("ok", Message.SUCCESS, result)
-            case Response(status="ok", message=Message.EMPTY):
-                return ClientResponse("ok", Message.EMPTY, [])
-        raise ValueError(f"Unexpected response: {resp}")
+#     def get_apikeys(self, client_id: str) -> ClientResponse:
+#         """Retrieve all API keys for a client."""
+#         resp = self.storage.get_matching("apikeys", {"client_id": client_id})
+#         match resp:
+#             case Response(status="error"):
+#                 raise api_errors.InternalError()
+#             case Response(status="ok", message=Message.FOUND, data=result):
+#                 return ClientResponse("ok", Message.SUCCESS, result)
+#             case Response(status="ok", message=Message.EMPTY):
+#                 return ClientResponse("ok", Message.EMPTY, [])
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def delete_api_key(self, client_id: str, name: str) -> ClientResponse:
-        """Delete an API key for a client."""
-        resp = self.storage.delete_matching(
-            "apikeys",
-            {"client_id": client_id, "name": name}
-        )
-        match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "API key not found",
-                     client_id=client_id, name=name
-                )
-            case Response(status="ok", message=Message.DELETED):
-                return ClientResponse(*resp)
-        raise ValueError(f"Unexpected response: {resp}")
+#     def delete_api_key(self, client_id: str, name: str) -> ClientResponse:
+#         """Delete an API key for a client."""
+#         resp = self.storage.delete_matching(
+#             "apikeys",
+#             {"client_id": client_id, "name": name}
+#         )
+#         match resp:
+#             case Response(status="error"):
+#                 raise api_errors.InternalError()
+#             case Response(status="ok", message=Message.NOT_FOUND):
+#                 raise api_errors.ConflictError(
+#                     "API key not found",
+#                      client_id=client_id, name=name
+#                 )
+#             case Response(status="ok", message=Message.DELETED):
+#                 return ClientResponse(*resp)
+#         raise ValueError(f"Unexpected response: {resp}")
 
