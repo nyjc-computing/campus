@@ -11,7 +11,7 @@ from typing import Any, TypedDict
 
 from common.schema import Message, Response
 
-from .base import PK, Condition, DrumResponse, Record, Update
+from .base import PK, Condition, DrumInterface, DrumResponse, Record, Update
 
 
 def dict_factory(cursor, row) -> Record:
@@ -36,7 +36,7 @@ class CursorResult(TypedDict):
     result: list[Record] | Record | None
 
 
-class SqliteDrum:
+class SqliteDrum(DrumInterface):
     """SQLite implementation of the Drum interface."""
     def __init__(self):
         self.transaction = None

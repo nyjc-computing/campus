@@ -13,7 +13,7 @@ from psycopg2.extras import RealDictCursor
 
 from common.schema import Message, Response
 
-from .base import PK, Condition, DrumResponse, Record, Update
+from .base import PK, Condition, DrumInterface, DrumResponse, Record, Update
 
 
 def get_conn() -> psycopg2.extensions.connection:
@@ -22,6 +22,10 @@ def get_conn() -> psycopg2.extensions.connection:
     conn.autocommit = False
     return conn
 
+def get_drum() -> 'PostgresDrum':
+    """Get a prepared Drum instance."""
+    return PostgresDrum()
+
 
 class CursorResult(TypedDict):
     lastrowid: int | None
@@ -29,7 +33,7 @@ class CursorResult(TypedDict):
     result: list[Record] | Record | None
 
 
-class PostgresDrum:
+class PostgresDrum(DrumInterface):
     """PostgreSQL implementation of the Drum interface."""
     def __init__(self):
         self.transaction = None
