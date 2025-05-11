@@ -18,7 +18,7 @@ DELETE = False
 # Database Models
 client_requests = client.ClientApplication()
 clients = client.Client()
-apikeys = client.ClientAPIKey()
+# apikeys = client.ClientAPIKey()
 users = user.User()
 
 
