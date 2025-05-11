@@ -93,7 +93,7 @@ def init_db() -> None:
 
 class ClientRequest(TypedDict):
     """Data model for a client key request (apply for a client id)."""
-    client_application_id: NotRequired[str]
+    id: NotRequired[str]
     owner: Email
     name: str
     description: str
@@ -133,10 +133,10 @@ class ClientApplication:
 
     def new(self, **fields) -> ClientResponse:
         """Submit a request for a new client id."""
-        validate_keys(fields, ClientRecord.__required_keys__)
+        validate_keys(fields, ClientRequest.__required_keys__)
         client_application_id = uid.generate_category_uid("client_application", length=6)
         request = ClientRequest(
-            client_application_id=client_application_id,
+            id=client_application_id,
             **fields,
             created_on=utc_time.now(),
             status="review"
@@ -144,6 +144,7 @@ class ClientApplication:
         resp = self.storage.insert("client_applications", request)
         match resp:
             case Response(status="error"):
+                breakpoint()
                 raise api_errors.InternalError()
             case Response(status="ok"):
                 return ClientResponse("ok", Message.CREATED, request)
