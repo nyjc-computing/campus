@@ -82,8 +82,6 @@ class PostgresDrum:
             self,
             *args,
             callback: Callable[[psycopg2.extensions.cursor], Any] | None = None,
-            commit: bool = True,
-            conn: psycopg2.extensions.connection | None = None,
     ) -> DrumResponse:
         """Execute a typical query, using a callback to handle the cursor.
 
@@ -91,64 +89,42 @@ class PostgresDrum:
             args: The query and parameters to execute.
             callback: A function that takes a cursor and returns a value.
                 If None, the cursor is returned.
-            commit: Whether to commit the transaction.
 
-            If a transaction is in progress, responses are collected, commit is
-            ignored.
+            If a transaction is in progress, responses are collected, and
+            commit is not automatically called. Otherwise, commit is automatically called after the operation.
 
         Returns:
             A DrumResponse object with the status, message, and data.
         """
-        if (self.transaction and commit):
-            raise ValueError(
-                "A transaction is in progress, cannot commit\n"
-                "Hint: unset commit keyword argument"
-            )
         conn = self.transaction or get_conn()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 cursor.execute(*args)
-                if callback:
-                    result = callback(cursor)
-                    return DrumResponse(
-                        'ok',
-                        Message.COMPLETED,
-                        CursorResult(
-                            lastrowid=cursor.lastrowid if cursor.lastrowid else None,
-                            rowcount=cursor.rowcount,
-                            result=result
-                        )
-                    )
-                if self.transaction:
-                    assert isinstance(self._responses, list)
-                    self._responses.append(
-                        DrumResponse(
-                            'ok',
-                            Message.COMPLETED,
-                            CursorResult(
-                                lastrowid=cursor.lastrowid if cursor.lastrowid else None,
-                                rowcount=cursor.rowcount,
-                                result=None
-                            )
-                        )
-                    )
-                elif commit:
-                    conn.commit()
-                    return DrumResponse(
-                        'ok',
-                        Message.COMPLETED,
-                        CursorResult(
-                            lastrowid=cursor.lastrowid if cursor.lastrowid else None,
-                            rowcount=cursor.rowcount,
-                            result=None
-                        )
-                    )
         except psycopg2.DatabaseError as e:
-            return DrumResponse('error', Message.FAILED, str(e))
+            resp = DrumResponse('error', Message.FAILED, str(e))
+            conn.rollback()
+            if self.transaction:
+                assert isinstance(self._responses, list)
+                self._responses.append(resp)
+            else:
+                conn.close()
+            return resp
+        else:
+            result = CursorResult(
+                lastrowid=cursor.lastrowid,
+                rowcount=cursor.rowcount,
+                result=callback(cursor) if callback else None
+            )
+            resp = DrumResponse('ok', Message.COMPLETED, result)
+            if self.transaction:
+                assert isinstance(self._responses, list)
+                self._responses.append(resp)
+            else:
+                conn.commit()
+                return resp
         finally:
             if not self.transaction:
                 conn.close()
-        raise AssertionError("unreachable")
 
     def get_all(self, group: str) -> DrumResponse:
         """Retrieve all records from table"""
