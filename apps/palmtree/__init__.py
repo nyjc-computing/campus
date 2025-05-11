@@ -6,14 +6,14 @@ Authentication and authorization service for Campus.
 from flask import Blueprint, Flask
 
 from apps.common import errors
+from apps.palmtree import routes
 
-from . import routes
-# These aliased imports allow the palmtree package to be used similarly to the
-# Campus API
+# These aliased model imports allow the palmtree package to be used similarly
+# to the Campus API
 # e.g. palmtree.clients.new(), palmtree.emailotp.request()
-from routes.clients import clients
-from routes.emailotp import emailotp
-from routes.users import users
+from apps.palmtree.routes.clients import clients
+from apps.palmtree.routes.emailotp import emailotp
+from apps.palmtree.routes.users import users
 
 __all__ = [
     'create_app',
