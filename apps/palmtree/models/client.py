@@ -42,7 +42,7 @@ def init_db() -> None:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS client_applications (
                 id TEXT PRIMARY KEY,
-                requester TEXT NOT NULL,
+                owner TEXT NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT,
                 created_on TEXT NOT NULL,
@@ -94,7 +94,7 @@ def init_db() -> None:
 class ClientRequest(TypedDict):
     """Data model for a client key request (apply for a client id)."""
     client_application_id: NotRequired[str]
-    requester: Email
+    owner: Email
     name: str
     description: str
     created_on: NotRequired[utc_time.datetime]
@@ -273,10 +273,8 @@ class Client:
             # Check for failed operations
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
-                breakpoint()
                 raise api_errors.InternalError("Some operations failed")
             else:
-                breakpoint()
                 return ClientResponse("ok", Message.SUCCESS, record)
         # transaction is automatically closed
 
