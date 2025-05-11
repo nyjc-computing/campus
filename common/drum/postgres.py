@@ -125,6 +125,7 @@ class PostgresDrum:
         finally:
             if not self.transaction:
                 conn.close()
+        raise AssertionError("UNreachable")  # appease mypy
 
     def get_all(self, group: str) -> DrumResponse:
         """Retrieve all records from table"""
