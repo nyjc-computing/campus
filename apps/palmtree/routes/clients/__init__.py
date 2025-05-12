@@ -121,6 +121,13 @@ def approve_application(client_application_id: str):
     if not PUT:
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
+    application = clients.applications.get(client_application_id).data
+    # TODO: Pass secret to admin, or generate new client without secret
+    resp = clients.new(
+        name=application["name"],
+        description=application["description"],
+        admins=[application["owner"]],
+    )
     resp = clients.applications.approve(client_application_id)  # raises APIError
     return resp.data, 201
 
