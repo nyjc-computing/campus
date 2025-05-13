@@ -142,6 +142,8 @@ class PostgresDrum(DrumInterface):
                     assert isinstance(self._responses, list)
                     self._responses.append(resp)
                 else:
+                    # Close the cursor otherwise SQL statements are still in progress
+                    cursor.close()
                     conn.commit()
                 return resp
             finally:
