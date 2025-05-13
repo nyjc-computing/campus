@@ -22,6 +22,14 @@ def dict_factory(cursor, row) -> Record:
     }
     return d
 
+def purge() -> None:
+    """Purge the database file."""
+    try:
+        import os
+        os.remove('test.db')
+    except FileNotFoundError:
+        pass
+
 def get_conn() -> sqlite3.Connection:
     """Get a prepared connection to the sqlite3 database."""
     conn = sqlite3.connect('test.db')

@@ -16,6 +16,15 @@ from common.schema import Message, Response
 from .base import PK, Condition, DrumInterface, DrumResponse, Record, Update
 
 
+def purge() -> None:
+    """Purge the database by dropping all tables."""
+    conn = get_conn()
+    with conn.cursor() as cursor:
+        cursor.execute("DROP SCHEMA public CASCADE;")
+        cursor.execute("CREATE SCHEMA public;")
+    conn.commit()
+    conn.close()
+
 def get_conn() -> psycopg2.extensions.connection:
     """Get a prepared connection to the PostgreSQL database."""
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
