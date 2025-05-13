@@ -54,12 +54,12 @@ def init_db() -> None:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS "clients" (
                 id TEXT PRIMARY KEY,
-                client_secret TEXT,
+                secret_hash TEXT,
                 name TEXT NOT NULL,
                 description TEXT,
                 created_on TEXT NOT NULL,
                 UNIQUE (name),
-                UNIQUE (client_secret)
+                UNIQUE (secret_hash)
             );
         """)
         # Note that junction tables violate the assumption of a single-column
