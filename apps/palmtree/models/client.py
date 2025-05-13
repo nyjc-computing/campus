@@ -8,6 +8,7 @@ import os
 from typing import Literal, NotRequired, TypedDict
 
 from apps.common.errors import api_errors
+from apps.palmtree.models.base import ModelResponse
 from common import devops
 from common.drum import DrumResponse
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
@@ -121,10 +122,6 @@ class APIKeyRecord(TypedDict):
     key: APIKey
 
 
-class ClientResponse(Response):
-    """Represents a client operation response."""
-
-
 class ClientApplication:
     """Model for database operations related to client id requests."""
 
@@ -132,7 +129,7 @@ class ClientApplication:
         """Initialize the Client model with a storage interface."""
         self.storage = get_drum()
 
-    def new(self, **fields) -> ClientResponse:
+    def new(self, **fields) -> ModelResponse:
         """Submit a request for a new client id."""
         validate_keys(fields, ClientApplicationSchema.__required_keys__)
         client_application_id = uid.generate_category_uid("client_application", length=6)
@@ -147,10 +144,10 @@ class ClientApplication:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok"):
-                return ClientResponse("ok", Message.CREATED, request)
+                return ModelResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get(self, client_application_id: str) -> ClientResponse:
+    def get(self, client_application_id: str) -> ModelResponse:
         """Retrieve a client request by its ID."""
         resp = self.storage.get_by_id("client_applications", client_application_id)
         match resp:
@@ -162,10 +159,10 @@ class ClientApplication:
                      client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.FOUND, data=result):
-                return ClientResponse("ok", Message.FOUND, result)
+                return ModelResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def replace(self, client_application_id: str) -> ClientResponse:
+    def replace(self, client_application_id: str) -> ModelResponse:
         """Revoke a client request by its ID."""
         resp = self.storage.delete_by_id("client_applications", client_application_id)
         match resp:
@@ -177,10 +174,10 @@ class ClientApplication:
                      client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.DELETED):
-                return ClientResponse("ok", Message.DELETED)
+                return ModelResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def reject(self, client_application_id: str) -> ClientResponse:
+    def reject(self, client_application_id: str) -> ModelResponse:
         """Reject a client request by its ID."""
         resp = self.storage.update_by_id(
             "client_applications",
@@ -196,10 +193,10 @@ class ClientApplication:
                      client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ClientResponse("ok", Message.SUCCESS)
+                return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def approve(self, client_application_id: str) -> ClientResponse:
+    def approve(self, client_application_id: str) -> ModelResponse:
         """Approve a client request by its ID."""
         resp = self.storage.update_by_id(
             "client_applications",
@@ -215,19 +212,19 @@ class ClientApplication:
                      client_application_id=client_application_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ClientResponse("ok", Message.SUCCESS)
+                return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def list(self) -> ClientResponse:
+    def list(self) -> ModelResponse:
         """List all client requests."""
         resp = self.storage.get_all("client_applications")
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.FOUND, data=result):
-                return ClientResponse("ok", Message.FOUND, result)
+                return ModelResponse("ok", Message.FOUND, result)
             case Response(status="ok", message=Message.EMPTY):
-                return ClientResponse("ok", Message.EMPTY, [])
+                return ModelResponse("ok", Message.EMPTY, [])
         raise ValueError(f"Unexpected response: {resp}")
 
 
@@ -240,7 +237,7 @@ class Client:
         """Initialize the Client model with a storage interface."""
         self.storage = get_drum()
 
-    def new(self, **fields) -> ClientResponse:
+    def new(self, **fields) -> ModelResponse:
         """Create a new client with associated admins."""
         # Use Client model to validate keyword arguments
         validate_keys(fields, ClientRecord.__required_keys__)
@@ -270,14 +267,14 @@ class Client:
             if any(resp.status == "error" for resp in responses):
                 raise api_errors.InternalError("Some operations failed")
             else:
-                return ClientResponse("ok", Message.SUCCESS, record)
+                return ModelResponse("ok", Message.SUCCESS, record)
         # transaction is automatically closed
 
-    def update(self, client_id: str, updates: dict) -> ClientResponse:
+    def update(self, client_id: str, updates: dict) -> ModelResponse:
         """Update an existing client record."""
         # Validate arguments first to avoid unnecessary database operations
         if not updates:
-            return ClientResponse("ok", Message.EMPTY, "Nothing to update")
+            return ModelResponse("ok", Message.EMPTY, "Nothing to update")
         if "admins" in updates:
             raise api_errors.InvalidRequestError(
                 message="Admins may not be updated directly (use add/remove admin endpoints instead)",
@@ -295,10 +292,10 @@ class Client:
                      client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ClientResponse("ok", Message.UPDATED)
+                return ModelResponse("ok", Message.UPDATED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def add_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
+    def add_admin(self, client_id: str, admin_email: Email) -> ModelResponse:
         """Add an admin to a client application."""
         resp = self.storage.insert(
             "client_admins",
@@ -308,10 +305,10 @@ class Client:
             case Response(status="error"):
                 raise api_errors.InternalError()
             case Response(status="ok", message=Message.CREATED):
-                return ClientResponse("ok", Message.SUCCESS)
+                return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def remove_admin(self, client_id: str, admin_email: Email) -> ClientResponse:
+    def remove_admin(self, client_id: str, admin_email: Email) -> ModelResponse:
         """Remove an admin from a client application."""
         # Check if admin_email is the last admin
         resp = self.storage.get_matching(
@@ -349,10 +346,10 @@ class Client:
                      client_id=client_id
                 )
             case Response(status="ok", message=Message.DELETED):
-                return ClientResponse("ok", Message.SUCCESS)
+                return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get(self, client_id: str) -> ClientResponse:
+    def get(self, client_id: str) -> ModelResponse:
         """Retrieve a client application by its ID, including its admins."""
         resp = self.storage.get_by_id("clients", client_id)
         match resp:
@@ -389,9 +386,9 @@ class Client:
             admin_record["admin_email"]
             for admin_record in admin_records
         ]
-        return ClientResponse("ok", Message.SUCCESS, client_record)
+        return ModelResponse("ok", Message.SUCCESS, client_record)
 
-    def delete(self, client_id: str) -> ClientResponse:
+    def delete(self, client_id: str) -> ModelResponse:
         """Delete a client application by its ID."""
         resp = self.get(client_id)
         match resp:
@@ -421,10 +418,10 @@ class Client:
                 raise api_errors.InternalError("Some operations failed")
             else:
                 self.storage.commit_transaction()
-                return ClientResponse("ok", Message.SUCCESS)
+                return ModelResponse("ok", Message.SUCCESS)
         # transaction is automatically closed
 
-    def replace(self, client_id: str) -> ClientResponse:
+    def replace(self, client_id: str) -> ModelResponse:
         """Revoke a client secret by its ID, and issue a new secret."""
         client_secret = secret.generate_client_secret()
         resp = self.storage.update_by_id(
@@ -444,7 +441,7 @@ class Client:
                      client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ClientResponse("ok", Message.SUCCESS, client_secret)
+                return ModelResponse("ok", Message.SUCCESS, client_secret)
         raise ValueError(f"Unexpected response: {resp}")
 
     def validate_credentials(self, client_id: str, client_secret: str) -> bool:
@@ -468,7 +465,7 @@ class Client:
 #     def __init__(self):
 #         self.storage = get_drum()
 
-#     def create_api_key(self, client_id: str, *, name: str) -> ClientResponse:
+#     def create_api_key(self, client_id: str, *, name: str) -> ModelResponse:
 #         """Create a new API key for a client.
 
 #         Validate name first before calling this function.
@@ -478,7 +475,7 @@ class Client:
 #             name: The name of the API key.
         
 #         Returns:
-#             A ClientResponse indicating the result of the operation.
+#             A ModelResponse indicating the result of the operation.
 #         """
 #         if not validname.is_valid_label(name):
 #             raise api_errors.InvalidRequestError(
@@ -496,22 +493,22 @@ class Client:
 #             case Response(status="error"):
 #                 raise api_errors.InternalError()
 #             case Response(status="ok", message=Message.CREATED):
-#                 return ClientResponse("ok", "API key created", record["key"])
+#                 return ModelResponse("ok", "API key created", record["key"])
 #         raise ValueError(f"Unexpected response: {resp}")
 
-#     def get_apikeys(self, client_id: str) -> ClientResponse:
+#     def get_apikeys(self, client_id: str) -> ModelResponse:
 #         """Retrieve all API keys for a client."""
 #         resp = self.storage.get_matching("apikeys", {"client_id": client_id})
 #         match resp:
 #             case Response(status="error"):
 #                 raise api_errors.InternalError()
 #             case Response(status="ok", message=Message.FOUND, data=result):
-#                 return ClientResponse("ok", Message.SUCCESS, result)
+#                 return ModelResponse("ok", Message.SUCCESS, result)
 #             case Response(status="ok", message=Message.EMPTY):
-#                 return ClientResponse("ok", Message.EMPTY, [])
+#                 return ModelResponse("ok", Message.EMPTY, [])
 #         raise ValueError(f"Unexpected response: {resp}")
 
-#     def delete_api_key(self, client_id: str, name: str) -> ClientResponse:
+#     def delete_api_key(self, client_id: str, name: str) -> ModelResponse:
 #         """Delete an API key for a client."""
 #         resp = self.storage.delete_matching(
 #             "apikeys",
@@ -526,6 +523,6 @@ class Client:
 #                      client_id=client_id, name=name
 #                 )
 #             case Response(status="ok", message=Message.DELETED):
-#                 return ClientResponse(*resp)
+#                 return ModelResponse(*resp)
 #         raise ValueError(f"Unexpected response: {resp}")
 

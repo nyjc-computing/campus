@@ -12,6 +12,7 @@ from typing import NamedTuple
 import bcrypt
 
 from apps.common.errors import api_errors
+from apps.palmtree.models.base import ModelResponse
 from common import devops
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
     from common.drum.postgres import get_conn, get_drum
@@ -118,10 +119,6 @@ class OTP(NamedTuple):
     expires_at: utc_time.datetime
 
 
-class OTPResponse(Response):
-    """Represents an OTP verification response"""
-
-
 class OTPAuth:
     """
     OTP model for handling database operations related to one-time passwords.
@@ -137,7 +134,7 @@ class OTPAuth:
         """
         self.storage = get_drum()
 
-    def request(self, email: str, expiry_minutes: int | float = 5) -> OTPResponse:
+    def request(self, email: str, expiry_minutes: int | float = 5) -> ModelResponse:
         """
         Generate a new OTP for the given email, store or update it in the database, and return it.
 
@@ -172,10 +169,10 @@ class OTPAuth:
             case Response(status="error"):
                 raise api_errors.InternalError(resp.message)
             case Response(status="ok", message=Message.CREATED):
-                return OTPResponse("ok", "OTP created", plain_otp)
+                return ModelResponse("ok", "OTP created", plain_otp)
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def verify(self, email: str, plain_otp: str) -> OTPResponse:
+    def verify(self, email: str, plain_otp: str) -> ModelResponse:
         """
         Verify if the provided OTP matches the one stored for the email.
 
@@ -184,7 +181,7 @@ class OTPAuth:
             plain_otp: Plaintext OTP to verify.
 
         Returns:
-            OTPResponse indicating the result of the verification.
+            ModelResponse indicating the result of the verification.
         """
         # Get the latest OTP for this email
         resp = self.storage.get_by_id('otp_codes', email)
@@ -209,11 +206,11 @@ class OTPAuth:
 
         # Verify OTP
         if hashed_otp.verify(_plainOTP(plain_otp)):
-            return OTPResponse("ok", "OTP verified")
+            return ModelResponse("ok", "OTP verified")
         else:
             raise api_errors.UnauthorizedError("Invalid OTP")
 
-    def revoke(self, email: str) -> OTPResponse:
+    def revoke(self, email: str) -> ModelResponse:
         """
         Delete all OTPs for the given email (typically after successful verification).
 
@@ -227,6 +224,6 @@ class OTPAuth:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError("OTP not found")
             case Response(status="ok", message=Message.DELETED):
-                return OTPResponse("ok", "OTP deleted")
+                return ModelResponse("ok", "OTP deleted")
             case _:
                 raise ValueError(f"Unexpected case: {resp}")
