@@ -152,14 +152,23 @@ class SqliteDrum(DrumInterface):
         finally:
             if not self.transaction:
                 conn.close()
-        raise AssertionError("unreachable")  # appease mypy
     
-    def get_all(self, group: str) -> DrumResponse:
+    def get_all(self, group: str, **filter: Any) -> DrumResponse:
         """Retrieve all records from table"""
-        resp = self._execute_callback(
-            f"""SELECT * FROM {group}""",
-            callback=lambda cursor: cursor.fetchall()
-        )
+        if filter:
+            filter_clause = " AND ".join(
+                f"{key} = ?" for key in filter
+            )
+            resp = self._execute_callback((
+                f"SELECT * FROM {group}"
+                f"{' WHERE ' + filter_clause if filter else ''}"
+                ),
+                tuple(filter.values())
+            )
+        else:
+            resp = self._execute_callback(
+                f"""SELECT * FROM {group}"""
+            )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
