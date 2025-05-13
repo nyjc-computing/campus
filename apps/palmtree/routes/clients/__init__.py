@@ -129,7 +129,7 @@ def approve_application(client_application_id: str):
         return {"message": "Not implemented"}, 501
     # TODO: validate, authenticate
     application = clients.applications.get(client_application_id).data
-    # TODO: Pass secret to admin, or generate new client without secret
+    # FUTURE: Migrate to flows
     resp = clients.new(
         name=application["name"],
         description=application["description"],
