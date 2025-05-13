@@ -6,7 +6,7 @@ PostgreSQL implementation of the Drum interface.
 import os
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -88,12 +88,20 @@ class PostgresDrum(DrumInterface):
         self.transaction = None
         self._responses = None
 
-    def transaction_responses(self) -> list[DrumResponse]:
+    def transaction_responses(
+            self,
+            status: Literal["ok", "error"] | None = None
+    ) -> list[DrumResponse]:
         """Return the results of the transaction."""
         if not self.transaction:
             raise RuntimeError("No transaction in progress")
         assert isinstance(self._responses, list)
-        return self._responses.copy()
+        if status:
+            return [
+                resp for resp in self._responses if resp.status == status
+            ]
+        else:
+            return self._responses.copy()
 
     def _execute_callback(
             self,
