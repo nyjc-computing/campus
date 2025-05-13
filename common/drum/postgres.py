@@ -245,7 +245,9 @@ class PostgresDrum(DrumInterface):
     def set(self, group: str, record: Record) -> DrumResponse:
         """Update an existing record, or insert a new one if it doesn't exist"""
         assert PK in record, f"Record must have a {PK} field"
-        resp = self.get_by_id(group, record[PK])
+        record_id = record[PK]
+        assert isinstance(record_id, str), f"{PK} must be a string"
+        resp = self.get_by_id(group, record_id)
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
@@ -259,7 +261,7 @@ class PostgresDrum(DrumInterface):
                     for key, value in record.items()
                     if existing_record.get(key) != value
                 }
-                return self.update_by_id(group, record[PK], updates)
+                return self.update_by_id(group, record_id, updates)
         raise ValueError(f"Unexpected case: {resp}")
 
     def get_matching(self, group: str, condition: Condition) -> DrumResponse:
