@@ -100,11 +100,6 @@ class ClientApplicationNewSchema(TypedDict):
     description: str
 
 
-class ClientApplicationByIdSchema(TypedDict):
-    """Data model for a clients.applications operations requiring id."""
-    client_application_id: str
-
-
 class ClientApplicationRecord(TypedDict):
     """Data model for a client application."""
     uid: str
@@ -152,9 +147,11 @@ class ClientApplication:
     __record_schema__ = ClientApplicationRecord
     __request_schema__ = {
         "list": None,
-        "delete": ClientApplicationByIdSchema,
-        "get": ClientApplicationByIdSchema,
+        "delete": None,
+        "get": None,
         "new": ClientApplicationNewSchema,
+        "approve": None,
+        "reject": None,
     }
 
     def __init__(self):
