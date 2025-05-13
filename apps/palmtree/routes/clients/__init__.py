@@ -105,14 +105,6 @@ def submit_client_application():
     resp = clients.applications.new(**data)
     return {"message": "Client request submitted"}, 201
 
-@bp.get('/applications/<string:client_application_id>')
-def get_client_application(client_application_id: str):
-    """Get details of a client application."""
-    if not GET:
-        return {"message": "Not implemented"}, 501
-    resp = clients.applications.get(client_application_id)  # raises APIError
-    return resp.data, 200
-
 @bp.delete('/applications/<string:client_application_id>')
 def delete_application(client_application_id: str):
     """Delete a client application."""
@@ -120,7 +112,6 @@ def delete_application(client_application_id: str):
         return {"message": "Not implemented"}, 501
     resp = clients.applications.delete(client_application_id)  # raises APIError
     return resp.data, 200
-
 
 @bp.get('/applications/<string:client_application_id>')
 def get_application_status(client_application_id: str):
