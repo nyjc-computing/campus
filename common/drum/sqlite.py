@@ -140,7 +140,7 @@ class SqliteDrum(DrumInterface):
             result = CursorResult(
                 lastrowid=cursor.lastrowid,
                 rowcount=cursor.rowcount,
-                result=callback(cursor) if callback else cursor.fetchall()
+                result=callback(cursor) if callback else None
             )
             resp = DrumResponse('ok', Message.COMPLETED, result)
             if self.transaction:
