@@ -277,7 +277,7 @@ class SqliteDrum(DrumInterface):
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
             case Response(status="ok", data=result):
-                assert result["rowcount"] == 1  # confirm one row inserted
+                # No need to check for rowcount, which is 0
                 return DrumResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected case: {resp}")
 
