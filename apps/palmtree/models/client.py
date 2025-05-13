@@ -92,7 +92,7 @@ def init_db() -> None:
         conn.close()
 
 
-class ClientRequest(TypedDict):
+class ClientApplicationSchema(TypedDict):
     """Data model for a client key request (apply for a client id)."""
     id: NotRequired[str]
     owner: Email
@@ -134,9 +134,9 @@ class ClientApplication:
 
     def new(self, **fields) -> ClientResponse:
         """Submit a request for a new client id."""
-        validate_keys(fields, ClientRequest.__required_keys__)
+        validate_keys(fields, ClientApplicationSchema.__required_keys__)
         client_application_id = uid.generate_category_uid("client_application", length=6)
-        request = ClientRequest(
+        request = ClientApplicationSchema(
             id=client_application_id,
             **fields,
             created_on=utc_time.now(),
