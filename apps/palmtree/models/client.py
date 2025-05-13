@@ -53,10 +53,11 @@ def init_db() -> None:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS clients (
                 id TEXT PRIMARY KEY,
-                client_secret TEXT NOT NULL,
+                client_secret TEXT,
                 name TEXT NOT NULL,
                 description TEXT,
                 created_on TEXT NOT NULL,
+                UNIQUE (name),
                 UNIQUE (client_secret)
             );
         """)
@@ -244,13 +245,8 @@ class Client:
         # Use Client model to validate keyword arguments
         validate_keys(fields, ClientRecord.__required_keys__)
         client_id = uid.generate_category_uid("client", length=6)
-        client_secret = secret.generate_client_secret()
         record = ClientRecord(
             client_id=client_id,
-            secret_hash=secret.hash_client_secret(
-                client_secret,
-                os.environ["SECRET_KEY"]
-            ),
             created_on=utc_time.now(),
             apikeys={},
             **fields,
