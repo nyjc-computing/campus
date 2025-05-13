@@ -101,8 +101,6 @@ class SqliteDrum(DrumInterface):
             self,
             *args,
             callback: Callable[[sqlite3.Cursor], Any] | None = None,
-            commit: bool = True,
-            conn: sqlite3.Connection | None = None,
     ) -> DrumResponse:
         """Execute a typical query, using a callback to handle the cursor.
 
@@ -110,67 +108,43 @@ class SqliteDrum(DrumInterface):
             args: The query and parameters to execute.
             callback: A function that takes a cursor and returns a value.
                 If None, the cursor is returned.
-            commit: Whether to commit the transaction.
-
-            If a transaction is in progress, responses are collected, commit is
-            ignored.
+            
+            If a transaction is in progress, responses are collected, and
+            commit is not automatically called. Otherwise, commit is automatically called after the operation.
 
         Returns:
             A DrumResponse object with the status, message, and data.
         """
-        if (self.transaction and commit):
-            raise ValueError(
-                "A transaction is in progress, cannot commit\n"
-                "Hint: unset commit keyword argument"
-            )
-        # We allow callback while a transaction is in progress, since it is used
-        # to perform SELECT queries and should not affect the transaction.
         conn = self.transaction or get_conn()
         try:
             cursor = conn.execute(*args)
         except sqlite3.DatabaseError as e:
-            return DrumResponse('error', Message.FAILED, str(e))
-        # Don't catch other kinds of errors
-        else:
-            if callback:
-                result = callback(cursor)
-                return DrumResponse(
-                    'ok',
-                    Message.COMPLETED,
-                    CursorResult(
-                        lastrowid=cursor.lastrowid,
-                        rowcount=cursor.rowcount,
-                        result=result
-                    )
-                )
+            resp = DrumResponse('error', Message.FAILED, str(e))
+            conn.rollback()
             if self.transaction:
                 assert isinstance(self._responses, list)
-                self._responses.append(
-                    DrumResponse(
-                        'ok',
-                        Message.COMPLETED,
-                        CursorResult(
-                            lastrowid=cursor.lastrowid,
-                            rowcount=cursor.rowcount,
-                            result=None
-                        )
-                    )
-                )
-            elif commit:
+                self._responses.append(resp)
+            else:
+                conn.close()
+            return resp
+        # Don't catch other kinds of errors
+        else:
+            result = CursorResult(
+                lastrowid=cursor.lastrowid,
+                rowcount=cursor.rowcount,
+                result=callback(cursor) if callback else None
+            )
+            resp = DrumResponse('ok', Message.COMPLETED, result)
+            if self.transaction:
+                assert isinstance(self._responses, list)
+                self._responses.append(resp)
+            else:
                 conn.commit()
-                return DrumResponse(
-                    'ok',
-                    Message.COMPLETED,
-                    CursorResult(
-                        lastrowid=cursor.lastrowid,
-                        rowcount=cursor.rowcount,
-                        result=None
-                    )
-                )
+                return resp
         finally:
             if not self.transaction:
                 conn.close()
-        raise AssertionError("unreachable")
+        raise AssertionError("unreachable")  # appease mypy
     
     def get_all(self, group: str) -> DrumResponse:
         """Retrieve all records from table"""
