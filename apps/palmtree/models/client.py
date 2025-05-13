@@ -42,7 +42,7 @@ def init_db() -> None:
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS client_applications (
-                uid TEXT PRIMARY KEY,
+                id TEXT PRIMARY KEY,
                 owner TEXT NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT,
@@ -102,7 +102,7 @@ class ClientApplicationNewSchema(TypedDict):
 
 class ClientApplicationRecord(TypedDict):
     """Data model for a client application."""
-    uid: str
+    id: str
     owner: Email
     name: str
     description: str
@@ -172,7 +172,7 @@ class ClientApplication:
         """Submit a request for a new client id."""
         validate_keys(fields, ClientApplicationNewSchema.__required_keys__)
         request = ClientApplicationRecord(
-            uid=uid.generate_category_uid("client_application", length=6),
+            id=uid.generate_category_uid("client_application", length=6),
             **fields,
             created_on=utc_time.now(),
             status="review"
@@ -180,6 +180,7 @@ class ClientApplication:
         resp = self.storage.insert("client_applications", request)
         match resp:
             case Response(status="error"):
+                breakpoint()
                 raise api_errors.InternalError()
             case Response(status="ok"):
                 return ModelResponse("ok", Message.CREATED, request)
@@ -243,11 +244,11 @@ class ClientAdmin:
                 return ModelResponse("ok", Message.EMPTY, [])
         raise ValueError(f"Unexpected response: {resp}")
 
-    def add(self, client_id: str, admin_email: Email) -> ModelResponse:
+    def add(self, client_id: str, admin_id: Email) -> ModelResponse:
         """Add an admin to a client application."""
         resp = self.storage.insert(
             "client_admins",
-            {"client_id": client_id, "admin_email": admin_email}
+            {"client_id": client_id, "admin_id": admin_id}
         )
         match resp:
             case Response(status="error"):
@@ -256,9 +257,9 @@ class ClientAdmin:
                 return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def remove(self, client_id: str, admin_email: Email) -> ModelResponse:
+    def remove(self, client_id: str, admin_id: Email) -> ModelResponse:
         """Remove an admin from a client application."""
-        # Check if admin_email is the last admin
+        # Check if admin_id is the last admin
         resp = self.storage.get_matching(
             "client_admins",
             {"client_id": client_id}
@@ -274,7 +275,7 @@ class ClientAdmin:
             case Response(status="ok", message=Message.FOUND, data=result):
                 if (
                         result and len(result) == 1
-                        and result[0]["admin_email"] == admin_email
+                        and result[0]["admin_id"] == admin_id
                 ):
                     raise api_errors.UnauthorizedError(
                         "Cannot remove last client admin",
@@ -283,7 +284,7 @@ class ClientAdmin:
 
         resp = self.storage.delete_matching(
             "client_admins",
-            {"client_id": client_id, "admin_email": admin_email}
+            {"client_id": client_id, "admin_id": admin_id}
         )
         match resp:
             case Response(status="error"):
@@ -308,7 +309,7 @@ class ClientNewSchema(TypedDict):
 class ClientRecord(TypedDict):
     """Data model for a client record."""
     # client_id and secret_hash will be generated and need not be provided
-    client_id: NotRequired[str]
+    id: NotRequired[str]
     secret_hash: NotRequired[str]
     created_on: NotRequired[utc_time.datetime]
     apikeys: NotRequired[dict[APIName, APIKey]]
@@ -407,7 +408,7 @@ class Client:
         )
 
         client_record["admins"] = [
-            admin_record["admin_email"]
+            admin_record["admin_id"]
             for admin_record in admin_records
         ]
         return ModelResponse("ok", Message.SUCCESS, client_record)
@@ -418,7 +419,7 @@ class Client:
         validate_keys(fields, ClientRecord.__required_keys__)
         client_id = uid.generate_category_uid("client", length=6)
         record = ClientRecord(
-            client_id=client_id,
+            id=client_id,
             created_on=utc_time.now(),
             **fields,
         )
@@ -435,15 +436,21 @@ class Client:
             for admin in record["admins"]:
                 self.storage.insert(
                     "client_admins",
-                    {"client_id": client_id, "admin_email": admin}
+                    {"client_id": client_id, "admin_id": admin}
                 )
             # Check for failed operations
-            responses = self.storage.transaction_responses()
-            if any(resp.status == "error" for resp in responses):
-                raise api_errors.InternalError("Some operations failed")
+            failures = [
+                resp for resp in self.storage.transaction_responses()
+                if resp.status == "error"
+            ]
+            if failures:
+                raise api_errors.InternalError("" \
+                    "Some operations failed",
+                    failed=failures
+                )
             else:
                 return ModelResponse("ok", Message.SUCCESS, record)
-        # transaction is automatically closed
+        # rollback/commit and tansaction closing are automatically handled
 
     def replace(self, client_id: str) -> ModelResponse:
         """Revoke a client secret by its ID, and issue a new secret."""
