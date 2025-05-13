@@ -134,7 +134,7 @@ class PostgresDrum(DrumInterface):
                 self._responses.append(resp)
             else:
                 conn.commit()
-                return resp
+            return resp
         finally:
             if not self.transaction:
                 conn.close()
