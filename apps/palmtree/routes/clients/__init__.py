@@ -83,7 +83,7 @@ def get_client_applications():
     return resp.data, 200
 
 @bp.post('/applications')
-def submit_client_application():
+def new_client_application():
     """Apply for a client id and secret."""
     if not POST:
         return {"message": "Not implemented"}, 501
