@@ -72,8 +72,8 @@ class User:
             {'activated_at': utc_time.now()}
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(message=resp.message, error=resp.data)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")
@@ -86,8 +86,8 @@ class User:
             {'id': user_id, 'email': email, 'name': name}
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(message=resp.message, error=resp.data)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.SUCCESS):
                 return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
         raise ValueError(f"Unexpected response from storage: {resp}")
@@ -97,8 +97,8 @@ class User:
         user_id, _ = email.split('@')
         resp = self.storage.delete_by_id('users', user_id)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(message=resp.message, error=resp.data)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.DELETED):
                 return ModelResponse(**resp)
             case Response(status="ok", message=Message.NOT_FOUND):
@@ -113,8 +113,8 @@ class User:
         user_id, _ = email.split('@')
         resp = self.storage.get_by_id('users', user_id)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(message=resp.message, error=resp.data)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.FOUND):
                 return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
@@ -129,8 +129,8 @@ class User:
         user_id, _ = email.split('@')
         resp = self.storage.update_by_id('users', user_id, updates)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(message=resp.message, error=resp.data)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):

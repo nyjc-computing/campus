@@ -131,8 +131,8 @@ class ClientApplication:
         """List all client requests."""
         resp = self.storage.get_all("client_applications")
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ModelResponse("ok", Message.FOUND, result)
             case Response(status="ok", message=Message.EMPTY):
@@ -143,8 +143,8 @@ class ClientApplication:
         """Revoke a client request by its ID."""
         resp = self.storage.delete_by_id("client_applications", client_application_id)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
@@ -158,8 +158,8 @@ class ClientApplication:
         """Retrieve a client request by its ID."""
         resp = self.storage.get_by_id("client_applications", client_application_id)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
@@ -180,9 +180,9 @@ class ClientApplication:
         )
         resp = self.storage.insert("client_applications", request)
         match resp:
-            case Response(status="error"):
+            case Response(status="error", message=message, data=error):
                 breakpoint()
-                raise api_errors.InternalError()
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok"):
                 return ModelResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
@@ -195,8 +195,8 @@ class ClientApplication:
             {"status": "approved"}
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
@@ -214,8 +214,8 @@ class ClientApplication:
             {"status": "rejected"}
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client request not found",
@@ -237,8 +237,8 @@ class ClientAdmin:
         """List all admins for a client application."""
         resp = self.storage.get_matching("client_admins", {"client_id": client_id})
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ModelResponse("ok", Message.FOUND, result)
             case Response(status="ok", message=Message.EMPTY):
@@ -256,8 +256,8 @@ class ClientAdmin:
             }
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.CREATED):
                 return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
@@ -270,8 +270,8 @@ class ClientAdmin:
             {"client_id": client_id}
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.EMPTY):
                 raise api_errors.ConflictError(
                     "Client has no admins",
@@ -292,8 +292,8 @@ class ClientAdmin:
             {"client_id": client_id, "admin_id": admin_id}
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client not found",
@@ -338,8 +338,8 @@ class Client:
         """Delete a client application by its ID."""
         resp = self.get(client_id)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", data=None):
                 raise api_errors.ConflictError(
                     "Client not found",
@@ -361,7 +361,7 @@ class Client:
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
                 self.storage.rollback_transaction()
-                raise api_errors.InternalError("Some operations failed")
+                raise api_errors.InternalError(message="Some operations failed", responses=self.storage.transaction_responses())
             else:
                 self.storage.commit_transaction()
                 return ModelResponse("ok", Message.SUCCESS)
@@ -371,8 +371,8 @@ class Client:
         """List all client applications."""
         resp = self.storage.get_all("clients")
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ModelResponse("ok", Message.FOUND, result)
             case Response(status="ok", message=Message.EMPTY):
@@ -383,8 +383,8 @@ class Client:
         """Retrieve a client application by its ID, including its admins."""
         resp = self.storage.get_by_id("clients", client_id)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND, data=None):
                 raise api_errors.ConflictError(
                     "Client not found",
@@ -396,8 +396,8 @@ class Client:
 
         resp = self.storage.get_matching("client_admins", {"client_id": client_id})
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", data=None):
                 # client has no admins
                 raise api_errors.ConflictError(
@@ -473,8 +473,8 @@ class Client:
             )}
         )
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client not found",
@@ -498,8 +498,8 @@ class Client:
 
         resp = self.storage.update_by_id("clients", client_id, updates)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client not found",
@@ -513,8 +513,8 @@ class Client:
         """Validate client_id and client_secret."""
         resp = self.storage.get_by_id("clients", client_id)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 return False
             case Response(status="ok", message=Message.FOUND, data=client):
@@ -568,8 +568,8 @@ class Client:
 #         )
 #         resp = self.storage.insert("apikeys", record)
 #         match resp:
-#             case Response(status="error"):
-#                 raise api_errors.InternalError()
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
 #             case Response(status="ok", message=Message.CREATED):
 #                 return ModelResponse("ok", "API key created", record["key"])
 #         raise ValueError(f"Unexpected response: {resp}")
@@ -578,8 +578,8 @@ class Client:
 #         """Retrieve all API keys for a client."""
 #         resp = self.storage.get_matching("apikeys", {"client_id": client_id})
 #         match resp:
-#             case Response(status="error"):
-#                 raise api_errors.InternalError()
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
 #             case Response(status="ok", message=Message.FOUND, data=result):
 #                 return ModelResponse("ok", Message.SUCCESS, result)
 #             case Response(status="ok", message=Message.EMPTY):
@@ -593,8 +593,8 @@ class Client:
 #             {"client_id": client_id, "name": name}
 #         )
 #         match resp:
-#             case Response(status="error"):
-#                 raise api_errors.InternalError()
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
 #             case Response(status="ok", message=Message.NOT_FOUND):
 #                 raise api_errors.ConflictError(
 #                     "API key not found",

@@ -155,8 +155,9 @@ class OTPAuth:
 
         # Delete any existing OTP for this email
         resp = self.storage.delete_by_id('otp_codes', email)
-        if resp.status == "error":
-            raise api_errors.InternalError(resp.message)
+        match resp:
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
         # Insert new OTP
         otp_code = OTP(
             email=email,
@@ -166,8 +167,8 @@ class OTPAuth:
         )
         resp = self.storage.insert('otp_codes', otp_code._asdict())
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(resp.message)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.CREATED):
                 return ModelResponse("ok", "OTP created", plain_otp)
         raise ValueError(f"Unexpected response from storage: {resp}")
@@ -186,8 +187,8 @@ class OTPAuth:
         # Get the latest OTP for this email
         resp = self.storage.get_by_id('otp_codes', email)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(resp.message)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError("OTP not found")
 
@@ -219,8 +220,8 @@ class OTPAuth:
         """
         resp = self.storage.delete_by_id('otp_codes', email)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(resp.message)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError("OTP not found")
             case Response(status="ok", message=Message.DELETED):
