@@ -41,7 +41,7 @@ def init_db() -> None:
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS client_applications (
+            CREATE TABLE IF NOT EXISTS "client_applications" (
                 id TEXT PRIMARY KEY,
                 owner TEXT NOT NULL,
                 name TEXT NOT NULL,
@@ -52,7 +52,7 @@ def init_db() -> None:
             )
         """)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS clients (
+            CREATE TABLE IF NOT EXISTS "clients" (
                 id TEXT PRIMARY KEY,
                 client_secret TEXT,
                 name TEXT NOT NULL,
@@ -66,10 +66,11 @@ def init_db() -> None:
         # string primary key, as they are not expected to be directly queried
         # by end users.
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS client_admins (
+            CREATE TABLE IF NOT EXISTS "client_admins" (
+                id TEXT PRIMARY KEY,
                 client_id TEXT NOT NULL,
                 admin_id TEXT NOT NULL,
-                PRIMARY KEY (client_id, admin_id),
+                UNIQUE (client_id, admin_id),
                 FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
             )
         """)
@@ -248,7 +249,11 @@ class ClientAdmin:
         """Add an admin to a client application."""
         resp = self.storage.insert(
             "client_admins",
-            {"client_id": client_id, "admin_id": admin_id}
+            {
+                "id": uid.generate_category_uid("client_admin", length=4),
+                "client_id": client_id,
+                "admin_id": admin_id
+            }
         )
         match resp:
             case Response(status="error"):
@@ -436,7 +441,11 @@ class Client:
             for admin in record["admins"]:
                 self.storage.insert(
                     "client_admins",
-                    {"client_id": client_id, "admin_id": admin}
+                    {
+                        "id": uid.generate_category_uid("client_admin", length=4),
+                        "client_id": client_id,
+                        "admin_id": admin
+                    }
                 )
             # Check for failed operations
             failures = [
@@ -444,7 +453,7 @@ class Client:
                 if resp.status == "error"
             ]
             if failures:
-                raise api_errors.InternalError("" \
+                raise api_errors.InternalError(
                     "Some operations failed",
                     failed=failures
                 )
