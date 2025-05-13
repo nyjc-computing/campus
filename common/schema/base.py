@@ -29,9 +29,9 @@ class Response(Mapping, Iterable):
         """Return a string representation of the response."""
         return (
             f"{self.__class__.__name__}"
-            f"(status={self.status}, "
-            f"message={self.message}, "
-            f"data={self.data})"
+            f"(status={self.status!r}, "
+            f"message={self.message!r}, "
+            f"data={self.data!r})"
         )
 
     @property
