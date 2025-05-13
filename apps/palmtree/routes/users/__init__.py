@@ -28,7 +28,7 @@ def get_authenticated_user():
 
 
 @bp.post('/')
-def create_user():
+def new_user():
     """Create a new user."""
     if not request.is_json:
         return {"error": "Request must be JSON"}, 400

@@ -28,7 +28,7 @@ def init_app(app) -> None:
 
 
 @bp.post('/')
-def create_client():
+def new_client():
     """Create a new client id and secret."""
     if not POST:
         return {"message": "Not implemented"}, 501
@@ -105,6 +105,22 @@ def submit_client_application():
     resp = clients.applications.new(**data)
     return {"message": "Client request submitted"}, 201
 
+@bp.get('/applications/<string:client_application_id>')
+def get_client_application(client_application_id: str):
+    """Get details of a client application."""
+    if not GET:
+        return {"message": "Not implemented"}, 501
+    resp = clients.applications.get(client_application_id)  # raises APIError
+    return resp.data, 200
+
+@bp.delete('/applications/<string:client_application_id>')
+def delete_application(client_application_id: str):
+    """Delete a client application."""
+    if not DELETE:
+        return {"message": "Not implemented"}, 501
+    resp = clients.applications.delete(client_application_id)  # raises APIError
+    return resp.data, 200
+
 
 @bp.get('/applications/<string:client_application_id>')
 def get_application_status(client_application_id: str):
@@ -152,13 +168,13 @@ def reject_application(client_application_id: str):
 
 
 # @bp.post('/<string:client_id>/apikeys')
-# def create_client_api_key(client_id: str):
+# def new_client_api_key(client_id: str):
 #     """Create a new API key for the client."""
 #     if not POST:
 #         return {"message": "not implemented"}, 501
 #     # TODO: validate, authenticate
 #     data = request.get_json()
-#     resp = apikeys.create_api_key(client_id, **data)  # raises APIError
+#     resp = apikeys.new_api_key(client_id, **data)  # raises APIError
 #     return resp.data, 201
 
 

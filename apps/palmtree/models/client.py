@@ -181,7 +181,7 @@ class ClientApplication:
                 return ModelResponse("ok", Message.FOUND, result)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def replace(self, client_application_id: str) -> ModelResponse:
+    def delete(self, client_application_id: str) -> ModelResponse:
         """Revoke a client request by its ID."""
         resp = self.storage.delete_by_id("client_applications", client_application_id)
         match resp:
