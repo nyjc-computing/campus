@@ -61,10 +61,14 @@ class SqliteDrum(DrumInterface):
         try:
             yield self.transaction
         finally:
+            if self.transaction_responses(status="error"):
+                self.rollback_transaction()
+            else:
+                self.commit_transaction()
             self.close_transaction()
 
     def begin_transaction(self) -> None:
-        """Begin a transaction and return the connection."""
+        """Begin a transaction and store the connection."""
         if self.transaction:
             raise RuntimeError("Transaction already in progress")
         self.transaction = get_conn()
@@ -245,7 +249,6 @@ class SqliteDrum(DrumInterface):
 
     def insert(self, group: str, record: Record) -> DrumResponse:
         """Insert a new record into the table"""
-        assert PK in record, f"Record must have a {PK} field"
         keys = ", ".join(record.keys())
         placeholders = ", ".join("?" * len(record))
         resp = self._execute_callback(
