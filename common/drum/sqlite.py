@@ -184,7 +184,7 @@ class SqliteDrum(DrumInterface):
     def get_by_id(self, group: str, id: str) -> DrumResponse:
         """Retrieve a record from table by its id"""
         resp = self._execute_callback(
-            f"""SELECT FROM {group} WHERE {PK} = ?""",
+            f"""SELECT * FROM {group} WHERE {PK} = ?""",
             (id,),
             callback=lambda cursor: cursor.fetchone()
         )
