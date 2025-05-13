@@ -7,7 +7,7 @@ SQLite implementation of the Drum interface.
 import sqlite3
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 from common.schema import Message, Response
 
@@ -94,12 +94,20 @@ class SqliteDrum(DrumInterface):
         self.transaction = None
         self._responses = None
 
-    def transaction_responses(self) -> list[DrumResponse]:
+    def transaction_responses(
+            self,
+            status: Literal["ok", "error"] | None = None
+    ) -> list[DrumResponse]:
         """Return the results of the transaction."""
         if not self.transaction:
             raise RuntimeError("No transaction in progress")
         assert isinstance(self._responses, list)
-        return self._responses.copy()
+        if status:
+            return [
+                resp for resp in self._responses if resp.status == status
+            ]
+        else:
+            return self._responses.copy()
 
     def _execute_callback(
             self,
@@ -122,21 +130,17 @@ class SqliteDrum(DrumInterface):
         conn = self.transaction or get_conn()
         try:
             cursor = conn.execute(*args)
-        except sqlite3.DatabaseError as e:
+        except (sqlite3.DatabaseError, Exception) as e:
             resp = DrumResponse('error', Message.FAILED, str(e))
-            conn.rollback()
             if self.transaction:
                 assert isinstance(self._responses, list)
                 self._responses.append(resp)
-            else:
-                conn.close()
             return resp
-        # Don't catch other kinds of errors
         else:
             result = CursorResult(
                 lastrowid=cursor.lastrowid,
                 rowcount=cursor.rowcount,
-                result=callback(cursor) if callback else None
+                result=callback(cursor) if callback else cursor.fetchall()
             )
             resp = DrumResponse('ok', Message.COMPLETED, result)
             if self.transaction:
