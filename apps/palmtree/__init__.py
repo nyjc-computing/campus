@@ -58,3 +58,25 @@ def init_db() -> None:
 
     for model in (client, otp, user):
         model.init_db()
+
+def purge() -> None:
+    """Purge the database.
+    
+    This function is intended to be used in a test environment to reset the
+    database state.
+    """
+    # These imports do not appear at the top of the file to avoid namespace
+    # pollution, as they are typically not used in production.
+    from warnings import warn
+
+    from common import devops
+
+    if devops.ENV in (devops.STAGING, devops.PRODUCTION):
+        warn(f"Purging database in {devops.ENV} environment.", stacklevel=2)
+        if input("Are you sure? (y/n): ").lower() == 'y':
+            # User confirmed the purge
+            from common.drum.postgres import purge
+            purge()
+    else:
+        from common.drum.sqlite import purge
+        purge()
