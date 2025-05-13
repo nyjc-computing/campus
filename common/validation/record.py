@@ -1,8 +1,9 @@
 from collections.abc import Collection, Mapping
+from typing import Any
 
 
 def _validate_key_names(
-        record: dict,
+        record: Mapping[str, Any],
         valid_keys: Collection[str],
         ignore_extra=True,
         required=True
@@ -30,7 +31,7 @@ def _validate_key_names(
 
 
 def _validate_key_types(
-        record: dict,
+        record: Mapping[str, Any],
         valid_keys: Mapping[str, type],
         ignore_extra=True,
         required=True
@@ -67,7 +68,7 @@ def _validate_key_types(
 
 
 def validate_keys(
-        record: dict,
+        record: Mapping[str, Any],
         valid_keys: Collection[str] | Mapping[str, type],
         ignore_extra=True,
         required=True

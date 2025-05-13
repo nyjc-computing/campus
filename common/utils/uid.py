@@ -26,5 +26,5 @@ def generate_category_uid(category: str, *, length: int = 16) -> str:
     Returns:
         A string containing the generated UID.
     """
-    return f"{category}-{generate_uid(length)}"
+    return f"uid-{category}-{generate_uid(length)}"
 

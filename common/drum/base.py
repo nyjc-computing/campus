@@ -8,6 +8,15 @@ Common assumptions across storage types:
 - primary keys are unique strings
 - timestamps are stored as RFC3339 strings
 - records/documents are grouped by collections/tables
+
+# Concrete Drum implementations:
+
+All concrete Drum implementations should inherit from DrumInterface and implement all methods.
+Operation methods should return a DrumResponse object.
+Each concrete Drum implementation should be defined in a submodule within the
+  `drum` package.
+  - A get_conn() function should be defined in the submodule to return a connection object.
+  - A get_drum() function should be defined in the submodule to return an instance of the concrete Drum implementation.
 """
 
 from abc import ABC, abstractmethod

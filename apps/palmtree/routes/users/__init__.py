@@ -1,10 +1,13 @@
 from flask import Blueprint, request
 
 from apps.palmtree.models import user
-from apps.palmtree.errors import api_errors
+from apps.common.errors import api_errors
+from common.auth import authenticate_client
 from common.schema import Message, Response
 
 bp = Blueprint('users', __name__, url_prefix='/users')
+bp.before_request(authenticate_client)
+
 
 users = user.User()
 
@@ -22,6 +25,28 @@ def get_authenticated_user():
     """Get the authenticated user's summary."""
     # TODO: Get user id from auth token
     return {"message": "not implemented"}, 501
+
+
+@bp.post('/')
+def new_user():
+    """Create a new user."""
+    if not request.is_json:
+        return {"error": "Request must be JSON"}, 400
+    data = request.get_json()
+    resp = users.new(**data)
+    if resp.status == "ok":
+        return {"message": "User created"}, 201
+    else:
+        return {"error": resp.message}, 400
+    
+@bp.delete('/<string:user_id>')
+def delete_user(user_id: str):
+    """Delete a user."""
+    resp = users.delete(user_id)
+    if resp.status == "ok":
+        return {"message": "User deleted"}, 200
+    else:
+        return {"error": resp.message}, 400
 
 @bp.get('/<string:user_id>')
 def get_user(user_id: str):
@@ -42,6 +67,7 @@ def patch_user_profile(user_id: str):
     return {"message": "Profile updated"}, 200
 
 @bp.get('/<string:user_id>/profile')
+# TODO: require client auth or token auth
 def get_user_profile(user_id: str):
     """Get a single user's profile."""
     resp = users.get(user_id)

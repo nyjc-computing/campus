@@ -7,11 +7,11 @@ SQLite implementation of the Drum interface.
 import sqlite3
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 from common.schema import Message, Response
 
-from .base import PK, Condition, DrumResponse, Record, Update
+from .base import PK, Condition, DrumInterface, DrumResponse, Record, Update
 
 
 def dict_factory(cursor, row) -> Record:
@@ -22,12 +22,24 @@ def dict_factory(cursor, row) -> Record:
     }
     return d
 
+def purge() -> None:
+    """Purge the database file."""
+    try:
+        import os
+        os.remove('test.db')
+    except FileNotFoundError:
+        pass
+
 def get_conn() -> sqlite3.Connection:
     """Get a prepared connection to the sqlite3 database."""
     conn = sqlite3.connect('test.db')
     conn.execute('PRAGMA foreign_keys = ON')
     conn.row_factory = dict_factory
     return conn
+
+def get_drum() -> 'SqliteDrum':
+    """Get a prepared Drum instance."""
+    return SqliteDrum()
 
 
 class CursorResult(TypedDict):
@@ -36,7 +48,7 @@ class CursorResult(TypedDict):
     result: list[Record] | Record | None
 
 
-class SqliteDrum:
+class SqliteDrum(DrumInterface):
     """SQLite implementation of the Drum interface."""
     def __init__(self):
         self.transaction = None
@@ -49,10 +61,14 @@ class SqliteDrum:
         try:
             yield self.transaction
         finally:
+            if self.transaction_responses(status="error"):
+                self.rollback_transaction()
+            else:
+                self.commit_transaction()
             self.close_transaction()
 
     def begin_transaction(self) -> None:
-        """Begin a transaction and return the connection."""
+        """Begin a transaction and store the connection."""
         if self.transaction:
             raise RuntimeError("Transaction already in progress")
         self.transaction = get_conn()
@@ -78,19 +94,25 @@ class SqliteDrum:
         self.transaction = None
         self._responses = None
 
-    def transaction_responses(self) -> list[DrumResponse]:
+    def transaction_responses(
+            self,
+            status: Literal["ok", "error"] | None = None
+    ) -> list[DrumResponse]:
         """Return the results of the transaction."""
         if not self.transaction:
             raise RuntimeError("No transaction in progress")
         assert isinstance(self._responses, list)
-        return self._responses.copy()
+        if status:
+            return [
+                resp for resp in self._responses if resp.status == status
+            ]
+        else:
+            return self._responses.copy()
 
     def _execute_callback(
             self,
             *args,
             callback: Callable[[sqlite3.Cursor], Any] | None = None,
-            commit: bool = True,
-            conn: sqlite3.Connection | None = None,
     ) -> DrumResponse:
         """Execute a typical query, using a callback to handle the cursor.
 
@@ -98,74 +120,57 @@ class SqliteDrum:
             args: The query and parameters to execute.
             callback: A function that takes a cursor and returns a value.
                 If None, the cursor is returned.
-            commit: Whether to commit the transaction.
-
-            If a transaction is in progress, responses are collected, commit is
-            ignored.
+            
+            If a transaction is in progress, responses are collected, and
+            commit is not automatically called. Otherwise, commit is automatically called after the operation.
 
         Returns:
             A DrumResponse object with the status, message, and data.
         """
-        if (self.transaction and commit):
-            raise ValueError(
-                "A transaction is in progress, cannot commit\n"
-                "Hint: unset commit keyword argument"
-            )
-        # We allow callback while a transaction is in progress, since it is used
-        # to perform SELECT queries and should not affect the transaction.
         conn = self.transaction or get_conn()
         try:
             cursor = conn.execute(*args)
-        except sqlite3.DatabaseError as e:
-            return DrumResponse('error', Message.FAILED, str(e))
-        # Don't catch other kinds of errors
-        else:
-            if callback:
-                result = callback(cursor)
-                return DrumResponse(
-                    'ok',
-                    Message.COMPLETED,
-                    CursorResult(
-                        lastrowid=cursor.lastrowid,
-                        rowcount=cursor.rowcount,
-                        result=result
-                    )
-                )
+        except (sqlite3.DatabaseError, Exception) as e:
+            resp = DrumResponse('error', Message.FAILED, str(e))
             if self.transaction:
                 assert isinstance(self._responses, list)
-                self._responses.append(
-                    DrumResponse(
-                        'ok',
-                        Message.COMPLETED,
-                        CursorResult(
-                            lastrowid=cursor.lastrowid,
-                            rowcount=cursor.rowcount,
-                            result=None
-                        )
-                    )
-                )
-            elif commit:
+                self._responses.append(resp)
+            return resp
+        else:
+            result = CursorResult(
+                lastrowid=cursor.lastrowid,
+                rowcount=cursor.rowcount,
+                result=callback(cursor) if callback else None
+            )
+            resp = DrumResponse('ok', Message.COMPLETED, result)
+            if self.transaction:
+                assert isinstance(self._responses, list)
+                self._responses.append(resp)
+            else:
+                # Close the cursor otherwise SQL statements are still in progress
+                cursor.close()
                 conn.commit()
-                return DrumResponse(
-                    'ok',
-                    Message.COMPLETED,
-                    CursorResult(
-                        lastrowid=cursor.lastrowid,
-                        rowcount=cursor.rowcount,
-                        result=None
-                    )
-                )
+            return resp
         finally:
             if not self.transaction:
                 conn.close()
-        raise AssertionError("unreachable")
     
-    def get_all(self, group: str) -> DrumResponse:
+    def get_all(self, group: str, **filter: Any) -> DrumResponse:
         """Retrieve all records from table"""
-        resp = self._execute_callback(
-            f"""SELECT * FROM {group}""",
-            callback=lambda cursor: cursor.fetchall()
-        )
+        if filter:
+            filter_clause = " AND ".join(
+                f"{key} = ?" for key in filter
+            )
+            resp = self._execute_callback((
+                f"SELECT * FROM {group}"
+                f"{' WHERE ' + filter_clause if filter else ''}"
+                ),
+                tuple(filter.values())
+            )
+        else:
+            resp = self._execute_callback(
+                f"""SELECT * FROM {group}"""
+            )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
@@ -179,7 +184,7 @@ class SqliteDrum:
     def get_by_id(self, group: str, id: str) -> DrumResponse:
         """Retrieve a record from table by its id"""
         resp = self._execute_callback(
-            f"""SELECT FROM {group} WHERE {PK} = ?""",
+            f"""SELECT * FROM {group} WHERE {PK} = ?""",
             (id,),
             callback=lambda cursor: cursor.fetchone()
         )
@@ -259,18 +264,20 @@ class SqliteDrum:
 
     def insert(self, group: str, record: Record) -> DrumResponse:
         """Insert a new record into the table"""
-        assert PK in record, f"Record must have a {PK} field"
         keys = ", ".join(record.keys())
         placeholders = ", ".join("?" * len(record))
         resp = self._execute_callback(
-            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders})""",
+            (
+                f"INSERT INTO {group} ({keys}) VALUES ({placeholders})"
+                " RETURNING *"
+            ),
             tuple(record.values())
         )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
             case Response(status="ok", data=result):
-                assert result["rowcount"] == 1  # confirm one row inserted
+                # No need to check for rowcount, which is 0
                 return DrumResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected case: {resp}")
 
@@ -333,7 +340,9 @@ class SqliteDrum:
         """Update an existing record, or insert a new one if it doesn't exist"""
         assert PK in record, f"Record must have a {PK} field"
         # Check if the record exists
-        resp = self.get_by_id(group, record[PK])
+        record_id = record[PK]
+        assert isinstance(record_id, str), f"{PK} must be a string"
+        resp = self.get_by_id(group, record_id)
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
@@ -349,5 +358,5 @@ class SqliteDrum:
                     for key, value in record.items()
                     if existing_record.get(key) != value
                 }
-                return self.update_by_id(group, record[PK], updates)
+                return self.update_by_id(group, record_id, updates)
         raise ValueError(f"Unexpected case: {resp}")

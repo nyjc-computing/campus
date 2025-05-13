@@ -6,21 +6,34 @@ PostgreSQL implementation of the Drum interface.
 import os
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from common.schema import Message, Response
 
-from .base import PK, Condition, DrumResponse, Record, Update
+from .base import PK, Condition, DrumInterface, DrumResponse, Record, Update
 
+
+def purge() -> None:
+    """Purge the database by dropping all tables."""
+    conn = get_conn()
+    with conn.cursor() as cursor:
+        cursor.execute("DROP SCHEMA public CASCADE;")
+        cursor.execute("CREATE SCHEMA public;")
+    conn.commit()
+    conn.close()
 
 def get_conn() -> psycopg2.extensions.connection:
     """Get a prepared connection to the PostgreSQL database."""
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     conn.autocommit = False
     return conn
+
+def get_drum() -> 'PostgresDrum':
+    """Get a prepared Drum instance."""
+    return PostgresDrum()
 
 
 class CursorResult(TypedDict):
@@ -29,7 +42,7 @@ class CursorResult(TypedDict):
     result: list[Record] | Record | None
 
 
-class PostgresDrum:
+class PostgresDrum(DrumInterface):
     """PostgreSQL implementation of the Drum interface."""
     def __init__(self):
         self.transaction = None
@@ -42,6 +55,10 @@ class PostgresDrum:
         try:
             yield self.transaction
         finally:
+            if self.transaction_responses(status="error"):
+                self.rollback_transaction()
+            else:
+                self.commit_transaction()
             self.close_transaction()
 
     def begin_transaction(self) -> None:
@@ -71,19 +88,25 @@ class PostgresDrum:
         self.transaction = None
         self._responses = None
 
-    def transaction_responses(self) -> list[DrumResponse]:
+    def transaction_responses(
+            self,
+            status: Literal["ok", "error"] | None = None
+    ) -> list[DrumResponse]:
         """Return the results of the transaction."""
         if not self.transaction:
             raise RuntimeError("No transaction in progress")
         assert isinstance(self._responses, list)
-        return self._responses.copy()
+        if status:
+            return [
+                resp for resp in self._responses if resp.status == status
+            ]
+        else:
+            return self._responses.copy()
 
     def _execute_callback(
             self,
             *args,
             callback: Callable[[psycopg2.extensions.cursor], Any] | None = None,
-            commit: bool = True,
-            conn: psycopg2.extensions.connection | None = None,
     ) -> DrumResponse:
         """Execute a typical query, using a callback to handle the cursor.
 
@@ -91,71 +114,56 @@ class PostgresDrum:
             args: The query and parameters to execute.
             callback: A function that takes a cursor and returns a value.
                 If None, the cursor is returned.
-            commit: Whether to commit the transaction.
 
-            If a transaction is in progress, responses are collected, commit is
-            ignored.
+            If a transaction is in progress, responses are collected, and
+            commit is not automatically called. Otherwise, commit is automatically called after the operation.
 
         Returns:
             A DrumResponse object with the status, message, and data.
         """
-        if (self.transaction and commit):
-            raise ValueError(
-                "A transaction is in progress, cannot commit\n"
-                "Hint: unset commit keyword argument"
-            )
         conn = self.transaction or get_conn()
-        try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            try:
                 cursor.execute(*args)
-                if callback:
-                    result = callback(cursor)
-                    return DrumResponse(
-                        'ok',
-                        Message.COMPLETED,
-                        CursorResult(
-                            lastrowid=cursor.lastrowid if cursor.lastrowid else None,
-                            rowcount=cursor.rowcount,
-                            result=result
-                        )
-                    )
+            except (psycopg2.DatabaseError, Exception) as e:
+                resp = DrumResponse('error', Message.FAILED, str(e))
                 if self.transaction:
                     assert isinstance(self._responses, list)
-                    self._responses.append(
-                        DrumResponse(
-                            'ok',
-                            Message.COMPLETED,
-                            CursorResult(
-                                lastrowid=cursor.lastrowid if cursor.lastrowid else None,
-                                rowcount=cursor.rowcount,
-                                result=None
-                            )
-                        )
-                    )
-                elif commit:
+                    self._responses.append(resp)
+                return resp
+            else:
+                result = CursorResult(
+                    lastrowid=cursor.lastrowid,
+                    rowcount=cursor.rowcount,
+                    result=callback(cursor) if callback else None
+                )
+                resp = DrumResponse('ok', Message.COMPLETED, result)
+                if self.transaction:
+                    assert isinstance(self._responses, list)
+                    self._responses.append(resp)
+                else:
+                    # Close the cursor otherwise SQL statements are still in progress
+                    cursor.close()
                     conn.commit()
-                    return DrumResponse(
-                        'ok',
-                        Message.COMPLETED,
-                        CursorResult(
-                            lastrowid=cursor.lastrowid if cursor.lastrowid else None,
-                            rowcount=cursor.rowcount,
-                            result=None
-                        )
-                    )
-        except psycopg2.DatabaseError as e:
-            return DrumResponse('error', Message.FAILED, str(e))
-        finally:
-            if not self.transaction:
-                conn.close()
-        raise AssertionError("unreachable")
+                return resp
+            finally:
+                if not self.transaction:
+                    conn.close()
 
-    def get_all(self, group: str) -> DrumResponse:
+    def get_all(self, group: str, **filter: Any) -> DrumResponse:
         """Retrieve all records from table"""
-        resp = self._execute_callback(
-            f"""SELECT * FROM {group}""",
-            callback=lambda cursor: cursor.fetchall()
-        )
+        if filter:
+            where_clause = " AND ".join(f"{key} = %s" for key in filter)
+            resp = self._execute_callback(
+                f"""SELECT * FROM {group} WHERE {where_clause}""",
+                tuple(filter.values()),
+                callback=lambda cursor: cursor.fetchall()
+            )
+        else:
+            resp = self._execute_callback(
+                f"""SELECT * FROM {group}""",
+                callback=lambda cursor: cursor.fetchall()
+            )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
@@ -184,18 +192,20 @@ class PostgresDrum:
 
     def insert(self, group: str, record: Record) -> DrumResponse:
         """Insert a new record into the table"""
-        assert PK in record, f"Record must have a {PK} field"
         keys = ", ".join(record.keys())
         placeholders = ", ".join("%s" for _ in record)
         resp = self._execute_callback(
-            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders})""",
+            (
+                f"INSERT INTO {group} ({keys}) VALUES ({placeholders})"
+                " RETURNING *"
+            ),
             tuple(record.values())
         )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
             case Response(status="ok", data=result):
-                assert result["rowcount"] == 1  # confirm one row inserted
+                # No need to check for rowcount, which is 0
                 return DrumResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected case: {resp}")
 
@@ -237,7 +247,9 @@ class PostgresDrum:
     def set(self, group: str, record: Record) -> DrumResponse:
         """Update an existing record, or insert a new one if it doesn't exist"""
         assert PK in record, f"Record must have a {PK} field"
-        resp = self.get_by_id(group, record[PK])
+        record_id = record[PK]
+        assert isinstance(record_id, str), f"{PK} must be a string"
+        resp = self.get_by_id(group, record_id)
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
@@ -251,7 +263,7 @@ class PostgresDrum:
                     for key, value in record.items()
                     if existing_record.get(key) != value
                 }
-                return self.update_by_id(group, record[PK], updates)
+                return self.update_by_id(group, record_id, updates)
         raise ValueError(f"Unexpected case: {resp}")
 
     def get_matching(self, group: str, condition: Condition) -> DrumResponse:

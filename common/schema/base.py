@@ -3,6 +3,7 @@
 Base schema definitions, enums, and constants for Campus.
 """
 
+from collections.abc import ItemsView
 from typing import Any, Iterable, Iterator, Literal, Mapping
 
 ResponseStatus = Literal["ok", "error"]
@@ -24,6 +25,15 @@ class Response(Mapping, Iterable):
     def __init__(self, status: ResponseStatus, message: str, data: Any | None = None) -> None:
         self.__ = (status, message, data)
 
+    def __repr__(self) -> str:
+        """Return a string representation of the response."""
+        return (
+            f"{self.__class__.__name__}"
+            f"(status={self.status!r}, "
+            f"message={self.message!r}, "
+            f"data={self.data!r})"
+        )
+
     @property
     def status(self) -> ResponseStatus:
         return self.__[0]
@@ -36,9 +46,25 @@ class Response(Mapping, Iterable):
     def data(self) -> Any:
         return self.__[2]
     
+    def __getitem__(self, key: int) -> Any:
+        """Get an item by index."""
+        return self.__[key]
+    
     def __iter__(self) -> Iterator:
         """Iterate over the response."""
         return iter(self.__)
+    
+    def __len__(self) -> int:
+        """Required by Mapping interface."""
+        return len(self.__)
+    
+    def items(self) -> ItemsView[str, Any]:
+        """Get the items of the response as an ItemsView."""
+        return ItemsView({
+            "status": self.status,
+            "message": self.message,
+            "data": self.data
+        })
 
 
 class Message:
@@ -70,6 +96,8 @@ class Message:
     NOT_FOUND = "Not found"
     # Request successfully fulfilled (all operations complete)
     SUCCESS = "Success"
+    # Client did not provide valid authentication credentials
+    UNAUTHORIZED = "Unauthorized"
     # Input or data is valid
     VALID = "Valid"
 

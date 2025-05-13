@@ -1,14 +1,17 @@
 from flask import Blueprint, request
 
 from apps.palmtree.models import otp
-from common.schema import Message, Response
+from common.auth import authenticate_client
 from common.services.email import create_email_sender
 
 from . import template
 
 bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
+# All routes in this blueprint can be called by a client without token auth
+# but must be authenticated with a client id and secret
+bp.before_request(authenticate_client)
 
-otp_auth = otp.OTPAuth()
+emailotp = otp.OTPAuth()
 
 EMAIL_PROVIDER = "smtp"
 
@@ -29,7 +32,7 @@ def request_otp():
     email = payload['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
-    resp = otp_auth.create(email)
+    resp = emailotp.request(email)
     otp_code = str(resp.data)
 
     # Send OTP via email
@@ -54,5 +57,5 @@ def verify_otp():
     otp_code = payload['otp']
     # TODO: Validate email format
     # TODO: Validate OTP format
-    resp = otp_auth.verify(email, otp_code)
+    resp = emailotp.verify(email, otp_code)
     return {"message": "OTP verified"}, 200

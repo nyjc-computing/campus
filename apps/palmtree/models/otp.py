@@ -5,32 +5,54 @@ This module provides classes and utilities for handling one-time
 passwords (OTPs) used in email authentication. It includes functionality
 generating, hashing, verifying, and managing OTPs securely.
 """
-
+import os
 import secrets
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 import bcrypt
 
-from apps.palmtree.errors import api_errors
-from common.drum import postgres
+from apps.common.errors import api_errors
+from apps.palmtree.models.base import ModelResponse
+from common import devops
+if devops.ENV in (devops.STAGING, devops.PRODUCTION):
+    from common.drum.postgres import get_conn, get_drum
+else:
+    from common.drum.sqlite import get_conn, get_drum
 from common.schema import Message, Response
 from common.utils import utc_time
 
 
 def init_db():
-    """Initialize the database with the necessary tables."""
-    conn = postgres.get_conn()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS otp_codes (
-            email TEXT PRIMARY KEY,
-            otp_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            expires_at TEXT NOT NULL
+    """Initialize the tables needed by the model.
+
+    This function is intended to be called only in a test environment (using a
+    local-only db like SQLite), or in a staging environment before upgrading to
+    production.
+    """
+    # TODO: Refactor into decorator
+    if os.getenv('ENV', 'development') == 'production':
+        raise AssertionError(
+            "Database initialization detected in production environment"
         )
-    """)
-    conn.commit()
-    conn.close()
+    conn = get_conn()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS otp_codes (
+                email TEXT PRIMARY KEY,
+                otp_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+        """)
+    except Exception:
+        # init_db() is not expected to be called in production, so we don't
+        # need to handle errors gracefully.
+        raise
+    else:
+        conn.commit()
+    finally:
+        conn.close()
 
 
 class _plainOTP(str):
@@ -97,10 +119,6 @@ class OTP(NamedTuple):
     expires_at: utc_time.datetime
 
 
-class OTPResponse(Response):
-    """Represents an OTP verification response"""
-
-
 class OTPAuth:
     """
     OTP model for handling database operations related to one-time passwords.
@@ -114,12 +132,11 @@ class OTPAuth:
         Args:
             storage: Implementation of StorageInterface for database operations.
         """
-        self.storage = postgres.PostgresDrum()
+        self.storage = get_drum()
 
-    def create(self, email: str, expiry_minutes: int | float = 5) -> OTPResponse:
+    def request(self, email: str, expiry_minutes: int | float = 5) -> ModelResponse:
         """
-        Generate a new OTP for the given email, store or update it in the database, and
-        return it.
+        Generate a new OTP for the given email, store or update it in the database, and return it.
 
         Args:
             email: Email address to associate with the OTP.
@@ -138,8 +155,9 @@ class OTPAuth:
 
         # Delete any existing OTP for this email
         resp = self.storage.delete_by_id('otp_codes', email)
-        if resp.status == "error":
-            raise api_errors.InternalError(resp.message)
+        match resp:
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
         # Insert new OTP
         otp_code = OTP(
             email=email,
@@ -149,13 +167,13 @@ class OTPAuth:
         )
         resp = self.storage.insert('otp_codes', otp_code._asdict())
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(resp.message)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.CREATED):
-                return OTPResponse("ok", "OTP created", plain_otp)
+                return ModelResponse("ok", "OTP created", plain_otp)
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def verify(self, email: str, plain_otp: str) -> OTPResponse:
+    def verify(self, email: str, plain_otp: str) -> ModelResponse:
         """
         Verify if the provided OTP matches the one stored for the email.
 
@@ -164,13 +182,13 @@ class OTPAuth:
             plain_otp: Plaintext OTP to verify.
 
         Returns:
-            OTPResponse indicating the result of the verification.
+            ModelResponse indicating the result of the verification.
         """
         # Get the latest OTP for this email
         resp = self.storage.get_by_id('otp_codes', email)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(resp.message)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError("OTP not found")
 
@@ -189,11 +207,11 @@ class OTPAuth:
 
         # Verify OTP
         if hashed_otp.verify(_plainOTP(plain_otp)):
-            return OTPResponse("ok", "OTP verified")
+            return ModelResponse("ok", "OTP verified")
         else:
             raise api_errors.UnauthorizedError("Invalid OTP")
 
-    def revoke(self, email: str) -> OTPResponse:
+    def revoke(self, email: str) -> ModelResponse:
         """
         Delete all OTPs for the given email (typically after successful verification).
 
@@ -202,11 +220,11 @@ class OTPAuth:
         """
         resp = self.storage.delete_by_id('otp_codes', email)
         match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError(resp.message)
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError("OTP not found")
             case Response(status="ok", message=Message.DELETED):
-                return OTPResponse("ok", "OTP deleted")
+                return ModelResponse("ok", "OTP deleted")
             case _:
                 raise ValueError(f"Unexpected case: {resp}")
