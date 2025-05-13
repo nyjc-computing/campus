@@ -139,12 +139,20 @@ class PostgresDrum(DrumInterface):
             if not self.transaction:
                 conn.close()
 
-    def get_all(self, group: str) -> DrumResponse:
+    def get_all(self, group: str, **filter: Any) -> DrumResponse:
         """Retrieve all records from table"""
-        resp = self._execute_callback(
-            f"""SELECT * FROM {group}""",
-            callback=lambda cursor: cursor.fetchall()
-        )
+        if filter:
+            where_clause = " AND ".join(f"{key} = %s" for key in filter)
+            resp = self._execute_callback(
+                f"""SELECT * FROM {group} WHERE {where_clause}""",
+                tuple(filter.values()),
+                callback=lambda cursor: cursor.fetchall()
+            )
+        else:
+            resp = self._execute_callback(
+                f"""SELECT * FROM {group}""",
+                callback=lambda cursor: cursor.fetchall()
+            )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
