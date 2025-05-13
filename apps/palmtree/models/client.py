@@ -326,7 +326,7 @@ class Client:
     """Model for database operations related to client applications."""
     # Nested attribute follows Campus API schema
     applications = ClientApplication()
-    # admins = ClientAdmin()
+    admins = ClientAdmin()
     # apikeys = ClientAPIKey()
 
     def __init__(self):
