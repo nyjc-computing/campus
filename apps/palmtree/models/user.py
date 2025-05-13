@@ -32,11 +32,12 @@ def init_db():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS "user" (
-                id VARCHAR(255) PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS "users" (
+                id VARCHAR(255) PRIMARY KEY NOT NULL,
                 email TEXT NOT NULL,
-                nric_name TEXT NOT NULL,
-                activated_at TEXT DEFAULT NULL
+                name TEXT NOT NULL,
+                activated_at TEXT DEFAULT NULL,
+                UNIQUE(email)
             )
         """)
     except Exception:
@@ -62,75 +63,80 @@ class User:
         """
         self.storage = get_drum()
 
-    def activate(self, user_id: str) -> ModelResponse:
+    def activate(self, email: str) -> ModelResponse:
         """Actions to perform upon first sign-in."""
+        user_id, _ = email.split('@')
         resp = self.storage.update_by_id(
-            'user',
+            'users',
             user_id,
             {'activated_at': utc_time.now()}
         )
         match resp:
             case Response(status="error"):
-                raise api_errors.InternalError()
+                raise api_errors.InternalError(message=resp.message, error=resp.data)
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")
     
-    def new(self, user_id: str, email: str) -> ModelResponse:
+    def new(self, email: str, name: str) -> ModelResponse:
         """Create a new user."""
+        user_id, _ = email.split('@')
         resp = self.storage.insert(
-            'user',
-            {'id': user_id, 'email': email}
+            'users',
+            {'id': user_id, 'email': email, 'name': name}
         )
         match resp:
             case Response(status="error"):
-                raise api_errors.InternalError()
-            case Response(status="ok", message=Message.CREATED):
-                return ModelResponse(**resp)
+                raise api_errors.InternalError(message=resp.message, error=resp.data)
+            case Response(status="ok", message=Message.SUCCESS):
+                return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
         raise ValueError(f"Unexpected response from storage: {resp}")
     
-    def delete(self, user_id: str) -> ModelResponse:
+    def delete(self, email: str) -> ModelResponse:
         """Delete a user by id."""
-        resp = self.storage.delete_by_id('user', user_id)
+        user_id, _ = email.split('@')
+        resp = self.storage.delete_by_id('users', user_id)
         match resp:
             case Response(status="error"):
-                raise api_errors.InternalError()
+                raise api_errors.InternalError(message=resp.message, error=resp.data)
             case Response(status="ok", message=Message.DELETED):
                 return ModelResponse(**resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="User not found",
-                    user_id=user_id
+                    email=email
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def get(self, user_id: str) -> ModelResponse:
+    def get(self, email: str) -> ModelResponse:
         """Get a user by id."""
-        resp = self.storage.get_by_id('user', user_id)
+        user_id, _ = email.split('@')
+        resp = self.storage.get_by_id('users', user_id)
         match resp:
             case Response(status="error"):
-                raise api_errors.InternalError()
+                raise api_errors.InternalError(message=resp.message, error=resp.data)
             case Response(status="ok", message=Message.FOUND):
                 return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="User not found",
-                    user_id=user_id
+                    email=email
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def update(self, user_id: str, updates: dict) -> ModelResponse:
+    def update(self, email: str, updates: dict) -> ModelResponse:
         """Update a user by id."""
-        resp = self.storage.update_by_id('user', user_id, updates)
+        user_id, _ = email.split('@')
+        resp = self.storage.update_by_id('users', user_id, updates)
         match resp:
             case Response(status="error"):
-                raise api_errors.InternalError()
+                raise api_errors.InternalError(message=resp.message, error=resp.data)
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="User not found",
-                    user_id=user_id
+                    email=email
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
