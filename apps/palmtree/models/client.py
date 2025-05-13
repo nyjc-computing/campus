@@ -42,7 +42,7 @@ def init_db() -> None:
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS client_applications (
-                id TEXT PRIMARY KEY,
+                uid TEXT PRIMARY KEY,
                 owner TEXT NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT,
@@ -93,18 +93,32 @@ def init_db() -> None:
         conn.close()
 
 
-class ClientApplicationSchema(TypedDict):
-    """Data model for a client key request (apply for a client id)."""
-    id: NotRequired[str]
+class ClientApplicationNewSchema(TypedDict):
+    """Data model for a clients.applications.new operation."""
     owner: Email
     name: str
     description: str
-    created_on: NotRequired[utc_time.datetime]
-    status: NotRequired[Literal["review", "rejected", "approved"]]
+
+
+class ClientApplicationRecord(TypedDict):
+    """Data model for a client application."""
+    uid: str
+    owner: Email
+    name: str
+    description: str
+    created_on: utc_time.datetime
+    status: Literal["review", "rejected", "approved"]
+
+
+class ClientNewSchema(TypedDict):
+    """Data model for a clients.new operation."""
+    name: str
+    description: str
+    admins: list[Email]
 
 
 class ClientRecord(TypedDict):
-    """Data model for a complete client record."""
+    """Data model for a client record."""
     # client_id and secret_hash will be generated and need not be provided
     client_id: NotRequired[str]
     secret_hash: NotRequired[str]
@@ -113,6 +127,12 @@ class ClientRecord(TypedDict):
     name: str
     description: str
     admins: list[Email]
+
+
+class APIKeyNewSchema(TypedDict):
+    """Data model for a clients.apikeys.new operation."""
+    name: APIName
+    description: str
 
 
 class APIKeyRecord(TypedDict):
@@ -131,9 +151,9 @@ class ClientApplication:
 
     def new(self, **fields) -> ModelResponse:
         """Submit a request for a new client id."""
-        validate_keys(fields, ClientApplicationSchema.__required_keys__)
+        validate_keys(fields, ClientApplicationNewSchema.__required_keys__)
         client_application_id = uid.generate_category_uid("client_application", length=6)
-        request = ClientApplicationSchema(
+        request = ClientApplicationNewSchema(
             id=client_application_id,
             **fields,
             created_on=utc_time.now(),
