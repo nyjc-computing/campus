@@ -485,7 +485,7 @@ class Client:
 #     def __init__(self):
 #         self.storage = get_drum()
 
-#     def create_api_key(self, client_id: str, *, name: str) -> ModelResponse:
+#     def new(self, client_id: str, *, name: str) -> ModelResponse:
 #         """Create a new API key for a client.
 
 #         Validate name first before calling this function.
@@ -516,7 +516,7 @@ class Client:
 #                 return ModelResponse("ok", "API key created", record["key"])
 #         raise ValueError(f"Unexpected response: {resp}")
 
-#     def get_apikeys(self, client_id: str) -> ModelResponse:
+#     def list(self, client_id: str) -> ModelResponse:
 #         """Retrieve all API keys for a client."""
 #         resp = self.storage.get_matching("apikeys", {"client_id": client_id})
 #         match resp:
@@ -528,7 +528,7 @@ class Client:
 #                 return ModelResponse("ok", Message.EMPTY, [])
 #         raise ValueError(f"Unexpected response: {resp}")
 
-#     def delete_api_key(self, client_id: str, name: str) -> ModelResponse:
+#     def delete(self, client_id: str, name: str) -> ModelResponse:
 #         """Delete an API key for a client."""
 #         resp = self.storage.delete_matching(
 #             "apikeys",
