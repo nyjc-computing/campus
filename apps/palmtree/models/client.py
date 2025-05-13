@@ -248,7 +248,6 @@ class Client:
         record = ClientRecord(
             client_id=client_id,
             created_on=utc_time.now(),
-            apikeys={},
             **fields,
         )
 
