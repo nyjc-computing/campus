@@ -55,6 +55,10 @@ class PostgresDrum(DrumInterface):
         try:
             yield self.transaction
         finally:
+            if self.transaction_responses(status="error"):
+                self.rollback_transaction()
+            else:
+                self.commit_transaction()
             self.close_transaction()
 
     def begin_transaction(self) -> None:
@@ -110,34 +114,31 @@ class PostgresDrum(DrumInterface):
             A DrumResponse object with the status, message, and data.
         """
         conn = self.transaction or get_conn()
-        try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            try:
                 cursor.execute(*args)
-        except psycopg2.DatabaseError as e:
-            resp = DrumResponse('error', Message.FAILED, str(e))
-            conn.rollback()
-            if self.transaction:
-                assert isinstance(self._responses, list)
-                self._responses.append(resp)
+            except (psycopg2.DatabaseError, Exception) as e:
+                resp = DrumResponse('error', Message.FAILED, str(e))
+                if self.transaction:
+                    assert isinstance(self._responses, list)
+                    self._responses.append(resp)
+                return resp
             else:
-                conn.close()
-            return resp
-        else:
-            result = CursorResult(
-                lastrowid=cursor.lastrowid,
-                rowcount=cursor.rowcount,
-                result=callback(cursor) if callback else None
-            )
-            resp = DrumResponse('ok', Message.COMPLETED, result)
-            if self.transaction:
-                assert isinstance(self._responses, list)
-                self._responses.append(resp)
-            else:
-                conn.commit()
-            return resp
-        finally:
-            if not self.transaction:
-                conn.close()
+                result = CursorResult(
+                    lastrowid=cursor.lastrowid,
+                    rowcount=cursor.rowcount,
+                    result=callback(cursor) if callback else cursor.fetchall()
+                )
+                resp = DrumResponse('ok', Message.COMPLETED, result)
+                if self.transaction:
+                    assert isinstance(self._responses, list)
+                    self._responses.append(resp)
+                else:
+                    conn.commit()
+                return resp
+            finally:
+                if not self.transaction:
+                    conn.close()
 
     def get_all(self, group: str, **filter: Any) -> DrumResponse:
         """Retrieve all records from table"""
