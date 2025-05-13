@@ -257,7 +257,7 @@ class ClientAdmin:
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.CREATED):
+            case Response(status="ok", message=Message.SUCCESS):
                 return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
@@ -294,10 +294,7 @@ class ClientAdmin:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client not found",
-                     client_id=client_id
-                )
+                raise AssertionError("Client admin not found")
             case Response(status="ok", message=Message.DELETED):
                 return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
