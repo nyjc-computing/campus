@@ -25,6 +25,15 @@ class Response(Mapping, Iterable):
     def __init__(self, status: ResponseStatus, message: str, data: Any | None = None) -> None:
         self.__ = (status, message, data)
 
+    def __repr__(self) -> str:
+        """Return a string representation of the response."""
+        return (
+            f"{self.__class__.__name__}"
+            f"(status={self.status}, "
+            f"message={self.message}, "
+            f"data={self.data})"
+        )
+
     @property
     def status(self) -> ResponseStatus:
         return self.__[0]
