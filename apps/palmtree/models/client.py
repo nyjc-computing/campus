@@ -5,7 +5,7 @@ This module provides classes and utilities for handling client applications
 and API keys for Campus services.
 """
 import os
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.palmtree.models.base import ModelResponse
@@ -149,12 +149,11 @@ class ClientApplication:
         """Initialize the Client model with a storage interface."""
         self.storage = get_drum()
 
-    def new(self, **fields) -> ModelResponse:
+    def new(self, **fields: Unpack[ClientApplicationNewSchema]) -> ModelResponse:
         """Submit a request for a new client id."""
         validate_keys(fields, ClientApplicationNewSchema.__required_keys__)
-        client_application_id = uid.generate_category_uid("client_application", length=6)
-        request = ClientApplicationNewSchema(
-            id=client_application_id,
+        request = ClientApplicationRecord(
+            uid=uid.generate_category_uid("client_application", length=6),
             **fields,
             created_on=utc_time.now(),
             status="review"
