@@ -181,7 +181,6 @@ class ClientApplication:
         resp = self.storage.insert("client_applications", request)
         match resp:
             case Response(status="error", message=message, data=error):
-                breakpoint()
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok"):
                 return ModelResponse("ok", Message.CREATED, request)
@@ -517,11 +516,13 @@ class Client:
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
                 return False
-            case Response(status="ok", message=Message.FOUND, data=client):
+            case Response(status="ok", message=Message.FOUND, data=cursor):
+                client = cursor['result']
                 return client["secret_hash"] == secret.hash_client_secret(
                     client_secret, os.environ["SECRET_KEY"]
                 )
-        return False
+            case _:
+                return False
 
 
 # class APIKeyNewSchema(TypedDict):
