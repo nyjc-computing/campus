@@ -265,7 +265,10 @@ class SqliteDrum(DrumInterface):
         keys = ", ".join(record.keys())
         placeholders = ", ".join("?" * len(record))
         resp = self._execute_callback(
-            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders})""",
+            (
+                f"INSERT INTO {group} ({keys}) VALUES ({placeholders})"
+                " RETURNING *"
+            ),
             tuple(record.values())
         )
         match resp:

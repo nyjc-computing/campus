@@ -193,7 +193,10 @@ class PostgresDrum(DrumInterface):
         keys = ", ".join(record.keys())
         placeholders = ", ".join("%s" for _ in record)
         resp = self._execute_callback(
-            f"""INSERT INTO {group} ({keys}) VALUES ({placeholders}) RETURNING {PK}""",
+            (
+                f"INSERT INTO {group} ({keys}) VALUES ({placeholders})"
+                " RETURNING *"
+            ),
             tuple(record.values())
         )
         match resp:
