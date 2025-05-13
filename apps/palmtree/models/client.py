@@ -100,6 +100,11 @@ class ClientApplicationNewSchema(TypedDict):
     description: str
 
 
+class ClientApplicationByIdSchema(TypedDict):
+    """Data model for a clients.applications operations requiring id."""
+    client_application_id: str
+
+
 class ClientApplicationRecord(TypedDict):
     """Data model for a client application."""
     uid: str
@@ -144,41 +149,28 @@ class APIKeyRecord(TypedDict):
 
 class ClientApplication:
     """Model for database operations related to client id requests."""
+    __record_schema__ = ClientApplicationRecord
+    __request_schema__ = {
+        "list": None,
+        "delete": ClientApplicationByIdSchema,
+        "get": ClientApplicationByIdSchema,
+        "new": ClientApplicationNewSchema,
+    }
 
     def __init__(self):
         """Initialize the Client model with a storage interface."""
         self.storage = get_drum()
 
-    def new(self, **fields: Unpack[ClientApplicationNewSchema]) -> ModelResponse:
-        """Submit a request for a new client id."""
-        validate_keys(fields, ClientApplicationNewSchema.__required_keys__)
-        request = ClientApplicationRecord(
-            uid=uid.generate_category_uid("client_application", length=6),
-            **fields,
-            created_on=utc_time.now(),
-            status="review"
-        )
-        resp = self.storage.insert("client_applications", request)
+    def list(self) -> ModelResponse:
+        """List all client requests."""
+        resp = self.storage.get_all("client_applications")
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
-            case Response(status="ok"):
-                return ModelResponse("ok", Message.CREATED, request)
-        raise ValueError(f"Unexpected response: {resp}")
-
-    def get(self, client_application_id: str) -> ModelResponse:
-        """Retrieve a client request by its ID."""
-        resp = self.storage.get_by_id("client_applications", client_application_id)
-        match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client request not found",
-                     client_application_id=client_application_id
-                )
             case Response(status="ok", message=Message.FOUND, data=result):
                 return ModelResponse("ok", Message.FOUND, result)
+            case Response(status="ok", message=Message.EMPTY):
+                return ModelResponse("ok", Message.EMPTY, [])
         raise ValueError(f"Unexpected response: {resp}")
 
     def delete(self, client_application_id: str) -> ModelResponse:
@@ -196,13 +188,9 @@ class ClientApplication:
                 return ModelResponse("ok", Message.DELETED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def reject(self, client_application_id: str) -> ModelResponse:
-        """Reject a client request by its ID."""
-        resp = self.storage.update_by_id(
-            "client_applications",
-            client_application_id,
-            {"status": "rejected"}
-        )
+    def get(self, client_application_id: str) -> ModelResponse:
+        """Retrieve a client request by its ID."""
+        resp = self.storage.get_by_id("client_applications", client_application_id)
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
@@ -211,8 +199,25 @@ class ClientApplication:
                     "Client request not found",
                      client_application_id=client_application_id
                 )
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.SUCCESS)
+            case Response(status="ok", message=Message.FOUND, data=result):
+                return ModelResponse("ok", Message.FOUND, result)
+        raise ValueError(f"Unexpected response: {resp}")
+
+    def new(self, **fields: Unpack[ClientApplicationNewSchema]) -> ModelResponse:
+        """Submit a request for a new client id."""
+        validate_keys(fields, ClientApplicationNewSchema.__required_keys__)
+        request = ClientApplicationRecord(
+            uid=uid.generate_category_uid("client_application", length=6),
+            **fields,
+            created_on=utc_time.now(),
+            status="review"
+        )
+        resp = self.storage.insert("client_applications", request)
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok"):
+                return ModelResponse("ok", Message.CREATED, request)
         raise ValueError(f"Unexpected response: {resp}")
 
     def approve(self, client_application_id: str) -> ModelResponse:
@@ -234,9 +239,36 @@ class ClientApplication:
                 return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def list(self) -> ModelResponse:
-        """List all client requests."""
-        resp = self.storage.get_all("client_applications")
+    def reject(self, client_application_id: str) -> ModelResponse:
+        """Reject a client request by its ID."""
+        resp = self.storage.update_by_id(
+            "client_applications",
+            client_application_id,
+            {"status": "rejected"}
+        )
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    "Client request not found",
+                     client_application_id=client_application_id
+                )
+            case Response(status="ok", message=Message.UPDATED):
+                return ModelResponse("ok", Message.SUCCESS)
+        raise ValueError(f"Unexpected response: {resp}")
+    
+
+class ClientAdmin:
+    """Model for database operations related to client admins."""
+
+    def __init__(self):
+        """Initialize the Client model with a storage interface."""
+        self.storage = get_drum()
+
+    def list(self, client_id: str) -> ModelResponse:
+        """List all admins for a client application."""
+        resp = self.storage.get_matching("client_admins", {"client_id": client_id})
         match resp:
             case Response(status="error"):
                 raise api_errors.InternalError()
@@ -246,75 +278,7 @@ class ClientApplication:
                 return ModelResponse("ok", Message.EMPTY, [])
         raise ValueError(f"Unexpected response: {resp}")
 
-
-class Client:
-    """Model for database operations related to client applications."""
-    # Nested attribute follows Campus API schema
-    applications = ClientApplication()
-
-    def __init__(self):
-        """Initialize the Client model with a storage interface."""
-        self.storage = get_drum()
-
-    def new(self, **fields) -> ModelResponse:
-        """Create a new client with associated admins."""
-        # Use Client model to validate keyword arguments
-        validate_keys(fields, ClientRecord.__required_keys__)
-        client_id = uid.generate_category_uid("client", length=6)
-        record = ClientRecord(
-            client_id=client_id,
-            created_on=utc_time.now(),
-            **fields,
-        )
-
-        # Registering a client involves multiple database operations
-        # We use a transaction to ensure atomicity, i.e. all operations
-        # are committed together, or none are.
-        with self.storage.use_transaction():
-            # admins are inserted in junction table and not in clients table
-            self.storage.insert(
-                "clients",
-                {k: v for k, v in record.items() if k != "admins"}
-            )
-            for admin in record["admins"]:
-                self.storage.insert(
-                    "client_admins",
-                    {"client_id": client_id, "admin_email": admin}
-                )
-            # Check for failed operations
-            responses = self.storage.transaction_responses()
-            if any(resp.status == "error" for resp in responses):
-                raise api_errors.InternalError("Some operations failed")
-            else:
-                return ModelResponse("ok", Message.SUCCESS, record)
-        # transaction is automatically closed
-
-    def update(self, client_id: str, updates: dict) -> ModelResponse:
-        """Update an existing client record."""
-        # Validate arguments first to avoid unnecessary database operations
-        if not updates:
-            return ModelResponse("ok", Message.EMPTY, "Nothing to update")
-        if "admins" in updates:
-            raise api_errors.InvalidRequestError(
-                message="Admins may not be updated directly (use add/remove admin endpoints instead)",
-                invalid_fields=["admins"]
-            )
-        validate_keys(updates, ClientRecord.__required_keys__, required=False)
-
-        resp = self.storage.update_by_id("clients", client_id, updates)
-        match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client not found",
-                     client_id=client_id
-                )
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.UPDATED)
-        raise ValueError(f"Unexpected response: {resp}")
-
-    def add_admin(self, client_id: str, admin_email: Email) -> ModelResponse:
+    def add(self, client_id: str, admin_email: Email) -> ModelResponse:
         """Add an admin to a client application."""
         resp = self.storage.insert(
             "client_admins",
@@ -327,7 +291,7 @@ class Client:
                 return ModelResponse("ok", Message.SUCCESS)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def remove_admin(self, client_id: str, admin_email: Email) -> ModelResponse:
+    def remove(self, client_id: str, admin_email: Email) -> ModelResponse:
         """Remove an admin from a client application."""
         # Check if admin_email is the last admin
         resp = self.storage.get_matching(
@@ -366,6 +330,63 @@ class Client:
                 )
             case Response(status="ok", message=Message.DELETED):
                 return ModelResponse("ok", Message.SUCCESS)
+        raise ValueError(f"Unexpected response: {resp}")
+
+
+class Client:
+    """Model for database operations related to client applications."""
+    # Nested attribute follows Campus API schema
+    applications = ClientApplication()
+    # admins = ClientAdmin()
+    # apikeys = ClientAPIKey()
+
+    def __init__(self):
+        """Initialize the Client model with a storage interface."""
+        self.storage = get_drum()
+
+    def delete(self, client_id: str) -> ModelResponse:
+        """Delete a client application by its ID."""
+        resp = self.get(client_id)
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok", data=None):
+                raise api_errors.ConflictError(
+                    "Client not found",
+                     client_id=client_id
+                )
+        assert isinstance(resp, DrumResponse)  # appease mypy
+        client_record = resp.data
+        assert isinstance(client_record, dict)
+
+        with self.storage.use_transaction():
+            # Remove admins first
+            self.storage.delete_matching(
+                "client_admins",
+                {"client_id": client_id}
+            )
+            # Then remove the client
+            self.storage.delete_by_id("clients", client_id)
+            # Check for failed operations
+            responses = self.storage.transaction_responses()
+            if any(resp.status == "error" for resp in responses):
+                self.storage.rollback_transaction()
+                raise api_errors.InternalError("Some operations failed")
+            else:
+                self.storage.commit_transaction()
+                return ModelResponse("ok", Message.SUCCESS)
+        # transaction is automatically closed
+
+    def list(self) -> ModelResponse:
+        """List all client applications."""
+        resp = self.storage.get_all("clients")
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok", message=Message.FOUND, data=result):
+                return ModelResponse("ok", Message.FOUND, result)
+            case Response(status="ok", message=Message.EMPTY):
+                return ModelResponse("ok", Message.EMPTY, [])
         raise ValueError(f"Unexpected response: {resp}")
 
     def get(self, client_id: str) -> ModelResponse:
@@ -407,37 +428,37 @@ class Client:
         ]
         return ModelResponse("ok", Message.SUCCESS, client_record)
 
-    def delete(self, client_id: str) -> ModelResponse:
-        """Delete a client application by its ID."""
-        resp = self.get(client_id)
-        match resp:
-            case Response(status="error"):
-                raise api_errors.InternalError()
-            case Response(status="ok", data=None):
-                raise api_errors.ConflictError(
-                    "Client not found",
-                     client_id=client_id
-                )
-        assert isinstance(resp, DrumResponse)  # appease mypy
-        client_record = resp.data
-        assert isinstance(client_record, dict)
+    def new(self, **fields) -> ModelResponse:
+        """Create a new client with associated admins."""
+        # Use Client model to validate keyword arguments
+        validate_keys(fields, ClientRecord.__required_keys__)
+        client_id = uid.generate_category_uid("client", length=6)
+        record = ClientRecord(
+            client_id=client_id,
+            created_on=utc_time.now(),
+            **fields,
+        )
 
+        # Registering a client involves multiple database operations
+        # We use a transaction to ensure atomicity, i.e. all operations
+        # are committed together, or none are.
         with self.storage.use_transaction():
-            # Remove admins first
-            self.storage.delete_matching(
-                "client_admins",
-                {"client_id": client_id}
+            # admins are inserted in junction table and not in clients table
+            self.storage.insert(
+                "clients",
+                {k: v for k, v in record.items() if k != "admins"}
             )
-            # Then remove the client
-            self.storage.delete_by_id("clients", client_id)
+            for admin in record["admins"]:
+                self.storage.insert(
+                    "client_admins",
+                    {"client_id": client_id, "admin_email": admin}
+                )
             # Check for failed operations
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
-                self.storage.rollback_transaction()
                 raise api_errors.InternalError("Some operations failed")
             else:
-                self.storage.commit_transaction()
-                return ModelResponse("ok", Message.SUCCESS)
+                return ModelResponse("ok", Message.SUCCESS, record)
         # transaction is automatically closed
 
     def replace(self, client_id: str) -> ModelResponse:
@@ -461,6 +482,31 @@ class Client:
                 )
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", Message.SUCCESS, client_secret)
+        raise ValueError(f"Unexpected response: {resp}")
+
+    def update(self, client_id: str, updates: dict) -> ModelResponse:
+        """Update an existing client record."""
+        # Validate arguments first to avoid unnecessary database operations
+        if not updates:
+            return ModelResponse("ok", Message.EMPTY, "Nothing to update")
+        if "admins" in updates:
+            raise api_errors.InvalidRequestError(
+                message="Admins may not be updated directly (use add/remove admin endpoints instead)",
+                invalid_fields=["admins"]
+            )
+        validate_keys(updates, ClientRecord.__required_keys__, required=False)
+
+        resp = self.storage.update_by_id("clients", client_id, updates)
+        match resp:
+            case Response(status="error"):
+                raise api_errors.InternalError()
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    "Client not found",
+                     client_id=client_id
+                )
+            case Response(status="ok", message=Message.UPDATED):
+                return ModelResponse("ok", Message.UPDATED)
         raise ValueError(f"Unexpected response: {resp}")
 
     def validate_credentials(self, client_id: str, client_secret: str) -> bool:
