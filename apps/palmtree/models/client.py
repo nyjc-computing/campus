@@ -110,38 +110,6 @@ class ClientApplicationRecord(TypedDict):
     status: Literal["review", "rejected", "approved"]
 
 
-class ClientNewSchema(TypedDict):
-    """Data model for a clients.new operation."""
-    name: str
-    description: str
-    admins: list[Email]
-
-
-class ClientRecord(TypedDict):
-    """Data model for a client record."""
-    # client_id and secret_hash will be generated and need not be provided
-    client_id: NotRequired[str]
-    secret_hash: NotRequired[str]
-    created_on: NotRequired[utc_time.datetime]
-    apikeys: NotRequired[dict[APIName, APIKey]]
-    name: str
-    description: str
-    admins: list[Email]
-
-
-class APIKeyNewSchema(TypedDict):
-    """Data model for a clients.apikeys.new operation."""
-    name: APIName
-    description: str
-
-
-class APIKeyRecord(TypedDict):
-    """Data model for an API key."""
-    client_id: str
-    name: APIName
-    key: APIKey
-
-
 class ClientApplication:
     """Model for database operations related to client id requests."""
     __record_schema__ = ClientApplicationRecord
@@ -330,6 +298,25 @@ class ClientAdmin:
         raise ValueError(f"Unexpected response: {resp}")
 
 
+class ClientNewSchema(TypedDict):
+    """Data model for a clients.new operation."""
+    name: str
+    description: str
+    admins: list[Email]
+
+
+class ClientRecord(TypedDict):
+    """Data model for a client record."""
+    # client_id and secret_hash will be generated and need not be provided
+    client_id: NotRequired[str]
+    secret_hash: NotRequired[str]
+    created_on: NotRequired[utc_time.datetime]
+    apikeys: NotRequired[dict[APIName, APIKey]]
+    name: str
+    description: str
+    admins: list[Email]
+
+
 class Client:
     """Model for database operations related to client applications."""
     # Nested attribute follows Campus API schema
@@ -425,7 +412,7 @@ class Client:
         ]
         return ModelResponse("ok", Message.SUCCESS, client_record)
 
-    def new(self, **fields) -> ModelResponse:
+    def new(self, **fields: Unpack[ClientNewSchema]) -> ModelResponse:
         """Create a new client with associated admins."""
         # Use Client model to validate keyword arguments
         validate_keys(fields, ClientRecord.__required_keys__)
@@ -519,6 +506,19 @@ class Client:
                     client_secret, os.environ["SECRET_KEY"]
                 )
         return False
+
+
+# class APIKeyNewSchema(TypedDict):
+#     """Data model for a clients.apikeys.new operation."""
+#     name: APIName
+#     description: str
+
+
+# class APIKeyRecord(TypedDict):
+#     """Data model for an API key."""
+#     client_id: str
+#     name: APIName
+#     key: APIKey
 
 
 # class ClientAPIKey:
