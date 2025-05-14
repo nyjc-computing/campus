@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 
-from apps.palmtree.models import otp
+from apps.api.models import otp
 from common.auth import authenticate_client
 from common.services.email import create_email_sender
 

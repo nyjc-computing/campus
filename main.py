@@ -1,6 +1,6 @@
-from apps import palmtree
+from apps import api
 
-app = palmtree.create_app()
+app = api.create_app()
 
 
 @app.route('/')

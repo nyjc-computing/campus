@@ -5,7 +5,7 @@ from typing import Callable
 from flask import g, request, jsonify
 from flask.wrappers import Response
 
-from apps.palmtree.models.client import Client
+from apps.api.models.client import Client
 
 
 def authenticate_client() -> tuple[Response, int] | None:

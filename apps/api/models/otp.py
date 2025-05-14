@@ -12,7 +12,7 @@ from typing import NamedTuple
 import bcrypt
 
 from apps.common.errors import api_errors
-from apps.palmtree.models.base import ModelResponse
+from apps.api.models.base import ModelResponse
 from common import devops
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
     from common.drum.postgres import get_conn, get_drum
