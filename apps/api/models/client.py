@@ -94,210 +94,210 @@ def init_db() -> None:
         conn.close()
 
 
-class ClientApplicationNewSchema(TypedDict):
-    """Data model for a clients.applications.new operation."""
-    owner: Email
-    name: str
-    description: str
+# class ClientApplicationNewSchema(TypedDict):
+#     """Data model for a clients.applications.new operation."""
+#     owner: Email
+#     name: str
+#     description: str
 
 
-class ClientApplicationRecord(TypedDict):
-    """Data model for a client application."""
-    id: str
-    owner: Email
-    name: str
-    description: str
-    created_at: utc_time.datetime
-    status: Literal["review", "rejected", "approved"]
+# class ClientApplicationRecord(TypedDict):
+#     """Data model for a client application."""
+#     id: str
+#     owner: Email
+#     name: str
+#     description: str
+#     created_at: utc_time.datetime
+#     status: Literal["review", "rejected", "approved"]
 
 
-class ClientApplication:
-    """Model for database operations related to client id requests."""
-    __record_schema__ = ClientApplicationRecord
-    __request_schema__ = {
-        "list": None,
-        "delete": None,
-        "get": None,
-        "new": ClientApplicationNewSchema,
-        "approve": None,
-        "reject": None,
-    }
+# class ClientApplication:
+#     """Model for database operations related to client id requests."""
+#     __record_schema__ = ClientApplicationRecord
+#     __request_schema__ = {
+#         "list": None,
+#         "delete": None,
+#         "get": None,
+#         "new": ClientApplicationNewSchema,
+#         "approve": None,
+#         "reject": None,
+#     }
 
-    def __init__(self):
-        """Initialize the Client model with a storage interface."""
-        self.storage = get_drum()
+#     def __init__(self):
+#         """Initialize the Client model with a storage interface."""
+#         self.storage = get_drum()
 
-    def list(self) -> ModelResponse:
-        """List all client requests."""
-        resp = self.storage.get_all("client_applications")
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND, data=result):
-                return ModelResponse("ok", Message.FOUND, result)
-            case Response(status="ok", message=Message.EMPTY):
-                return ModelResponse("ok", Message.EMPTY, [])
-        raise ValueError(f"Unexpected response: {resp}")
+#     def list(self) -> ModelResponse:
+#         """List all client requests."""
+#         resp = self.storage.get_all("client_applications")
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.FOUND, data=result):
+#                 return ModelResponse("ok", Message.FOUND, result)
+#             case Response(status="ok", message=Message.EMPTY):
+#                 return ModelResponse("ok", Message.EMPTY, [])
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def delete(self, client_application_id: str) -> ModelResponse:
-        """Revoke a client request by its ID."""
-        resp = self.storage.delete_by_id("client_applications", client_application_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client request not found",
-                     client_application_id=client_application_id
-                )
-            case Response(status="ok", message=Message.DELETED):
-                return ModelResponse("ok", Message.DELETED)
-        raise ValueError(f"Unexpected response: {resp}")
+#     def delete(self, client_application_id: str) -> ModelResponse:
+#         """Revoke a client request by its ID."""
+#         resp = self.storage.delete_by_id("client_applications", client_application_id)
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.NOT_FOUND):
+#                 raise api_errors.ConflictError(
+#                     "Client request not found",
+#                      client_application_id=client_application_id
+#                 )
+#             case Response(status="ok", message=Message.DELETED):
+#                 return ModelResponse("ok", Message.DELETED)
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def get(self, client_application_id: str) -> ModelResponse:
-        """Retrieve a client request by its ID."""
-        resp = self.storage.get_by_id("client_applications", client_application_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client request not found",
-                     client_application_id=client_application_id
-                )
-            case Response(status="ok", message=Message.FOUND, data=result):
-                return ModelResponse("ok", Message.FOUND, result)
-        raise ValueError(f"Unexpected response: {resp}")
+#     def get(self, client_application_id: str) -> ModelResponse:
+#         """Retrieve a client request by its ID."""
+#         resp = self.storage.get_by_id("client_applications", client_application_id)
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.NOT_FOUND):
+#                 raise api_errors.ConflictError(
+#                     "Client request not found",
+#                      client_application_id=client_application_id
+#                 )
+#             case Response(status="ok", message=Message.FOUND, data=result):
+#                 return ModelResponse("ok", Message.FOUND, result)
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def new(self, **fields: Unpack[ClientApplicationNewSchema]) -> ModelResponse:
-        """Submit a request for a new client id."""
-        validate_keys(fields, ClientApplicationNewSchema.__required_keys__)
-        request = ClientApplicationRecord(
-            id=uid.generate_category_uid("client_application", length=6),
-            **fields,
-            created_at=utc_time.now(),
-            status="review"
-        )
-        resp = self.storage.insert("client_applications", request)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok"):
-                return ModelResponse("ok", Message.CREATED, request)
-        raise ValueError(f"Unexpected response: {resp}")
+#     def new(self, **fields: Unpack[ClientApplicationNewSchema]) -> ModelResponse:
+#         """Submit a request for a new client id."""
+#         validate_keys(fields, ClientApplicationNewSchema.__required_keys__)
+#         request = ClientApplicationRecord(
+#             id=uid.generate_category_uid("client_application", length=6),
+#             **fields,
+#             created_at=utc_time.now(),
+#             status="review"
+#         )
+#         resp = self.storage.insert("client_applications", request)
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok"):
+#                 return ModelResponse("ok", Message.CREATED, request)
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def approve(self, client_application_id: str) -> ModelResponse:
-        """Approve a client request by its ID."""
-        resp = self.storage.update_by_id(
-            "client_applications",
-            client_application_id,
-            {"status": "approved"}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client request not found",
-                     client_application_id=client_application_id
-                )
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.SUCCESS)
-        raise ValueError(f"Unexpected response: {resp}")
+#     def approve(self, client_application_id: str) -> ModelResponse:
+#         """Approve a client request by its ID."""
+#         resp = self.storage.update_by_id(
+#             "client_applications",
+#             client_application_id,
+#             {"status": "approved"}
+#         )
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.NOT_FOUND):
+#                 raise api_errors.ConflictError(
+#                     "Client request not found",
+#                      client_application_id=client_application_id
+#                 )
+#             case Response(status="ok", message=Message.UPDATED):
+#                 return ModelResponse("ok", Message.SUCCESS)
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def reject(self, client_application_id: str) -> ModelResponse:
-        """Reject a client request by its ID."""
-        resp = self.storage.update_by_id(
-            "client_applications",
-            client_application_id,
-            {"status": "rejected"}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client request not found",
-                     client_application_id=client_application_id
-                )
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.SUCCESS)
-        raise ValueError(f"Unexpected response: {resp}")
+#     def reject(self, client_application_id: str) -> ModelResponse:
+#         """Reject a client request by its ID."""
+#         resp = self.storage.update_by_id(
+#             "client_applications",
+#             client_application_id,
+#             {"status": "rejected"}
+#         )
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.NOT_FOUND):
+#                 raise api_errors.ConflictError(
+#                     "Client request not found",
+#                      client_application_id=client_application_id
+#                 )
+#             case Response(status="ok", message=Message.UPDATED):
+#                 return ModelResponse("ok", Message.SUCCESS)
+#         raise ValueError(f"Unexpected response: {resp}")
     
 
-class ClientAdmin:
-    """Model for database operations related to client admins."""
+# class ClientAdmin:
+#     """Model for database operations related to client admins."""
 
-    def __init__(self):
-        """Initialize the Client model with a storage interface."""
-        self.storage = get_drum()
+#     def __init__(self):
+#         """Initialize the Client model with a storage interface."""
+#         self.storage = get_drum()
 
-    def list(self, client_id: str) -> ModelResponse:
-        """List all admins for a client application."""
-        resp = self.storage.get_matching("client_admins", {"client_id": client_id})
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND, data=result):
-                return ModelResponse("ok", Message.FOUND, result)
-            case Response(status="ok", message=Message.EMPTY):
-                return ModelResponse("ok", Message.EMPTY, [])
-        raise ValueError(f"Unexpected response: {resp}")
+#     def list(self, client_id: str) -> ModelResponse:
+#         """List all admins for a client application."""
+#         resp = self.storage.get_matching("client_admins", {"client_id": client_id})
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.FOUND, data=result):
+#                 return ModelResponse("ok", Message.FOUND, result)
+#             case Response(status="ok", message=Message.EMPTY):
+#                 return ModelResponse("ok", Message.EMPTY, [])
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def add(self, client_id: str, admin_id: Email) -> ModelResponse:
-        """Add an admin to a client application."""
-        resp = self.storage.insert(
-            "client_admins",
-            {
-                "id": uid.generate_category_uid("client_admin", length=4),
-                "client_id": client_id,
-                "admin_id": admin_id
-            }
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS):
-                return ModelResponse("ok", Message.SUCCESS)
-        raise ValueError(f"Unexpected response: {resp}")
+#     def add(self, client_id: str, admin_id: Email) -> ModelResponse:
+#         """Add an admin to a client application."""
+#         resp = self.storage.insert(
+#             "client_admins",
+#             {
+#                 "id": uid.generate_category_uid("client_admin", length=4),
+#                 "client_id": client_id,
+#                 "admin_id": admin_id
+#             }
+#         )
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.SUCCESS):
+#                 return ModelResponse("ok", Message.SUCCESS)
+#         raise ValueError(f"Unexpected response: {resp}")
 
-    def remove(self, client_id: str, admin_id: Email) -> ModelResponse:
-        """Remove an admin from a client application."""
-        # Check if admin_id is the last admin
-        resp = self.storage.get_matching(
-            "client_admins",
-            {"client_id": client_id}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.EMPTY):
-                raise api_errors.ConflictError(
-                    "Client has no admins",
-                     client_id=client_id
-                )
-            case Response(status="ok", message=Message.FOUND, data=result):
-                if (
-                        result and len(result) == 1
-                        and result[0]["admin_id"] == admin_id
-                ):
-                    raise api_errors.UnauthorizedError(
-                        "Cannot remove last client admin",
-                        client_id=client_id
-                    )
+#     def remove(self, client_id: str, admin_id: Email) -> ModelResponse:
+#         """Remove an admin from a client application."""
+#         # Check if admin_id is the last admin
+#         resp = self.storage.get_matching(
+#             "client_admins",
+#             {"client_id": client_id}
+#         )
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.EMPTY):
+#                 raise api_errors.ConflictError(
+#                     "Client has no admins",
+#                      client_id=client_id
+#                 )
+#             case Response(status="ok", message=Message.FOUND, data=result):
+#                 if (
+#                         result and len(result) == 1
+#                         and result[0]["admin_id"] == admin_id
+#                 ):
+#                     raise api_errors.UnauthorizedError(
+#                         "Cannot remove last client admin",
+#                         client_id=client_id
+#                     )
 
-        resp = self.storage.delete_matching(
-            "client_admins",
-            {"client_id": client_id, "admin_id": admin_id}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise AssertionError("Client admin not found")
-            case Response(status="ok", message=Message.DELETED):
-                return ModelResponse("ok", Message.SUCCESS)
-        raise ValueError(f"Unexpected response: {resp}")
+#         resp = self.storage.delete_matching(
+#             "client_admins",
+#             {"client_id": client_id, "admin_id": admin_id}
+#         )
+#         match resp:
+#             case Response(status="error", message=message, data=error):
+#                 raise api_errors.InternalError(message=message, error=error)
+#             case Response(status="ok", message=Message.NOT_FOUND):
+#                 raise AssertionError("Client admin not found")
+#             case Response(status="ok", message=Message.DELETED):
+#                 return ModelResponse("ok", Message.SUCCESS)
+#         raise ValueError(f"Unexpected response: {resp}")
 
 
 class ClientNewSchema(TypedDict):
@@ -322,8 +322,8 @@ class ClientRecord(TypedDict):
 class Client:
     """Model for database operations related to client applications."""
     # Nested attribute follows Campus API schema
-    applications = ClientApplication()
-    admins = ClientAdmin()
+    # applications = ClientApplication()
+    # admins = ClientAdmin()
     # apikeys = ClientAPIKey()
 
     def __init__(self):
@@ -388,6 +388,8 @@ class Client:
                 )
         assert isinstance(resp, DrumResponse)  # appease mypy
         client_record = resp.data
+        # Do not reveal secrets in API
+        del client_record["secret_hash"]
         assert isinstance(client_record, dict)
 
         resp = self.storage.get_matching("client_admins", {"client_id": client_id})
@@ -408,10 +410,10 @@ class Client:
             for admin_record in admin_records
         )
 
-        client_record["admins"] = [
-            admin_record["admin_id"]
-            for admin_record in admin_records
-        ]
+        # client_record["admins"] = [
+        #     admin_record["admin_id"]
+        #     for admin_record in admin_records
+        # ]
         return ModelResponse("ok", Message.SUCCESS, client_record)
 
     def new(self, **fields: Unpack[ClientNewSchema]) -> ModelResponse:
@@ -434,15 +436,15 @@ class Client:
                 "clients",
                 {k: v for k, v in record.items() if k != "admins"}
             )
-            for admin in record["admins"]:
-                self.storage.insert(
-                    "client_admins",
-                    {
-                        "id": uid.generate_category_uid("client_admin", length=4),
-                        "client_id": client_id,
-                        "admin_id": admin
-                    }
-                )
+            # for admin in record["admins"]:
+            #     self.storage.insert(
+            #         "client_admins",
+            #         {
+            #             "id": uid.generate_category_uid("client_admin", length=4),
+            #             "client_id": client_id,
+            #             "admin_id": admin
+            #         }
+            #     )
             # Check for failed operations
             failures = [
                 resp for resp in self.storage.transaction_responses()
