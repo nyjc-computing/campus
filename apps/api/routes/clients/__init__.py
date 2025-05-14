@@ -1,6 +1,6 @@
 from flask import Blueprint, request
 
-from apps.palmtree.models import client, user
+from apps.api.models import client, user
 from apps.common.errors import api_errors
 from common.auth import authenticate_client
 from common.schema import Message, Response

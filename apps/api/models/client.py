@@ -8,7 +8,7 @@ import os
 from typing import Literal, NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
-from apps.palmtree.models.base import ModelResponse
+from apps.api.models.base import ModelResponse
 from common import devops
 from common.drum import DrumResponse
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
