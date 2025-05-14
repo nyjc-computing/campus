@@ -46,7 +46,7 @@ def init_db() -> None:
                 owner TEXT NOT NULL,
                 name TEXT NOT NULL,
                 description TEXT,
-                created_on TEXT NOT NULL,
+                created_at TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'review',
                 CHECK (status IN ('review', 'rejected', 'approved'))
             )
@@ -57,7 +57,7 @@ def init_db() -> None:
                 secret_hash TEXT,
                 name TEXT NOT NULL,
                 description TEXT,
-                created_on TEXT NOT NULL,
+                created_at TEXT NOT NULL,
                 UNIQUE (name),
                 UNIQUE (secret_hash)
             );
@@ -107,7 +107,7 @@ class ClientApplicationRecord(TypedDict):
     owner: Email
     name: str
     description: str
-    created_on: utc_time.datetime
+    created_at: utc_time.datetime
     status: Literal["review", "rejected", "approved"]
 
 
@@ -175,7 +175,7 @@ class ClientApplication:
         request = ClientApplicationRecord(
             id=uid.generate_category_uid("client_application", length=6),
             **fields,
-            created_on=utc_time.now(),
+            created_at=utc_time.now(),
             status="review"
         )
         resp = self.storage.insert("client_applications", request)
@@ -312,7 +312,7 @@ class ClientRecord(TypedDict):
     # client_id and secret_hash will be generated and need not be provided
     id: NotRequired[str]
     secret_hash: NotRequired[str]
-    created_on: NotRequired[utc_time.datetime]
+    created_at: NotRequired[utc_time.datetime]
     apikeys: NotRequired[dict[APIName, APIKey]]
     name: str
     description: str
@@ -421,7 +421,7 @@ class Client:
         client_id = uid.generate_category_uid("client", length=6)
         record = ClientRecord(
             id=client_id,
-            created_on=utc_time.now(),
+            created_at=utc_time.now(),
             **fields,
         )
 
