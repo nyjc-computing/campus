@@ -1,9 +1,11 @@
+"""apps/api/routes/clients
+
+API routes for the clients resource.
+"""
 from flask import Blueprint, request
 
 from apps.api.models import client, user
-from apps.common.errors import api_errors
 from common.auth import authenticate_client
-from common.schema import Message, Response
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -22,6 +24,7 @@ users = user.User()
 
 
 def init_app(app) -> None:
+    """Initialise client routes with the given Flask app/blueprint."""
     client.init_db()
     app.register_blueprint(bp)
     return app
@@ -177,4 +180,3 @@ def revoke_client(client_id: str, **request_json):
 #     # TODO: validate, authenticate
 #     resp = apikeys.delete_api_key(client_id, apikey_name)  # raises APIError
 #     return resp.data, 200
-
