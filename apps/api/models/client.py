@@ -13,7 +13,6 @@ from common import devops
 from common.drum import DrumResponse
 from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
-from common.validation.record import validate_keys
 
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
     from common.drum.postgres import get_conn, get_drum
@@ -429,7 +428,6 @@ class Client:
     def new(self, **fields: Unpack[ClientNew]) -> ModelResponse:
         """Create a new client."""
         # Use Client model to validate keyword arguments
-        validate_keys(fields, ClientNew.__annotations__, required=True)
         client_id = uid.generate_category_uid("client", length=8)
         record = ClientResource(
             id=client_id,
@@ -504,7 +502,6 @@ class Client:
         #         ),
         #         invalid_fields=["admins"]
         #     )
-        validate_keys(updates, ClientResource.__annotations__, required=False)
 
         resp = self.storage.update_by_id("clients", client_id, updates)
         match resp:

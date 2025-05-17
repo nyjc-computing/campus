@@ -83,4 +83,14 @@ resources.
 - Models and schemas should be named in singular, e.g. `UserResource`, since
   they represent a single resource record.  
   This makes it easier to differentiate records and resources.
+
+### Validation
+
+- While parameter types are declared in the submodules of `models`, Models are
+  not responsible for validating the types and formats of their arguments.
+- That would involve importing many more modules, violating the Single
+  Responsibility Principle.
+- Model users should validate their arguments before passing them to the model.
+- The model will generally rely on the backend to raise errors if input is
+  invalid.
 """
