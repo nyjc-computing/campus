@@ -310,7 +310,7 @@ class ClientNew(TypedDict, total=True):
 class ClientResource(ClientNew, total=True):
     """Data model for a complete client resource."""
     # client_id and secret_hash will be generated and need not be provided
-    id: ReadOnly[str]
+    id: str
     secret_hash: str
     created_at: utc_time.datetime
     # apikeys: NotRequired[dict[APIName, APIKey]]
