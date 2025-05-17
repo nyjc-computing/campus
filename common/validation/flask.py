@@ -7,7 +7,7 @@ from functools import wraps
 from json import JSONDecodeError
 from typing import Any, Callable, Mapping, Protocol, Type
 
-from flask import Request, request as flask_request
+from flask import Request, has_request_context, request as flask_request
 
 from common.validation import record
 
@@ -47,12 +47,14 @@ class ValidatedViewFunction(Protocol):
         ...
 
 
-def unpack_json(request: Request, on_error: ErrorHandler) -> JsonObject:
+def unpack_json(request: Request, on_error: ErrorHandler) -> JsonObject | None:
     """Unpacks JSON body from the request.
     Calls the given error handler if unable to do so.
     """
+    # request.is_json will fail because during init, this function does not
+    # have an app context. So need to check if we have a request context.
     # Mimetype check
-    if not request.is_json:
+    if has_request_context() and not request.is_json:
         on_error(415)
     # Unpack request JSON body
     try:
@@ -63,7 +65,6 @@ def unpack_json(request: Request, on_error: ErrorHandler) -> JsonObject:
         on_error(500)
     else:
         return payload
-    raise AssertionError("Unreachable code")  # pragma: no cover
 
 def validate_and_unpack(
         *,
