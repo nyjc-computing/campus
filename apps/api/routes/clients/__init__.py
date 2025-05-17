@@ -2,10 +2,14 @@
 
 API routes for the clients resource.
 """
+
+from typing import Unpack
+
 from flask import Blueprint, request
 
 from apps.api.models import client, user
 from common.auth import authenticate_client
+from common.validation.flask import FlaskResponse, validate_and_unpack
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -31,25 +35,30 @@ def init_app(app) -> None:
 
 
 @bp.post('/')
-def new_client(**request_json):
+@validate_and_unpack(
+    request=client.ClientNew.__annotations__,
+    response=client.ClientResource.__annotations__
+)
+def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:  # *_ appease linter
     """Create a new client id and secret."""
     if not POST:
         return {"message": "Not implemented"}, 501
-    # TODO: validate request, authenticate
-    data = request.get_json()
-    clients.new(**data)  # raises APIError
-    return {"message": "Client created"}, 201
+    # TODO: authenticate
+    resp = clients.new(**data)  # raises APIError
+    return resp.data, 201
 
 @bp.delete('/<string:client_id>')
-def delete_client(client_id: str, **request_json):
+@validate_and_unpack(response={"message": str})
+def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Delete a client id and secret."""
     if not DELETE:
         return {"message": "Not implemented"}, 501
-    clients.delete(client_id)  # raises APIError
+    resp = clients.delete(client_id)  # raises APIError
     return {"message": "Client deleted"}, 200
 
 @bp.get('/<string:client_id>')
-def get_client_details(client_id: str, **request_json):
+@validate_and_unpack(response=client.ClientResource.__annotations__)
+def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Get details of a client."""
     if not GET:
         return {"message": "Not implemented"}, 501
@@ -58,17 +67,21 @@ def get_client_details(client_id: str, **request_json):
     return resp.data, 200
 
 @bp.patch('/<string:client_id>')
-def edit_client(client_id: str, **request_json):
+@validate_and_unpack(
+    request=client.ClientUpdate.__annotations__,
+    response=client.ClientResource.__annotations__
+)
+def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> FlaskResponse:  # *_ appease linter
     """Edit name, description, or admins of client."""
     if not PATCH:
         return {"message": "Not implemented"}, 501
-    # TODO: validate request, authenticate
-    data = request.get_json()
-    clients.update(**data)  # raises APIError
-    return {"message": "Client updated"}, 200
+    # TODO: authenticate
+    resp = clients.update(client_id, **data)  # raises APIError
+    return resp.data, 200
 
 @bp.post('/<string:client_id>/replace')
-def revoke_client(client_id: str, **request_json):
+@validate_and_unpack(response=client.ClientReplaceResponse.__annotations__)
+def revoke_client(client_id: str, *_, **__) -> FlaskResponse:
     """Revoke a client id and secret, and reissue them."""
     if not POST:
         return {"message": "Not implemented"}, 501

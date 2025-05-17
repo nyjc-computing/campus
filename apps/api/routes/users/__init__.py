@@ -2,12 +2,16 @@
 
 API routes for the users resource.
 """
+
+from typing import Unpack
+
 from flask import Blueprint, request
 
 from apps.api.models import user
 from apps.common.errors import api_errors
 from common.auth import authenticate_client
 from common.schema import Message, Response
+from common.validation.flask import FlaskResponse, validate_and_unpack
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
@@ -33,19 +37,21 @@ def get_authenticated_user():
 
 
 @bp.post('/')
-def new_user():
+@validate_and_unpack(
+    request=user.UserNew.__annotations__,
+    response=user.UserResource.__annotations__
+)
+def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
     """Create a new user."""
-    if not request.is_json:
-        return {"error": "Request must be JSON"}, 400
-    data = request.get_json()
     resp = users.new(**data)
     if resp.status == "ok":
-        return {"message": "User created"}, 201
+        return resp.data, 201
     else:
         return {"error": resp.message}, 400
 
 @bp.delete('/<string:user_id>')
-def delete_user(user_id: str):
+@validate_and_unpack(response={"message": str})
+def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Delete a user."""
     resp = users.delete(user_id)
     if resp.status == "ok":
@@ -54,26 +60,31 @@ def delete_user(user_id: str):
         return {"error": resp.message}, 400
 
 @bp.get('/<string:user_id>')
-def get_user(user_id: str):
+@validate_and_unpack(response=user.UserResource.__annotations__)
+def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Get a single user's summary."""
     summary = {}
-    resp, _ = get_user_profile(user_id)
-    summary['profile'] = resp.data
+    record, _ = get_user_profile(user_id)
+    summary['profile'] = record
     # future calls for other user info go here
     return summary, 200
 
 @bp.patch('/<string:user_id>')
-def patch_user_profile(user_id: str):
+@validate_and_unpack(
+    request=user.UserUpdate.__annotations__,
+    response=user.UserResource.__annotations__
+)
+def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> FlaskResponse:  # *_ appease linter
     """Update a single user's profile."""
-    if not request.is_json:
-        return {"error": "Request must be JSON"}, 400
-    update = request.get_json()
-    resp = users.update(user_id, **update)
-    return {"message": "Profile updated"}, 200
+    resp = users.update(user_id, **data)
+    return resp.data, 200
 
 @bp.get('/<string:user_id>/profile')
+@validate_and_unpack(
+    response=user.UserResource.__annotations__
+)
 # TODO: require client auth or token auth
-def get_user_profile(user_id: str):
+def get_user_profile(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Get a single user's profile."""
     resp = users.get(user_id)
     match resp:

@@ -2,11 +2,15 @@
 
 API routes for the emailotp resource.
 """
-from flask import Blueprint, request
+
+from typing import Unpack
+
+from flask import Blueprint
 
 from apps.api.models import otp
 from common.auth import authenticate_client
 from common.services.email import create_email_sender
+from common.validation.flask import FlaskResponse, validate_and_unpack
 
 from . import template
 
@@ -27,14 +31,13 @@ def init_app(app) -> None:
 
 
 @bp.post('/request')
-def request_otp():
+@validate_and_unpack(
+    request=otp.OTPRequest.__annotations__,
+    response={"message": str}
+)
+def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
     """Request a new OTP for email authentication."""
-    if not request.is_json:
-        return {"error": "Request must be JSON"}, 400
-    payload = request.get_json()
-    if 'email' not in payload:
-        return {"error": "Missing email"}, 400
-    email = payload['email']
+    email = data['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
     resp = emailotp.request(email)
@@ -51,16 +54,13 @@ def request_otp():
     return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
-def verify_otp():
+@validate_and_unpack(
+    request=otp.OTPVerify.__annotations__,
+    response={"message": str}
+)
+def verify_otp(*_, **data: Unpack[otp.OTPVerify]) -> FlaskResponse:
     """Verify an OTP for email authentication."""
-    if not request.is_json:
-        return {"error": "Request must be JSON"}, 400
-    payload = request.get_json()
-    if 'email' not in payload or 'otp' not in payload:
-        return {"error": "Missing email or otp"}, 400
-    email = payload['email']
-    otp_code = payload['otp']
     # TODO: Validate email format
     # TODO: Validate OTP format
-    resp = emailotp.verify(email, otp_code)
+    resp = emailotp.verify(**data)
     return {"message": "OTP verified"}, 200
