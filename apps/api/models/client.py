@@ -9,6 +9,7 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
+from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
 from common.drum import DrumResponse
 from common.schema import Message, Response
@@ -50,6 +51,17 @@ def init_db() -> None:
         #         CHECK (status IN ('review', 'rejected', 'approved'))
         #     )
         # """)
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS "client_applications" (
+        #         id TEXT PRIMARY KEY,
+        #         owner TEXT NOT NULL,
+        #         name TEXT NOT NULL,
+        #         description TEXT,
+        #         created_at TEXT NOT NULL,
+        #         status TEXT NOT NULL DEFAULT 'review',
+        #         CHECK (status IN ('review', 'rejected', 'approved'))
+        #     )
+        # """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS "clients" (
                 id TEXT PRIMARY KEY,
@@ -64,6 +76,15 @@ def init_db() -> None:
         # Note that junction tables violate the assumption of a single-column
         # string primary key, as they are not expected to be directly queried
         # by end users.
+        # cursor.execute("""
+        #     CREATE TABLE IF NOT EXISTS "client_admins" (
+        #         id TEXT PRIMARY KEY,
+        #         client_id TEXT NOT NULL,
+        #         admin_id TEXT NOT NULL,
+        #         UNIQUE (client_id, admin_id),
+        #         FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+        #     )
+        # """)
         # cursor.execute("""
         #     CREATE TABLE IF NOT EXISTS "client_admins" (
         #         id TEXT PRIMARY KEY,
@@ -307,10 +328,20 @@ class ClientNew(TypedDict, total=True):
 
 class ClientUpdate(TypedDict, total=False):
     """Request body schema for a clients.update operation."""
+    """Request body schema for a clients.new operation."""
     name: str
     description: str
 
 
+class ClientUpdate(TypedDict, total=False):
+    """Request body schema for a clients.update operation."""
+    name: str
+    description: str
+
+
+class ClientResource(ClientNew, BaseRecord, total=True):
+    """Response body schema representing the result of a clients.get operation.
+    """
 class ClientResource(ClientNew, BaseRecord, total=True):
     """Response body schema representing the result of a clients.get operation.
     """
@@ -353,6 +384,10 @@ class Client:
 
         with self.storage.use_transaction():
             # Remove admins first
+            # self.storage.delete_matching(
+            #     "client_admins",
+            #     {"client_id": client_id}
+            # )
             # self.storage.delete_matching(
             #     "client_admins",
             #     {"client_id": client_id}
@@ -440,6 +475,7 @@ class Client:
         # are committed together, or none are.
         with self.storage.use_transaction():
             # admins are inserted in junction table and not in clients table
+            self.storage.insert("clients", record)
             self.storage.insert("clients", record)
             # for admin in record["admins"]:
             #     self.storage.insert(

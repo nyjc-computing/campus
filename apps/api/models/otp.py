@@ -13,7 +13,10 @@ import bcrypt
 
 from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
+from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
+from common.schema import Message, Response
+from common.utils import uid, utc_time
 from common.schema import Message, Response
 from common.utils import uid, utc_time
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
@@ -41,11 +44,15 @@ def init_db():
             CREATE TABLE IF NOT EXISTS emailotp (
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL,,
+            CREATE TABLE IF NOT EXISTS emailotp (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,,
                 otp_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL
             )
         """)
+    except Exception:  # pylint: disable=try-except-raise
     except Exception:  # pylint: disable=try-except-raise
         # init_db() is not expected to be called in production, so we don't
         # need to handle errors gracefully.
@@ -114,7 +121,20 @@ class _hashedOTP(str):
 
 class OTPRequest(TypedDict, total=True):
     """Request body schema for an emailotp.new operation."""
+class OTPRequest(TypedDict, total=True):
+    """Request body schema for an emailotp.new operation."""
     email: str
+
+
+class OTPVerify(OTPRequest, total=True):
+    """Request body schema for an emailotp.verify operation."""
+    otp: str
+
+
+class OTPRecord(OTPRequest, BaseRecord, total=True):
+    """Schema for a complete OTP record.
+    Currently unused in the API, provided for documentation purpose.
+    """
 
 
 class OTPVerify(OTPRequest, total=True):
@@ -173,11 +193,15 @@ class OTPAuth:
         otp_id = uid.generate_category_uid("emailotp", length=16)
         otp_code = OTPRecord(
             id=otp_id,
+        otp_id = uid.generate_category_uid("emailotp", length=16)
+        otp_code = OTPRecord(
+            id=otp_id,
             email=email,
             otp_hash=otp_hash,
             created_at=created_at,
             expires_at=expires_at,
         )
+        resp = self.storage.insert('otp_codes', otp_code)
         resp = self.storage.insert('otp_codes', otp_code)
         match resp:
             case Response(status="error", message=message, data=error):

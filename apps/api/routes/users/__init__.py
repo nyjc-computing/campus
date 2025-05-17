@@ -22,6 +22,7 @@ users = user.User()
 
 def init_app(app) -> None:
     """Initialise users routes with the given Flask app/blueprint."""
+    """Initialise users routes with the given Flask app/blueprint."""
     user.init_db()
     app.register_blueprint(bp)
     app.add_url_rule('/me', 'get_authenticated_user', get_authenticated_user)
@@ -48,6 +49,7 @@ def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
         return resp.data, 201
     else:
         return {"error": resp.message}, 400
+
 
 @bp.delete('/<string:user_id>')
 @validate_and_unpack(response={"message": str})
@@ -92,6 +94,8 @@ def get_user_profile(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease lin
             raise api_errors.ConflictError(
                 message="User not found"
             )
+        case Response(status="ok", message=Message.FOUND, data=record):
+            return record, 200
         case Response(status="ok", message=Message.FOUND, data=record):
             return record, 200
     raise ValueError(f"Unexpected response: {resp}")

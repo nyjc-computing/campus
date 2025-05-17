@@ -26,6 +26,7 @@ EMAIL_PROVIDER = "smtp"
 
 def init_app(app) -> None:
     """Initialise emailotp routes with the given Flask app/blueprint."""
+    """Initialise emailotp routes with the given Flask app/blueprint."""
     otp.init_db()
     app.register_blueprint(bp)
 
