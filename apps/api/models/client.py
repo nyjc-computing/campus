@@ -300,22 +300,20 @@ def init_db() -> None:
 #         raise ValueError(f"Unexpected response: {resp}")
 
 
-class ClientNewSchema(TypedDict):
+class ClientNew(TypedDict, total=True):
     """Data model for a clients.new operation."""
     name: str
     description: str
     # admins: list[Email]
 
 
-class ClientRecord(TypedDict):
-    """Data model for a client record."""
+class ClientResource(ClientNew, total=True):
+    """Data model for a complete client resource."""
     # client_id and secret_hash will be generated and need not be provided
-    id: NotRequired[str]
-    secret_hash: NotRequired[str]
-    created_at: NotRequired[utc_time.datetime]
+    id: str
+    secret_hash: str
+    created_at: utc_time.datetime
     # apikeys: NotRequired[dict[APIName, APIKey]]
-    name: str
-    description: str
     # admins: list[Email]
 
 
@@ -416,12 +414,12 @@ class Client:
         # ]
         return ModelResponse("ok", Message.SUCCESS, client_record)
 
-    def new(self, **fields: Unpack[ClientNewSchema]) -> ModelResponse:
+    def new(self, **fields: Unpack[ClientNew]) -> ModelResponse:
         """Create a new client with associated admins."""
         # Use Client model to validate keyword arguments
-        validate_keys(fields, ClientRecord.__required_keys__)
+        validate_keys(fields, ClientNew.__required_keys__)
         client_id = uid.generate_category_uid("client", length=6)
-        record = ClientRecord(
+        record = ClientResource(
             id=client_id,
             created_at=utc_time.now(),
             **fields,
@@ -492,7 +490,7 @@ class Client:
                 message="Admins may not be updated directly (use add/remove admin endpoints instead)",
                 invalid_fields=["admins"]
             )
-        validate_keys(updates, ClientRecord.__required_keys__, required=False)
+        validate_keys(updates, ClientResource.__required_keys__, required=False)
 
         resp = self.storage.update_by_id("clients", client_id, updates)
         match resp:
