@@ -5,7 +5,7 @@ This module provides classes and utilities for handling client applications
 and API keys for Campus services.
 """
 import os
-from typing import TypedDict, Unpack
+from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.api.models.base import ModelResponse
@@ -311,7 +311,7 @@ class ClientResource(ClientNew, total=True):
     """Data model for a complete client resource."""
     # client_id and secret_hash will be generated and need not be provided
     id: str
-    secret_hash: str
+    secret_hash: NotRequired[str]
     created_at: utc_time.datetime
     # apikeys: NotRequired[dict[APIName, APIKey]]
     # admins: list[Email]
@@ -415,7 +415,7 @@ class Client:
         return ModelResponse("ok", Message.SUCCESS, client_record)
 
     def new(self, **fields: Unpack[ClientNew]) -> ModelResponse:
-        """Create a new client with associated admins."""
+        """Create a new client."""
         # Use Client model to validate keyword arguments
         validate_keys(fields, ClientNew.__required_keys__)
         client_id = uid.generate_category_uid("client", length=6)
