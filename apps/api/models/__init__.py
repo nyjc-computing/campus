@@ -94,3 +94,15 @@ resources.
 - The model will generally rely on the backend to raise errors if input is
   invalid.
 """
+
+from . import (
+    client,
+    otp,
+    user
+)
+
+__all__ = [
+    "client",
+    "otp",
+    "user"
+]
