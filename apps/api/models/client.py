@@ -11,14 +11,14 @@ from apps.common.errors import api_errors
 from apps.api.models.base import ModelResponse
 from common import devops
 from common.drum import DrumResponse
+from common.schema import Message, Response
+from common.utils import secret, uid, utc_time
+from common.validation.record import validate_keys
+
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
     from common.drum.postgres import get_conn, get_drum
 else:
     from common.drum.sqlite import get_conn, get_drum
-from common.schema import Message, Response
-from common.utils import secret, uid, utc_time
-from common.validation import name as validname
-from common.validation.record import validate_keys
 
 APIName = str
 APIKey = str
@@ -84,7 +84,7 @@ def init_db() -> None:
         #         FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
         #     )
         # """)
-    except Exception:
+    except Exception:  # pylint: disable=try-except-raise
         # init_db() is not expected to be called in production, so we don't
         # need to handle errors gracefully.
         raise
@@ -485,11 +485,11 @@ class Client:
         # Validate arguments first to avoid unnecessary database operations
         if not updates:
             return ModelResponse("ok", Message.EMPTY, "Nothing to update")
-        if "admins" in updates:
-            raise api_errors.InvalidRequestError(
-                message="Admins may not be updated directly (use add/remove admin endpoints instead)",
-                invalid_fields=["admins"]
-            )
+        # if "admins" in updates:
+        #     raise api_errors.InvalidRequestError(
+        #         message="Admins may not be updated directly (use add/remove admin endpoints instead)",
+        #         invalid_fields=["admins"]
+        #     )
         validate_keys(updates, ClientResource.__required_keys__, required=False)
 
         resp = self.storage.update_by_id("clients", client_id, updates)
