@@ -1,3 +1,7 @@
+"""apps/api/routes/emailotp
+
+API routes for the emailotp resource.
+"""
 from flask import Blueprint, request
 
 from apps.api.models import otp
@@ -17,6 +21,7 @@ EMAIL_PROVIDER = "smtp"
 
 
 def init_app(app) -> None:
+    """Initialise emailotp routes with the given Flask app/blueprint."""
     otp.init_db()
     app.register_blueprint(bp)
 

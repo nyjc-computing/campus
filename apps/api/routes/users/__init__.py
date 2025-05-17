@@ -1,3 +1,7 @@
+"""apps/api/routes/users
+
+API routes for the users resource.
+"""
 from flask import Blueprint, request
 
 from apps.api.models import user
@@ -13,6 +17,7 @@ users = user.User()
 
 
 def init_app(app) -> None:
+    """Initialise users routes with the given Flask app/blueprint."""
     user.init_db()
     app.register_blueprint(bp)
     app.add_url_rule('/me', 'get_authenticated_user', get_authenticated_user)
@@ -38,7 +43,7 @@ def new_user():
         return {"message": "User created"}, 201
     else:
         return {"error": resp.message}, 400
-    
+
 @bp.delete('/<string:user_id>')
 def delete_user(user_id: str):
     """Delete a user."""
@@ -63,7 +68,7 @@ def patch_user_profile(user_id: str):
     if not request.is_json:
         return {"error": "Request must be JSON"}, 400
     update = request.get_json()
-    resp = users.update(user_id, update)
+    resp = users.update(user_id, **update)
     return {"message": "Profile updated"}, 200
 
 @bp.get('/<string:user_id>/profile')
@@ -76,7 +81,6 @@ def get_user_profile(user_id: str):
             raise api_errors.ConflictError(
                 message="User not found"
             )
-        case Response(status="ok", message=Message.FOUND, data=user):
-            return user, 200
+        case Response(status="ok", message=Message.FOUND, data=record):
+            return record, 200
     raise ValueError(f"Unexpected response: {resp}")
-

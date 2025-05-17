@@ -7,19 +7,19 @@ generating, hashing, verifying, and managing OTPs securely.
 """
 import os
 import secrets
-from typing import NamedTuple
+from typing import TypedDict
 
 import bcrypt
 
 from apps.common.errors import api_errors
-from apps.api.models.base import ModelResponse
+from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
+from common.schema import Message, Response
+from common.utils import uid, utc_time
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
     from common.drum.postgres import get_conn, get_drum
 else:
     from common.drum.sqlite import get_conn, get_drum
-from common.schema import Message, Response
-from common.utils import utc_time
 
 
 def init_db():
@@ -38,14 +38,15 @@ def init_db():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS otp_codes (
-                email TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS emailotp (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,,
                 otp_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL
             )
         """)
-    except Exception:
+    except Exception:  # pylint: disable=try-except-raise
         # init_db() is not expected to be called in production, so we don't
         # need to handle errors gracefully.
         raise
@@ -111,11 +112,21 @@ class _hashedOTP(str):
         return bcrypt.checkpw(plain_bytes, hashed_bytes)
 
 
-class OTP(NamedTuple):
-    """Data model for OTP"""
+class OTPRequest(TypedDict, total=True):
+    """Request body schema for an emailotp.new operation."""
     email: str
+
+
+class OTPVerify(OTPRequest, total=True):
+    """Request body schema for an emailotp.verify operation."""
+    otp: str
+
+
+class OTPRecord(OTPRequest, BaseRecord, total=True):
+    """Schema for a complete OTP record.
+    Currently unused in the API, provided for documentation purpose.
+    """
     otp_hash: str
-    created_at: utc_time.datetime
     expires_at: utc_time.datetime
 
 
@@ -159,13 +170,15 @@ class OTPAuth:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
         # Insert new OTP
-        otp_code = OTP(
+        otp_id = uid.generate_category_uid("emailotp", length=16)
+        otp_code = OTPRecord(
+            id=otp_id,
             email=email,
             otp_hash=otp_hash,
             created_at=created_at,
             expires_at=expires_at,
         )
-        resp = self.storage.insert('otp_codes', otp_code._asdict())
+        resp = self.storage.insert('otp_codes', otp_code)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
