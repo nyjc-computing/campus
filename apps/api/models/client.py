@@ -304,7 +304,7 @@ class ClientNewSchema(TypedDict):
     """Data model for a clients.new operation."""
     name: str
     description: str
-    admins: list[Email]
+    # admins: list[Email]
 
 
 class ClientRecord(TypedDict):
@@ -313,10 +313,10 @@ class ClientRecord(TypedDict):
     id: NotRequired[str]
     secret_hash: NotRequired[str]
     created_at: NotRequired[utc_time.datetime]
-    apikeys: NotRequired[dict[APIName, APIKey]]
+    # apikeys: NotRequired[dict[APIName, APIKey]]
     name: str
     description: str
-    admins: list[Email]
+    # admins: list[Email]
 
 
 class Client:
