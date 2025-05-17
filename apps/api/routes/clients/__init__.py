@@ -28,7 +28,7 @@ def init_app(app) -> None:
 
 
 @bp.post('/')
-def new_client():
+def new_client(**request_json):
     """Create a new client id and secret."""
     if not POST:
         return {"message": "Not implemented"}, 501
@@ -38,7 +38,7 @@ def new_client():
     return {"message": "Client created"}, 201
 
 @bp.delete('/<string:client_id>')
-def delete_client(client_id: str):
+def delete_client(client_id: str, **request_json):
     """Delete a client id and secret."""
     if not DELETE:
         return {"message": "Not implemented"}, 501
@@ -46,7 +46,7 @@ def delete_client(client_id: str):
     return {"message": "Client deleted"}, 200
 
 @bp.get('/<string:client_id>')
-def get_client_details(client_id: str):
+def get_client_details(client_id: str, **request_json):
     """Get details of a client."""
     if not GET:
         return {"message": "Not implemented"}, 501
@@ -55,7 +55,7 @@ def get_client_details(client_id: str):
     return resp.data, 200
 
 @bp.patch('/<string:client_id>')
-def edit_client():
+def edit_client(client_id: str, **request_json):
     """Edit name, description, or admins of client."""
     if not PATCH:
         return {"message": "Not implemented"}, 501
@@ -65,7 +65,7 @@ def edit_client():
     return {"message": "Client updated"}, 200
 
 @bp.post('/<string:client_id>/replace')
-def revoke_client(client_id: str):
+def revoke_client(client_id: str, **request_json):
     """Revoke a client id and secret, and reissue them."""
     if not POST:
         return {"message": "Not implemented"}, 501
