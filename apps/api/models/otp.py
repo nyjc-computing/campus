@@ -7,7 +7,7 @@ generating, hashing, verifying, and managing OTPs securely.
 """
 import os
 import secrets
-from typing import TypedDict
+from typing import TypedDict, Unpack
 
 import bcrypt
 
@@ -186,7 +186,7 @@ class OTPAuth:
                 return ModelResponse("ok", "OTP created", plain_otp)
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def verify(self, email: str, plain_otp: str) -> ModelResponse:
+    def verify(self, **data: Unpack[OTPVerify]) -> ModelResponse:
         """
         Verify if the provided OTP matches the one stored for the email.
 
@@ -198,7 +198,7 @@ class OTPAuth:
             ModelResponse indicating the result of the verification.
         """
         # Get the latest OTP for this email
-        resp = self.storage.get_by_id('otp_codes', email)
+        resp = self.storage.get_by_id('otp_codes', data['email'])
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -219,7 +219,7 @@ class OTPAuth:
             raise api_errors.UnauthorizedError("OTP expired")
 
         # Verify OTP
-        if hashed_otp.verify(_plainOTP(plain_otp)):
+        if hashed_otp.verify(_plainOTP(data['otp'])):
             return ModelResponse("ok", "OTP verified")
         else:
             raise api_errors.UnauthorizedError("Invalid OTP")
