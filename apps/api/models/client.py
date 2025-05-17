@@ -328,20 +328,10 @@ class ClientNew(TypedDict, total=True):
 
 class ClientUpdate(TypedDict, total=False):
     """Request body schema for a clients.update operation."""
-    """Request body schema for a clients.new operation."""
     name: str
     description: str
 
 
-class ClientUpdate(TypedDict, total=False):
-    """Request body schema for a clients.update operation."""
-    name: str
-    description: str
-
-
-class ClientResource(ClientNew, BaseRecord, total=True):
-    """Response body schema representing the result of a clients.get operation.
-    """
 class ClientResource(ClientNew, BaseRecord, total=True):
     """Response body schema representing the result of a clients.get operation.
     """

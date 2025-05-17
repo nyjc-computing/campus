@@ -53,7 +53,6 @@ def init_db():
             )
         """)
     except Exception:  # pylint: disable=try-except-raise
-    except Exception:  # pylint: disable=try-except-raise
         # init_db() is not expected to be called in production, so we don't
         # need to handle errors gracefully.
         raise
@@ -121,20 +120,7 @@ class _hashedOTP(str):
 
 class OTPRequest(TypedDict, total=True):
     """Request body schema for an emailotp.new operation."""
-class OTPRequest(TypedDict, total=True):
-    """Request body schema for an emailotp.new operation."""
     email: str
-
-
-class OTPVerify(OTPRequest, total=True):
-    """Request body schema for an emailotp.verify operation."""
-    otp: str
-
-
-class OTPRecord(OTPRequest, BaseRecord, total=True):
-    """Schema for a complete OTP record.
-    Currently unused in the API, provided for documentation purpose.
-    """
 
 
 class OTPVerify(OTPRequest, total=True):
@@ -190,9 +176,6 @@ class OTPAuth:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
         # Insert new OTP
-        otp_id = uid.generate_category_uid("emailotp", length=16)
-        otp_code = OTPRecord(
-            id=otp_id,
         otp_id = uid.generate_category_uid("emailotp", length=16)
         otp_code = OTPRecord(
             id=otp_id,
