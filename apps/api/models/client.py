@@ -223,7 +223,7 @@ def init_db() -> None:
 #             case Response(status="ok", message=Message.UPDATED):
 #                 return ModelResponse("ok", Message.SUCCESS)
 #         raise ValueError(f"Unexpected response: {resp}")
-    
+
 
 # class ClientAdmin:
 #     """Model for database operations related to client admins."""
@@ -355,7 +355,10 @@ class Client:
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
                 self.storage.rollback_transaction()
-                raise api_errors.InternalError(message="Some operations failed", responses=self.storage.transaction_responses())
+                raise api_errors.InternalError(
+                    message="Some operations failed",
+                    responses=self.storage.transaction_responses()
+                )
             else:
                 self.storage.commit_transaction()
                 return ModelResponse("ok", Message.SUCCESS)
@@ -487,7 +490,10 @@ class Client:
             return ModelResponse("ok", Message.EMPTY, "Nothing to update")
         # if "admins" in updates:
         #     raise api_errors.InvalidRequestError(
-        #         message="Admins may not be updated directly (use add/remove admin endpoints instead)",
+        #         message=(
+        #             "Admins may not be updated directly "
+        #             "(use add/remove admin endpoints instead)"
+        #         ),
         #         invalid_fields=["admins"]
         #     )
         validate_keys(updates, ClientResource.__required_keys__, required=False)
@@ -549,7 +555,7 @@ class Client:
 #         Args:
 #             client_id: The ID of the client.
 #             name: The name of the API key.
-        
+
 #         Returns:
 #             A ModelResponse indicating the result of the operation.
 #         """
@@ -601,4 +607,3 @@ class Client:
 #             case Response(status="ok", message=Message.DELETED):
 #                 return ModelResponse(*resp)
 #         raise ValueError(f"Unexpected response: {resp}")
-

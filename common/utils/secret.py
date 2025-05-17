@@ -4,10 +4,11 @@ Utility functions for generating and hashing secrets.
 """
 
 import base64
-import bcrypt
-import secrets
 import hashlib
 import hmac
+import secrets
+
+import bcrypt
 
 
 def generate_otp(length: int = 6) -> str:
@@ -87,4 +88,3 @@ def generate_api_key(length: int = 32) -> str:
         A string containing the generated API key.
     """
     return secrets.token_urlsafe(length)
-
