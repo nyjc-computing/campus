@@ -12,19 +12,19 @@ from flask import Request, request as flask_request
 from common.validation import record
 
 # Only expecting strings or dicts
-JsonSerializable = str | dict[str, Any]
+JsonObject = dict[str, Any]
 StatusCode = int
 # Actually, view functions may return a variety of return values which Flask is
 # able to handle
 # But Campus API sticks to JSON-serializable return values, with a status code
-FlaskResponse = tuple[JsonSerializable, StatusCode]
+FlaskResponse = tuple[dict[str, Any], StatusCode]
 ErrorHandler = Callable[[StatusCode], None]
 
 
 class ViewFunction(Protocol):
     """Define a ViewFunction as a function that takes arbitrary arguments and
     returns what a Flask view function would return (for now, just a tuple
-    [JsonSerializable, StatusCode]
+    [JsonObject, StatusCode]
     """
 
     def __call__(self, *args: str, **kwargs) -> FlaskResponse:
@@ -47,7 +47,7 @@ class ValidatedViewFunction(Protocol):
         ...
 
 
-def unpack_json(request: Request, on_error: ErrorHandler) -> JsonSerializable:
+def unpack_json(request: Request, on_error: ErrorHandler) -> JsonObject:
     """Unpacks JSON body from the request.
     Calls the given error handler if unable to do so.
     """
@@ -83,7 +83,6 @@ def validate_schema(
         # TODO: provide helpful validation hints
         payload = unpack_json(flask_request, on_error)
         # Validate request body
-        assert isinstance(payload, dict), "Request body must be a JSON object"
         if request is not None:
             try:
                 record.validate_keys(
