@@ -421,7 +421,7 @@ class Client:
     def new(self, **fields: Unpack[ClientNew]) -> ModelResponse:
         """Create a new client."""
         # Use Client model to validate keyword arguments
-        validate_keys(fields, ClientNew.__required_keys__)
+        validate_keys(fields, ClientNew.__annotations__, required=True)
         client_id = uid.generate_category_uid("client", length=6)
         record = ClientResource(
             id=client_id,
@@ -484,7 +484,7 @@ class Client:
                 return ModelResponse("ok", Message.SUCCESS, client_secret)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def update(self, client_id: str, updates: dict) -> ModelResponse:
+    def update(self, client_id: str, **updates: Unpack[ClientNew]) -> ModelResponse:
         """Update an existing client record."""
         # Validate arguments first to avoid unnecessary database operations
         if not updates:
@@ -497,7 +497,7 @@ class Client:
         #         ),
         #         invalid_fields=["admins"]
         #     )
-        validate_keys(updates, ClientResource.__required_keys__, required=False)
+        validate_keys(updates, ClientResource.__annotations__, required=False)
 
         resp = self.storage.update_by_id("clients", client_id, updates)
         match resp:
