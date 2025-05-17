@@ -65,7 +65,7 @@ def unpack_json(request: Request, on_error: ErrorHandler) -> JsonObject:
         return payload
     raise AssertionError("Unreachable code")  # pragma: no cover
 
-def validate_schema(
+def validate_and_unpack(
         *,
         request: Mapping[str, Type] | None = None,
         response: Mapping[str, Type] | None = None,
@@ -73,6 +73,11 @@ def validate_schema(
 ) -> Callable[[ViewFunction], ValidatedViewFunction]:
     """Returns a decorator that takes a view-function and returns a
     validated-view-function.
+
+    The validated-view-function only takes positional arguments, passing them
+    to the wrapped view-function.
+    The validated-view-function will unpack the request JSON body and pass it
+    to the wrapped view-function as keyword arguments.
     """
 
     def vfdecorator(vf: ViewFunction) -> ValidatedViewFunction:
