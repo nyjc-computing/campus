@@ -321,6 +321,11 @@ class ClientResource(ClientNew, BaseRecord, total=True):
     # admins: list[Email]
 
 
+class ClientReplaceResponse(TypedDict, total=True):
+    """Response body schema for a clients.replace operation."""
+    secret: str
+
+
 class Client:
     """Model for database operations related to client applications."""
     # Nested attribute follows Campus API schema
@@ -481,7 +486,9 @@ class Client:
                      client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.SUCCESS, client_secret)
+                return ModelResponse("ok", Message.SUCCESS, {
+                    "secret", client_secret
+                })
         raise ValueError(f"Unexpected response: {resp}")
 
     def update(self, client_id: str, **updates: Unpack[ClientNew]) -> ModelResponse:
