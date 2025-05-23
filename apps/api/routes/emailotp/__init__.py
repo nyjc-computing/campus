@@ -2,11 +2,16 @@
 
 API routes for the emailotp resource.
 """
-from flask import Blueprint, request
+
+from typing import Unpack
+
+from flask import Blueprint, Flask
 
 from apps.api.models import otp
+from apps.common.errors import api_errors
 from common.auth import authenticate_client
 from common.services.email import create_email_sender
+from common.validation.flask import FlaskResponse, unpack_request, validate
 
 from . import template
 
@@ -20,21 +25,22 @@ emailotp = otp.OTPAuth()
 EMAIL_PROVIDER = "smtp"
 
 
-def init_app(app) -> None:
+def init_app(app: Flask) -> None:
     """Initialise emailotp routes with the given Flask app/blueprint."""
     otp.init_db()
     app.register_blueprint(bp)
 
 
 @bp.post('/request')
-def request_otp():
+@unpack_request
+@validate(
+    request=otp.OTPRequest.__annotations__,
+    response={"message": str},
+    on_error=api_errors.raise_api_error
+)
+def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
     """Request a new OTP for email authentication."""
-    if not request.is_json:
-        return {"error": "Request must be JSON"}, 400
-    payload = request.get_json()
-    if 'email' not in payload:
-        return {"error": "Missing email"}, 400
-    email = payload['email']
+    email = data['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
     resp = emailotp.request(email)
@@ -51,16 +57,15 @@ def request_otp():
     return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
-def verify_otp():
+@unpack_request
+@validate(
+    request=otp.OTPVerify.__annotations__,
+    response={"message": str},
+    on_error=api_errors.raise_api_error
+)
+def verify_otp(*_, **data: Unpack[otp.OTPVerify]) -> FlaskResponse:
     """Verify an OTP for email authentication."""
-    if not request.is_json:
-        return {"error": "Request must be JSON"}, 400
-    payload = request.get_json()
-    if 'email' not in payload or 'otp' not in payload:
-        return {"error": "Missing email or otp"}, 400
-    email = payload['email']
-    otp_code = payload['otp']
     # TODO: Validate email format
     # TODO: Validate OTP format
-    resp = emailotp.verify(email, otp_code)
+    resp = emailotp.verify(**data)
     return {"message": "OTP verified"}, 200
