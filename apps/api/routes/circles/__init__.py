@@ -5,7 +5,7 @@ API routes for the circles resource.
 
 from typing import Unpack
 
-from flask import Blueprint, Flask
+from flask import Blueprint, Flask, jsonify
 
 from apps.api.models import circle, user
 from apps.common.errors import api_errors
@@ -72,3 +72,34 @@ def edit_circle(circle_id: str, *_, **data: Unpack[circle.CircleUpdate]) -> Flas
     # TODO: authenticate
     resp = circles.update(circle_id, **data)  # raises APIError
     return resp.data, 200
+
+@bp.post('/<string:circle_id>/move')
+def move_circle(circle_id: str):
+    """Move a circle to a new parent."""
+    return jsonify({"message": "Not implemented"}), 501
+
+@bp.get('/<string:circle_id>/members')
+def get_circle_members(circle_id: str):
+    """Get members of a circle."""
+    return jsonify({"message": "Not implemented"}), 501
+
+@bp.post('/<string:circle_id>/members/add')
+def add_circle_member(circle_id: str):
+    """Add a member to a circle."""
+    return jsonify({"message": "Not implemented"}), 501
+
+@bp.delete('/<string:circle_id>/members/remove')
+def remove_circle_member(circle_id: str):
+    """Remove a member from a circle."""
+    return jsonify({"message": "Not implemented"}), 501
+
+# TODO: Redesign for clearer access update: circles can have multiple parentage paths
+@bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
+def patch_circle_member(circle_id: str, member_circle_id: str):
+    """Update a member's access in a circle."""
+    return jsonify({"message": "Not implemented"}), 501
+
+@bp.get('/<string:circle_id>/users')
+def get_circle_users(circle_id: str):
+    """Get users in a circle."""
+    return jsonify({"message": "Not implemented"}), 501
