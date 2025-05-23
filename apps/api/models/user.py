@@ -95,6 +95,11 @@ class User:
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    message="User not found",
+                    user_id=user_id
+                )
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")

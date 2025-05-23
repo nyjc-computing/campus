@@ -161,8 +161,8 @@ class Client:
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.CREATED, data=data):
-                return ModelResponse("ok", Message.CREATED, data)
+            case Response(status="ok", message=Message.SUCCESS, data=result):
+                return ModelResponse("ok", Message.CREATED, result)
         raise ValueError(f"Unexpected response: {resp}")
 
     def replace(self, client_id: str) -> ModelResponse:
