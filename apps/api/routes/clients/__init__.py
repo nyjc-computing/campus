@@ -5,7 +5,7 @@ API routes for the clients resource.
 
 from typing import Unpack
 
-from flask import Blueprint, request
+from flask import Blueprint, Flask
 
 from apps.api.models import client, user
 from common.auth import authenticate_client
@@ -27,11 +27,10 @@ clients = client.Client()
 users = user.User()
 
 
-def init_app(app) -> None:
+def init_app(app: Flask) -> None:
     """Initialise client routes with the given Flask app/blueprint."""
     client.init_db()
     app.register_blueprint(bp)
-    return app
 
 
 @bp.post('/')

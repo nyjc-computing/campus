@@ -5,7 +5,7 @@ API routes for the emailotp resource.
 
 from typing import Unpack
 
-from flask import Blueprint
+from flask import Blueprint, Flask
 
 from apps.api.models import otp
 from common.auth import authenticate_client
@@ -24,8 +24,7 @@ emailotp = otp.OTPAuth()
 EMAIL_PROVIDER = "smtp"
 
 
-def init_app(app) -> None:
-    """Initialise emailotp routes with the given Flask app/blueprint."""
+def init_app(app: Flask) -> None:
     """Initialise emailotp routes with the given Flask app/blueprint."""
     otp.init_db()
     app.register_blueprint(bp)

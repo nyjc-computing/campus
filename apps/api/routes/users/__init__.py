@@ -5,7 +5,7 @@ API routes for the users resource.
 
 from typing import Unpack
 
-from flask import Blueprint, request
+from flask import Blueprint, Flask
 
 from apps.api.models import user
 from apps.common.errors import api_errors
@@ -20,13 +20,11 @@ bp.before_request(authenticate_client)
 users = user.User()
 
 
-def init_app(app) -> None:
-    """Initialise users routes with the given Flask app/blueprint."""
+def init_app(app: Flask) -> None:
     """Initialise users routes with the given Flask app/blueprint."""
     user.init_db()
     app.register_blueprint(bp)
     app.add_url_rule('/me', 'get_authenticated_user', get_authenticated_user)
-    return app
 
 
 # This view function is not registered with the blueprint
