@@ -6,6 +6,8 @@ from common.validation import record as record_validation
 class TestSchemaValidation(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
+        self.app.testing = True
+        self.app.config['PROPAGATE_EXCEPTIONS'] = True
         self.client = self.app.test_client()
 
     def test_validate_decorator_valid_request_and_response(self):
@@ -13,9 +15,16 @@ class TestSchemaValidation(unittest.TestCase):
         schema = {'foo': str, 'bar': int}
         response_schema = {'result': str}
 
+        def error_handler(status, **body):
+            raise Exception(f"Should not be called: {status}")
+
         @self.app.route('/test', methods=['POST'])
         @flask_validation.unpack_request
-        @flask_validation.validate(request=schema, response=response_schema)
+        @flask_validation.validate(
+            request=schema,
+            response=response_schema,
+            on_error=error_handler
+        )
         def test_view(*args: str, **payload):
             return {'result': f"{payload['foo']}-{payload['bar']}"}, 200
 
@@ -25,11 +34,13 @@ class TestSchemaValidation(unittest.TestCase):
             self.assertEqual(resp.get_json(), {'result': 'baz-1'})
 
     def test_validate_decorator_invalid_request(self):
-        """Test that the validate decorator calls on_error for invalid request schema."""
+        """Test that the validate decorator calls on_error for invalid request schema and that it must raise."""
         schema = {'foo': str, 'bar': int}
         called = {}
-        def on_error(status):
+        class CustomError(Exception): pass
+        def on_error(status, **body):
             called['status'] = status
+            raise CustomError("error handler called")
 
         @self.app.route('/test_invalid', methods=['POST'])
         @flask_validation.unpack_request
@@ -38,27 +49,33 @@ class TestSchemaValidation(unittest.TestCase):
             return {'result': f"{payload['foo']}-{payload['bar']}"}, 200
 
         with self.app.test_client() as c:
-            _ = c.post('/test_invalid', json={'foo': 'baz'})  # missing 'bar'
-            # The decorator should call on_error(400) and not call the view
+            with self.assertRaises(CustomError):
+                c.post('/test_invalid', json={'foo': 'baz'})  # missing 'bar'
             self.assertEqual(called.get('status'), 400)
 
     def test_validate_decorator_invalid_response(self):
-        """Test that the validate decorator calls on_error for invalid response schema."""
+        """Test that the validate decorator calls on_error for invalid response schema and that it must raise."""
         schema = {'foo': str}
         response_schema = {'result': int}
         called = {}
-        def on_error(status):
+        class CustomError(Exception): pass
+        def on_error(status, **body):
             called['status'] = status
+            raise CustomError("error handler called")
 
         @self.app.route('/test_invalid_resp', methods=['POST'])
         @flask_validation.unpack_request
-        @flask_validation.validate(request=schema, response=response_schema, on_error=on_error)
+        @flask_validation.validate(
+            request=schema,
+            response=response_schema,
+            on_error=on_error
+        )
         def test_view_invalid_resp(*_: str, **__):
             return {'result': 'not-an-int'}, 200
 
         with self.app.test_client() as c:
-            resp = c.post('/test_invalid_resp', json={'foo': 'baz'})
-            # The decorator should call on_error(500) due to response schema mismatch
+            with self.assertRaises(CustomError):
+                c.post('/test_invalid_resp', json={'foo': 'baz'})
             self.assertEqual(called.get('status'), 500)
 
     def test_record_validate_keys_valid(self):
