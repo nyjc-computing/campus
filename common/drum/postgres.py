@@ -199,14 +199,15 @@ class PostgresDrum(DrumInterface):
                 f"INSERT INTO {group} ({keys}) VALUES ({placeholders})"
                 " RETURNING *"
             ),
-            tuple(record.values())
+            tuple(record.values()),
+            callback=lambda cursor: cursor.fetchone()
         )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
                 return DrumResponse("error", Message.FAILED, err)
             case Response(status="ok", data=result):
                 # No need to check for rowcount, which is 0
-                return DrumResponse("ok", Message.SUCCESS)
+                return DrumResponse("ok", Message.SUCCESS, result["result"])
         raise ValueError(f"Unexpected case: {resp}")
 
     def delete_by_id(self, group: str, id: str) -> DrumResponse:

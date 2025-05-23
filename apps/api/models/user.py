@@ -19,6 +19,8 @@ if devops.ENV in (devops.STAGING, devops.PRODUCTION):
 else:
     from common.drum.sqlite import get_conn, get_drum
 
+TABLE = "users"
+
 
 def init_db():
     """Initialize the tables needed by the model.
@@ -87,13 +89,18 @@ class User:
         """Actions to perform upon first sign-in."""
         user_id = uid.generate_user_uid(email)
         resp = self.storage.update_by_id(
-            'users',
+            TABLE,
             user_id,
             {'activated_at': utc_time.now()}
         )
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    message="User not found",
+                    user_id=user_id
+                )
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")
@@ -108,7 +115,7 @@ class User:
             **fields,
             # do not activate user on creation
         )
-        resp = self.storage.insert('users', record)
+        resp = self.storage.insert(TABLE, record)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -118,7 +125,7 @@ class User:
     
     def delete(self, user_id: str) -> ModelResponse:
         """Delete a user by id."""
-        resp = self.storage.delete_by_id('users', user_id)
+        resp = self.storage.delete_by_id(TABLE, user_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -133,7 +140,7 @@ class User:
 
     def get(self, user_id: str) -> ModelResponse:
         """Get a user by id."""
-        resp = self.storage.get_by_id('users', user_id)
+        resp = self.storage.get_by_id(TABLE, user_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -148,7 +155,7 @@ class User:
 
     def update(self, user_id: str, **updates: Unpack[UserUpdate]) -> ModelResponse:
         """Update a user by id."""
-        resp = self.storage.update_by_id('users', user_id, updates)
+        resp = self.storage.update_by_id(TABLE, user_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)

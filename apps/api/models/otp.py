@@ -24,6 +24,8 @@ if devops.ENV in (devops.STAGING, devops.PRODUCTION):
 else:
     from common.drum.sqlite import get_conn, get_drum
 
+TABLE = "emailotp"
+
 
 def init_db():
     """Initialize the tables needed by the model.
@@ -173,7 +175,7 @@ class OTPAuth:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
         # Insert new OTP
-        otp_id = uid.generate_category_uid("emailotp", length=16)
+        otp_id = uid.generate_category_uid(TABLE, length=16)
         otp_code = OTPRecord(
             id=otp_id,
             email=email,
