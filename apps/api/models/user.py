@@ -18,6 +18,8 @@ if devops.ENV in (devops.STAGING, devops.PRODUCTION):
 else:
     from common.drum.sqlite import get_conn, get_drum
 
+TABLE = "users"
+
 
 def init_db():
     """Initialize the tables needed by the model.
@@ -87,7 +89,7 @@ class User:
         user_id, _ = email.split('@')
         user_id = "uid-user-" + user_id
         resp = self.storage.update_by_id(
-            'users',
+            TABLE,
             user_id,
             {'activated_at': utc_time.now()}
         )
@@ -108,7 +110,7 @@ class User:
             **fields,
             # do not activate user on creation
         )
-        resp = self.storage.insert('users', record)
+        resp = self.storage.insert(TABLE, record)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -118,7 +120,7 @@ class User:
     
     def delete(self, user_id: str) -> ModelResponse:
         """Delete a user by id."""
-        resp = self.storage.delete_by_id('users', user_id)
+        resp = self.storage.delete_by_id(TABLE, user_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -133,7 +135,7 @@ class User:
 
     def get(self, user_id: str) -> ModelResponse:
         """Get a user by id."""
-        resp = self.storage.get_by_id('users', user_id)
+        resp = self.storage.get_by_id(TABLE, user_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -148,7 +150,7 @@ class User:
 
     def update(self, user_id: str, **updates: Unpack[UserUpdate]) -> ModelResponse:
         """Update a user by id."""
-        resp = self.storage.update_by_id('users', user_id, updates)
+        resp = self.storage.update_by_id(TABLE, user_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)

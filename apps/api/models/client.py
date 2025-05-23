@@ -24,6 +24,8 @@ APIName = str
 APIKey = str
 Email = str
 
+TABLE = "clients"
+
 
 def init_db() -> None:
     """Initialize the tables needed by the model.
@@ -354,7 +356,7 @@ class Client:
             #     {"client_id": client_id}
             # )
             # Then remove the client
-            self.storage.delete_by_id("clients", client_id)
+            self.storage.delete_by_id(TABLE, client_id)
             # Check for failed operations
             responses = self.storage.transaction_responses()
             if any(resp.status == "error" for resp in responses):
@@ -370,7 +372,7 @@ class Client:
 
     def list(self) -> ModelResponse:
         """List all client applications."""
-        resp = self.storage.get_all("clients")
+        resp = self.storage.get_all(TABLE)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -382,7 +384,7 @@ class Client:
 
     def get(self, client_id: str) -> ModelResponse:
         """Retrieve a client application by its ID, including its admins."""
-        resp = self.storage.get_by_id("clients", client_id)
+        resp = self.storage.get_by_id(TABLE, client_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -437,7 +439,7 @@ class Client:
         # are committed together, or none are.
         with self.storage.use_transaction():
             # admins are inserted in junction table and not in clients table
-            self.storage.insert("clients", record)
+            self.storage.insert(TABLE, record)
             # for admin in record["admins"]:
             #     self.storage.insert(
             #         "client_admins",
@@ -465,7 +467,7 @@ class Client:
         """Revoke a client secret by its ID, and issue a new secret."""
         client_secret = secret.generate_client_secret()
         resp = self.storage.update_by_id(
-            "clients",
+            TABLE,
             client_id,
             {"secret_hash": secret.hash_client_secret(
                 client_secret,
@@ -499,7 +501,7 @@ class Client:
         #     )
         validate_keys(updates, ClientResource.__annotations__, required=False)
 
-        resp = self.storage.update_by_id("clients", client_id, updates)
+        resp = self.storage.update_by_id(TABLE, client_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -514,7 +516,7 @@ class Client:
 
     def validate_credentials(self, client_id: str, client_secret: str) -> bool:
         """Validate client_id and client_secret."""
-        resp = self.storage.get_by_id("clients", client_id)
+        resp = self.storage.get_by_id(TABLE, client_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
