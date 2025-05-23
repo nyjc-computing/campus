@@ -11,8 +11,7 @@ from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
 from common.schema import Message, Response
-from common.utils import utc_time
-from common.validation.record import validate_keys
+from common.utils import uid, utc_time
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
     from common.drum.postgres import get_conn, get_drum
 else:
@@ -86,7 +85,7 @@ class User:
 
     def activate(self, email: str) -> ModelResponse:
         """Actions to perform upon first sign-in."""
-        user_id, _ = email.split('@')
+        user_id = uid.generate_user_uid(email)
         resp = self.storage.update_by_id(
             TABLE,
             user_id,
@@ -106,7 +105,7 @@ class User:
     
     def new(self, **fields: Unpack[UserNew]) -> ModelResponse:
         """Create a new user."""
-        validate_keys(fields, UserNew.__annotations__, required=True)
+        user_id = uid.generate_user_uid(fields["email"])
         user_id, _ = fields["email"].split('@')
         record = UserResource(
             id=user_id,

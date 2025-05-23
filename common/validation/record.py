@@ -1,3 +1,7 @@
+"""common/validation/record
+
+This module contains utility functions for validating records (dictionaries).
+"""
 from collections.abc import Collection, Mapping
 from typing import Any
 

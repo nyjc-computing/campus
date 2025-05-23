@@ -13,7 +13,6 @@ from common import devops
 from common.drum import DrumResponse
 from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
-from common.validation.record import validate_keys
 
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
     from common.drum.postgres import get_conn, get_drum
@@ -94,6 +93,11 @@ class ClientResource(ClientNew, BaseRecord, total=True):
     # admins: list[Email]
 
 
+class ClientReplaceResponse(TypedDict, total=True):
+    """Response body schema for a clients.replace operation."""
+    secret: str
+
+
 class Client:
     """Model for database operations related to client applications."""
     # Nested attribute follows Campus API schema
@@ -150,7 +154,6 @@ class Client:
     def new(self, **fields: Unpack[ClientNew]) -> ModelResponse:
         """Create a new client."""
         # Use Client model to validate keyword arguments
-        validate_keys(fields, ClientNew.__annotations__, required=True)
         client_id = uid.generate_category_uid("client", length=8)
         record = ClientResource(
             id=client_id,
@@ -185,16 +188,16 @@ class Client:
                      client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.SUCCESS, client_secret)
+                return ModelResponse("ok", Message.SUCCESS, {
+                    "secret": client_secret
+                })
         raise ValueError(f"Unexpected response: {resp}")
 
     def update(self, client_id: str, **updates: Unpack[ClientNew]) -> ModelResponse:
         """Update an existing client record."""
         if not updates:
             return ModelResponse("ok", Message.EMPTY, "Nothing to update")
-        # Validate arguments first to avoid unnecessary database operations
-        validate_keys(updates, ClientResource.__annotations__, required=False)
-
+        
         resp = self.storage.update_by_id(TABLE, client_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):

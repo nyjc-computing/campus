@@ -3,7 +3,49 @@
 API error definitions for Palmtree.
 These errors represent all possible API errors that would be raised.
 """
+
+from typing import NoReturn
+
 from .base import APIError, ErrorConstant
+
+
+def raise_api_error(status: int, **body) -> NoReturn:
+    """Raise an API error with the given status code."""
+    match status:
+        case 400:
+            raise InvalidRequestError(
+                message="Bad request",
+                status=status,
+                **body
+            )
+        case 401:
+            raise UnauthorizedError(
+                message="Unauthorized",
+                status=status,
+                **body
+           )
+        case 409:
+            raise ConflictError(
+                message="Conflict",
+                status=status,
+                **body
+            )
+        case 415:
+            raise UnsupportedMediaTypeError(
+                message="Unsupported Media Type",
+                status=status,
+                **body
+            )
+        case 500:
+            raise InternalError(
+                message="Internal server error",
+                status=status,
+                **body
+            )
+        case _:
+            raise ValueError(
+                f"Unexpected status code: {status}"
+            )
 
 
 class InternalError(APIError):
@@ -71,6 +113,23 @@ class ConflictError(APIError):
             self,
             message: str = "Conflict",
             error_code: str = ErrorConstant.CONFLICT,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
+class UnsupportedMediaTypeError(APIError):
+    """Unsupported Media Type error.
+
+    Error indicates that the request's Content-Type is not supported by the server.
+    Specifically, the server expects 'application/json'.
+    """
+    status_code: int = 415
+
+    def __init__(
+            self,
+            message: str = "Unsupported Media Type: Content-Type must be 'application/json'",
+            error_code: str = ErrorConstant.INVALID_REQUEST,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)
