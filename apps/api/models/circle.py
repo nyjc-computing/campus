@@ -4,13 +4,13 @@ Circle Models
 This module provides classes for managing Campus circles.
 """
 
-from typing import TypedDict, Unpack
+from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
-from common.drum import PK
 from common.drum.mongodb import get_drum
-from common.schema import Message, Response
+from common.schema import CampusID, UserID, Message, Response
+from common.utils import uid, utc_time
 
 TABLE = "circles"
 
@@ -28,16 +28,23 @@ def init_db():
 class CircleNew(TypedDict, total=True):
     """Request body schema for a circles.new operation."""
     name: str
+    description: NotRequired[str]
     tag: str
+    parents: list[]
 
 
 class CircleUpdate(TypedDict, total=False):
     """Request body schema for a circles.update operation."""
     name: str
+    description: str
     # tag cannot be updated once created
 
 
-class CircleResource(CircleNew, BaseRecord, TypedDict, total=True):
+class CircleRecord(CircleNew, BaseRecord, TypedDict, total=True):
+    """The circle record stored in the circle collection."""
+
+
+class CircleResource(CircleRecord, TypedDict, total=True):
     """Response body schema representing the result of a circles.get operation."""
 
 
@@ -49,11 +56,17 @@ class Circle:
         self.storage = get_drum()
 
     def new(self, **fields: Unpack[CircleNew]) -> ModelResponse:
-        """Create a new circle."""
-        resp = self.storage.insert(
-            TABLE,
-            fields,
+        """This creates a new circle and adds it to the circle collection.
+
+        It does not add it to the circle hierarchy or access control.
+        """
+        circle_id = uid.generate_category_uid("circle", length=8)
+        record = CircleResource(
+            id=circle_id,
+            created_at=utc_time.now(),
+            **fields,
         )
+        resp = self.storage.insert(TABLE, record)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -62,7 +75,11 @@ class Circle:
         raise ValueError(f"Unexpected response from storage: {resp}")
 
     def delete(self, circle_id: str) -> ModelResponse:
-        """Delete a circle by id."""
+        """Delete a circle by id.
+        
+        This action is destructive and cannot be undone.
+        It should only be done by an admin/owner.
+        """
         resp = self.storage.delete_by_id(TABLE, circle_id)
         match resp:
             case Response(status="error", message=message, data=error):
@@ -77,7 +94,7 @@ class Circle:
         raise ValueError(f"Unexpected response from storage: {resp}")
 
     def get(self, circle_id: str) -> ModelResponse:
-        """Get a circle by id."""
+        """Get a circle by id from the circle collection."""
         resp = self.storage.get_by_id(TABLE, circle_id)
         match resp:
             case Response(status="error", message=message, data=error):
