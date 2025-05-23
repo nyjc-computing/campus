@@ -8,6 +8,7 @@ from typing import Unpack
 from flask import Blueprint, Flask
 
 from apps.api.models import client, user
+from apps.common.errors import api_errors
 from common.auth import authenticate_client
 from common.validation.flask import FlaskResponse, unpack_request, validate
 
@@ -37,7 +38,8 @@ def init_app(app: Flask) -> None:
 @unpack_request
 @validate(
     request=client.ClientNew.__annotations__,
-    response=client.ClientResource.__annotations__
+    response=client.ClientResource.__annotations__,
+    on_error=api_errors.raise_api_error
 )
 def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:  # *_ appease linter
     """Create a new client id and secret."""
@@ -48,7 +50,10 @@ def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:  # *
     return resp.data, 201
 
 @bp.delete('/<string:client_id>')
-@validate(response={"message": str})
+@validate(
+    response={"message": str},
+    on_error=api_errors.raise_api_error
+)
 def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Delete a client id and secret."""
     if not DELETE:
@@ -57,7 +62,10 @@ def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease lint
     return {"message": "Client deleted"}, 200
 
 @bp.get('/<string:client_id>')
-@validate(response=client.ClientResource.__annotations__)
+@validate(
+    response=client.ClientResource.__annotations__,
+    on_error=api_errors.raise_api_error
+)
 def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Get details of a client."""
     if not GET:
@@ -70,7 +78,8 @@ def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease
 @unpack_request
 @validate(
     request=client.ClientUpdate.__annotations__,
-    response=client.ClientResource.__annotations__
+    response=client.ClientResource.__annotations__,
+    on_error=api_errors.raise_api_error
 )
 def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> FlaskResponse:  # *_ appease linter
     """Edit name, description, or admins of client."""
@@ -81,7 +90,10 @@ def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> Flas
     return resp.data, 200
 
 @bp.post('/<string:client_id>/replace')
-@validate(response=client.ClientReplaceResponse.__annotations__)
+@validate(
+    response=client.ClientReplaceResponse.__annotations__,
+    on_error=api_errors.raise_api_error
+)
 def revoke_client(client_id: str, *_, **__) -> FlaskResponse:
     """Revoke a client id and secret, and reissue them."""
     if not POST:

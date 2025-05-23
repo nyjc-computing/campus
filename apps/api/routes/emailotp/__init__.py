@@ -8,6 +8,7 @@ from typing import Unpack
 from flask import Blueprint, Flask
 
 from apps.api.models import otp
+from apps.common.errors import api_errors
 from common.auth import authenticate_client
 from common.services.email import create_email_sender
 from common.validation.flask import FlaskResponse, unpack_request, validate
@@ -34,7 +35,8 @@ def init_app(app: Flask) -> None:
 @unpack_request
 @validate(
     request=otp.OTPRequest.__annotations__,
-    response={"message": str}
+    response={"message": str},
+    on_error=api_errors.raise_api_error
 )
 def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
     """Request a new OTP for email authentication."""
@@ -58,7 +60,8 @@ def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
 @unpack_request
 @validate(
     request=otp.OTPVerify.__annotations__,
-    response={"message": str}
+    response={"message": str},
+    on_error=api_errors.raise_api_error
 )
 def verify_otp(*_, **data: Unpack[otp.OTPVerify]) -> FlaskResponse:
     """Verify an OTP for email authentication."""

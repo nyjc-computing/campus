@@ -39,7 +39,8 @@ def get_authenticated_user():
 @unpack_request
 @validate(
     request=user.UserNew.__annotations__,
-    response=user.UserResource.__annotations__
+    response=user.UserResource.__annotations__,
+    on_error=api_errors.raise_api_error
 )
 def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
     """Create a new user."""
@@ -51,7 +52,10 @@ def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
 
 
 @bp.delete('/<string:user_id>')
-@validate(response={"message": str})
+@validate(
+    response={"message": str},
+    on_error=api_errors.raise_api_error
+)
 def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Delete a user."""
     resp = users.delete(user_id)
@@ -61,7 +65,10 @@ def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
         return {"error": resp.message}, 400
 
 @bp.get('/<string:user_id>')
-@validate(response=user.UserResource.__annotations__)
+@validate(
+    response=user.UserResource.__annotations__,
+    on_error=api_errors.raise_api_error
+)
 def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Get a single user's summary."""
     summary = {}
@@ -74,7 +81,8 @@ def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
 @unpack_request
 @validate(
     request=user.UserUpdate.__annotations__,
-    response=user.UserResource.__annotations__
+    response=user.UserResource.__annotations__,
+    on_error=api_errors.raise_api_error
 )
 def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> FlaskResponse:  # *_ appease linter
     """Update a single user's profile."""
@@ -83,7 +91,8 @@ def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> Fla
 
 @bp.get('/<string:user_id>/profile')
 @validate(
-    response=user.UserResource.__annotations__
+    response=user.UserResource.__annotations__,
+    on_error=api_errors.raise_api_error
 )
 # TODO: require client auth or token auth
 def get_user_profile(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
@@ -94,8 +103,6 @@ def get_user_profile(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease lin
             raise api_errors.ConflictError(
                 message="User not found"
             )
-        case Response(status="ok", message=Message.FOUND, data=record):
-            return record, 200
         case Response(status="ok", message=Message.FOUND, data=record):
             return record, 200
     raise ValueError(f"Unexpected response: {resp}")
