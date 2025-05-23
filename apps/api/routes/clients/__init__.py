@@ -28,7 +28,7 @@ clients = client.Client()
 users = user.User()
 
 
-def init_app(app: Flask) -> None:
+def init_app(app: Flask | Blueprint) -> None:
     """Initialise client routes with the given Flask app/blueprint."""
     client.init_db()
     app.register_blueprint(bp)

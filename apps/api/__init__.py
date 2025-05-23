@@ -35,7 +35,7 @@ def create_app() -> Flask:
     errors.init_app(app)
     return app
 
-def init_app(app: Flask) -> None:
+def init_app(app: Flask | Blueprint) -> None:
     """Initialise the Palmtree API blueprint with the given Flask app."""
     # Organise API routes under api blueprint
     bp = Blueprint('v1', __name__, url_prefix='/v1')
