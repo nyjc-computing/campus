@@ -37,6 +37,7 @@ def get_drum() -> 'PostgresDrum':
 
 
 class CursorResult(TypedDict):
+    """dict representing common cursor attributes."""
     lastrowid: int | None
     rowcount: int
     result: list[Record] | Record | None
@@ -50,8 +51,13 @@ class PostgresDrum(DrumInterface):
 
     @contextmanager
     def use_transaction(self) -> Generator[psycopg2.extensions.connection, None, None]:
+        """Context manager to use a transaction.
+
+        This will automatically commit or rollback the transaction
+        depending on the status of the responses.
+        """
         self.begin_transaction()
-        assert self.transaction is not None
+        assert self.transaction is not None, "Transaction not started"
         try:
             yield self.transaction
         finally:
@@ -116,7 +122,8 @@ class PostgresDrum(DrumInterface):
                 If None, the cursor is returned.
 
             If a transaction is in progress, responses are collected, and
-            commit is not automatically called. Otherwise, commit is automatically called after the operation.
+            commit is not automatically called. Otherwise, commit is
+            automatically called after the operation.
 
         Returns:
             A DrumResponse object with the status, message, and data.
@@ -206,7 +213,7 @@ class PostgresDrum(DrumInterface):
                 return DrumResponse("error", Message.FAILED, err)
             case Response(status="ok", data=result):
                 # No need to check for rowcount, which is 0
-                return DrumResponse("ok", Message.SUCCESS)
+                return DrumResponse("ok", Message.SUCCESS, result["result"])
         raise ValueError(f"Unexpected case: {resp}")
 
     def delete_by_id(self, group: str, id: str) -> DrumResponse:
