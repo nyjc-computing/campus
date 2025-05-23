@@ -197,9 +197,7 @@ class Client:
         """Update an existing client record."""
         if not updates:
             return ModelResponse("ok", Message.EMPTY, "Nothing to update")
-        # Validate arguments first to avoid unnecessary database operations
-        validate_keys(updates, ClientResource.__annotations__, required=False)
-
+        
         resp = self.storage.update_by_id(TABLE, client_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
