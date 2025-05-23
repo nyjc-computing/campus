@@ -13,10 +13,7 @@ import bcrypt
 
 from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
-from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
-from common.schema import Message, Response
-from common.utils import uid, utc_time
 from common.schema import Message, Response
 from common.utils import uid, utc_time
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
@@ -183,7 +180,6 @@ class OTPAuth:
             created_at=created_at,
             expires_at=expires_at,
         )
-        resp = self.storage.insert('otp_codes', otp_code)
         resp = self.storage.insert('otp_codes', otp_code)
         match resp:
             case Response(status="error", message=message, data=error):
