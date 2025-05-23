@@ -163,3 +163,7 @@ cython_debug/
 .replit
 replit.nix
 *.db
+
+# VS Code
+# Workspace configuration file on local machine
+*.code-workspace
