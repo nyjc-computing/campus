@@ -28,3 +28,18 @@ def generate_category_uid(category: str, *, length: int = 16) -> str:
     """
     return f"uid-{category}-{generate_uid(length)}"
 
+
+def generate_user_uid(email: str) -> str:
+    """Generate a unique identifier for a user based on their email.
+
+    User UIDs are different from other UIDs since they are not arbitrarily
+    generated and benefit from a consistent, recognisable, user-readable format.
+
+    Args:
+        email: The user's email address.
+
+    Returns:
+        A string containing the generated UID.
+    """
+    user_id, _ = email.split('@')
+    return user_id

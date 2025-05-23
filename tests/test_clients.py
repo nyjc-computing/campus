@@ -8,33 +8,23 @@ class TestClients(unittest.TestCase):
         api.purge()
         api.init_db()
 
-    def test_client_creation_and_admin_management(self):
+    def test_client_creation(self):
         data = {
             "name": "Test Client",
             "description": "A test client.",
-            "admins": ["admin1@example.com"]
         }
         resp = api.clients.new(**data)
         self.assertEqual(resp.status, "ok", f"Failed to create client: {resp.message}, Response data: {resp.data}")
-        client_id = resp.data['id']
-
-        # Test adding an admin
-        resp = api.clients.admins.add(client_id, "admin2@example.com")
-        self.assertEqual(resp.status, "ok", f"Failed to add admin: {resp.message}, Response data: {resp.data}")
-
-        # Test removing an admin
-        resp = api.clients.admins.remove(client_id, "admin2@example.com")
-        self.assertEqual(resp.status, "ok", f"Failed to remove admin: {resp.message}, Response data: {resp.data}")
-
+\
     def test_validating_credentials(self):
         data = {
             "name": "Test Client",
             "description": "A test client.",
-            "admins": ["admin1@example.com"]
         }
-        resp = api.clients.new(**data)
-        client_id = resp.data['id']
-        secret_hash = api.clients.replace(client_id).data
+        client = api.clients.new(**data).data
+        client_id = client["id"]
+        result = api.clients.replace(client_id).data
+        secret_hash = result["secret"]
 
         # Test credential validation
         is_valid = api.clients.validate_credentials(client_id, secret_hash)

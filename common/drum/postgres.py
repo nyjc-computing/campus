@@ -206,7 +206,8 @@ class PostgresDrum(DrumInterface):
                 f"INSERT INTO {group} ({keys}) VALUES ({placeholders})"
                 " RETURNING *"
             ),
-            tuple(record.values())
+            tuple(record.values()),
+            callback=lambda cursor: cursor.fetchone()
         )
         match resp:
             case Response(status="error", message=Message.FAILED, data=err):
