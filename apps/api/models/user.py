@@ -87,7 +87,6 @@ class User:
     def activate(self, email: str) -> ModelResponse:
         """Actions to perform upon first sign-in."""
         user_id, _ = email.split('@')
-        user_id = "uid-user-" + user_id
         resp = self.storage.update_by_id(
             TABLE,
             user_id,
