@@ -10,7 +10,7 @@ from flask import Blueprint
 from apps.api.models import otp
 from common.auth import authenticate_client
 from common.services.email import create_email_sender
-from common.validation.flask import FlaskResponse, validate_and_unpack
+from common.validation.flask import FlaskResponse, unpack_request, validate
 
 from . import template
 
@@ -32,7 +32,8 @@ def init_app(app) -> None:
 
 
 @bp.post('/request')
-@validate_and_unpack(
+@unpack_request
+@validate(
     request=otp.OTPRequest.__annotations__,
     response={"message": str}
 )
@@ -55,7 +56,8 @@ def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
     return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
-@validate_and_unpack(
+@unpack_request
+@validate(
     request=otp.OTPVerify.__annotations__,
     response={"message": str}
 )

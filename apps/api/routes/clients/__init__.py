@@ -9,7 +9,7 @@ from flask import Blueprint, request
 
 from apps.api.models import client, user
 from common.auth import authenticate_client
-from common.validation.flask import FlaskResponse, unpack_request, validate_and_unpack
+from common.validation.flask import FlaskResponse, unpack_request, validate
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -36,7 +36,7 @@ def init_app(app) -> None:
 
 @bp.post('/')
 @unpack_request
-@validate_and_unpack(
+@validate(
     request=client.ClientNew.__annotations__,
     response=client.ClientResource.__annotations__
 )
@@ -49,7 +49,7 @@ def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:  # *
     return resp.data, 201
 
 @bp.delete('/<string:client_id>')
-@validate_and_unpack(response={"message": str})
+@validate(response={"message": str})
 def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Delete a client id and secret."""
     if not DELETE:
@@ -58,7 +58,7 @@ def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease lint
     return {"message": "Client deleted"}, 200
 
 @bp.get('/<string:client_id>')
-@validate_and_unpack(response=client.ClientResource.__annotations__)
+@validate(response=client.ClientResource.__annotations__)
 def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Get details of a client."""
     if not GET:
@@ -69,7 +69,7 @@ def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease
 
 @bp.patch('/<string:client_id>')
 @unpack_request
-@validate_and_unpack(
+@validate(
     request=client.ClientUpdate.__annotations__,
     response=client.ClientResource.__annotations__
 )
@@ -82,7 +82,7 @@ def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> Flas
     return resp.data, 200
 
 @bp.post('/<string:client_id>/replace')
-@validate_and_unpack(response=client.ClientReplaceResponse.__annotations__)
+@validate(response=client.ClientReplaceResponse.__annotations__)
 def revoke_client(client_id: str, *_, **__) -> FlaskResponse:
     """Revoke a client id and secret, and reissue them."""
     if not POST:

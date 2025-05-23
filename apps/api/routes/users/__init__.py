@@ -11,7 +11,7 @@ from apps.api.models import user
 from apps.common.errors import api_errors
 from common.auth import authenticate_client
 from common.schema import Message, Response
-from common.validation.flask import FlaskResponse, validate_and_unpack
+from common.validation.flask import FlaskResponse, unpack_request, validate
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
@@ -38,7 +38,8 @@ def get_authenticated_user():
 
 
 @bp.post('/')
-@validate_and_unpack(
+@unpack_request
+@validate(
     request=user.UserNew.__annotations__,
     response=user.UserResource.__annotations__
 )
@@ -52,7 +53,7 @@ def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
 
 
 @bp.delete('/<string:user_id>')
-@validate_and_unpack(response={"message": str})
+@validate(response={"message": str})
 def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Delete a user."""
     resp = users.delete(user_id)
@@ -62,7 +63,7 @@ def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
         return {"error": resp.message}, 400
 
 @bp.get('/<string:user_id>')
-@validate_and_unpack(response=user.UserResource.__annotations__)
+@validate(response=user.UserResource.__annotations__)
 def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     """Get a single user's summary."""
     summary = {}
@@ -72,7 +73,8 @@ def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     return summary, 200
 
 @bp.patch('/<string:user_id>')
-@validate_and_unpack(
+@unpack_request
+@validate(
     request=user.UserUpdate.__annotations__,
     response=user.UserResource.__annotations__
 )
@@ -82,7 +84,7 @@ def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> Fla
     return resp.data, 200
 
 @bp.get('/<string:user_id>/profile')
-@validate_and_unpack(
+@validate(
     response=user.UserResource.__annotations__
 )
 # TODO: require client auth or token auth
