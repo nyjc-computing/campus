@@ -1,5 +1,5 @@
 import unittest
-from flask import Flask, jsonify, request
+from flask import Flask
 from common.validation import flask as flask_validation
 from common.validation import record as record_validation
 
