@@ -24,6 +24,8 @@ FlaskResponse = tuple[dict[str, Any], StatusCode]
 class ErrorHandler(Protocol):
     """Define an ErrorHandler as a function that takes a status code and
     optional keyword arguments.
+
+    Error Handlers must raise an exception.
     """
     def __call__(self, status: StatusCode, **body) -> NoReturn:
         """An error handler returns None"""
@@ -73,6 +75,10 @@ def validate(
     to the wrapped view-function.
     The validated-view-function will unpack the request JSON body and pass it
     to the wrapped view-function as keyword arguments.
+
+    An error handler must be provided, which will be called with the status
+    code and any additional keyword arguments.
+    The error handler must raise an exception.
     """
 
     def vfdecorator(vf: ViewFunction) -> ViewFunction:
