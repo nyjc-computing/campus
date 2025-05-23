@@ -1,5 +1,5 @@
 import unittest
-from flask import Flask, Request, json
+from flask import Flask, jsonify, request
 from common.validation import flask as flask_validation
 from common.validation import record as record_validation
 
@@ -8,62 +8,89 @@ class TestSchemaValidation(unittest.TestCase):
         self.app = Flask(__name__)
         self.client = self.app.test_client()
 
-    def test_unpack_json_valid(self):
-        with self.app.test_request_context(
-            '/', method='POST', json={'foo': 'bar'}
-        ):
-            result = flask_validation.unpack_json(flask_validation.flask_request, lambda s: self.fail(f"Error handler called with status {s}"))
-            self.assertEqual(result, {'foo': 'bar'})
+    def test_validate_decorator_valid_request_and_response(self):
+        """Test that the validate decorator passes valid request and response schemas."""
+        schema = {'foo': str, 'bar': int}
+        response_schema = {'result': str}
 
-    def test_unpack_json_invalid_json(self):
-        with self.app.test_request_context(
-            '/', method='POST', data='notjson', content_type='application/json'
-        ):
-            called = {}
-            def on_error(status):
-                called['status'] = status
-            result = flask_validation.unpack_json(flask_validation.flask_request, on_error)
-            self.assertIsNone(result)
-            self.assertIn('status', called)
-            self.assertEqual(called['status'], 400)
+        @self.app.route('/test', methods=['POST'])
+        @flask_validation.unpack_request
+        @flask_validation.validate(request=schema, response=response_schema)
+        def test_view(*args: str, **payload):
+            return {'result': f"{payload['foo']}-{payload['bar']}"}, 200
 
-    def test_unpack_json_wrong_mimetype(self):
-        with self.app.test_request_context(
-            '/', method='POST', data='{"foo": "bar"}', content_type='text/plain'
-        ):
-            called = {}
-            def on_error(status):
-                called['status'] = status
-            result = flask_validation.unpack_json(flask_validation.flask_request, on_error)
-            self.assertIsNone(result)
-            self.assertIn('status', called)
-            self.assertEqual(called['status'], 415)
+        with self.app.test_client() as c:
+            resp = c.post('/test', json={'foo': 'baz', 'bar': 1})
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.get_json(), {'result': 'baz-1'})
+
+    def test_validate_decorator_invalid_request(self):
+        """Test that the validate decorator calls on_error for invalid request schema."""
+        schema = {'foo': str, 'bar': int}
+        called = {}
+        def on_error(status):
+            called['status'] = status
+
+        @self.app.route('/test_invalid', methods=['POST'])
+        @flask_validation.unpack_request
+        @flask_validation.validate(request=schema, on_error=on_error)
+        def test_view_invalid(*args: str, **payload):
+            return {'result': f"{payload['foo']}-{payload['bar']}"}, 200
+
+        with self.app.test_client() as c:
+            _ = c.post('/test_invalid', json={'foo': 'baz'})  # missing 'bar'
+            # The decorator should call on_error(400) and not call the view
+            self.assertEqual(called.get('status'), 400)
+
+    def test_validate_decorator_invalid_response(self):
+        """Test that the validate decorator calls on_error for invalid response schema."""
+        schema = {'foo': str}
+        response_schema = {'result': int}
+        called = {}
+        def on_error(status):
+            called['status'] = status
+
+        @self.app.route('/test_invalid_resp', methods=['POST'])
+        @flask_validation.unpack_request
+        @flask_validation.validate(request=schema, response=response_schema, on_error=on_error)
+        def test_view_invalid_resp(*_: str, **__):
+            return {'result': 'not-an-int'}, 200
+
+        with self.app.test_client() as c:
+            resp = c.post('/test_invalid_resp', json={'foo': 'baz'})
+            # The decorator should call on_error(500) due to response schema mismatch
+            self.assertEqual(called.get('status'), 500)
 
     def test_record_validate_keys_valid(self):
+        """Test that validate_keys passes for valid data and schema."""
         schema = {'foo': str, 'bar': int}
         data = {'foo': 'baz', 'bar': 1}
         # Should not raise
         record_validation.validate_keys(data, schema, ignore_extra=True, required=True)
 
     def test_record_validate_keys_missing_key(self):
+        """Test that validate_keys raises KeyError for missing required keys."""
         schema = {'foo': str, 'bar': int}
         data = {'foo': 'baz'}
         with self.assertRaises(KeyError):
             record_validation.validate_keys(data, schema, ignore_extra=True, required=True)
 
     def test_record_validate_keys_wrong_type(self):
+        """Test that validate_keys raises TypeError for wrong value types."""
         schema = {'foo': str, 'bar': int}
         data = {'foo': 'baz', 'bar': 'notint'}
         with self.assertRaises(TypeError):
             record_validation.validate_keys(data, schema, ignore_extra=True, required=True)
 
     def test_record_validate_keys_ignore_extra(self):
+        """Test that validate_keys ignores extra keys when ignore_extra is True."""
         schema = {'foo': str}
         data = {'foo': 'baz', 'extra': 123}
         # Should not raise
         record_validation.validate_keys(data, schema, ignore_extra=True, required=True)
 
     def test_record_validate_keys_no_ignore_extra(self):
+        """Test that validate_keys raises KeyError for extra keys when ignore_extra is False."""
         schema = {'foo': str}
         data = {'foo': 'baz', 'extra': 123}
         with self.assertRaises(KeyError):
