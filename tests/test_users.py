@@ -13,7 +13,7 @@ class TestUsers(unittest.TestCase):
         user_id, _ = email.split('@')
 
         # Test user creation
-        resp = api.users.new(email, "Test User")
+        resp = api.users.new(email=email, name="Test User")
         self.assertEqual(resp.status, "ok", f"Failed to create user: {resp.message}, Response data: {resp.data}")
 
         # Test user activation
