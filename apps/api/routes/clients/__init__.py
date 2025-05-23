@@ -9,7 +9,7 @@ from flask import Blueprint, request
 
 from apps.api.models import client, user
 from common.auth import authenticate_client
-from common.validation.flask import FlaskResponse, validate_and_unpack
+from common.validation.flask import FlaskResponse, unpack_request, validate_and_unpack
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -35,6 +35,7 @@ def init_app(app) -> None:
 
 
 @bp.post('/')
+@unpack_request
 @validate_and_unpack(
     request=client.ClientNew.__annotations__,
     response=client.ClientResource.__annotations__
@@ -67,6 +68,7 @@ def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease
     return resp.data, 200
 
 @bp.patch('/<string:client_id>')
+@unpack_request
 @validate_and_unpack(
     request=client.ClientUpdate.__annotations__,
     response=client.ClientResource.__annotations__

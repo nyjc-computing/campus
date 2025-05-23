@@ -44,27 +44,27 @@ class ValidatedViewFunction(Protocol):
         resource ids.
         Keyword arguments will come from the request JSON body.
         """
-        ...
 
 
-def unpack_json(request: Request, on_error: ErrorHandler) -> JsonObject | None:
-    """Unpacks JSON body from the request.
-    Calls the given error handler if unable to do so.
+def unpack_request(vf: ViewFunction) -> ViewFunction:
+    """Unpacks the request JSON body into the view function.
+
+    This is a helper function to be used in the decorator.
     """
-    # request.is_json will fail because during init, this function does not
-    # have an app context. So need to check if we have a request context.
-    # Mimetype check
-    if has_request_context() and not request.is_json:
-        on_error(415)
-    # Unpack request JSON body
-    try:
-        payload = request.get_json()
-    except JSONDecodeError:
-        on_error(400)
-    except Exception:
-        on_error(500)
-    else:
-        return payload
+    def vfdecorator(*args: str, **kwargs) -> FlaskResponse:
+        """The decorated ViewFunction that unpacks the request JSON body into
+        the inner view-function.
+        """
+        if not has_request_context():
+            raise RuntimeError("Request context not available")
+
+        payload = flask_request.get_json(silent=True)
+        if payload is None:
+            raise JSONDecodeError("Invalid JSON", "", 0)
+
+        return vf(*args, **kwargs, **payload)
+    return vfdecorator
+
 
 def validate_and_unpack(
         *,
