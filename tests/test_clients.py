@@ -23,7 +23,8 @@ class TestClients(unittest.TestCase):
         }
         client = api.clients.new(**data).data
         client_id = client["id"]
-        secret_hash = api.clients.replace(client_id).data
+        result = api.clients.replace(client_id).data
+        secret_hash = result["secret"]
 
         # Test credential validation
         is_valid = api.clients.validate_credentials(client_id, secret_hash)
