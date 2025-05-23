@@ -190,7 +190,7 @@ class Client:
                 )
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", Message.SUCCESS, {
-                    "secret", client_secret
+                    "secret": client_secret
                 })
         raise ValueError(f"Unexpected response: {resp}")
 
