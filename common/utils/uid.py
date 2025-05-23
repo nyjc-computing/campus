@@ -42,4 +42,4 @@ def generate_user_uid(email: str) -> str:
         A string containing the generated UID.
     """
     user_id, _ = email.split('@')
-    return f"uid-user-{user_id}"
+    return user_id
