@@ -4,8 +4,10 @@ Circle Models
 This module provides classes for managing Campus circles.
 """
 
+from typing import TypedDict, Unpack
+
 from apps.common.errors import api_errors
-from apps.api.models.base import ModelResponse
+from apps.api.models.base import BaseRecord, ModelResponse
 from common.drum import PK
 from common.drum.mongodb import get_drum
 from common.schema import Message, Response
@@ -23,6 +25,22 @@ def init_db():
     # No-op for MongoDB, but you could create indexes here if needed.
 
 
+class CircleNew(TypedDict, total=True):
+    """Request body schema for a circles.new operation."""
+    name: str
+    tag: str
+
+
+class CircleUpdate(TypedDict, total=False):
+    """Request body schema for a circles.update operation."""
+    name: str
+    # tag cannot be updated once created
+
+
+class CircleResource(CircleNew, BaseRecord, TypedDict, total=True):
+    """Response body schema representing the result of a circles.get operation."""
+
+
 class Circle:
     """Circle model for handling database operations related to circles."""
 
@@ -30,11 +48,11 @@ class Circle:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
 
-    def new(self, id: str, name: str, tag: str) -> ModelResponse:
+    def new(self, **fields: Unpack[CircleNew]) -> ModelResponse:
         """Create a new circle."""
         resp = self.storage.insert(
             TABLE,
-            {PK: id, "name": name, "tag": tag}
+            fields,
         )
         match resp:
             case Response(status="error", message=message, data=error):
@@ -43,9 +61,9 @@ class Circle:
                 return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def delete(self, id: str) -> ModelResponse:
+    def delete(self, circle_id: str) -> ModelResponse:
         """Delete a circle by id."""
-        resp = self.storage.delete_by_id(TABLE, id)
+        resp = self.storage.delete_by_id(TABLE, circle_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -54,13 +72,13 @@ class Circle:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="Circle not found",
-                    id=id
+                    id=circle_id
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def get(self, id: str) -> ModelResponse:
+    def get(self, circle_id: str) -> ModelResponse:
         """Get a circle by id."""
-        resp = self.storage.get_by_id(TABLE, id)
+        resp = self.storage.get_by_id(TABLE, circle_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -69,13 +87,13 @@ class Circle:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="Circle not found",
-                    id=id
+                    id=circle_id
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def update(self, id: str, updates: dict) -> ModelResponse:
+    def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> ModelResponse:
         """Update a circle by id."""
-        resp = self.storage.update_by_id('circles', id, updates)
+        resp = self.storage.update_by_id('circles', circle_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -84,6 +102,6 @@ class Circle:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="Circle not found",
-                    id=id
+                    id=circle_id
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
