@@ -3,10 +3,13 @@
 API error definitions for Palmtree.
 These errors represent all possible API errors that would be raised.
 """
+
+from typing import NoReturn
+
 from .base import APIError, ErrorConstant
 
 
-def raise_api_error(status: int, **body) -> None:
+def raise_api_error(status: int, **body) -> NoReturn:
     """Raise an API error with the given status code."""
     match status:
         case 400:
