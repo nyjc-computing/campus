@@ -1,9 +1,11 @@
+"""apps/api/routes/clients
+
+API routes for the clients resource.
+"""
 from flask import Blueprint, request
 
 from apps.api.models import client, user
-from apps.common.errors import api_errors
 from common.auth import authenticate_client
-from common.schema import Message, Response
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -22,13 +24,14 @@ users = user.User()
 
 
 def init_app(app) -> None:
+    """Initialise client routes with the given Flask app/blueprint."""
     client.init_db()
     app.register_blueprint(bp)
     return app
 
 
 @bp.post('/')
-def new_client():
+def new_client(**request_json):
     """Create a new client id and secret."""
     if not POST:
         return {"message": "Not implemented"}, 501
@@ -38,7 +41,7 @@ def new_client():
     return {"message": "Client created"}, 201
 
 @bp.delete('/<string:client_id>')
-def delete_client(client_id: str):
+def delete_client(client_id: str, **request_json):
     """Delete a client id and secret."""
     if not DELETE:
         return {"message": "Not implemented"}, 501
@@ -46,7 +49,7 @@ def delete_client(client_id: str):
     return {"message": "Client deleted"}, 200
 
 @bp.get('/<string:client_id>')
-def get_client_details(client_id: str):
+def get_client_details(client_id: str, **request_json):
     """Get details of a client."""
     if not GET:
         return {"message": "Not implemented"}, 501
@@ -55,7 +58,7 @@ def get_client_details(client_id: str):
     return resp.data, 200
 
 @bp.patch('/<string:client_id>')
-def edit_client():
+def edit_client(client_id: str, **request_json):
     """Edit name, description, or admins of client."""
     if not PATCH:
         return {"message": "Not implemented"}, 501
@@ -65,7 +68,7 @@ def edit_client():
     return {"message": "Client updated"}, 200
 
 @bp.post('/<string:client_id>/replace')
-def revoke_client(client_id: str):
+def revoke_client(client_id: str, **request_json):
     """Revoke a client id and secret, and reissue them."""
     if not POST:
         return {"message": "Not implemented"}, 501
@@ -73,79 +76,79 @@ def revoke_client(client_id: str):
     resp = clients.replace(client_id)  # raises APIError
     return resp.data, 201
 
-@bp.get('/applications')
-def get_client_applications():
-    """Get all client applications."""
-    if not GET:
-        return {"message": "Not implemented"}, 501
-    data = request.get_json()
-    resp = clients.applications.list(**data)  # raises APIError
-    return resp.data, 200
+# @bp.get('/applications')
+# def get_client_applications():
+#     """Get all client applications."""
+#     if not GET:
+#         return {"message": "Not implemented"}, 501
+#     data = request.get_json()
+#     resp = clients.applications.list(**data)  # raises APIError
+#     return resp.data, 200
 
-@bp.post('/applications')
-def new_client_application():
-    """Apply for a client id and secret."""
-    if not POST:
-        return {"message": "Not implemented"}, 501
-    data = request.get_json()
-    missing_fields = list(
-        filter(
-            lambda field: field not in data,
-            ("owner", "name", "description")
-        )
-    )
-    if missing_fields:
-        raise api_errors.InvalidRequestError(
-            message="Required fields missing",
-            missing_fields=missing_fields
-        )
-    # Check owner exists
-    # TODO: use token to authenticate user
-    resp = users.get(data["owner"])  # raises APIError
-    resp = clients.applications.new(**data)
-    return {"message": "Client request submitted"}, 201
+# @bp.post('/applications')
+# def new_client_application():
+#     """Apply for a client id and secret."""
+#     if not POST:
+#         return {"message": "Not implemented"}, 501
+#     data = request.get_json()
+#     missing_fields = list(
+#         filter(
+#             lambda field: field not in data,
+#             ("owner", "name", "description")
+#         )
+#     )
+#     if missing_fields:
+#         raise api_errors.InvalidRequestError(
+#             message="Required fields missing",
+#             missing_fields=missing_fields
+#         )
+#     # Check owner exists
+#     # TODO: use token to authenticate user
+#     resp = users.get(data["owner"])  # raises APIError
+#     resp = clients.applications.new(**data)
+#     return {"message": "Client request submitted"}, 201
 
-@bp.delete('/applications/<string:client_application_id>')
-def delete_application(client_application_id: str):
-    """Delete a client application."""
-    if not DELETE:
-        return {"message": "Not implemented"}, 501
-    resp = clients.applications.delete(client_application_id)  # raises APIError
-    return resp.data, 200
+# @bp.delete('/applications/<string:client_application_id>')
+# def delete_application(client_application_id: str):
+#     """Delete a client application."""
+#     if not DELETE:
+#         return {"message": "Not implemented"}, 501
+#     resp = clients.applications.delete(client_application_id)  # raises APIError
+#     return resp.data, 200
 
-@bp.get('/applications/<string:client_application_id>')
-def get_application_status(client_application_id: str):
-    """Get the status of a client application."""
-    if not GET:
-        return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = clients.applications.get(client_application_id)  # raises APIError
-    return resp.data, 200
+# @bp.get('/applications/<string:client_application_id>')
+# def get_application_status(client_application_id: str):
+#     """Get the status of a client application."""
+#     if not GET:
+#         return {"message": "Not implemented"}, 501
+#     # TODO: validate, authenticate
+#     resp = clients.applications.get(client_application_id)  # raises APIError
+#     return resp.data, 200
 
-@bp.put('/applications/<string:client_application_id>/approve')
-def approve_application(client_application_id: str):
-    """Approve a client application."""
-    if not PUT:
-        return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    application = clients.applications.get(client_application_id).data
-    # FUTURE: Migrate to flows
-    resp = clients.new(
-        name=application["name"],
-        description=application["description"],
-        admins=[application["owner"]],
-    )
-    resp = clients.applications.approve(client_application_id)  # raises APIError
-    return resp.data, 201
+# @bp.put('/applications/<string:client_application_id>/approve')
+# def approve_application(client_application_id: str):
+#     """Approve a client application."""
+#     if not PUT:
+#         return {"message": "Not implemented"}, 501
+#     # TODO: validate, authenticate
+#     application = clients.applications.get(client_application_id).data
+#     # FUTURE: Migrate to flows
+#     resp = clients.new(
+#         name=application["name"],
+#         description=application["description"],
+#         admins=[application["owner"]],
+#     )
+#     resp = clients.applications.approve(client_application_id)  # raises APIError
+#     return resp.data, 201
 
-@bp.put('/applications/<string:application_id>/reject')
-def reject_application(client_application_id: str):
-    """Reject a client application."""
-    if not PUT:
-        return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = clients.applications.reject(client_application_id)  # raises APIError
-    return resp.data, 201
+# @bp.put('/applications/<string:application_id>/reject')
+# def reject_application(client_application_id: str):
+#     """Reject a client application."""
+#     if not PUT:
+#         return {"message": "Not implemented"}, 501
+#     # TODO: validate, authenticate
+#     resp = clients.applications.reject(client_application_id)  # raises APIError
+#     return resp.data, 201
 
 
 # @bp.get('/<string:client_id>/apikeys')
@@ -177,4 +180,3 @@ def reject_application(client_application_id: str):
 #     # TODO: validate, authenticate
 #     resp = apikeys.delete_api_key(client_id, apikey_name)  # raises APIError
 #     return resp.data, 200
-

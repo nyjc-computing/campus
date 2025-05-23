@@ -71,6 +71,7 @@ def validate_keys(
         record: Mapping[str, Any],
         valid_keys: Collection[str] | Mapping[str, type],
         ignore_extra=True,
+        optional=True,
         required=True
     ) -> None:
     """Validate that the keys in the record are valid according to the provided set of valid keys.
@@ -80,16 +81,17 @@ def validate_keys(
         valid_keys (Collection[str] | Mapping[str, type]): A collection of valid keys or a mapping of valid keys to types.
             If a mapping is provided, the types are checked against the record values.
         ignore_extra (bool): If True, keys not in valid_keys are ignored.
-        required_keys (bool): If True, all keys in valid_keys are required.
+        required (bool): If True, all keys in valid_keys are required.
 
     Raises:
         KeyError: If any keys in the record are not valid.
         TypeError: If any values in the record do not match the expected types.
     """
     match valid_keys:
-        case Collection():
-            _validate_key_names(record, valid_keys, ignore_extra=ignore_extra, required=required)
         case Mapping():
             _validate_key_types(record, valid_keys, ignore_extra=ignore_extra, required=required)
+        case Collection():
+            _validate_key_names(record, valid_keys, ignore_extra=ignore_extra, required=required)
         case _:
             raise TypeError(f"Invalid type for valid_keys: {type(valid_keys)}")
+

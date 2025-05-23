@@ -1,6 +1,6 @@
-"""palmtree.py
+"""apps/api
 
-Authentication and authorization service for Campus.
+Web API for Campus services.
 """
 
 from flask import Blueprint, Flask
@@ -8,9 +8,9 @@ from flask import Blueprint, Flask
 from apps.common import errors
 from apps.api import routes
 
-# These aliased model imports allow the palmtree package to be used similarly
+# These aliased model imports allow the api package to be used similarly
 # to the Campus API
-# e.g. palmtree.clients.new(), palmtree.emailotp.request()
+# e.g. api.clients.new(), api.emailotp.request()
 from apps.api.routes.clients import clients
 from apps.api.routes.emailotp import emailotp
 from apps.api.routes.users import users

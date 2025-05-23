@@ -20,15 +20,15 @@ Each concrete Drum implementation should be defined in a submodule within the
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, MutableMapping, TypedDict
+from typing import Any, Mapping, MutableMapping, TypedDict
 
 from common.schema import Response
 
 GroupName = str
 StrId = str
 Record = TypedDict | MutableMapping[str, Any]  # Complete set of fields for a record
-Update = dict[str, Any]  # Partial set of fields to update
-Condition = dict[str, Any]  # Conditions for querying records
+Update = Mapping[str, Any]  # Partial set of fields to update
+Condition = Mapping[str, Any]  # Conditions for querying records
 
 PK = "id"
 

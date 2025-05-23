@@ -10,6 +10,6 @@ Common assumptions across storage types:
 - records/documents are grouped by collections/tables
 """
 
-from .base import DrumError, DrumResponse
+from .base import DrumError, DrumResponse, PK
 
 from . import postgres, sqlite
