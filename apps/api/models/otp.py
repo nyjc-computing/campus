@@ -42,7 +42,7 @@ def init_db():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS emailotp (
                 id TEXT PRIMARY KEY,
-                email TEXT NOT NULL,,
+                email TEXT NOT NULL,
                 otp_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL
