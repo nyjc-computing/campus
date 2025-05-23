@@ -20,7 +20,7 @@ bp.before_request(authenticate_client)
 users = user.User()
 
 
-def init_app(app: Flask) -> None:
+def init_app(app: Flask | Blueprint) -> None:
     """Initialise users routes with the given Flask app/blueprint."""
     user.init_db()
     app.register_blueprint(bp)

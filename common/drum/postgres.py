@@ -37,6 +37,7 @@ def get_drum() -> 'PostgresDrum':
 
 
 class CursorResult(TypedDict):
+    """dict representing common cursor attributes."""
     lastrowid: int | None
     rowcount: int
     result: list[Record] | Record | None
@@ -50,8 +51,13 @@ class PostgresDrum(DrumInterface):
 
     @contextmanager
     def use_transaction(self) -> Generator[psycopg2.extensions.connection, None, None]:
+        """Context manager to use a transaction.
+
+        This will automatically commit or rollback the transaction
+        depending on the status of the responses.
+        """
         self.begin_transaction()
-        assert self.transaction is not None
+        assert self.transaction is not None, "Transaction not started"
         try:
             yield self.transaction
         finally:
@@ -116,7 +122,8 @@ class PostgresDrum(DrumInterface):
                 If None, the cursor is returned.
 
             If a transaction is in progress, responses are collected, and
-            commit is not automatically called. Otherwise, commit is automatically called after the operation.
+            commit is not automatically called. Otherwise, commit is
+            automatically called after the operation.
 
         Returns:
             A DrumResponse object with the status, message, and data.

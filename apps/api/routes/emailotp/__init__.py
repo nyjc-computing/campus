@@ -25,7 +25,7 @@ emailotp = otp.OTPAuth()
 EMAIL_PROVIDER = "smtp"
 
 
-def init_app(app: Flask) -> None:
+def init_app(app: Flask | Blueprint) -> None:
     """Initialise emailotp routes with the given Flask app/blueprint."""
     otp.init_db()
     app.register_blueprint(bp)
