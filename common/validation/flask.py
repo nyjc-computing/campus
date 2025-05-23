@@ -5,20 +5,29 @@ Common utility functions for validation of flask requests and responses.
 
 from functools import wraps
 from json import JSONDecodeError
-from typing import Any, Callable, Mapping, Protocol, Type
+from typing import Any, Callable, Mapping, NoReturn, Protocol, Type
 
-from flask import Request, has_request_context, request as flask_request
+from flask import has_request_context, request as flask_request
 
 from common.validation import record
 
 # Only expecting strings or dicts
 JsonObject = dict[str, Any]
 StatusCode = int
+ViewFunctionDecorator = Callable[["ViewFunction"], "ViewFunction"]
 # Actually, view functions may return a variety of return values which Flask is
 # able to handle
 # But Campus API sticks to JSON-serializable return values, with a status code
 FlaskResponse = tuple[dict[str, Any], StatusCode]
-ErrorHandler = Callable[[StatusCode], None]
+
+
+class ErrorHandler(Protocol):
+    """Define an ErrorHandler as a function that takes a status code and
+    optional keyword arguments.
+    """
+    def __call__(self, status: StatusCode, **body) -> NoReturn:
+        """An error handler returns None"""
+        ...
 
 
 class ViewFunction(Protocol):
@@ -26,7 +35,6 @@ class ViewFunction(Protocol):
     returns what a Flask view function would return (for now, just a tuple
     [JsonObject, StatusCode]
     """
-
     def __call__(self, *args: str, **kwargs) -> FlaskResponse:
         """A view function returns a Flask response"""
         ...
@@ -56,8 +64,8 @@ def validate(
         *,
         request: Mapping[str, Type] | None = None,
         response: Mapping[str, Type] | None = None,
-        on_error: ErrorHandler = lambda s: None,
-) -> Callable[[ViewFunction], ViewFunction]:
+        on_error: ErrorHandler,
+) -> ViewFunctionDecorator:
     """Returns a decorator that takes a view-function and returns a
     validated-view-function.
 
@@ -70,7 +78,7 @@ def validate(
     def vfdecorator(vf: ViewFunction) -> ViewFunction:
         """Validates the current Flask request JSON body, and unpacks it into
         the wrapped view-function.
-        Validates the 
+        Validates the response JSON body before returning.
         """
         # TODO: provide helpful validation hints
         @wraps(vf)
@@ -87,6 +95,7 @@ def validate(
                     )
                 except (KeyError, TypeError):
                     on_error(400)
+                    
                 except Exception:
                     on_error(500)
             # Call view function
