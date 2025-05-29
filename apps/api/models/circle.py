@@ -57,12 +57,12 @@ def init_db():
     ).data
 
     storage = get_conn()
-    storage["settings"].update(
+    storage["settings"].update_one(
         {"category": "admin"},
         {"$set": {"circle_id": admin_circle[PK]}},
         upsert=True
     )
-    storage["settings"].update(
+    storage["settings"].update_one(
         {"category": "circles"},
         {"$set": {"root": root_circle[PK]}},
         upsert=True
