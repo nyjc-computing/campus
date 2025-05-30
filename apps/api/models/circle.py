@@ -14,6 +14,7 @@ Main operations:
 - move circles
 """
 
+from collections.abc import Iterator, Mapping
 from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
@@ -243,7 +244,7 @@ class Circle:
         raise ValueError(f"Unexpected response from storage: {resp}")
 
 
-class CircleAddressTree:
+class CircleAddressTree(Mapping[CircleID, "CircleAddressTree"]):
     """Circle address tree for managing circle hierarchy.
 
     While each circle already stores its descendancy information,
@@ -253,13 +254,20 @@ class CircleAddressTree:
     speed (MongoDB limits documents to 16MB).
     """
 
-    def __init__(self):
-        """Initialize the address tree with a storage interface."""
-        self.storage = get_drum()
-        self.tree: CircleTree = {}
-        self._load_tree()
+    def __init__(self, root: CircleTree):
+        self.root = root
 
-    def _load_tree(self):
-        """Load the address tree from the database."""
-        # TODO: Recursive conversion of PK from _id
-        self.tree = get_tree_root()
+    def __getitem__(self, key: CircleID) -> "CircleAddressTree":
+        """Get a circle tree by its ID."""
+        if key not in self.root:
+            raise KeyError(f"Circle ID {key} not found in address tree.")
+        return CircleAddressTree(self.root[key])
+    
+    def __iter__(self) -> Iterator[CircleID]:
+        """Iterate over the circle IDs in the address tree."""
+        return iter(self.root)
+
+    def __len__(self) -> int:
+        """Get the number of circles in the address tree."""
+        return len(self.root)
+    
