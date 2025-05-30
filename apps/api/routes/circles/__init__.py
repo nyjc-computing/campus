@@ -33,7 +33,7 @@ def init_app(app: Flask | Blueprint) -> None:
     response=circle.CircleResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def new_circle(*_: str, **data: Unpack[circle.CircleNew]) -> FlaskResponse:  # *_ appease linter
+def new_circle(*_: str, **data: Unpack[circle.CircleNew]) -> FlaskResponse:
     """Create a new circle."""
     # TODO: authenticate
     resp = circles.new(**data)  # raises APIError
@@ -44,7 +44,7 @@ def new_circle(*_: str, **data: Unpack[circle.CircleNew]) -> FlaskResponse:  # *
     response={"message": str},
     on_error=api_errors.raise_api_error
 )
-def delete_circle(circle_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
+def delete_circle(circle_id: str, *_, **__) -> FlaskResponse:
     """Delete a circle."""
     resp = circles.delete(circle_id)  # raises APIError
     return {"message": "Circle deleted"}, 200
@@ -54,7 +54,7 @@ def delete_circle(circle_id: str, *_, **__) -> FlaskResponse:  # *_ appease lint
     response=circle.CircleResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def get_circle_details(circle_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
+def get_circle_details(circle_id: str, *_, **__) -> FlaskResponse:
     """Get details of a circle."""
     # TODO: validate, authenticate
     resp = circles.get(circle_id)  # raises APIError
@@ -67,7 +67,11 @@ def get_circle_details(circle_id: str, *_, **__) -> FlaskResponse:  # *_ appease
     response=circle.CircleResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def edit_circle(circle_id: str, *_, **data: Unpack[circle.CircleUpdate]) -> FlaskResponse:  # *_ appease linter
+def edit_circle(
+        circle_id: str,
+        *_,
+        **data: Unpack[circle.CircleUpdate]
+) -> FlaskResponse:
     """Edit name or description of a circle."""
     # TODO: authenticate
     resp = circles.update(circle_id, **data)  # raises APIError
@@ -89,7 +93,11 @@ def get_circle_members(circle_id: str, *_, **__) -> FlaskResponse:
     request=circle.CircleMemberAdd.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def add_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberAdd]) -> FlaskResponse:
+def add_circle_member(
+        circle_id: str,
+        *_,
+        **data: Unpack[circle.CircleMemberAdd]
+) -> FlaskResponse:
     """Add a member to a circle."""
     resp = circles.members.add(circle_id, **data)
     return resp.data, 200
@@ -99,7 +107,11 @@ def add_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberAdd]
     request=circle.CircleMemberRemove.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def remove_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberRemove]) -> FlaskResponse:
+def remove_circle_member(
+        circle_id: str,
+        *_,
+        **data: Unpack[circle.CircleMemberRemove]
+) -> FlaskResponse:
     """Remove a member from a circle."""
     resp = circles.members.remove(circle_id, **data)
     return resp.data, 200
@@ -110,7 +122,11 @@ def remove_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberR
     request=circle.CircleMemberSet.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def patch_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberSet]) -> FlaskResponse:
+def patch_circle_member(
+        circle_id: str,
+        *_,
+        **data: Unpack[circle.CircleMemberSet]
+) -> FlaskResponse:
     """Update a member's access in a circle."""
     resp = circles.members.set(circle_id, **data)
     return resp.data, 200
