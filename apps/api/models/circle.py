@@ -188,7 +188,20 @@ class Circle:
             description=fields.get("description", ""),
             tag=fields["tag"],
         )
+        # TODO: Use transactions for atomic creation of circles and their parents
+        # https://www.mongodb.com/docs/languages/python/pymongo-driver/upcoming/write/transactions/
         resp = self.storage.insert(TABLE, record)
+        client = get_conn()
+        for parent_id, access_value in parents.items():
+            # TODO: Drum notation for updating nested fields
+            client[TABLE].update_one(
+                {parent_id: {"$exists": True}},
+                {
+                    "$set": {
+                        f"members.{circle_id}": access_value
+                    }
+                },
+            )
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
