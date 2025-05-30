@@ -84,6 +84,10 @@ def get_circle_members(circle_id: str):
     return jsonify({"message": "Not implemented"}), 501
 
 @bp.post('/<string:circle_id>/members/add')
+@validate(
+    request=circle.CircleMemberAdd.__annotations__,
+    on_error=api_errors.raise_api_error
+)
 def add_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberAdd]) -> FlaskResponse:
     """Add a member to a circle."""
     resp = circles.members.add(circle_id, **data)
