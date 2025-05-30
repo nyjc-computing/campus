@@ -19,7 +19,7 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
-from common.drum.mongodb import PK, get_conn, get_drum
+from common.drum.mongodb import PK, get_conn, get_db, get_drum
 from common.schema import CampusID, UserID, Message, Response
 from common.utils import uid, utc_time
 
@@ -44,7 +44,7 @@ def init_db():
     For MongoDB, collections are created automatically on first insert.
     """
     # Check for existing root circle
-    storage = get_conn()
+    db = get_db()
     circle_meta = get_circle_meta()
     if (circle_meta is None or "root" not in circle_meta):
         # Create admin and root circles
@@ -61,7 +61,7 @@ def init_db():
             parents={root_circle[PK]: 15}
         ).data
         # Create or update circle meta record
-        storage[TABLE].update_one(
+        db[TABLE].update_one(
             {"@meta": True},
             {
                 "$set": {
@@ -139,8 +139,8 @@ class CircleMemberSet(CircleMemberRemove):
 
 def get_circle_meta() -> "CircleMeta":
     """Get the circle meta record from the settings collection."""
-    storage = get_conn()
-    circle_meta = storage[TABLE].find_one({"@meta": True})
+    db = get_db()
+    circle_meta = db[TABLE].find_one({"@meta": True})
     if circle_meta is None:
         raise api_errors.InternalError(
             message=f"Circle meta record not found in collection {TABLE}",
@@ -218,8 +218,8 @@ class CircleMember:
                 message="Member circle not found",
                 id=member_id
             )
-        client = get_conn()
-        client[TABLE].update_one(
+        db = get_db()
+        db[TABLE].update_one(
             {circle_id: {"$exists": True}},
             {
                 "$set": {
@@ -244,8 +244,8 @@ class CircleMember:
                 message="Member not found in circle",
                 id=member_id
             )
-        client = get_conn()
-        client[TABLE].update_one(
+        db = get_db()
+        db[TABLE].update_one(
             {circle_id: {"$exists": True}},
             {
                 "$unset": {
@@ -298,7 +298,6 @@ class Circle:
         # TODO: Use transactions for atomic creation of circles and their parents
         # https://www.mongodb.com/docs/languages/python/pymongo-driver/upcoming/write/transactions/
         resp = self.storage.insert(TABLE, record)
-        client = get_conn()
         for parent_id, access_value in parents.items():
             # TODO: Drum notation for updating nested fields
             self.members.add(parent_id, member_id=circle_id, access_value=access_value)
