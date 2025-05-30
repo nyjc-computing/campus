@@ -107,13 +107,16 @@ class CircleUpdate(TypedDict, total=False):
     # tag cannot be updated once created
 
 
-class CircleRecord(CircleNew, BaseRecord):
+class CircleRecord(BaseRecord):
     """The circle record stored in the circle collection."""
+    name: str
+    description: NotRequired[str]
+    tag: CircleTag
 
 
 class CircleResource(CircleRecord, total=False):
     """Response body schema representing the result of a circles.get operation."""
-    children: dict[CircleID, AccessValue]
+    members: dict[CircleID, AccessValue]
     sources: dict  # SourceID, SourceHeader
 
 
@@ -163,6 +166,8 @@ class Circle:
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
+
+    def 
 
     def new(self, **fields: Unpack[CircleNew]) -> ModelResponse:
         """This creates a new circle and adds it to the circle collection.
