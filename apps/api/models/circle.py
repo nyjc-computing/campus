@@ -160,8 +160,97 @@ def get_address_tree() -> "CircleAddressTree":
     return CircleAddressTree(root=root)
 
 
+class CircleMember:
+    """Circle model for handling database operations related to circle members
+    (subcircles).
+    """
+
+    def __init__(self):
+        """Initialize the Circle model with a storage interface."""
+        self.storage = get_drum()
+
+    def list(self, circle_id: CircleID) -> ModelResponse:
+        """List all members of a circle."""
+        resp = self.storage.get_by_id(TABLE, circle_id)
+        if resp.status == "error":
+            raise api_errors.ConflictError(
+                message="Circle not found",
+                id=circle_id
+            )
+        member_id_access = resp.data["members"]
+        match resp:
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
+            case Response(status="ok", message=Message.FOUND):
+                return ModelResponse(status="ok", message=Message.FOUND, data=member_id_access)
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    message="Circle not found",
+                    id=circle_id
+                )
+        raise ValueError(f"Unexpected response from storage: {resp}")
+
+    def add(self, circle_id: CircleID, member_id: CircleID, access_value: AccessValue) -> ModelResponse:
+        """Add a member to a circle."""
+        # Check if member circle exists
+        member_circle = self.storage.get_by_id(TABLE, member_id)
+        if member_circle.status == "error":
+            raise api_errors.ConflictError(
+                message="Member circle not found",
+                id=member_id
+            )
+        resp = self.storage.update_by_id(
+            TABLE,
+            circle_id,
+            {"$set": {f"members.{member_id}": access_value}}
+        )
+        match resp:
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
+            case Response(status="ok", message=Message.UPDATED):
+                return ModelResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    message="Circle not found",
+                    id=circle_id
+                )
+        raise ValueError(f"Unexpected response from storage: {resp}")
+    
+    def remove(self, circle_id: CircleID, member_id: CircleID) -> ModelResponse:
+        """Remove a member from a circle."""
+        # Check if member circle is a member of circle
+        circle = self.storage.get_by_id(TABLE, circle_id)
+        if circle.status == "error":
+            raise api_errors.ConflictError(
+                message="Circle not found",
+                id=circle_id
+            )
+        if member_id not in circle.data.get("members", {}):
+            raise api_errors.ConflictError(
+                message="Member not found in circle",
+                id=member_id
+            )
+        resp = self.storage.update_by_id(
+            TABLE,
+            circle_id,
+            {"$unset": {f"members.{member_id}": ""}}
+        )
+        match resp:
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
+            case Response(status="ok", message=Message.UPDATED):
+                return ModelResponse(*resp)
+            case Response(status="ok", message=Message.NOT_FOUND):
+                raise api_errors.ConflictError(
+                    message="Circle not found",
+                    id=circle_id
+                )
+        raise ValueError(f"Unexpected response from storage: {resp}")
+
+
 class Circle:
     """Circle model for handling database operations related to circles."""
+    members = CircleMember()
 
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
@@ -215,6 +304,7 @@ class Circle:
         This action is destructive and cannot be undone.
         It should only be done by an admin/owner.
         """
+        # TODO: Check circle ancestry, remove from parents' members
         resp = self.storage.delete_by_id(TABLE, circle_id)
         match resp:
             case Response(status="error", message=message, data=error):
@@ -286,4 +376,3 @@ class CircleAddressTree(Mapping[CircleID, "CircleAddressTree"]):
     def __len__(self) -> int:
         """Get the number of circles in the address tree."""
         return len(self.root)
-    
