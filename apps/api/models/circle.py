@@ -116,6 +116,8 @@ class CircleRecord(BaseRecord):
 
 class CircleResource(CircleRecord, total=False):
     """Response body schema representing the result of a circles.get operation."""
+    # TODO: store ancestry tree
+    # ancestry: CircleTree
     members: dict[CircleID, AccessValue]
     sources: dict  # SourceID, SourceHeader
 
@@ -265,6 +267,7 @@ class Circle:
             description=fields.get("description", ""),
             tag=fields["tag"],
         )
+        # TODO: Store ancestry tree
         # TODO: Use transactions for atomic creation of circles and their parents
         # https://www.mongodb.com/docs/languages/python/pymongo-driver/upcoming/write/transactions/
         resp = self.storage.insert(TABLE, record)
