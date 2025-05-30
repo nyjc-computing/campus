@@ -122,6 +122,12 @@ class CircleResource(CircleRecord, total=False):
     sources: dict  # SourceID, SourceHeader
 
 
+class CircleMemberAdd(TypedDict):
+    """Request body schema for a circles.members.add operation"""
+    member_id: CircleID
+    access_value: AccessValue
+
+
 def get_circle_meta() -> "CircleMeta":
     """Get the circle meta record from the settings collection."""
     storage = get_conn()

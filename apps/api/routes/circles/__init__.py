@@ -84,9 +84,10 @@ def get_circle_members(circle_id: str):
     return jsonify({"message": "Not implemented"}), 501
 
 @bp.post('/<string:circle_id>/members/add')
-def add_circle_member(circle_id: str):
+def add_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberAdd]) -> FlaskResponse:
     """Add a member to a circle."""
-    return jsonify({"message": "Not implemented"}), 501
+    resp = circles.members.add(circle_id, **data)
+    return resp.data, 200
 
 @bp.delete('/<string:circle_id>/members/remove')
 def remove_circle_member(circle_id: str):
