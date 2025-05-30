@@ -278,14 +278,13 @@ class Circle:
 
         It does not add it to the circle hierarchy or access control.
         """
-        admin_circle_id = self.storage.get_matching(
-            TABLE, {"tag": "admin"}
-        ).data[PK]
-        # Root circle must not have parents
-        parents = fields.pop(
-            "parents",
-            {} if fields["tag"] == "root" else {admin_circle_id: 15}
-        )
+        # TODO: Add admin as default parent if not specified
+        parents = fields.pop("parents", {})
+        if fields["tag"] == "root" and len(parents) > 0:
+            raise api_errors.ConflictError(
+                message="Root circle cannot have parents",
+                id=fields["tag"]
+            )
         circle_id = CampusID(uid.generate_category_uid("circle", length=8))
         record = CircleRecord(
             id=circle_id,
