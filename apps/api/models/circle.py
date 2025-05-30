@@ -271,14 +271,7 @@ class Circle:
         client = get_conn()
         for parent_id, access_value in parents.items():
             # TODO: Drum notation for updating nested fields
-            client[TABLE].update_one(
-                {parent_id: {"$exists": True}},
-                {
-                    "$set": {
-                        f"members.{circle_id}": access_value
-                    }
-                },
-            )
+            self.members.add(parent_id, circle_id, access_value)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
