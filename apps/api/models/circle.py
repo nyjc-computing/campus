@@ -19,7 +19,7 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
-from common.drum.mongodb import PK, get_conn, get_db, get_drum
+from common.drum.mongodb import PK, get_db, get_drum
 from common.schema import CampusID, UserID, Message, Response
 from common.utils import uid, utc_time
 
@@ -112,13 +112,13 @@ class CircleRecord(BaseRecord):
     name: str
     description: NotRequired[str]
     tag: CircleTag
+    members: dict[CircleID, AccessValue]
 
 
 class CircleResource(CircleRecord, total=False):
     """Response body schema representing the result of a circles.get operation."""
     # TODO: store ancestry tree
     # ancestry: CircleTree
-    members: dict[CircleID, AccessValue]
     sources: dict  # SourceID, SourceHeader
 
 
@@ -220,7 +220,7 @@ class CircleMember:
             )
         db = get_db()
         db[TABLE].update_one(
-            {circle_id: {"$exists": True}},
+            {"id": circle_id},
             {
                 "$set": {
                     f"members.{member_id}": access_value
@@ -292,6 +292,7 @@ class Circle:
             name=fields["name"],
             description=fields.get("description", ""),
             tag=fields["tag"],
+            members={},
         )
         # TODO: Store ancestry tree
         # TODO: Use transactions for atomic creation of circles and their parents
