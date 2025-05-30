@@ -79,9 +79,10 @@ def move_circle(circle_id: str):
     return jsonify({"message": "Not implemented"}), 501
 
 @bp.get('/<string:circle_id>/members')
-def get_circle_members(circle_id: str):
+def get_circle_members(circle_id: str, *_, **__) -> FlaskResponse:
     """Get members of a circle."""
-    return jsonify({"message": "Not implemented"}), 501
+    resp = circles.members.list(circle_id)  # raises APIError
+    return resp.data, 200
 
 @bp.post('/<string:circle_id>/members/add')
 @validate(
