@@ -135,7 +135,12 @@ class Circle:
         It does not add it to the circle hierarchy or access control.
         """
         circle_id = uid.generate_category_uid("circle", length=8)
-        if len(fields["parents"]) == 0:
+        if fields["tag"] == "root" and len(fields["parents"]) > 0:
+            raise api_errors.InvalidRequestError(
+                message="Root Circle cannot have parent",
+                id=circle_id,
+            )
+        elif fields["tag"] != "root" and len(fields["parents"]) == 0:
             raise api_errors.InvalidRequestError(
                 message="Circle must have at least one parent",
                 id=circle_id,
