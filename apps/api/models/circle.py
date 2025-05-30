@@ -42,54 +42,48 @@ def init_db():
     staging.
     For MongoDB, collections are created automatically on first insert.
     """
-    # Create admin and root circles
-    root_circle = Circle().new(
-        name=DOMAIN,
-        description="Root circle",
-        tag="root",
-        parents={}
-    ).data
-    admin_circle = Circle().new(
-        name="campus-admin",
-        description="Campus admin account",
-        tag="admin",
-        parents={root_circle[PK]: 15}
-    ).data
-
+    # Check for existing root circle
     storage = get_conn()
-    storage["settings"].update(
-        {"category": "admin"},
-        {"$set": {"circle_id": admin_circle[PK]}},
-        upsert=True
-    )
-    storage["settings"].update(
-        {"category": "circles"},
-        {"$set": {"root": root_circle[PK]}},
-        upsert=True
-    )
-
-    # Create circle address tree
-    storage[TABLE].insert_one({root_circle[PK]: {}})
-
-
-def get_root_circle() -> "CircleRecord":
-    """Get the root circle ID from the settings collection."""
-    storage = get_conn()
-    circle_settings = storage["settings"].find_one({"category": "circles"})
-    if circle_settings is None:
-        raise api_errors.InternalError(
-            message="Root circle not found in settings",
-            id=DOMAIN
+    circle_meta = get_circle_meta()
+    if (circle_meta is None or "root" not in circle_meta):
+        # Create admin and root circles
+        root_circle = Circle().new(
+            name=DOMAIN,
+            description="Root circle",
+            tag="root",
+            parents={}
+        ).data
+        Circle().new(
+            name="campus-admin",
+            description="Campus admin circle",
+            tag="admin",
+            parents={root_circle[PK]: 15}
+        ).data
+        # Create or update circle meta record
+        storage[TABLE].update_one(
+            {"@meta": True},
+            {
+                "$set": {
+                    "@meta": True,
+                    "root": root_circle[PK],
+                    root_circle[PK]: {},  # circle address tree
+                }
+            },
+            upsert=False
         )
-    return Circle().get(circle_settings["root"]).data
 
 
-def get_tree_root() -> CircleTree:
-    """Get the root of the Circle tree"""
-    root = get_root_circle()
-    return get_conn()[TABLE].find_one(
-        {root[PK]: {"$exists": True}}
-    )
+class CircleMeta(TypedDict, total=False):
+    """Circle meta schema for the circles collection.
+
+    This is used to store the root circle and the address tree.
+    """
+    # Some keys are required but (intentionally) cannot be represented
+    # in TypedDict
+    # These are added here for documentation purposes
+    # @meta: bool  # always True
+    # <circle_id>: CircleTree  # circle address tree
+    root: CircleID
 
 
 class CircleNew(TypedDict, total=True):
@@ -120,6 +114,46 @@ class CircleResource(CircleRecord, total=False):
     """Response body schema representing the result of a circles.get operation."""
     children: dict[CircleID, AccessValue]
     sources: dict  # SourceID, SourceHeader
+
+
+def get_circle_meta() -> "CircleMeta":
+    """Get the circle meta record from the settings collection."""
+    storage = get_conn()
+    circle_meta = storage[TABLE].find_one({"@meta": True})
+    if circle_meta is None:
+        raise api_errors.InternalError(
+            message=f"Circle meta record not found in collection {TABLE}",
+            id=DOMAIN
+        )
+    # Since some keys required in CircleMeta cannot be represented as
+    # identifiers, we use the TypedDict constructor
+    return TypedDict("CircleMeta", circle_meta)  # type: ignore
+
+def get_root_circle() -> "CircleRecord":
+    """Get the root circle ID from the settings collection."""
+    circle_meta = get_circle_meta()
+    if "root" not in circle_meta:
+        raise api_errors.InternalError(
+            message=f"'root' not set in collection {TABLE}",
+            id=DOMAIN
+        )
+    return Circle().get(circle_meta["root"]).data
+
+def get_tree_root() -> "CircleTree":
+    """Get the root of the Circle tree"""
+    circle_meta = get_circle_meta()
+    if "root" not in circle_meta:
+        raise api_errors.InternalError(
+            message=f"'root' not set in collection {TABLE}",
+            id=DOMAIN
+        )
+    tree_root = circle_meta[circle_meta["root"]]
+    return TypedDict("CircleTree", tree_root)  # type: ignore
+
+def get_address_tree() -> "CircleAddressTree":
+    """Get the address tree of circles."""
+    root = get_tree_root()
+    return CircleAddressTree(root=root)
 
 
 class Circle:
