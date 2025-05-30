@@ -80,7 +80,7 @@ def move_circle(circle_id: str, *_, **__) -> FlaskResponse:
 
 @bp.get('/<string:circle_id>/members')
 def get_circle_members(circle_id: str, *_, **__) -> FlaskResponse:
-    """Get members of a circle."""
+    """Get member IDs of a circle and their access values."""
     resp = circles.members.list(circle_id)  # raises APIError
     return resp.data, 200
 
@@ -95,15 +95,25 @@ def add_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberAdd]
     return resp.data, 200
 
 @bp.delete('/<string:circle_id>/members/remove')
-def remove_circle_member(circle_id: str, *_, **data) -> FlaskResponse:
+@validate(
+    request=circle.CircleMemberRemove.__annotations__,
+    on_error=api_errors.raise_api_error
+)
+def remove_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberRemove]) -> FlaskResponse:
     """Remove a member from a circle."""
-    return jsonify({"message": "Not implemented"}), 501
+    resp = circles.members.remove(circle_id, **data)
+    return resp.data, 200
 
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
 @bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
-def patch_circle_member(circle_id: str, *_, **data) -> FlaskResponse:
+@validate(
+    request=circle.CircleMemberSet.__annotations__,
+    on_error=api_errors.raise_api_error
+)
+def patch_circle_member(circle_id: str, *_, **data: Unpack[circle.CircleMemberSet]) -> FlaskResponse:
     """Update a member's access in a circle."""
-    return jsonify({"message": "Not implemented"}), 501
+    resp = circles.members.set(circle_id, **data)
+    return resp.data, 200
 
 @bp.get('/<string:circle_id>/users')
 def get_circle_users(circle_id: str, *_, **data) -> FlaskResponse:

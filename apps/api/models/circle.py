@@ -122,9 +122,18 @@ class CircleResource(CircleRecord, total=False):
     sources: dict  # SourceID, SourceHeader
 
 
-class CircleMemberAdd(TypedDict):
-    """Request body schema for a circles.members.add operation"""
+class CircleMemberRemove(TypedDict):
+    """Request body schema for a circles.members.remove operation"""
     member_id: CircleID
+
+
+class CircleMemberAdd(CircleMemberRemove):
+    """Request body schema for a circles.members.add operation"""
+    access_value: AccessValue
+
+
+class CircleMemberSet(CircleMemberRemove):
+    """Request body schema for a circles.members.set operation"""
     access_value: AccessValue
 
 
@@ -198,8 +207,10 @@ class CircleMember:
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def add(self, circle_id: CircleID, member_id: CircleID, access_value: AccessValue) -> ModelResponse:
+    def add(self, circle_id: CircleID, **fields: Unpack[CircleMemberAdd]) -> ModelResponse:
         """Add a member to a circle."""
+        member_id = fields["member_id"]
+        access_value = fields["access_value"]
         # Check if member circle exists
         member_circle = self.storage.get_by_id(TABLE, member_id)
         if member_circle.status == "error":
@@ -218,8 +229,9 @@ class CircleMember:
         )
         return ModelResponse(status="ok", message=Message.UPDATED)
     
-    def remove(self, circle_id: CircleID, member_id: CircleID) -> ModelResponse:
+    def remove(self, circle_id: CircleID, **fields: Unpack[CircleMemberRemove]) -> ModelResponse:
         """Remove a member from a circle."""
+        member_id = fields["member_id"]
         # Check if member circle is a member of circle
         circle = self.storage.get_by_id(TABLE, circle_id)
         if circle.status == "error":
@@ -241,6 +253,15 @@ class CircleMember:
                 }
             },
         )
+        return ModelResponse(status="ok", message=Message.UPDATED)
+
+    def set(self, circle_id: CircleID, **fields: Unpack[CircleMemberSet]) -> ModelResponse:
+        """Set the access of a member of a circle.
+
+        No validation of existing access is carried out.
+        """
+        # For now, set and add operations are identical
+        self.add(circle_id, **fields)
         return ModelResponse(status="ok", message=Message.UPDATED)
 
 
@@ -280,7 +301,7 @@ class Circle:
         client = get_conn()
         for parent_id, access_value in parents.items():
             # TODO: Drum notation for updating nested fields
-            self.members.add(parent_id, circle_id, access_value)
+            self.members.add(parent_id, member_id=circle_id, access_value=access_value)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
