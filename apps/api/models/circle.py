@@ -199,22 +199,16 @@ class CircleMember:
                 message="Member circle not found",
                 id=member_id
             )
-        resp = self.storage.update_by_id(
-            TABLE,
-            circle_id,
-            {"$set": {f"members.{member_id}": access_value}}
+        client = get_conn()
+        client[TABLE].update_one(
+            {circle_id: {"$exists": True}},
+            {
+                "$set": {
+                    f"members.{member_id}": access_value
+                }
+            },
         )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="Circle not found",
-                    id=circle_id
-                )
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        return ModelResponse(status="ok", message=Message.UPDATED)
     
     def remove(self, circle_id: CircleID, member_id: CircleID) -> ModelResponse:
         """Remove a member from a circle."""
@@ -230,22 +224,16 @@ class CircleMember:
                 message="Member not found in circle",
                 id=member_id
             )
-        resp = self.storage.update_by_id(
-            TABLE,
-            circle_id,
-            {"$unset": {f"members.{member_id}": ""}}
+        client = get_conn()
+        client[TABLE].update_one(
+            {circle_id: {"$exists": True}},
+            {
+                "$unset": {
+                    f"members.{member_id}": ""
+                }
+            },
         )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="Circle not found",
-                    id=circle_id
-                )
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        return ModelResponse(status="ok", message=Message.UPDATED)
 
 
 class Circle:
