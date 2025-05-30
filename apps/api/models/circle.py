@@ -45,7 +45,7 @@ def init_db():
     """
     # Check for existing root circle
     db = get_db()
-    circle_meta = get_circle_meta()
+    circle_meta = db[TABLE].find_one({"@meta": True})
     if (circle_meta is None or "root" not in circle_meta):
         # Create admin and root circles
         root_circle = Circle().new(
