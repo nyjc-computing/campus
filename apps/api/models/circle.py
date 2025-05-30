@@ -97,7 +97,7 @@ class CircleNew(TypedDict, total=True):
     name: str
     description: NotRequired[str]
     tag: CircleTag
-    parents: dict[CirclePath, AccessValue]
+    parents: NotRequired[dict[CirclePath, AccessValue]]
 
 
 class CircleUpdate(TypedDict, total=False):
@@ -167,28 +167,26 @@ class Circle:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
 
-    def 
-
     def new(self, **fields: Unpack[CircleNew]) -> ModelResponse:
         """This creates a new circle and adds it to the circle collection.
 
         It does not add it to the circle hierarchy or access control.
         """
-        circle_id = uid.generate_category_uid("circle", length=8)
-        if fields["tag"] == "root" and len(fields["parents"]) > 0:
-            raise api_errors.InvalidRequestError(
-                message="Root Circle cannot have parent",
-                id=circle_id,
-            )
-        elif fields["tag"] != "root" and len(fields["parents"]) == 0:
-            raise api_errors.InvalidRequestError(
-                message="Circle must have at least one parent",
-                id=circle_id,
-            )
+        admin_circle_id = self.storage.get_matching(
+            TABLE, {"tag": "admin"}
+        ).data[PK]
+        # Root circle must not have parents
+        parents = fields.pop(
+            "parents",
+            {} if fields["tag"] == "root" else {admin_circle_id: 15}
+        )
+        circle_id = CampusID(uid.generate_category_uid("circle", length=8))
         record = CircleRecord(
             id=circle_id,
             created_at=utc_time.now(),
-            **fields,
+            name=fields["name"],
+            description=fields.get("description", ""),
+            tag=fields["tag"],
         )
         resp = self.storage.insert(TABLE, record)
         match resp:
