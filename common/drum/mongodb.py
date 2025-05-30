@@ -84,9 +84,7 @@ class MongoDrum(DrumInterface):
                 " Use get_by_id() instead."
             )
         try:
-            docs = list(self.db[group].find(condition))
-            for doc in docs:
-                doc[PK] = str(doc.pop("_id"))
+            docs = [from_mongo_id(d) for d in self.db[group].find(condition)]
             if docs:
                 return DrumResponse("ok", Message.FOUND, docs)
             else:
@@ -98,7 +96,7 @@ class MongoDrum(DrumInterface):
         try:
             doc = to_mongo_id(record)
             self.db[group].insert_one(doc)
-            return DrumResponse("ok", Message.SUCCESS)
+            return DrumResponse("ok", Message.SUCCESS, record)
         except PyMongoError as e:
             return error_response(str(e))
 
