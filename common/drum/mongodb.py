@@ -6,18 +6,25 @@ MongoDB implementation of the Drum interface.
 import os
 from typing import Any
 from pymongo import MongoClient
+from pymongo.database import Database
 from pymongo.errors import PyMongoError
 
 from common.schema import Message
 from .base import PK, Condition, DrumInterface, DrumResponse, Record, Update
 
+DBNAME = "campus"  # Default database name
 MONGOPK = "_id"
 
 
 def get_conn() -> MongoClient:
     """Get a prepared connection to the MongoDB database."""
-    uri = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+    uri = os.environ["MONGODB_URI"]
     return MongoClient(uri)
+
+def get_db() -> Database:
+    """Get a prepared database instance."""
+    client = get_conn()
+    return client[DBNAME]
 
 def get_drum() -> 'MongoDrum':
     """Get a prepared Drum instance."""
@@ -77,9 +84,7 @@ class MongoDrum(DrumInterface):
                 " Use get_by_id() instead."
             )
         try:
-            docs = list(self.db[group].find(condition))
-            for doc in docs:
-                doc[PK] = str(doc.pop("_id"))
+            docs = [from_mongo_id(d) for d in self.db[group].find(condition)]
             if docs:
                 return DrumResponse("ok", Message.FOUND, docs)
             else:
@@ -91,7 +96,7 @@ class MongoDrum(DrumInterface):
         try:
             doc = to_mongo_id(record)
             self.db[group].insert_one(doc)
-            return DrumResponse("ok", Message.SUCCESS)
+            return DrumResponse("ok", Message.SUCCESS, record)
         except PyMongoError as e:
             return error_response(str(e))
 

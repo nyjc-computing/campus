@@ -8,6 +8,10 @@ from typing import Any, Iterable, Iterator, Literal, Mapping
 
 ResponseStatus = Literal["ok", "error"]
 
+# TODO: Replace with OpenAPI-based pattern-string schema
+CampusID = str
+UserID = str
+
 
 class Response(Mapping, Iterable):
     """Base interface for all responses.

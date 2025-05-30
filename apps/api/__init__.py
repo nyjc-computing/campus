@@ -11,6 +11,7 @@ from apps.api import routes
 # These aliased model imports allow the api package to be used similarly
 # to the Campus API
 # e.g. api.clients.new(), api.emailotp.request()
+from apps.api.routes.circles import circles
 from apps.api.routes.clients import clients
 from apps.api.routes.emailotp import emailotp
 from apps.api.routes.users import users
@@ -19,6 +20,7 @@ __all__ = [
     'create_app',
     'init_app',
     'init_db',
+    'circles',
     'clients',
     'emailotp',
     'users'

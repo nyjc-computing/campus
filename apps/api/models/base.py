@@ -3,9 +3,9 @@
 Base types and classes for all Palmtree models.
 """
 
-from typing import Any, TypedDict
+from typing import TypedDict
 
-from common.schema import Message, Response
+from common.schema import CampusID, Response, UserID
 from common.utils import utc_time
 
 
@@ -19,5 +19,5 @@ class BaseRecord(TypedDict):
     Records are Mapping objects that represent a single record in the database.
     BaseRecord reflects the keys that are common to all records in the system.
     """
-    id: str
+    id: CampusID | UserID
     created_at: utc_time.datetime
