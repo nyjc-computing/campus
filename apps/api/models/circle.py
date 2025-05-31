@@ -346,7 +346,7 @@ class Circle:
 
     def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> ModelResponse:
         """Update a circle by id."""
-        resp = self.storage.update_by_id('circles', circle_id, updates)
+        resp = self.storage.update_by_id(TABLE, circle_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
