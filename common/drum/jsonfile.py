@@ -22,18 +22,25 @@ def error_response(message: str) -> DrumResponse:
 
 
 class JsonDrum(DrumInterface):
-    """MongoDB implementation of the Drum interface."""
+    """JSON file implementation of the Drum interface."""
 
     def __init__(self, srcdir: os.path.PathLike):
-        self.srcdir = srcdir
+        self.srcdir = Path(srcdir)
 
     def get_all(self, group: str) -> DrumResponse:
-        """Return all JSON documents in srcdir."""
-        pass
+        """Return all JSON documents in parh srcdir/group."""
+        path = os.path.join(self.srcdir, group)
+        files = [
+            entry for entry in os.listdir(path)
+            if os.path.isfile(os.path.join(path, entry))
+            and os.path.splitext(entry)[-1] == ".json"
+        ]
+        
 
     def get_by_id(self, group: str, id: str) -> DrumResponse:
         """Return JSON document with matching name as id."""
-        pass
+        filepath = os.path.join(self.srcsir, group, id + ".json")
+        
 
     def get_matching(self, group: str, condition: Condition) -> DrumResponse:
         raise NotImplementedError("operation not supported.")
