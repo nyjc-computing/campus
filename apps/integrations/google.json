@@ -1,0 +1,29 @@
+{
+  "name": "google",
+  "description": "Google API platform integration for Campus. Provides access to Google services via OAuth2.",
+  "servers": {
+    "development": "https://www.googleapis.com",
+    "production": "https://www.googleapis.com",
+    "staging": "https://www.googleapis.com",
+    "testing": "https://www.googleapis.com"
+  },
+  "api_doc": "https://developers.google.com/apis-explorer",
+  "security": {
+    "oauth2": {
+      "type": "oauth2",
+      "scopes": [
+        "https://www.googleapis.com/auth/userinfo.email",
+        "https://www.googleapis.com/auth/userinfo.profile"
+      ],
+      "flows": "authorizationCode",
+      "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
+      "token_url": "https://oauth2.googleapis.com/token"
+    }
+  },
+  "capabilities": {
+    "webhook_support": false,
+    "webhook_events": [],
+    "polling_supported": true,
+    "default_poll_interval": 300
+  }
+}
