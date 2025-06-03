@@ -1,0 +1,33 @@
+{
+  "name": "discord",
+  "description": "Discord API platform integration for Campus. Provides access to Discord services via OAuth2.",
+  "servers": {
+    "development": "https://discord.com/api",
+    "production": "https://discord.com/api",
+    "staging": "https://discord.com/api",
+    "testing": "https://discord.com/api"
+  },
+  "api_doc": "https://discord.com/developers/docs/intro",
+  "security": {
+    "oauth2": {
+      "type": "oauth2",
+      "scopes": [
+        "identify",
+        "email",
+        "guilds"
+      ],
+      "flows": "authorizationCode",
+      "authorization_url": "https://discord.com/api/oauth2/authorize",
+      "token_url": "https://discord.com/api/oauth2/token"
+    }
+  },
+  "capabilities": {
+    "webhook_support": true,
+    "webhook_events": [
+      "MESSAGE_CREATE",
+      "GUILD_MEMBER_ADD"
+    ],
+    "polling_supported": false,
+    "default_poll_interval": 0
+  }
+}
