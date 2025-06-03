@@ -5,7 +5,7 @@ This module provides classes for creating and managing Campus integrations,
 which are connections to third-party platforms and APIs.
 """
 from collections.abc import Mapping
-from typing import Literal, NotRequired, TypedDict, Unpack
+from typing import Literal, NotRequired, Required, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
@@ -82,30 +82,18 @@ class IntegrationCapabilities(TypedDict):
     default_poll_interval: int  # Default polling interval in seconds
 
 
-class IntegrationUpdate(TypedDict, total=False):
-    """Request body schema for a integrations.update operation."""
+class IntegrationResource(BaseRecord, total=False):
+    """Database record schema for an integration.
+
+    This is the internal representation of an integration in the database.
+    """
+    id: Required[IntegrationID]
+    name: str  # lowercase, e.g. "google" | "discord" | "github"
     description: str
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
     security: Mapping[IntegrationAuthTypes, IntegrationAuth]
     capabilities: IntegrationCapabilities
-
-
-class IntegrationNew(IntegrationUpdate):
-    """Request body schema for a integrations.new operation.
-    
-    All fields except name are optional as they are expected to be filled in
-    by the admin after the integration is registered.
-    """
-    name: str  # lowercase, e.g. "google" | "discord" | "github"
-
-
-class IntegrationResource(IntegrationNew, BaseRecord):
-    """Database record schema for an integration.
-
-    This is the internal representation of an integration in the database.
-    """
-    id: IntegrationID
     enabled: bool  # Whether the integration is enabled in Campus
 
 
@@ -117,45 +105,6 @@ class Integration:
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
-
-    def new(self, **fields: Unpack[IntegrationNew]) -> ModelResponse:
-        """This registers a new integration.
-
-        This is expected to be an admin operation.
-        """
-        integration_id = IntegrationID(uid.generate_category_uid("integration", length=8))
-        record = IntegrationResource(
-            id=integration_id,
-            created_at=utc_time.now(),
-            enabled=False,  # Default to disabled until configured
-            **fields
-        )
-        resp = self.storage.insert(TABLE, record)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS):
-                return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
-        raise ValueError(f"Unexpected response from storage: {resp}")
-
-    def delete(self, integration_id: str) -> ModelResponse:
-        """Delete an integration by id.
-        
-        This action is destructive and cannot be undone.
-        It should only be done by an admin/owner.
-        """
-        resp = self.storage.delete_by_id(TABLE, integration_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.DELETED):
-                return ModelResponse(**resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="Integration not found",
-                    id=integration_id
-                )
-        raise ValueError(f"Unexpected response from storage: {resp}")
 
     def get(self, integration_id: str) -> ModelResponse:
         """Get a circle by id from the circle collection."""
@@ -173,17 +122,31 @@ class Integration:
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def update(self, circle_id: str, **updates: Unpack[IntegrationUpdate]) -> ModelResponse:
-        """Update a circle by id."""
-        resp = self.storage.update_by_id(TABLE, circle_id, updates)
+    def disable(self, integration_id: str) -> ModelResponse:
+        """Disable an integration."""
+        resp = self.storage.update_by_id(
+            TABLE,
+            integration_id,
+            {"$set": {"enabled": False}}
+        )
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="Circle not found",
-                    id=circle_id
-                )
+            case Response(status="ok", message=Message.SUCCESS):
+                return ModelResponse(status="ok", message=Message.SUCCESS, data=resp.data)
         raise ValueError(f"Unexpected response from storage: {resp}")
+    
+    def enable(self, integration_id: str) -> ModelResponse:
+        """Enable an integration."""
+        resp = self.storage.update_by_id(
+            TABLE,
+            integration_id,
+            {"$set": {"enabled": True}}
+        )
+        match resp:
+            case Response(status="error", message=message, data=error):
+                raise api_errors.InternalError(message=message, error=error)
+            case Response(status="ok", message=Message.SUCCESS):
+                return ModelResponse(status="ok", message=Message.SUCCESS, data=resp.data)
+        raise ValueError(f"Unexpected response from storage: {resp}")
+    
