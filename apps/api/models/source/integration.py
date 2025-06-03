@@ -10,7 +10,8 @@ from typing import Literal, NotRequired, Required, TypedDict, Unpack
 from apps.common.errors import api_errors
 from apps.api.models.base import ModelResponse
 from common.devops import Env
-from common.drum.mongodb import get_drum
+from common.drum.jsonfile import get_drum
+from common.drum.mongodb import get_db
 from common.schema import CampusID, Message, Response
 from common.utils import uid, utc_time
 
@@ -18,7 +19,7 @@ IntegrationAuthTypes = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 IntegrationID = CampusID
 Url = str
 
-TABLE = "integrations"
+TABLE = "sources"
 
 
 class IntegrationAuth(TypedDict):
@@ -95,11 +96,27 @@ class Integration:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
 
+    def disable(self, name: str) -> ModelResponse:
+        """Disable an integration."""
+        db = get_db()
+        db[TABLE].update_one(
+            {"@meta": True},
+            {"$set": {f"integrations.{name}.enabled": False}}
+        )
+        return ModelResponse(status="ok", message=Message.SUCCESS)
+    
+    def enable(self, name: str) -> ModelResponse:
+        """Enable an integration."""
+        db = get_db()
+        db[TABLE].update_one(
+            {"@meta": True},
+            {"$set": {f"integrations.{name}.enabled": True}}
+        )
+        return ModelResponse(status="ok", message=Message.SUCCESS)
+    
     def get(self, name: str) -> ModelResponse:
-        """Get a circle by id from the circle collection."""
-        # TODO: refactor to import from JSON file instead of database
-        resp = self.storage.get_by_id(TABLE, integration_id)
-        # TODO: join with sources and access values
+        """Get an integration by name from the integrations config."""
+        resp = self.storage.get_by_id(TABLE, name)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -107,36 +124,8 @@ class Integration:
                 return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
-                    message="Circle not found",
-                    id=integration_id
+                    message="Integration not found",
+                    id=name
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def disable(self, name: str) -> ModelResponse:
-        """Disable an integration."""
-        resp = self.storage.update_by_id(
-            TABLE,
-            integration_id,
-            {"$set": {"enabled": False}}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS):
-                return ModelResponse(status="ok", message=Message.SUCCESS, data=resp.data)
-        raise ValueError(f"Unexpected response from storage: {resp}")
-    
-    def enable(self, name: str) -> ModelResponse:
-        """Enable an integration."""
-        resp = self.storage.update_by_id(
-            TABLE,
-            integration_id,
-            {"$set": {"enabled": True}}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS):
-                return ModelResponse(status="ok", message=Message.SUCCESS, data=resp.data)
-        raise ValueError(f"Unexpected response from storage: {resp}")
-    
