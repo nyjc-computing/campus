@@ -11,7 +11,7 @@ Main operations:
 - 
 """
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from typing import Literal, NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
@@ -93,6 +93,7 @@ class IntegrationCapabilities(TypedDict):
 
 
 class IntegrationUpdate(TypedDict, total=False):
+    """Request body schema for a integrations.update operation."""
     description: str
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
