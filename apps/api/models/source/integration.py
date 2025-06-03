@@ -13,6 +13,8 @@ from common.devops import Env
 from common.drum.mongodb import get_drum
 from common.schema import CampusID, Message, Response
 from common.utils import uid, utc_time
+
+IntegrationAuthTypes = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 IntegrationID = CampusID
 Url = str
 
@@ -38,7 +40,7 @@ class IntegrationAuth(TypedDict):
     """
     # Follow OpenAPI 3.0 for convenience
     # https://swagger.io/docs/specification/v3_0/authentication/
-    type: Literal["http", "apiKey", "oauth2", "openIdConnect"]
+    type: IntegrationAuthTypes
     scopes: list[str]  # OAuth2 scopes that Campus will use
 
 
@@ -85,7 +87,7 @@ class IntegrationUpdate(TypedDict, total=False):
     description: str
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
-    security: IntegrationAuth
+    security: Mapping[IntegrationAuthTypes, IntegrationAuth]
     capabilities: IntegrationCapabilities
 
 
