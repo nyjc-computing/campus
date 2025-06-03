@@ -19,6 +19,12 @@ def get_drum() -> 'JsonDrum':
     """Get a prepared Drum instance."""
     return JsonDrum(ROOTDIR)
 
+def load_json(filepath: os.PathLike) -> Any:
+    """Load a JSON file and return its content."""
+    import json
+    with open(filepath, 'r', encoding='utf-8') as file:
+        return json.load(file)
+
 def error_response(message: str) -> DrumResponse:
     """Helper function to create an error response."""
     return DrumResponse("error", Message.FAILED, message)
@@ -38,11 +44,25 @@ class JsonDrum(DrumInterface):
             if os.path.isfile(os.path.join(path, entry))
             and os.path.splitext(entry)[-1].lower() == ".json"
         ]
-        
+        if not files:
+            return error_response(f"No JSON files found in {path}.")
+        data = [
+            self.get_by_id(group, os.path.splitext(filename)[0]).data
+            for filename in files
+        ]
+        return DrumResponse(status="ok", message=Message.SUCCESS, data=data)
 
     def get_by_id(self, group: str, id: str) -> DrumResponse:
         """Return JSON document with matching name as id."""
         filepath = os.path.join(self.srcdir, group, id + ".json")
+        if not os.path.exists(filepath):
+            return error_response(f"File {filepath} does not exist.")
+        try:
+            data = load_json(filepath)
+        except Exception as e:
+            return error_response(f"Failed to load JSON from {filepath}: {str(e)}")
+        else:
+            return DrumResponse(status="ok", message=Message.SUCCESS, data=data)
 
     def get_matching(self, group: str, condition: Condition) -> DrumResponse:
         raise NotImplementedError("operation not supported.")
