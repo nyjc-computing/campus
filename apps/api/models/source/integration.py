@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from typing import Literal, NotRequired, Required, TypedDict, Unpack
 
 from apps.common.errors import api_errors
-from apps.api.models.base import BaseRecord, ModelResponse
+from apps.api.models.base import ModelResponse
 from common.devops import Env
 from common.drum.mongodb import get_drum
 from common.schema import CampusID, Message, Response
@@ -70,12 +70,13 @@ class IntegrationCapabilities(TypedDict):
     default_poll_interval: int  # Default polling interval in seconds
 
 
-class IntegrationResource(BaseRecord, total=False):
-    """Database record schema for an integration.
+class IntegrationConfig(TypedDict, total=False):
+    """Config schema for an integration.
 
-    This is the internal representation of an integration in the database.
+    Since integrations are imported from config and not created or
+    mutated via API, they do not have a CampusID or created_at field.
+    They are identified via name as the PK.
     """
-    id: Required[IntegrationID]
     name: str  # lowercase, e.g. "google" | "discord" | "github"
     description: str
     servers: Mapping[Env, Url]
@@ -94,7 +95,7 @@ class Integration:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
 
-    def get(self, integration_id: str) -> ModelResponse:
+    def get(self, name: str) -> ModelResponse:
         """Get a circle by id from the circle collection."""
         # TODO: refactor to import from JSON file instead of database
         resp = self.storage.get_by_id(TABLE, integration_id)
@@ -111,7 +112,7 @@ class Integration:
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def disable(self, integration_id: str) -> ModelResponse:
+    def disable(self, name: str) -> ModelResponse:
         """Disable an integration."""
         resp = self.storage.update_by_id(
             TABLE,
@@ -125,7 +126,7 @@ class Integration:
                 return ModelResponse(status="ok", message=Message.SUCCESS, data=resp.data)
         raise ValueError(f"Unexpected response from storage: {resp}")
     
-    def enable(self, integration_id: str) -> ModelResponse:
+    def enable(self, name: str) -> ModelResponse:
         """Enable an integration."""
         resp = self.storage.update_by_id(
             TABLE,
