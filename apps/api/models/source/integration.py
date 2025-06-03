@@ -21,18 +21,6 @@ Url = str
 TABLE = "integrations"
 
 
-# TODO: Refactor settings into a separate model
-def init_db():
-    """Initialize the collections needed by the model.
-
-    This function is intended to be called only in a test environment or
-    staging.
-    For MongoDB, collections are created automatically on first insert.
-    """
-    # No init required as of now
-    pass
-
-
 class IntegrationAuth(TypedDict):
     """Authentication configuration for an integration.
 
@@ -108,6 +96,7 @@ class Integration:
 
     def get(self, integration_id: str) -> ModelResponse:
         """Get a circle by id from the circle collection."""
+        # TODO: refactor to import from JSON file instead of database
         resp = self.storage.get_by_id(TABLE, integration_id)
         # TODO: join with sources and access values
         match resp:

@@ -10,10 +10,12 @@ Data structures:
 Main operations:
 - 
 """
+from common.drum.mongodb import get_db
 
-from .integration import Integration, init_db as init_db_integration
+from .integration import Integration
 
-init_db_integration()
+TABLE = "sources"
+
 
 def init_db():
     """Initialize the collections needed by the model.
@@ -22,7 +24,15 @@ def init_db():
     staging.
     For MongoDB, collections are created automatically on first insert.
     """
-    init_db_integration()
+    db = get_db()
+    source_meta = db[TABLE].find_one({"@meta": True})
+    if source_meta is None:
+        db[TABLE].insert_one({
+            "@meta": True,
+            "integrations": {},
+            "sourcetypes": {},
+        })
+    
 
 __all__ = [
     "Integration",
