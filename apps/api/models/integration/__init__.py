@@ -35,12 +35,8 @@ def init_db():
     staging.
     For MongoDB, collections are created automatically on first insert.
     """
-    # Check for existing root circle
-    db = get_db()
-    integration_meta = db[TABLE].find_one({"@meta": True})
-    if (integration_meta is None):
-        # Create meta record if it does not exist
-        Integration().new()
+    # No init required as of now
+    pass
 
 
 class IntegrationAuth(TypedDict):
