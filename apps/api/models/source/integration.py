@@ -15,7 +15,6 @@ from common.drum.mongodb import get_db
 from common.schema import CampusID, Message, Response
 
 IntegrationAuthTypes = Literal["http", "apiKey", "oauth2", "openIdConnect"]
-IntegrationID = CampusID
 Url = str
 
 TABLE = "sources"
@@ -92,7 +91,7 @@ class Integration:
     """
 
     def __init__(self):
-        """Initialize the Circle model with a storage interface."""
+        """Initialize the Integration model with a storage interface."""
         self.storage = get_drum()
 
     def disable(self, name: str) -> ModelResponse:
