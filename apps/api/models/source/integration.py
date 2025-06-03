@@ -5,7 +5,7 @@ This module provides classes for creating and managing Campus integrations,
 which are connections to third-party platforms and APIs.
 """
 from collections.abc import Mapping
-from typing import Literal, NotRequired, Required, TypedDict, Unpack
+from typing import Literal, NotRequired, TypedDict
 
 from apps.common.errors import api_errors
 from apps.api.models.base import ModelResponse
@@ -13,7 +13,6 @@ from common.devops import Env
 from common.drum.jsonfile import get_drum
 from common.drum.mongodb import get_db
 from common.schema import CampusID, Message, Response
-from common.utils import uid, utc_time
 
 IntegrationAuthTypes = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 IntegrationID = CampusID
@@ -117,6 +116,7 @@ class Integration:
     def get(self, name: str) -> ModelResponse:
         """Get an integration by name from the integrations config."""
         resp = self.storage.get_by_id(TABLE, name)
+        # TODO: Cast to appropriate TypedDicts
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
