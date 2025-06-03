@@ -6,15 +6,18 @@ This is intended as a read-only interface, and does not support mutation.
 """
 
 import os
+from pathlib import Path
 from typing import Any
 
 from common.schema import Message
 from .base import PK, Condition, DrumInterface, DrumResponse, Record, Update
 
+ROOTDIR = "apps"
+
 
 def get_drum() -> 'JsonDrum':
     """Get a prepared Drum instance."""
-    return JsonDrum()
+    return JsonDrum(ROOTDIR)
 
 def error_response(message: str) -> DrumResponse:
     """Helper function to create an error response."""
@@ -24,7 +27,7 @@ def error_response(message: str) -> DrumResponse:
 class JsonDrum(DrumInterface):
     """JSON file implementation of the Drum interface."""
 
-    def __init__(self, srcdir: os.path.PathLike):
+    def __init__(self, srcdir: os.PathLike):
         self.srcdir = Path(srcdir)
 
     def get_all(self, group: str) -> DrumResponse:
@@ -33,14 +36,13 @@ class JsonDrum(DrumInterface):
         files = [
             entry for entry in os.listdir(path)
             if os.path.isfile(os.path.join(path, entry))
-            and os.path.splitext(entry)[-1] == ".json"
+            and os.path.splitext(entry)[-1].lower() == ".json"
         ]
         
 
     def get_by_id(self, group: str, id: str) -> DrumResponse:
         """Return JSON document with matching name as id."""
-        filepath = os.path.join(self.srcsir, group, id + ".json")
-        
+        filepath = os.path.join(self.srcdir, group, id + ".json")
 
     def get_matching(self, group: str, condition: Condition) -> DrumResponse:
         raise NotImplementedError("operation not supported.")
