@@ -106,16 +106,12 @@ class IntegrationNew(IntegrationUpdate):
     name: str  # lowercase, e.g. "google" | "discord" | "github"
 
 
-class IntegrationRecord(IntegrationNew, BaseRecord):
+class IntegrationResource(IntegrationNew, BaseRecord):
     """Database record schema for an integration.
 
     This is the internal representation of an integration in the database.
     """
     id: IntegrationID
-
-
-class IntegrationResource(IntegrationRecord):
-    """Response body schema representing the result of a integrations.get operation."""
     enabled: bool  # Whether the integration is enabled in Campus
 
 
@@ -134,9 +130,10 @@ class Integration:
         This is expected to be an admin operation.
         """
         integration_id = IntegrationID(uid.generate_category_uid("integration", length=8))
-        record = IntegrationRecord(
+        record = IntegrationResource(
             id=integration_id,
             created_at=utc_time.now(),
+            enabled=False,  # Default to disabled until configured
             **fields
         )
         resp = self.storage.insert(TABLE, record)
