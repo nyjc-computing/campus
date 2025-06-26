@@ -5,7 +5,7 @@ This module provides classes for creating and managing Campus integrations,
 which are connections to third-party platforms and APIs.
 """
 from collections.abc import Mapping
-from typing import Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from apps.common.errors import api_errors
 from apps.api.models.base import ModelResponse
@@ -85,14 +85,50 @@ class IntegrationConfig(TypedDict, total=False):
     enabled: bool  # Whether the integration is enabled in Campus
 
 
-class Integration:
-    """Integration model for handling database operations related to
-    integrations.
-    """
+class IntegrationBase:
+    """Abstract base class for integration config objects."""
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        servers: Mapping[Env, Url],
+        api_doc: Url,
+        security: Mapping[IntegrationAuthTypes, IntegrationAuth],
+        capabilities: IntegrationCapabilities,
+        enabled: bool = True
+    ):
+        self.name = name
+        self.description = description
+        self.servers = servers
+        self.api_doc = api_doc
+        self.security = security
+        self.capabilities = capabilities
+        self.enabled = enabled
 
-    def __init__(self):
-        """Initialize the Integration model with a storage interface."""
-        self.storage = get_drum()
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "IntegrationBase":
+        """Instantiate from a dict (e.g., loaded from JSON)."""
+        return cls(
+            name=data["name"],
+            description=data["description"],
+            servers=data["servers"],
+            api_doc=data["api_doc"],
+            security=data["security"],
+            capabilities=data["capabilities"],
+            enabled=data.get("enabled", True)
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict for serialization."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "servers": self.servers,
+            "api_doc": self.api_doc,
+            "security": self.security,
+            "capabilities": self.capabilities,
+            "enabled": self.enabled
+        }
 
     def disable(self, name: str) -> ModelResponse:
         """Disable an integration."""
@@ -111,20 +147,3 @@ class Integration:
             {"$set": {f"integrations.{name}.enabled": True}}
         )
         return ModelResponse(status="ok", message=Message.SUCCESS)
-    
-    def get(self, name: str) -> ModelResponse:
-        """Get an integration by name from the integrations config."""
-        resp = self.storage.get_by_id(TABLE, name)
-        # TODO: Cast to appropriate TypedDicts
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="Integration not found",
-                    id=name
-                )
-        raise ValueError(f"Unexpected response from storage: {resp}")
-
