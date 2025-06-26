@@ -22,12 +22,15 @@
     }
   },
   "capabilities": {
-    "webhook_support": true,
-    "webhook_events": [
-      "MESSAGE_CREATE",
-      "GUILD_MEMBER_ADD"
-    ],
-    "polling_supported": false,
-    "default_poll_interval": 0
+    "polling": {
+      "supported": false
+    },
+    "webhooks": {
+      "supported": true,
+      "events": [
+        "MESSAGE_CREATE",
+        "GUILD_MEMBER_ADD"
+      ]
+    }
   }
 }

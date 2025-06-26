@@ -21,9 +21,12 @@
     }
   },
   "capabilities": {
-    "webhook_support": false,
-    "webhook_events": [],
-    "polling_supported": true,
-    "default_poll_interval": 300
+    "polling": {
+      "supported": true,
+      "default_poll_interval": 300
+    },
+    "webhooks": {
+      "supported": false
+    }
   }
 }

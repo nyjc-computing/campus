@@ -61,12 +61,22 @@ class OpenIdConnectAuth(IntegrationAuth):
     discovery_url: str  # URL for OpenID Connect discovery document
 
 
+class PollingCapabilities(TypedDict):
+    """Polling capabilities of an integration."""
+    supported: bool  # Whether polling is supported
+    default_poll_interval: NotRequired[int]  # Default polling interval in seconds, if applicable
+
+
+class WebhookCapabilities(TypedDict):
+    """Webhook capabilities of an integration."""
+    supported: bool  # Whether the integration supports webhooks
+    events: list[str]  # List of events that can trigger webhooks
+
+
 class IntegrationCapabilities(TypedDict):
     """Capabilities of an integration that Campus can use."""
-    webhook_support: bool  # Whether the integration supports webhooks
-    webhook_events: list[str]  # List of events that can trigger webhooks
-    polling_supported: bool  # Whether the integration supports polling
-    default_poll_interval: int  # Default polling interval in seconds
+    polling: PollingCapabilities
+    webhooks: WebhookCapabilities
 
 
 class IntegrationConfig(TypedDict, total=False):
