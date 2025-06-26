@@ -7,12 +7,10 @@ which are connections to third-party platforms and APIs.
 from collections.abc import Mapping
 from typing import Any, Literal, NotRequired, TypedDict
 
-from apps.common.errors import api_errors
 from apps.api.models.base import ModelResponse
 from common.devops import Env
-from common.drum.jsonfile import get_drum
 from common.drum.mongodb import get_db
-from common.schema import CampusID, Message, Response
+from common.schema import Message
 
 IntegrationAuthTypes = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 Url = str
