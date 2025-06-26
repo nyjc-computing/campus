@@ -73,8 +73,8 @@ class WebhookCapabilities(TypedDict):
     events: list[str]  # List of events that can trigger webhooks
 
 
-class IntegrationCapabilities(TypedDict):
-    """Capabilities of an integration that Campus can use."""
+class CommonCapabilities(TypedDict):
+    """Common capabilities of an integration/sourcetype that Campus can use."""
     polling: PollingCapabilities
     webhooks: WebhookCapabilities
 
@@ -91,21 +91,21 @@ class IntegrationConfig(TypedDict, total=False):
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
     security: Mapping[IntegrationAuthTypes, IntegrationAuth]
-    capabilities: IntegrationCapabilities
+    capabilities: CommonCapabilities
     enabled: bool  # Whether the integration is enabled in Campus
 
 
 class IntegrationBase:
     """Abstract base class for integration config objects."""
     def __init__(
-        self,
-        name: str,
-        description: str,
-        servers: Mapping[Env, Url],
-        api_doc: Url,
-        security: Mapping[IntegrationAuthTypes, IntegrationAuth],
-        capabilities: IntegrationCapabilities,
-        enabled: bool
+            self,
+            name: str,
+            description: str,
+            servers: Mapping[Env, Url],
+            api_doc: Url,
+            security: Mapping[IntegrationAuthTypes, IntegrationAuth],
+            capabilities: CommonCapabilities,
+            enabled: bool
     ):
         self.name = name
         self.description = description

@@ -4,77 +4,54 @@ SourceType Models
 This module provides classes for creating and managing Campus source types,
 which are categories of data sources from third-party platforms and APIs.
 """
-from collections.abc import Mapping
-from typing import Literal, NotRequired, TypedDict
-
-from apps.common.errors import api_errors
-from apps.api.models.base import ModelResponse
-from common.devops import Env
-from common.drum.jsonfile import get_drum
-from common.drum.mongodb import get_db
-from common.schema import CampusID, Message, Response
-
-from .integration import IntegrationAuthTypes, Url
-
-SourceTypeID = CampusID
+from .integration import (
+    CommonCapabilities,
+    Url,
+)
 
 TABLE = "sourcetypes"
 
 
-class SourceTypeResource(TypedDict, total=False):
-    """Database record schema for an integration.
+class SourceTypeBase:
+    """Base class for source type config objects."""
 
-    This is the internal representation of an integration in the database.
-    """
-    name: str
-    description: str
-    integration: str
-    servers: Mapping[Env, Url]
-    api_doc: Url  # URL to OpenAPI spec or API documentation
-    security: IntegrationAuthTypes
-    scopes: list[str]
-    base_url: NotRequired[Url]
+    def __init__(
+            self,
+            integration_name: str,
+            name: str,
+            description: str,
+            api_base_url: Url,
+            resource_id_format: str,
+            scopes: list[str],
+            capabilities: CommonCapabilities,
+    ):
+        self.integration_name = integration_name
+        self.name = name
+        self.description = description
+        self.api_base_url = api_base_url
+        self.resource_id_format = resource_id_format
+        self.scopes = scopes
+        self.capabilities = capabilities
 
-
-class SourceType:
-    """SourceType model for handling database operations related to
-    source types.
-    """
-
-    def __init__(self):
-        """Initialize the SourceType model with a storage interface."""
-        self.storage = get_drum()
-
-    def disable(self, name: str) -> ModelResponse:
-        """Disable a sourcetype."""
-        db = get_db()
-        db[TABLE].update_one(
-            {"@meta": True},
-            {"$set": {f"sourcetypes.{name}.enabled": False}}
+    @classmethod
+    def from_dict(cls, data: dict) -> "SourceTypeBase":
+        return cls(
+            integration_name=data["integration_name"],
+            name=data["name"],
+            description=data["description"],
+            api_base_url=data["api_base_url"],
+            resource_id_format=data["resource_id_format"],
+            scopes=data["scopes"],
+            capabilities=CommonCapabilities(**data["capabilities"]),
         )
-        return ModelResponse(status="ok", message=Message.SUCCESS)
-    
-    def enable(self, name: str) -> ModelResponse:
-        """Enable a sourcetype."""
-        db = get_db()
-        db[TABLE].update_one(
-            {"@meta": True},
-            {"$set": {f"sourcetypes.{name}.enabled": True}}
-        )
-        return ModelResponse(status="ok", message=Message.SUCCESS)
-    
-    def get(self, name: str) -> ModelResponse:
-        """Get a sourcetype by name from the sourcetypes config."""
-        resp = self.storage.get_by_id(TABLE, name)
-        # TODO: Cast to appropriate TypedDicts
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="Integration not found",
-                    id=name
-                )
-        raise ValueError(f"Unexpected response from storage: {resp}")
+
+    def to_dict(self) -> dict:
+        return {
+            "integration_name": self.integration_name,
+            "name": self.name,
+            "description": self.description,
+            "api_base_url": self.api_base_url,
+            "resource_id_format": self.resource_id_format,
+            "scopes": self.scopes,
+            "capabilities": self.capabilities,
+        }
