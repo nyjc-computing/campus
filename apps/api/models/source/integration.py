@@ -95,7 +95,7 @@ class IntegrationBase:
         api_doc: Url,
         security: Mapping[IntegrationAuthTypes, IntegrationAuth],
         capabilities: IntegrationCapabilities,
-        enabled: bool = True
+        enabled: bool
     ):
         self.name = name
         self.description = description
@@ -115,7 +115,7 @@ class IntegrationBase:
             api_doc=data["api_doc"],
             security=data["security"],
             capabilities=data["capabilities"],
-            enabled=data.get("enabled", True)
+            enabled=data.get("enabled", False)
         )
 
     def to_dict(self) -> dict[str, Any]:
