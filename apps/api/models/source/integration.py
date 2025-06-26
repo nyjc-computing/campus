@@ -160,7 +160,10 @@ class IntegrationBase:
         # assume metadata document exists
         if not isinstance(meta, dict):
             raise ValueError("No @meta document found in storage.")
-        if not db[TABLE].find_one({"@meta": True, f"integrations.{self.name}.enabled": {"$exists": True}}):
+        if not db[TABLE].find_one({
+            "@meta": True,
+            f"integrations.{self.name}.enabled": {"$exists": True}
+        }):
             # Integration not completely registered in storage
             # Default status to False
             # MongoDB $set operator works recursively
@@ -168,7 +171,10 @@ class IntegrationBase:
                 {"@meta": True},
                 {"$set": {f"integrations.{self.name}.enabled": False}}
             )
-        integration = db[TABLE].find_one({"@meta": True, f"integrations.{self.name}": 1})
+        integration = db[TABLE].find_one({
+            "@meta": True,
+            f"integrations.{self.name}": 1
+        })
         assert isinstance(integration, dict)
         if self.enabled is None:
             # Instance is inited but not yet synced
@@ -178,6 +184,8 @@ class IntegrationBase:
             # Update storage from instance enabled status
             db[TABLE].update_one(
                 {"@meta": True},
-                {"$set": {f"integrations.{self.name}.enabled": bool(self.enabled)}}
+                {"$set": {
+                    f"integrations.{self.name}.enabled": bool(self.enabled)
+                }}
             )
         return ModelResponse(status="ok", message=Message.SUCCESS)
