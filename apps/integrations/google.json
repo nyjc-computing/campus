@@ -15,9 +15,15 @@
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile"
       ],
-      "flows": "authorizationCode",
+      "flow": "authorizationCode",
       "authorization_url": "https://accounts.google.com/o/oauth2/v2/auth",
-      "token_url": "https://oauth2.googleapis.com/token"
+      "token_url": "https://oauth2.googleapis.com/token",
+      "user_info_url": "https://www.googleapis.com/oauth2/v3/userinfo",
+      "extra_params": {
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "consent"
+      }
     }
   },
   "capabilities": {

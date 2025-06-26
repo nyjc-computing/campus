@@ -15,9 +15,13 @@
         "read:user",
         "user:email"
       ],
-      "flows": "authorizationCode",
+      "flow": "authorizationCode",
       "authorization_url": "https://github.com/login/oauth/authorize",
-      "token_url": "https://github.com/login/oauth/access_token"
+      "token_url": "https://github.com/login/oauth/access_token",
+      "user_info_url": "https://api.github.com/user",
+      "extra_params": {
+        "allow_signup": "true"
+      }
     }
   },
   "capabilities": {

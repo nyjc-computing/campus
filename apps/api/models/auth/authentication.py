@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from functools import singledispatchmethod
 from typing import Literal, NotRequired, TypedDict, Unpack
+from urllib.parse import urlencode
 
 import requests
 
@@ -216,7 +217,7 @@ class OAuth2AuthorizationCode(WebAuth):
         self.token_params = kwargs.get("token_params", {})
         self.user_info_params = kwargs.get("user_info_params", {})
 
-    def get_authorization_url(self, state: str, client_id: str, redirect_uri: str, provider: str) -> str:
+    def get_authorization_url(self, state: str, client_id: str, redirect_uri: str) -> str:
         """Return the authorization URL for redirect, with provider-specific params."""
         params = {
             "response_type": "code",
@@ -225,18 +226,7 @@ class OAuth2AuthorizationCode(WebAuth):
             "scope": " ".join(self.scopes),
             "state": state,
         }
-        # Provider-specific tweaks
-        if provider == "google":
-            params["access_type"] = "offline"
-            params["include_granted_scopes"] = "true"
-            params["prompt"] = "consent"
-        elif provider == "github":
-            params["allow_signup"] = "true"
-        elif provider == "discord":
-            params["prompt"] = "consent"
-        # Merge in any extra_params
         params.update(getattr(self, "extra_params", {}) or {})
-        from urllib.parse import urlencode
         base_url = getattr(self, "authorization_url", "")
         return f"{base_url}?{urlencode(params)}"
 
@@ -266,16 +256,8 @@ class OAuth2AuthorizationCode(WebAuth):
         """Fetch user info from the provider's user info endpoint."""
         if not self.user_info_url:
             return {}
-        # if provider == "google":
-        #     url = "https://openidconnect.googleapis.com/v1/userinfo"
-        # elif provider == "github":
-        #     url = "https://api.github.com/user"
-        # elif provider == "discord":
-        #     url = "https://discord.com/api/users/@me"
-        # else:
-        #     return {}
         headers = self.get_auth_headers(access_token)
-        headers.update(getattr(self, "user_info_params", {}) or {})
+        headers.update(self.user_info_params)
         resp = requests.get(self.user_info_url, headers=headers)
         try:
             return resp.json()
