@@ -103,7 +103,7 @@ class IntegrationBase:
             api_doc: Url,
             security: Mapping[IntegrationAuthTypes, IntegrationAuth],
             capabilities: CommonCapabilities,
-            enabled: bool
+            enabled: bool | None = None
     ):
         self.name = name
         self.description = description
@@ -111,7 +111,10 @@ class IntegrationBase:
         self.api_doc = api_doc
         self.security = security
         self.capabilities = capabilities
+        # Disabled/enabled status is stored in storage
+        # Sync from storage on init
         self.enabled = enabled
+        self.sync_status()
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IntegrationBase":
@@ -123,7 +126,7 @@ class IntegrationBase:
             api_doc=data["api_doc"],
             security=data["security"],
             capabilities=data["capabilities"],
-            enabled=data.get("enabled", False)
+            enabled=data.get("enabled", None)  # Default to False if not present
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -138,20 +141,43 @@ class IntegrationBase:
             "enabled": self.enabled
         }
 
-    def disable(self, name: str) -> ModelResponse:
+    def disable(self) -> ModelResponse:
         """Disable an integration."""
-        db = get_db()
-        db[TABLE].update_one(
-            {"@meta": True},
-            {"$set": {f"integrations.{name}.enabled": False}}
-        )
+        self.enabled = False
+        self.sync_status()
         return ModelResponse(status="ok", message=Message.SUCCESS)
     
-    def enable(self, name: str) -> ModelResponse:
+    def enable(self) -> ModelResponse:
         """Enable an integration."""
+        self.enabled = True
+        self.sync_status()
+        return ModelResponse(status="ok", message=Message.SUCCESS)
+    
+    def sync_status(self) -> ModelResponse:
+        """Sync an integration status to storage."""
         db = get_db()
-        db[TABLE].update_one(
-            {"@meta": True},
-            {"$set": {f"integrations.{name}.enabled": True}}
-        )
+        meta = db[TABLE].find_one({"@meta": True})
+        # assume metadata document exists
+        if not isinstance(meta, dict):
+            raise ValueError("No @meta document found in storage.")
+        if not db[TABLE].find_one({"@meta": True, f"integrations.{self.name}.enabled": {"$exists": True}}):
+            # Integration not completely registered in storage
+            # Default status to False
+            # MongoDB $set operator works recursively
+            db[TABLE].update_one(
+                {"@meta": True},
+                {"$set": {f"integrations.{self.name}.enabled": False}}
+            )
+        integration = db[TABLE].find_one({"@meta": True, f"integrations.{self.name}": 1})
+        assert isinstance(integration, dict)
+        if self.enabled is None:
+            # Instance is inited but not yet synced
+            # Set the enabled status from integration doc
+            self.enabled = bool(integration["enabled"])
+        else:
+            # Update storage from instance enabled status
+            db[TABLE].update_one(
+                {"@meta": True},
+                {"$set": {f"integrations.{self.name}.enabled": bool(self.enabled)}}
+            )
         return ModelResponse(status="ok", message=Message.SUCCESS)
