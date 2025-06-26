@@ -77,7 +77,7 @@ class OAuth2PasswordConfig(OAuth2BaseConfig):
     token_params: NotRequired[dict[str, str]]  # Optional, for custom token exchange
 
 
-class WebAuth(ABC):
+class AuthFlow(ABC):
     """Web auth model for authentication methods.
 
     Each authentication method and flow should inherit this subclass and
@@ -106,7 +106,7 @@ class WebAuth(ABC):
 
     @singledispatchmethod
     @classmethod
-    def from_json(cls, data: BaseAuthConfig) -> "WebAuth":
+    def from_json(cls, data: BaseAuthConfig) -> "AuthFlow":
         match data["type"]:
             # case "http":
             #     return HttpAuth(**data)
@@ -115,7 +115,7 @@ class WebAuth(ABC):
             case "oauth2":
                 match data["flow"]:
                     case "authorizationCode":
-                        return OAuth2AuthorizationCode(**data)
+                        return OAuth2AuthorizationCodeFlow(**data)
                     # case "clientCredentials":
                     #     return OAuth2ClientCredentials(**data)
                     # case "implicit":
@@ -128,7 +128,7 @@ class WebAuth(ABC):
         raise ValueError(f"Unsupported auth type: {data['type']}")
 
 
-# class HttpAuth(WebAuth):
+# class HttpAuthFlow(WebAuth):
 #     """Implements HTTP Bearer authentication flow.
 
 #     Uses the Authorization header with a Bearer token for authentication.
@@ -148,7 +148,7 @@ class WebAuth(ABC):
 #         return self.is_authenticated(request)
 
 
-# class ApiKeyAuth(WebAuth):
+# class ApiKeyAuthFlow(WebAuth):
 #     """Implements API Key authentication flow.
 
 #     Supports API keys in HTTP headers or query parameters.
@@ -175,7 +175,7 @@ class WebAuth(ABC):
 #         return self.is_authenticated(request)
 
 
-# class OpenIdConnectAuth(WebAuth):
+# class OpenIdConnectAuthFlow(WebAuth):
 #     """Implements OpenID Connect authentication flow.
 
 #     Uses OpenID Connect tokens and discovery document for authentication.
@@ -200,7 +200,7 @@ class WebAuth(ABC):
 #         return {}
 
 
-class OAuth2AuthorizationCode(WebAuth):
+class OAuth2AuthorizationCodeFlow(AuthFlow):
     """Implements OAuth2 Authorization Code flow.
 
     Uses a user-agent redirect to obtain an authorization code, then exchanges it for an access token.
@@ -276,7 +276,7 @@ class OAuth2AuthorizationCode(WebAuth):
         return self.is_authenticated(request)
 
 
-# class OAuth2ClientCredentials(WebAuth):
+# class OAuth2ClientCredentialsFlow(WebAuth):
 #     """Implements OAuth2 Client Credentials flow.
 
 #     Obtains an access token using client credentials without user interaction.
@@ -301,7 +301,7 @@ class OAuth2AuthorizationCode(WebAuth):
 #         return self.is_authenticated(request)
 
 
-# class OAuth2Implicit(WebAuth):
+# class OAuth2ImplicitFlow(WebAuth):
 #     """Implements OAuth2 Implicit flow.
 
 #     Obtains an access token directly from the authorization endpoint via user-agent redirect.
@@ -326,7 +326,7 @@ class OAuth2AuthorizationCode(WebAuth):
 #         return self.is_authenticated(request)
 
 
-# class OAuth2Password(WebAuth):
+# class OAuth2PasswordFlow(WebAuth):
 #     """Implements OAuth2 Resource Owner Password Credentials flow.
 
 #     Obtains an access token using a username and password directly.
