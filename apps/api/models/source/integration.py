@@ -5,58 +5,17 @@ This module provides classes for creating and managing Campus integrations,
 which are connections to third-party platforms and APIs.
 """
 from collections.abc import Mapping
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from apps.api.models.base import ModelResponse
+from apps.api.models.auth.authentication import AuthTypes, BaseAuthConfig, WebAuth
 from common.devops import Env
 from common.drum.mongodb import get_db
 from common.schema import Message
 
-IntegrationAuthTypes = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 Url = str
 
 TABLE = "sources"
-
-
-class IntegrationAuth(TypedDict):
-    """Authentication configuration for an integration.
-
-    To be subclassed for each auth type.
-    """
-    # Follow OpenAPI 3.0 for convenience
-    # https://swagger.io/docs/specification/v3_0/authentication/
-    type: IntegrationAuthTypes
-    scopes: list[str]  # OAuth2 scopes that Campus will use
-
-
-class HttpAuth(IntegrationAuth):
-    """HTTP authentication configuration.
-
-    Limited to auth mechanisms supported by Campus, now or in future.
-    """
-    type: Literal["http"]
-    scheme: Literal["bearer"]  # Basic auth not supported
-
-
-class ApiKeyAuth(IntegrationAuth):
-    """API Key authentication configuration."""
-    type: Literal["apiKey"]
-    in_: Literal["header", "query"]  # Use 'in_' to avoid conflict with Python keyword
-    name: str  # Name of the header or query parameter
-
-
-class OAuth2Auth(IntegrationAuth):
-    """OAuth2 authentication configuration."""
-    type: Literal["oauth2"]
-    flows: Literal["authorizationCode", "clientCredentials", "implicit", "password"]  # implicit and password might be deprecated in future
-    authorization_url: NotRequired[str]  # Optional, for user consent flow
-    token_url: NotRequired[str]  # Optional, for token exchange
-
-
-class OpenIdConnectAuth(IntegrationAuth):
-    """OpenID Connect authentication configuration."""
-    type: Literal["openIdConnect"]
-    discovery_url: str  # URL for OpenID Connect discovery document
 
 
 class PollingCapabilities(TypedDict):
@@ -88,7 +47,7 @@ class IntegrationConfig(TypedDict, total=False):
     description: str
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
-    security: Mapping[IntegrationAuthTypes, IntegrationAuth]
+    security: Mapping[AuthTypes, BaseAuthConfig]
     capabilities: CommonCapabilities
     enabled: bool  # Whether the integration is enabled in Campus
 
@@ -101,7 +60,7 @@ class IntegrationBase:
             description: str,
             servers: Mapping[Env, Url],
             api_doc: Url,
-            security: Mapping[IntegrationAuthTypes, IntegrationAuth],
+            security: Mapping[AuthTypes, BaseAuthConfig],
             capabilities: CommonCapabilities,
             enabled: bool | None = None
     ):
