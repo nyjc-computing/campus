@@ -6,7 +6,7 @@ OAuth2 security scheme base configs and models.
 
 from typing import Literal, Type, Unpack
 
-from apps.api.models.auth.base import (
+from apps.api.models.webauth.base import (
     BaseSecuritySchemeConfigSchema,
     SecurityError,
     SecurityScheme

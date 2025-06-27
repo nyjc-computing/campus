@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from apps.api.models.auth.oauth2.base import (
+from apps.api.models.webauth.oauth2.base import (
     OAuth2ConfigSchema,
     OAuth2FlowScheme,
     OAuth2SecurityError

@@ -9,7 +9,7 @@ The HTTP authentication scheme comprises two types of authentication:
 
 from typing import Literal, Unpack
 
-from apps.api.models.auth.base import (
+from apps.api.models.webauth.base import (
     BaseSecuritySchemeConfigSchema,
     HttpHeader,
     SecurityError,

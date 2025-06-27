@@ -9,8 +9,8 @@ The OAuth2 security scheme comprises four flows:
 4. Password Flow: Used for resource owner password credentials (not used in Campus).
 """
 
-from apps.api.models.auth.oauth2.authorization_code import OAuth2AuthorizationCodeFlowScheme
-from apps.api.models.auth.oauth2.base import OAuth2FlowScheme
+from apps.api.models.webauth.oauth2.authorization_code import OAuth2AuthorizationCodeFlowScheme
+from apps.api.models.webauth.oauth2.base import OAuth2FlowScheme
 
 
 OAuth2FlowScheme.register_flow("authorizationCode", OAuth2AuthorizationCodeFlowScheme)

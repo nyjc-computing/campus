@@ -11,9 +11,9 @@ configuration and validation methods for authentication headers. Actual
 authentication logic is handled by the campusauth module.
 """
 
-from apps.api.models.auth.base import SecurityScheme
-import apps.api.models.auth.http as http
-import apps.api.models.auth.oauth2 as oauth2
+from apps.api.models.webauth.base import SecurityScheme
+import apps.api.models.webauth.http as http
+import apps.api.models.webauth.oauth2 as oauth2
 
 SecurityScheme.register("http", http.HttpAuthenticationScheme)
 SecurityScheme.register("oauth2", oauth2.OAuth2FlowScheme)
