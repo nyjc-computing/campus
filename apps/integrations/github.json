@@ -11,6 +11,9 @@
   "security": {
     "oauth2": {
       "type": "oauth2",
+      "headers": {
+        "Accept": "application/json"
+      },
       "scopes": [
         "read:user",
         "user:email"
