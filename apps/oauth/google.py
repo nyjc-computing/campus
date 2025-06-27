@@ -3,7 +3,7 @@
 Routes for Google OAuth2.
 """
 
-from typing import Unpack
+from typing import NotRequired, TypedDict, Unpack
 
 from flask import Blueprint, Flask
 
@@ -11,6 +11,13 @@ from apps.common.errors import api_errors
 from common.validation.flask import FlaskResponse, unpack_request, validate
 
 bp = Blueprint('google', __name__, url_prefix='/google')
+
+
+class Callback(TypedDict, total=False):
+    """Response type for a Google OAuth callback."""
+    error: NotRequired[str]
+    code: NotRequired[str]
+    state: NotRequired[str]
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -21,10 +28,10 @@ def init_app(app: Flask | Blueprint) -> None:
 @bp.post('/callback')
 @unpack_request
 @validate(
-    request=GoogleCallback.__annotations__,
+    request=Callback.__annotations__,
     response={"message": str},
     on_error=api_errors.raise_api_error
 )
-def google_callback(*_, **data: Unpack[GoogleCallback]) -> FlaskResponse:
+def google_callback(*_, **data: Unpack[Callback]) -> FlaskResponse:
     """Handle a Google OAuth callback request."""
     return {"message": "Not implemented"}, 501
