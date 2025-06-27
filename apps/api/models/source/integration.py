@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
 from apps.api.models.base import ModelResponse
-from apps.api.models.webauth.authentication import AuthTypes, BaseAuthConfig, AuthFlow
+from apps.api.models.webauth import Security, SecuritySchemeConfigSchema
 from common.devops import Env
 from common.drum.mongodb import get_db
 from common.schema import Message
@@ -47,7 +47,7 @@ class IntegrationConfig(TypedDict, total=False):
     description: str
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
-    security: Mapping[AuthTypes, BaseAuthConfig]
+    security: Mapping[Security, SecuritySchemeConfigSchema]
     capabilities: CommonCapabilities
     enabled: bool  # Whether the integration is enabled in Campus
 
@@ -60,7 +60,7 @@ class IntegrationBase:
             description: str,
             servers: Mapping[Env, Url],
             api_doc: Url,
-            security: Mapping[AuthTypes, BaseAuthConfig],
+            security: Mapping[Security, SecuritySchemeConfigSchema],
             capabilities: CommonCapabilities,
             enabled: bool | None = None
     ):

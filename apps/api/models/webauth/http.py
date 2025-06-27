@@ -10,7 +10,7 @@ The HTTP authentication scheme comprises two types of authentication:
 from typing import Literal, Unpack
 
 from apps.api.models.webauth.base import (
-    BaseSecuritySchemeConfigSchema,
+    SecuritySchemeConfigSchema,
     HttpHeader,
     SecurityError,
     SecurityScheme
@@ -25,7 +25,7 @@ class HttpSecurityError(SecurityError):
     """HTTP authentication error."""
 
 
-class HttpAuthConfigSchema(BaseSecuritySchemeConfigSchema):
+class HttpAuthConfigSchema(SecuritySchemeConfigSchema):
     """HTTP authentication scheme schema."""
     scheme: HttpScheme
 

@@ -7,7 +7,7 @@ OAuth2 security scheme base configs and models.
 from typing import Literal, Type, Unpack
 
 from apps.api.models.webauth.base import (
-    BaseSecuritySchemeConfigSchema,
+    SecuritySchemeConfigSchema,
     SecurityError,
     SecurityScheme
 )
@@ -20,7 +20,7 @@ class OAuth2SecurityError(SecurityError):
     """OAuth2 authentication error."""
 
 
-class OAuth2ConfigSchema(BaseSecuritySchemeConfigSchema):
+class OAuth2ConfigSchema(SecuritySchemeConfigSchema):
     """OAuth2 base authentication schema."""
     flow: OAuth2Flow
 
