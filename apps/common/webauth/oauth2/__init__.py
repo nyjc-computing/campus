@@ -18,5 +18,6 @@ OAuth2FlowScheme.register_flow(
 
 
 __all__ = [
+    "OAuth2FlowScheme",
     "OAuth2AuthorizationCodeFlowScheme",
 ]
