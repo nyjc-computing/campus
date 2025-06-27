@@ -1,4 +1,4 @@
-"""apps/api/models/auth/authentication/base
+"""apps/api/models/webauth/base
 
 Base configs and models for authentication flows.
 """

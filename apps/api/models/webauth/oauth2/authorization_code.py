@@ -1,4 +1,4 @@
-"""apps/api/models/auth/authentication/oauth2/authorization_code
+"""apps/api/models/webauth/oauth2/authorization_code
 
 OAuth2 Authorization Code flow configs and models.
 """
@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 import requests
 
-from apps.api.models.webauth.oauth2.base import (
+from .base import (
     OAuth2ConfigSchema,
     OAuth2FlowScheme,
     OAuth2SecurityError
