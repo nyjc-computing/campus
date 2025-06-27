@@ -50,7 +50,8 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             self,
             state: str,
             client_id: str,
-            redirect_uri: Url
+            redirect_uri: Url,
+            user_id: str,  # user's email for login_hint
     ) -> str:
         """Return the authorization URL for redirect, with provider-specific
         params.
@@ -61,6 +62,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             "redirect_uri": redirect_uri,
             "scope": " ".join(self.scopes),
             "state": state,
+            "login_hint": user_id
         }
         params.update(getattr(self, "extra_params", {}) or {})
         base_url = getattr(self, "authorization_url", "")
