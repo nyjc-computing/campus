@@ -29,12 +29,15 @@ class HttpAuthProperty(str):
         _, key = self.split(" ", 1)
         return key.strip()
     
-    def credentials(self, sep: str = "") -> str | tuple[str, ...]:
+    def credentials(self, sep: str = ":") -> str | tuple[str, ...]:
         """Decode Base64-encoded credentials."""
         if self.scheme != "basic":
             raise ValueError("Only Basic authentication can be decoded")
         decoded = b64decode(self.value).decode("utf-8")
-        return tuple(decoded.split(sep)) if sep else decoded
+        assert sep in decoded, (
+            f"Credentials must contain '{sep}' separator, got: {decoded}"
+        )
+        return tuple(decoded.split(sep))
     
     @classmethod
     def from_credentials(cls, client_id: str, client_secret: str) -> "HttpAuthProperty":
