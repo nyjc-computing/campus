@@ -11,7 +11,7 @@ from apps.common.errors import api_errors
 from common.validation.flask import FlaskResponse, unpack_request, validate
 
 # No url prefix because authentication endpoints are not only used by the API
-bp = Blueprint('auth', __name__, url_prefix='/')
+bp = Blueprint('campusauth', __name__, url_prefix='/')
 
 
 def init_app(app: Flask | Blueprint) -> None:
