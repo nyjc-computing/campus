@@ -1,6 +1,6 @@
-"""apps/api/routes/oauth
+"""apps/oauth/google
 
-Routes for external integration authentication - google, github, discord, etc.
+Routes for Google OAuth2.
 """
 
 from typing import Unpack
@@ -10,7 +10,7 @@ from flask import Blueprint, Flask
 from apps.common.errors import api_errors
 from common.validation.flask import FlaskResponse, unpack_request, validate
 
-bp = Blueprint('auth', __name__, url_prefix='/oauth')
+bp = Blueprint('google', __name__, url_prefix='/google')
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -18,9 +18,7 @@ def init_app(app: Flask | Blueprint) -> None:
     app.register_blueprint(bp)
 
 
-## Integration authentication routes
-
-@bp.post('/google/callback')
+@bp.post('/callback')
 @unpack_request
 @validate(
     request=GoogleCallback.__annotations__,
@@ -30,7 +28,3 @@ def init_app(app: Flask | Blueprint) -> None:
 def google_callback(*_, **data: Unpack[GoogleCallback]) -> FlaskResponse:
     """Handle a Google OAuth callback request."""
     return {"message": "Not implemented"}, 501
-
-
-# TODO: github
-# TODO: discord
