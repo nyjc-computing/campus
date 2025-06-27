@@ -29,7 +29,7 @@ class HttpAuthProperty(str):
         _, key = self.split(" ", 1)
         return key.strip()
     
-    def credentials(self, sep: str = ":") -> str | tuple[str, ...]:
+    def credentials(self, sep: str = ":") -> tuple[str, ...]:
         """Decode Base64-encoded credentials."""
         if self.scheme != "basic":
             raise ValueError("Only Basic authentication can be decoded")
