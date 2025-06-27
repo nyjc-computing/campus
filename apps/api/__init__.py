@@ -40,7 +40,7 @@ def create_app() -> Flask:
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the Palmtree API blueprint with the given Flask app."""
     # Organise API routes under api blueprint
-    bp = Blueprint('v1', __name__, url_prefix='/v1')
+    bp = Blueprint('v1', __name__, url_prefix='/api/v1')
     # Users need to be initialised first as other blueprints
     # rely on user table
     routes.users.init_app(bp)

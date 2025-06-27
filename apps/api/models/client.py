@@ -211,21 +211,26 @@ class Client:
                 return ModelResponse("ok", Message.UPDATED)
         raise ValueError(f"Unexpected response: {resp}")
 
-    def validate_credentials(self, client_id: str, client_secret: str) -> bool:
+    def validate_credentials(self, client_id: str, client_secret: str) -> None:
         """Validate client_id and client_secret."""
         resp = self.storage.get_by_id(TABLE, client_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
-                return False
+                api_errors.raise_api_error(403, message="Client not found", client_id=client_id)
             case Response(status="ok", message=Message.FOUND, data=cursor):
                 client = cursor['result']
-                return client["secret_hash"] == secret.hash_client_secret(
+                secret_hash = secret.hash_client_secret(
                     client_secret, os.environ["SECRET_KEY"]
                 )
-            case _:
-                return False
+                if client["secret_hash"] != secret_hash:
+                    api_errors.raise_api_error(
+                        403,
+                        message="Invalid client secret",
+                        client_id=client_id
+                    )
+        raise ValueError(f"Unexpected response: {resp}")
 
 
 # class APIKeyNewSchema(TypedDict):

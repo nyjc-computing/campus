@@ -5,7 +5,11 @@ This module contains the DevOps-related functionality for the Campus project.
 
 import os
 from functools import wraps
+from typing import Literal
 
+
+# typing stub
+Env = Literal["development", "testing", "staging", "production"]
 
 # ENV enums
 DEVELOPMENT = "development"

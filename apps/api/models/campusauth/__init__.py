@@ -1,11 +1,32 @@
-from base64 import b64decode
+"""apps/api/models/campusauth
+
+Authentication implementation for the Campus API.
+
+This module handles authentication of credentials for Campus API requests.
+"""
+
 from functools import wraps
 from typing import Callable
 
-from flask import g, request, jsonify
+from flask import request
 from flask.wrappers import Response
 
+from apps.api.models.webauth import http, oauth2
+
 from apps.api.models.client import Client
+from common.auth.header import HttpHeaderDict
+
+
+basicauth = http.HttpAuthenticationScheme(
+    security_scheme="http",
+    scheme="basic",
+    scopes=[]
+)
+bearerauth = http.HttpAuthenticationScheme(
+    security_scheme="http",
+    scheme="bearer",
+    scopes=[]
+)
 
 
 def authenticate_client() -> tuple[Response, int] | None:
@@ -19,27 +40,15 @@ def authenticate_client() -> tuple[Response, int] | None:
 
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Basic "):
-        return jsonify(
-            {"message": "Missing or invalid Authorization header"}
-        ), 401
-
-    try:
-        # Decode the Base64-encoded credentials
-        encoded_credentials = auth_header.split(" ")[1]
-        decoded_credentials = b64decode(encoded_credentials).decode("utf-8")
-        client_id, client_secret = decoded_credentials.split(":", 1)
-    except (ValueError, UnicodeDecodeError):
-        return jsonify({"message": "Invalid credentials format"}), 401
+    # Check for valid header
+    basicauth.validate_header(request.headers)  # type: ignore[call-arg]
+    auth_header = HttpHeaderDict(request.headers).get_auth()
+    assert auth_header
+    client_id, client_secret = auth_header.credentials()
 
     # Validate the client_id and client_secret
     client_model = Client()
-    if not client_model.validate_credentials(client_id, client_secret):
-        return jsonify({"message": "Invalid client_id or client_secret"}), 401
-    
-    # Store the client_id in Flask's g object for later use
-    g.client_id = client_id
+    client_model.validate_credentials(client_id, client_secret)
 
 
 def client_auth_required(func) -> Callable:

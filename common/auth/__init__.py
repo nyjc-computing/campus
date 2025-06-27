@@ -3,9 +3,8 @@
 This module contains authentication-related functionality.
 """
 
-from .clientauth import authenticate_client, client_auth_required
+from . import header
 
 __all__ = [
-    "authenticate_client",
-    "client_auth_required",
+    "header",
 ]
