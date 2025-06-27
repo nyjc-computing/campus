@@ -28,9 +28,9 @@ __all__ = [
 
 
 def create_app() -> Flask:
-    """Factory function to create the Palmtree app.
+    """Factory function to create the api app.
     
-    This is called if Palmtree is run as a standalone app.
+    This is called if api is run as a standalone app.
     """
     app = Flask(__name__)
     init_app(app)
@@ -38,7 +38,7 @@ def create_app() -> Flask:
     return app
 
 def init_app(app: Flask | Blueprint) -> None:
-    """Initialise the Palmtree API blueprint with the given Flask app."""
+    """Initialise the API blueprint with the given Flask app."""
     # Organise API routes under api blueprint
     bp = Blueprint('v1', __name__, url_prefix='/api/v1')
     # Users need to be initialised first as other blueprints
