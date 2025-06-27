@@ -15,7 +15,7 @@ bp = Blueprint('campusauth', __name__, url_prefix='/')
 
 
 def init_app(app: Flask | Blueprint) -> None:
-    """Initialise auth routes with the given Flask app/blueprint."""
+    """Initialise campusauth routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
 
 

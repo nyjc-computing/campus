@@ -49,7 +49,7 @@ def init_app(app: Flask | Blueprint) -> None:
     app.register_blueprint(bp)
 
 def init_db() -> None:
-    """Initialise the tables needed by Palmtree.
+    """Initialise the tables needed by api.
     
     This convenience function makes it easier to initialise tables for all
     models.
