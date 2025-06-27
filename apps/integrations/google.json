@@ -21,8 +21,7 @@
       "user_info_url": "https://www.googleapis.com/oauth2/v3/userinfo",
       "extra_params": {
         "access_type": "offline",
-        "include_granted_scopes": "true",
-        "prompt": "consent"
+        "include_granted_scopes": "true"
       }
     }
   },
