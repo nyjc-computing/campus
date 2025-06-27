@@ -1,4 +1,4 @@
-"""apps/api/routes/auth
+"""apps/api/routes/campusauth
 
 Routes for Campus authentication - clients and users.
 """
@@ -45,8 +45,3 @@ def verify_otp(*_, **data: Unpack[TokenSchema]) -> FlaskResponse:
 
 # TODO: /login
 # TODO: /logout
-
-
-## Integration authentication routes
-
-@bp.post('')
