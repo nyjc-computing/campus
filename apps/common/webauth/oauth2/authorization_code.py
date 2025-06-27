@@ -1,4 +1,4 @@
-"""apps/api/models/webauth/oauth2/authorization_code
+"""apps/common/webauth/oauth2/authorization_code
 
 OAuth2 Authorization Code flow configs and models.
 """
@@ -31,7 +31,8 @@ class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
 class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     """Implements OAuth2 Authorization Code flow.
 
-    Uses a user-agent redirect to obtain an authorization code, then exchanges it for an access token.
+    Uses a user-agent redirect to obtain an authorization code, then exchanges
+    it for an access token.
     """
 
     def __init__(self, **kwargs: Unpack[OAuth2AuthorizationCodeConfigSchema]):
@@ -90,7 +91,9 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         try:
             return resp.json()
         except Exception as err:
-            raise OAuth2SecurityError("Failed to exchange code for token") from err
+            raise OAuth2SecurityError(
+                "Failed to exchange code for token"
+            ) from err
 
     def get_user_info(self, access_token: str) -> dict:
         """Fetch user info from the provider's user info endpoint."""

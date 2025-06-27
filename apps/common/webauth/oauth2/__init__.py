@@ -1,4 +1,4 @@
-"""apps/api/models/webauth/oauth2
+"""apps/common/webauth/oauth2
 
 OAuth2 security scheme configs and models.
 
@@ -13,7 +13,8 @@ from .authorization_code import OAuth2AuthorizationCodeFlowScheme
 from .base import OAuth2FlowScheme
 
 
-OAuth2FlowScheme.register_flow("authorizationCode", OAuth2AuthorizationCodeFlowScheme)
+OAuth2FlowScheme.register_flow(
+    "authorizationCode", OAuth2AuthorizationCodeFlowScheme)
 
 
 __all__ = [
