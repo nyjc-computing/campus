@@ -8,18 +8,14 @@ from typing import Unpack
 from flask import Blueprint, Flask
 
 from apps.common.errors import api_errors
-from common.auth import authenticate_client
-from common.services.email import create_email_sender
+from apps.api.models.campusauth import authenticate_client
 from common.validation.flask import FlaskResponse, unpack_request, validate
 
-bp = Blueprint('auth', __name__, url_prefix='/auth')
+# No url prefix because many external integrations requiring oauth2 
+bp = Blueprint('auth', __name__, url_prefix='/')
 # All routes in this blueprint can be called by a client without token auth
 # but must be authenticated with a client id and secret
 bp.before_request(authenticate_client)
-
-emailotp = otp.OTPAuth()
-
-EMAIL_PROVIDER = "smtp"
 
 
 def init_app(app: Flask | Blueprint) -> None:
