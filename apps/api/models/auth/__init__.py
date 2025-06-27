@@ -1,6 +1,14 @@
 """apps/api/models/auth
 
-Authentication models for the Campus API.
+Web authentication models for the Campus API.
+
+This module contains classes and functions for handling web-based authentication
+schemes, including HTTP Basic and Bearer authentication, as well as OAuth2
+flows.
+
+The classes do not authenticate credentials, but provide the necessary
+configuration and validation methods for authentication headers. Actual
+authentication logic is handled by the campusauth module.
 """
 
 from apps.api.models.auth.base import SecurityScheme
@@ -9,6 +17,7 @@ import apps.api.models.auth.oauth2 as oauth2
 
 SecurityScheme.register("http", http.HttpAuthenticationScheme)
 SecurityScheme.register("oauth2", oauth2.OAuth2FlowScheme)
+
 
 __all__ = [
     "SecurityScheme",
