@@ -1,5 +1,4 @@
-"""
-Client Models
+"""apps.common.models.client
 
 This module provides classes and utilities for handling client applications
 and API keys for Campus services.
@@ -7,8 +6,8 @@ and API keys for Campus services.
 import os
 from typing import NotRequired, TypedDict, Unpack
 
+from apps.common.models.base import BaseRecord, ModelResponse
 from apps.common.errors import api_errors
-from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
 from common.drum import DrumResponse
 from common.schema import Message, Response
@@ -116,7 +115,7 @@ class Client:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client not found",
-                     client_id=client_id
+                    client_id=client_id
                 )
             case Response(status="ok", message=Message.DELETED, data=data):
                 return ModelResponse("ok", Message.DELETED, data)
@@ -143,7 +142,7 @@ class Client:
             case Response(status="ok", message=Message.NOT_FOUND, data=None):
                 raise api_errors.ConflictError(
                     "Client not found",
-                     client_id=client_id
+                    client_id=client_id
                 )
         assert isinstance(resp, DrumResponse)  # appease mypy
         client_record = resp.data
@@ -185,7 +184,7 @@ class Client:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client not found",
-                     client_id=client_id
+                    client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", Message.SUCCESS, {
@@ -197,7 +196,7 @@ class Client:
         """Update an existing client record."""
         if not updates:
             return ModelResponse("ok", Message.EMPTY, "Nothing to update")
-        
+
         resp = self.storage.update_by_id(TABLE, client_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
@@ -205,7 +204,7 @@ class Client:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     "Client not found",
-                     client_id=client_id
+                    client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", Message.UPDATED)
@@ -218,7 +217,8 @@ class Client:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.NOT_FOUND):
-                api_errors.raise_api_error(403, message="Client not found", client_id=client_id)
+                api_errors.raise_api_error(
+                    403, message="Client not found", client_id=client_id)
             case Response(status="ok", message=Message.FOUND, data=cursor):
                 client = cursor['result']
                 secret_hash = secret.hash_client_secret(

@@ -1,12 +1,12 @@
-"""apps/api
+"""apps.api
 
 Web API for Campus services.
 """
 
 from flask import Blueprint, Flask
 
-from apps.common import errors
 from apps.api import routes
+from apps.common import errors
 
 # These aliased model imports allow the api package to be used similarly
 # to the Campus API
@@ -28,9 +28,9 @@ __all__ = [
 
 
 def create_app() -> Flask:
-    """Factory function to create the Palmtree app.
+    """Factory function to create the api app.
     
-    This is called if Palmtree is run as a standalone app.
+    This is called if api is run as a standalone app.
     """
     app = Flask(__name__)
     init_app(app)
@@ -38,7 +38,7 @@ def create_app() -> Flask:
     return app
 
 def init_app(app: Flask | Blueprint) -> None:
-    """Initialise the Palmtree API blueprint with the given Flask app."""
+    """Initialise the API blueprint with the given Flask app."""
     # Organise API routes under api blueprint
     bp = Blueprint('v1', __name__, url_prefix='/api/v1')
     # Users need to be initialised first as other blueprints
@@ -49,14 +49,14 @@ def init_app(app: Flask | Blueprint) -> None:
     app.register_blueprint(bp)
 
 def init_db() -> None:
-    """Initialise the tables needed by Palmtree.
+    """Initialise the tables needed by api.
     
     This convenience function makes it easier to initialise tables for all
     models.
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
-    from .models import client, otp, user
+    from apps.common.models import client, otp, user
 
     for model in (client, otp, user):
         model.init_db()

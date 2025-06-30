@@ -1,4 +1,4 @@
-"""apps/api/routes/clients
+"""apps.api.routes.clients
 
 API routes for the clients resource.
 """
@@ -7,9 +7,9 @@ from typing import Unpack
 
 from flask import Blueprint, Flask
 
-from apps.api.models import client, user
+from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
-from apps.api.models.campusauth import authenticate_client
+from apps.common.models import client, user
 from common.validation.flask import FlaskResponse, unpack_request, validate
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
@@ -41,13 +41,15 @@ def init_app(app: Flask | Blueprint) -> None:
     response=client.ClientResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:  # *_ appease linter
+# *_ appease linter
+def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:
     """Create a new client id and secret."""
     if not POST:
         return {"message": "Not implemented"}, 501
     # TODO: authenticate
     resp = clients.new(**data)  # raises APIError
     return resp.data, 201
+
 
 @bp.delete('/<string:client_id>')
 @validate(
@@ -60,6 +62,7 @@ def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease lint
         return {"message": "Not implemented"}, 501
     resp = clients.delete(client_id)  # raises APIError
     return {"message": "Client deleted"}, 200
+
 
 @bp.get('/<string:client_id>')
 @validate(
@@ -74,6 +77,7 @@ def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease
     resp = clients.get(client_id)  # raises APIError
     return resp.data, 200
 
+
 @bp.patch('/<string:client_id>')
 @unpack_request
 @validate(
@@ -81,13 +85,15 @@ def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease
     response=client.ClientResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> FlaskResponse:  # *_ appease linter
+# *_ appease linter
+def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> FlaskResponse:
     """Edit name, description, or admins of client."""
     if not PATCH:
         return {"message": "Not implemented"}, 501
     # TODO: authenticate
     resp = clients.update(client_id, **data)  # raises APIError
     return resp.data, 200
+
 
 @bp.post('/<string:client_id>/replace')
 @validate(

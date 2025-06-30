@@ -1,6 +1,6 @@
-"""apps.palmtree.errors.base.py
+"""apps.common.errors.base
 
-Base error definitions, enums, and constants for Palmtree.
+Base error definitions, enums, and constants for Campus.
 These errors are used to catch common API errors and return
 standardised JSON responses.
 """
@@ -13,6 +13,7 @@ JsonDict = dict[str, JsonValues]
 
 
 class ErrorConstant(str):
+    """Error enums"""
     CONFLICT = "CONFLICT"
     INVALID_REQUEST = "INVALID_REQUEST"
     SERVER_ERROR = "SERVER_ERROR"
@@ -51,5 +52,3 @@ class APIError(Exception):
             "error_code": self.error_code,
             "details": self.details,
         }
-
-

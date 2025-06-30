@@ -1,4 +1,4 @@
-"""apps/api/routes/emailotp
+"""apps.api.routes.emailotp
 
 API routes for the emailotp resource.
 """
@@ -7,9 +7,9 @@ from typing import Unpack
 
 from flask import Blueprint, Flask
 
-from apps.api.models import otp
+from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
-from apps.api.models.campusauth import authenticate_client
+from apps.common.models import otp
 from common.services.email import create_email_sender
 from common.validation.flask import FlaskResponse, unpack_request, validate
 

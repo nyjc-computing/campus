@@ -1,4 +1,4 @@
-"""apps/api/models/auth/authentication/oauth2/base
+"""common.webauth.oauth2.base
 
 OAuth2 security scheme base configs and models.
 
@@ -6,7 +6,7 @@ OAuth2 security scheme base configs and models.
 
 from typing import Literal, Type, Unpack
 
-from apps.api.models.webauth.base import (
+from ..base import (
     SecuritySchemeConfigSchema,
     SecurityError,
     SecurityScheme

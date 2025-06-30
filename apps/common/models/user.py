@@ -1,5 +1,4 @@
-"""
-User Models
+"""apps.common.models.user
 
 This module provides classes for managing Campus users.
 """
@@ -7,8 +6,8 @@ import os
 
 from typing import NotRequired, TypedDict, Unpack
 
+from apps.common.models.base import BaseRecord, ModelResponse
 from apps.common.errors import api_errors
-from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
 from common.schema import Message, Response
 from common.utils import uid, utc_time
@@ -102,7 +101,7 @@ class User:
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")
-    
+
     def new(self, **fields: Unpack[UserNew]) -> ModelResponse:
         """Create a new user."""
         user_id = uid.generate_user_uid(fields["email"])
@@ -120,7 +119,7 @@ class User:
             case Response(status="ok", message=Message.SUCCESS):
                 return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
         raise ValueError(f"Unexpected response from storage: {resp}")
-    
+
     def delete(self, user_id: str) -> ModelResponse:
         """Delete a user by id."""
         resp = self.storage.delete_by_id(TABLE, user_id)
@@ -165,4 +164,3 @@ class User:
                     user_id=user_id
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
-

@@ -1,5 +1,4 @@
-"""apps.palmtree.models.otp.py
-OTP Models for Email Authentication
+"""apps.common.models.otp
 
 This module provides classes and utilities for handling one-time
 passwords (OTPs) used in email authentication. It includes functionality
@@ -12,7 +11,7 @@ from typing import TypedDict, Unpack
 import bcrypt
 
 from apps.common.errors import api_errors
-from apps.api.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord, ModelResponse
 from common import devops
 from common.schema import Message, Response
 from common.utils import uid, utc_time

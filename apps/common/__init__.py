@@ -1,11 +1,17 @@
-"""apps/common
+"""apps.common
 
 This module contains common functions and classes used across multiple
 applications.
+
+Modules:
+
+- errors: Contains error definitions and handling for API errors.
+- webauth: Contains web authentication models and configurations.
 """
 
-from .errors import api_errors
+from . import errors, models
 
 __all__ = [
-    "api_errors",
+    "errors",
+    "models",
 ]

@@ -1,4 +1,4 @@
-"""apps.palmtree.routes.emailotp.template
+"""apps.api.routes.emailotp.template
 
 Email templates for OTP authentication.
 """
@@ -49,4 +49,3 @@ def html_body(service: str, otp: str) -> str:
         service=service,
         otp=otp
     )
-

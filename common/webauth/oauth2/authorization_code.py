@@ -1,14 +1,14 @@
-"""apps/api/models/auth/authentication/oauth2/authorization_code
+"""common.webauth.oauth2.authorization_code
 
 OAuth2 Authorization Code flow configs and models.
 """
 
-from typing import Required, Unpack
+from typing import NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
 import requests
 
-from apps.api.models.webauth.oauth2.base import (
+from .base import (
     OAuth2ConfigSchema,
     OAuth2FlowScheme,
     OAuth2SecurityError
@@ -28,10 +28,30 @@ class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
     user_info_params: dict[str, str]  # Optional, for custom
 
 
+class AuthorizationUrlRequestSchema(TypedDict, total=False):
+    """Request schema for getting the authorization URL."""
+    state: str  # State parameter for CSRF protection
+    client_id: str  # Client ID of the OAuth2 application
+    redirect_uri: Url  # Redirect URI registered with the OAuth2 provider
+    login_hint: str  # User's email or identifier for login_hint
+    response_type: NotRequired[str]
+    scope: NotRequired[str]  # Space-separated scopes for the request
+
+
+class TokenRequestSchema(TypedDict, total=False):
+    """Request schema for exchanging authorization code for access token."""
+    code: str  # Authorization code received from the provider
+    redirect_uri: Url  # Same redirect URI used in authorization request
+    client_id: str  # Client ID of the OAuth2 application
+    client_secret: str  # Client secret of the OAuth2 application
+    grant_type: NotRequired[str]  # Will be "authorization_code"
+
+
 class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     """Implements OAuth2 Authorization Code flow.
 
-    Uses a user-agent redirect to obtain an authorization code, then exchanges it for an access token.
+    Uses a user-agent redirect to obtain an authorization code, then exchanges
+    it for an access token.
     """
 
     def __init__(self, **kwargs: Unpack[OAuth2AuthorizationCodeConfigSchema]):
@@ -47,57 +67,45 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     def get_authorization_url(
             self,
-            state: str,
-            client_id: str,
-            redirect_uri: Url
+            **params: Unpack[AuthorizationUrlRequestSchema]
     ) -> str:
         """Return the authorization URL for redirect, with provider-specific
         params.
         """
-        params = {
-            "response_type": "code",
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "scope": " ".join(self.scopes),
-            "state": state,
-        }
-        params.update(getattr(self, "extra_params", {}) or {})
-        base_url = getattr(self, "authorization_url", "")
-        return f"{base_url}?{urlencode(params)}"
+        params["response_type"] = "code"
+        params["scope"] = " ".join(self.scopes)
+        return f"""{self.authorization_url}?{urlencode(
+            {**params, **self.extra_params})
+        }"""
 
     def exchange_code_for_token(
             self,
-            code: str,
-            client_id: str,
-            client_secret: str,
-            redirect_uri: str
+            **data: Unpack[TokenRequestSchema],
     ) -> dict:
         """Exchange authorization code for access token."""
-        data = dict(
-            grant_type="authorization_code",
-            code=code,
-            redirect_uri=redirect_uri,
-            client_id=client_id,
-            client_secret=client_secret,
-            **self.token_params,
-        )
+        data["grant_type"] = "authorization_code"
         resp = requests.post(
             self.token_url,
-            data=data,
+            data={**data, **self.token_params},
             headers=self.headers,
             timeout=10
         )
         try:
             return resp.json()
         except Exception as err:
-            raise OAuth2SecurityError("Failed to exchange code for token") from err
+            raise OAuth2SecurityError(
+                "Failed to exchange code for token"
+            ) from err
 
     def get_user_info(self, access_token: str) -> dict:
         """Fetch user info from the provider's user info endpoint."""
         if not self.user_info_url:
             return {}
-        headers = {"Authorization": f"Bearer {access_token}"}
-        headers.update(self.user_info_params)
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {access_token}",
+            **self.user_info_params
+        }
         resp = requests.get(self.user_info_url, headers=headers, timeout=10)
         try:
             return resp.json()

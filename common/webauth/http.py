@@ -1,4 +1,4 @@
-"""apps/api/models/auth/authentication/http
+"""common.webauth.http
 
 HTTP aAuthentication configs and models.
 
@@ -9,14 +9,13 @@ The HTTP authentication scheme comprises two types of authentication:
 
 from typing import Literal, Unpack
 
-from apps.api.models.webauth.base import (
+from apps.common.errors import api_errors
+from common.auth.header import HttpHeaderDict
+from .base import (
     SecuritySchemeConfigSchema,
-    HttpHeader,
     SecurityError,
     SecurityScheme
 )
-from apps.common.errors import api_errors
-from common.auth.header import HttpHeaderDict
 
 HttpScheme = Literal["basic", "bearer"]
 
@@ -38,9 +37,9 @@ class HttpAuthenticationScheme(SecurityScheme):
         super().__init__(**kwargs)
         self.scheme = kwargs["scheme"]
 
-    def validate_header(self, header: HttpHeader) -> None:
+    def validate_header(self, header: dict) -> None:
         """Validate the HTTP header for authentication.
-        
+
         Raises an API error if the header is invalid or missing.
         """
         auth = HttpHeaderDict(header).get_auth()
@@ -48,7 +47,7 @@ class HttpAuthenticationScheme(SecurityScheme):
             api_errors.raise_api_error(401)
         if auth.scheme != self.scheme:
             api_errors.raise_api_error(401)
-        
+
     @classmethod
     def from_json(
             cls,

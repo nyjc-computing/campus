@@ -1,4 +1,4 @@
-"""apps/api/models/source
+"""apps.common.models.source
 Source Models
 
 This module provides classes for creating and managing Campus sources, which
@@ -13,14 +13,11 @@ Main operations:
 
 from typing import TypedDict, NotRequired, Unpack
 
-from apps.api.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord, ModelResponse
 from apps.common.errors import api_errors
 from common.drum.mongodb import get_db, get_drum
 from common.schema import CampusID, Message, Response
 from common.utils import uid, utc_time
-
-from .integration import Integration
-from .sourcetype import SourceType
 
 SourceID = CampusID
 
@@ -53,8 +50,10 @@ class SourceRecord(BaseRecord, total=False):
     linked_by: str  # Circle that linked this source
     linked_at: str  # ISO timestamp
     owner_circles: list[str]  # Owning circles — only these can assign access
-    access_policies: dict[str, dict[str, int]]  # Access rules per owning circle
-    metadata: NotRequired[dict[str, str]]  # Optional live metadata from the external platform
+    # Access rules per owning circle
+    access_policies: dict[str, dict[str, int]]
+    # Optional live metadata from the external platform
+    metadata: NotRequired[dict[str, str]]
 
 
 class SourceNew(TypedDict, total=True):
@@ -106,7 +105,7 @@ class Source:
 
     def delete(self, source_id: str) -> ModelResponse:
         """Delete a source by id.
-        
+
         This action is destructive and cannot be undone.
         It should only be done by an admin/owner.
         """
@@ -138,7 +137,7 @@ class Source:
                     id=source_id
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
-    
+
     def list(self) -> ModelResponse:
         """List all sources in the sources collection."""
         resp = self.storage.get_all(TABLE)
@@ -168,7 +167,5 @@ class Source:
 
 
 __all__ = [
-    "Integration",
-    "SourceType",
     "init_db",
 ]
