@@ -1,4 +1,4 @@
-"""apps.palmtree.routes.emailotp.template
+"""apps.api.routes.emailotp.template
 
 Email templates for OTP authentication.
 """

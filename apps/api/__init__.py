@@ -1,4 +1,4 @@
-"""apps/api
+"""apps.api
 
 Web API for Campus services.
 """

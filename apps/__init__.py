@@ -8,13 +8,8 @@ This module contains the main applications for Campus.
 - campusauth: Web endpoints for Campus (OAuth2) authentication.
 - integrations: Integrations with third-party platforms and APIs.
 - oauth: Campus OAuth2 implementation.
-
-## Common app modules
-- errors: Common error handling for Campus apps.
-- webauth: Web authentication models.
 """
 
-from .common import errors, webauth
 from . import api, campusauth, integrations, oauth
 
 __all__ = [
@@ -22,6 +17,4 @@ __all__ = [
     "campusauth",
     "integrations",
     "oauth",
-    "errors",
-    "webauth",
 ]

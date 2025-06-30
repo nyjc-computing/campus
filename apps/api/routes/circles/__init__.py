@@ -1,4 +1,4 @@
-"""apps/api/routes/circles
+"""apps.api.routes.circles
 
 API routes for the circles resource.
 """
@@ -7,7 +7,7 @@ from typing import Unpack
 
 from flask import Blueprint, Flask
 
-from apps.api.models import circle, user
+from apps.api.models import circle
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from common.validation.flask import FlaskResponse, unpack_request, validate

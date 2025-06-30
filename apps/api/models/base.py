@@ -1,6 +1,6 @@
-"""apps/palmtree/models/base.py
+"""apps.api.models.base
 
-Base types and classes for all Palmtree models.
+Base types and classes for all Campus models.
 """
 
 from typing import TypedDict
@@ -14,7 +14,7 @@ class ModelResponse(Response):
 
 
 class BaseRecord(TypedDict):
-    """Base class for all records in the Palmtree system.
+    """Base class for all records in the Campus system.
 
     Records are Mapping objects that represent a single record in the database.
     BaseRecord reflects the keys that are common to all records in the system.

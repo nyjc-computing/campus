@@ -1,5 +1,4 @@
-"""
-Circle Models
+"""apps.api.models.circle
 
 This module provides classes for managing Campus circles.
 
@@ -17,8 +16,8 @@ Main operations:
 from collections.abc import Iterator, Mapping
 from typing import NotRequired, TypedDict, Unpack
 
-from apps.api.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
+from apps.common.errors import api_errors
 from common.drum.mongodb import PK, get_db, get_drum
 from common.schema import CampusID, UserID, Message, Response
 from common.utils import uid, utc_time

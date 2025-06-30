@@ -1,5 +1,4 @@
-"""
-Client Models
+"""apps.api.models.client
 
 This module provides classes and utilities for handling client applications
 and API keys for Campus services.

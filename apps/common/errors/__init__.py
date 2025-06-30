@@ -1,6 +1,6 @@
-"""apps/errors
+"""apps.common.errors
 
-API error handling for Palmtree.
+API error handling for Campus.
 """
 
 from werkzeug.exceptions import HTTPException, InternalServerError

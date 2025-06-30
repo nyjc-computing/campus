@@ -1,4 +1,4 @@
-"""apps/api/models/source/sourcetype.py
+"""apps.api.models.source.sourcetype.py
 SourceType Models
 
 This module provides classes for creating and managing Campus source types,

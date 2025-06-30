@@ -1,4 +1,4 @@
-"""apps/api/routes/emailotp
+"""apps.api.routes.emailotp
 
 API routes for the emailotp resource.
 """

@@ -1,4 +1,4 @@
-"""apps/api/models/source
+"""apps.api.models.source
 Source Models
 
 This module provides classes for creating and managing Campus sources, which

@@ -1,4 +1,4 @@
-"""apps/oauth/google
+"""apps.oauth.google
 
 Routes for Google OAuth2.
 """

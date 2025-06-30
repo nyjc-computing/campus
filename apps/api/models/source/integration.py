@@ -1,4 +1,4 @@
-"""apps/api/models/source/integration.py
+"""apps.api.models.source.integration.py
 Integration Models
 
 This module provides classes for creating and managing Campus integrations,

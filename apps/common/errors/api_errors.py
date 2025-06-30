@@ -1,6 +1,6 @@
-"""apps.palmtree.errors.api.py
+"""apps.common.errors.api_errors
 
-API error definitions for Palmtree.
+API error definitions for Campus.
 These errors represent all possible API errors that would be raised.
 """
 

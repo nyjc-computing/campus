@@ -1,4 +1,4 @@
-"""apps/common/webauth/oauth2
+"""apps.common.webauth.oauth2
 
 OAuth2 security scheme configs and models.
 

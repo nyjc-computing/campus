@@ -1,4 +1,4 @@
-"""apps/api/routes/clients
+"""apps.api.routes.clients
 
 API routes for the clients resource.
 """

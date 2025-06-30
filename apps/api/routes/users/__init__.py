@@ -1,4 +1,4 @@
-"""apps/api/routes/users
+"""apps.api.routes.users
 
 API routes for the users resource.
 """

@@ -1,6 +1,6 @@
-"""apps/palmtree/routes
+"""apps.api.routes
 
-This is a namespace module for the Palmtree API routes.
+This is a namespace module for the Campus API routes.
 """
 
 from . import circles, clients, emailotp, users

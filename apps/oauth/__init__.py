@@ -1,4 +1,4 @@
-"""apps/oauth
+"""apps.oauth
 
 OAuth2 routes for integrations.
 """
