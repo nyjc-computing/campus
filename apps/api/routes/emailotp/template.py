@@ -49,4 +49,3 @@ def html_body(service: str, otp: str) -> str:
         service=service,
         otp=otp
     )
-

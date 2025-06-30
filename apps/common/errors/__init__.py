@@ -40,4 +40,3 @@ def init_app(app):
     """
     app.register_error_handler(HTTPException, handle_werkzeug_error)
     app.register_error_handler(APIError, handle_api_error)
-

@@ -64,6 +64,7 @@ def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     else:
         return {"error": resp.message}, 400
 
+
 @bp.get('/<string:user_id>')
 @validate(
     response=user.UserResource.__annotations__,
@@ -77,6 +78,7 @@ def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     # future calls for other user info go here
     return summary, 200
 
+
 @bp.patch('/<string:user_id>')
 @unpack_request
 @validate(
@@ -84,10 +86,12 @@ def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     response=user.UserResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> FlaskResponse:  # *_ appease linter
+# *_ appease linter
+def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> FlaskResponse:
     """Update a single user's profile."""
     resp = users.update(user_id, **data)
     return resp.data, 200
+
 
 @bp.get('/<string:user_id>/profile')
 @validate(

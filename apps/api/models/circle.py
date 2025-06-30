@@ -149,6 +149,7 @@ def get_circle_meta() -> "CircleMeta":
     # identifiers, we use the TypedDict constructor
     return TypedDict("CircleMeta", circle_meta)  # type: ignore
 
+
 def get_root_circle() -> "CircleRecord":
     """Get the root circle ID from the settings collection."""
     circle_meta = get_circle_meta()
@@ -158,6 +159,7 @@ def get_root_circle() -> "CircleRecord":
             id=DOMAIN
         )
     return Circle().get(circle_meta["root"]).data
+
 
 def get_tree_root() -> "CircleTree":
     """Get the root of the Circle tree"""
@@ -169,6 +171,7 @@ def get_tree_root() -> "CircleTree":
         )
     tree_root = circle_meta[circle_meta["root"]]
     return TypedDict("CircleTree", tree_root)  # type: ignore
+
 
 def get_address_tree() -> "CircleAddressTree":
     """Get the address tree of circles."""
@@ -227,7 +230,7 @@ class CircleMember:
             },
         )
         return ModelResponse(status="ok", message=Message.UPDATED)
-    
+
     def remove(self, circle_id: CircleID, **fields: Unpack[CircleMemberRemove]) -> ModelResponse:
         """Remove a member from a circle."""
         member_id = fields["member_id"]
@@ -299,7 +302,8 @@ class Circle:
         resp = self.storage.insert(TABLE, record)
         for parent_id, access_value in parents.items():
             # TODO: Drum notation for updating nested fields
-            self.members.add(parent_id, member_id=circle_id, access_value=access_value)
+            self.members.add(parent_id, member_id=circle_id,
+                             access_value=access_value)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
@@ -309,7 +313,7 @@ class Circle:
 
     def delete(self, circle_id: str) -> ModelResponse:
         """Delete a circle by id.
-        
+
         This action is destructive and cannot be undone.
         It should only be done by an admin/owner.
         """
@@ -377,7 +381,7 @@ class CircleAddressTree(Mapping[CircleID, "CircleAddressTree"]):
         if key not in self.root:
             raise KeyError(f"Circle ID {key} not found in address tree.")
         return CircleAddressTree(self.root[key])
-    
+
     def __iter__(self) -> Iterator[CircleID]:
         """Iterate over the circle IDs in the address tree."""
         return iter(self.root)

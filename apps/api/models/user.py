@@ -101,7 +101,7 @@ class User:
             case Response(status="ok", message=Message.UPDATED):
                 return ModelResponse("ok", "User activated")
         raise ValueError(f"Unexpected response from storage: {resp}")
-    
+
     def new(self, **fields: Unpack[UserNew]) -> ModelResponse:
         """Create a new user."""
         user_id = uid.generate_user_uid(fields["email"])
@@ -119,7 +119,7 @@ class User:
             case Response(status="ok", message=Message.SUCCESS):
                 return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
         raise ValueError(f"Unexpected response from storage: {resp}")
-    
+
     def delete(self, user_id: str) -> ModelResponse:
         """Delete a user by id."""
         resp = self.storage.delete_by_id(TABLE, user_id)
@@ -164,4 +164,3 @@ class User:
                     user_id=user_id
                 )
         raise ValueError(f"Unexpected response from storage: {resp}")
-

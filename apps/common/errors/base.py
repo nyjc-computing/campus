@@ -13,6 +13,7 @@ JsonDict = dict[str, JsonValues]
 
 
 class ErrorConstant(str):
+    """Error enums"""
     CONFLICT = "CONFLICT"
     INVALID_REQUEST = "INVALID_REQUEST"
     SERVER_ERROR = "SERVER_ERROR"
@@ -51,5 +52,3 @@ class APIError(Exception):
             "error_code": self.error_code,
             "details": self.details,
         }
-
-

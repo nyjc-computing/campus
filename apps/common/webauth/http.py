@@ -17,7 +17,6 @@ from .base import (
     SecurityError,
     SecurityScheme
 )
-from common.auth.header import HttpHeaderDict
 
 HttpScheme = Literal["basic", "bearer"]
 
@@ -41,7 +40,7 @@ class HttpAuthenticationScheme(SecurityScheme):
 
     def validate_header(self, header: HttpHeader) -> None:
         """Validate the HTTP header for authentication.
-        
+
         Raises an API error if the header is invalid or missing.
         """
         auth = HttpHeaderDict(header).get_auth()
