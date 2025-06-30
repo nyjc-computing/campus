@@ -7,7 +7,7 @@ from typing import NotRequired, TypedDict, Unpack
 
 from flask import Blueprint, Flask
 
-from apps import config
+from apps.common.models.integration import config
 from apps.common.errors import api_errors
 from common.webauth.oauth2 import (
     OAuth2FlowScheme,
