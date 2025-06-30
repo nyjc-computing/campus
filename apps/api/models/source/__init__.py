@@ -14,7 +14,7 @@ Main operations:
 from typing import TypedDict, NotRequired, Unpack
 
 from apps.api.models.base import BaseRecord, ModelResponse
-from apps.common.errors import api_errors
+from apps.api.errors import api_errors
 from common.drum.mongodb import get_db, get_drum
 from common.schema import CampusID, Message, Response
 from common.utils import uid, utc_time

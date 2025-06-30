@@ -8,7 +8,7 @@ from typing import NotRequired, TypedDict, Unpack
 from flask import Blueprint, Flask
 
 from apps import integrations
-from apps.common.errors import api_errors
+from apps.api.errors import api_errors
 from apps.common.webauth.oauth2 import (
     OAuth2FlowScheme,
     OAuth2AuthorizationCodeFlowScheme,
