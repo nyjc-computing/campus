@@ -9,7 +9,7 @@ from flask import Blueprint, Flask
 
 from apps.api.models import otp
 from apps.common.errors import api_errors
-from apps.api.models.campusauth import authenticate_client
+from apps.campusauth.model import authenticate_client
 from common.services.email import create_email_sender
 from common.validation.flask import FlaskResponse, unpack_request, validate
 

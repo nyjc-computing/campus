@@ -9,13 +9,14 @@ The HTTP authentication scheme comprises two types of authentication:
 
 from typing import Literal, Unpack
 
-from apps.api.models.webauth.base import (
+from apps.common.errors import api_errors
+from common.auth.header import HttpHeaderDict
+from .base import (
     SecuritySchemeConfigSchema,
     HttpHeader,
     SecurityError,
     SecurityScheme
 )
-from apps.common.errors import api_errors
 from common.auth.header import HttpHeaderDict
 
 HttpScheme = Literal["basic", "bearer"]
