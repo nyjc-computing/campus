@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
 from apps.api.models.base import ModelResponse
-from apps.common.webauth import Security, SecuritySchemeConfigSchema
+from common.webauth import Security, SecuritySchemeConfigSchema
 from common.devops import Env
 from common.drum.mongodb import get_db
 from common.schema import Message

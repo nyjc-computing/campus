@@ -1,4 +1,4 @@
-"""apps.common.webauth.base
+"""common.webauth.base
 
 Base configs and models for authentication flows.
 """
@@ -10,11 +10,6 @@ Security = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 
 class SecurityError(Exception):
     """Base class for security-related errors."""
-
-
-class HttpHeader(TypedDict):
-    """HTTP header for authentication."""
-    Authorization: str
 
 
 class SecuritySchemeConfigSchema(TypedDict, total=False):
@@ -65,7 +60,6 @@ class SecurityScheme(Protocol):
 
 __all__ = [
     "SecuritySchemeConfigSchema",
-    "HttpHeader",
     "Security",
     "SecurityError",
     "SecurityScheme",

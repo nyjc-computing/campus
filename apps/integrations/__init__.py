@@ -6,7 +6,7 @@ Config for third-party integrations.
 import json
 import os
 
-from apps.common.webauth.oauth2.base import OAuth2ConfigSchema
+from common.webauth.oauth2.base import OAuth2ConfigSchema
 
 
 def get_config(provider: str) -> OAuth2ConfigSchema:

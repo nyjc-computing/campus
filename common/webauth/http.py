@@ -1,4 +1,4 @@
-"""apps.common.webauth.http
+"""common.webauth.http
 
 HTTP aAuthentication configs and models.
 
@@ -13,7 +13,6 @@ from apps.common.errors import api_errors
 from common.auth.header import HttpHeaderDict
 from .base import (
     SecuritySchemeConfigSchema,
-    HttpHeader,
     SecurityError,
     SecurityScheme
 )
@@ -38,7 +37,7 @@ class HttpAuthenticationScheme(SecurityScheme):
         super().__init__(**kwargs)
         self.scheme = kwargs["scheme"]
 
-    def validate_header(self, header: HttpHeader) -> None:
+    def validate_header(self, header: dict) -> None:
         """Validate the HTTP header for authentication.
 
         Raises an API error if the header is invalid or missing.
