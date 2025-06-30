@@ -1,4 +1,4 @@
-"""apps.api.errors
+"""apps/errors
 
 API error handling for Palmtree.
 """

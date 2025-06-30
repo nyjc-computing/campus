@@ -8,8 +8,8 @@ from typing import Unpack
 from flask import Blueprint, Flask
 
 from apps.api.models import circle, user
-from apps.common.errors import api_errors
 from apps.campusauth.model import authenticate_client
+from apps.common.errors import api_errors
 from common.validation.flask import FlaskResponse, unpack_request, validate
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')

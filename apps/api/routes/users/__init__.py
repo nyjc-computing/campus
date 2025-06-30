@@ -8,8 +8,8 @@ from typing import Unpack
 from flask import Blueprint, Flask
 
 from apps.api.models import user
-from apps.api.errors import api_errors
 from apps.campusauth.model import authenticate_client
+from apps.common.errors import api_errors
 from common.schema import Message, Response
 from common.validation.flask import FlaskResponse, unpack_request, validate
 

@@ -7,8 +7,8 @@ and API keys for Campus services.
 import os
 from typing import NotRequired, TypedDict, Unpack
 
-from apps.api.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
+from apps.common.errors import api_errors
 from common import devops
 from common.drum import DrumResponse
 from common.schema import Message, Response

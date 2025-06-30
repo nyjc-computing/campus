@@ -6,7 +6,6 @@ OAuth2 routes for integrations.
 from flask import Blueprint, Flask
 
 from apps.common import errors
-from apps.api import routes
 
 from . import google
 

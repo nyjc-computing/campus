@@ -1,11 +1,12 @@
-"""apps/common
+"""apps.common
 
 This module contains common functions and classes used across multiple
 applications.
 """
 
-from .errors import api_errors
+from . import errors, webauth
 
 __all__ = [
-    "api_errors",
+    "errors",
+    "webauth",
 ]
