@@ -5,7 +5,7 @@ API routes for the circles resource.
 
 from typing import Unpack
 
-from flask import Blueprint, Flask, jsonify
+from flask import Blueprint, Flask
 
 from apps.api.models import circle, user
 from apps.common.errors import api_errors
@@ -80,7 +80,7 @@ def edit_circle(
 @bp.post('/<string:circle_id>/move')
 def move_circle(circle_id: str, *_, **__) -> FlaskResponse:
     """Move a circle to a new parent."""
-    return jsonify({"message": "Not implemented"}), 501
+    return {"message": "Not implemented"}, 501
 
 @bp.get('/<string:circle_id>/members')
 def get_circle_members(circle_id: str, *_, **__) -> FlaskResponse:
@@ -134,4 +134,4 @@ def patch_circle_member(
 @bp.get('/<string:circle_id>/users')
 def get_circle_users(circle_id: str, *_, **data) -> FlaskResponse:
     """Get users in a circle."""
-    return jsonify({"message": "Not implemented"}), 501
+    return {"message": "Not implemented"}, 501

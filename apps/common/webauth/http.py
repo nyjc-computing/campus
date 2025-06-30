@@ -1,4 +1,4 @@
-"""apps/api/models/auth/authentication/http
+"""apps/common/webauth/http
 
 HTTP aAuthentication configs and models.
 
@@ -49,7 +49,7 @@ class HttpAuthenticationScheme(SecurityScheme):
             api_errors.raise_api_error(401)
         if auth.scheme != self.scheme:
             api_errors.raise_api_error(401)
-        
+
     @classmethod
     def from_json(
             cls,

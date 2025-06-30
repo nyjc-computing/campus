@@ -11,7 +11,7 @@ from typing import TypedDict, Unpack
 
 import bcrypt
 
-from apps.common.errors import api_errors
+from apps.api.errors import api_errors
 from apps.api.models.base import BaseRecord, ModelResponse
 from common import devops
 from common.schema import Message, Response

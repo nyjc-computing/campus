@@ -1,4 +1,4 @@
-"""apps/api/models/auth
+"""apps/common/webauth
 
 Web authentication models for the Campus API.
 
@@ -11,9 +11,8 @@ configuration and validation methods for authentication headers. Actual
 authentication logic is handled by the campusauth module.
 """
 
-from apps.api.models.webauth.base import Security, SecurityScheme, SecuritySchemeConfigSchema
-import apps.api.models.webauth.http as http
-import apps.api.models.webauth.oauth2 as oauth2
+from .base import Security, SecurityScheme, SecuritySchemeConfigSchema
+from . import http, oauth2
 
 SecurityScheme.register("http", http.HttpAuthenticationScheme)
 SecurityScheme.register("oauth2", oauth2.OAuth2FlowScheme)

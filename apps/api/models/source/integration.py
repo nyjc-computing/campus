@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
 from apps.api.models.base import ModelResponse
-from apps.api.models.webauth import Security, SecuritySchemeConfigSchema
+from apps.common.webauth import Security, SecuritySchemeConfigSchema
 from common.devops import Env
 from common.drum.mongodb import get_db
 from common.schema import Message
@@ -21,7 +21,8 @@ TABLE = "sources"
 class PollingCapabilities(TypedDict):
     """Polling capabilities of an integration."""
     supported: bool  # Whether polling is supported
-    default_poll_interval: NotRequired[int]  # Default polling interval in seconds, if applicable
+    # Default polling interval in seconds, if applicable
+    default_poll_interval: NotRequired[int]
 
 
 class WebhookCapabilities(TypedDict):
@@ -54,6 +55,7 @@ class IntegrationConfig(TypedDict, total=False):
 
 class IntegrationBase:
     """Abstract base class for integration config objects."""
+
     def __init__(
             self,
             name: str,
@@ -85,7 +87,8 @@ class IntegrationBase:
             api_doc=data["api_doc"],
             security=data["security"],
             capabilities=data["capabilities"],
-            enabled=data.get("enabled", None)  # Default to False if not present
+            # Default to False if not present
+            enabled=data.get("enabled", None)
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -105,13 +108,13 @@ class IntegrationBase:
         self.enabled = False
         self.sync_status()
         return ModelResponse(status="ok", message=Message.SUCCESS)
-    
+
     def enable(self) -> ModelResponse:
         """Enable an integration."""
         self.enabled = True
         self.sync_status()
         return ModelResponse(status="ok", message=Message.SUCCESS)
-    
+
     def sync_status(self) -> ModelResponse:
         """Sync an integration status to storage."""
         db = get_db()
