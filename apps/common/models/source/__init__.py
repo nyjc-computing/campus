@@ -1,4 +1,4 @@
-"""apps.api.models.source
+"""apps.common.models.source
 Source Models
 
 This module provides classes for creating and managing Campus sources, which
@@ -13,7 +13,7 @@ Main operations:
 
 from typing import TypedDict, NotRequired, Unpack
 
-from apps.api.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord, ModelResponse
 from apps.common.errors import api_errors
 from common.drum.mongodb import get_db, get_drum
 from common.schema import CampusID, Message, Response

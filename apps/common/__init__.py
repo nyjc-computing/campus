@@ -9,9 +9,9 @@ Modules:
 - webauth: Contains web authentication models and configurations.
 """
 
-from . import errors, webauth
+from . import errors, models
 
 __all__ = [
     "errors",
-    "webauth",
+    "models",
 ]

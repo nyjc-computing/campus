@@ -1,4 +1,4 @@
-"""apps.api.models.client
+"""apps.common.models.client
 
 This module provides classes and utilities for handling client applications
 and API keys for Campus services.
@@ -6,7 +6,7 @@ and API keys for Campus services.
 import os
 from typing import NotRequired, TypedDict, Unpack
 
-from apps.api.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord, ModelResponse
 from apps.common.errors import api_errors
 from common import devops
 from common.drum import DrumResponse

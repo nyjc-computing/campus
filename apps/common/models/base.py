@@ -1,4 +1,4 @@
-"""apps.api.models.base
+"""apps.common.models.base
 
 Base types and classes for all Campus models.
 """

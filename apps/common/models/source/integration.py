@@ -1,4 +1,4 @@
-"""apps.api.models.source.integration.py
+"""apps.common.models.source.integration
 Integration Models
 
 This module provides classes for creating and managing Campus integrations,
@@ -7,7 +7,7 @@ which are connections to third-party platforms and APIs.
 from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
-from apps.api.models.base import ModelResponse
+from apps.common.models.base import ModelResponse
 from common.webauth import Security, SecuritySchemeConfigSchema
 from common.devops import Env
 from common.drum.mongodb import get_db

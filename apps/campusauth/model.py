@@ -11,7 +11,7 @@ from typing import Callable
 from flask import request
 from flask.wrappers import Response
 
-from apps.api.models.client import Client
+from apps.common.models.client import Client
 from common.webauth import http, oauth2
 
 from common.auth.header import HttpHeaderDict

@@ -56,7 +56,7 @@ def init_db() -> None:
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
-    from .models import client, otp, user
+    from apps.common.models import client, otp, user
 
     for model in (client, otp, user):
         model.init_db()
