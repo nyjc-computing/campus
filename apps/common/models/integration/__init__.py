@@ -1,9 +1,9 @@
-"""apps.common.models.source.integration
-Integration Models
+"""apps.common.models.integration
 
 This module provides classes for creating and managing Campus integrations,
 which are connections to third-party platforms and APIs.
 """
+
 from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
@@ -15,7 +15,7 @@ from common.schema import Message
 
 Url = str
 
-TABLE = "sources"
+TABLE = "integrations"
 
 
 class PollingCapabilities(TypedDict):

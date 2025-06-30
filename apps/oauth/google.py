@@ -7,7 +7,7 @@ from typing import NotRequired, TypedDict, Unpack
 
 from flask import Blueprint, Flask
 
-from apps import integrations
+from apps import config
 from apps.common.errors import api_errors
 from common.webauth.oauth2 import (
     OAuth2FlowScheme,
@@ -17,7 +17,7 @@ from common.validation.flask import FlaskResponse, unpack_request, validate
 
 bp = Blueprint('google', __name__, url_prefix='/google')
 oauth2 = OAuth2FlowScheme.from_json(
-    integrations.get_config('google')
+    config.get_config('google')
 )
 
 

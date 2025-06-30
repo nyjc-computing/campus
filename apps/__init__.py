@@ -10,11 +10,11 @@ This module contains the main applications for Campus.
 - oauth: Campus OAuth2 implementation.
 """
 
-from . import api, campusauth, integrations, oauth
+from . import api, campusauth, config, oauth
 
 __all__ = [
     "api",
     "campusauth",
-    "integrations",
+    "config",
     "oauth",
 ]

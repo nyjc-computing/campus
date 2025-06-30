@@ -1,4 +1,4 @@
-"""apps.integrations
+"""apps.integration.config
 
 Config for third-party integrations.
 """

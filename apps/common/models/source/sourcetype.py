@@ -4,7 +4,7 @@ SourceType Models
 This module provides classes for creating and managing Campus source types,
 which are categories of data sources from third-party platforms and APIs.
 """
-from .integration import (
+from ..integration import (
     CommonCapabilities,
     Url,
 )
