@@ -31,9 +31,11 @@ TIMEOUT = 10  # Default timeout for requests in seconds
 
 class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
     """OAuth2 Authorization Code flow configuration."""
+    name: Required[str]  # Name of the OAuth2 provider (e.g., google, github)
     authorization_url: Required[Url]  # Required for authorization code flow
     token_url: Required[Url]  # Required for token exchange
     headers: dict[str, str]  # Optional, for custom headers in requests
+    scopes: Required[list[str]]  # Required scopes for the OAuth2 flow
     user_info_url: Url  # Optional, for user info endpoint
     extra_params: dict[str, str]  # Optional, for additional parameters in requests
     token_params: dict[str, str]  # Optional, for custom token exchange
@@ -92,6 +94,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     The attributes are typically provided from a config file.
     """
+    name: str
     authorization_url: Url
     token_url: Url
     headers: dict[str, str]
@@ -99,12 +102,15 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     extra_params: dict[str, str]
     token_params: dict[str, str]
     user_info_params: dict[str, str]
+    scopes: list[str]
 
     def __init__(self, **config: Unpack[OAuth2AuthorizationCodeConfigSchema]):
         """Initialize with OAuth2 Authorization Code flow configuration."""
         super().__init__(**config)
+        self.name = config["name"]
         self.authorization_url = config["authorization_url"]
         self.token_url = config["token_url"]
+        self.scopes = config["scopes"]
         self.headers = config.get("headers", {})
         self.user_info_url = config.get("user_info_url", None)
         self.extra_params = config.get("extra_params", {})
@@ -129,6 +135,20 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             return resp.json()
         except Exception as err:
             raise OAuth2SecurityError("Failed to fetch user info") from err
+
+    def create_session(
+            self,
+            client_id: str,
+            redirect_uri: Url,
+            scopes: list[str],
+    ) -> "OAuth2AuthorizationCodeSession":
+        """Create a new OAuth2 Authorization Code flow session."""
+        return OAuth2AuthorizationCodeSession(
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scopes=scopes,
+            provider=self
+        )
 
 
 class OAuth2AuthorizationCodeSession:
