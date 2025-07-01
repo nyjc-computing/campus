@@ -11,6 +11,7 @@ from flask import Blueprint, Flask
 
 from apps.common.models.integration import config
 from apps.common.errors import api_errors
+from common.services.vault import get_vault
 from common.validation.flask import FlaskResponse, unpack_request, validate
 from common.webauth.oauth2 import OAuth2AuthorizationCodeFlowScheme
 from common.webauth.oauth2.authorization_code import (
