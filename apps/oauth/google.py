@@ -21,9 +21,11 @@ from common.webauth.oauth2.authorization_code import (
     AuthorizationErrorCode,
 )
 
-vault = get_vault('google')
-bp = Blueprint('google', __name__, url_prefix='/google')
-oauthconfig = config.get_config('google')
+PROVIDER = 'google'
+
+vault = get_vault(PROVIDER)
+bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
+oauthconfig = config.get_config(PROVIDER)
 oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig)
 
 
