@@ -13,6 +13,7 @@ from apps.common.models.integration import config
 from apps.common.errors import api_errors
 from common.services.vault import get_vault
 from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.webauth.credentials import ProviderCredentials
 from common.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
@@ -20,28 +21,20 @@ from common.webauth.oauth2.authorization_code import (
     AuthorizationErrorCode,
 )
 
-from .model import OAuthSession, ProviderCredentials
-
 vault = get_vault('google')
 bp = Blueprint('google', __name__, url_prefix='/google')
 oauthconfig = config.get_config('google')
 oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig)
 
 
-class Authorize(TypedDict, total=False):
+class AuthorizeRequestSchema(TypedDict, total=False):
     """Request type for Google OAuth authorization.
 
     Reference: https://developers.google.com/identity/protocols/oauth2/web-server#httprest
 
     NotRequired fields will be filled in by redirect endpoint.
     """
-    client_id: str  # will be filled in from vault
-    redirect_uri: Required[str]  # The URI to redirect to after authorization
-    response_type: str  # 'code' for authorization code flow
-    scope: str  # Space-separated list of scopes requested
-    access_type: NotRequired[str]  # from integration config
-    state: NotRequired[str]  # Optional state parameter to maintain state between request and callback
-    include_granted_scopes: bool  # from integration config
+    target: Required[str]  # The URL to redirect to after successful authentication
     login_hint: NotRequired[str]  # Optional hint for the user's email address
     # prompt: str  # Not used
 
@@ -54,7 +47,7 @@ class Callback(TypedDict, total=False):
     """
     error: AuthorizationErrorCode
     code: str
-    state: str
+    state: Required[str]
     error_description: str
     error_uri: str
     redirect_uri: Required[str]  # The URI to redirect to after authorization
@@ -76,22 +69,21 @@ def init_app(app: Flask | Blueprint) -> None:
 
 @bp.get('/authorize')
 @validate(
-    request=Authorize.__annotations__,
+    request=AuthorizeRequestSchema.__annotations__,
     response={"url": str},
     on_error=api_errors.raise_api_error
 )
-def google_authorize(*_, **params: Unpack[Authorize]) -> FlaskResponse:
+def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> FlaskResponse:
     """Redirect to Google OAuth authorization endpoint."""
-    data = {
-        "client_id": vault.get('CLIENT_ID'),
-        "redirect_uri": params["redirect_uri"],
-        "access_type": oauth2.extra_params["access_type"],
-        "scopes": oauth2.scopes
-    }
-    session = oauth2.create_session(**data)
-    # TODO: Persist session data temporarily in cache
-    session.serialize()
-    return redirect(session.get_authorization_url())
+    session = oauth2.create_session(
+        client_id=vault.get('CLIENT_ID'),
+        scopes=oauth2.scopes,
+        target=params['target'],
+    )
+    session.store()
+    # TODO: pass login_hint to authorization URL if provided
+    extra_params = {}
+    return redirect(session.get_authorization_url(**extra_params))
 
 @bp.post('/callback')
 @unpack_request
@@ -106,17 +98,26 @@ def google_callback(*_, **params: Unpack[Callback]) -> FlaskResponse:
         api_errors.raise_api_error(401, **params)
     elif "code" not in params:
         api_errors.raise_api_error(400, **params)
-    token_response = oauth2.exchange_code_for_token(
+    session = oauth2.retrieve_session(params["state"])
+    if not session:
+        api_errors.raise_api_error(400, error="No authentication session found")
+    token_response = session.exchange_code_for_token(
         code=params["code"],
-        redirect_uri=params["redirect_uri"],
-        client_id=vault.get('CLIENT_ID'),
         client_secret= vault.get('CLIENT_SECRET'),
     )
     if "error" in token_response:
         api_errors.raise_api_error(400, **token_response)
     # TODO: verify requested scopes were granted
-    # TODO: store id, access token, refresh token, scopes in credentials store
+    assert "access_token" in token_response, "Access token not found in response"
     user_info = oauth2.get_user_info(token_response["access_token"])
     if "error" in user_info:
         api_errors.raise_api_error(400, **user_info)
-    # TODO: redirect
+    # Store the access token in the user's credentials
+    credentials = ProviderCredentials(user_info["email"], "google")
+    credentials.set_access_token(token_response["access_token"])
+    credentials.set_scopes(token_response["scope"].split(" "))
+    if "refresh_token" in token_response:
+        credentials.set_refresh_token(token_response["refresh_token"])
+    # TODO: handle successful authentication
+    session.delete()
+    return redirect(session.target)
