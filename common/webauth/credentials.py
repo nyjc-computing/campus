@@ -10,7 +10,6 @@ from typing import TypedDict
 
 from common.drum.mongodb import get_db, get_drum
 from common.schema import UserID
-from common.utils import uid, utc_time
 
 
 TABLE = "credentials"
