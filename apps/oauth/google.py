@@ -8,11 +8,11 @@ Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 from typing import NotRequired, Required, TypedDict, Unpack
 
 from flask import Blueprint, Flask, redirect
+from werkzeug.wrappers import Response
 
 from apps.common.errors import api_errors
 from common.integration import config
 from common.services.vault import get_vault
-from common.validation.flask import FlaskResponse, unpack_request, validate
 from common.webauth.credentials import ProviderCredentials
 from common.webauth.oauth2 import \
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
@@ -67,12 +67,8 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.get('/authorize')
-@validate(
-    request=AuthorizeRequestSchema.__annotations__,
-    response={"url": str},
-    on_error=api_errors.raise_api_error
-)
-def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> FlaskResponse:
+# TODO: validate URL parameters (instead of JSON body)
+def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
     """Redirect to Google OAuth authorization endpoint."""
     session = oauth2.create_session(
         client_id=vault.get('CLIENT_ID'),
@@ -85,13 +81,8 @@ def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> FlaskRespo
     return redirect(session.get_authorization_url(**extra_params))
 
 @bp.post('/callback')
-@unpack_request
-@validate(
-    request=Callback.__annotations__,
-    response={"message": str},
-    on_error=api_errors.raise_api_error
-)
-def google_callback(*_, **params: Unpack[Callback]) -> FlaskResponse:
+# TODO: validate URL parameters (instead of JSON body)
+def google_callback(*_, **params: Unpack[Callback]) -> Response:
     """Handle a Google OAuth callback request."""
     if "error" in params:
         api_errors.raise_api_error(401, **params)
