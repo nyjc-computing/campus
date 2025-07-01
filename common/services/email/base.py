@@ -1,4 +1,4 @@
-"""common.services.email.base.py
+"""common.services.email.base
 
 Base classes for email sending services.
 """

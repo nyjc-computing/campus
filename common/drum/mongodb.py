@@ -1,4 +1,4 @@
-"""common/drum/mongodb.py
+"""common.drum.mongodb
 
 MongoDB implementation of the Drum interface.
 """

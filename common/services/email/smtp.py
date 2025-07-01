@@ -1,4 +1,4 @@
-"""common.services.email.smtp.py
+"""common.services.email.smtp
 
 SMTP email sending service.
 """

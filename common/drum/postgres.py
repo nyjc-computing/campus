@@ -1,4 +1,4 @@
-"""common/drum/postgres.py
+"""common.drum.postgres
 
 PostgreSQL implementation of the Drum interface.
 """

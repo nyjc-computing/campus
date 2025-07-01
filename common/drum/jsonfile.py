@@ -1,4 +1,4 @@
-"""common/drum/jsonfile.py
+"""common.drum.jsonfile
 
 JSON file implementation of the Drum interface.
 

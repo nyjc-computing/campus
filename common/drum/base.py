@@ -1,4 +1,4 @@
-"""common.drum.base.py
+"""common.drum.base
 
 Base classes and common types for the Drum interface.
 

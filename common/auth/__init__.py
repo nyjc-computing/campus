@@ -1,4 +1,4 @@
-"""common/auth
+"""common.auth
 
 This module contains authentication-related functionality.
 """

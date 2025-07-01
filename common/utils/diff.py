@@ -1,4 +1,4 @@
-"""common.utils.diff.py
+"""common.utils.diff
 
 Utility functions for comparing complex data types.
 """
