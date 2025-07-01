@@ -168,6 +168,12 @@ class OAuth2AuthorizationCodeSession:
     This class may be subclassed by specific OAuth2 providers to implement
     provider-specific logic, such as custom headers or additional parameters.
     """
+    provider: OAuth2AuthorizationCodeFlowScheme
+    client_id: str
+    response_type: Literal["code"]
+    redirect_uri: Url
+    scopes: list[str]
+    state: str  # Unique state for CSRF protection
 
     def __init__(
             self,
@@ -241,6 +247,16 @@ class OAuth2AuthorizationCodeSession:
             raise OAuth2SecurityError(
                 "Invalid response from token endpoint, missing 'code' or 'error'."
             )
+
+    def serialize(self) -> dict[str, str]:
+        """Serialize the session to a dictionary."""
+        return {
+            "provider": self.provider.name,
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "scopes": " ".join(self.scopes),
+            "state": self.state,
+        }
 
 
 __all__ = [
