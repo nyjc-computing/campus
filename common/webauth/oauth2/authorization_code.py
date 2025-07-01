@@ -3,10 +3,13 @@
 OAuth2 Authorization Code flow configs and models.
 """
 
-from typing import Literal, NotRequired, Required, TypedDict, Unpack
+from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
 import requests
+
+from common.drum.mongodb import get_db
+from common.utils import uid, utc_time
 
 from .base import (
     OAuth2ConfigSchema,
@@ -25,7 +28,9 @@ AuthorizationErrorCode = Literal[
     "temporarily_unavailable",
 ]
 
+OAUTH_EXPIRY_MINUTES = 10  # Default expiry time for OAuth2 sessions in minutes
 TIMEOUT = 10  # Default timeout for requests in seconds
+TABLE = "webauth"
 
 
 class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
@@ -96,6 +101,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     name: str
     authorization_url: Url
     token_url: Url
+    redirect_uri: Url
     headers: dict[str, str]
     user_info_url: Url | None
     extra_params: dict[str, str]
@@ -109,6 +115,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         self.name = config["name"]
         self.authorization_url = config["authorization_url"]
         self.token_url = config["token_url"]
+        self.redirect_uri = config.get("redirect_uri", "")
         self.scopes = config["scopes"]
         self.headers = config.get("headers", {})
         self.user_info_url = config.get("user_info_url", None)
@@ -138,14 +145,31 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     def create_session(
             self,
             client_id: str,
-            redirect_uri: Url,
             scopes: list[str],
+            target: Url,
     ) -> "OAuth2AuthorizationCodeSession":
         """Create a new OAuth2 Authorization Code flow session."""
         return OAuth2AuthorizationCodeSession(
-            client_id=client_id,
-            redirect_uri=redirect_uri,
             scopes=scopes,
+            target=target,
+            provider=self,
+            client_id=client_id,
+        )
+
+    def retrieve_session(
+            self,
+            state: str
+    ) -> "OAuth2AuthorizationCodeSession | None":
+        """Retrieve an existing OAuth2 Authorization Code flow session by state."""
+        db = get_db()
+        record = db[TABLE].find_one({"state": state})
+        if not record:
+            return None
+        return OAuth2AuthorizationCodeSession(
+            client_id=record["client_id"],
+            scopes=record["scopes"],
+            target=record["target"],
+            state=record["state"],
             provider=self
         )
 
@@ -164,54 +188,49 @@ class OAuth2AuthorizationCodeSession:
     - is short-lived (typically a few minutes)
     - is identified by a unique state hash
 
+    The attributes that the class possesses are used for OAuth2 flow or
+    common provider parameters.
+
     This class may be subclassed by specific OAuth2 providers to implement
     provider-specific logic, such as custom headers or additional parameters.
     """
     provider: OAuth2AuthorizationCodeFlowScheme
     client_id: str
+    created_at: str  # RFC3339 timestamp of when the session was created
     response_type: Literal["code"]
-    redirect_uri: Url
     scopes: list[str]
     state: str  # Unique state for CSRF protection
+    target: Url  # URL to redirect to after successful authentication
 
     def __init__(
             self,
-            client_id: str,
-            redirect_uri: Url,
             scopes: list[str],
+            target: Url,
+            state: str = "",
             *,
             provider: OAuth2AuthorizationCodeFlowScheme,
+            client_id: str,
     ):
         """Return the base parameters for the authorization request.
 
         Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
         """
         self.provider = provider
+        self.created_at = utc_time.to_rfc3339(utc_time.now())
         self.client_id = client_id
         self.response_type = "code"
-        self.redirect_uri = redirect_uri
         self.scopes = scopes
-        # TODO: Set unique state for CSRF protection
-        # https://developers.google.com/identity/openid-connect/openid-connect#python
-        self.state = ""
+        self.state = state or uid.generate_category_uid("oauthsession")
+        self.target = target
 
-    def get_authorization_url(self, **additional_params: dict[str, str]) -> str:
-        """Return the authorization URL for redirect, with provider-specific
-        params.
+    def delete(self) -> None:
+        """Delete the session from the database or cache.
 
-        Subclasses should extend this method to implement provider-specific
-        logic, such as custom headers or additional parameters.
+        This method should be implemented by subclasses to remove the session
+        data, such as from a database or cache.
         """
-        params = {
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "response_type": self.response_type,
-            "scope": " ".join(self.scopes),
-            "state": self.state,
-            **self.provider.extra_params,
-            **additional_params
-        }
-        return f"""{self.provider.authorization_url}?{urlencode(params)}"""
+        db = get_db()
+        db[TABLE].delete_one({"state": self.state})
 
     def exchange_code_for_token(
             self,
@@ -221,7 +240,7 @@ class OAuth2AuthorizationCodeSession:
         """Exchange authorization code for access token."""
         params = {
             "grant_type": "authorization_code",
-            "redirect_uri": self.redirect_uri,
+            "redirect_uri": self.provider.redirect_uri,
             "client_id": self.client_id,
             "code": code,
             "client_secret": client_secret,
@@ -247,13 +266,52 @@ class OAuth2AuthorizationCodeSession:
                 "Invalid response from token endpoint, missing 'code' or 'error'."
             )
 
-    def serialize(self) -> dict[str, str]:
-        """Serialize the session to a dictionary."""
+    def get_authorization_url(self, **additional_params: dict[str, str]) -> str:
+        """Return the authorization URL for redirect, with provider-specific
+        params.
+
+        Subclasses should extend this method to implement provider-specific
+        logic, such as custom headers or additional parameters.
+        """
+        params = {
+            "client_id": self.client_id,
+            # TODO: Add base URL to redirect_uri
+            "redirect_uri": self.provider.redirect_uri,
+            "response_type": self.response_type,
+            "scope": " ".join(self.scopes),
+            "state": self.state,
+            **self.provider.extra_params,
+            **additional_params
+        }
+        return f"""{self.provider.authorization_url}?{urlencode(params)}"""
+
+    def is_expired(self) -> bool:
+        """Check if the session has expired.
+
+        This method checks if the session was created more than 10 minutes ago.
+        If so, it considers the session expired.
+        """
+        created_at = utc_time.from_rfc3339(self.created_at)
+        expires_at = utc_time.after(created_at, minutes=OAUTH_EXPIRY_MINUTES)
+        return expires_at > utc_time.now()
+
+    def store(self) -> None:
+        """Store the session in the database or cache.
+
+        This method should be implemented by subclasses to persist the session
+        data, such as in a database or cache.
+        """
+        db = get_db()
+        db[TABLE].insert_one(self.to_dict())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a dictionary representation of the session."""
         return {
             "provider": self.provider.name,
             "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "scopes": " ".join(self.scopes),
+            "created_at": self.created_at,
+            "response_type": self.response_type,
+            "scopes": self.scopes,
             "state": self.state,
         }
 
