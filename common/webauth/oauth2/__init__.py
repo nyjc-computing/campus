@@ -13,10 +13,6 @@ from .authorization_code import OAuth2AuthorizationCodeFlowScheme
 from .base import OAuth2FlowScheme
 
 
-OAuth2FlowScheme.register_flow(
-    "authorizationCode", OAuth2AuthorizationCodeFlowScheme)
-
-
 __all__ = [
     "OAuth2FlowScheme",
     "OAuth2AuthorizationCodeFlowScheme",
