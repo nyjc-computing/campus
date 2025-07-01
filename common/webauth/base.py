@@ -3,7 +3,11 @@
 Base configs and models for authentication flows.
 """
 
-from typing import Literal, Protocol, Required, Type, TypedDict, Unpack
+from typing import Literal, Protocol, Required, Type, TypeVar, TypedDict, Unpack
+
+from common.integration.config import IntegrationConfigSchema
+
+S = TypeVar("S", bound="SecurityScheme")
 
 Security = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 
@@ -32,30 +36,30 @@ class SecurityScheme(Protocol):
     provider: str
     security_scheme: Security
     scopes: list[str]
-    _registry: dict[Security, Type["SecurityScheme"]] = {}
 
-    def __init__(self, provider: str, **kwargs: Unpack[SecuritySchemeConfigSchema]):
+    def __init__(self, provider: str, **config: Unpack[SecuritySchemeConfigSchema]):
         """Subclasses must implement an __init__() method that initializes the
         security scheme using keyword arguments.
         Subclasses must also call super().__init__(**kwargs) to ensure
         the base class is properly initialized.
         """
         self.provider = provider
-        self.security_scheme = kwargs["security_scheme"]
+        self.security_scheme = config["security_scheme"]
 
     @classmethod
-    def from_json(cls, data) -> "SecurityScheme":
+    def from_json(
+            cls: Type[S],
+            data: IntegrationConfigSchema,
+            security: Security
+        ) -> S:
         """Instantiate a security scheme from a JSON-like dictionary."""
-        if data["security_scheme"] not in cls._registry:
-            raise ValueError(f"Security scheme {data['security_scheme']} is not registered.")
-        return cls._registry[data["security_scheme"]](**data)
-
-    @classmethod
-    def register(cls, security: Security, scheme: Type["SecurityScheme"]) -> None:
-        """Register a security scheme class for a given security type."""
-        if security in cls._registry:
-            raise ValueError(f"Security scheme for {security} is registered.")
-        cls._registry[security] = scheme
+        if security not in data["security"]:
+            raise ValueError(
+                f"Integration {data['provider']} does not have {security} security configured."
+            )
+        provider = data["provider"]
+        security_config = data["security"][security]
+        return cls(provider, **security_config)
 
 
 __all__ = [

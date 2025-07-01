@@ -9,24 +9,21 @@ from typing import NotRequired, Required, TypedDict, Unpack
 
 from flask import Blueprint, Flask, redirect
 
-from common.integration import config
 from apps.common.errors import api_errors
+from common.integration import config
 from common.services.vault import get_vault
 from common.validation.flask import FlaskResponse, unpack_request, validate
 from common.webauth.credentials import ProviderCredentials
-from common.webauth.oauth2 import (
+from common.webauth.oauth2 import \
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
-)
-from common.webauth.oauth2.authorization_code import (
-    AuthorizationErrorCode,
-)
+from common.webauth.oauth2.authorization_code import AuthorizationErrorCode
 
 PROVIDER = 'google'
 
 vault = get_vault(PROVIDER)
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = config.get_config(PROVIDER)
-oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig)
+oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
 
 
 class AuthorizeRequestSchema(TypedDict, total=False):

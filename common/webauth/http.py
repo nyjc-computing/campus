@@ -33,8 +33,8 @@ class HttpAuthenticationScheme(SecurityScheme):
     """HTTP authentication for Basic and Bearer schemes."""
     scheme: HttpScheme
 
-    def __init__(self, **kwargs: Unpack[HttpAuthConfigSchema]):
-        super().__init__(**kwargs)
+    def __init__(self, provider: str, **kwargs: Unpack[HttpAuthConfigSchema]):
+        super().__init__(provider, **kwargs)
         self.scheme = kwargs["scheme"]
 
     def validate_header(self, header: dict) -> None:
@@ -47,14 +47,6 @@ class HttpAuthenticationScheme(SecurityScheme):
             api_errors.raise_api_error(401)
         if auth.scheme != self.scheme:
             api_errors.raise_api_error(401)
-
-    @classmethod
-    def from_json(
-            cls,
-            data: HttpAuthConfigSchema
-    ) -> "HttpAuthenticationScheme":
-        """Validate security_scheme before calling this method."""
-        return cls(**data)
 
 
 __all__ = [

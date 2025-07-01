@@ -37,27 +37,16 @@ class OAuth2FlowScheme(SecurityScheme, Generic[F]):
     OAuth2 is only used for initial authentication of users and clients.
     Subsequent authorization uses HTTP Basic/Bearer schemes.
     """
-    flow: OAuth2Flow
-    _flow_registry: dict[OAuth2Flow, Type[F]] = {}
+    flow: str
 
-    def __init__(self, provider, **kwargs: Unpack[OAuth2AuthorizationCodeConfigSchema]):
-        super().__init__(provider, **kwargs)
-        self.flow = kwargs["flow"]
+    def __init__(
+            self,
+            provider: str,
+            **config: Unpack[OAuth2AuthorizationCodeConfigSchema]
+    ):
+        super().__init__(provider, **config)
+        self.flow = config["flow"]
 
-    @classmethod
-    def from_json(cls: Type[F], data: IntegrationConfigSchema) -> F:
-        provider = data["provider"]
-        if "oauth2" not in data["security"]:
-            raise ValueError(f"{provider} has no oauth2 security configured.")
-        security_config = data["security"]["oauth2"]
-        return cls._flow_registry[security_config["flow"]](provider, **security_config)
-
-    @classmethod
-    def register_flow(cls, flow: OAuth2Flow, scheme: Type[F]) -> None:
-        """Register an OAuth2 flow."""
-        if flow in cls._flow_registry:
-            raise ValueError(f"OAuth2 flow {flow} is registered.")
-        cls._flow_registry[flow] = scheme
 
 __all__ = [
     "OAuth2AuthorizationCodeConfigSchema",
