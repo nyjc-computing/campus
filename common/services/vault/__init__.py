@@ -6,7 +6,7 @@ Each vault (in a collection) is identified by a unique label.
 To avoid collision between label and keys in the vault, the label key is prefixed with '@', i.e. '@label'.
 """
 
-from common.drum.mongodb import PK, get_db, get_drum
+from common.drum.mongodb import PK, get_db
 
 from . import meta
 
