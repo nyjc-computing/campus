@@ -11,7 +11,6 @@ import requests
 from .base import (
     OAuth2ConfigSchema,
     OAuth2FlowScheme,
-    OAuth2InvalidRequestError,
     OAuth2SecurityError,
 )
 
