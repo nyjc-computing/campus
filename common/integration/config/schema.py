@@ -32,7 +32,7 @@ class OAuth2AuthorizationCodeConfigSchema(SecurityConfigSchema):
 
 class IntegrationConfigSchema(TypedDict):
     """Schema for integration configuration."""
-    name: str
+    provider: str
     description: str
     servers: dict[Env, Url]
     redirect_uri: str

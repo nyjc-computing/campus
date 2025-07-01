@@ -1,5 +1,5 @@
 {
-  "name": "google",
+  "provider": "google",
   "description": "Google API platform integration for Campus. Provides access to Google services via OAuth2.",
   "servers": {
     "development": "https://www.googleapis.com",

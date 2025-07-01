@@ -6,8 +6,12 @@ OAuth2 security scheme base configs and models.
 
 from typing import Generic, Literal, Type, TypeVar, Unpack
 
+from common.integration.config import (
+    IntegrationConfigSchema,
+    OAuth2AuthorizationCodeConfigSchema,
+)
+
 from ..base import (
-    SecuritySchemeConfigSchema,
     SecurityError,
     SecurityScheme
 )
@@ -27,11 +31,6 @@ class OAuth2SecurityError(SecurityError):
     """OAuth2 authentication error."""
 
 
-class OAuth2ConfigSchema(SecuritySchemeConfigSchema):
-    """OAuth2 base authentication schema."""
-    flow: OAuth2Flow
-
-
 class OAuth2FlowScheme(SecurityScheme, Generic[F]):
     """OAuth2 security scheme base class for OAuth2 flows.
 
@@ -41,15 +40,16 @@ class OAuth2FlowScheme(SecurityScheme, Generic[F]):
     flow: OAuth2Flow
     _flow_registry: dict[OAuth2Flow, Type[F]] = {}
 
-    def __init__(self, **kwargs: Unpack[OAuth2ConfigSchema]):
+    def __init__(self, **kwargs: Unpack[OAuth2AuthorizationCodeConfigSchema]):
         super().__init__(**kwargs)
         self.flow = kwargs["flow"]
 
     @classmethod
-    def from_json(cls: Type[F], data: OAuth2ConfigSchema) -> F:
-        if data["security_scheme"] != "oauth2":
-            raise ValueError("Invalid security scheme for OAuth2.")
-        return cls._flow_registry[data["flow"]](**data)
+    def from_json(cls: Type[F], data: IntegrationConfigSchema) -> F:
+        if "oauth2" not in data["security"]:
+            raise ValueError(f"Provider {data['name']} does not have oauth2 securty scheme.")
+        security_config = data["security"]["oauth2"]
+        return cls._flow_registry[security_config["flow"]](**security_config)
 
     @classmethod
     def register_flow(cls, flow: OAuth2Flow, scheme: Type[F]) -> None:
@@ -59,7 +59,7 @@ class OAuth2FlowScheme(SecurityScheme, Generic[F]):
         cls._flow_registry[flow] = scheme
 
 __all__ = [
-    "OAuth2ConfigSchema",
+    "OAuth2AuthorizationCodeConfigSchema",
     "OAuth2FlowScheme",
     "OAuth2SecurityError",
     "OAuth2Flow",

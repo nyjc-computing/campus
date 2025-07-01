@@ -1,5 +1,5 @@
 {
-  "name": "discord",
+  "provider": "discord",
   "description": "Discord API platform integration for Campus. Provides access to Discord services via OAuth2.",
   "servers": {
     "development": "https://discord.com/api",

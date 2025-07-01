@@ -58,7 +58,7 @@ class Integration:
 
     def __init__(
             self,
-            name: str,
+            provider: str,
             description: str,
             servers: Mapping[Env, Url],
             api_doc: Url,
@@ -66,7 +66,7 @@ class Integration:
             capabilities: CommonCapabilities,
             enabled: bool | None = None
     ):
-        self.name = name
+        self.provider = provider
         self.description = description
         self.servers = servers
         self.api_doc = api_doc
@@ -81,7 +81,7 @@ class Integration:
     def from_dict(cls, data: dict[str, Any]) -> "Integration":
         """Instantiate from a dict (e.g., loaded from JSON)."""
         return cls(
-            name=data["name"],
+            provider=data["provider"],
             description=data["description"],
             servers=data["servers"],
             api_doc=data["api_doc"],
@@ -94,7 +94,7 @@ class Integration:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for serialization."""
         return {
-            "name": self.name,
+            "provider": self.provider,
             "description": self.description,
             "servers": self.servers,
             "api_doc": self.api_doc,
@@ -122,18 +122,18 @@ class Integration:
             raise ValueError("No @meta document found in storage.")
         if not db[TABLE].find_one({
             "@meta": True,
-            f"integrations.{self.name}.enabled": {"$exists": True}
+            f"integrations.{self.provider}.enabled": {"$exists": True}
         }):
             # Integration not completely registered in storage
             # Default status to False
             # MongoDB $set operator works recursively
             db[TABLE].update_one(
                 {"@meta": True},
-                {"$set": {f"integrations.{self.name}.enabled": False}}
+                {"$set": {f"integrations.{self.provider}.enabled": False}}
             )
         integration = db[TABLE].find_one({
             "@meta": True,
-            f"integrations.{self.name}": 1
+            f"integrations.{self.provider}": 1
         })
         assert isinstance(integration, dict)
         if self.enabled is None:
@@ -145,7 +145,7 @@ class Integration:
             db[TABLE].update_one(
                 {"@meta": True},
                 {"$set": {
-                    f"integrations.{self.name}.enabled": bool(self.enabled)
+                    f"integrations.{self.provider}.enabled": bool(self.enabled)
                 }}
             )
 

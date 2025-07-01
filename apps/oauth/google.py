@@ -9,7 +9,7 @@ from typing import NotRequired, Required, TypedDict, Unpack
 
 from flask import Blueprint, Flask, redirect
 
-from apps.common.models.integration import config
+from common.integration import config
 from apps.common.errors import api_errors
 from common.services.vault import get_vault
 from common.validation.flask import FlaskResponse, unpack_request, validate

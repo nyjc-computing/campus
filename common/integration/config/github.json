@@ -1,5 +1,5 @@
 {
-  "name": "github",
+  "provider": "github",
   "description": "GitHub API platform integration for Campus. Provides access to GitHub services via OAuth2.",
   "servers": {
     "development": "https://api.github.com",

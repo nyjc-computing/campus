@@ -12,7 +12,7 @@ from common.drum.mongodb import get_db
 from common.utils import uid, utc_time
 
 from .base import (
-    OAuth2ConfigSchema,
+    OAuth2AuthorizationCodeConfigSchema,
     OAuth2FlowScheme,
     OAuth2SecurityError,
 )
@@ -31,19 +31,6 @@ AuthorizationErrorCode = Literal[
 OAUTH_EXPIRY_MINUTES = 10  # Default expiry time for OAuth2 sessions in minutes
 TIMEOUT = 10  # Default timeout for requests in seconds
 TABLE = "webauth"
-
-
-class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
-    """OAuth2 Authorization Code flow configuration."""
-    name: Required[str]  # Name of the OAuth2 provider (e.g., google, github)
-    authorization_url: Required[Url]  # Required for authorization code flow
-    token_url: Required[Url]  # Required for token exchange
-    headers: dict[str, str]  # Optional, for custom headers in requests
-    scopes: Required[list[str]]  # Required scopes for the OAuth2 flow
-    user_info_url: Url  # Optional, for user info endpoint
-    extra_params: dict[str, str]  # Optional, for additional parameters in requests
-    token_params: dict[str, str]  # Optional, for custom token exchange
-    user_info_params: dict[str, str]  # Optional, for custom user info requests
 
 
 class AuthorizationRequestSchema(TypedDict, total=False):
@@ -109,10 +96,10 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     user_info_params: dict[str, str]
     scopes: list[str]
 
-    def __init__(self, **config: Unpack[OAuth2AuthorizationCodeConfigSchema]):
+    def __init__(self, provider: str, **config: Unpack[OAuth2AuthorizationCodeConfigSchema]):
         """Initialize with OAuth2 Authorization Code flow configuration."""
         super().__init__(**config)
-        self.name = config["name"]
+        self.provider = provider
         self.authorization_url = config["authorization_url"]
         self.token_url = config["token_url"]
         self.redirect_uri = config.get("redirect_uri", "")
