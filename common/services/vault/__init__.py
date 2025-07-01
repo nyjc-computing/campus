@@ -13,6 +13,23 @@ from . import meta
 PREFIX = "@"
 TABLE = "vault"
 
+__all__ = [
+    "get_vault",
+    "Vault",
+    "VaultDisabledOrNotFoundError",
+    "VaultKeyError",
+    "init_db",
+    "prefixed",
+    "Prefixable",
+]
+
+
+def get_vault(label: str) -> "Vault":
+    """Get a Vault instance by label."""
+    if not isinstance(label, str):
+        raise TypeError(f"label must be a string, got {type(label).__name__}")
+    return Vault(label)
+
 
 def prefixed(value: "Prefixable") -> str:
     """Create a prefixed string."""
@@ -31,7 +48,7 @@ class Prefixable(str):
                 f"Value '{value}' already starts with prefix '{prefix}'"
             )
         return super().__new__(cls, value)
-    
+
     def __prefixed__(self) -> str:
         """Return the prefixed string.
 
@@ -59,6 +76,7 @@ def init_db():
 
 class VaultDisabledOrNotFoundError(ValueError):
     """Custom error for when a vault is disabled or not found."""
+
     def __init__(self, label: str):
         super().__init__(f"Vault '{label}' is disabled or not found.")
         self.label = label
@@ -66,6 +84,7 @@ class VaultDisabledOrNotFoundError(ValueError):
 
 class VaultKeyError(KeyError):
     """Custom error for when a key is not found in the vault."""
+
     def __init__(self, key: str):
         super().__init__(f"Key '{key}' not found in vault.")
         self.key = key
@@ -73,11 +92,12 @@ class VaultKeyError(KeyError):
 
 class Vault:
     """Vault model for managing secrets in the Campus system.
-    
+
     A vault is a collection of secrets represented in a document.
     Each secret is stored as a key-value pair in the vault document.
     The vault is recognised by a unique label.
     """
+
     def __init__(self, label: str):
         self.label = label
 
@@ -94,7 +114,7 @@ class Vault:
                 f"Secret '{key}' not found in vault '{self.label}'."
             )
         return vault[key]
-    
+
     def has(self, key: str) -> bool:
         """Check if a secret exists in the vault."""
         if not meta.is_enabled(self.label):
@@ -113,7 +133,7 @@ class Vault:
             {"$set": {key: value}},
             upsert=True
         )
-    
+
     def delete(self, key: str) -> None:
         """Delete a secret from the vault."""
         if not meta.is_enabled(self.label):
