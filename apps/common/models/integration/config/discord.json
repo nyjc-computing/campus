@@ -8,6 +8,7 @@
     "testing": "https://discord.com/api"
   },
   "api_doc": "https://discord.com/developers/docs/intro",
+  "discovery_url": "https://raw.githubusercontent.com/discord/discord-api-spec/refs/heads/main/specs/openapi.json",
   "security": {
     "oauth2": {
       "type": "oauth2",

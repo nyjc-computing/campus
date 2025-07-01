@@ -8,6 +8,7 @@
     "testing": "https://www.googleapis.com"
   },
   "api_doc": "https://developers.google.com/apis-explorer",
+  "discovery_url": "https://www.googleapis.com/discovery/v1/apis",
   "security": {
     "oauth2": {
       "type": "oauth2",

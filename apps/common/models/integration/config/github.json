@@ -8,6 +8,7 @@
     "testing": "https://api.github.com"
   },
   "api_doc": "https://docs.github.com/en/rest",
+  "discovery_url": "https://github.com/github/rest-api-description/releases/download/v2.1.0/descriptions.zip",
   "security": {
     "oauth2": {
       "type": "oauth2",
