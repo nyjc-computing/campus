@@ -18,11 +18,13 @@ from common.auth.header import HttpHeaderDict
 
 
 basicauth = http.HttpAuthenticationScheme(
+    provider="campus",
     security_scheme="http",
     scheme="basic",
     scopes=[]
 )
 bearerauth = http.HttpAuthenticationScheme(
+    provider="campus",
     security_scheme="http",
     scheme="bearer",
     scopes=[]
