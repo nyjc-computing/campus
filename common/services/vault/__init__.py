@@ -94,6 +94,14 @@ class Vault:
                 f"Secret '{key}' not found in vault '{self.label}'."
             )
         return vault[key]
+    
+    def has(self, key: str) -> bool:
+        """Check if a secret exists in the vault."""
+        if not meta.is_enabled(self.label):
+            raise VaultDisabledOrNotFoundError(self.label)
+        db = get_db()
+        vault = db[TABLE].find_one({"@label": self.label})
+        return vault is not None and key in vault
 
     def set(self, key: str, value: str) -> None:
         """Set a secret in the vault."""
