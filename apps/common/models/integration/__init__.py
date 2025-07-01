@@ -13,6 +13,8 @@ from common.devops import Env
 from common.drum.mongodb import get_db
 from common.schema import Message
 
+from . import config
+
 Url = str
 
 TABLE = "integrations"
@@ -53,8 +55,8 @@ class IntegrationConfig(TypedDict, total=False):
     enabled: bool  # Whether the integration is enabled in Campus
 
 
-class IntegrationBase:
-    """Abstract base class for integration config objects."""
+class Integration:
+    """Encapsulate integration properties and interactions."""
 
     def __init__(
             self,
@@ -78,7 +80,7 @@ class IntegrationBase:
         self.sync_status()
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "IntegrationBase":
+    def from_dict(cls, data: dict[str, Any]) -> "Integration":
         """Instantiate from a dict (e.g., loaded from JSON)."""
         return cls(
             name=data["name"],
@@ -151,3 +153,11 @@ class IntegrationBase:
                 }}
             )
         return ModelResponse(status="ok", message=Message.SUCCESS)
+
+
+class IntegrationCredentials(TypedDict):
+    """Credentials for an integration."""
+    client_id: str
+    client_secret: str
+    access_token: NotRequired[str]  # Optional access token for OAuth2 flows
+    refresh_token: NotRequired[str]  # Optional refresh token for OAuth2 flows
