@@ -42,4 +42,4 @@ def init_db() -> None:
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
-    # TODO: init credentials storage
+    # TODO: init credentials and session storage

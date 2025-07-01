@@ -7,22 +7,25 @@ Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 
 from typing import NotRequired, Required, TypedDict, Unpack
 
-from flask import Blueprint, Flask
+from flask import Blueprint, Flask, redirect
 
 from apps.common.models.integration import config
 from apps.common.errors import api_errors
 from common.services.vault import get_vault
 from common.validation.flask import FlaskResponse, unpack_request, validate
-from common.webauth.oauth2 import OAuth2AuthorizationCodeFlowScheme
+from common.webauth.oauth2 import (
+    OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
+)
 from common.webauth.oauth2.authorization_code import (
     AuthorizationErrorCode,
 )
 
+from .model import OAuthSession, ProviderCredentials
+
 vault = get_vault('google')
 bp = Blueprint('google', __name__, url_prefix='/google')
-oauth2: OAuth2AuthorizationCodeFlowScheme = OAuth2AuthorizationCodeFlowScheme.from_json(
-    config.get_config('google')
-)
+oauthconfig = config.get_config('google')
+oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig)
 
 
 class Authorize(TypedDict, total=False):
@@ -78,14 +81,17 @@ def init_app(app: Flask | Blueprint) -> None:
     on_error=api_errors.raise_api_error
 )
 def google_authorize(*_, **params: Unpack[Authorize]) -> FlaskResponse:
-    """Fill in missing params before redirect to Google OAuth authorization
-    endpoint.
-    """
-    params["client_id"] = vault.get('CLIENT_ID')
-    params["response_type"] = "code"
-    params["access_type"] = "offline"
-    if "redirect_uri" not in params or "scope" not in params:
-        api_errors.raise_api_error(400, **params)
+    """Redirect to Google OAuth authorization endpoint."""
+    data = {
+        "client_id": vault.get('CLIENT_ID'),
+        "redirect_uri": params["redirect_uri"],
+        "access_type": oauth2.extra_params["access_type"],
+        "scopes": oauth2.scopes
+    }
+    session = oauth2.create_session(**data)
+    # TODO: Persist session data temporarily in cache
+    session.serialize()
+    return redirect(session.get_authorization_url())
 
 @bp.post('/callback')
 @unpack_request
