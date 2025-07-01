@@ -26,6 +26,8 @@ AuthorizationErrorCode = Literal[
     "temporarily_unavailable",
 ]
 
+TIMEOUT = 10  # Default timeout for requests in seconds
+
 
 class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
     """OAuth2 Authorization Code flow configuration."""
@@ -48,7 +50,7 @@ class AuthorizationRequestSchema(TypedDict, total=False):
     client_id: Required[str]  # Client ID of the OAuth2 application
     redirect_uri: Url  # Redirect URI registered with the OAuth2 provider
     scope: str  # Space-separated scopes for the request
-    state: str  # State parameter for CSRF protection
+    state: NotRequired[str]  # State parameter for CSRF protection
 
 
 class AuthorizationResponseSchema(TypedDict, total=False):
@@ -85,72 +87,29 @@ class TokenRequestSchema(TypedDict, total=False):
 
 
 class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
-    """Implements OAuth2 Authorization Code flow.
+    """Configures OAuth2 Authorization Code flow for a specified provider
+    (google, github, discord, ...).
 
-    Uses a user-agent redirect to obtain an authorization code, then exchanges
-    it for an access token.
+    The attributes are typically provided from a config file.
     """
+    authorization_url: Url
+    token_url: Url
+    headers: dict[str, str]
+    user_info_url: Url | None
+    extra_params: dict[str, str]
+    token_params: dict[str, str]
+    user_info_params: dict[str, str]
 
-    def __init__(self, **kwargs: Unpack[OAuth2AuthorizationCodeConfigSchema]):
+    def __init__(self, **config: Unpack[OAuth2AuthorizationCodeConfigSchema]):
         """Initialize with OAuth2 Authorization Code flow configuration."""
-        super().__init__(**kwargs)
-        self.authorization_url = kwargs["authorization_url"]
-        self.token_url = kwargs["token_url"]
-        self.headers = kwargs.get("headers", {})
-        self.user_info_url = kwargs.get("user_info_url", None)
-        self.extra_params = kwargs.get("extra_params", {})
-        self.token_params = kwargs.get("token_params", {})
-        self.user_info_params = kwargs.get("user_info_params", {})
-        self.scopes = kwargs.get("scopes", [])
-
-    def get_authorization_url(
-            self,
-            **params: Unpack[AuthorizationRequestSchema]
-    ) -> str:
-        """Return the authorization URL for redirect, with provider-specific
-        params.
-        """
-        if "response_type" in params and params["response_type"] != "code":
-            raise OAuth2InvalidRequestError(
-                "Invalid response_type, must be 'code' for authorization code flow."
-            )
-        params["response_type"] = "code"
-        params["scope"] = " ".join(self.scopes)
-        return f"""{self.authorization_url}?{urlencode(
-            {**params, **self.extra_params})
-        }"""
-
-    def exchange_code_for_token(
-            self,
-            **params: Unpack[TokenRequestSchema],
-    ) -> AuthorizationResponseSchema | AuthorizationErrorResponseSchema:
-        """Exchange authorization code for access token."""
-        if "grant_type" in params and params["grant_type"] != "authorization_code":
-            raise OAuth2InvalidRequestError(
-                "Invalid grant_type, must be 'authorization_code' for authorization code flow."
-            )
-        params["grant_type"] = "authorization_code"
-        resp = requests.post(
-            self.token_url,
-            params=params,
-            headers=self.headers,
-            timeout=10
-        )
-        try:
-            body = resp.json()
-        except Exception as err:
-            raise OAuth2SecurityError(
-                "Failed to exchange code for token"
-            ) from err
-        else:
-            if "code" in body:
-                return AuthorizationResponseSchema(**body)
-            elif "error" in body:
-                return AuthorizationErrorResponseSchema(**body)
-            else:
-                raise OAuth2SecurityError(
-                    "Invalid response from token endpoint, missing 'code' or 'error'."
-                )
+        super().__init__(**config)
+        self.authorization_url = config["authorization_url"]
+        self.token_url = config["token_url"]
+        self.headers = config.get("headers", {})
+        self.user_info_url = config.get("user_info_url", None)
+        self.extra_params = config.get("extra_params", {})
+        self.token_params = config.get("token_params", {})
+        self.user_info_params = config.get("user_info_params", {})
 
     def get_user_info(self, access_token: str) -> dict:
         """Fetch user info from the provider's user info endpoint."""
@@ -161,11 +120,107 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             "Authorization": f"Bearer {access_token}",
             **self.user_info_params
         }
-        resp = requests.get(self.user_info_url, headers=headers, timeout=10)
+        resp = requests.get(
+            self.user_info_url,
+            headers=headers,
+            timeout=TIMEOUT
+        )
         try:
             return resp.json()
         except Exception as err:
             raise OAuth2SecurityError("Failed to fetch user info") from err
+
+
+class OAuth2AuthorizationCodeSession:
+    """Implements the OAuth2 Authorization Code flow session for a specified
+    provider (google, github, discord, ...).
+
+    While OAuth2AuthorizationCodeFlowScheme holds the provider config,
+    OAuth2AuthorizationCodeSession handles the actual flow session for a single
+    user sign-in.
+
+    Each session:
+    - is for a single user only
+    - is assumed to be the only active session for that user
+    - is short-lived (typically a few minutes)
+    - is identified by a unique state hash
+
+    This class may be subclassed by specific OAuth2 providers to implement
+    provider-specific logic, such as custom headers or additional parameters.
+    """
+
+    def __init__(
+            self,
+            client_id: str,
+            redirect_uri: Url,
+            scopes: list[str],
+            *,
+            provider: OAuth2AuthorizationCodeFlowScheme,
+    ):
+        """Return the base parameters for the authorization request.
+
+        Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
+        """
+        self.provider = provider
+        self.client_id = client_id
+        self.response_type = "code"
+        self.redirect_uri = redirect_uri
+        self.scopes = scopes
+        # TODO: Set unique state for CSRF protection
+        # https://developers.google.com/identity/openid-connect/openid-connect#python
+        self.state = ""
+
+    def get_authorization_url(self, **additional_params: dict[str, str]) -> str:
+        """Return the authorization URL for redirect, with provider-specific
+        params.
+
+        Subclasses should extend this method to implement provider-specific
+        logic, such as custom headers or additional parameters.
+        """
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "response_type": self.response_type,
+            "scope": " ".join(self.scopes),
+            "state": self.state,
+            **self.provider.extra_params,
+            **additional_params
+        }
+        return f"""{self.provider.authorization_url}?{urlencode(params)}"""
+
+    def exchange_code_for_token(
+            self,
+            code: str,
+            client_secret: str,
+    ) -> AuthorizationResponseSchema | AuthorizationErrorResponseSchema:
+        """Exchange authorization code for access token."""
+        params = {
+            "grant_type": "authorization_code",
+            "redirect_uri": self.redirect_uri,
+            "client_id": self.client_id,
+            "code": code,
+            "client_secret": client_secret,
+        }
+        resp = requests.post(
+            self.provider.token_url,
+            params=params,
+            headers=self.provider.headers,
+            timeout=TIMEOUT
+        )
+        try:
+            body = resp.json()
+        except Exception as err:
+            raise OAuth2SecurityError(
+                "Failed to exchange code for token"
+            ) from err
+        else:
+            if "code" in body:
+                return AuthorizationResponseSchema(**body)
+            if "error" in body:
+                return AuthorizationErrorResponseSchema(**body)
+            raise OAuth2SecurityError(
+                "Invalid response from token endpoint, missing 'code' or 'error'."
+            )
 
 
 __all__ = [
