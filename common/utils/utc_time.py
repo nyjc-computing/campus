@@ -14,16 +14,19 @@ def now() -> datetime:
     """Get the current time in UTC."""
     return datetime.now(UTC)
 
-def after(**kwargs) -> datetime:
-    """Create an expiry timestamp at a given time from now.
+def after(time: datetime | None, **delta) -> datetime:
+    """Create an expiry timestamp at a given delta after time.
+
+    If time is not specified, defaults to the current time.
 
     Keyword arguments:
-    - follows that of timedelta
+    - **delta: follows that of timedelta
     """
-    if kwargs:
-        return now() + timedelta(**kwargs)
+    time = time or now()
+    if delta:
+        return time + timedelta(**delta)
     else:
-        return now()
+        return time
 
 def is_expired(ts: datetime | float, threshold: float | int = 1) -> bool:
     """Check if a timestamp has expired (within threshold)"""
