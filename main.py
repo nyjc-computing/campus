@@ -1,6 +1,7 @@
-from apps import api
+from apps import api, oauth, create_app_from_modules
 
-app = api.create_app()
+
+app = create_app_from_modules(api, oauth)
 
 
 @app.route('/')
@@ -9,4 +10,4 @@ def index():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(port=5000)
