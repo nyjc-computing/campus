@@ -17,6 +17,7 @@ from common.webauth.oauth2.authorization_code import (
     AuthorizationErrorCode,
 )
 
+vault = get_vault('google')
 bp = Blueprint('google', __name__, url_prefix='/google')
 oauth2: OAuth2AuthorizationCodeFlowScheme = OAuth2AuthorizationCodeFlowScheme.from_json(
     config.get_config('google')
@@ -101,8 +102,8 @@ def google_callback(*_, **params: Unpack[Callback]) -> FlaskResponse:
     token_response = oauth2.exchange_code_for_token(
         code=params["code"],
         redirect_uri=params["redirect_uri"],
-        client_id=client_id,
-        client_secret=client_secret
+        client_id=vault.get('CLIENT_ID'),
+        client_secret= vault.get('CLIENT_SECRET'),
     )
     if "error" in token_response:
         api_errors.raise_api_error(400, **token_response)
