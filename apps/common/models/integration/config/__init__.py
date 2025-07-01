@@ -6,10 +6,10 @@ Config for third-party integrations.
 import json
 import os
 
-from common.webauth.oauth2.base import OAuth2ConfigSchema
+from .schema import IntegrationConfigSchema
 
 
-def get_config(provider: str) -> OAuth2ConfigSchema:
+def get_config(provider: str) -> IntegrationConfigSchema:
     """Get the configuration for a specific integration provider."""
     # change cwd to this file's directory
     os.chdir(os.path.dirname(__file__))

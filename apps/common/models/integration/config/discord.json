@@ -12,13 +12,13 @@
   "discovery_url": "https://raw.githubusercontent.com/discord/discord-api-spec/refs/heads/main/specs/openapi.json",
   "security": {
     "oauth2": {
-      "type": "oauth2",
+      "security_scheme": "oauth2",
+      "flow": "authorizationCode",
       "scopes": [
         "identify",
         "email",
         "guilds"
       ],
-      "flow": "authorizationCode",
       "authorization_url": "https://discord.com/api/oauth2/authorize",
       "token_url": "https://discord.com/api/oauth2/token",
       "user_info_url": "https://discord.com/api/users/@me",

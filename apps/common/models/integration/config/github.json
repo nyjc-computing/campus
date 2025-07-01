@@ -12,7 +12,8 @@
   "discovery_url": "https://github.com/github/rest-api-description/releases/download/v2.1.0/descriptions.zip",
   "security": {
     "oauth2": {
-      "type": "oauth2",
+      "security_scheme": "oauth2",
+      "flow": "authorizationCode",
       "headers": {
         "Accept": "application/json"
       },
@@ -20,7 +21,6 @@
         "read:user",
         "user:email"
       ],
-      "flow": "authorizationCode",
       "authorization_url": "https://github.com/login/oauth/authorize",
       "token_url": "https://github.com/login/oauth/access_token",
       "user_info_url": "https://api.github.com/user",
