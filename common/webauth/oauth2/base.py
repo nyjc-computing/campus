@@ -40,16 +40,17 @@ class OAuth2FlowScheme(SecurityScheme, Generic[F]):
     flow: OAuth2Flow
     _flow_registry: dict[OAuth2Flow, Type[F]] = {}
 
-    def __init__(self, **kwargs: Unpack[OAuth2AuthorizationCodeConfigSchema]):
-        super().__init__(**kwargs)
+    def __init__(self, provider, **kwargs: Unpack[OAuth2AuthorizationCodeConfigSchema]):
+        super().__init__(provider, **kwargs)
         self.flow = kwargs["flow"]
 
     @classmethod
     def from_json(cls: Type[F], data: IntegrationConfigSchema) -> F:
+        provider = data["provider"]
         if "oauth2" not in data["security"]:
-            raise ValueError(f"Provider {data['name']} does not have oauth2 securty scheme.")
+            raise ValueError(f"{provider} has no oauth2 security configured.")
         security_config = data["security"]["oauth2"]
-        return cls._flow_registry[security_config["flow"]](**security_config)
+        return cls._flow_registry[security_config["flow"]](provider, **security_config)
 
     @classmethod
     def register_flow(cls, flow: OAuth2Flow, scheme: Type[F]) -> None:

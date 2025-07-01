@@ -85,7 +85,6 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     The attributes are typically provided from a config file.
     """
-    name: str
     authorization_url: Url
     token_url: Url
     redirect_uri: Url
@@ -98,8 +97,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     def __init__(self, provider: str, **config: Unpack[OAuth2AuthorizationCodeConfigSchema]):
         """Initialize with OAuth2 Authorization Code flow configuration."""
-        super().__init__(**config)
-        self.provider = provider
+        super().__init__(provider, **config)
         self.authorization_url = config["authorization_url"]
         self.token_url = config["token_url"]
         self.redirect_uri = config.get("redirect_uri", "")
@@ -294,7 +292,7 @@ class OAuth2AuthorizationCodeSession:
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the session."""
         return {
-            "provider": self.provider.name,
+            "provider": self.provider.provider,
             "client_id": self.client_id,
             "created_at": self.created_at,
             "response_type": self.response_type,
