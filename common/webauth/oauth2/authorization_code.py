@@ -3,7 +3,7 @@
 OAuth2 Authorization Code flow configs and models.
 """
 
-from typing import NotRequired, Required, TypedDict, Unpack
+from typing import Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
 import requests
@@ -11,10 +11,20 @@ import requests
 from .base import (
     OAuth2ConfigSchema,
     OAuth2FlowScheme,
-    OAuth2SecurityError
+    OAuth2InvalidRequestError,
+    OAuth2SecurityError,
 )
 
 Url = str
+AuthorizationErrorCode = Literal[
+    "invalid_request",
+    "unauthorized_client",
+    "access_denied",
+    "unsupported_response_type",
+    "invalid_scope",
+    "server_error",
+    "temporarily_unavailable",
+]
 
 
 class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
@@ -25,26 +35,53 @@ class OAuth2AuthorizationCodeConfigSchema(OAuth2ConfigSchema, total=False):
     user_info_url: Url  # Optional, for user info endpoint
     extra_params: dict[str, str]  # Optional, for additional parameters in requests
     token_params: dict[str, str]  # Optional, for custom token exchange
-    user_info_params: dict[str, str]  # Optional, for custom
+    user_info_params: dict[str, str]  # Optional, for custom user info requests
 
 
-class AuthorizationUrlRequestSchema(TypedDict, total=False):
-    """Request schema for getting the authorization URL."""
-    state: str  # State parameter for CSRF protection
-    client_id: str  # Client ID of the OAuth2 application
+class AuthorizationRequestSchema(TypedDict, total=False):
+    """Request schema for OAuth2 Authorization Code flow.
+    Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
+
+    NotRequired fields will be filled in by auth flow
+    """
+    response_type: NotRequired[str]  # Must be 'code'
+    client_id: Required[str]  # Client ID of the OAuth2 application
     redirect_uri: Url  # Redirect URI registered with the OAuth2 provider
-    login_hint: str  # User's email or identifier for login_hint
-    response_type: NotRequired[str]
-    scope: NotRequired[str]  # Space-separated scopes for the request
+    scope: str  # Space-separated scopes for the request
+    state: str  # State parameter for CSRF protection
+
+
+class AuthorizationResponseSchema(TypedDict, total=False):
+    """Response schema for OAuth2 Authorization Code flow.
+    Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+
+    Response may be a success or error response.
+    Success response will contain the authorization code and state.
+    Error response will contain an error code and description.
+    """
+    code: str  # Authorization code received from the provider
+    state: str  # State parameter for CSRF protection
+
+
+class AuthorizationErrorResponseSchema(TypedDict, total=False):
+    """Error response schema for OAuth2 Authorization Code flow.
+    Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+
+    NotRequired fields will be filled in by redirect endpoint.
+    """
+    error: AuthorizationErrorCode
+    error_description: str  # Human-readable description of the error
+    error_uri: Url
+    state: str  # State parameter for CSRF protection, if provided
 
 
 class TokenRequestSchema(TypedDict, total=False):
     """Request schema for exchanging authorization code for access token."""
-    code: str  # Authorization code received from the provider
+    grant_type: NotRequired[str]  # Must be "authorization_code"
+    code: Required[str]  # Authorization code received from the provider
     redirect_uri: Url  # Same redirect URI used in authorization request
-    client_id: str  # Client ID of the OAuth2 application
+    client_id: Required[str]  # Client ID of the OAuth2 application
     client_secret: str  # Client secret of the OAuth2 application
-    grant_type: NotRequired[str]  # Will be "authorization_code"
 
 
 class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
@@ -64,14 +101,19 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         self.extra_params = kwargs.get("extra_params", {})
         self.token_params = kwargs.get("token_params", {})
         self.user_info_params = kwargs.get("user_info_params", {})
+        self.scopes = kwargs.get("scopes", [])
 
     def get_authorization_url(
             self,
-            **params: Unpack[AuthorizationUrlRequestSchema]
+            **params: Unpack[AuthorizationRequestSchema]
     ) -> str:
         """Return the authorization URL for redirect, with provider-specific
         params.
         """
+        if "response_type" in params and params["response_type"] != "code":
+            raise OAuth2InvalidRequestError(
+                "Invalid response_type, must be 'code' for authorization code flow."
+            )
         params["response_type"] = "code"
         params["scope"] = " ".join(self.scopes)
         return f"""{self.authorization_url}?{urlencode(
@@ -80,22 +122,35 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     def exchange_code_for_token(
             self,
-            **data: Unpack[TokenRequestSchema],
-    ) -> dict:
+            **params: Unpack[TokenRequestSchema],
+    ) -> AuthorizationResponseSchema | AuthorizationErrorResponseSchema:
         """Exchange authorization code for access token."""
-        data["grant_type"] = "authorization_code"
+        if "grant_type" in params and params["grant_type"] != "authorization_code":
+            raise OAuth2InvalidRequestError(
+                "Invalid grant_type, must be 'authorization_code' for authorization code flow."
+            )
+        params["grant_type"] = "authorization_code"
         resp = requests.post(
             self.token_url,
-            data={**data, **self.token_params},
+            params=params,
             headers=self.headers,
             timeout=10
         )
         try:
-            return resp.json()
+            body = resp.json()
         except Exception as err:
             raise OAuth2SecurityError(
                 "Failed to exchange code for token"
             ) from err
+        else:
+            if "code" in body:
+                return AuthorizationResponseSchema(**body)
+            elif "error" in body:
+                return AuthorizationErrorResponseSchema(**body)
+            else:
+                raise OAuth2SecurityError(
+                    "Invalid response from token endpoint, missing 'code' or 'error'."
+                )
 
     def get_user_info(self, access_token: str) -> dict:
         """Fetch user info from the provider's user info endpoint."""

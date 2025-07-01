@@ -4,7 +4,7 @@ OAuth2 security scheme base configs and models.
 
 """
 
-from typing import Literal, Type, Unpack
+from typing import Generic, Literal, Type, TypeVar, Unpack
 
 from ..base import (
     SecuritySchemeConfigSchema,
@@ -12,8 +12,15 @@ from ..base import (
     SecurityScheme
 )
 
-OAuth2Flow = Literal["authorizationCode", "clientCredentials", "implicit", "password"]
+# Generic type for OAuth2 flow schemes
+F = TypeVar('F', bound='OAuth2FlowScheme')
 Url = str
+
+OAuth2Flow = Literal["authorizationCode", "clientCredentials", "implicit", "password"]
+
+
+class OAuth2InvalidRequestError(SecurityError):
+    """OAuth2 invalid request error."""
 
 
 class OAuth2SecurityError(SecurityError):
@@ -25,27 +32,27 @@ class OAuth2ConfigSchema(SecuritySchemeConfigSchema):
     flow: OAuth2Flow
 
 
-class OAuth2FlowScheme(SecurityScheme):
+class OAuth2FlowScheme(SecurityScheme, Generic[F]):
     """OAuth2 security scheme base class for OAuth2 flows.
 
     OAuth2 is only used for initial authentication of users and clients.
     Subsequent authorization uses HTTP Basic/Bearer schemes.
     """
     flow: OAuth2Flow
-    _flow_registry: dict[OAuth2Flow, Type["OAuth2FlowScheme"]] = {}
+    _flow_registry: dict[OAuth2Flow, Type[F]] = {}
 
     def __init__(self, **kwargs: Unpack[OAuth2ConfigSchema]):
         super().__init__(**kwargs)
         self.flow = kwargs["flow"]
 
     @classmethod
-    def from_json(cls, data: OAuth2ConfigSchema) -> "OAuth2FlowScheme":
+    def from_json(cls: Type[F], data: OAuth2ConfigSchema) -> F:
         if data["security_scheme"] != "oauth2":
             raise ValueError("Invalid security scheme for OAuth2.")
         return cls._flow_registry[data["flow"]](**data)
 
     @classmethod
-    def register_flow(cls, flow: OAuth2Flow, scheme: Type["OAuth2FlowScheme"]) -> None:
+    def register_flow(cls, flow: OAuth2Flow, scheme: Type[F]) -> None:
         """Register an OAuth2 flow."""
         if flow in cls._flow_registry:
             raise ValueError(f"OAuth2 flow {flow} is registered.")
