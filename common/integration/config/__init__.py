@@ -6,7 +6,11 @@ Config for third-party integrations.
 import json
 import os
 
-from .schema import IntegrationConfigSchema
+from .schema import (
+    IntegrationConfigSchema,
+    SecurityConfigSchema,
+    OAuth2AuthorizationCodeConfigSchema
+)
 
 
 def get_config(provider: str) -> IntegrationConfigSchema:

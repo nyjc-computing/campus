@@ -7,11 +7,9 @@ which are connections to third-party platforms and APIs.
 from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
-from apps.common.models.base import ModelResponse
 from common.webauth import Security, SecuritySchemeConfigSchema
 from common.devops import Env
 from common.drum.mongodb import get_db
-from common.schema import Message
 
 from . import config
 
@@ -105,19 +103,17 @@ class Integration:
             "enabled": self.enabled
         }
 
-    def disable(self) -> ModelResponse:
+    def disable(self):
         """Disable an integration."""
         self.enabled = False
         self.sync_status()
-        return ModelResponse(status="ok", message=Message.SUCCESS)
 
-    def enable(self) -> ModelResponse:
+    def enable(self):
         """Enable an integration."""
         self.enabled = True
         self.sync_status()
-        return ModelResponse(status="ok", message=Message.SUCCESS)
 
-    def sync_status(self) -> ModelResponse:
+    def sync_status(self):
         """Sync an integration status to storage."""
         db = get_db()
         meta = db[TABLE].find_one({"@meta": True})
@@ -152,7 +148,6 @@ class Integration:
                     f"integrations.{self.name}.enabled": bool(self.enabled)
                 }}
             )
-        return ModelResponse(status="ok", message=Message.SUCCESS)
 
 
 class IntegrationCredentials(TypedDict):

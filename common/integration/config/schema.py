@@ -17,15 +17,17 @@ class SecurityConfigSchema(TypedDict):
     security_scheme: Security
 
 
-class OAuth2ConfigSchema(SecurityConfigSchema):
+class OAuth2AuthorizationCodeConfigSchema(SecurityConfigSchema):
     """Schema for OAuth2 security configuration."""
     flow: str
     scopes: list[str]
     authorization_url: Url
     token_url: Url
-    user_info_url: Url
     headers: NotRequired[dict[str, str]]
+    user_info_url: Url
     extra_params: NotRequired[dict[str, str]]
+    token_params: NotRequired[dict[str, str]]
+    user_info_params: NotRequired[dict[str, str]]
 
 
 class IntegrationConfigSchema(TypedDict):
