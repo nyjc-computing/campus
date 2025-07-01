@@ -21,7 +21,6 @@ class SecuritySchemeConfigSchema(TypedDict, total=False):
     https://swagger.io/docs/specification/v3_0/authentication/
     """
     security_scheme: Required[Security]
-    scopes: Required[list[str]]
 
 
 class SecurityScheme(Protocol):
@@ -41,7 +40,6 @@ class SecurityScheme(Protocol):
         the base class is properly initialized.
         """
         self.security_scheme = kwargs["security_scheme"]
-        self.scopes = kwargs["scopes"]
 
     @classmethod
     def from_json(cls, data) -> "SecurityScheme":
