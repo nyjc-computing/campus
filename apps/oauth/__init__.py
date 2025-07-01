@@ -40,6 +40,4 @@ def init_db() -> None:
     This convenience function makes it easier to initialise tables for all
     models.
     """
-    # These imports do not appear at the top of the file to avoid namespace
-    # pollution, as they are typically only used in staging.
-    # TODO: init credentials and session storage
+    
