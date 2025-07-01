@@ -8,6 +8,7 @@ from json import JSONDecodeError
 from typing import Any, Callable, Mapping, NoReturn, Protocol, Type
 
 from flask import has_request_context, request as flask_request
+from werkzeug.wrappers import Response
 
 from common.validation import record
 
@@ -18,7 +19,7 @@ ViewFunctionDecorator = Callable[["ViewFunction"], "ViewFunction"]
 # Actually, view functions may return a variety of return values which Flask is
 # able to handle
 # But Campus API sticks to JSON-serializable return values, with a status code
-FlaskResponse = tuple[dict[str, Any], StatusCode]
+FlaskResponse = tuple[dict[str, Any], StatusCode] | Response
 
 
 class ErrorHandler(Protocol):
