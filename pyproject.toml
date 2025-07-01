@@ -10,7 +10,7 @@ flask = "^3.0.0"
 gunicorn = "^21.2.0"
 bcrypt = "4.2.1"
 psycopg2-binary = "2.9.10"
-pymongo = {extras = ["srv"], version = "^4.13.0"}
+pymongo = {extras = ["srv"], version = "^4.13.2"}
 requests = "^2.32.4"
 
 [tool.pyright]
