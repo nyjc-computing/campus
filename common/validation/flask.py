@@ -48,6 +48,7 @@ def unpack_request(vf: ViewFunction) -> ViewFunction:
 
     This is a helper function to be used in the decorator.
     """
+    @wraps(vf)
     def vfdecorator(*args: str, **kwargs) -> FlaskResponse:
         """The decorated ViewFunction that unpacks the request JSON body into
         the inner view-function.
