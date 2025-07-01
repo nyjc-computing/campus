@@ -7,6 +7,7 @@
     "staging": "https://www.googleapis.com",
     "testing": "https://www.googleapis.com"
   },
+  "redirect_uri": "/oauth/google/callback", 
   "api_doc": "https://developers.google.com/apis-explorer",
   "discovery_url": "https://www.googleapis.com/discovery/v1/apis",
   "security": {
