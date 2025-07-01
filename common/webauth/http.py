@@ -11,8 +11,8 @@ from typing import Literal, Unpack
 
 from apps.common.errors import api_errors
 from common.auth.header import HttpHeaderDict
+from common.integration.config import SecurityConfigSchema
 from .base import (
-    SecuritySchemeConfigSchema,
     SecurityError,
     SecurityScheme
 )
@@ -24,7 +24,7 @@ class HttpSecurityError(SecurityError):
     """HTTP authentication error."""
 
 
-class HttpAuthConfigSchema(SecuritySchemeConfigSchema):
+class HttpAuthConfigSchema(SecurityConfigSchema):
     """HTTP authentication scheme schema."""
     scheme: HttpScheme
 

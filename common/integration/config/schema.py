@@ -4,10 +4,13 @@ Schema to describe the JSON files describing third-party integration
 configurations.
 """
 
-from typing import NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 from common.devops import Env
-from common.webauth import Security
+
+HttpScheme = Literal["basic", "bearer"]
+OAuth2Flow = Literal["authorizationCode", "clientCredentials", "implicit", "password"]
+Security = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 
 Url = str
 

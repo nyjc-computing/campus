@@ -7,6 +7,9 @@ import json
 import os
 
 from .schema import (
+    HttpScheme,
+    OAuth2Flow,
+    Security,
     IntegrationConfigSchema,
     SecurityConfigSchema,
     OAuth2AuthorizationCodeConfigSchema
@@ -29,3 +32,14 @@ def get_config(provider: str) -> IntegrationConfigSchema:
         raise ValueError(
             f"Invalid JSON in configuration for '{provider}': {err}"
         ) from err
+
+
+__all__ = [
+    "get_config",
+    "IntegrationConfigSchema",
+    "SecurityConfigSchema",
+    "OAuth2AuthorizationCodeConfigSchema",
+    "HttpScheme",
+    "OAuth2Flow",
+    "Security",
+]

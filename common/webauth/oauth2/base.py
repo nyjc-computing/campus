@@ -4,10 +4,10 @@ OAuth2 security scheme base configs and models.
 
 """
 
-from typing import Generic, Literal, Type, TypeVar, Unpack
+from typing import Generic, TypeVar, Unpack
 
 from common.integration.config import (
-    IntegrationConfigSchema,
+    OAuth2Flow,
     OAuth2AuthorizationCodeConfigSchema,
 )
 
@@ -19,8 +19,6 @@ from ..base import (
 # Generic type for OAuth2 flow schemes
 F = TypeVar('F', bound='OAuth2FlowScheme')
 Url = str
-
-OAuth2Flow = Literal["authorizationCode", "clientCredentials", "implicit", "password"]
 
 
 class OAuth2InvalidRequestError(SecurityError):

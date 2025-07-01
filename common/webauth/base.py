@@ -3,28 +3,19 @@
 Base configs and models for authentication flows.
 """
 
-from typing import Literal, Protocol, Required, Type, TypeVar, TypedDict, Unpack
+from typing import Protocol, Type, TypeVar, Unpack
 
-from common.integration.config import IntegrationConfigSchema
+from common.integration.config import (
+    Security,
+    IntegrationConfigSchema,
+    SecurityConfigSchema
+)
 
 S = TypeVar("S", bound="SecurityScheme")
-
-Security = Literal["http", "apiKey", "oauth2", "openIdConnect"]
 
 
 class SecurityError(Exception):
     """Base class for security-related errors."""
-
-
-class SecuritySchemeConfigSchema(TypedDict, total=False):
-    """Generalized authentication configuration.
-    
-    This base class defines a common schema for HTTP, API Key, OAuth2, and
-    OpenID Connect security schemes.
-    The schema follows OpenAPI 3.0 for convenience
-    https://swagger.io/docs/specification/v3_0/authentication/
-    """
-    security_scheme: Required[Security]
 
 
 class SecurityScheme(Protocol):
@@ -37,7 +28,7 @@ class SecurityScheme(Protocol):
     security_scheme: Security
     scopes: list[str]
 
-    def __init__(self, provider: str, **config: Unpack[SecuritySchemeConfigSchema]):
+    def __init__(self, provider: str, **config: Unpack[SecurityConfigSchema]):
         """Subclasses must implement an __init__() method that initializes the
         security scheme using keyword arguments.
         Subclasses must also call super().__init__(**kwargs) to ensure
@@ -63,8 +54,6 @@ class SecurityScheme(Protocol):
 
 
 __all__ = [
-    "SecuritySchemeConfigSchema",
-    "Security",
     "SecurityError",
     "SecurityScheme",
 ]

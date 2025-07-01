@@ -7,11 +7,12 @@ which are connections to third-party platforms and APIs.
 from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
-from common.webauth import Security, SecuritySchemeConfigSchema
 from common.devops import Env
 from common.drum.mongodb import get_db
 
 from . import config
+
+from .config import Security, SecurityConfigSchema
 
 Url = str
 
@@ -48,7 +49,7 @@ class IntegrationConfig(TypedDict, total=False):
     description: str
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
-    security: Mapping[Security, SecuritySchemeConfigSchema]
+    security: Mapping[Security, SecurityConfigSchema]
     capabilities: CommonCapabilities
     enabled: bool  # Whether the integration is enabled in Campus
 
@@ -62,7 +63,7 @@ class Integration:
             description: str,
             servers: Mapping[Env, Url],
             api_doc: Url,
-            security: Mapping[Security, SecuritySchemeConfigSchema],
+            security: Mapping[Security, SecurityConfigSchema],
             capabilities: CommonCapabilities,
             enabled: bool | None = None
     ):
