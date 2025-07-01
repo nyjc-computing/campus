@@ -101,6 +101,9 @@ class Vault:
     def __init__(self, label: str):
         self.label = label
 
+    def __repr__(self) -> str:
+        return f"Vault(label={self.label!r})"
+
     def get(self, key: str) -> str:
         """Get a secret from the vault."""
         if not meta.is_enabled(self.label):
