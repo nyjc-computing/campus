@@ -52,6 +52,7 @@ def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
 
 
 @bp.delete('/<string:user_id>')
+@unpack_request
 @validate(
     response={"message": str},
     on_error=api_errors.raise_api_error
@@ -66,6 +67,7 @@ def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
 
 
 @bp.get('/<string:user_id>')
+@unpack_request
 @validate(
     response=user.UserResource.__annotations__,
     on_error=api_errors.raise_api_error
@@ -94,6 +96,7 @@ def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> Fla
 
 
 @bp.get('/<string:user_id>/profile')
+@unpack_request
 @validate(
     response=user.UserResource.__annotations__,
     on_error=api_errors.raise_api_error
