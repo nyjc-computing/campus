@@ -3,24 +3,15 @@
 API routes for the clients resource.
 """
 
-from typing import Unpack
-
 from flask import Blueprint, Flask
 
-from apps.campusauth.model import authenticate_client
+import common.validation.flask as flask_validation
+from apps.campusauth import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import client, user
-import common.validation.flask as flask_validation
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
-
-# Feature flags
-GET = True
-PATCH = False
-POST = False
-PUT = False
-DELETE = False
 
 # Database Models
 clients = client.Client()
@@ -41,37 +32,32 @@ def new_client() -> flask_validation.JsonResponse:
         client.ClientNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resp = clients.new(**payload)  # raises APIError
+    resource = clients.new(**payload)
     flask_validation.validate_json_response(
-        resp.data,
         client.ClientResource.__annotations__,
+        resource,
         on_error=api_errors.raise_api_error,
     )
-    return resp.data, 201
+    return dict(resource), 201
 
 
 @bp.delete('/<string:client_id>')
 def delete_client(client_id: str) -> flask_validation.JsonResponse:
     """Delete a client id and secret."""
-    resp = clients.delete(client_id)
-    flask_validation.validate_json_response(
-        resp.data,
-        {"message": str},
-        on_error=api_errors.raise_api_error,
-    )
-    return {"message": "Client deleted"}, 200
+    clients.delete(client_id)
+    return {}, 200
 
 
 @bp.get('/<string:client_id>')
 def get_client_details(client_id: str) -> flask_validation.JsonResponse:
     """Get details of a client."""
-    resp = clients.get(client_id)
+    resource = clients.get(client_id)
     flask_validation.validate_json_response(
-        resp.data,
         client.ClientResource.__annotations__,
+        resource,
         on_error=api_errors.raise_api_error,
     )
-    return resp.data, 200
+    return dict(resource), 200
 
 
 @bp.patch('/<string:client_id>')
@@ -81,27 +67,16 @@ def edit_client(client_id: str) -> flask_validation.JsonResponse:
         client.ClientUpdate.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resp = clients.update(client_id, **payload)
-    flask_validation.validate_json_response(
-        resp.data,
-        client.ClientResource.__annotations__,
-        on_error=api_errors.raise_api_error,
-    )
-    return resp.data, 200
+    clients.update(client_id, **payload)
+    return {}, 200
 
 
 @bp.post('/<string:client_id>/replace')
 def revoke_client(client_id: str) -> flask_validation.JsonResponse:
     """Revoke a client id and secret, and reissue them."""
-    if not POST:
-        return {"message": "Not implemented"}, 501
-    resp = clients.replace(client_id)
-    flask_validation.validate_json_response(
-        resp.data,
-        client.ClientResource.__annotations__,
-        on_error=api_errors.raise_api_error,
-    )
-    return resp.data, 201
+    new_secret = clients.replace(client_id)
+    assert "secret" in new_secret
+    return new_secret, 201
 
 # @bp.get('/<string:client_id>/apikeys')
 # def get_client_apikeys(client_id: str):

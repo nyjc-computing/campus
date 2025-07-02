@@ -138,7 +138,7 @@ def validate_request_and_extract_urlparams(
 
 def validate_json_response(
         schema: Mapping[str, Type],
-        resp_json: Mapping[str, Type], *,
+        resp_json: Mapping[str, Any], *,
         on_error: ErrorHandler,
 ) -> None:
     """Validate the response JSON body against the provided schema."""

@@ -11,6 +11,7 @@ This module contains the main applications for Campus.
 """
 
 from . import api, campusauth, oauth
+from .campusauth import ctx
 from .factory import create_app_from_modules
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "campusauth",
     "oauth",
     "create_app_from_modules",
+    "ctx",
 ]
