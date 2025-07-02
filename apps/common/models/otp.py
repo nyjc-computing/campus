@@ -13,7 +13,7 @@ from typing import TypedDict, Unpack
 import bcrypt
 
 from apps.common.errors import api_errors
-from apps.common.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord
 from common import devops
 from common.schema import Message, Response
 from common.utils import uid, utc_time
