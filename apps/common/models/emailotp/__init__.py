@@ -133,7 +133,7 @@ class OTPRecord(OTPRequest, BaseRecord, total=True):
     expires_at: utc_time.datetime
 
 
-class OTPAuth:
+class EmailOTPAuth:
     """
     OTP model for handling database operations related to one-time passwords.
 
