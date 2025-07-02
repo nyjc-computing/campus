@@ -148,9 +148,9 @@ class OTPAuth:
         """
         self.storage = get_drum()
 
-    def request(self, email: str, expiry_minutes: int | float = 5) -> ModelResponse:
-        """
-        Generate a new OTP for the given email, store or update it in the database, and return it.
+    def request(self, email: str, expiry_minutes: int | float = 5) -> str:
+        """Generate a new OTP for the given email, store or update it in the database,
+        and return it.
 
         Args:
             email: Email address to associate with the OTP.
@@ -186,12 +186,11 @@ class OTPAuth:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.CREATED):
-                return ModelResponse("ok", "OTP created", plain_otp)
+                return plain_otp
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def verify(self, **data: Unpack[OTPVerify]) -> ModelResponse:
-        """
-        Verify if the provided OTP matches the one stored for the email.
+    def verify(self, **data: Unpack[OTPVerify]) -> None:
+        """Verify if the provided OTP matches the one stored for the email.
 
         Args:
             email: Email address to check.
@@ -223,13 +222,13 @@ class OTPAuth:
 
         # Verify OTP
         if hashed_otp.verify(_plainOTP(data['otp'])):
-            return ModelResponse("ok", "OTP verified")
+            return
         else:
             raise api_errors.UnauthorizedError("Invalid OTP")
 
-    def revoke(self, email: str) -> ModelResponse:
-        """
-        Delete all OTPs for the given email (typically after successful verification).
+    def revoke(self, email: str) -> None:
+        """Delete all OTPs for the given email (typically after successful
+        verification).
 
         Args:
             email: Email address to delete OTPs for.
@@ -241,6 +240,6 @@ class OTPAuth:
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError("OTP not found")
             case Response(status="ok", message=Message.DELETED):
-                return ModelResponse("ok", "OTP deleted")
+                return
             case _:
                 raise ValueError(f"Unexpected case: {resp}")

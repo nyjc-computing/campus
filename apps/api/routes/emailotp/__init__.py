@@ -39,12 +39,11 @@ def request_otp() -> flask_validation.JsonResponse:
     email = payload['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
-    resp = emailotp.request(email)
-    otp_code = str(resp.data)
+    otp_code = emailotp.request(email)
 
     # Send OTP via email
     email_sender = create_email_sender(EMAIL_PROVIDER)
-    resp = email_sender.send_email(
+    email_sender.send_email(
         recipient=email,
         subject=template.subject("Campus", otp_code),
         body=template.body("Campus", otp_code),
