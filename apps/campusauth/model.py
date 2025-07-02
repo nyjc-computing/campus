@@ -14,7 +14,7 @@ from flask import request
 from flask.wrappers import Response
 
 from apps.common.models.client import Client
-from apps.common.webauth import http, oauth2
+from apps.common.webauth import http
 
 
 basicauth = http.HttpAuthenticationScheme(
@@ -48,14 +48,14 @@ def authenticate_client() -> tuple[Response, int] | None:
     Client().validate_credentials(client_id, client_secret)
 
 
-def client_auth_required(func) -> Callable:
-    """Decorator to enforce HTTP Basic Authentication."""
-    @wraps(func)
-    def wrapper(*args, **kwargs) -> tuple[Response, int]:
+def client_auth_required(vf) -> Callable:
+    """View function decorator to enforce HTTP Basic Authentication."""
+    @wraps(vf)
+    def authenticatedvf(*args, **kwargs) -> tuple[Response, int]:
         """Wrapper function that returns the error response from
         authentication, or calls the original function if authentication
         is successful.
         """
-        return authenticate_client() or func(*args, **kwargs)
+        return authenticate_client() or vf(*args, **kwargs)
 
-    return wrapper
+    return vf

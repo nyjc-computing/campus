@@ -3,15 +3,13 @@
 API routes for the users resource.
 """
 
-from typing import Unpack
-
 from flask import Blueprint, Flask
 
+import common.validation.flask as flask_validation
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import user
 from common.schema import Message, Response
-import common.validation.flask as flask_validation
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)

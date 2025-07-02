@@ -5,13 +5,14 @@ Web endpoints for Campus authentication.
 
 from flask import Blueprint, Flask
 
-from apps.common import errors
-from . import routes
+from .model import authenticate_client, client_auth_required
 
 __all__ = [
     'create_app',
     'init_app',
     'init_db',
+    'authenticate_client',
+    'client_auth_required'
 ]
 
 
@@ -20,6 +21,7 @@ def create_app() -> Flask:
     
     This is called if campusauth is run as a standalone app.
     """
+    from apps.common import errors
     app = Flask(__name__)
     init_app(app)
     errors.init_app(app)
@@ -27,6 +29,7 @@ def create_app() -> Flask:
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the campusauth blueprint with the given Flask app."""
+    from . import routes
     routes.init_app(app)
 
 def init_db() -> None:

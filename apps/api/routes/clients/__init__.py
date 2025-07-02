@@ -3,8 +3,6 @@
 API routes for the clients resource.
 """
 
-from typing import Unpack
-
 from flask import Blueprint, Flask
 
 from apps.campusauth.model import authenticate_client
