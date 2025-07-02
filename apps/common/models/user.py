@@ -82,7 +82,7 @@ class User:
         """
         self.storage = get_drum()
 
-    def activate(self, email: str) -> ModelResponse:
+    def activate(self, email: str) -> None:
         """Actions to perform upon first sign-in."""
         user_id = uid.generate_user_uid(email)
         resp = self.storage.update_by_id(
@@ -99,10 +99,10 @@ class User:
                     user_id=user_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", "User activated")
+                return
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def new(self, **fields: Unpack[UserNew]) -> ModelResponse:
+    def new(self, **fields: Unpack[UserNew]) -> UserResource:
         """Create a new user."""
         user_id = uid.generate_user_uid(fields["email"])
         user_id, _ = fields["email"].split('@')
@@ -116,51 +116,51 @@ class User:
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS):
-                return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
+            case Response(status="ok", message=Message.SUCCESS, data=resource):
+                return resource
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def delete(self, user_id: str) -> ModelResponse:
+    def delete(self, user_id: str) -> None:
         """Delete a user by id."""
         resp = self.storage.delete_by_id(TABLE, user_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.DELETED):
-                return ModelResponse(**resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="User not found",
                     user_id=user_id
                 )
+            case Response(status="ok", message=Message.DELETED):
+                return
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def get(self, user_id: str) -> ModelResponse:
+    def get(self, user_id: str) -> UserResource:
         """Get a user by id."""
         resp = self.storage.get_by_id(TABLE, user_id)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND):
-                return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="User not found",
                     user_id=user_id
                 )
+            case Response(status="ok", message=Message.FOUND, data=resource):
+                return resource
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def update(self, user_id: str, **updates: Unpack[UserUpdate]) -> ModelResponse:
+    def update(self, user_id: str, **updates: Unpack[UserUpdate]) -> None:
         """Update a user by id."""
         resp = self.storage.update_by_id(TABLE, user_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="User not found",
                     user_id=user_id
                 )
+            case Response(status="ok", message=Message.UPDATED):
+                return
         raise ValueError(f"Unexpected response from storage: {resp}")
