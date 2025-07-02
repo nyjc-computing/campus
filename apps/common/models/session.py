@@ -6,15 +6,10 @@ Sessions are short-lived processes, typically used for authentication state.
 """
 
 from apps.common.errors import api_errors
-from apps.common.models.base import ModelResponse
 from common.drum.mongodb import get_drum, PK
 from common.schema import CampusID
 
 TABLE = "sessions"
-
-
-def init_db():
-    pass
 
 
 class Session:
