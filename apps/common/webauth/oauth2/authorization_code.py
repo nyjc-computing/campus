@@ -8,7 +8,9 @@ from urllib.parse import urlencode
 
 import requests
 
-from common.drum.mongodb import get_db
+from apps.common.errors import api_errors
+from apps.common.models.base import ModelResponse
+from apps.common.models.session import Session
 from common.utils import uid, utc_time
 
 from .base import (
@@ -144,19 +146,21 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     def retrieve_session(
             self,
             state: str
-    ) -> "OAuth2AuthorizationCodeSession | None":
+    ) -> "OAuth2AuthorizationCodeSession":
         """Retrieve an existing OAuth2 Authorization Code flow session by state."""
-        db = get_db()
-        record = db[TABLE].find_one({"state": state})
-        if not record:
-            return None
-        return OAuth2AuthorizationCodeSession(
-            client_id=record["client_id"],
-            scopes=record["scopes"],
-            target=record["target"],
-            state=record["state"],
-            provider=self
-        )
+        resp = Session().get(session_id=state)
+        match resp:
+            case ModelResponse(status="error"):
+                api_errors.raise_api_error(500)
+            case ModelResponse(status="ok", data=record):
+                return OAuth2AuthorizationCodeSession(
+                    client_id=record["client_id"],
+                    scopes=record["scopes"],
+                    target=record["target"],
+                    state=record["state"],
+                    provider=self
+                )
+        raise AssertionError(f"Unexpected response: {resp}")
 
 
 class OAuth2AuthorizationCodeSession:
@@ -214,8 +218,7 @@ class OAuth2AuthorizationCodeSession:
         This method should be implemented by subclasses to remove the session
         data, such as from a database or cache.
         """
-        db = get_db()
-        db[TABLE].delete_one({"state": self.state})
+        Session().delete(session_id=self.state)
 
     def exchange_code_for_token(
             self,
@@ -286,8 +289,10 @@ class OAuth2AuthorizationCodeSession:
         This method should be implemented by subclasses to persist the session
         data, such as in a database or cache.
         """
-        db = get_db()
-        db[TABLE].insert_one(self.to_dict())
+        Session().store(
+            session_id=self.state,
+            session=self.to_dict()
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the session."""
