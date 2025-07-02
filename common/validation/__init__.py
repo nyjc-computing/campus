@@ -1,4 +1,4 @@
 """common.validation
 
-Comon functions used for validation.
+Common functions used for validation.
 """
