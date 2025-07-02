@@ -7,13 +7,13 @@
     "staging": "https://discord.com/api",
     "testing": "https://discord.com/api"
   },
-  "redirect_uri": "/oauth/discord/callback", 
   "api_doc": "https://discord.com/developers/docs/intro",
   "discovery_url": "https://raw.githubusercontent.com/discord/discord-api-spec/refs/heads/main/specs/openapi.json",
   "security": {
     "oauth2": {
       "security_scheme": "oauth2",
       "flow": "authorizationCode",
+      "redirect_uri": "http://127.0.0.1:5000/oauth/discord/callback", 
       "scopes": [
         "identify",
         "email",

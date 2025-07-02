@@ -7,13 +7,13 @@
     "staging": "https://api.github.com",
     "testing": "https://api.github.com"
   },
-  "redirect_uri": "/oauth/github/callback", 
   "api_doc": "https://docs.github.com/en/rest",
   "discovery_url": "https://github.com/github/rest-api-description/releases/download/v2.1.0/descriptions.zip",
   "security": {
     "oauth2": {
       "security_scheme": "oauth2",
       "flow": "authorizationCode",
+      "redirect_uri": "http://127.0.0.1:5000/oauth/github/callback", 
       "headers": {
         "Accept": "application/json"
       },
