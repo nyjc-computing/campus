@@ -7,20 +7,13 @@ from typing import Unpack
 
 from flask import Blueprint, Flask
 
+import common.validation.flask as flask_validation
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import client, user
-import common.validation.flask as flask_validation
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
-
-# Feature flags
-GET = True
-PATCH = False
-POST = False
-PUT = False
-DELETE = False
 
 # Database Models
 clients = client.Client()

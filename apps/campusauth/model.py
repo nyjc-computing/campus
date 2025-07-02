@@ -13,20 +13,11 @@ from typing import Callable
 from flask import request
 from flask.wrappers import Response
 
+from apps import ctx
 from apps.common.models.client import Client
-from apps.common.webauth import http, oauth2
+from apps.common.webauth import http
 
-
-basicauth = http.HttpAuthenticationScheme(
-    provider="campus",
-    security_scheme="http",
-    scheme="basic",
-)
-bearerauth = http.HttpAuthenticationScheme(
-    provider="campus",
-    security_scheme="http",
-    scheme="bearer",
-)
+clients = Client()
 
 
 def authenticate_client() -> tuple[Response, int] | None:
@@ -40,22 +31,26 @@ def authenticate_client() -> tuple[Response, int] | None:
 
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
-    # Check for valid header
-    auth = basicauth.validate_header(request.headers)
-    client_id, client_secret = auth.credentials()
+    auth = (
+        http.HttpAuthenticationScheme
+        .from_header("campus", request.headers)
+        .get_auth(request.headers)
+    )
+    match auth.scheme:
+        case "basic":
+            client_id, client_secret = auth.credentials()
+            clients.validate_credentials(client_id, client_secret)
+            ctx.client = clients.get(client_id)
+        case "bearer":
+            return {"message": "Bearer auth not implemented"}, 501
 
-    # Validate the client_id and client_secret
-    Client().validate_credentials(client_id, client_secret)
-
-
-def client_auth_required(func) -> Callable:
-    """Decorator to enforce HTTP Basic Authentication."""
-    @wraps(func)
-    def wrapper(*args, **kwargs) -> tuple[Response, int]:
+def client_auth_required(vf) -> Callable:
+    """View function decorator to enforce HTTP Basic Authentication."""
+    @wraps(vf)
+    def authenticatedvf(*args, **kwargs) -> tuple[Response, int]:
         """Wrapper function that returns the error response from
         authentication, or calls the original function if authentication
         is successful.
         """
-        return authenticate_client() or func(*args, **kwargs)
-
-    return wrapper
+        return authenticate_client() or vf(*args, **kwargs)
+    return authenticatedvf

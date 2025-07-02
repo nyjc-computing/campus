@@ -6,8 +6,8 @@ and API keys for Campus services.
 import os
 from typing import NotRequired, TypedDict, Unpack
 
-from apps.common.models.base import BaseRecord, ModelResponse
 from apps.common.errors import api_errors
+from apps.common.models.base import BaseRecord, ModelResponse
 from common import devops
 from common.drum import DrumResponse
 from common.schema import Message, Response
@@ -106,7 +106,7 @@ class Client:
         """Initialize the Client model with a storage interface."""
         self.storage = get_drum()
 
-    def delete(self, client_id: str) -> ModelResponse:
+    def delete(self, client_id: str) -> None:
         """Delete a client application by its ID."""
         resp = self.storage.delete_by_id(TABLE, client_id)
         match resp:
@@ -118,22 +118,22 @@ class Client:
                     client_id=client_id
                 )
             case Response(status="ok", message=Message.DELETED, data=data):
-                return ModelResponse("ok", Message.DELETED, data)
+                pass
         raise ValueError(f"Unexpected response: {resp}")
 
-    def list(self) -> ModelResponse:
+    def list(self) -> list:
         """List all client applications."""
         resp = self.storage.get_all(TABLE)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.FOUND, data=result):
-                return ModelResponse("ok", Message.FOUND, result)
+                return result
             case Response(status="ok", message=Message.EMPTY):
-                return ModelResponse("ok", Message.EMPTY, [])
+                return []
         raise ValueError(f"Unexpected response: {resp}")
 
-    def get(self, client_id: str) -> ModelResponse:
+    def get(self, client_id: str) -> ClientResource:
         """Retrieve a client application by its ID, including its admins."""
         resp = self.storage.get_by_id(TABLE, client_id)
         match resp:
@@ -148,9 +148,9 @@ class Client:
         client_record = resp.data
         # Do not reveal secrets in API
         del client_record["secret_hash"]
-        return ModelResponse("ok", Message.SUCCESS, client_record)
+        return client_record
 
-    def new(self, **fields: Unpack[ClientNew]) -> ModelResponse:
+    def new(self, **fields: Unpack[ClientNew]) -> ClientResource:
         """Create a new client."""
         # Use Client model to validate keyword arguments
         client_id = uid.generate_category_uid("client", length=8)
@@ -164,10 +164,10 @@ class Client:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
             case Response(status="ok", message=Message.SUCCESS, data=result):
-                return ModelResponse("ok", Message.CREATED, result)
+                return result
         raise ValueError(f"Unexpected response: {resp}")
 
-    def replace(self, client_id: str) -> ModelResponse:
+    def replace(self, client_id: str) -> dict[str, str]:
         """Revoke a client secret by its ID, and issue a new secret."""
         client_secret = secret.generate_client_secret()
         resp = self.storage.update_by_id(
@@ -187,15 +187,13 @@ class Client:
                     client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.SUCCESS, {
-                    "secret": client_secret
-                })
+                return {"secret": client_secret}
         raise ValueError(f"Unexpected response: {resp}")
 
-    def update(self, client_id: str, **updates: Unpack[ClientNew]) -> ModelResponse:
+    def update(self, client_id: str, **updates: Unpack[ClientNew]) -> None:
         """Update an existing client record."""
         if not updates:
-            return ModelResponse("ok", Message.EMPTY, "Nothing to update")
+            return
 
         resp = self.storage.update_by_id(TABLE, client_id, updates)
         match resp:
@@ -207,10 +205,14 @@ class Client:
                     client_id=client_id
                 )
             case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse("ok", Message.UPDATED)
+                pass
         raise ValueError(f"Unexpected response: {resp}")
 
-    def validate_credentials(self, client_id: str, client_secret: str) -> None:
+    def validate_credentials(
+            self,
+            client_id: str,
+            client_secret: str
+    ) -> None:
         """Validate client_id and client_secret.
         
         Raises:

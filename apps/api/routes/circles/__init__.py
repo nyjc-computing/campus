@@ -3,14 +3,12 @@
 API routes for the circles resource.
 """
 
-from typing import Unpack
-
 from flask import Blueprint, Flask
 
+import common.validation.flask as flask_validation
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import circle
-import common.validation.flask as flask_validation
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')
 bp.before_request(authenticate_client)

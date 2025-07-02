@@ -12,9 +12,8 @@ authentication logic is handled by the campusauth module.
 """
 # TODO: move to common.services
 
-from .base import SecurityScheme
 from . import http, oauth2
-
+from .base import SecurityScheme
 
 __all__ = [
     "SecurityScheme",

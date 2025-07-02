@@ -3,15 +3,13 @@
 API routes for the users resource.
 """
 
-from typing import Unpack
-
 from flask import Blueprint, Flask
 
+import common.validation.flask as flask_validation
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import user
 from common.schema import Message, Response
-import common.validation.flask as flask_validation
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
@@ -55,7 +53,7 @@ def new_user() -> flask_validation.JsonResponse:
 
 
 @bp.delete('/<string:user_id>')
-def delete_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease linter
+def delete_user(user_id: str) -> flask_validation.JsonResponse:
     """Delete a user."""
     resp = users.delete(user_id)
     if resp.status == "ok":
@@ -65,7 +63,7 @@ def delete_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease li
 
 
 @bp.get('/<string:user_id>')
-def get_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease linter
+def get_user(user_id: str) -> flask_validation.JsonResponse:
     """Get a single user's summary."""
     summary = {}
     record, _ = get_user_profile(user_id)
