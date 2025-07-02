@@ -6,7 +6,7 @@ import os
 
 from typing import NotRequired, TypedDict, Unpack
 
-from apps.common.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord
 from apps.common.errors import api_errors
 from common import devops
 from common.schema import Message, Response
