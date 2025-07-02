@@ -26,7 +26,6 @@ class SecurityScheme(Protocol):
     """
     provider: str
     security_scheme: Security
-    scopes: list[str]
 
     def __init__(self, provider: str, **config: Unpack[SecurityConfigSchema]):
         """Subclasses must implement an __init__() method that initializes the
