@@ -34,10 +34,10 @@ class HttpAuthenticationScheme(SecurityScheme):
     def __init__(
             self,
             provider: str,
-            **kwargs: Unpack[HttpAuthConfigSchema]
+            **config: Unpack[HttpAuthConfigSchema]
     ):
-        super().__init__(provider, **kwargs)
-        self.scheme = kwargs["scheme"]
+        super().__init__(provider, **config)
+        self.scheme = config["scheme"]
 
     def get_auth(self, header: dict) -> HttpAuthProperty:
         """Validate the HTTP header for authentication.
@@ -56,8 +56,7 @@ class HttpAuthenticationScheme(SecurityScheme):
         return auth
 
     @classmethod
-    def from_header(
-            cls,
+    def from_header(cls,
             provider: str,
             header: dict
     ) -> "HttpAuthenticationScheme":
