@@ -1,8 +1,10 @@
 """apps/campusauth/models
 
-Authentication implementation for the Campus API.
+Authentication and authorisation implementation for the Campus API.
 
-This module handles authentication of credentials for Campus API requests.
+This module handles:
+- authentication of credentials for Campus API requests.
+- authorisation of requests based on access scopes.
 """
 
 from functools import wraps
