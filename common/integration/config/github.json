@@ -1,5 +1,5 @@
 {
-  "name": "github",
+  "provider": "github",
   "description": "GitHub API platform integration for Campus. Provides access to GitHub services via OAuth2.",
   "servers": {
     "development": "https://api.github.com",
@@ -8,9 +8,12 @@
     "testing": "https://api.github.com"
   },
   "api_doc": "https://docs.github.com/en/rest",
+  "discovery_url": "https://github.com/github/rest-api-description/releases/download/v2.1.0/descriptions.zip",
   "security": {
     "oauth2": {
-      "type": "oauth2",
+      "security_scheme": "oauth2",
+      "flow": "authorizationCode",
+      "redirect_uri": "http://127.0.0.1:5000/oauth/github/callback", 
       "headers": {
         "Accept": "application/json"
       },
@@ -18,7 +21,6 @@
         "read:user",
         "user:email"
       ],
-      "flow": "authorizationCode",
       "authorization_url": "https://github.com/login/oauth/authorize",
       "token_url": "https://github.com/login/oauth/access_token",
       "user_info_url": "https://api.github.com/user",

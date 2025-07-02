@@ -1,4 +1,4 @@
-"""common/drum/sqlite.py
+"""common.drum.sqlite
 
 SQLite implementation of the Drum interface.
 """

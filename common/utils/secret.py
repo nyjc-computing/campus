@@ -1,4 +1,4 @@
-"""common.utils.secret.py
+"""common.utils.secret
 
 Utility functions for generating and hashing secrets.
 """

@@ -19,7 +19,7 @@ class TestSchemaValidation(unittest.TestCase):
             raise Exception(f"Should not be called: {status}")
 
         @self.app.route('/test', methods=['POST'])
-        @flask_validation.unpack_request
+        @flask_validation.unpack_request_json
         @flask_validation.validate(
             request=schema,
             response=response_schema,
@@ -43,7 +43,7 @@ class TestSchemaValidation(unittest.TestCase):
             raise CustomError("error handler called")
 
         @self.app.route('/test_invalid', methods=['POST'])
-        @flask_validation.unpack_request
+        @flask_validation.unpack_request_json
         @flask_validation.validate(request=schema, on_error=on_error)
         def test_view_invalid(*args: str, **payload):
             return {'result': f"{payload['foo']}-{payload['bar']}"}, 200
@@ -64,7 +64,7 @@ class TestSchemaValidation(unittest.TestCase):
             raise CustomError("error handler called")
 
         @self.app.route('/test_invalid_resp', methods=['POST'])
-        @flask_validation.unpack_request
+        @flask_validation.unpack_request_json
         @flask_validation.validate(
             request=schema,
             response=response_schema,

@@ -1,8 +1,10 @@
 """apps/campusauth/models
 
-Authentication implementation for the Campus API.
+Authentication and authorisation implementation for the Campus API.
 
-This module handles authentication of credentials for Campus API requests.
+This module handles:
+- authentication of credentials for Campus API requests.
+- authorisation of requests based on access scopes.
 """
 
 from functools import wraps
@@ -12,25 +14,23 @@ from flask import request
 from flask.wrappers import Response
 
 from apps.common.models.client import Client
-from common.webauth import http, oauth2
-
-from common.auth.header import HttpHeaderDict
+from apps.common.webauth import http, oauth2
 
 
 basicauth = http.HttpAuthenticationScheme(
+    provider="campus",
     security_scheme="http",
     scheme="basic",
-    scopes=[]
 )
 bearerauth = http.HttpAuthenticationScheme(
+    provider="campus",
     security_scheme="http",
     scheme="bearer",
-    scopes=[]
 )
 
 
 def authenticate_client() -> tuple[Response, int] | None:
-    """Authenticate the client using HTTP Basic Authentication.
+    """Authenticate the client credentials using HTTP Basic Authentication.
 
     This function is meant to be used with Flask.before_request
     to enforce authentication for all routes in the blueprint.
@@ -41,14 +41,11 @@ def authenticate_client() -> tuple[Response, int] | None:
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
     # Check for valid header
-    basicauth.validate_header(request.headers)  # type: ignore[call-arg]
-    auth_header = HttpHeaderDict(request.headers).get_auth()
-    assert auth_header
-    client_id, client_secret = auth_header.credentials()
+    auth = basicauth.validate_header(request.headers)
+    client_id, client_secret = auth.credentials()
 
     # Validate the client_id and client_secret
-    client_model = Client()
-    client_model.validate_credentials(client_id, client_secret)
+    Client().validate_credentials(client_id, client_secret)
 
 
 def client_auth_required(func) -> Callable:

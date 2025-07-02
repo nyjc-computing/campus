@@ -1,4 +1,4 @@
-"""common.webauth
+"""apps.common.webauth
 
 Web authentication models for the Campus API.
 
@@ -10,18 +10,14 @@ The classes do not authenticate credentials, but provide the necessary
 configuration and validation methods for authentication headers. Actual
 authentication logic is handled by the campusauth module.
 """
+# TODO: move to common.services
 
-from .base import Security, SecurityScheme, SecuritySchemeConfigSchema
+from .base import SecurityScheme
 from . import http, oauth2
-
-SecurityScheme.register("http", http.HttpAuthenticationScheme)
-SecurityScheme.register("oauth2", oauth2.OAuth2FlowScheme)
 
 
 __all__ = [
-    "Security",
     "SecurityScheme",
-    "SecuritySchemeConfigSchema",
     "http",
     "oauth2",
 ]

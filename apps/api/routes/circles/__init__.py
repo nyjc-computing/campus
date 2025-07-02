@@ -10,7 +10,7 @@ from flask import Blueprint, Flask
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import circle
-from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.validation.flask import JsonResponse, unpack_request_json, validate
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')
 bp.before_request(authenticate_client)
@@ -27,13 +27,13 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/')
-@unpack_request
+@unpack_request_json
 @validate(
     request=circle.CircleNew.__annotations__,
     response=circle.CircleResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def new_circle(*_: str, **data: Unpack[circle.CircleNew]) -> FlaskResponse:
+def new_circle(*_: str, **data: Unpack[circle.CircleNew]) -> JsonResponse:
     """Create a new circle."""
     # TODO: authenticate
     resp = circles.new(**data)  # raises APIError
@@ -44,7 +44,7 @@ def new_circle(*_: str, **data: Unpack[circle.CircleNew]) -> FlaskResponse:
     response={"message": str},
     on_error=api_errors.raise_api_error
 )
-def delete_circle(circle_id: str, *_, **__) -> FlaskResponse:
+def delete_circle(circle_id: str, *_, **__) -> JsonResponse:
     """Delete a circle."""
     resp = circles.delete(circle_id)  # raises APIError
     return {"message": "Circle deleted"}, 200
@@ -54,14 +54,14 @@ def delete_circle(circle_id: str, *_, **__) -> FlaskResponse:
     response=circle.CircleResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def get_circle_details(circle_id: str, *_, **__) -> FlaskResponse:
+def get_circle_details(circle_id: str, *_, **__) -> JsonResponse:
     """Get details of a circle."""
     # TODO: validate, authenticate
     resp = circles.get(circle_id)  # raises APIError
     return resp.data, 200
 
 @bp.patch('/<string:circle_id>')
-@unpack_request
+@unpack_request_json
 @validate(
     request=circle.CircleUpdate.__annotations__,
     response=circle.CircleResource.__annotations__,
@@ -71,19 +71,19 @@ def edit_circle(
         circle_id: str,
         *_,
         **data: Unpack[circle.CircleUpdate]
-) -> FlaskResponse:
+) -> JsonResponse:
     """Edit name or description of a circle."""
     # TODO: authenticate
     resp = circles.update(circle_id, **data)  # raises APIError
     return resp.data, 200
 
 @bp.post('/<string:circle_id>/move')
-def move_circle(circle_id: str, *_, **__) -> FlaskResponse:
+def move_circle(circle_id: str, *_, **__) -> JsonResponse:
     """Move a circle to a new parent."""
     return {"message": "Not implemented"}, 501
 
 @bp.get('/<string:circle_id>/members')
-def get_circle_members(circle_id: str, *_, **__) -> FlaskResponse:
+def get_circle_members(circle_id: str, *_, **__) -> JsonResponse:
     """Get member IDs of a circle and their access values."""
     resp = circles.members.list(circle_id)  # raises APIError
     return resp.data, 200
@@ -97,7 +97,7 @@ def add_circle_member(
         circle_id: str,
         *_,
         **data: Unpack[circle.CircleMemberAdd]
-) -> FlaskResponse:
+) -> JsonResponse:
     """Add a member to a circle."""
     resp = circles.members.add(circle_id, **data)
     return resp.data, 200
@@ -111,7 +111,7 @@ def remove_circle_member(
         circle_id: str,
         *_,
         **data: Unpack[circle.CircleMemberRemove]
-) -> FlaskResponse:
+) -> JsonResponse:
     """Remove a member from a circle."""
     resp = circles.members.remove(circle_id, **data)
     return resp.data, 200
@@ -126,12 +126,12 @@ def patch_circle_member(
         circle_id: str,
         *_,
         **data: Unpack[circle.CircleMemberSet]
-) -> FlaskResponse:
+) -> JsonResponse:
     """Update a member's access in a circle."""
     resp = circles.members.set(circle_id, **data)
     return resp.data, 200
 
 @bp.get('/<string:circle_id>/users')
-def get_circle_users(circle_id: str, *_, **data) -> FlaskResponse:
+def get_circle_users(circle_id: str, *_, **data) -> JsonResponse:
     """Get users in a circle."""
     return {"message": "Not implemented"}, 501

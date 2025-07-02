@@ -11,7 +11,7 @@ from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import otp
 from common.services.email import create_email_sender
-from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.validation.flask import JsonResponse, unpack_request_json, validate
 
 from . import template
 
@@ -32,13 +32,13 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/request')
-@unpack_request
+@unpack_request_json
 @validate(
     request=otp.OTPRequest.__annotations__,
     response={"message": str},
     on_error=api_errors.raise_api_error
 )
-def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
+def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> JsonResponse:
     """Request a new OTP for email authentication."""
     email = data['email']
     # TODO: Validate email format
@@ -57,13 +57,13 @@ def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
     return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
-@unpack_request
+@unpack_request_json
 @validate(
     request=otp.OTPVerify.__annotations__,
     response={"message": str},
     on_error=api_errors.raise_api_error
 )
-def verify_otp(*_, **data: Unpack[otp.OTPVerify]) -> FlaskResponse:
+def verify_otp(*_, **data: Unpack[otp.OTPVerify]) -> JsonResponse:
     """Verify an OTP for email authentication."""
     # TODO: Validate email format
     # TODO: Validate OTP format

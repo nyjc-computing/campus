@@ -6,10 +6,17 @@ Config for third-party integrations.
 import json
 import os
 
-from common.webauth.oauth2.base import OAuth2ConfigSchema
+from .schema import (
+    HttpScheme,
+    OAuth2Flow,
+    Security,
+    IntegrationConfigSchema,
+    SecurityConfigSchema,
+    OAuth2AuthorizationCodeConfigSchema
+)
 
 
-def get_config(provider: str) -> OAuth2ConfigSchema:
+def get_config(provider: str) -> IntegrationConfigSchema:
     """Get the configuration for a specific integration provider."""
     # change cwd to this file's directory
     os.chdir(os.path.dirname(__file__))
@@ -25,3 +32,14 @@ def get_config(provider: str) -> OAuth2ConfigSchema:
         raise ValueError(
             f"Invalid JSON in configuration for '{provider}': {err}"
         ) from err
+
+
+__all__ = [
+    "get_config",
+    "IntegrationConfigSchema",
+    "SecurityConfigSchema",
+    "OAuth2AuthorizationCodeConfigSchema",
+    "HttpScheme",
+    "OAuth2Flow",
+    "Security",
+]

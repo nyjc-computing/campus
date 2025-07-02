@@ -211,7 +211,12 @@ class Client:
         raise ValueError(f"Unexpected response: {resp}")
 
     def validate_credentials(self, client_id: str, client_secret: str) -> None:
-        """Validate client_id and client_secret."""
+        """Validate client_id and client_secret.
+        
+        Raises:
+            api_errors.InternalError: Error retrieving the stored credentials.
+            api_errors.ForbiddenError: Client is not found or secret is invalid.
+        """
         resp = self.storage.get_by_id(TABLE, client_id)
         match resp:
             case Response(status="error", message=message, data=error):

@@ -7,13 +7,12 @@ which are connections to third-party platforms and APIs.
 from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
-from apps.common.models.base import ModelResponse
-from common.webauth import Security, SecuritySchemeConfigSchema
 from common.devops import Env
 from common.drum.mongodb import get_db
-from common.schema import Message
 
 from . import config
+
+from .config import Security, SecurityConfigSchema
 
 Url = str
 
@@ -50,7 +49,7 @@ class IntegrationConfig(TypedDict, total=False):
     description: str
     servers: Mapping[Env, Url]
     api_doc: Url  # URL to OpenAPI spec or API documentation
-    security: Mapping[Security, SecuritySchemeConfigSchema]
+    security: Mapping[Security, SecurityConfigSchema]
     capabilities: CommonCapabilities
     enabled: bool  # Whether the integration is enabled in Campus
 
@@ -60,15 +59,15 @@ class Integration:
 
     def __init__(
             self,
-            name: str,
+            provider: str,
             description: str,
             servers: Mapping[Env, Url],
             api_doc: Url,
-            security: Mapping[Security, SecuritySchemeConfigSchema],
+            security: Mapping[Security, SecurityConfigSchema],
             capabilities: CommonCapabilities,
             enabled: bool | None = None
     ):
-        self.name = name
+        self.provider = provider
         self.description = description
         self.servers = servers
         self.api_doc = api_doc
@@ -83,7 +82,7 @@ class Integration:
     def from_dict(cls, data: dict[str, Any]) -> "Integration":
         """Instantiate from a dict (e.g., loaded from JSON)."""
         return cls(
-            name=data["name"],
+            provider=data["provider"],
             description=data["description"],
             servers=data["servers"],
             api_doc=data["api_doc"],
@@ -96,7 +95,7 @@ class Integration:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for serialization."""
         return {
-            "name": self.name,
+            "provider": self.provider,
             "description": self.description,
             "servers": self.servers,
             "api_doc": self.api_doc,
@@ -105,19 +104,17 @@ class Integration:
             "enabled": self.enabled
         }
 
-    def disable(self) -> ModelResponse:
+    def disable(self):
         """Disable an integration."""
         self.enabled = False
         self.sync_status()
-        return ModelResponse(status="ok", message=Message.SUCCESS)
 
-    def enable(self) -> ModelResponse:
+    def enable(self):
         """Enable an integration."""
         self.enabled = True
         self.sync_status()
-        return ModelResponse(status="ok", message=Message.SUCCESS)
 
-    def sync_status(self) -> ModelResponse:
+    def sync_status(self):
         """Sync an integration status to storage."""
         db = get_db()
         meta = db[TABLE].find_one({"@meta": True})
@@ -126,18 +123,18 @@ class Integration:
             raise ValueError("No @meta document found in storage.")
         if not db[TABLE].find_one({
             "@meta": True,
-            f"integrations.{self.name}.enabled": {"$exists": True}
+            f"integrations.{self.provider}.enabled": {"$exists": True}
         }):
             # Integration not completely registered in storage
             # Default status to False
             # MongoDB $set operator works recursively
             db[TABLE].update_one(
                 {"@meta": True},
-                {"$set": {f"integrations.{self.name}.enabled": False}}
+                {"$set": {f"integrations.{self.provider}.enabled": False}}
             )
         integration = db[TABLE].find_one({
             "@meta": True,
-            f"integrations.{self.name}": 1
+            f"integrations.{self.provider}": 1
         })
         assert isinstance(integration, dict)
         if self.enabled is None:
@@ -149,10 +146,9 @@ class Integration:
             db[TABLE].update_one(
                 {"@meta": True},
                 {"$set": {
-                    f"integrations.{self.name}.enabled": bool(self.enabled)
+                    f"integrations.{self.provider}.enabled": bool(self.enabled)
                 }}
             )
-        return ModelResponse(status="ok", message=Message.SUCCESS)
 
 
 class IntegrationCredentials(TypedDict):

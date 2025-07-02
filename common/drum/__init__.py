@@ -1,4 +1,4 @@
-"""drum.py
+"""common.drum
 
 A storage interface for Campus digital services.
 

@@ -1,8 +1,9 @@
-"""common/drum/mongodb.py
+"""common.drum.mongodb
 
 MongoDB implementation of the Drum interface.
 """
 
+from copy import deepcopy
 import os
 from typing import Any
 from pymongo import MongoClient
@@ -35,10 +36,11 @@ def get_drum() -> 'MongoDrum':
 # These functions help to convert between the MongoDB _id field and
 # Campus PK field.
 
-def to_mongo_id(record: Record) -> dict[str, Any]:
+def to_mongo_id(record: dict[str, Any]) -> dict[str, Any]:
     """Convert a record to use MongoDB _id field."""
-    doc = dict(record.items())
-    doc[MONGOPK] = record[PK]
+    assert PK in record, f"Record must have a {PK} field"
+    doc = deepcopy(record)
+    doc[MONGOPK] = doc.pop(PK)
     return doc
 
 def from_mongo_id(record: dict[str, Any]) -> Record:
@@ -94,7 +96,7 @@ class MongoDrum(DrumInterface):
 
     def insert(self, group: str, record: Record) -> DrumResponse:
         try:
-            doc = to_mongo_id(record)
+            doc = to_mongo_id(dict(record))
             self.db[group].insert_one(doc)
             return DrumResponse("ok", Message.SUCCESS, record)
         except PyMongoError as e:
@@ -102,7 +104,7 @@ class MongoDrum(DrumInterface):
 
     def set(self, group: str, record: Record) -> DrumResponse:
         try:
-            record = to_mongo_id(record)
+            record = to_mongo_id(dict(record))
             result = self.db[group].replace_one(
                 {MONGOPK: record[MONGOPK]},
                 record,

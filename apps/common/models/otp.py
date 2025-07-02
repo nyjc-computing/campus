@@ -4,6 +4,8 @@ This module provides classes and utilities for handling one-time
 passwords (OTPs) used in email authentication. It includes functionality
 generating, hashing, verifying, and managing OTPs securely.
 """
+# TODO: Move to common.services
+
 import os
 import secrets
 from typing import TypedDict, Unpack

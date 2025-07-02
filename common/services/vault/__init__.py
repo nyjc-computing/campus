@@ -6,7 +6,7 @@ Each vault (in a collection) is identified by a unique label.
 To avoid collision between label and keys in the vault, the label key is prefixed with '@', i.e. '@label'.
 """
 
-from common.drum.mongodb import PK, get_db, get_drum
+from common.drum.mongodb import PK, get_db
 
 from . import meta
 
@@ -100,6 +100,9 @@ class Vault:
 
     def __init__(self, label: str):
         self.label = label
+
+    def __repr__(self) -> str:
+        return f"Vault(label={self.label!r})"
 
     def get(self, key: str) -> str:
         """Get a secret from the vault."""

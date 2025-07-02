@@ -1,4 +1,4 @@
-"""common.webauth.oauth2
+"""apps.common.webauth.oauth2
 
 OAuth2 security scheme configs and models.
 
@@ -11,10 +11,6 @@ The OAuth2 security scheme comprises four flows:
 
 from .authorization_code import OAuth2AuthorizationCodeFlowScheme
 from .base import OAuth2FlowScheme
-
-
-OAuth2FlowScheme.register_flow(
-    "authorizationCode", OAuth2AuthorizationCodeFlowScheme)
 
 
 __all__ = [

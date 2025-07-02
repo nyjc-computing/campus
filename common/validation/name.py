@@ -1,3 +1,8 @@
+"""common.validation.name
+
+Common functions used for validation of names and labels.
+"""
+
 def is_valid_identifier(name: str) -> bool:
     """
     Check if the given name is a valid Python identifier.

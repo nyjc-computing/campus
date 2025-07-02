@@ -1,12 +1,21 @@
-from apps import api
+from flask import redirect, url_for
 
-app = api.create_app()
+from apps import api, oauth, create_app_from_modules
+
+
+app = create_app_from_modules(api, oauth)
 
 
 @app.route('/')
 def index():
-    return 'Hello from Flask!'
+    return redirect(url_for('oauth.google.authorize', target='/home'))
+
+@app.route('/home')
+def home():
+    # TODO: Implement authentication check
+    # TODO: Implement user session management
+    return "Welcome to the home page! You are authenticated."
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run('127.0.0.1', port=5000)
