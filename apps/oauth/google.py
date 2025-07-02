@@ -11,14 +11,17 @@ from flask import Blueprint, Flask, redirect
 from werkzeug.wrappers import Response
 
 from apps.common.errors import api_errors
+from apps.common.models.credentials import UserCredentials
+from apps.common.webauth.oauth2 import (
+    OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
+)
+from apps.common.webauth.oauth2.authorization_code import AuthorizationErrorCode
 from common.integration import config
 from common.services.vault import get_vault
-from common.webauth.credentials import ProviderCredentials
-from common.webauth.oauth2 import \
-    OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
-from common.webauth.oauth2.authorization_code import AuthorizationErrorCode
 
 PROVIDER = 'google'
+
+user_credentials = UserCredentials(PROVIDER)
 
 vault = get_vault(PROVIDER)
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
@@ -67,47 +70,58 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.get('/authorize')
-# TODO: validate URL parameters (instead of JSON body)
 def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
     """Redirect to Google OAuth authorization endpoint."""
+    if "target" not in params:
+        api_errors.raise_api_error(400, error="Missing target parameter")
     session = oauth2.create_session(
         client_id=vault.get('CLIENT_ID'),
         scopes=oauth2.scopes,
         target=params['target'],
     )
     session.store()
-    # TODO: pass login_hint to authorization URL if provided
-    extra_params = {}
+    if "login_hint" in params:
+        extra_params = {"login_hint": params["login_hint"]}
+    else:
+        extra_params = {}
     return redirect(session.get_authorization_url(**extra_params))
 
 @bp.post('/callback')
-# TODO: validate URL parameters (instead of JSON body)
 def google_callback(*_, **params: Unpack[Callback]) -> Response:
     """Handle a Google OAuth callback request."""
     if "error" in params:
         api_errors.raise_api_error(401, **params)
-    elif "code" not in params:
+    elif "code" not in params or "state" not in params:
         api_errors.raise_api_error(400, **params)
     session = oauth2.retrieve_session(params["state"])
-    if not session:
-        api_errors.raise_api_error(400, error="No authentication session found")
     token_response = session.exchange_code_for_token(
         code=params["code"],
         client_secret= vault.get('CLIENT_SECRET'),
     )
     if "error" in token_response:
         api_errors.raise_api_error(400, **token_response)
-    # TODO: verify requested scopes were granted
-    assert "access_token" in token_response, "Access token not found in response"
+
+    # Verify requested scopes were granted
+    assert "scope" in token_response, "Response missing scope"
+    granted_scopes = token_response["scope"].split(" ")
+    missing_scopes = set(session.scopes) - set(granted_scopes)
+    if missing_scopes:
+        api_errors.raise_api_error(
+            403,
+            error="Missing scopes",
+            missing_scopes=list(missing_scopes),
+            granted_scopes=granted_scopes,
+        )
+    assert "access_token" in token_response
     user_info = oauth2.get_user_info(token_response["access_token"])
     if "error" in user_info:
         api_errors.raise_api_error(400, **user_info)
+
     # Store the access token in the user's credentials
-    credentials = ProviderCredentials(user_info["email"], "google")
-    credentials.set_access_token(token_response["access_token"])
-    credentials.set_scopes(token_response["scope"].split(" "))
-    if "refresh_token" in token_response:
-        credentials.set_refresh_token(token_response["refresh_token"])
-    # TODO: handle successful authentication
-    session.delete()
+    user_credentials.store(
+        user_id=user_info["email"],
+        token=token_response
+    )
+
+    # Session cleanup is expected to be handled automatically
     return redirect(session.target)
