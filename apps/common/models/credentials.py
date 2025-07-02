@@ -11,7 +11,7 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.common.webauth.oauth2.authorization_code import TokenResponseSchema
-from common.drum.mongodb import get_drum, PK
+from common.drum.mongodb import PK, get_drum
 from common.schema import CampusID
 
 TABLE = "credentials"
@@ -25,10 +25,12 @@ class ClientCredentials:
     client ID.
 
     Scopes may be included in the credentials, but are not required.
+
+    The client credentials are assumed to be issued by Campus.
     """
 
-    def __init__(self):
-        pass
+    def __init__(self, provider: str = "campus"):
+        self.provider = provider
 
     def delete(self, client_id: CampusID) -> None:
         """Delete a client credential by its ID."""
