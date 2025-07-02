@@ -27,7 +27,10 @@ user_credentials = UserCredentials(PROVIDER)
 vault = get_vault(PROVIDER)
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = config.get_config(PROVIDER)
-oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
+oauth2: OAuth2Flow = OAuth2Flow.from_json(
+    oauthconfig,
+    security="oauth2",
+)
 
 
 class AuthorizeRequestSchema(TypedDict, total=False):
@@ -84,7 +87,8 @@ def authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
         extra_params = {"login_hint": params["login_hint"]}
     else:
         extra_params = {}
-    return redirect(session.get_authorization_url(**extra_params))
+    authorization_url = session.get_authorization_url(**extra_params)
+    return redirect(authorization_url)
 
 @bp.get('/callback')
 @unpack_request_urlparams
