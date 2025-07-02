@@ -86,8 +86,7 @@ def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
         extra_params = {}
     return redirect(session.get_authorization_url(**extra_params))
 
-@bp.post('/callback')
-def google_callback(*_, **params: Unpack[Callback]) -> Response:
+@bp.get('/callback')
     """Handle a Google OAuth callback request."""
     if "error" in params:
         api_errors.raise_api_error(401, **params)
