@@ -16,10 +16,10 @@ Main operations:
 from collections.abc import Iterator, Mapping
 from typing import NotRequired, TypedDict, Unpack
 
-from apps.common.models.base import BaseRecord, ModelResponse
 from apps.common.errors import api_errors
+from apps.common.models.base import BaseRecord
 from common.drum.mongodb import PK, get_db, get_drum
-from common.schema import CampusID, UserID, Message, Response
+from common.schema import CampusID, Message, Response
 from common.utils import uid, utc_time
 
 # TODO: Replace with OpenAPI-based string-pattern schema
@@ -52,13 +52,13 @@ def init_db():
             description="Root circle",
             tag="root",
             parents={}
-        ).data
+        )
         Circle().new(
             name="campus-admin",
             description="Campus admin circle",
             tag="admin",
             parents={root_circle[PK]: 15}
-        ).data
+        )
         # Create or update circle meta record
         db[TABLE].update_one(
             {"@meta": True},
@@ -158,7 +158,7 @@ def get_root_circle() -> "CircleRecord":
             message=f"'root' not set in collection {TABLE}",
             id=DOMAIN
         )
-    return Circle().get(circle_meta["root"]).data
+    return Circle().get(circle_meta["root"])
 
 
 def get_tree_root() -> "CircleTree":
@@ -188,7 +188,7 @@ class CircleMember:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
 
-    def list(self, circle_id: CircleID) -> ModelResponse:
+    def list(self, circle_id: CircleID) -> dict:
         """List all members of a circle."""
         resp = self.storage.get_by_id(TABLE, circle_id)
         if resp.status == "error":
@@ -196,20 +196,19 @@ class CircleMember:
                 message="Circle not found",
                 id=circle_id
             )
-        member_id_access = resp.data["members"]
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND):
-                return ModelResponse(status="ok", message=Message.FOUND, data=member_id_access)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="Circle not found",
                     id=circle_id
                 )
+            case Response(status="ok", message=Message.FOUND, data=resource):
+                return resource["members"]
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def add(self, circle_id: CircleID, **fields: Unpack[CircleMemberAdd]) -> ModelResponse:
+    def add(self, circle_id: CircleID, **fields: Unpack[CircleMemberAdd]) -> None:
         """Add a member to a circle."""
         member_id = fields["member_id"]
         access_value = fields["access_value"]
@@ -229,9 +228,8 @@ class CircleMember:
                 }
             },
         )
-        return ModelResponse(status="ok", message=Message.UPDATED)
 
-    def remove(self, circle_id: CircleID, **fields: Unpack[CircleMemberRemove]) -> ModelResponse:
+    def remove(self, circle_id: CircleID, **fields: Unpack[CircleMemberRemove]) -> None:
         """Remove a member from a circle."""
         member_id = fields["member_id"]
         # Check if member circle is a member of circle
@@ -255,16 +253,14 @@ class CircleMember:
                 }
             },
         )
-        return ModelResponse(status="ok", message=Message.UPDATED)
 
-    def set(self, circle_id: CircleID, **fields: Unpack[CircleMemberSet]) -> ModelResponse:
+    def set(self, circle_id: CircleID, **fields: Unpack[CircleMemberSet]) -> None:
         """Set the access of a member of a circle.
 
         No validation of existing access is carried out.
         """
         # For now, set and add operations are identical
         self.add(circle_id, **fields)
-        return ModelResponse(status="ok", message=Message.UPDATED)
 
 
 class Circle:
@@ -275,7 +271,7 @@ class Circle:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_drum()
 
-    def new(self, **fields: Unpack[CircleNew]) -> ModelResponse:
+    def new(self, **fields: Unpack[CircleNew]) -> CircleResource:
         """This creates a new circle and adds it to the circle collection.
 
         It does not add it to the circle hierarchy or access control.
@@ -307,11 +303,11 @@ class Circle:
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS):
-                return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
+            case Response(status="ok", message=Message.SUCCESS, data=resource):
+                return resource
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def delete(self, circle_id: str) -> ModelResponse:
+    def delete(self, circle_id: str) -> None:
         """Delete a circle by id.
 
         This action is destructive and cannot be undone.
@@ -322,44 +318,44 @@ class Circle:
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.DELETED):
-                return ModelResponse(**resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="Circle not found",
                     id=circle_id
                 )
+            case Response(status="ok", message=Message.DELETED):
+                return
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def get(self, circle_id: str) -> ModelResponse:
+    def get(self, circle_id: str) -> CircleResource:
         """Get a circle by id from the circle collection."""
         resp = self.storage.get_by_id(TABLE, circle_id)
         # TODO: join with sources and access values
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND):
-                return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="Circle not found",
                     id=circle_id
                 )
+            case Response(status="ok", message=Message.FOUND, data=resource):
+                return resource
         raise ValueError(f"Unexpected response from storage: {resp}")
 
-    def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> ModelResponse:
+    def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> None:
         """Update a circle by id."""
         resp = self.storage.update_by_id(TABLE, circle_id, updates)
         match resp:
             case Response(status="error", message=message, data=error):
                 raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse(*resp)
             case Response(status="ok", message=Message.NOT_FOUND):
                 raise api_errors.ConflictError(
                     message="Circle not found",
                     id=circle_id
                 )
+            case Response(status="ok", message=Message.UPDATED):
+                return
         raise ValueError(f"Unexpected response from storage: {resp}")
 
 

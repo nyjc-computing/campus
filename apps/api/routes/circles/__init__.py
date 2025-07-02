@@ -31,30 +31,30 @@ def new_circle(*_: str) -> flask_validation.JsonResponse:
         circle.CircleNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resp = circles.new(**payload)
+    resource = circles.new(**payload)
     flask_validation.validate_json_response(
-        resp.data,
         circle.CircleResource.__annotations__,
+        resource,
         on_error=api_errors.raise_api_error,
     )
-    return resp.data, 201
+    return dict(resource), 201
 
 @bp.delete('/<string:circle_id>')
 def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Delete a circle."""
     circles.delete(circle_id)
-    return {"message": "Circle deleted"}, 200
+    return {}, 200
 
 @bp.get('/<string:circle_id>')
 def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
     """Get details of a circle."""
-    resp = circles.get(circle_id)
+    resource = circles.get(circle_id)
     flask_validation.validate_json_response(
-        resp.data,
         circle.CircleResource.__annotations__,
+        resource,
         on_error=api_errors.raise_api_error,
     )
-    return resp.data, 200
+    return dict(resource), 200
 
 @bp.patch('/<string:circle_id>')
 def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
@@ -63,13 +63,8 @@ def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
         circle.CircleUpdate.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resp = circles.update(circle_id, **params)
-    flask_validation.validate_json_response(
-        resp.data,
-        circle.CircleResource.__annotations__,
-        on_error=api_errors.raise_api_error,
-    )
-    return resp.data, 200
+    circles.update(circle_id, **params)
+    return {}, 200
 
 @bp.post('/<string:circle_id>/move')
 def move_circle(circle_id: str) -> flask_validation.JsonResponse:
@@ -79,9 +74,9 @@ def move_circle(circle_id: str) -> flask_validation.JsonResponse:
 @bp.get('/<string:circle_id>/members')
 def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
     """Get member IDs of a circle and their access values."""
-    resp = circles.members.list(circle_id)
+    resource = circles.members.list(circle_id)
     # TODO: validate response
-    return resp.data, 200
+    return resource, 200
 
 @bp.post('/<string:circle_id>/members/add')
 def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
@@ -90,8 +85,8 @@ def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
         circle.CircleMemberAdd.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resp = circles.members.add(circle_id, **params)
-    return resp.data, 200
+    circles.members.add(circle_id, **params)
+    return {}, 200
 
 @bp.delete('/<string:circle_id>/members/remove')
 def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
@@ -100,9 +95,9 @@ def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
         circle.CircleMemberRemove.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resp = circles.members.remove(circle_id, **params)
+    circles.members.remove(circle_id, **params)
     # TODO: validate response
-    return resp.data, 200
+    return {}, 200
 
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
 @bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
@@ -112,9 +107,9 @@ def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
         circle.CircleMemberSet.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resp = circles.members.set(circle_id, **params)
+    circles.members.set(circle_id, **params)
     # TODO: validate response
-    return resp.data, 200
+    return {}, 200
 
 @bp.get('/<string:circle_id>/users')
 def get_circle_users(circle_id: str) -> flask_validation.JsonResponse:
