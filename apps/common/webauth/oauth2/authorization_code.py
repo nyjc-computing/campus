@@ -8,8 +8,6 @@ from urllib.parse import urlencode
 
 import requests
 
-from apps.common.errors import api_errors
-from apps.common.models.base import ModelResponse
 from apps.common.models.session import Session
 from common.utils import uid, utc_time
 
@@ -148,19 +146,14 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             state: str
     ) -> "OAuth2AuthorizationCodeSession":
         """Retrieve an existing OAuth2 Authorization Code flow session by state."""
-        resp = Session().get(session_id=state)
-        match resp:
-            case ModelResponse(status="error"):
-                api_errors.raise_api_error(500)
-            case ModelResponse(status="ok", data=record):
-                return OAuth2AuthorizationCodeSession(
-                    client_id=record["client_id"],
-                    scopes=record["scopes"],
-                    target=record["target"],
-                    state=record["state"],
-                    provider=self
-                )
-        raise AssertionError(f"Unexpected response: {resp}")
+        session = Session().get(session_id=state)
+        return OAuth2AuthorizationCodeSession(
+            client_id=session["client_id"],
+            scopes=session["scopes"],
+            target=session["target"],
+            state=session["state"],
+            provider=self
+        )
 
 
 class OAuth2AuthorizationCodeSession:
