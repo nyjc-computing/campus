@@ -43,8 +43,7 @@ def authenticate_client() -> tuple[Response, int] | None:
     client_id, client_secret = auth.credentials()
 
     # Validate the client_id and client_secret
-    client_model = Client()
-    client_model.validate_credentials(client_id, client_secret)
+    Client().validate_credentials(client_id, client_secret)
 
 
 def client_auth_required(func) -> Callable:
