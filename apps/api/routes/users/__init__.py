@@ -6,7 +6,7 @@ API routes for the users resource.
 from flask import Blueprint, Flask
 
 import common.validation.flask as flask_validation
-from apps.campusauth.model import authenticate_client
+from apps.campusauth import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import user
 

@@ -5,8 +5,11 @@ Web endpoints for Campus authentication.
 
 from flask import Blueprint, Flask
 
+from .authentication import (
+    authenticate_client,
+    client_auth_required
+)
 from .context import CampusContext
-from .model import authenticate_client, client_auth_required
 
 ctx = CampusContext()
 
