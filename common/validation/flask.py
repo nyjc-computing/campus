@@ -53,7 +53,7 @@ def unpack_request_urlparams(vf: ViewFunction[R]) -> ViewFunction[R]:
         into the inner view-function.
         """
         # Unpack URL parameters into kwargs
-        kwargs.update(flask_request.view_args or {})
+        kwargs.update(flask_request.args or {})
         return vf(*args, **kwargs)
     return unpackedvf
 
