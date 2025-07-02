@@ -24,6 +24,12 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 status=status,
                 **body
            )
+        case 403:
+            raise ForbiddenError(
+                message="Forbidden",
+                status=status,
+                **body
+            )
         case 409:
             raise ConflictError(
                 message="Conflict",
@@ -42,10 +48,9 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 status=status,
                 **body
             )
-        case _:
-            raise ValueError(
-                f"Unexpected status code: {status}"
-            )
+    raise ValueError(
+        f"Unexpected status code: {status}"
+    )
 
 
 class InternalError(APIError):
@@ -93,7 +98,25 @@ class UnauthorizedError(APIError):
     def __init__(
             self,
             message: str = "Unauthorized",
-            error_code: str = ErrorConstant.INVALID_REQUEST,
+            error_code: str = ErrorConstant.UNAUTHORIZED,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
+class ForbiddenError(APIError):
+    """Forbidden error.
+
+    Error indicates that the request is authenticated but the user does not
+    have permission to access the requested resource.
+    E.g. trying to access a resource that the user does not have permission to access.
+    """
+    status_code: int = 403
+
+    def __init__(
+            self,
+            message: str = "Forbidden",
+            error_code: str = ErrorConstant.FORBIDDEN,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)
