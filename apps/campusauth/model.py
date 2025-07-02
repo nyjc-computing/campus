@@ -16,7 +16,6 @@ from flask.wrappers import Response
 from apps.common.models.client import Client
 from apps.common.webauth import http
 
-
 basicauth = http.HttpAuthenticationScheme(
     provider="campus",
     security_scheme="http",
