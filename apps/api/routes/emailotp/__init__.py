@@ -3,15 +3,13 @@
 API routes for the emailotp resource.
 """
 
-from typing import Unpack
-
 from flask import Blueprint, Flask
 
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import otp
 from common.services.email import create_email_sender
-from common.validation.flask import JsonResponse, unpack_request_json, validate
+import common.validation.flask as flask_validation
 
 from . import template
 
@@ -32,15 +30,13 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/request')
-@unpack_request_json
-@validate(
-    request=otp.OTPRequest.__annotations__,
-    response={"message": str},
-    on_error=api_errors.raise_api_error
-)
-def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> JsonResponse:
+def request_otp() -> flask_validation.JsonResponse:
     """Request a new OTP for email authentication."""
-    email = data['email']
+    payload = flask_validation.validate_request_and_extract_json(
+        otp.OTPRequest.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    email = payload['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
     resp = emailotp.request(email)
@@ -57,15 +53,13 @@ def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> JsonResponse:
     return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
-@unpack_request_json
-@validate(
-    request=otp.OTPVerify.__annotations__,
-    response={"message": str},
-    on_error=api_errors.raise_api_error
-)
-def verify_otp(*_, **data: Unpack[otp.OTPVerify]) -> JsonResponse:
+def verify_otp() -> flask_validation.JsonResponse:
     """Verify an OTP for email authentication."""
     # TODO: Validate email format
     # TODO: Validate OTP format
-    resp = emailotp.verify(**data)
+    payload = flask_validation.validate_request_and_extract_json(
+        otp.OTPVerify.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    emailotp.verify(**payload)
     return {"message": "OTP verified"}, 200

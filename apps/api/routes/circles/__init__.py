@@ -10,7 +10,7 @@ from flask import Blueprint, Flask
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import circle
-from common.validation.flask import JsonResponse, unpack_request_json, validate
+import common.validation.flask as flask_validation
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')
 bp.before_request(authenticate_client)
@@ -27,111 +27,99 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/')
-@unpack_request_json
-@validate(
-    request=circle.CircleNew.__annotations__,
-    response=circle.CircleResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def new_circle(*_: str, **data: Unpack[circle.CircleNew]) -> JsonResponse:
+def new_circle(*_: str) -> flask_validation.JsonResponse:
     """Create a new circle."""
-    # TODO: authenticate
-    resp = circles.new(**data)  # raises APIError
+    payload = flask_validation.validate_request_and_extract_json(
+        circle.CircleNew.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = circles.new(**payload)
+    flask_validation.validate_json_response(
+        resp.data,
+        circle.CircleResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 201
 
 @bp.delete('/<string:circle_id>')
-@validate(
-    response={"message": str},
-    on_error=api_errors.raise_api_error
-)
-def delete_circle(circle_id: str, *_, **__) -> JsonResponse:
+def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Delete a circle."""
-    resp = circles.delete(circle_id)  # raises APIError
+    circles.delete(circle_id)
     return {"message": "Circle deleted"}, 200
 
 @bp.get('/<string:circle_id>')
-@validate(
-    response=circle.CircleResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def get_circle_details(circle_id: str, *_, **__) -> JsonResponse:
+def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
     """Get details of a circle."""
-    # TODO: validate, authenticate
-    resp = circles.get(circle_id)  # raises APIError
+    resp = circles.get(circle_id)
+    flask_validation.validate_json_response(
+        resp.data,
+        circle.CircleResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 200
 
 @bp.patch('/<string:circle_id>')
-@unpack_request_json
-@validate(
-    request=circle.CircleUpdate.__annotations__,
-    response=circle.CircleResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def edit_circle(
-        circle_id: str,
-        *_,
-        **data: Unpack[circle.CircleUpdate]
-) -> JsonResponse:
+def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Edit name or description of a circle."""
-    # TODO: authenticate
-    resp = circles.update(circle_id, **data)  # raises APIError
+    params = flask_validation.validate_request_and_extract_json(
+        circle.CircleUpdate.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = circles.update(circle_id, **params)
+    flask_validation.validate_json_response(
+        resp.data,
+        circle.CircleResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 200
 
 @bp.post('/<string:circle_id>/move')
-def move_circle(circle_id: str, *_, **__) -> JsonResponse:
+def move_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Move a circle to a new parent."""
     return {"message": "Not implemented"}, 501
 
 @bp.get('/<string:circle_id>/members')
-def get_circle_members(circle_id: str, *_, **__) -> JsonResponse:
+def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
     """Get member IDs of a circle and their access values."""
-    resp = circles.members.list(circle_id)  # raises APIError
+    resp = circles.members.list(circle_id)
+    # TODO: validate response
     return resp.data, 200
 
 @bp.post('/<string:circle_id>/members/add')
-@validate(
-    request=circle.CircleMemberAdd.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def add_circle_member(
-        circle_id: str,
-        *_,
-        **data: Unpack[circle.CircleMemberAdd]
-) -> JsonResponse:
+def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     """Add a member to a circle."""
-    resp = circles.members.add(circle_id, **data)
+    params = flask_validation.validate_request_and_extract_json(
+        circle.CircleMemberAdd.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = circles.members.add(circle_id, **params)
     return resp.data, 200
 
 @bp.delete('/<string:circle_id>/members/remove')
-@validate(
-    request=circle.CircleMemberRemove.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def remove_circle_member(
-        circle_id: str,
-        *_,
-        **data: Unpack[circle.CircleMemberRemove]
-) -> JsonResponse:
+def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     """Remove a member from a circle."""
-    resp = circles.members.remove(circle_id, **data)
+    params = flask_validation.validate_request_and_extract_json(
+        circle.CircleMemberRemove.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = circles.members.remove(circle_id, **params)
+    # TODO: validate response
     return resp.data, 200
 
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
 @bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
-@validate(
-    request=circle.CircleMemberSet.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def patch_circle_member(
-        circle_id: str,
-        *_,
-        **data: Unpack[circle.CircleMemberSet]
-) -> JsonResponse:
+def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     """Update a member's access in a circle."""
-    resp = circles.members.set(circle_id, **data)
+    params = flask_validation.validate_request_and_extract_json(
+        circle.CircleMemberSet.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = circles.members.set(circle_id, **params)
+    # TODO: validate response
     return resp.data, 200
 
 @bp.get('/<string:circle_id>/users')
-def get_circle_users(circle_id: str, *_, **data) -> JsonResponse:
+def get_circle_users(circle_id: str) -> flask_validation.JsonResponse:
+    # TODO: validate request
     """Get users in a circle."""
     return {"message": "Not implemented"}, 501

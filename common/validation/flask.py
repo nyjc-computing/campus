@@ -5,7 +5,16 @@ Common utility functions for validation of flask requests and responses.
 
 from functools import wraps
 from json import JSONDecodeError
-from typing import Any, Callable, Generic, Mapping, NoReturn, Protocol, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Mapping,
+    NoReturn,
+    Protocol,
+    Type,
+    TypeVar
+)
 
 from flask import has_request_context, request as flask_request
 from werkzeug.wrappers import Response as FlaskResponse
@@ -45,6 +54,14 @@ JsonViewFunction = ViewFunction[JsonResponse]
 FlaskViewFunction = ViewFunction[FlaskResponse]
 
 
+def get_request_urlparams() -> JsonObject:
+    """Get the JSON body of the current Flask request."""
+    if not has_request_context():
+        raise RuntimeError("Request context not available")
+    params = dict(flask_request.args or {})
+    return params
+
+
 def unpack_request_urlparams(vf: ViewFunction[R]) -> ViewFunction[R]:
     """Unpacks the request URL parameters into the view function."""
     @wraps(vf)
@@ -53,9 +70,19 @@ def unpack_request_urlparams(vf: ViewFunction[R]) -> ViewFunction[R]:
         into the inner view-function.
         """
         # Unpack URL parameters into kwargs
-        kwargs.update(flask_request.args or {})
+        kwargs.update(get_request_urlparams())
         return vf(*args, **kwargs)
     return unpackedvf
+
+
+def get_request_json() -> JsonObject:
+    """Get the JSON body of the current Flask request."""
+    if not has_request_context():
+        raise RuntimeError("Request context not available")
+    payload = flask_request.get_json(silent=True)
+    if payload is None:
+        raise JSONDecodeError("Invalid JSON", "", 0)
+    return payload
 
 
 def unpack_request_json(vf: ViewFunction) -> ViewFunction:
@@ -65,15 +92,66 @@ def unpack_request_json(vf: ViewFunction) -> ViewFunction:
         """The decorated ViewFunction that unpacks the request JSON body into
         the inner view-function.
         """
-        if not has_request_context():
-            raise RuntimeError("Request context not available")
-
-        payload = flask_request.get_json(silent=True)
-        if payload is None:
-            raise JSONDecodeError("Invalid JSON", "", 0)
-
-        return vf(*args, **kwargs, **payload)
+        payload = get_request_json()
+        kwargs.update(payload)
+        return vf(*args, **kwargs)
     return unpackedvf
+
+
+def validate_request_and_extract_json(
+        schema: Mapping[str, Type], *,
+        on_error: ErrorHandler,
+) -> JsonObject:
+    """Validate the request JSON body against the provided schema before
+    returning the payload.
+    """
+    try:
+        payload = get_request_json()
+        record.validate_keys(
+            payload,
+            schema,
+        )
+    except (KeyError, TypeError, JSONDecodeError) as err:
+        on_error(400, message=err.args[0])
+    else:
+        return payload
+
+
+def validate_request_and_extract_urlparams(
+        schema: Mapping[str, Type], *,
+        on_error: ErrorHandler,
+) -> JsonObject:
+    """Validate the request URL parameters against the provided schema before
+    returning the parameters.
+    """
+    try:
+        params = get_request_urlparams()
+        record.validate_keys(
+            params,
+            schema,
+        )
+    except (KeyError, TypeError) as err:
+        on_error(400, message=err.args[0])
+    else:
+        return params
+    
+
+def validate_json_response(
+        schema: Mapping[str, Type],
+        resp_json: Mapping[str, Type], *,
+        on_error: ErrorHandler,
+) -> None:
+    """Validate the response JSON body against the provided schema."""
+    if resp_json is None:
+        on_error(500, message="Response body must be a JSON object")
+        return
+    try:
+        record.validate_keys(
+            resp_json,
+            schema,
+        )
+    except (KeyError, TypeError) as err:
+        on_error(500, message=err.args[0])
 
 
 def validate(

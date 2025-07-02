@@ -11,7 +11,7 @@ from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import user
 from common.schema import Message, Response
-from common.validation.flask import JsonResponse, unpack_request_json, validate
+import common.validation.flask as flask_validation
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
@@ -36,28 +36,26 @@ def get_authenticated_user():
 
 
 @bp.post('/')
-@unpack_request_json
-@validate(
-    request=user.UserNew.__annotations__,
-    response=user.UserResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def new_user(*_, **data: Unpack[user.UserNew]) -> JsonResponse:
+def new_user() -> flask_validation.JsonResponse:
     """Create a new user."""
-    resp = users.new(**data)
+    payload = flask_validation.validate_request_and_extract_json(
+        user.UserNew.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = users.new(**payload)
     if resp.status == "ok":
+        flask_validation.validate_json_response(
+            resp.data,
+            user.UserResource.__annotations__,
+            on_error=api_errors.raise_api_error,
+        )
         return resp.data, 201
     else:
         return {"error": resp.message}, 400
 
 
 @bp.delete('/<string:user_id>')
-@unpack_request_json
-@validate(
-    response={"message": str},
-    on_error=api_errors.raise_api_error
-)
-def delete_user(user_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
+def delete_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease linter
     """Delete a user."""
     resp = users.delete(user_id)
     if resp.status == "ok":
@@ -67,42 +65,38 @@ def delete_user(user_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
 
 
 @bp.get('/<string:user_id>')
-@unpack_request_json
-@validate(
-    response=user.UserResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def get_user(user_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
+def get_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease linter
     """Get a single user's summary."""
     summary = {}
     record, _ = get_user_profile(user_id)
     summary['profile'] = record
+    flask_validation.validate_json_response(
+        summary,
+        user.UserResource.__annotations__,
+        on_error=api_errors.raise_api_error
+    )
     # future calls for other user info go here
     return summary, 200
 
 
 @bp.patch('/<string:user_id>')
-@unpack_request_json
-@validate(
-    request=user.UserUpdate.__annotations__,
-    response=user.UserResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-# *_ appease linter
-def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> JsonResponse:
+def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
     """Update a single user's profile."""
-    resp = users.update(user_id, **data)
+    payload = flask_validation.validate_request_and_extract_json(
+        user.UserUpdate.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = users.update(user_id, **payload)
+    flask_validation.validate_json_response(
+        resp.data,
+        user.UserResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 200
 
 
 @bp.get('/<string:user_id>/profile')
-@unpack_request_json
-@validate(
-    response=user.UserResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-# TODO: require client auth or token auth
-def get_user_profile(user_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
+def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
     """Get a single user's profile."""
     resp = users.get(user_id)
     match resp:
@@ -111,5 +105,10 @@ def get_user_profile(user_id: str, *_, **__) -> JsonResponse:  # *_ appease lint
                 message="User not found"
             )
         case Response(status="ok", message=Message.FOUND, data=record):
+            flask_validation.validate_json_response(
+                record,
+                user.UserResource.__annotations__,
+                on_error=api_errors.raise_api_error,
+            )
             return record, 200
     raise ValueError(f"Unexpected response: {resp}")

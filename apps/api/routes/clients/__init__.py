@@ -10,7 +10,7 @@ from flask import Blueprint, Flask
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import client, user
-from common.validation.flask import JsonResponse, unpack_request_json, validate
+import common.validation.flask as flask_validation
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -35,77 +35,72 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/')
-@unpack_request_json
-@validate(
-    request=client.ClientNew.__annotations__,
-    response=client.ClientResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-# *_ appease linter
-def new_client(*_: str, **data: Unpack[client.ClientNew]) -> JsonResponse:
+def new_client() -> flask_validation.JsonResponse:
     """Create a new client id and secret."""
-    if not POST:
-        return {"message": "Not implemented"}, 501
-    # TODO: authenticate
-    resp = clients.new(**data)  # raises APIError
+    payload = flask_validation.validate_request_and_extract_json(
+        client.ClientNew.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = clients.new(**payload)  # raises APIError
+    flask_validation.validate_json_response(
+        resp.data,
+        client.ClientResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 201
 
 
 @bp.delete('/<string:client_id>')
-@validate(
-    response={"message": str},
-    on_error=api_errors.raise_api_error
-)
-def delete_client(client_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
+def delete_client(client_id: str) -> flask_validation.JsonResponse:
     """Delete a client id and secret."""
-    if not DELETE:
-        return {"message": "Not implemented"}, 501
-    resp = clients.delete(client_id)  # raises APIError
+    resp = clients.delete(client_id)
+    flask_validation.validate_json_response(
+        resp.data,
+        {"message": str},
+        on_error=api_errors.raise_api_error,
+    )
     return {"message": "Client deleted"}, 200
 
 
 @bp.get('/<string:client_id>')
-@validate(
-    response=client.ClientResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def get_client_details(client_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
+def get_client_details(client_id: str) -> flask_validation.JsonResponse:
     """Get details of a client."""
-    if not GET:
-        return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = clients.get(client_id)  # raises APIError
+    resp = clients.get(client_id)
+    flask_validation.validate_json_response(
+        resp.data,
+        client.ClientResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 200
 
 
 @bp.patch('/<string:client_id>')
-@unpack_request_json
-@validate(
-    request=client.ClientUpdate.__annotations__,
-    response=client.ClientResource.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-# *_ appease linter
-def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> JsonResponse:
+def edit_client(client_id: str) -> flask_validation.JsonResponse:
     """Edit name, description, or admins of client."""
-    if not PATCH:
-        return {"message": "Not implemented"}, 501
-    # TODO: authenticate
-    resp = clients.update(client_id, **data)  # raises APIError
+    payload = flask_validation.validate_request_and_extract_json(
+        client.ClientUpdate.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+    resp = clients.update(client_id, **payload)
+    flask_validation.validate_json_response(
+        resp.data,
+        client.ClientResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 200
 
 
 @bp.post('/<string:client_id>/replace')
-@validate(
-    response=client.ClientReplaceResponse.__annotations__,
-    on_error=api_errors.raise_api_error
-)
-def revoke_client(client_id: str, *_, **__) -> JsonResponse:
+def revoke_client(client_id: str) -> flask_validation.JsonResponse:
     """Revoke a client id and secret, and reissue them."""
     if not POST:
         return {"message": "Not implemented"}, 501
-    # TODO: validate, authenticate
-    resp = clients.replace(client_id)  # raises APIError
+    resp = clients.replace(client_id)
+    flask_validation.validate_json_response(
+        resp.data,
+        client.ClientResource.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     return resp.data, 201
 
 # @bp.get('/<string:client_id>/apikeys')
