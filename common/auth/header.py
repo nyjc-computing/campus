@@ -40,9 +40,9 @@ class HttpAuthProperty(str):
         return tuple(decoded.split(sep))
 
     @classmethod
-    def from_credentials(cls, client_id: str, client_secret: str) -> "HttpAuthProperty":
+    def from_credentials(cls, c_id: str, c_secret: str) -> "HttpAuthProperty":
         """Create an HttpAuthProperty from client credentials."""
-        credentials = f"{client_id}:{client_secret}"
+        credentials = f"{c_id}:{c_secret}"
         encoded_credentials = b64decode(credentials.encode()).decode()
         return cls(f"Basic {encoded_credentials}")
 
@@ -63,10 +63,15 @@ class HttpHeaderDict(dict):
         return None
 
     @classmethod
-    def from_credentials(cls, client_id: str, client_secret: str) -> "HttpHeaderDict":
+    def from_credentials(cls, c_id: str, c_secret: str) -> "HttpHeaderDict":
         """Create an HTTP header dictionary from client credentials."""
-        auth_property = HttpAuthProperty.from_credentials(
-            client_id, client_secret)
+        auth_property = HttpAuthProperty.from_credentials(c_id, c_secret)
+        return cls({"Authorization": auth_property})
+    
+    @classmethod
+    def from_bearer_token(cls, token: str) -> "HttpHeaderDict":
+        """Create an HTTP header dictionary from a bearer token."""
+        auth_property = HttpAuthProperty.from_bearer_token(token)
         return cls({"Authorization": auth_property})
 
 
