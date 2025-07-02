@@ -1,4 +1,4 @@
-"""common.webauth.oauth2.authorization_code
+"""apps.common.webauth.oauth2.authorization_code
 
 OAuth2 Authorization Code flow configs and models.
 """

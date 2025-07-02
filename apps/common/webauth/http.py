@@ -1,4 +1,4 @@
-"""common.webauth.http
+"""apps.common.webauth.http
 
 HTTP aAuthentication configs and models.
 

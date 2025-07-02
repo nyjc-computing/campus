@@ -1,4 +1,4 @@
-"""common.webauth.credentials
+"""apps.common.webauth.credentials
 
 This module defines third party credentials storage models.
 

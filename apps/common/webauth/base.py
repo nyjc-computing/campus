@@ -1,4 +1,4 @@
-"""common.webauth.base
+"""apps.common.webauth.base
 
 Base configs and models for authentication flows.
 """

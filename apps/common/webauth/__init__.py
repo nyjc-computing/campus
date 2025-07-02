@@ -1,4 +1,4 @@
-"""common.webauth
+"""apps.common.webauth
 
 Web authentication models for the Campus API.
 
