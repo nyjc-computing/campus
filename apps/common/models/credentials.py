@@ -116,11 +116,11 @@ class UserCredentials:
                 500, message="Provider mismatch in credentials"
             )
         token_id = self.provider + ":" + credentials["user_id"]
-        credentials[PK] = token_id
         drum = get_drum()
         resp = drum.get_by_id(TABLE,  token_id)
         if resp.status == "ok" and resp.data:
             # If the record already exists, update it.
             drum.update_by_id(TABLE, token_id, credentials)
         else:
+            credentials[PK] = token_id
             drum.insert(TABLE, credentials)
