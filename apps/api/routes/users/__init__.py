@@ -53,7 +53,7 @@ def new_user() -> flask_validation.JsonResponse:
 
 
 @bp.delete('/<string:user_id>')
-def delete_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease linter
+def delete_user(user_id: str) -> flask_validation.JsonResponse:
     """Delete a user."""
     resp = users.delete(user_id)
     if resp.status == "ok":
@@ -63,7 +63,7 @@ def delete_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease li
 
 
 @bp.get('/<string:user_id>')
-def get_user(user_id: str) -> flask_validation.JsonResponse:  # *_ appease linter
+def get_user(user_id: str) -> flask_validation.JsonResponse:
     """Get a single user's summary."""
     summary = {}
     record, _ = get_user_profile(user_id)
