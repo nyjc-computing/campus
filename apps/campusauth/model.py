@@ -16,17 +16,6 @@ from flask.wrappers import Response
 from apps.common.models.client import Client
 from apps.common.webauth import http
 
-basicauth = http.HttpAuthenticationScheme(
-    provider="campus",
-    security_scheme="http",
-    scheme="basic",
-)
-bearerauth = http.HttpAuthenticationScheme(
-    provider="campus",
-    security_scheme="http",
-    scheme="bearer",
-)
-
 
 def authenticate_client() -> tuple[Response, int] | None:
     """Authenticate the client credentials using HTTP Basic Authentication.
@@ -39,13 +28,17 @@ def authenticate_client() -> tuple[Response, int] | None:
 
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
-    # Check for valid header
-    auth = basicauth.validate_header(request.headers)
-    client_id, client_secret = auth.credentials()
-
-    # Validate the client_id and client_secret
-    Client().validate_credentials(client_id, client_secret)
-
+    auth = (
+        http.HttpAuthenticationScheme
+        .from_header("campus", request.headers)
+        .get_auth(request.headers)
+    )
+    match auth.scheme:
+        case "basic":
+            client_id, client_secret = auth.credentials()
+            Client().validate_credentials(client_id, client_secret)
+        case "bearer":
+            return {"message": "Bearer auth not implemented"}, 501
 
 def client_auth_required(vf) -> Callable:
     """View function decorator to enforce HTTP Basic Authentication."""

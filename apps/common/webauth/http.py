@@ -31,11 +31,15 @@ class HttpAuthenticationScheme(SecurityScheme):
     """HTTP authentication for Basic and Bearer schemes."""
     scheme: HttpScheme
 
-    def __init__(self, provider: str, **kwargs: Unpack[HttpAuthConfigSchema]):
+    def __init__(
+            self,
+            provider: str,
+            **kwargs: Unpack[HttpAuthConfigSchema]
+    ):
         super().__init__(provider, **kwargs)
         self.scheme = kwargs["scheme"]
 
-    def validate_header(self, header: dict) -> HttpAuthProperty:
+    def get_auth(self, header: dict) -> HttpAuthProperty:
         """Validate the HTTP header for authentication.
 
         Raises an API error if the header is invalid or missing.
@@ -50,6 +54,23 @@ class HttpAuthenticationScheme(SecurityScheme):
         if auth.scheme != self.scheme:
             api_errors.raise_api_error(401)
         return auth
+
+    @classmethod
+    def from_header(
+            cls,
+            provider: str,
+            header: dict
+    ) -> "HttpAuthenticationScheme":
+        """Create an HTTP authentication scheme from an HTTP header."""
+        auth = HttpHeaderDict(header).get_auth()
+        if auth is None:
+            api_errors.raise_api_error(401)
+        match auth.scheme:
+            case "basic":
+                return cls(provider, security_scheme="http", scheme="basic")
+            case "bearer":
+                return cls(provider, security_scheme="http", scheme="bearer")
+        raise HttpSecurityError(f"Unsupported HTTP scheme: {auth.scheme}")
 
 
 __all__ = [
