@@ -19,6 +19,7 @@ from apps.common.webauth.oauth2.authorization_code import AuthorizationErrorCode
 from common.integration import config
 from common.services.vault import get_vault
 from common.validation.flask import unpack_request_urlparams
+import common.validation.flask as flask_validation
 
 PROVIDER = 'google'
 
@@ -74,9 +75,12 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.get('/authorize')
-@unpack_request_urlparams
-def authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
+def authorize() -> Response:
     """Redirect to Google OAuth authorization endpoint."""
+    params = flask_validation.validate_request_and_extract_urlparams(
+        AuthorizeRequestSchema.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     session = oauth2.create_session(
         client_id=vault.get('CLIENT_ID'),
         scopes=oauth2.scopes,
@@ -91,9 +95,12 @@ def authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
     return redirect(authorization_url)
 
 @bp.get('/callback')
-@unpack_request_urlparams
-def callback(*_, **params: Unpack[Callback]) -> Response:
+def callback() -> Response:
     """Handle a Google OAuth callback request."""
+    params = flask_validation.validate_request_and_extract_urlparams(
+        Callback.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
     if "error" in params:
         api_errors.raise_api_error(401, **params)
     elif "code" not in params or "state" not in params:
