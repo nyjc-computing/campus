@@ -43,10 +43,8 @@ def authenticate_client() -> tuple[Response, int] | None:
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
     # Check for valid header
-    basicauth.validate_header(request.headers)  # type: ignore[call-arg]
-    auth_header = HttpHeaderDict(request.headers).get_auth()
-    assert auth_header
-    client_id, client_secret = auth_header.credentials()
+    auth = basicauth.validate_header(request.headers)
+    client_id, client_secret = auth.credentials()
 
     # Validate the client_id and client_secret
     client_model = Client()
