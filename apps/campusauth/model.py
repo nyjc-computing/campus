@@ -14,7 +14,7 @@ from flask import request
 from flask.wrappers import Response
 
 from apps.common.models.client import Client
-from common.webauth import http, oauth2
+from apps.common.webauth import http, oauth2
 
 
 basicauth = http.HttpAuthenticationScheme(
