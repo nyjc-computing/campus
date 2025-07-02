@@ -13,8 +13,11 @@ from typing import Callable
 from flask import request
 from flask.wrappers import Response
 
+from apps import ctx
 from apps.common.models.client import Client
 from apps.common.webauth import http
+
+clients = Client()
 
 
 def authenticate_client() -> tuple[Response, int] | None:
@@ -36,7 +39,8 @@ def authenticate_client() -> tuple[Response, int] | None:
     match auth.scheme:
         case "basic":
             client_id, client_secret = auth.credentials()
-            Client().validate_credentials(client_id, client_secret)
+            clients.validate_credentials(client_id, client_secret)
+            ctx.client = clients.get(client_id)
         case "bearer":
             return {"message": "Bearer auth not implemented"}, 501
 
@@ -49,5 +53,4 @@ def client_auth_required(vf) -> Callable:
         is successful.
         """
         return authenticate_client() or vf(*args, **kwargs)
-
-    return vf
+    return authenticatedvf
