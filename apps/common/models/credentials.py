@@ -17,6 +17,24 @@ from common.schema import CampusID
 TABLE = "credentials"
 
 
+class ClientCredentialsSchema(TypedDict):
+    """TokenCredentials type for storing access and refresh tokens."""
+    id: NotRequired[str]  # Primary key, only used internally
+    provider: NotRequired[str]  # added by ClientCredentials
+    client_id: CampusID  # must be provided
+    issued_at: NotRequired[int]  # Timestamp of when the token was issued
+    token: TokenResponseSchema
+
+
+class UserCredentialsSchema(TypedDict):
+    """TokenCredentials type for storing access and refresh tokens."""
+    id: NotRequired[str]  # Primary key, only used internally
+    provider: NotRequired[str]  # added by UserCredentials
+    user_id: CampusID  # must be provided
+    issued_at: NotRequired[int]  # Timestamp of when the token was issued
+    token: TokenResponseSchema
+
+
 class ClientCredentials:
     """Model for client credentials.
 
@@ -57,15 +75,6 @@ class ClientCredentials:
             drum.update_by_id(TABLE, credentials[PK], credentials)
         else:
             drum.insert(TABLE, credentials)
-
-
-class UserCredentialsSchema(TypedDict):
-    """TokenCredentials type for storing access and refresh tokens."""
-    id: NotRequired[str]  # Primary key, only used internally
-    provider: NotRequired[str]  # added by UserCredentials
-    user_id: CampusID  # must be provided
-    issued_at: NotRequired[int]  # Timestamp of when the token was issued
-    token: TokenResponseSchema
 
 
 class UserCredentials:
