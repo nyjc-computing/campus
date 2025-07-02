@@ -10,7 +10,6 @@ Credentials are assumed to be issued by a provider.
 from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
-from apps.common.webauth.http import HttpScheme
 from apps.common.webauth.oauth2.authorization_code import TokenResponseSchema
 from common.drum.mongodb import get_drum, PK
 from common.schema import CampusID
