@@ -227,7 +227,7 @@ class OAuth2AuthorizationCodeSession:
             self,
             code: str,
             client_secret: str,
-    ) -> AuthorizationResponseSchema | AuthorizationErrorResponseSchema:
+    ) -> TokenResponseSchema | AuthorizationErrorResponseSchema:
         """Exchange authorization code for access token."""
         params = {
             "grant_type": "authorization_code",
@@ -249,12 +249,12 @@ class OAuth2AuthorizationCodeSession:
                 "Failed to exchange code for token"
             ) from err
         else:
-            if "code" in body:
-                return AuthorizationResponseSchema(**body)
+            if "token_type" in body:
+                return TokenResponseSchema(**body)
             if "error" in body:
                 return AuthorizationErrorResponseSchema(**body)
             raise OAuth2SecurityError(
-                "Invalid response from token endpoint, missing 'code' or 'error'."
+                "Invalid response from token endpoint, missing 'token_type' or 'error'."
             )
 
     def get_authorization_url(self, **additional_params: str) -> str:
