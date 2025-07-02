@@ -41,6 +41,10 @@ class HttpAuthenticationScheme(SecurityScheme):
         """Validate the HTTP header for authentication.
 
         Raises an API error if the header is invalid or missing.
+
+        Returns:
+            HttpHeaderDict: The HTTP header dictionary containing the
+            authentication information.
         """
         auth = HttpHeaderDict(header).get_auth()
         if auth is None:

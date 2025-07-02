@@ -32,7 +32,7 @@ bearerauth = http.HttpAuthenticationScheme(
 
 
 def authenticate_client() -> tuple[Response, int] | None:
-    """Authenticate the client using HTTP Basic Authentication.
+    """Authenticate the client credentials using HTTP Basic Authentication.
 
     This function is meant to be used with Flask.before_request
     to enforce authentication for all routes in the blueprint.
