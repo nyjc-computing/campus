@@ -40,7 +40,8 @@ class SecurityScheme(Protocol):
     def from_json(
             cls: Type[S],
             data: IntegrationConfigSchema,
-            security: Security
+            security: Security,
+            **override_config
         ) -> S:
         """Instantiate a security scheme from a JSON-like dictionary."""
         if security not in data["security"]:
@@ -49,6 +50,7 @@ class SecurityScheme(Protocol):
             )
         provider = data["provider"]
         security_config = data["security"][security]
+        security_config.update(override_config)  # type: ignore[typeddict-item]
         return cls(provider, **security_config)
 
 
