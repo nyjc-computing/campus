@@ -10,7 +10,7 @@ from flask import Blueprint, Flask
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import client, user
-from common.validation.flask import FlaskResponse, unpack_request_json, validate
+from common.validation.flask import JsonResponse, unpack_request_json, validate
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -42,7 +42,7 @@ def init_app(app: Flask | Blueprint) -> None:
     on_error=api_errors.raise_api_error
 )
 # *_ appease linter
-def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:
+def new_client(*_: str, **data: Unpack[client.ClientNew]) -> JsonResponse:
     """Create a new client id and secret."""
     if not POST:
         return {"message": "Not implemented"}, 501
@@ -56,7 +56,7 @@ def new_client(*_: str, **data: Unpack[client.ClientNew]) -> FlaskResponse:
     response={"message": str},
     on_error=api_errors.raise_api_error
 )
-def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
+def delete_client(client_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
     """Delete a client id and secret."""
     if not DELETE:
         return {"message": "Not implemented"}, 501
@@ -69,7 +69,7 @@ def delete_client(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease lint
     response=client.ClientResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
+def get_client_details(client_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
     """Get details of a client."""
     if not GET:
         return {"message": "Not implemented"}, 501
@@ -86,7 +86,7 @@ def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease
     on_error=api_errors.raise_api_error
 )
 # *_ appease linter
-def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> FlaskResponse:
+def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> JsonResponse:
     """Edit name, description, or admins of client."""
     if not PATCH:
         return {"message": "Not implemented"}, 501
@@ -100,7 +100,7 @@ def edit_client(client_id: str, *_, **data: Unpack[client.ClientUpdate]) -> Flas
     response=client.ClientReplaceResponse.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def revoke_client(client_id: str, *_, **__) -> FlaskResponse:
+def revoke_client(client_id: str, *_, **__) -> JsonResponse:
     """Revoke a client id and secret, and reissue them."""
     if not POST:
         return {"message": "Not implemented"}, 501

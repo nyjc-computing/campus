@@ -11,7 +11,7 @@ from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import user
 from common.schema import Message, Response
-from common.validation.flask import FlaskResponse, unpack_request_json, validate
+from common.validation.flask import JsonResponse, unpack_request_json, validate
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
@@ -42,7 +42,7 @@ def get_authenticated_user():
     response=user.UserResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
+def new_user(*_, **data: Unpack[user.UserNew]) -> JsonResponse:
     """Create a new user."""
     resp = users.new(**data)
     if resp.status == "ok":
@@ -57,7 +57,7 @@ def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
     response={"message": str},
     on_error=api_errors.raise_api_error
 )
-def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
+def delete_user(user_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
     """Delete a user."""
     resp = users.delete(user_id)
     if resp.status == "ok":
@@ -72,7 +72,7 @@ def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     response=user.UserResource.__annotations__,
     on_error=api_errors.raise_api_error
 )
-def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
+def get_user(user_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
     """Get a single user's summary."""
     summary = {}
     record, _ = get_user_profile(user_id)
@@ -89,7 +89,7 @@ def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
     on_error=api_errors.raise_api_error
 )
 # *_ appease linter
-def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> FlaskResponse:
+def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> JsonResponse:
     """Update a single user's profile."""
     resp = users.update(user_id, **data)
     return resp.data, 200
@@ -102,7 +102,7 @@ def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> Fla
     on_error=api_errors.raise_api_error
 )
 # TODO: require client auth or token auth
-def get_user_profile(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
+def get_user_profile(user_id: str, *_, **__) -> JsonResponse:  # *_ appease linter
     """Get a single user's profile."""
     resp = users.get(user_id)
     match resp:

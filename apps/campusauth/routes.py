@@ -8,7 +8,7 @@ from typing import Unpack
 from flask import Blueprint, Flask
 
 from apps.common.errors import api_errors
-from common.validation.flask import FlaskResponse, unpack_request_json, validate
+from common.validation.flask import JsonResponse, unpack_request_json, validate
 
 # No url prefix because authentication endpoints are not only used by the API
 bp = Blueprint('campusauth', __name__, url_prefix='/')
@@ -22,7 +22,7 @@ def init_app(app: Flask | Blueprint) -> None:
 ## Campus authentication routes
 
 # @bp.post('/authorize')  # OAuth2 authorization endpoint for user consent and code grant
-# @unpack_request
+# @unpack_request_json
 # @validate(
 #     request=AuthorizeSchema.__annotations__,
 #     response={"message": str},
@@ -33,7 +33,7 @@ def init_app(app: Flask | Blueprint) -> None:
 #     return {"message": "Not implemented"}, 501
 
 # @bp.post('/token')  # OAuth2 token endpoint for exchanging authorization code for access token
-# @unpack_request
+# @unpack_request_json
 # @validate(
 #     request=TokenSchema.__annotations__,
 #     response={"message": str},
