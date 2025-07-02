@@ -33,13 +33,13 @@ class Session:
                 api_errors.raise_api_error(404, message="Session not found")
             case "ok":
                 record = resp.data
+                # Remove id primary key: only needed by the Drum interface.
                 assert record[PK] == record["state"]
                 del record[PK]
                 return record
-        raise AssertionError(f"Unexpected response: {resp}")
 
-    def store(self, session_id: CampusID, session: dict) -> None:
-        """Store an OAuth session with the given ID and data."""
+    def store(self, session: dict) -> None:
+        """Store an OAuth session."""
         # Add id primary key which is needed by the Drum interface.
-        session["id"] = session_id
+        session[PK] = session["state"]
         get_drum().insert(TABLE, session)

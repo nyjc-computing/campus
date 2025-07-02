@@ -282,10 +282,7 @@ class OAuth2AuthorizationCodeSession:
         This method should be implemented by subclasses to persist the session
         data, such as in a database or cache.
         """
-        Session().store(
-            session_id=self.state,
-            session=self.to_dict()
-        )
+        Session().store(session=self.to_dict())
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the session."""
