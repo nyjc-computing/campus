@@ -5,12 +5,14 @@ Common utility functions for validation of flask requests and responses.
 
 from functools import wraps
 from json import JSONDecodeError
-from typing import Any, Callable, Mapping, NoReturn, Protocol, Type
+from typing import Any, Callable, Generic, Mapping, NoReturn, Protocol, Type, TypeVar
 
 from flask import has_request_context, request as flask_request
+from werkzeug.wrappers import Response as FlaskResponse
 
 from common.validation import record
 
+R = TypeVar("R", covariant=True)
 # Only expecting strings or dicts
 JsonObject = dict[str, Any]
 StatusCode = int
@@ -18,7 +20,7 @@ ViewFunctionDecorator = Callable[["ViewFunction"], "ViewFunction"]
 # Actually, view functions may return a variety of return values which Flask is
 # able to handle
 # But Campus API sticks to JSON-serializable return values, with a status code
-FlaskResponse = tuple[dict[str, Any], StatusCode]
+JsonResponse = tuple[dict[str, Any], StatusCode]
 
 
 class ErrorHandler(Protocol):
@@ -32,23 +34,34 @@ class ErrorHandler(Protocol):
         ...
 
 
-class ViewFunction(Protocol):
-    """Define a ViewFunction as a function that takes arbitrary arguments and
-    returns what a Flask view function would return (for now, just a tuple
-    [JsonObject, StatusCode]
+class ViewFunction(Protocol, Generic[R]):
+    """A view function that takes arbitrary arguments and returns a response.
     """
-    def __call__(self, *args: str, **kwargs) -> FlaskResponse:
-        """A view function returns a Flask response"""
+    def __call__(self, *args: str, **kwargs) -> R:
         ...
 
 
-def unpack_request_json(vf: ViewFunction) -> ViewFunction:
-    """Unpacks the request JSON body into the view function.
+JsonViewFunction = ViewFunction[JsonResponse]
+FlaskViewFunction = ViewFunction[FlaskResponse]
 
-    This is a helper function to be used in the decorator.
-    """
+
+def unpack_request_urlparams(vf: ViewFunction[R]) -> ViewFunction[R]:
+    """Unpacks the request URL parameters into the view function."""
     @wraps(vf)
-    def vfdecorator(*args: str, **kwargs) -> FlaskResponse:
+    def unpackedvf(*args: str, **kwargs) -> R:
+        """The decorated ViewFunction that unpacks the request URL parameters
+        into the inner view-function.
+        """
+        # Unpack URL parameters into kwargs
+        kwargs.update(flask_request.view_args or {})
+        return vf(*args, **kwargs)
+    return unpackedvf
+
+
+def unpack_request_json(vf: ViewFunction) -> ViewFunction:
+    """Unpacks the request JSON body into the view function."""
+    @wraps(vf)
+    def unpackedvf(*args: str, **kwargs) -> JsonResponse:
         """The decorated ViewFunction that unpacks the request JSON body into
         the inner view-function.
         """
@@ -60,7 +73,7 @@ def unpack_request_json(vf: ViewFunction) -> ViewFunction:
             raise JSONDecodeError("Invalid JSON", "", 0)
 
         return vf(*args, **kwargs, **payload)
-    return vfdecorator
+    return unpackedvf
 
 
 def validate(
@@ -89,7 +102,7 @@ def validate(
         """
         # TODO: provide helpful validation hints
         @wraps(vf)
-        def validatedvf(*args: str, **payload) -> FlaskResponse:
+        def validatedvf(*args: str, **payload) -> JsonResponse:
             """The decorated ValidatedViewFunction that unpacks the response
             JSON body into the inner view-function.
             """
