@@ -11,7 +11,7 @@ from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import user
 from common.schema import Message, Response
-from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.validation.flask import FlaskResponse, unpack_request_json, validate
 
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
@@ -36,7 +36,7 @@ def get_authenticated_user():
 
 
 @bp.post('/')
-@unpack_request
+@unpack_request_json
 @validate(
     request=user.UserNew.__annotations__,
     response=user.UserResource.__annotations__,
@@ -52,7 +52,7 @@ def new_user(*_, **data: Unpack[user.UserNew]) -> FlaskResponse:
 
 
 @bp.delete('/<string:user_id>')
-@unpack_request
+@unpack_request_json
 @validate(
     response={"message": str},
     on_error=api_errors.raise_api_error
@@ -67,7 +67,7 @@ def delete_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
 
 
 @bp.get('/<string:user_id>')
-@unpack_request
+@unpack_request_json
 @validate(
     response=user.UserResource.__annotations__,
     on_error=api_errors.raise_api_error
@@ -82,7 +82,7 @@ def get_user(user_id: str, *_, **__) -> FlaskResponse:  # *_ appease linter
 
 
 @bp.patch('/<string:user_id>')
-@unpack_request
+@unpack_request_json
 @validate(
     request=user.UserUpdate.__annotations__,
     response=user.UserResource.__annotations__,
@@ -96,7 +96,7 @@ def patch_user_profile(user_id: str, *_, **data: Unpack[user.UserUpdate]) -> Fla
 
 
 @bp.get('/<string:user_id>/profile')
-@unpack_request
+@unpack_request_json
 @validate(
     response=user.UserResource.__annotations__,
     on_error=api_errors.raise_api_error

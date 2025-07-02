@@ -42,7 +42,7 @@ class ViewFunction(Protocol):
         ...
 
 
-def unpack_request(vf: ViewFunction) -> ViewFunction:
+def unpack_request_json(vf: ViewFunction) -> ViewFunction:
     """Unpacks the request JSON body into the view function.
 
     This is a helper function to be used in the decorator.

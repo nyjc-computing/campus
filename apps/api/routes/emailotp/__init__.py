@@ -11,7 +11,7 @@ from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import otp
 from common.services.email import create_email_sender
-from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.validation.flask import FlaskResponse, unpack_request_json, validate
 
 from . import template
 
@@ -32,7 +32,7 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/request')
-@unpack_request
+@unpack_request_json
 @validate(
     request=otp.OTPRequest.__annotations__,
     response={"message": str},
@@ -57,7 +57,7 @@ def request_otp(*_, **data: Unpack[otp.OTPRequest]) -> FlaskResponse:
     return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
-@unpack_request
+@unpack_request_json
 @validate(
     request=otp.OTPVerify.__annotations__,
     response={"message": str},

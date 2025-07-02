@@ -8,7 +8,7 @@ from typing import Unpack
 from flask import Blueprint, Flask
 
 from apps.common.errors import api_errors
-from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.validation.flask import FlaskResponse, unpack_request_json, validate
 
 # No url prefix because authentication endpoints are not only used by the API
 bp = Blueprint('campusauth', __name__, url_prefix='/')

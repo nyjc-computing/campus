@@ -10,7 +10,7 @@ from flask import Blueprint, Flask
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import circle
-from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.validation.flask import FlaskResponse, unpack_request_json, validate
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')
 bp.before_request(authenticate_client)
@@ -27,7 +27,7 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/')
-@unpack_request
+@unpack_request_json
 @validate(
     request=circle.CircleNew.__annotations__,
     response=circle.CircleResource.__annotations__,
@@ -61,7 +61,7 @@ def get_circle_details(circle_id: str, *_, **__) -> FlaskResponse:
     return resp.data, 200
 
 @bp.patch('/<string:circle_id>')
-@unpack_request
+@unpack_request_json
 @validate(
     request=circle.CircleUpdate.__annotations__,
     response=circle.CircleResource.__annotations__,

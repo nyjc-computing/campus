@@ -10,7 +10,7 @@ from flask import Blueprint, Flask
 from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import client, user
-from common.validation.flask import FlaskResponse, unpack_request, validate
+from common.validation.flask import FlaskResponse, unpack_request_json, validate
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
@@ -35,7 +35,7 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/')
-@unpack_request
+@unpack_request_json
 @validate(
     request=client.ClientNew.__annotations__,
     response=client.ClientResource.__annotations__,
@@ -79,7 +79,7 @@ def get_client_details(client_id: str, *_, **__) -> FlaskResponse:  # *_ appease
 
 
 @bp.patch('/<string:client_id>')
-@unpack_request
+@unpack_request_json
 @validate(
     request=client.ClientUpdate.__annotations__,
     response=client.ClientResource.__annotations__,
