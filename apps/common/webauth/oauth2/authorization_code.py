@@ -303,6 +303,7 @@ class OAuth2AuthorizationCodeSession:
             "response_type": self.response_type,
             "scopes": self.scopes,
             "state": self.state,
+            "target": self.target,
         }
 
 

@@ -74,8 +74,6 @@ def init_app(app: Flask | Blueprint) -> None:
 @unpack_request_urlparams
 def authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
     """Redirect to Google OAuth authorization endpoint."""
-    if "target" not in params:
-        api_errors.raise_api_error(400, error="Missing target parameter")
     session = oauth2.create_session(
         client_id=vault.get('CLIENT_ID'),
         scopes=oauth2.scopes,
