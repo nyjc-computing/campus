@@ -13,7 +13,7 @@ def now() -> datetime:
     """Get the current time in UTC."""
     return datetime.now(UTC)
 
-def after(time: datetime | None, **delta) -> datetime:
+def after(time: datetime | None = None, **delta) -> datetime:
     """Create an expiry timestamp at a given delta after time.
 
     If time is not specified, defaults to the current time.
