@@ -254,7 +254,7 @@ class OAuth2AuthorizationCodeSession:
                 "Invalid response from token endpoint, missing 'code' or 'error'."
             )
 
-    def get_authorization_url(self, **additional_params: dict[str, str]) -> str:
+    def get_authorization_url(self, **additional_params: str) -> str:
         """Return the authorization URL for redirect, with provider-specific
         params.
 
