@@ -18,6 +18,7 @@ from apps.common.webauth.oauth2 import (
 from apps.common.webauth.oauth2.authorization_code import AuthorizationErrorCode
 from common.integration import config
 from common.services.vault import get_vault
+from common.validation.flask import unpack_request_urlparams
 
 PROVIDER = 'google'
 
@@ -70,7 +71,8 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.get('/authorize')
-def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
+@unpack_request_urlparams
+def authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
     """Redirect to Google OAuth authorization endpoint."""
     if "target" not in params:
         api_errors.raise_api_error(400, error="Missing target parameter")
@@ -87,6 +89,8 @@ def google_authorize(*_, **params: Unpack[AuthorizeRequestSchema]) -> Response:
     return redirect(session.get_authorization_url(**extra_params))
 
 @bp.get('/callback')
+@unpack_request_urlparams
+def callback(*_, **params: Unpack[Callback]) -> Response:
     """Handle a Google OAuth callback request."""
     if "error" in params:
         api_errors.raise_api_error(401, **params)
