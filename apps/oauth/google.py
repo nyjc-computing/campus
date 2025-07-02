@@ -125,6 +125,7 @@ def callback(*_, **params: Unpack[Callback]) -> Response:
     # Store the access token in the user's credentials
     user_credentials.store(
         user_id=user_info["email"],
+        provider=PROVIDER,
         token=token_response
     )
 
