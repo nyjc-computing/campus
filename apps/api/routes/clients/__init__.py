@@ -12,13 +12,8 @@ from apps.campusauth.model import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import client, user
 
-
-# Feature flags
-GET = True
-PATCH = False
-POST = False
-PUT = False
-DELETE = False
+bp = Blueprint('clients', __name__, url_prefix='/clients')
+bp.before_request(authenticate_client)
 
 # Database Models
 clients = client.Client()
