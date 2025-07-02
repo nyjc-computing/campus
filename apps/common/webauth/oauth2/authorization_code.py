@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 import requests
 
 from apps.common.models.session import Session
+from apps.common.webauth.http import HttpScheme
 from common.utils import uid, utc_time
 
 from .base import (
@@ -77,6 +78,15 @@ class TokenRequestSchema(TypedDict, total=False):
     redirect_uri: Url  # Same redirect URI used in authorization request
     client_id: Required[str]  # Client ID of the OAuth2 application
     client_secret: str  # Client secret of the OAuth2 application
+
+
+class TokenResponseSchema(TypedDict):
+    """Token schema as used by most providers."""
+    token_type: HttpScheme
+    scope: str
+    access_token: str
+    refresh_token: NotRequired[str]
+    expires_in: NotRequired[int]  # Lifetime of the access token in seconds
 
 
 class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
