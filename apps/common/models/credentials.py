@@ -121,11 +121,9 @@ class UserCredentials:
 
     def store(self, **credentials: Unpack[UserCredentialsSchema]) -> None:
         """Store user credentials with the given data."""
+        assert credentials.get("provider", self.provider) == self.provider, \
+            "Provider mismatch in credentials"
         # Add id primary key which is needed by the Drum interface.
-        if credentials.get("provider", self.provider) != self.provider:
-            api_errors.raise_api_error(
-                500, message="Provider mismatch in credentials"
-            )
         token_id = self.provider + ":" + credentials["user_id"]
         drum = get_drum()
         resp = drum.get_by_id(TABLE,  token_id)
