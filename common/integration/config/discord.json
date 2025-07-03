@@ -13,7 +13,6 @@
     "oauth2": {
       "security_scheme": "oauth2",
       "flow": "authorizationCode",
-      "redirect_uri": "http://127.0.0.1:5000/oauth/discord/callback", 
       "scopes": [
         "identify",
         "email",

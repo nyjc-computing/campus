@@ -257,7 +257,7 @@ class OAuth2AuthorizationCodeSession:
                 "Invalid response from token endpoint, missing 'token_type' or 'error'."
             )
 
-    def get_authorization_url(self, **additional_params: str) -> str:
+    def get_authorization_url(self, redirect_uri: Url, **additional_params: str) -> str:
         """Return the authorization URL for redirect, with provider-specific
         params.
 
@@ -267,7 +267,7 @@ class OAuth2AuthorizationCodeSession:
         params = {
             "client_id": self.client_id,
             # TODO: Add base URL to redirect_uri
-            "redirect_uri": self.provider.redirect_uri,
+            "redirect_uri": redirect_uri,
             "response_type": self.response_type,
             "scope": " ".join(self.scopes),
             "state": self.state,
