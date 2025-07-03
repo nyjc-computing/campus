@@ -20,7 +20,7 @@ from apps.common.webauth import http
 clients = Client()
 
 
-def authenticate_client() -> tuple[Response, int] | None:
+def authenticate_client() -> tuple[dict[str, str], int] | None:
     """Authenticate the client credentials using HTTP Basic Authentication.
 
     This function is meant to be used with Flask.before_request
