@@ -17,7 +17,7 @@ from apps.common.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
 from apps.common.webauth.token import CredentialToken
-from common.integration import config
+from common import integration
 from common.services.vault import get_vault
 import common.validation.flask as flask_validation
 from common.utils import utc_time
@@ -28,7 +28,7 @@ google_user_credentials = UserCredentials(PROVIDER)
 
 vault = get_vault(PROVIDER)
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
-oauthconfig = config.get_config(PROVIDER)
+oauthconfig = integration.get_config(PROVIDER)
 oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
 
 

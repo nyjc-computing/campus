@@ -12,7 +12,7 @@ from common.drum.mongodb import get_db
 
 from . import config
 
-from .config import Security, SecurityConfigSchema
+from .config import Security, SecurityConfigSchema, get_config
 
 Url = str
 
