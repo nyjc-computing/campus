@@ -28,7 +28,12 @@ class HttpAuthConfigSchema(SecurityConfigSchema):
 
 
 class HttpAuthenticationScheme(SecurityScheme):
-    """HTTP authentication for Basic and Bearer schemes."""
+    """HTTP authentication for Basic and Bearer schemes.
+    
+    This class provides methods to:
+    - retrieve the authentication credentials from an HTTP header
+    - validate the credentials against the configured scheme
+    """
     scheme: HttpScheme
 
     def __init__(
