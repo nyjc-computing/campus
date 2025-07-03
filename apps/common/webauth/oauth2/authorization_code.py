@@ -10,6 +10,7 @@ import requests
 from flask import session
 
 from apps.common.webauth.http import HttpScheme
+from apps.common.webauth.token import CredentialToken
 from common.utils import uid, utc_time
 
 from .base import (
@@ -130,10 +131,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             client_id=client_id,
         )
 
-    def retrieve_session(
-            self,
-            state: str
-    ) -> "OAuth2AuthorizationCodeSession":
+    def retrieve_session(self) -> "OAuth2AuthorizationCodeSession":
         """Retrieve an existing OAuth2 Authorization Code flow session by state."""
         return OAuth2AuthorizationCodeSession(
             client_id=session["client_id"],
@@ -142,6 +140,71 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             state=session["state"],
             provider=self
         )
+
+    def refresh_token(
+            self,
+            token: CredentialToken,
+            *,
+            auth: tuple[str, str] | None = None,
+            client_id: str | None = None,
+            client_secret: str | None = None,
+            force=False
+    ) -> None:
+        """Refresh the access token using the refresh token.
+
+        Args:
+            token: The CredentialToken instance to refresh.
+            auth: Optional tuple of (username, password) for basic auth.
+                Used by Discord
+            client_id, client_secret: Client ID and secret.
+                Used by Google, GitHub, etc.
+            force: If True, force refresh even if the token is not expired.
+
+        auth or client_id/client_secret must be provided, but not both.
+        """
+        if not token.is_expired() and not force:
+            return
+        assert "refresh_token" in token.token, "Refresh token not present"
+        match (auth, client_id, client_secret):
+            case (auth, None, None):
+                resp = requests.post(
+                    url=self.token_url,
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": token.token["refresh_token"],
+                    },
+                    headers=self.headers,
+                    auth=auth,
+                    timeout=TIMEOUT
+                )
+            case (None, client_id, client_secret):
+                # Use client_id and client_secret for token refresh
+                resp = requests.post(
+                    url=self.token_url,
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": token.token["refresh_token"],
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                    },
+                    headers=self.headers,
+                    timeout=TIMEOUT
+                )
+            case (None, None, None):
+                raise ValueError("Missing auth and client_id/client_secret")
+            case (_, _, _):
+                raise ValueError(
+                    "Provide only auth or client_id/client_secret, not both"
+                )
+            case _:
+                raise ValueError(
+                    "Invalid combination of auth, client_id, and client_secret"
+                )
+        try:
+            body = resp.json()
+        except Exception as err:
+            raise OAuth2SecurityError("Failed to refresh token") from err
+        token.refresh_from_response(body)
 
 
 class OAuth2AuthorizationCodeSession:
@@ -234,7 +297,6 @@ class OAuth2AuthorizationCodeSession:
         """
         params = {
             "client_id": self.client_id,
-            # TODO: Add base URL to redirect_uri
             "redirect_uri": redirect_uri,
             "response_type": self.response_type,
             "scope": " ".join(self.scopes),
