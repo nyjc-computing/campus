@@ -22,7 +22,7 @@ def get_config(provider: str) -> IntegrationConfigSchema:
     os.chdir(os.path.dirname(__file__))
     # Load the provider's config file
     try:
-        with open(f"{provider}.json", "r", encoding="utf-8") as f:
+        with open(f"{provider}/api.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError as err:
         raise ValueError(
