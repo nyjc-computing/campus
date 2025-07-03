@@ -7,7 +7,7 @@ import os
 from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
-from apps.common.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord
 from common import devops
 from common.drum import DrumResponse
 from common.schema import Message, Response

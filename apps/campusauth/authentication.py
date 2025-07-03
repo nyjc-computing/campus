@@ -13,14 +13,14 @@ from typing import Callable
 from flask import request
 from flask.wrappers import Response
 
-from apps import ctx
+from apps.campusauth.context import ctx
 from apps.common.models.client import Client
 from apps.common.webauth import http
 
 clients = Client()
 
 
-def authenticate_client() -> tuple[Response, int] | None:
+def authenticate_client() -> tuple[dict[str, str], int] | None:
     """Authenticate the client credentials using HTTP Basic Authentication.
 
     This function is meant to be used with Flask.before_request

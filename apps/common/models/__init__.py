@@ -97,12 +97,12 @@ resources.
 
 from . import (
     client,
-    otp,
+    emailotp,
     user
 )
 
 __all__ = [
     "client",
-    "otp",
+    "emailotp",
     "user"
 ]

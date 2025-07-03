@@ -1,15 +1,16 @@
 """apps.common.webauth.oauth2.authorization_code
 
-OAuth2 Authorization Code flow configs and models.
+OAuth2 Authorization Code flow schemas and models.
 """
 
 from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
 import requests
+from flask import session
 
-from apps.common.models.session import Session
 from apps.common.webauth.http import HttpScheme
+from apps.common.webauth.token import CredentialToken
 from common.utils import uid, utc_time
 
 from .base import (
@@ -19,15 +20,6 @@ from .base import (
 )
 
 Url = str
-AuthorizationErrorCode = Literal[
-    "invalid_request",
-    "unauthorized_client",
-    "access_denied",
-    "unsupported_response_type",
-    "invalid_scope",
-    "server_error",
-    "temporarily_unavailable",
-]
 
 OAUTH_EXPIRY_MINUTES = 10  # Default expiry time for OAuth2 sessions in minutes
 TIMEOUT = 10  # Default timeout for requests in seconds
@@ -57,18 +49,6 @@ class AuthorizationResponseSchema(TypedDict, total=False):
     """
     code: str  # Authorization code received from the provider
     state: str  # State parameter for CSRF protection
-
-
-class AuthorizationErrorResponseSchema(TypedDict, total=False):
-    """Error response schema for OAuth2 Authorization Code flow.
-    Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
-
-    NotRequired fields will be filled in by redirect endpoint.
-    """
-    error: AuthorizationErrorCode
-    error_description: str  # Human-readable description of the error
-    error_uri: Url
-    state: str  # State parameter for CSRF protection, if provided
 
 
 class TokenRequestSchema(TypedDict, total=False):
@@ -151,12 +131,8 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             client_id=client_id,
         )
 
-    def retrieve_session(
-            self,
-            state: str
-    ) -> "OAuth2AuthorizationCodeSession":
+    def retrieve_session(self) -> "OAuth2AuthorizationCodeSession":
         """Retrieve an existing OAuth2 Authorization Code flow session by state."""
-        session = Session().get(session_id=state)
         return OAuth2AuthorizationCodeSession(
             client_id=session["client_id"],
             scopes=session["scopes"],
@@ -164,6 +140,71 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             state=session["state"],
             provider=self
         )
+
+    def refresh_token(
+            self,
+            token: CredentialToken,
+            *,
+            auth: tuple[str, str] | None = None,
+            client_id: str | None = None,
+            client_secret: str | None = None,
+            force=False
+    ) -> None:
+        """Refresh the access token using the refresh token.
+
+        Args:
+            token: The CredentialToken instance to refresh.
+            auth: Optional tuple of (username, password) for basic auth.
+                Used by Discord
+            client_id, client_secret: Client ID and secret.
+                Used by Google, GitHub, etc.
+            force: If True, force refresh even if the token is not expired.
+
+        auth or client_id/client_secret must be provided, but not both.
+        """
+        if not token.is_expired() and not force:
+            return
+        assert "refresh_token" in token.token, "Refresh token not present"
+        match (auth, client_id, client_secret):
+            case (auth, None, None):
+                resp = requests.post(
+                    url=self.token_url,
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": token.token["refresh_token"],
+                    },
+                    headers=self.headers,
+                    auth=auth,
+                    timeout=TIMEOUT
+                )
+            case (None, client_id, client_secret):
+                # Use client_id and client_secret for token refresh
+                resp = requests.post(
+                    url=self.token_url,
+                    data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": token.token["refresh_token"],
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                    },
+                    headers=self.headers,
+                    timeout=TIMEOUT
+                )
+            case (None, None, None):
+                raise ValueError("Missing auth and client_id/client_secret")
+            case (_, _, _):
+                raise ValueError(
+                    "Provide only auth or client_id/client_secret, not both"
+                )
+            case _:
+                raise ValueError(
+                    "Invalid combination of auth, client_id, and client_secret"
+                )
+        try:
+            body = resp.json()
+        except Exception as err:
+            raise OAuth2SecurityError("Failed to refresh token") from err
+        token.refresh_from_response(body)
 
 
 class OAuth2AuthorizationCodeSession:
@@ -216,18 +257,15 @@ class OAuth2AuthorizationCodeSession:
         self.target = target
 
     def delete(self) -> None:
-        """Delete the session from the database or cache.
-
-        This method should be implemented by subclasses to remove the session
-        data, such as from a database or cache.
-        """
-        Session().delete(session_id=self.state)
+        """Delete the session from the database or cache."""
+        for key in self.to_dict():
+            del session[key]
 
     def exchange_code_for_token(
             self,
             code: str,
             client_secret: str,
-    ) -> TokenResponseSchema | AuthorizationErrorResponseSchema:
+    ) -> dict[str, Any]:
         """Exchange authorization code for access token."""
         params = {
             "grant_type": "authorization_code",
@@ -248,16 +286,9 @@ class OAuth2AuthorizationCodeSession:
             raise OAuth2SecurityError(
                 "Failed to exchange code for token"
             ) from err
-        else:
-            if "token_type" in body:
-                return TokenResponseSchema(**body)
-            if "error" in body:
-                return AuthorizationErrorResponseSchema(**body)
-            raise OAuth2SecurityError(
-                "Invalid response from token endpoint, missing 'token_type' or 'error'."
-            )
+        return body
 
-    def get_authorization_url(self, **additional_params: str) -> str:
+    def get_authorization_url(self, redirect_uri: Url, **additional_params: str) -> str:
         """Return the authorization URL for redirect, with provider-specific
         params.
 
@@ -266,8 +297,7 @@ class OAuth2AuthorizationCodeSession:
         """
         params = {
             "client_id": self.client_id,
-            # TODO: Add base URL to redirect_uri
-            "redirect_uri": self.provider.redirect_uri,
+            "redirect_uri": redirect_uri,
             "response_type": self.response_type,
             "scope": " ".join(self.scopes),
             "state": self.state,
@@ -292,7 +322,8 @@ class OAuth2AuthorizationCodeSession:
         This method should be implemented by subclasses to persist the session
         data, such as in a database or cache.
         """
-        Session().store(session=self.to_dict())
+        for key, value in self.to_dict().items():
+            session[key] = value
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the session."""

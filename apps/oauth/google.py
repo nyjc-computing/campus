@@ -5,9 +5,10 @@ Routes for Google OAuth2.
 Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 """
 
-from typing import NotRequired, Required, TypedDict, Unpack
+import os
+from typing import NotRequired, Required, TypedDict
 
-from flask import Blueprint, Flask, redirect
+from flask import Blueprint, Flask, redirect, url_for
 from werkzeug.wrappers import Response
 
 from apps.common.errors import api_errors
@@ -15,23 +16,20 @@ from apps.common.models.credentials import UserCredentials
 from apps.common.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
-from apps.common.webauth.oauth2.authorization_code import AuthorizationErrorCode
-from common.integration import config
+from apps.common.webauth.token import CredentialToken
+from common import integration
 from common.services.vault import get_vault
-from common.validation.flask import unpack_request_urlparams
 import common.validation.flask as flask_validation
+from common.utils import utc_time
 
 PROVIDER = 'google'
 
-user_credentials = UserCredentials(PROVIDER)
+google_user_credentials = UserCredentials(PROVIDER)
 
 vault = get_vault(PROVIDER)
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
-oauthconfig = config.get_config(PROVIDER)
-oauth2: OAuth2Flow = OAuth2Flow.from_json(
-    oauthconfig,
-    security="oauth2",
-)
+oauthconfig = integration.get_config(PROVIDER)
+oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
 
 
 class AuthorizeRequestSchema(TypedDict, total=False):
@@ -52,7 +50,7 @@ class Callback(TypedDict, total=False):
     This should be cast to either AuthorizationResponseSchema or
     AuthorizationErrorResponseSchema based on the presence of 'code' or 'error'.
     """
-    error: AuthorizationErrorCode
+    error: str
     code: str
     state: Required[str]
     error_description: str
@@ -60,7 +58,7 @@ class Callback(TypedDict, total=False):
     redirect_uri: Required[str]  # The URI to redirect to after authorization
 
 
-class TokenResponseSchema(TypedDict, total=False):
+class GoogleTokenResponseSchema(TypedDict):
     """Response schema for access token exchange."""
     access_token: str  # Access token issued by the OAuth2 provider
     token_type: str  # Type of the token (e.g., "Bearer")
@@ -77,64 +75,114 @@ def init_app(app: Flask | Blueprint) -> None:
 @bp.get('/authorize')
 def authorize() -> Response:
     """Redirect to Google OAuth authorization endpoint."""
+    # Requests to this endpoint are internal and should be strictly validated.
     params = flask_validation.validate_request_and_extract_urlparams(
         AuthorizeRequestSchema.__annotations__,
         on_error=api_errors.raise_api_error,
+        ignore_extra=False,
     )
+    # Store session with target URL
     session = oauth2.create_session(
         client_id=vault.get('CLIENT_ID'),
         scopes=oauth2.scopes,
-        target=params['target'],
+        target=params.pop('target'),
     )
     session.store()
-    if "login_hint" in params:
-        extra_params = {"login_hint": params["login_hint"]}
-    else:
-        extra_params = {}
-    authorization_url = session.get_authorization_url(**extra_params)
+    redirect_uri = os.environ['REDIRECT_URI']
+    authorization_url = session.get_authorization_url(
+        redirect_uri,
+        **params
+    )
     return redirect(authorization_url)
 
 @bp.get('/callback')
 def callback() -> Response:
     """Handle a Google OAuth callback request."""
+    # Requests to this endpoint are from Google, can be more loosely validated.
     params = flask_validation.validate_request_and_extract_urlparams(
         Callback.__annotations__,
         on_error=api_errors.raise_api_error,
+        ignore_extra=True,
     )
-    if "error" in params:
-        api_errors.raise_api_error(401, **params)
-    elif "code" not in params or "state" not in params:
-        api_errors.raise_api_error(400, **params)
-    session = oauth2.retrieve_session(params["state"])
-    token_response = session.exchange_code_for_token(
-        code=params["code"],
-        client_secret= vault.get('CLIENT_SECRET'),
+
+    # Retrive session stored in /authorize
+    # Exchange the authorization code for an access token.
+    match params:
+        case {"error": _}:
+            api_errors.raise_api_error(401, **params)
+        case {"code": code, "state": state}:
+            session = oauth2.retrieve_session()
+            if not session or session.state != state:
+                api_errors.raise_api_error(
+                    401,
+                    error="Invalid session state",
+                    message="The session state does not match the expected value."
+                )
+            token_response = session.exchange_code_for_token(
+                code=code,
+                client_secret= vault.get('CLIENT_SECRET'),
+            )
+        case _:
+            api_errors.raise_api_error(400, **params)
+
+    # Validate the token response
+    match token_response:
+        case {"error": "invalid_grant"}:
+            # Reference: https://developers.google.com/identity/protocols/oauth2/web-server#exchange-errors-invalid-grant
+            # TODO: display user-friendly error message before restarting flow
+            return redirect(url_for('authorize', target=session.target))
+        case {"error": _}:
+            # Handle other errors returned by the token exchange
+            api_errors.raise_api_error(400, **token_response)
+    flask_validation.validate_json_response(
+        schema=GoogleTokenResponseSchema.__annotations__,
+        resp_json=token_response,
+        on_error=api_errors.raise_api_error,
+        ignore_extra=True,
     )
-    if "error" in token_response:
-        api_errors.raise_api_error(400, **token_response)
 
     # Verify requested scopes were granted
-    assert "scope" in token_response, "Response missing scope"
-    granted_scopes = token_response["scope"].split(" ")
-    missing_scopes = set(session.scopes) - set(granted_scopes)
+    credentials = CredentialToken(provider=PROVIDER, **token_response)
+    missing_scopes = set(session.scopes) - set(credentials.scopes)
     if missing_scopes:
         api_errors.raise_api_error(
             403,
             error="Missing scopes",
             missing_scopes=list(missing_scopes),
-            granted_scopes=granted_scopes,
+            granted_scopes=credentials.scopes,
         )
-    assert "access_token" in token_response
-    user_info = oauth2.get_user_info(token_response["access_token"])
+    user_info = oauth2.get_user_info(credentials.access_token)
     if "error" in user_info:
         api_errors.raise_api_error(400, **user_info)
 
     # Store the access token in the user's credentials
-    user_credentials.store(
+    google_user_credentials.store(
         user_id=user_info["email"],
-        provider=PROVIDER,
-        token=token_response
+        issued_at=utc_time.now(),
+        token=credentials.token,
     )
 
     # Session cleanup is expected to be handled automatically
     return redirect(session.target)
+
+
+def get_valid_token(user_id: str) -> CredentialToken:
+    """Retrieve the user's Google OAuth token.
+
+    This function is not a flask view function.
+    """
+    record = google_user_credentials.get(user_id)
+    token = CredentialToken.from_dict(PROVIDER, record["token"])
+    if token.is_expired():
+        # token is refreshed in-place
+        oauth2.refresh_token(
+            token=token,
+            client_id=vault.get('CLIENT_ID'),
+            client_secret=vault.get('CLIENT_SECRET'),
+        )
+        google_user_credentials.store(
+            user_id=record["user_id"],
+            issued_at=utc_time.now(),
+            token=token.to_dict(),
+        )
+    return token

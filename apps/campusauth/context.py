@@ -13,6 +13,8 @@ from apps.common.models.credentials import (
 )
 from apps.common.models.user import UserResource
 
+__all__ = ["ctx"]
+
 
 class ContextError(Exception):
     """Error raised when the context is invalid."""
@@ -71,3 +73,6 @@ class CampusContext:
     def client_credentials(self, value: ClientCredentialsSchema):
         """Set the client credentials."""
         g.client_credentials = value
+
+
+ctx = CampusContext()

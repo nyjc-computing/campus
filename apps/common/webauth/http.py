@@ -1,6 +1,6 @@
 """apps.common.webauth.http
 
-HTTP aAuthentication configs and models.
+HTTP Authentication configs and models.
 
 The HTTP authentication scheme comprises two types of authentication:
 1. Basic Authentication: Uses a client_id and client_secret encoded in Base64.
@@ -10,7 +10,7 @@ The HTTP authentication scheme comprises two types of authentication:
 from typing import Literal, Unpack
 
 from apps.common.errors import api_errors
-from common.auth.header import HttpAuthProperty, HttpHeaderDict
+from apps.common.webauth.header import HttpAuthProperty, HttpHeaderDict
 from common.integration.config import SecurityConfigSchema
 
 from .base import SecurityError, SecurityScheme
@@ -28,16 +28,21 @@ class HttpAuthConfigSchema(SecurityConfigSchema):
 
 
 class HttpAuthenticationScheme(SecurityScheme):
-    """HTTP authentication for Basic and Bearer schemes."""
+    """HTTP authentication for Basic and Bearer schemes.
+    
+    This class provides methods to:
+    - retrieve the authentication credentials from an HTTP header
+    - validate the credentials against the configured scheme
+    """
     scheme: HttpScheme
 
     def __init__(
             self,
             provider: str,
-            **kwargs: Unpack[HttpAuthConfigSchema]
+            **config: Unpack[HttpAuthConfigSchema]
     ):
-        super().__init__(provider, **kwargs)
-        self.scheme = kwargs["scheme"]
+        super().__init__(provider, **config)
+        self.scheme = config["scheme"]
 
     def get_auth(self, header: dict) -> HttpAuthProperty:
         """Validate the HTTP header for authentication.
@@ -56,8 +61,7 @@ class HttpAuthenticationScheme(SecurityScheme):
         return auth
 
     @classmethod
-    def from_header(
-            cls,
+    def from_header(cls,
             provider: str,
             header: dict
     ) -> "HttpAuthenticationScheme":

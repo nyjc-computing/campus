@@ -13,7 +13,7 @@ def now() -> datetime:
     """Get the current time in UTC."""
     return datetime.now(UTC)
 
-def after(time: datetime | None, **delta) -> datetime:
+def after(time: datetime | None = None, **delta) -> datetime:
     """Create an expiry timestamp at a given delta after time.
 
     If time is not specified, defaults to the current time.
@@ -27,11 +27,12 @@ def after(time: datetime | None, **delta) -> datetime:
     else:
         return time
 
-def is_expired(ts: datetime | float, threshold: float | int = 1) -> bool:
+def is_expired(ts: datetime | float, *, from_time: datetime | None = None, threshold: float | int = 1) -> bool:
     """Check if a timestamp has expired (within threshold)"""
     # Convert to float timestamp
     ts = ts.timestamp() if isinstance(ts, datetime) else ts
-    return -threshold < now().timestamp() - ts < threshold
+    from_time = from_time or now()
+    return -threshold < from_time.timestamp() - ts < threshold
 
 def from_rfc3339(dtstr: str) -> datetime:
     """Parse an RFC3339 formatted string into a datetime object."""
