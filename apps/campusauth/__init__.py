@@ -9,9 +9,7 @@ from .authentication import (
     authenticate_client,
     client_auth_required
 )
-from .context import CampusContext
-
-ctx = CampusContext()
+from .context import ctx
 
 __all__ = [
     'create_app',
