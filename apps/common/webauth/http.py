@@ -1,6 +1,6 @@
 """apps.common.webauth.http
 
-HTTP aAuthentication configs and models.
+HTTP Authentication configs and models.
 
 The HTTP authentication scheme comprises two types of authentication:
 1. Basic Authentication: Uses a client_id and client_secret encoded in Base64.
@@ -10,7 +10,7 @@ The HTTP authentication scheme comprises two types of authentication:
 from typing import Literal, Unpack
 
 from apps.common.errors import api_errors
-from common.auth.header import HttpAuthProperty, HttpHeaderDict
+from apps.common.webauth.header import HttpAuthProperty, HttpHeaderDict
 from common.integration.config import SecurityConfigSchema
 
 from .base import SecurityError, SecurityScheme
