@@ -10,11 +10,15 @@ The OAuth2 security scheme comprises four flows:
    in Campus).
 """
 
-from .authorization_code import OAuth2AuthorizationCodeFlowScheme
+from .authorization_code import (
+    AuthorizationErrorCode,
+    OAuth2AuthorizationCodeFlowScheme
+)
 from .base import OAuth2FlowScheme
 
 
 __all__ = [
+    "AuthorizationErrorCode",
     "OAuth2FlowScheme",
     "OAuth2AuthorizationCodeFlowScheme",
 ]

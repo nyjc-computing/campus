@@ -14,9 +14,9 @@ from werkzeug.wrappers import Response
 from apps.common.errors import api_errors
 from apps.common.models.credentials import UserCredentials
 from apps.common.webauth.oauth2 import (
+    AuthorizationErrorCode,
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
-from apps.common.webauth.oauth2.authorization_code import AuthorizationErrorCode
 from common.integration import config
 from common.services.vault import get_vault
 import common.validation.flask as flask_validation

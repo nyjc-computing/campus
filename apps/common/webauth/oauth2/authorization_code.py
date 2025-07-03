@@ -1,6 +1,6 @@
 """apps.common.webauth.oauth2.authorization_code
 
-OAuth2 Authorization Code flow configs and models.
+OAuth2 Authorization Code flow schemas and models.
 """
 
 from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
