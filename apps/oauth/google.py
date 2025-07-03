@@ -74,9 +74,11 @@ def init_app(app: Flask | Blueprint) -> None:
 @bp.get('/authorize')
 def authorize() -> Response:
     """Redirect to Google OAuth authorization endpoint."""
+    # Requests to this endpoint are internal and should be strictly validated.
     params = flask_validation.validate_request_and_extract_urlparams(
         AuthorizeRequestSchema.__annotations__,
         on_error=api_errors.raise_api_error,
+        ignore_extra=False,
     )
     session = oauth2.create_session(
         client_id=vault.get('CLIENT_ID'),
@@ -94,9 +96,11 @@ def authorize() -> Response:
 @bp.get('/callback')
 def callback() -> Response:
     """Handle a Google OAuth callback request."""
+    # Requests to this endpoint are from Google, can be more loosely validated.
     params = flask_validation.validate_request_and_extract_urlparams(
         Callback.__annotations__,
         on_error=api_errors.raise_api_error,
+        ignore_extra=True,
     )
     if "error" in params:
         api_errors.raise_api_error(401, **params)
