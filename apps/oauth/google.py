@@ -5,7 +5,8 @@ Routes for Google OAuth2.
 Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 """
 
-from typing import NotRequired, Required, TypedDict, Unpack
+import os
+from typing import NotRequired, Required, TypedDict
 
 from flask import Blueprint, Flask, redirect
 from werkzeug.wrappers import Response
@@ -84,14 +85,14 @@ def authorize() -> Response:
     session = oauth2.create_session(
         client_id=vault.get('CLIENT_ID'),
         scopes=oauth2.scopes,
-        target=params['target'],
+        target=params.pop('target'),
     )
     session.store()
-    if "login_hint" in params:
-        extra_params = {"login_hint": params["login_hint"]}
-    else:
-        extra_params = {}
-    authorization_url = session.get_authorization_url(**extra_params)
+    redirect_uri = os.environ['REDIRECT_URI']
+    authorization_url = session.get_authorization_url(
+        redirect_uri,
+        **params
+    )
     return redirect(authorization_url)
 
 @bp.get('/callback')
