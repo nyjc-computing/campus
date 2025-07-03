@@ -19,20 +19,16 @@ from apps.common.webauth.oauth2 import (
 from apps.common.webauth.oauth2.authorization_code import AuthorizationErrorCode
 from common.integration import config
 from common.services.vault import get_vault
-from common.validation.flask import unpack_request_urlparams
 import common.validation.flask as flask_validation
 
 PROVIDER = 'google'
 
-user_credentials = UserCredentials(PROVIDER)
+google_user_credentials = UserCredentials(PROVIDER)
 
 vault = get_vault(PROVIDER)
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = config.get_config(PROVIDER)
-oauth2: OAuth2Flow = OAuth2Flow.from_json(
-    oauthconfig,
-    security="oauth2",
-)
+oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
 
 
 class AuthorizeRequestSchema(TypedDict, total=False):
@@ -131,9 +127,8 @@ def callback() -> Response:
         api_errors.raise_api_error(400, **user_info)
 
     # Store the access token in the user's credentials
-    user_credentials.store(
+    google_user_credentials.store(
         user_id=user_info["email"],
-        provider=PROVIDER,
         token=token_response
     )
 
