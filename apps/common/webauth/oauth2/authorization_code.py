@@ -7,8 +7,8 @@ from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
 import requests
+from flask import session
 
-from apps.common.models.session import Session
 from apps.common.webauth.http import HttpScheme
 from common.utils import uid, utc_time
 
@@ -135,7 +135,6 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             state: str
     ) -> "OAuth2AuthorizationCodeSession":
         """Retrieve an existing OAuth2 Authorization Code flow session by state."""
-        session = Session().get(session_id=state)
         return OAuth2AuthorizationCodeSession(
             client_id=session["client_id"],
             scopes=session["scopes"],
@@ -195,12 +194,9 @@ class OAuth2AuthorizationCodeSession:
         self.target = target
 
     def delete(self) -> None:
-        """Delete the session from the database or cache.
-
-        This method should be implemented by subclasses to remove the session
-        data, such as from a database or cache.
-        """
-        Session().delete(session_id=self.state)
+        """Delete the session from the database or cache."""
+        for key in self.to_dict():
+            del session[key]
 
     def exchange_code_for_token(
             self,
@@ -227,8 +223,7 @@ class OAuth2AuthorizationCodeSession:
             raise OAuth2SecurityError(
                 "Failed to exchange code for token"
             ) from err
-        else:
-            return body
+        return body
 
     def get_authorization_url(self, redirect_uri: Url, **additional_params: str) -> str:
         """Return the authorization URL for redirect, with provider-specific
@@ -265,7 +260,8 @@ class OAuth2AuthorizationCodeSession:
         This method should be implemented by subclasses to persist the session
         data, such as in a database or cache.
         """
-        Session().store(session=self.to_dict())
+        for key, value in self.to_dict().items():
+            session[key] = value
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the session."""
