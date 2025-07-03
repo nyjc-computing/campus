@@ -14,7 +14,6 @@ from werkzeug.wrappers import Response
 from apps.common.errors import api_errors
 from apps.common.models.credentials import UserCredentials
 from apps.common.webauth.oauth2 import (
-    AuthorizationErrorCode,
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
 from common.integration import config
@@ -49,7 +48,7 @@ class Callback(TypedDict, total=False):
     This should be cast to either AuthorizationResponseSchema or
     AuthorizationErrorResponseSchema based on the presence of 'code' or 'error'.
     """
-    error: AuthorizationErrorCode
+    error: str
     code: str
     state: Required[str]
     error_description: str
@@ -111,8 +110,11 @@ def callback() -> Response:
         code=params["code"],
         client_secret= vault.get('CLIENT_SECRET'),
     )
-    if "error" in token_response:
-        api_errors.raise_api_error(400, **token_response)
+    match token_response:
+        case {"error": "invalid_grant"}:
+            # Reference: https://developers.google.com/identity/protocols/oauth2/web-server#exchange-errors-invalid-grant
+            # TODO: display user-friendly error message before restarting flow
+            return redirect(url_for('authorize', target=session.target))
 
     # Verify requested scopes were granted
     assert "scope" in token_response, "Response missing scope"

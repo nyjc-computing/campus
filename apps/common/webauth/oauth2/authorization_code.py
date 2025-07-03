@@ -19,15 +19,6 @@ from .base import (
 )
 
 Url = str
-AuthorizationErrorCode = Literal[
-    "invalid_request",
-    "unauthorized_client",
-    "access_denied",
-    "unsupported_response_type",
-    "invalid_scope",
-    "server_error",
-    "temporarily_unavailable",
-]
 
 OAUTH_EXPIRY_MINUTES = 10  # Default expiry time for OAuth2 sessions in minutes
 TIMEOUT = 10  # Default timeout for requests in seconds
@@ -57,18 +48,6 @@ class AuthorizationResponseSchema(TypedDict, total=False):
     """
     code: str  # Authorization code received from the provider
     state: str  # State parameter for CSRF protection
-
-
-class AuthorizationErrorResponseSchema(TypedDict, total=False):
-    """Error response schema for OAuth2 Authorization Code flow.
-    Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
-
-    NotRequired fields will be filled in by redirect endpoint.
-    """
-    error: AuthorizationErrorCode
-    error_description: str  # Human-readable description of the error
-    error_uri: Url
-    state: str  # State parameter for CSRF protection, if provided
 
 
 class TokenRequestSchema(TypedDict, total=False):
@@ -227,7 +206,7 @@ class OAuth2AuthorizationCodeSession:
             self,
             code: str,
             client_secret: str,
-    ) -> TokenResponseSchema | AuthorizationErrorResponseSchema:
+    ) -> dict[str, Any]:
         """Exchange authorization code for access token."""
         params = {
             "grant_type": "authorization_code",
@@ -249,13 +228,7 @@ class OAuth2AuthorizationCodeSession:
                 "Failed to exchange code for token"
             ) from err
         else:
-            if "token_type" in body:
-                return TokenResponseSchema(**body)
-            if "error" in body:
-                return AuthorizationErrorResponseSchema(**body)
-            raise OAuth2SecurityError(
-                "Invalid response from token endpoint, missing 'token_type' or 'error'."
-            )
+            return body
 
     def get_authorization_url(self, redirect_uri: Url, **additional_params: str) -> str:
         """Return the authorization URL for redirect, with provider-specific
