@@ -23,7 +23,7 @@ class ClientCredentialsSchema(TypedDict):
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by ClientCredentials
     client_id: CampusID  # must be provided
-    issued_at: NotRequired[utc_time.datetime]
+    issued_at: utc_time.datetime
     token: TokenSchema
 
 
@@ -32,7 +32,7 @@ class UserCredentialsSchema(TypedDict):
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by UserCredentials
     user_id: CampusID  # must be provided
-    issued_at: NotRequired[utc_time.datetime]
+    issued_at: utc_time.datetime
     token: TokenSchema
 
 
@@ -99,23 +99,22 @@ class UserCredentials:
             condition={"provider": self.provider, "user_id": user_id}
         )
 
-    def get(self, user_id: CampusID) -> dict | None:
+    def get(self, user_id: CampusID) -> UserCredentialsSchema:
         """Retrieve user credentials by user ID."""
         resp = get_drum().get_matching(
             TABLE,
             condition={"provider": self.provider, "user_id": user_id}
         )
         match resp.status:
-            case "error":
+            case ("error"):
                 api_errors.raise_api_error(500)
-            case "ok":
-                records = resp.data
-                if not records:
+            case ("ok"):
+                if not resp.data:
                     api_errors.raise_api_error(
                         404,
                         message="User credentials not found"
                     )
-                record = records[0]
+                record = resp.data[0]
                 # Remove the primary key field from the record
                 del record[PK]
                 return record
