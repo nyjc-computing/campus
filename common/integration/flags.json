@@ -1,0 +1,14 @@
+{
+    "google": {
+        "forms": {
+            "enabled": true,
+            "discovery_url": "https://forms.googleapis.com/$discovery/rest?version=v1",
+            "filename": "forms.json"
+        },
+        "pubsub": {
+            "enabled": true,
+            "discovery_url": "https://pubsub.googleapis.com/$discovery/rest?version=v1beta1a",
+            "filename": "pubsub.json"
+        }
+    }
+}
