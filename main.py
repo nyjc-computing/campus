@@ -1,7 +1,16 @@
+"""main
+
+This entrypoint is only used for development purposes.
+It will be removed in production.
+"""
+import os
+
 from flask import redirect, url_for
 
 from apps import api, oauth, create_app_from_modules
 
+# Set environment variables for OAuth2 configuration
+os.environ['REDIRECT_URI'] = ""
 
 app = create_app_from_modules(api, oauth)
 
