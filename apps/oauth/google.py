@@ -164,3 +164,25 @@ def callback() -> Response:
 
     # Session cleanup is expected to be handled automatically
     return redirect(session.target)
+
+
+def get_valid_token(user_id: str) -> CredentialToken:
+    """Retrieve the user's Google OAuth token.
+
+    This function is not a flask view function.
+    """
+    record = google_user_credentials.get(user_id)
+    token = CredentialToken.from_dict(PROVIDER, record["token"])
+    if token.is_expired():
+        # token is refreshed in-place
+        oauth2.refresh_token(
+            token=token,
+            client_id=vault.get('CLIENT_ID'),
+            client_secret=vault.get('CLIENT_SECRET'),
+        )
+        google_user_credentials.store(
+            user_id=record["user_id"],
+            issued_at=utc_time.now(),
+            token=token.to_dict(),
+        )
+    return token
