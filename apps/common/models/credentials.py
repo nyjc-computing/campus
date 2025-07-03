@@ -132,4 +132,5 @@ class UserCredentials:
             drum.update_by_id(TABLE, token_id, credentials)
         else:
             credentials[PK] = token_id
+            credentials["provider"] = self.provider
             drum.insert(TABLE, credentials)
