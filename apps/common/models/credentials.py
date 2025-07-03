@@ -10,9 +10,10 @@ Credentials are assumed to be issued by a provider.
 from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
-from apps.common.webauth.oauth2.authorization_code import TokenResponseSchema
+from apps.common.webauth.token import TokenSchema
 from common.drum.mongodb import PK, get_drum
 from common.schema import CampusID
+from common.utils import utc_time
 
 TABLE = "credentials"
 
@@ -22,8 +23,8 @@ class ClientCredentialsSchema(TypedDict):
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by ClientCredentials
     client_id: CampusID  # must be provided
-    issued_at: NotRequired[int]  # Timestamp of when the token was issued
-    token: TokenResponseSchema
+    issued_at: NotRequired[utc_time.datetime]
+    token: TokenSchema
 
 
 class UserCredentialsSchema(TypedDict):
@@ -31,8 +32,8 @@ class UserCredentialsSchema(TypedDict):
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by UserCredentials
     user_id: CampusID  # must be provided
-    issued_at: NotRequired[int]  # Timestamp of when the token was issued
-    token: TokenResponseSchema
+    issued_at: NotRequired[utc_time.datetime]
+    token: TokenSchema
 
 
 class ClientCredentials:
