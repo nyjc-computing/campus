@@ -132,13 +132,15 @@ def validate_request_and_extract_urlparams(
         on_error(400, message=err.args[0])
     else:
         return params
-    
+
 
 def validate_json_response(
         schema: Mapping[str, Type],
         resp_json: Mapping[str, Any], *,
         on_error: ErrorHandler,
         ignore_extra: bool = True,
+        error_status_code: StatusCode = 500,
+        error_message: str | None = None,
 ) -> None:
     """Validate the response JSON body against the provided schema."""
     if resp_json is None:
@@ -147,7 +149,7 @@ def validate_json_response(
     try:
         record.validate_keys(resp_json, schema, ignore_extra=ignore_extra)
     except (KeyError, TypeError) as err:
-        on_error(500, message=err.args[0])
+        on_error(error_status_code, message=error_message or err.args[0])
 
 
 def validate(
