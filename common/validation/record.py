@@ -3,6 +3,7 @@
 This module contains utility functions for validating records (dictionaries).
 """
 from collections.abc import Callable, Collection, Mapping
+from enum import Enum
 from typing import (
     Any,
     NotRequired,
@@ -14,6 +15,12 @@ from typing import (
 )
 
 C = TypeVar('C', bound=Collection)
+
+class Requiredness(Enum):
+    """Enum for requiredness of a key."""
+    REQUIRED = Required
+    OPTIONAL = NotRequired
+    UNMARKED = None
 
 
 def _validate_key_names(
@@ -46,7 +53,7 @@ def _validate_key_names(
             raise KeyError(f"Invalid keys: {', '.join(extra_keys)}")
     # all keys are valid
 
-def get_requiredness_type(typ: type) -> tuple[_SpecialForm, tuple[Any, ...] | type]:
+def get_requiredness_type(typ: type) -> tuple[Requiredness, type]:
     """Get the requiredness and wrapped type of a value."""
     # get_origin is expected to return NotRequired, Required, or None
     # if NotRequired or Required, args is expected to be a tuple of length 1
@@ -55,7 +62,7 @@ def get_requiredness_type(typ: type) -> tuple[_SpecialForm, tuple[Any, ...] | ty
     # actual type of the value
     origin, unwrapped_type = get_origin(typ), get_args(typ)
     assert isinstance(origin, _SpecialForm), f"Unexpected origin: {origin}"
-    return origin, unwrapped_type if origin is not None else typ
+    return Requiredness(origin), unwrapped_type[0] if origin is not None else typ
 
 def unpack_required_optional(
         schema: Mapping[str, type],
@@ -83,17 +90,21 @@ def unpack_required_optional(
     required, optional = [], []
     for key, typ in schema.items():
         requiredness, unwrapped_type = get_requiredness_type(typ)
-        if requiredness is not None:
-            typ = unwrapped_type[0]
-        if total or requiredness is Required:
-            required.append(key)
-        elif not total or requiredness is NotRequired:
-            optional.append(key)
-        else:
-            raise AssertionError(
-                f"Unexpected state: requiredness={requiredness}, total={total}"
-        )
-    breakpoint()
+        if requiredness is not Requiredness.UNMARKED:
+            typ = unwrapped_type
+        match (requiredness, total):
+            case (Requiredness.REQUIRED, _):
+                required.append(key)
+            case (Requiredness.OPTIONAL, _):
+                optional.append(key)
+            case (Requiredness.UNMARKED, True):
+                required.append(key)
+            case (Requiredness.UNMARKED, False):
+                optional.append(key)
+            case _:
+                raise AssertionError(
+                    f"Unexpected state: requiredness={requiredness}, total={total}"
+                )
     return factory(required), factory(optional)
 
 def _validate_key_names_types(
