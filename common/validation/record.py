@@ -9,7 +9,6 @@ from typing import (
     NotRequired,
     Required,
     TypeVar,
-    _SpecialForm,
     get_args,
     get_origin,
 )
@@ -61,7 +60,6 @@ def get_requiredness_type(typ: type) -> tuple[Requiredness, type]:
     # if None, args is expected to be an empty tuple, in which case typ is the
     # actual type of the value
     origin, unwrapped_type = get_origin(typ), get_args(typ)
-    assert origin is None or isinstance(origin, _SpecialForm), f"Unexpected origin: {origin}"
     return Requiredness(origin), unwrapped_type[0] if origin is not None else typ
 
 def unpack_required_optional(
