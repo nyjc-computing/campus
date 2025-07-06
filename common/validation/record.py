@@ -142,7 +142,7 @@ def _validate_key_names_types(
     # all record keys are valid
     for key in record_set:
         requiredness, unwrapped_type = get_requiredness_type(valid_keys[key])
-        KeyType = unwrapped_type if requiredness is not None else valid_keys[key]
+        KeyType = unwrapped_type if requiredness is not Requiredness.UNMARKED else valid_keys[key]
         if not isinstance(record[key], KeyType):
             raise TypeError(
                 f"Invalid type for key '{key}': expected {valid_keys[key].__name__}, "
