@@ -8,14 +8,8 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.common.models.base import BaseRecord
-from common import devops
 from common.utils import secret, uid, utc_time
 from storage import get_table
-
-if devops.ENV in (devops.STAGING, devops.PRODUCTION):
-    from common.drum.postgres import get_conn
-else:
-    from common.drum.sqlite import get_conn
 
 APIName = str
 APIKey = str
@@ -31,43 +25,33 @@ def init_db() -> None:
     local-only db like SQLite), or in a staging environment before upgrading to
     production.
     """
-    # TODO: Refactor into decorator
-    if os.getenv('ENV', 'development') == 'production':
-        raise AssertionError(
-            "Database initialization detected in production environment"
-        )
-    conn = get_conn()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS "clients" (
-                id TEXT PRIMARY KEY,
-                secret_hash TEXT,
-                name TEXT NOT NULL,
-                description TEXT,
-                created_at TEXT NOT NULL,
-                UNIQUE (name),
-                UNIQUE (secret_hash)
-            );
-        """)
-        # cursor.execute("""
-        #     CREATE TABLE IF NOT EXISTS apikeys (
-        #         client_id TEXT NOT NULL,
-        #         name TEXT NOT NULL,
-        #         key TEXT NOT NULL,
-        #         PRIMARY KEY (client_id, name),
-        #         UNIQUE (key),
-        #         FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
-        #     )
-        # """)
-    except Exception:  # pylint: disable=try-except-raise
-        # init_db() is not expected to be called in production, so we don't
-        # need to handle errors gracefully.
-        raise
-    else:
-        conn.commit()
-    finally:
-        conn.close()
+    storage = get_table(TABLE)
+    schema = """
+        CREATE TABLE IF NOT EXISTS "clients" (
+            id TEXT PRIMARY KEY,
+            secret_hash TEXT,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE (name),
+            UNIQUE (secret_hash)
+        );
+    """
+    storage.init_table(schema)
+    
+    # TODO: Implement API keys table when needed
+    # apikey_schema = """
+    #     CREATE TABLE IF NOT EXISTS apikeys (
+    #         client_id TEXT NOT NULL,
+    #         name TEXT NOT NULL,
+    #         key TEXT NOT NULL,
+    #         PRIMARY KEY (client_id, name),
+    #         UNIQUE (key),
+    #         FOREIGN KEY (client_id) REFERENCES clients(client_id) ON DELETE CASCADE
+    #     )
+    # """
+    # apikey_storage = get_table("apikeys")
+    # apikey_storage.init_table(apikey_schema)
 
 
 class ClientNew(TypedDict, total=True):
@@ -235,84 +219,3 @@ class Client:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
             raise api_errors.InternalError(message=str(e), error=e)
-
-
-# class APIKeyNewSchema(TypedDict):
-#     """Data model for a clients.apikeys.new operation."""
-#     name: APIName
-#     description: str
-
-
-# class APIKeyRecord(TypedDict):
-#     """Data model for an API key."""
-#     client_id: str
-#     name: APIName
-#     key: APIKey
-
-
-# class ClientAPIKey:
-#     """Model for database operations related to client API keys."""
-
-#     def __init__(self):
-#         self.storage = get_drum()
-
-#     def new(self, client_id: str, *, name: str) -> ModelResponse:
-#         """Create a new API key for a client.
-
-#         Validate name first before calling this function.
-
-#         Args:
-#             client_id: The ID of the client.
-#             name: The name of the API key.
-
-#         Returns:
-#             A ModelResponse indicating the result of the operation.
-#         """
-#         if not validname.is_valid_label(name):
-#             raise api_errors.InvalidRequestError(
-#                 message="Invalid API key name",
-#                 invalid_values=["name"]
-#             )
-#         api_key = secret.generate_api_key()
-#         record = APIKeyRecord(
-#             client_id=client_id,
-#             name=name,
-#             key=api_key
-#         )
-#         resp = self.storage.insert("apikeys", record)
-#         match resp:
-#             case Response(status="error", message=message, data=error):
-#                 raise api_errors.InternalError(message=message, error=error)
-#             case Response(status="ok", message=Message.CREATED):
-#                 return ModelResponse("ok", "API key created", record["key"])
-#         raise ValueError(f"Unexpected response: {resp}")
-
-#     def list(self, client_id: str) -> ModelResponse:
-#         """Retrieve all API keys for a client."""
-#         resp = self.storage.get_matching("apikeys", {"client_id": client_id})
-#         match resp:
-#             case Response(status="error", message=message, data=error):
-#                 raise api_errors.InternalError(message=message, error=error)
-#             case Response(status="ok", message=Message.FOUND, data=result):
-#                 return ModelResponse("ok", Message.SUCCESS, result)
-#             case Response(status="ok", message=Message.EMPTY):
-#                 return ModelResponse("ok", Message.EMPTY, [])
-#         raise ValueError(f"Unexpected response: {resp}")
-
-#     def delete(self, client_id: str, name: str) -> ModelResponse:
-#         """Delete an API key for a client."""
-#         resp = self.storage.delete_matching(
-#             "apikeys",
-#             {"client_id": client_id, "name": name}
-#         )
-#         match resp:
-#             case Response(status="error", message=message, data=error):
-#                 raise api_errors.InternalError(message=message, error=error)
-#             case Response(status="ok", message=Message.NOT_FOUND):
-#                 raise api_errors.ConflictError(
-#                     "API key not found",
-#                      client_id=client_id, name=name
-#                 )
-#             case Response(status="ok", message=Message.DELETED):
-#                 return ModelResponse(*resp)
-#         raise ValueError(f"Unexpected response: {resp}")
