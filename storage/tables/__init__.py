@@ -7,14 +7,14 @@ This interface is usually provided by relational databases like PostgreSQL
 or SQLite.
 """
 
-import backend.postgres
+from .backend.postgres import PostgreSQLTable
 
 from .interface import TableInterface
 
 
 def get_db(name: str):
     """Get a table by name."""
-    return backend.postgres.PostgreSQLTable(name)
+    return PostgreSQLTable(name)
 
 
 __all__ = [

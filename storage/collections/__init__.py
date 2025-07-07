@@ -9,14 +9,14 @@ This interface is usually provided by document-oriented databases like MongoDB
 or CouchDB.
 """
 
-import backend.mongodb
+from .backend.mongodb import MongoDBCollection
 
 from .interface import CollectionInterface
 
 
 def get_db(name: str):
     """Get a collection by name."""
-    return backend.mongodb.MongoDBCollection(name)
+    return MongoDBCollection(name)
 
 
 __all__ = [
