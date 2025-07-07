@@ -18,8 +18,9 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.common.models.base import BaseRecord
-from common.drum.mongodb import PK, get_db, get_drum
-from common.schema import CampusID, Message, Response
+from storage import get_collection
+from common.drum.mongodb import get_db  # Keep for direct MongoDB operations in init_db
+from common.schema import CampusID
 from common.utils import uid, utc_time
 
 # TODO: Replace with OpenAPI-based string-pattern schema
@@ -57,7 +58,7 @@ def init_db():
             name="campus-admin",
             description="Campus admin circle",
             tag="admin",
-            parents={root_circle[PK]: 15}
+            parents={root_circle["id"]: 15}
         )
         # Create or update circle meta record
         db[TABLE].update_one(
@@ -65,8 +66,8 @@ def init_db():
             {
                 "$set": {
                     "@meta": True,
-                    "root": root_circle[PK],
-                    root_circle[PK]: {},  # circle address tree
+                    "root": root_circle["id"],
+                    root_circle["id"]: {},  # circle address tree
                 }
             },
             upsert=False
@@ -138,16 +139,19 @@ class CircleMemberSet(CircleMemberRemove):
 
 def get_circle_meta() -> "CircleMeta":
     """Get the circle meta record from the settings collection."""
-    db = get_db()
-    circle_meta = db[TABLE].find_one({"@meta": True})
-    if circle_meta is None:
-        raise api_errors.InternalError(
-            message=f"Circle meta record not found in collection {TABLE}",
-            id=DOMAIN
-        )
-    # Since some keys required in CircleMeta cannot be represented as
-    # identifiers, we use the TypedDict constructor
-    return TypedDict("CircleMeta", circle_meta)  # type: ignore
+    storage = get_collection(TABLE)
+    try:
+        circle_meta = storage.get_matching({"@meta": True})
+        if not circle_meta:
+            raise api_errors.InternalError(
+                message=f"Circle meta record not found in collection {TABLE}",
+                id=DOMAIN
+            )
+        # Since some keys required in CircleMeta cannot be represented as
+        # identifiers, we use the TypedDict constructor
+        return TypedDict("CircleMeta", circle_meta[0])  # type: ignore
+    except Exception as e:
+        raise api_errors.InternalError(message=str(e), error=e)
 
 
 def get_root_circle() -> "CircleRecord":
@@ -186,39 +190,42 @@ class CircleMember:
 
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
-        self.storage = get_drum()
+        self.storage = get_collection(TABLE)
 
     def list(self, circle_id: CircleID) -> dict:
         """List all members of a circle."""
-        resp = self.storage.get_by_id(TABLE, circle_id)
-        if resp.status == "error":
-            raise api_errors.ConflictError(
-                message="Circle not found",
-                id=circle_id
-            )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            record = self.storage.get_by_id(circle_id)
+            if record is None:
                 raise api_errors.ConflictError(
                     message="Circle not found",
                     id=circle_id
                 )
-            case Response(status="ok", message=Message.FOUND, data=resource):
-                return resource["members"]
-        raise ValueError(f"Unexpected response from storage: {resp}")
+            return record.get("members", {})
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def add(self, circle_id: CircleID, **fields: Unpack[CircleMemberAdd]) -> None:
         """Add a member to a circle."""
         member_id = fields["member_id"]
         access_value = fields["access_value"]
         # Check if member circle exists
-        member_circle = self.storage.get_by_id(TABLE, member_id)
-        if member_circle.status == "error":
-            raise api_errors.ConflictError(
-                message="Member circle not found",
-                id=member_id
-            )
+        try:
+            member_circle = self.storage.get_by_id(member_id)
+            if member_circle is None:
+                raise api_errors.ConflictError(
+                    message="Member circle not found",
+                    id=member_id
+                )
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
+        
+        # Use direct MongoDB access for nested field updates
+        # TODO: Consider adding nested field update support to storage interface
         db = get_db()
         db[TABLE].update_one(
             {"id": circle_id},
@@ -233,20 +240,28 @@ class CircleMember:
         """Remove a member from a circle."""
         member_id = fields["member_id"]
         # Check if member circle is a member of circle
-        circle = self.storage.get_by_id(TABLE, circle_id)
-        if circle.status == "error":
-            raise api_errors.ConflictError(
-                message="Circle not found",
-                id=circle_id
-            )
-        if member_id not in circle.data.get("members", {}):
-            raise api_errors.ConflictError(
-                message="Member not found in circle",
-                id=member_id
-            )
+        try:
+            circle = self.storage.get_by_id(circle_id)
+            if circle is None:
+                raise api_errors.ConflictError(
+                    message="Circle not found",
+                    id=circle_id
+                )
+            if member_id not in circle.get("members", {}):
+                raise api_errors.ConflictError(
+                    message="Member not found in circle",
+                    id=member_id
+                )
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
+        
+        # Use direct MongoDB access for nested field updates
+        # TODO: Consider adding nested field update support to storage interface
         db = get_db()
         db[TABLE].update_one(
-            {circle_id: {"$exists": True}},
+            {"id": circle_id},
             {
                 "$unset": {
                     f"members.{member_id}": ""
@@ -269,7 +284,7 @@ class Circle:
 
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
-        self.storage = get_drum()
+        self.storage = get_collection(TABLE)
 
     def new(self, **fields: Unpack[CircleNew]) -> CircleResource:
         """This creates a new circle and adds it to the circle collection.
@@ -295,17 +310,18 @@ class Circle:
         # TODO: Store ancestry tree
         # TODO: Use transactions for atomic creation of circles and their parents
         # https://www.mongodb.com/docs/languages/python/pymongo-driver/upcoming/write/transactions/
-        resp = self.storage.insert(TABLE, record)
-        for parent_id, access_value in parents.items():
-            # TODO: Drum notation for updating nested fields
-            self.members.add(parent_id, member_id=circle_id,
-                             access_value=access_value)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS, data=resource):
-                return resource
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        try:
+            self.storage.insert_one(dict(record))
+            for parent_id, access_value in parents.items():
+                # TODO: Drum notation for updating nested fields
+                self.members.add(parent_id, member_id=circle_id,
+                                 access_value=access_value)
+            # Return as CircleResource (add sources field)
+            resource = CircleResource(**record)
+            resource["sources"] = {}  # TODO: join with sources and access values
+            return resource
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def delete(self, circle_id: str) -> None:
         """Delete a circle by id.
@@ -314,49 +330,42 @@ class Circle:
         It should only be done by an admin/owner.
         """
         # TODO: Check circle ancestry, remove from parents' members
-        resp = self.storage.delete_by_id(TABLE, circle_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="Circle not found",
-                    id=circle_id
-                )
-            case Response(status="ok", message=Message.DELETED):
-                return
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        try:
+            self.storage.delete_by_id(circle_id)
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def get(self, circle_id: str) -> CircleResource:
         """Get a circle by id from the circle collection."""
-        resp = self.storage.get_by_id(TABLE, circle_id)
-        # TODO: join with sources and access values
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            record = self.storage.get_by_id(circle_id)
+            if record is None:
                 raise api_errors.ConflictError(
                     message="Circle not found",
                     id=circle_id
                 )
-            case Response(status="ok", message=Message.FOUND, data=resource):
-                return resource
-        raise ValueError(f"Unexpected response from storage: {resp}")
+            # TODO: join with sources and access values
+            resource = CircleResource(**record)
+            resource["sources"] = {}  # TODO: join with sources and access values
+            return resource
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> None:
         """Update a circle by id."""
-        resp = self.storage.update_by_id(TABLE, circle_id, updates)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            result = self.storage.update_by_id(circle_id, dict(updates))
+            if result is None:
                 raise api_errors.ConflictError(
                     message="Circle not found",
                     id=circle_id
                 )
-            case Response(status="ok", message=Message.UPDATED):
-                return
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
 
 class CircleAddressTree(Mapping[CircleID, "CircleAddressTree"]):

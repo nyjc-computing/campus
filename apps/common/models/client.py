@@ -9,14 +9,13 @@ from typing import NotRequired, TypedDict, Unpack
 from apps.common.errors import api_errors
 from apps.common.models.base import BaseRecord
 from common import devops
-from common.drum import DrumResponse
-from common.schema import Message, Response
 from common.utils import secret, uid, utc_time
+from storage import get_table
 
 if devops.ENV in (devops.STAGING, devops.PRODUCTION):
-    from common.drum.postgres import get_conn, get_drum
+    from common.drum.postgres import get_conn
 else:
-    from common.drum.sqlite import get_conn, get_drum
+    from common.drum.sqlite import get_conn
 
 APIName = str
 APIKey = str
@@ -103,110 +102,108 @@ class Client:
     # apikeys = ClientAPIKey()
 
     def __init__(self):
-        """Initialize the Client model with a storage interface."""
-        self.storage = get_drum()
+        """Initialize the Client model with a table storage interface."""
+        self.storage = get_table(TABLE)
 
     def delete(self, client_id: str) -> None:
         """Delete a client application by its ID."""
-        resp = self.storage.delete_by_id(TABLE, client_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client not found",
-                    client_id=client_id
-                )
-            case Response(status="ok", message=Message.DELETED, data=data):
-                pass
-        raise ValueError(f"Unexpected response: {resp}")
+        # Check if client exists first
+        client = self.storage.get_by_id(client_id)
+        if not client:
+            raise api_errors.ConflictError(
+                "Client not found",
+                client_id=client_id
+            )
+        try:
+            self.storage.delete_by_id(client_id)
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def list(self) -> list:
         """List all client applications."""
-        resp = self.storage.get_all(TABLE)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND, data=result):
-                return result
-            case Response(status="ok", message=Message.EMPTY):
-                return []
-        raise ValueError(f"Unexpected response: {resp}")
+        try:
+            # Table interface doesn't have get_all, but get_matching with empty query
+            # should return all records. Let's use get_matching with empty dict.
+            results = self.storage.get_matching({})
+            return results
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def get(self, client_id: str) -> ClientResource:
         """Retrieve a client application by its ID, including its admins."""
-        resp = self.storage.get_by_id(TABLE, client_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND, data=None):
+        try:
+            client_record = self.storage.get_by_id(client_id)
+            if not client_record:
                 raise api_errors.ConflictError(
                     "Client not found",
                     client_id=client_id
                 )
-        assert isinstance(resp, DrumResponse)  # appease mypy
-        client_record = resp.data
-        # Do not reveal secrets in API
-        del client_record["secret_hash"]
-        return client_record
+            
+            # Do not reveal secrets in API - make a copy first
+            client_data = dict(client_record)
+            if "secret_hash" in client_data:
+                del client_data["secret_hash"]
+            return client_data  # type: ignore
+        except api_errors.ConflictError:
+            raise
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def new(self, **fields: Unpack[ClientNew]) -> ClientResource:
         """Create a new client."""
         # Use Client model to validate keyword arguments
         client_id = uid.generate_category_uid("client", length=8)
-        record = ClientResource(
+        record = dict(
             id=client_id,
             created_at=utc_time.now(),
             **fields,
         )
-        resp = self.storage.insert(TABLE, record)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS, data=result):
-                return result
-        raise ValueError(f"Unexpected response: {resp}")
+        try:
+            self.storage.insert_one(record)
+            return record  # type: ignore
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def replace(self, client_id: str) -> dict[str, str]:
         """Revoke a client secret by its ID, and issue a new secret."""
+        # Check if client exists first
+        client = self.storage.get_by_id(client_id)
+        if not client:
+            raise api_errors.ConflictError(
+                "Client not found",
+                client_id=client_id
+            )
+        
         client_secret = secret.generate_client_secret()
-        resp = self.storage.update_by_id(
-            TABLE,
-            client_id,
-            {"secret_hash": secret.hash_client_secret(
-                client_secret,
-                os.environ["SECRET_KEY"]
-            )}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client not found",
-                    client_id=client_id
-                )
-            case Response(status="ok", message=Message.UPDATED):
-                return {"secret": client_secret}
-        raise ValueError(f"Unexpected response: {resp}")
+        try:
+            self.storage.update_by_id(
+                client_id,
+                {"secret_hash": secret.hash_client_secret(
+                    client_secret,
+                    os.environ["SECRET_KEY"]
+                )}
+            )
+            return {"secret": client_secret}
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def update(self, client_id: str, **updates: Unpack[ClientNew]) -> None:
         """Update an existing client record."""
         if not updates:
             return
 
-        resp = self.storage.update_by_id(TABLE, client_id, updates)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    "Client not found",
-                    client_id=client_id
-                )
-            case Response(status="ok", message=Message.UPDATED):
-                pass
-        raise ValueError(f"Unexpected response: {resp}")
+        # Check if client exists first
+        client = self.storage.get_by_id(client_id)
+        if not client:
+            raise api_errors.ConflictError(
+                "Client not found",
+                client_id=client_id
+            )
+        
+        try:
+            self.storage.update_by_id(client_id, dict(updates))
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def validate_credentials(
             self,
@@ -219,25 +216,25 @@ class Client:
             api_errors.InternalError: Error retrieving the stored credentials.
             api_errors.ForbiddenError: Client is not found or secret is invalid.
         """
-        resp = self.storage.get_by_id(TABLE, client_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            client = self.storage.get_by_id(client_id)
+            if not client:
                 api_errors.raise_api_error(
                     403, message="Client not found", client_id=client_id)
-            case Response(status="ok", message=Message.FOUND, data=cursor):
-                client = cursor['result']
-                secret_hash = secret.hash_client_secret(
-                    client_secret, os.environ["SECRET_KEY"]
+            
+            secret_hash = secret.hash_client_secret(
+                client_secret, os.environ["SECRET_KEY"]
+            )
+            if client["secret_hash"] != secret_hash:
+                api_errors.raise_api_error(
+                    403,
+                    message="Invalid client secret",
+                    client_id=client_id
                 )
-                if client["secret_hash"] != secret_hash:
-                    api_errors.raise_api_error(
-                        403,
-                        message="Invalid client secret",
-                        client_id=client_id
-                    )
-        raise ValueError(f"Unexpected response: {resp}")
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
 
 # class APIKeyNewSchema(TypedDict):
