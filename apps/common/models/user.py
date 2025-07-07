@@ -8,13 +8,8 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.models.base import BaseRecord
 from apps.common.errors import api_errors
-from common import devops
 from common.utils import uid, utc_time
 from storage import get_table
-if devops.ENV in (devops.STAGING, devops.PRODUCTION):
-    from common.drum.postgres import get_conn
-else:
-    from common.drum.sqlite import get_conn
 
 TABLE = "users"
 
@@ -26,32 +21,18 @@ def init_db():
     local-only db like SQLite), or in a staging environment before upgrading to
     production.
     """
-    # TODO: Refactor into decorator
-    if os.getenv('ENV', 'development') == 'production':
-        raise AssertionError(
-            "Database initialization detected in production environment"
+    storage = get_table(TABLE)
+    schema = """
+        CREATE TABLE IF NOT EXISTS "users" (
+            id TEXT PRIMARY KEY NOT NULL,
+            email TEXT NOT NULL,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            activated_at TEXT DEFAULT NULL,
+            UNIQUE(email)
         )
-    conn = get_conn()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS "users" (
-                id TEXT PRIMARY KEY NOT NULL,
-                email TEXT NOT NULL,
-                name TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                activated_at TEXT DEFAULT NULL,
-                UNIQUE(email)
-            )
-        """)
-    except Exception:  # pylint: disable=try-except-raise
-        # init_db() is not expected to be called in production, so we don't
-        # need to handle errors gracefully.
-        raise
-    else:
-        conn.commit()
-    finally:
-        conn.close()
+    """
+    storage.init_table(schema)
 
 
 class UserNew(TypedDict, total=True):
