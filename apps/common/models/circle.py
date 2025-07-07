@@ -43,10 +43,13 @@ def init_db():
     staging.
     For MongoDB, collections are created automatically on first insert.
     """
+    # Initialize the collection (creates it if needed)
+    storage = get_collection(TABLE)
+    storage.init_collection()
+    
     # Check for existing root circle
-    db = get_db()
-    circle_meta = db[TABLE].find_one({"@meta": True})
-    if (circle_meta is None or "root" not in circle_meta):
+    circle_meta_list = storage.get_matching({"@meta": True})
+    if not circle_meta_list or "root" not in circle_meta_list[0]:
         # Create admin and root circles
         root_circle = Circle().new(
             name=DOMAIN,
@@ -60,18 +63,26 @@ def init_db():
             tag="admin",
             parents={root_circle["id"]: 15}
         )
-        # Create or update circle meta record
-        db[TABLE].update_one(
-            {"@meta": True},
-            {
-                "$set": {
-                    "@meta": True,
-                    "root": root_circle["id"],
-                    root_circle["id"]: {},  # circle address tree
-                }
-            },
-            upsert=False
-        )
+        # Create or update circle meta record using storage interface
+        meta_record = {
+            "@meta": True,
+            "root": root_circle["id"],
+            root_circle["id"]: {},  # circle address tree
+        }
+        # Check if meta record exists and update/insert accordingly
+        existing_meta = storage.get_matching({"@meta": True})
+        if existing_meta:
+            # Update existing meta record - we need to handle this with direct MongoDB access
+            # since the storage interface doesn't support complex updates yet
+            from common.drum.mongodb import get_db
+            db = get_db()
+            db[TABLE].update_one(
+                {"@meta": True},
+                {"$set": meta_record},
+                upsert=True
+            )
+        else:
+            storage.insert_one(meta_record)
 
 
 class CircleMeta(TypedDict, total=False):
@@ -226,6 +237,7 @@ class CircleMember:
         
         # Use direct MongoDB access for nested field updates
         # TODO: Consider adding nested field update support to storage interface
+        from common.drum.mongodb import get_db
         db = get_db()
         db[TABLE].update_one(
             {"id": circle_id},
@@ -259,6 +271,7 @@ class CircleMember:
         
         # Use direct MongoDB access for nested field updates
         # TODO: Consider adding nested field update support to storage interface
+        from common.drum.mongodb import get_db
         db = get_db()
         db[TABLE].update_one(
             {"id": circle_id},
