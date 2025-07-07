@@ -76,7 +76,6 @@ class User:
     def new(self, **fields: Unpack[UserNew]) -> UserResource:
         """Create a new user."""
         user_id = uid.generate_user_uid(fields["email"])
-        user_id, _ = fields["email"].split('@')
         record = dict(
             id=user_id,
             created_at=utc_time.now(),
