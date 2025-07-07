@@ -25,8 +25,6 @@ table.delete_by_id("123")
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from psycopg2.errors import UniqueViolation
-
 from storage.tables.interface import TableInterface, PK
 
 DB_URI = os.environ["DB_URI"]
