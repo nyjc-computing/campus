@@ -11,11 +11,11 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.errors import api_errors
 from apps.common.webauth.token import TokenSchema
-from common.drum.mongodb import PK, get_drum
+from storage import get_collection
 from common.schema import CampusID
 from common.utils import utc_time
 
-TABLE = "credentials"
+COLLECTION = "credentials"
 
 
 class ClientCredentialsSchema(TypedDict):
@@ -50,32 +50,45 @@ class ClientCredentials:
 
     def __init__(self, provider: str = "campus"):
         self.provider = provider
+        self.storage = get_collection(COLLECTION)
 
     def delete(self, client_id: CampusID) -> None:
         """Delete a client credential by its ID."""
-        get_drum().delete_by_id(TABLE, client_id)
+        try:
+            self.storage.delete_by_id(client_id)
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def get(self, client_id: CampusID) -> dict | None:
         """Retrieve a client credential by its ID."""
-        resp = get_drum().get_by_id(TABLE, client_id)
-        match resp.status:
-            case "error":
+        try:
+            record = self.storage.get_by_id(client_id)
+            if record is None:
                 api_errors.raise_api_error(404, message="Client not found")
-            case "ok":
-                record = resp.data
-                return record
+            return record
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def store(self, credentials: dict) -> None:
         """Store a client credential with the given ID and data."""
-        # Add id primary key which is needed by the Drum interface.
-        assert PK in credentials, "Client credentials must have an ID"
-        drum = get_drum()
-        resp = drum.get_by_id(TABLE, credentials[PK])
-        if resp.status == "ok":
-            # If the record already exists, we update it.
-            drum.update_by_id(TABLE, credentials[PK], credentials)
-        else:
-            drum.insert(TABLE, credentials)
+        try:
+            # Add id primary key which is needed by the backend interface.
+            assert "id" in credentials, "Client credentials must have an ID"
+            credentials_data = dict(credentials)
+            
+            # Check if record already exists
+            existing_record = self.storage.get_by_id(credentials_data["id"])
+            if existing_record is not None:
+                # If the record already exists, we update it.
+                self.storage.update_by_id(credentials_data["id"], credentials_data)
+            else:
+                self.storage.insert_one(credentials_data)
+        except Exception as e:
+            if isinstance(e, AssertionError):
+                raise  # Re-raise assertion errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
 
 class UserCredentials:
@@ -91,46 +104,61 @@ class UserCredentials:
 
     def __init__(self, provider: str):
         self.provider = provider
+        self.storage = get_collection(COLLECTION)
 
     def delete(self, user_id: CampusID) -> None:
         """Delete user credentials by ID."""
-        get_drum().delete_matching(
-            TABLE,
-            condition={"provider": self.provider, "user_id": user_id}
-        )
+        try:
+            self.storage.delete_matching(
+                {"provider": self.provider, "user_id": user_id}
+            )
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def get(self, user_id: CampusID) -> UserCredentialsSchema:
         """Retrieve user credentials by user ID."""
-        resp = get_drum().get_matching(
-            TABLE,
-            condition={"provider": self.provider, "user_id": user_id}
-        )
-        match resp.status:
-            case ("error"):
-                api_errors.raise_api_error(500)
-            case ("ok"):
-                if not resp.data:
-                    api_errors.raise_api_error(
-                        404,
-                        message="User credentials not found"
-                    )
-                record = resp.data[0]
-                # Remove the primary key field from the record
-                del record[PK]
-                return record
+        try:
+            records = self.storage.get_matching(
+                {"provider": self.provider, "user_id": user_id}
+            )
+            if not records:
+                api_errors.raise_api_error(
+                    404,
+                    message="User credentials not found"
+                )
+            
+            record = records[0]
+            # Remove the primary key field from the record
+            # Make a copy to avoid modifying the original
+            credentials_data = dict(record)
+            if "id" in credentials_data:
+                del credentials_data["id"]
+            return credentials_data  # type: ignore
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            api_errors.raise_api_error(500)
 
     def store(self, **credentials: Unpack[UserCredentialsSchema]) -> None:
         """Store user credentials with the given data."""
-        assert credentials.get("provider", self.provider) == self.provider, \
-            "Provider mismatch in credentials"
-        # Add id primary key which is needed by the Drum interface.
-        token_id = self.provider + ":" + credentials["user_id"]
-        drum = get_drum()
-        resp = drum.get_by_id(TABLE,  token_id)
-        if resp.status == "ok" and resp.data:
-            # If the record already exists, update it.
-            drum.update_by_id(TABLE, token_id, credentials)
-        else:
-            credentials[PK] = token_id
-            credentials["provider"] = self.provider
-            drum.insert(TABLE, credentials)
+        try:
+            assert credentials.get("provider", self.provider) == self.provider, \
+                "Provider mismatch in credentials"
+            
+            # Add id primary key which is needed by the backend interface.
+            token_id = self.provider + ":" + credentials["user_id"]
+            credentials_data = dict(credentials)
+            credentials_data["id"] = token_id
+            credentials_data["provider"] = self.provider
+            
+            # Check if record already exists
+            existing_record = self.storage.get_by_id(token_id)
+            if existing_record is not None:
+                # If the record already exists, update it.
+                self.storage.update_by_id(token_id, credentials_data)
+            else:
+                self.storage.insert_one(credentials_data)
+        except Exception as e:
+            if isinstance(e, AssertionError):
+                raise  # Re-raise assertion errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)

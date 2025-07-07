@@ -8,13 +8,8 @@ from typing import NotRequired, TypedDict, Unpack
 
 from apps.common.models.base import BaseRecord
 from apps.common.errors import api_errors
-from common import devops
-from common.schema import Message, Response
 from common.utils import uid, utc_time
-if devops.ENV in (devops.STAGING, devops.PRODUCTION):
-    from common.drum.postgres import get_conn, get_drum
-else:
-    from common.drum.sqlite import get_conn, get_drum
+from storage import get_table
 
 TABLE = "users"
 
@@ -26,32 +21,18 @@ def init_db():
     local-only db like SQLite), or in a staging environment before upgrading to
     production.
     """
-    # TODO: Refactor into decorator
-    if os.getenv('ENV', 'development') == 'production':
-        raise AssertionError(
-            "Database initialization detected in production environment"
+    storage = get_table(TABLE)
+    schema = """
+        CREATE TABLE IF NOT EXISTS "users" (
+            id TEXT PRIMARY KEY NOT NULL,
+            email TEXT NOT NULL,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            activated_at TEXT DEFAULT NULL,
+            UNIQUE(email)
         )
-    conn = get_conn()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS "users" (
-                id TEXT PRIMARY KEY NOT NULL,
-                email TEXT NOT NULL,
-                name TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                activated_at TEXT DEFAULT NULL,
-                UNIQUE(email)
-            )
-        """)
-    except Exception:  # pylint: disable=try-except-raise
-        # init_db() is not expected to be called in production, so we don't
-        # need to handle errors gracefully.
-        raise
-    else:
-        conn.commit()
-    finally:
-        conn.close()
+    """
+    storage.init_table(schema)
 
 
 class UserNew(TypedDict, total=True):
@@ -74,93 +55,78 @@ class User:
     """User model for handling database operations related to users."""
 
     def __init__(self):
-        """Initialize the OTP model with a storage interface.
-
-        Args:
-            storage: Implementation of StorageInterface for database
-            operations.
-        """
-        self.storage = get_drum()
+        """Initialize the User model with a table storage interface."""
+        self.storage = get_table(TABLE)
 
     def activate(self, email: str) -> None:
         """Actions to perform upon first sign-in."""
         user_id = uid.generate_user_uid(email)
-        resp = self.storage.update_by_id(
-            TABLE,
-            user_id,
-            {'activated_at': utc_time.now()}
-        )
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="User not found",
-                    user_id=user_id
-                )
-            case Response(status="ok", message=Message.UPDATED):
-                return
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        try:
+            self.storage.update_by_id(user_id, {'activated_at': utc_time.now()})
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        # Check if user was actually found and updated
+        user = self.storage.get_by_id(user_id)
+        if not user:
+            raise api_errors.ConflictError(
+                message="User not found",
+                user_id=user_id
+            )
 
     def new(self, **fields: Unpack[UserNew]) -> UserResource:
         """Create a new user."""
         user_id = uid.generate_user_uid(fields["email"])
-        user_id, _ = fields["email"].split('@')
-        record = UserResource(
+        record = dict(
             id=user_id,
             created_at=utc_time.now(),
             **fields,
             # do not activate user on creation
         )
-        resp = self.storage.insert(TABLE, record)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS, data=resource):
-                return resource
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        try:
+            self.storage.insert_one(record)
+            return record  # type: ignore
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def delete(self, user_id: str) -> None:
         """Delete a user by id."""
-        resp = self.storage.delete_by_id(TABLE, user_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="User not found",
-                    user_id=user_id
-                )
-            case Response(status="ok", message=Message.DELETED):
-                return
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        # Check if user exists first
+        user = self.storage.get_by_id(user_id)
+        if not user:
+            raise api_errors.ConflictError(
+                message="User not found",
+                user_id=user_id
+            )
+        try:
+            self.storage.delete_by_id(user_id)
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def get(self, user_id: str) -> UserResource:
         """Get a user by id."""
-        resp = self.storage.get_by_id(TABLE, user_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            user = self.storage.get_by_id(user_id)
+            if not user:
                 raise api_errors.ConflictError(
                     message="User not found",
                     user_id=user_id
                 )
-            case Response(status="ok", message=Message.FOUND, data=resource):
-                return resource
-        raise ValueError(f"Unexpected response from storage: {resp}")
+            return user  # type: ignore
+        except api_errors.ConflictError:
+            raise
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def update(self, user_id: str, **updates: Unpack[UserUpdate]) -> None:
         """Update a user by id."""
-        resp = self.storage.update_by_id(TABLE, user_id, updates)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                raise api_errors.ConflictError(
-                    message="User not found",
-                    user_id=user_id
-                )
-            case Response(status="ok", message=Message.UPDATED):
-                return
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        # Check if user exists first
+        user = self.storage.get_by_id(user_id)
+        if not user:
+            raise api_errors.ConflictError(
+                message="User not found",
+                user_id=user_id
+            )
+        try:
+            self.storage.update_by_id(user_id, dict(updates))
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)

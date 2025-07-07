@@ -13,13 +13,12 @@ Main operations:
 
 from typing import TypedDict, NotRequired, Unpack
 
-from apps.common.models.base import BaseRecord, ModelResponse
+from apps.common.models.base import BaseRecord
 from apps.common.errors import api_errors
-from common.drum.mongodb import get_db, get_drum
-from common.schema import CampusID, Message, Response
 from common.utils import uid, utc_time
+from storage import get_collection
 
-SourceID = CampusID
+SourceID = str
 
 TABLE = "sources"
 
@@ -31,10 +30,11 @@ def init_db():
     staging.
     For MongoDB, collections are created automatically on first insert.
     """
-    db = get_db()
-    source_meta = db[TABLE].find_one({"@meta": True})
-    if source_meta is None:
-        db[TABLE].insert_one({
+    storage = get_collection(TABLE)
+    # Check if metadata document exists
+    source_meta = storage.get_matching({"@meta": True})
+    if not source_meta:
+        storage.insert_one({
             "@meta": True,
             "integrations": {},
             "sourcetypes": {},
@@ -83,9 +83,9 @@ class Source:
 
     def __init__(self):
         """Initialize the Source model with a storage interface."""
-        self.storage = get_drum()
+        self.storage = get_collection(TABLE)
 
-    def new(self, **fields: Unpack[SourceNew]) -> ModelResponse:
+    def new(self, **fields: Unpack[SourceNew]) -> str:
         """This creates a new source."""
         # TODO: add to circle
         source_id = SourceID(uid.generate_category_uid("source", length=16))
@@ -94,76 +94,75 @@ class Source:
             created_at=utc_time.now(),
             name=fields["name"],
             description=fields.get("description", ""),
+            type=fields["type"],
+            external_id=fields["external_id"],
+            linked_by=fields["linked_by"],
+            linked_at=fields["linked_at"],
+            owner_circles=fields["owner_circles"],
+            access_policies=fields["access_policies"],
+            metadata=fields.get("metadata", {}),
         )
-        resp = self.storage.insert(TABLE, record)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.SUCCESS):
-                return ModelResponse(status="ok", message=Message.CREATED, data=resp.data)
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        try:
+            self.storage.insert_one(dict(record))
+            return source_id
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
-    def delete(self, source_id: str) -> ModelResponse:
+    def delete(self, source_id: str) -> None:
         """Delete a source by id.
 
         This action is destructive and cannot be undone.
         It should only be done by an admin/owner.
         """
-        resp = self.storage.delete_by_id(TABLE, source_id)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.DELETED):
-                return ModelResponse(**resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            deleted_count = self.storage.delete_by_id(source_id)
+            if deleted_count == 0:
                 raise api_errors.ConflictError(
                     message="Source not found",
                     id=source_id
                 )
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
-    def get(self, source_id: str) -> ModelResponse:
+    def get(self, source_id: str) -> dict:
         """Get a source by id from the source collection."""
-        resp = self.storage.get_by_id(TABLE, source_id)
-        # TODO: join with sources and access values
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            record = self.storage.get_by_id(source_id)
+            if record is None:
                 raise api_errors.ConflictError(
                     message="Source not found",
                     id=source_id
                 )
-        raise ValueError(f"Unexpected response from storage: {resp}")
+            return record
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
-    def list(self) -> ModelResponse:
+    def list(self) -> list[dict]:
         """List all sources in the sources collection."""
-        resp = self.storage.get_all(TABLE)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.FOUND):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
-                return ModelResponse(status="ok", message=Message.NOT_FOUND, data=[])
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        try:
+            # Get all documents (excluding metadata documents)
+            sources = self.storage.get_matching({"@meta": {"$ne": True}})
+            return sources
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
-    def update(self, source_id: str, **updates: Unpack[SourceUpdate]) -> ModelResponse:
+    def update(self, source_id: str, **updates: Unpack[SourceUpdate]) -> None:
         """Update a source by id."""
-        resp = self.storage.update_by_id(TABLE, source_id, updates)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.UPDATED):
-                return ModelResponse(*resp)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            updated_count = self.storage.update_by_id(source_id, dict(updates))
+            if updated_count == 0:
                 raise api_errors.ConflictError(
                     message="Source not found",
                     id=source_id
                 )
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
 
 __all__ = [

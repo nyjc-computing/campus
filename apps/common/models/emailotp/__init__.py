@@ -14,13 +14,8 @@ import bcrypt
 
 from apps.common.errors import api_errors
 from apps.common.models.base import BaseRecord
-from common import devops
-from common.schema import Message, Response
 from common.utils import uid, utc_time
-if devops.ENV in (devops.STAGING, devops.PRODUCTION):
-    from common.drum.postgres import get_conn, get_drum
-else:
-    from common.drum.sqlite import get_conn, get_drum
+from storage import get_table
 
 TABLE = "emailotp"
 
@@ -32,31 +27,17 @@ def init_db():
     local-only db like SQLite), or in a staging environment before upgrading to
     production.
     """
-    # TODO: Refactor into decorator
-    if os.getenv('ENV', 'development') == 'production':
-        raise AssertionError(
-            "Database initialization detected in production environment"
+    storage = get_table(TABLE)
+    schema = """
+        CREATE TABLE IF NOT EXISTS emailotp (
+            id TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            otp_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
         )
-    conn = get_conn()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS emailotp (
-                id TEXT PRIMARY KEY,
-                email TEXT NOT NULL,
-                otp_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL
-            )
-        """)
-    except Exception:  # pylint: disable=try-except-raise
-        # init_db() is not expected to be called in production, so we don't
-        # need to handle errors gracefully.
-        raise
-    else:
-        conn.commit()
-    finally:
-        conn.close()
+    """
+    storage.init_table(schema)
 
 
 class _plainOTP(str):
@@ -146,7 +127,7 @@ class EmailOTPAuth:
         Args:
             storage: Implementation of StorageInterface for database operations.
         """
-        self.storage = get_drum()
+        self.storage = get_table(TABLE)
 
     def request(self, email: str, expiry_minutes: int | float = 5) -> str:
         """Generate a new OTP for the given email, store or update it in the database,
@@ -167,27 +148,25 @@ class EmailOTPAuth:
         created_at = utc_time.now()
         expires_at = utc_time.after(minutes=expiry_minutes)
 
-        # Delete any existing OTP for this email
-        resp = self.storage.delete_by_id('otp_codes', email)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-        # Insert new OTP
-        otp_id = uid.generate_category_uid(TABLE, length=16)
-        otp_code = OTPRecord(
-            id=otp_id,
-            email=email,
-            otp_hash=otp_hash,
-            created_at=created_at,
-            expires_at=expires_at,
-        )
-        resp = self.storage.insert('otp_codes', otp_code)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.CREATED):
-                return plain_otp
-        raise ValueError(f"Unexpected response from storage: {resp}")
+        try:
+            # Delete any existing OTP for this email (find by email field)
+            existing_otps = self.storage.get_matching({"email": email})
+            for otp_record in existing_otps:
+                self.storage.delete_by_id(otp_record["id"])
+            
+            # Insert new OTP
+            otp_id = uid.generate_category_uid(TABLE, length=16)
+            otp_code = OTPRecord(
+                id=otp_id,
+                email=email,
+                otp_hash=otp_hash,
+                created_at=created_at,
+                expires_at=expires_at,
+            )
+            self.storage.insert_one(dict(otp_code))
+            return plain_otp
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def verify(self, **data: Unpack[OTPVerify]) -> None:
         """Verify if the provided OTP matches the one stored for the email.
@@ -199,32 +178,35 @@ class EmailOTPAuth:
         Returns:
             ModelResponse indicating the result of the verification.
         """
-        # Get the latest OTP for this email
-        resp = self.storage.get_by_id('otp_codes', data['email'])
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            # Get the latest OTP for this email
+            otp_records = self.storage.get_matching({"email": data['email']})
+            if not otp_records:
                 raise api_errors.ConflictError("OTP not found")
+            
+            # Get the most recent OTP record (assuming they're ordered by creation time)
+            record = otp_records[0]
+            
+            hashed_otp = _hashedOTP(record['otp_hash'])
+            expires_at = record['expires_at']
 
-        _, _, record = resp
-        assert isinstance(record, dict)  # appeasing mypy gods
-        hashed_otp = _hashedOTP(record['otp_hash'])
-        expires_at = record['expires_at']
+            # Convert expires_at to datetime if it's a string
+            if isinstance(expires_at, str):
+                expires_at = utc_time.from_rfc3339(expires_at)
 
-        # Convert expires_at to datetime if it's a string
-        if isinstance(expires_at, str):
-            expires_at = utc_time.from_rfc3339(expires_at)
+            # Check if OTP is expired
+            if utc_time.is_expired(expires_at):
+                raise api_errors.UnauthorizedError("OTP expired")
 
-        # Check if OTP is expired
-        if utc_time.is_expired(expires_at):
-            raise api_errors.UnauthorizedError("OTP expired")
-
-        # Verify OTP
-        if hashed_otp.verify(_plainOTP(data['otp'])):
-            return
-        else:
-            raise api_errors.UnauthorizedError("Invalid OTP")
+            # Verify OTP
+            if hashed_otp.verify(_plainOTP(data['otp'])):
+                return
+            else:
+                raise api_errors.UnauthorizedError("Invalid OTP")
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def revoke(self, email: str) -> None:
         """Delete all OTPs for the given email (typically after successful
@@ -233,13 +215,16 @@ class EmailOTPAuth:
         Args:
             email: Email address to delete OTPs for.
         """
-        resp = self.storage.delete_by_id('otp_codes', email)
-        match resp:
-            case Response(status="error", message=message, data=error):
-                raise api_errors.InternalError(message=message, error=error)
-            case Response(status="ok", message=Message.NOT_FOUND):
+        try:
+            # Find all OTPs for this email
+            otp_records = self.storage.get_matching({"email": email})
+            if not otp_records:
                 raise api_errors.ConflictError("OTP not found")
-            case Response(status="ok", message=Message.DELETED):
-                return
-            case _:
-                raise ValueError(f"Unexpected case: {resp}")
+            
+            # Delete all OTP records for this email
+            for record in otp_records:
+                self.storage.delete_by_id(record["id"])
+        except Exception as e:
+            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
+                raise  # Re-raise API errors as-is
+            raise api_errors.InternalError(message=str(e), error=e)
