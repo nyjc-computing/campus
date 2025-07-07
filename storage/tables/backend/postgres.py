@@ -173,3 +173,25 @@ class PostgreSQLTable(TableInterface):
                     params
                 )
                 conn.commit()
+
+    def init_table(self, schema: str) -> None:
+        """Initialize the table with the given SQL schema.
+        
+        This method is intended for development/testing environments.
+        In production, schema management should be handled by migrations.
+        
+        Args:
+            schema: SQL CREATE TABLE statement defining the table structure.
+        """
+        import os
+        
+        # Safety check: prevent running in production
+        if os.getenv('ENV', 'development') == 'production':
+            raise AssertionError(
+                "Table initialization detected in production environment"
+            )
+            
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(schema)
+                conn.commit()

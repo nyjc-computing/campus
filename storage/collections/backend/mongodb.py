@@ -128,3 +128,23 @@ class MongoDBCollection(CollectionInterface):
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
         self.collection.delete_many(query)
+
+    def init_collection(self) -> None:
+        """Initialize the collection.
+        
+        This method is intended for development/testing environments.
+        For MongoDB, collections are created automatically on first insert,
+        so this method primarily ensures the collection exists and can be used
+        for any setup operations if needed in the future.
+        """
+        import os
+        
+        # Safety check: prevent running in production  
+        if os.getenv('ENV', 'development') == 'production':
+            raise AssertionError(
+                "Collection initialization detected in production environment"
+            )
+        
+        # For MongoDB, collections are created automatically on first insert
+        # This method exists for interface compatibility and future extensibility
+        pass
