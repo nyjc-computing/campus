@@ -2,64 +2,25 @@
 
 This module provides the MongoDB backend for the Collections storage interface.
 
-Features:
-- Full CRUD Operations: Create, Read, Update, Delete operations
-- Flexible Schema: Native JSON document storage
-- Primary Key Support: Uses standard `id` field as primary key (mapped to MongoDB's `_id`)
-- Automatic ObjectId Handling: Transparent mapping between Campus `id` and MongoDB `_id`
-- Query Support: Supports MongoDB's native query capabilities
+Environment Variables:
+- MONGODB_URI: MongoDB connection string (required)
+- MONGODB_NAME: Database name (required)
 
-Architecture:
-The MongoDB implementation uses a document-based approach:
-1. Primary Key Mapping: Campus `id` field maps to MongoDB's `_id` field
-2. Document Storage: All other fields are stored as native JSON documents
-3. MongoRecord Class: Handles transparent key mapping between Campus and MongoDB formats
+Implementation:
+Uses MongoDB's native document storage with transparent primary key mapping
+between Campus `id` and MongoDB `_id` fields. Collections are created automatically.
+Record validation is handled before storage and is not the responsibility of this module.
 
-Usage:
+Usage Example:
 ```python
 from storage.collections.backend.mongodb import MongoDBCollection
 
-# Create a collection instance
-users_collection = MongoDBCollection("users")
-
-# Insert a document
-user_data = {
-    "id": "user_123",
-    "name": "John Doe",
-    "email": "john@example.com",
-    "age": 30
-}
-users_collection.insert_one(user_data)
-
-# Retrieve by ID
-user = users_collection.get_by_id("user_123")
-
-# Query matching documents
-young_users = users_collection.get_matching({"age": 25})
-
-# Update a document
-users_collection.update_by_id("user_123", {"age": 31, "status": "active"})
-
-# Delete a document
-users_collection.delete_by_id("user_123")
+collection = MongoDBCollection("users")
+collection.insert_one({"id": "123", "name": "John"})
+user = collection.get_by_id("123")
+collection.update_by_id("123", {"name": "Jane"})
+collection.delete_by_id("123")
 ```
-
-Database Configuration:
-The implementation requires these environment variables:
-- MONGO_URI: MongoDB connection string (required)
-- MONGO_DB_NAME: Database name (required)
-
-Dependencies:
-- pymongo: MongoDB driver for Python
-
-Performance Considerations:
-- Native JSON document storage for optimal performance
-- Automatic connection management
-- Efficient document mapping through MongoRecord class
-- Leverages MongoDB's native indexing capabilities
-
-Note: Collections are created automatically by MongoDB when first accessed.
-Record validation is handled before storage and is not the responsibility of this module.
 """
 
 import os
@@ -69,8 +30,8 @@ from pymongo.errors import DuplicateKeyError
 
 from storage.collections.interface import CollectionInterface, PK
 
-DB_URI = os.environ["MONGO_URI"]
-DB_NAME = os.environ["MONGO_DB_NAME"]
+DB_URI = os.environ["MONGODB_URI"]
+DB_NAME = os.environ["MONGODB_NAME"]
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
 
