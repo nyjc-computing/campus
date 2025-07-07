@@ -7,14 +7,20 @@ This interface is usually provided by relational databases like PostgreSQL
 or SQLite.
 """
 
+from common import devops
+
 from .backend.postgres import PostgreSQLTable
 
 from .interface import TableInterface
 
-
 def get_db(name: str):
-    """Get a table by name."""
-    return PostgreSQLTable(name)
+    """Get a table by name, using appropriate backend for environment."""
+    if devops.ENV in (devops.STAGING, devops.PRODUCTION):
+        return PostgreSQLTable(name)
+    else:
+        # TODO: Use SQLite for development/testing when backend is implemented
+        # For now, use PostgreSQL for all environments
+        return PostgreSQLTable(name)
 
 
 __all__ = [
