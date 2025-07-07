@@ -59,7 +59,7 @@ Performance Considerations:
 - Leverages MongoDB's native indexing capabilities
 
 Note: Collections are created automatically by MongoDB when first accessed.
-No explicit schema management is required.
+Record validation is handled before storage and is not the responsibility of this module.
 """
 
 import os
@@ -86,10 +86,6 @@ class MongoRecord(dict):
     def __init__(self, *args, **kwargs):
         """Initialize the MongoRecord with given arguments."""
         super().__init__(*args, **kwargs)
-        if "id" not in self:
-            raise ValueError(
-                "MongoRecord must have an 'id' field as primary key."
-            )
 
     @classmethod
     def from_mongo(cls, mongo_doc: dict) -> "MongoRecord":
