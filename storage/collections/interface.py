@@ -21,7 +21,7 @@ class CollectionInterface(ABC):
         self.name = name
 
     @abstractmethod
-    def get_by_id(self, doc_id: str) -> dict:
+    def get_by_id(self, doc_id: str) -> dict | None:
         """Retrieve a document by its ID."""
         ...
 
