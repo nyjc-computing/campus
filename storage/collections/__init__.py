@@ -16,7 +16,7 @@ from .interface import CollectionInterface
 
 def get_db(name: str):
     """Get a collection by name."""
-    raise NotImplementedError
+    return backend.mongodb.MongoDBCollection(name)
 
 
 __all__ = [

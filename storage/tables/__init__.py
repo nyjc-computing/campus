@@ -14,7 +14,7 @@ from .interface import TableInterface
 
 def get_db(name: str):
     """Get a table by name."""
-    raise NotImplementedError
+    return backend.postgres.PostgreSQLTable(name)
 
 
 __all__ = [
