@@ -6,7 +6,6 @@ generating, hashing, verifying, and managing OTPs securely.
 """
 # TODO: Move to common.services
 
-import os
 import secrets
 from typing import TypedDict, Unpack
 
