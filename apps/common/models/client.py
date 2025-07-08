@@ -26,8 +26,8 @@ def init_db() -> None:
     production.
     """
     storage = get_table(TABLE)
-    schema = """
-        CREATE TABLE IF NOT EXISTS "clients" (
+    schema = f"""
+        CREATE TABLE IF NOT EXISTS "{TABLE}" (
             id TEXT PRIMARY KEY,
             secret_hash TEXT,
             name TEXT NOT NULL,

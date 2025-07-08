@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
 from common.devops import Env
-from common.drum.mongodb import get_db
+from storage import get_collection
 
 from . import config, schema
 
@@ -16,11 +16,31 @@ from .config import Security, IntegrationConfigSchema, SecurityConfigSchema, get
 
 Url = str
 
-TABLE = "integrations"
+COLLECTION = "integrations"
 
 __all__ = [
     "get_config",
 ]
+
+
+# TODO: Refactor settings into a separate model
+def init_db():
+    """Initialize the collections needed by the model.
+
+    This function is intended to be called only in a test environment or
+    staging.
+    For MongoDB, collections are created automatically on first insert.
+    """
+    # Initialize the collection (creates it if needed)
+    storage = get_collection(COLLECTION)
+    storage.init_collection()
+
+    # Ensure meta record exists
+    meta_list = storage.get_matching({"@meta": True})
+    if not meta_list:
+        storage.insert_one({"@meta": True})
+        meta_list = storage.get_matching({"@meta": True})
+    meta_record = meta_list[0]
 
 
 class PollingCapabilities(TypedDict):
@@ -120,38 +140,32 @@ class Integration:
 
     def sync_status(self):
         """Sync an integration status to storage."""
-        db = get_db()
-        meta = db[TABLE].find_one({"@meta": True})
-        # assume metadata document exists
-        if not isinstance(meta, dict):
+        storage = get_collection(COLLECTION)
+        meta_list = storage.get_matching({"@meta": True})
+        if not meta_list:
             raise ValueError("No @meta document found in storage.")
-        if not db[TABLE].find_one({
-            "@meta": True,
-            f"integrations.{self.provider}.enabled": {"$exists": True}
-        }):
-            # Integration not completely registered in storage
-            # Default status to False
-            # MongoDB $set operator works recursively
-            db[TABLE].update_one(
+        meta_record = meta_list[0]
+        if not "enabled" in meta_record["integrations"][self.provider]:
+            # If the integration is not registered, register it
+            storage.update_matching(
                 {"@meta": True},
-                {"$set": {f"integrations.{self.provider}.enabled": False}}
+                {f"integrations.{self.provider}.enabled": False}
             )
-        integration = db[TABLE].find_one({
+
+        integration = storage.get_matching({
             "@meta": True,
             f"integrations.{self.provider}": 1
-        })
-        assert isinstance(integration, dict)
+        })[0]
+        assert isinstance(integration, dict) and "enabled" in integration
         if self.enabled is None:
             # Instance is inited but not yet synced
             # Set the enabled status from integration doc
             self.enabled = bool(integration["enabled"])
         else:
             # Update storage from instance enabled status
-            db[TABLE].update_one(
+            storage.update_matching(
                 {"@meta": True},
-                {"$set": {
-                    f"integrations.{self.provider}.enabled": bool(self.enabled)
-                }}
+                {f"integrations.{self.provider}.enabled": bool(self.enabled)}
             )
 
 

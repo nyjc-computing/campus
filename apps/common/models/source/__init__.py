@@ -30,15 +30,7 @@ def init_db():
     staging.
     For MongoDB, collections are created automatically on first insert.
     """
-    storage = get_collection(TABLE)
-    # Check if metadata document exists
-    source_meta = storage.get_matching({"@meta": True})
-    if not source_meta:
-        storage.insert_one({
-            "@meta": True,
-            "integrations": {},
-            "sourcetypes": {},
-        })
+    pass
 
 
 class SourceRecord(BaseRecord, total=False):
