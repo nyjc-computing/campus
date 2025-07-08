@@ -28,8 +28,8 @@ def init_db():
     production.
     """
     storage = get_table(TABLE)
-    schema = """
-        CREATE TABLE IF NOT EXISTS emailotp (
+    schema = f"""
+        CREATE TABLE IF NOT EXISTS "{TABLE}" (
             id TEXT PRIMARY KEY,
             email TEXT NOT NULL,
             otp_hash TEXT NOT NULL,

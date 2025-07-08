@@ -22,8 +22,8 @@ def init_db():
     production.
     """
     storage = get_table(TABLE)
-    schema = """
-        CREATE TABLE IF NOT EXISTS "users" (
+    schema = f"""
+        CREATE TABLE IF NOT EXISTS "{TABLE}" (
             id TEXT PRIMARY KEY NOT NULL,
             email TEXT NOT NULL,
             name TEXT NOT NULL,
