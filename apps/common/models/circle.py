@@ -19,7 +19,6 @@ from typing import NotRequired, TypedDict, Unpack
 from apps.common.errors import api_errors
 from apps.common.models.base import BaseRecord
 from storage import get_collection
-from common.drum.mongodb import get_db  # Keep for direct MongoDB operations in init_db
 from common.schema import CampusID
 from common.utils import uid, utc_time
 
@@ -32,7 +31,7 @@ CircleTree = dict[CircleID, "CircleTree"]
 
 # TODO: Make domain configurable
 DOMAIN = "nyjc.edu.sg"
-TABLE = "circles"
+COLLECTION = "circles"
 
 
 # TODO: Refactor settings into a separate model
@@ -44,12 +43,18 @@ def init_db():
     For MongoDB, collections are created automatically on first insert.
     """
     # Initialize the collection (creates it if needed)
-    storage = get_collection(TABLE)
+    storage = get_collection(COLLECTION)
     storage.init_collection()
-    
+
+    # Ensure meta record exists
+    meta_list = storage.get_matching({"@meta": True})
+    if not meta_list:
+        storage.insert_one({"@meta": True})
+        meta_list = storage.get_matching({"@meta": True})
+    meta_record = meta_list[0]
+
     # Check for existing root circle
-    circle_meta_list = storage.get_matching({"@meta": True})
-    if not circle_meta_list or "root" not in circle_meta_list[0]:
+    if not "root" not in meta_record or not meta_record["root"]:
         # Create admin and root circles
         root_circle = Circle().new(
             name=DOMAIN,
@@ -64,25 +69,13 @@ def init_db():
             parents={root_circle["id"]: 15}
         )
         # Create or update circle meta record using storage interface
-        meta_record = {
-            "@meta": True,
-            "root": root_circle["id"],
-            root_circle["id"]: {},  # circle address tree
-        }
-        # Check if meta record exists and update/insert accordingly
-        existing_meta = storage.get_matching({"@meta": True})
-        if existing_meta:
-            # Update existing meta record - we need to handle this with direct MongoDB access
-            # since the storage interface doesn't support complex updates yet
-            from common.drum.mongodb import get_db
-            db = get_db()
-            db[TABLE].update_one(
-                {"@meta": True},
-                {"$set": meta_record},
-                upsert=True
-            )
-        else:
-            storage.insert_one(meta_record)
+        storage.update_matching(
+            {"@meta": True},
+            {
+                "root": root_circle["id"],
+                root_circle["id"]: {},  # circle address tree
+            }
+        )
 
 
 class CircleMeta(TypedDict, total=False):
@@ -150,12 +143,12 @@ class CircleMemberSet(CircleMemberRemove):
 
 def get_circle_meta() -> "CircleMeta":
     """Get the circle meta record from the settings collection."""
-    storage = get_collection(TABLE)
+    storage = get_collection(COLLECTION)
     try:
         circle_meta = storage.get_matching({"@meta": True})
         if not circle_meta:
             raise api_errors.InternalError(
-                message=f"Circle meta record not found in collection {TABLE}",
+                message=f"Circle meta record not found in collection {COLLECTION}",
                 id=DOMAIN
             )
         # Since some keys required in CircleMeta cannot be represented as
@@ -170,7 +163,7 @@ def get_root_circle() -> "CircleRecord":
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
         raise api_errors.InternalError(
-            message=f"'root' not set in collection {TABLE}",
+            message=f"'root' not set in collection {COLLECTION}",
             id=DOMAIN
         )
     return Circle().get(circle_meta["root"])
@@ -181,7 +174,7 @@ def get_tree_root() -> "CircleTree":
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
         raise api_errors.InternalError(
-            message=f"'root' not set in collection {TABLE}",
+            message=f"'root' not set in collection {COLLECTION}",
             id=DOMAIN
         )
     tree_root = circle_meta[circle_meta["root"]]
@@ -201,7 +194,7 @@ class CircleMember:
 
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
-        self.storage = get_collection(TABLE)
+        self.storage = get_collection(COLLECTION)
 
     def list(self, circle_id: CircleID) -> dict:
         """List all members of a circle."""
@@ -234,12 +227,10 @@ class CircleMember:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
             raise api_errors.InternalError(message=str(e), error=e)
-        
+
         # Use direct MongoDB access for nested field updates
-        # TODO: Consider adding nested field update support to storage interface
-        from common.drum.mongodb import get_db
-        db = get_db()
-        db[TABLE].update_one(
+        storage = get_collection(COLLECTION)
+        storage.update_matching(
             {"id": circle_id},
             {
                 "$set": {
@@ -268,12 +259,10 @@ class CircleMember:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
             raise api_errors.InternalError(message=str(e), error=e)
-        
+
         # Use direct MongoDB access for nested field updates
-        # TODO: Consider adding nested field update support to storage interface
-        from common.drum.mongodb import get_db
-        db = get_db()
-        db[TABLE].update_one(
+        storage = get_collection(COLLECTION)
+        storage.update_matching(
             {"id": circle_id},
             {
                 "$unset": {
@@ -297,7 +286,7 @@ class Circle:
 
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
-        self.storage = get_collection(TABLE)
+        self.storage = get_collection(COLLECTION)
 
     def new(self, **fields: Unpack[CircleNew]) -> CircleResource:
         """This creates a new circle and adds it to the circle collection.
@@ -369,12 +358,7 @@ class Circle:
     def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> None:
         """Update a circle by id."""
         try:
-            result = self.storage.update_by_id(circle_id, dict(updates))
-            if result is None:
-                raise api_errors.ConflictError(
-                    message="Circle not found",
-                    id=circle_id
-                )
+            self.storage.update_by_id(circle_id, dict(updates))
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
