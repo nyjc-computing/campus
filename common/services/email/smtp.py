@@ -3,19 +3,19 @@
 SMTP email sending service.
 """
 
-import os
 import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from common.schema import Message, Response
+from common.services.vault import get_vault
 
-from .base import EmailResponse, EmailSenderInterface
+from .base import EmailSenderInterface
 
+vault = get_vault("smtp")
 
 class SMTPEmailSender(EmailSenderInterface):
     """SMTP email sending service."""
-    
+
     def __init__(
             self,
             smtp_server: str,
@@ -32,7 +32,7 @@ class SMTPEmailSender(EmailSenderInterface):
         body: str,
         html_body: str | None = None,
         attachments: Sequence[Any] | None = None
-    ) -> EmailResponse:
+    ) -> dict:
         """Send an email to a recipient via SMTP.
     
         Args:
@@ -45,9 +45,9 @@ class SMTPEmailSender(EmailSenderInterface):
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-        username = os.environ['SMTP_USERNAME']
-        password = os.environ['SMTP_PASSWORD']
-        host = os.environ['SMTP_HOST']
+        username = vault.get('SMTP_USERNAME')
+        password = vault.get('SMTP_PASSWORD')
+        host = vault.get('SMTP_HOST')
 
         msg = EmailMessage()
         msg['Subject'] = subject
@@ -66,7 +66,6 @@ class SMTPEmailSender(EmailSenderInterface):
                 server.send_message(msg)
 
         except Exception as err:
-            return EmailResponse("error", Message.FAILED, err)
+            return {"message": err.args}
         else:
-            return EmailResponse("ok", Message.SUCCESS)
-
+            return {}
