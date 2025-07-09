@@ -1,4 +1,4 @@
-"""common.services.email.smtp
+"""services.email.smtp
 
 SMTP email sending service.
 """
@@ -7,7 +7,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from common.services.vault import get_vault
+from services.vault import get_vault
 
 from .base import EmailSenderInterface
 

@@ -1,4 +1,4 @@
-"""common.services.email
+"""services.email
 
 Email sending services for Campus digital services.
 """

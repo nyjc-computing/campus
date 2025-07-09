@@ -1,4 +1,4 @@
-"""common.services.vault.meta
+"""services.vault.meta
 
 Vault metadata management for the Campus vault service.
 """

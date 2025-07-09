@@ -1,4 +1,4 @@
-"""common.services.vault
+"""services.vault
 
 Vault service for managing secrets and sensitive system data in Campus.
 

@@ -9,7 +9,7 @@ import common.validation.flask as flask_validation
 from apps.campusauth import authenticate_client
 from apps.common.errors import api_errors
 from apps.common.models import emailotp
-from common.services.email import create_email_sender
+from services.email import create_email_sender
 
 from apps.common.models.emailotp import template
 
