@@ -3,6 +3,28 @@
 Access control module for the vault service.
 
 Manages client permissions for vault labels using bitflag permissions.
+
+BITFLAGS EXPLAINED:
+Bitflags are a way to store multiple boolean permissions in a single integer.
+Each permission is represented by a power of 2 (1, 2, 4, 8, 16, ...).
+
+Our permission system uses these values:
+- READ = 1 (binary: 0001)
+- CREATE = 2 (binary: 0010) 
+- UPDATE = 4 (binary: 0100)
+- DELETE = 8 (binary: 1000)
+
+To combine permissions, we use the bitwise OR operator (|):
+- READ + CREATE = 1 | 2 = 3 (binary: 0011)
+- READ + UPDATE = 1 | 4 = 5 (binary: 0101)
+- ALL permissions = 1 | 2 | 4 | 8 = 15 (binary: 1111)
+
+To check if a permission is granted, we use the bitwise AND operator (&):
+- If (granted_permissions & required_permission) == required_permission, access is granted
+- Example: granted=5 (READ+UPDATE), checking for READ: (5 & 1) == 1 ✓ 
+- Example: granted=5 (READ+UPDATE), checking for CREATE: (5 & 2) == 2 ✗
+
+This allows efficient storage and checking of multiple permissions in one integer.
 """
 
 from storage import get_table
@@ -11,11 +33,12 @@ from common.utils import uid, utc_time
 TABLE = "vault_access"
 
 # Access permission bitflags
-READ = 1
-CREATE = 2
-UPDATE = 4
-DELETE = 8
-ALL = READ | CREATE | UPDATE | DELETE
+# Each permission is a power of 2, allowing them to be combined with | (OR)
+READ = 1    # 0001 in binary - Can read existing secrets
+CREATE = 2  # 0010 in binary - Can create new secrets  
+UPDATE = 4  # 0100 in binary - Can modify existing secrets
+DELETE = 8  # 1000 in binary - Can delete secrets
+ALL = READ | CREATE | UPDATE | DELETE  # 1111 in binary - All permissions (value: 15)
 
 __all__ = [
     "grant_access",
@@ -33,10 +56,23 @@ __all__ = [
 def grant_access(client_id: str, label: str, access: int = ALL) -> None:
     """Grant a client access to a vault label with specified permissions.
     
+    The access parameter uses bitflags to specify which operations are allowed.
+    You can combine multiple permissions using the | (OR) operator.
+    
     Args:
         client_id: The client identifier
-        label: The vault label
+        label: The vault label  
         access: Bitflag permissions (default: ALL permissions)
+                Examples:
+                - READ: Only read secrets
+                - READ | CREATE: Read and create new secrets
+                - READ | UPDATE: Read and modify existing secrets
+                - ALL: All permissions (READ | CREATE | UPDATE | DELETE)
+    
+    Examples:
+        grant_access("client-123", "api-keys", READ)  # Read-only access
+        grant_access("client-456", "api-keys", READ | CREATE)  # Read + create
+        grant_access("admin-789", "api-keys", ALL)  # Full access
     """
     access_storage = get_table(TABLE)
     
@@ -70,13 +106,29 @@ def revoke_access(client_id: str, label: str) -> None:
 def has_access(client_id: str, label: str, required_access: int = READ) -> bool:
     """Check if a client has the required access permissions for a vault label.
     
+    This function uses bitwise AND (&) to check if the client's granted permissions
+    include all the required permissions. For example:
+    - Client has READ | CREATE (value: 3)
+    - We check for READ permission (value: 1)
+    - Check: (3 & 1) == 1 → True (client has READ access)
+    - We check for DELETE permission (value: 8)  
+    - Check: (3 & 8) == 8 → False (client lacks delete access)
+    
     Args:
         client_id: The client identifier
         label: The vault label
         required_access: Required permission bitflags (default: READ)
+                        Can be a single permission or combined permissions.
+                        Examples:
+                        - READ: Check if client can read
+                        - READ | UPDATE: Check if client can both read AND update
         
     Returns:
-        True if the client has the required permissions, False otherwise
+        True if the client has ALL the required permissions, False otherwise
+        
+    Examples:
+        has_access("client-123", "secrets", READ)  # Can client read?
+        has_access("client-123", "secrets", READ | UPDATE)  # Can client read AND update?
     """
     access_storage = get_table(TABLE)
     access_records = access_storage.get_matching({"client_id": client_id, "label": label})

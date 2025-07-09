@@ -2,9 +2,34 @@
 
 Vault service for managing secrets and sensitive system data in Campus.
 
-Each vault (in a collection) is identified by a unique label.
-Client access to vault labels is controlled through client permissions.
+Each vault is identified by a unique label and stores key-value pairs of secrets.
+Client access to vault labels is controlled through bitflag permissions.
 Clients are identified by the CLIENT_ID environment variable.
+
+PERMISSION SYSTEM:
+The vault uses bitflag permissions to control what operations clients can perform:
+
+- READ (1): Can retrieve existing secrets with vault.get()
+- CREATE (2): Can add new secrets with vault.set() (for new keys)
+- UPDATE (4): Can modify existing secrets with vault.set() (for existing keys)  
+- DELETE (8): Can remove secrets with vault.delete()
+
+Permissions can be combined using the | operator:
+- READ | CREATE: Can read and create, but not update or delete
+- READ | UPDATE: Can read and modify existing secrets
+- ALL: Can perform all operations (READ | CREATE | UPDATE | DELETE)
+
+USAGE EXAMPLE:
+    # Grant permissions (typically done by admin)
+    from services.vault.access import grant_access, READ, CREATE
+    grant_access("client-123", "api-secrets", READ | CREATE)
+    
+    # Use vault (CLIENT_ID env var must be set to "client-123")
+    vault = get_vault("api-secrets")
+    vault.set("api_key", "secret123")  # Requires CREATE (new key)
+    secret = vault.get("api_key")      # Requires READ
+    vault.set("api_key", "newsecret")  # Requires UPDATE (existing key)
+    vault.delete("api_key")            # Requires DELETE - would fail!
 """
 
 import os
@@ -105,11 +130,24 @@ class Vault:
     def _check_access(self, required_permission: int) -> None:
         """Check if the client has the required permission for this vault label.
         
+        This method uses bitwise operations to verify permissions:
+        1. Calls access.has_access() which does: (granted & required) == required
+        2. If access is denied, builds a human-readable error message
+        3. The error message shows which specific permissions are missing
+        
+        BITWISE PERMISSION CHECKING:
+        - Client granted: READ | CREATE (value: 3, binary: 0011)
+        - Required: UPDATE (value: 4, binary: 0100)  
+        - Check: (3 & 4) == 4 → (0011 & 0100) == 0100 → 0000 == 0100 → False
+        - Result: Access denied, UPDATE permission missing
+        
         Args:
             required_permission: The permission bitflag required for the operation
+                                Can be READ (1), CREATE (2), UPDATE (4), or DELETE (8)
             
         Raises:
-            VaultAccessDeniedError: If the client lacks the required permission
+            VaultAccessDeniedError: If the client lacks the required permission.
+                                   Error message includes which permissions are missing.
         """
         if not access.has_access(self.client_id, self.label, required_permission):
             permission_names = []
@@ -129,7 +167,21 @@ class Vault:
             )
 
     def get(self, key: str) -> str:
-        """Get a secret from the vault."""
+        """Get a secret from the vault.
+        
+        Requires READ permission. This is the most basic operation and is typically
+        granted to most clients that need access to secrets.
+        
+        Args:
+            key: The secret key name to retrieve
+            
+        Returns:
+            The secret value as a string
+            
+        Raises:
+            VaultAccessDeniedError: If client lacks READ permission
+            VaultKeyError: If the secret key doesn't exist in this vault
+        """
         self._check_access(access.READ)
         
         secret_records = self.storage.get_matching({"label": self.label, "key": key})
@@ -140,14 +192,51 @@ class Vault:
         return secret_records[0]["value"]
 
     def has(self, key: str) -> bool:
-        """Check if a secret exists in the vault."""
+        """Check if a secret exists in the vault.
+        
+        Requires READ permission. This allows clients to check for the existence
+        of a secret without retrieving its value.
+        
+        Args:
+            key: The secret key name to check
+            
+        Returns:
+            True if the secret exists, False otherwise
+            
+        Raises:
+            VaultAccessDeniedError: If client lacks READ permission
+        """
         self._check_access(access.READ)
         
         secret_records = self.storage.get_matching({"label": self.label, "key": key})
         return bool(secret_records)
 
     def set(self, key: str, value: str) -> None:
-        """Set a secret in the vault."""
+        """Set a secret in the vault.
+        
+        This method has smart permission checking:
+        - If the key doesn't exist: Requires CREATE permission (adding new secret)
+        - If the key already exists: Requires UPDATE permission (modifying existing secret)
+        
+        This allows fine-grained control where some clients can only add new secrets
+        but not modify existing ones, or vice versa.
+        
+        Args:
+            key: The secret key name
+            value: The secret value to store
+            
+        Raises:
+            VaultAccessDeniedError: If client lacks CREATE (new key) or UPDATE (existing key)
+            
+        Examples:
+            # Client with CREATE permission can add new secrets
+            vault.set("new_api_key", "abc123")  # Requires CREATE
+            
+            # Client with UPDATE permission can modify existing secrets  
+            vault.set("existing_key", "new_value")  # Requires UPDATE
+            
+            # Client with CREATE | UPDATE can do both operations
+        """
         # Check if the key already exists for this label
         existing_records = self.storage.get_matching({"label": self.label, "key": key})
         if existing_records:
@@ -170,7 +259,21 @@ class Vault:
             self.storage.insert_one(new_secret)
 
     def delete(self, key: str) -> None:
-        """Delete a secret from the vault."""
+        """Delete a secret from the vault.
+        
+        Requires DELETE permission. This is typically the most restricted permission
+        since deleting secrets can break applications that depend on them.
+        
+        Args:
+            key: The secret key name to delete
+            
+        Raises:
+            VaultAccessDeniedError: If client lacks DELETE permission
+            
+        Note:
+            If the secret doesn't exist, this method silently succeeds (no error).
+            Use vault.has(key) first if you need to verify existence.
+        """
         self._check_access(access.DELETE)
         
         secret_records = self.storage.get_matching({"label": self.label, "key": key})
