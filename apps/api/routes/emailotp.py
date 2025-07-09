@@ -43,12 +43,18 @@ def request_otp() -> flask_validation.JsonResponse:
 
     # Send OTP via email
     email_sender = create_email_sender(EMAIL_PROVIDER)
-    email_sender.send_email(
+    error = email_sender.send_email(
         recipient=email,
         subject=template.subject("Campus", otp_code),
         body=template.body("Campus", otp_code),
         html_body=template.html_body("Campus", otp_code)
     )
+    if error:
+        api_errors.raise_api_error(
+            error["message"],
+            status_code=500,
+            error_message=str(error)
+        )
     return {"message": "OTP sent"}, 200
 
 @bp.post('/verify')
