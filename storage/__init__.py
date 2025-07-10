@@ -11,6 +11,7 @@ from . import collections, tables
 
 from .collections import CollectionInterface
 from .tables import TableInterface
+from .errors import StorageError, NotFoundError, NoChangesAppliedError
 
 
 def get_table(name: str):
@@ -25,6 +26,9 @@ def get_collection(name: str):
 __all__ = [
     "CollectionInterface",
     "TableInterface",
+    "StorageError",
+    "NotFoundError", 
+    "NoChangesAppliedError",
     "get_table",
     "get_collection",
 ]
