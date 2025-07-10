@@ -11,7 +11,6 @@ from services.vault import get_vault
 
 from .base import EmailSenderInterface
 
-vault = get_vault("smtp")
 
 class SMTPEmailSender(EmailSenderInterface):
     """SMTP email sending service."""
@@ -45,6 +44,7 @@ class SMTPEmailSender(EmailSenderInterface):
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
+        vault = get_vault("smtp")
         username = vault.get('SMTP_USERNAME')
         password = vault.get('SMTP_PASSWORD')
         host = vault.get('SMTP_HOST')
