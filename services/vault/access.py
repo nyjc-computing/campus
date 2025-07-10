@@ -28,8 +28,9 @@ This allows efficient storage and checking of multiple permissions in one intege
 """
 
 from common.utils import uid, utc_time
+from common import devops
 
-from .db import get_connection_context, execute_query
+from . import db
 
 TABLE = "vault_access"
 
@@ -76,9 +77,9 @@ def grant_access(client_id: str, label: str, access: int = ALL) -> None:
         grant_access("client-456", "api-keys", READ | CREATE)  # Read + create
         grant_access("admin-789", "api-keys", ALL)  # Full access
     """
-    with get_connection_context() as conn:
+    with db.get_connection_context() as conn:
         # Check if access already exists
-        existing_access = execute_query(
+        existing_access = db.execute_query(
             conn,
             "SELECT * FROM vault_access WHERE client_id = %s AND label = %s",
             (client_id, label),
@@ -87,7 +88,7 @@ def grant_access(client_id: str, label: str, access: int = ALL) -> None:
 
         if existing_access:
             # Update existing access permissions
-            execute_query(
+            db.execute_query(
                 conn,
                 "UPDATE vault_access SET access = %s WHERE id = %s",
                 (access, existing_access["id"]),
@@ -97,7 +98,7 @@ def grant_access(client_id: str, label: str, access: int = ALL) -> None:
         else:
             # Create new access record
             access_id = uid.generate_category_uid(TABLE, length=16)
-            execute_query(
+            db.execute_query(
                 conn,
                 (
                     "INSERT INTO vault_access (id, created_at, client_id, label, access)"
@@ -111,8 +112,8 @@ def grant_access(client_id: str, label: str, access: int = ALL) -> None:
 
 def revoke_access(client_id: str, label: str) -> None:
     """Revoke a client's access to a vault label."""
-    with get_connection_context() as conn:
-        execute_query(
+    with db.get_connection_context() as conn:
+        db.execute_query(
             conn,
             "DELETE FROM vault_access WHERE client_id = %s AND label = %s",
             (client_id, label),
@@ -148,8 +149,8 @@ def has_access(client_id: str, label: str, required_access: int = READ) -> bool:
         has_access("client-123", "secrets", READ)  # Can client read?
         has_access("client-123", "secrets", READ | UPDATE)  # Can client read AND update?
     """
-    with get_connection_context() as conn:
-        access_record = execute_query(
+    with db.get_connection_context() as conn:
+        access_record = db.execute_query(
             conn,
             "SELECT access FROM vault_access WHERE client_id = %s AND label = %s",
             (client_id, label),
@@ -163,22 +164,14 @@ def has_access(client_id: str, label: str, required_access: int = READ) -> bool:
         return (granted_access & required_access) == required_access
 
 
+@devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the access control table.
 
     This function is intended to be called only in a test environment or
     staging.
     """
-    import os
-
-    # Safety check: prevent running in production
-    if os.getenv('ENV', 'development') == 'production':
-        raise AssertionError(
-            "Access table initialization detected in production environment. "
-            "Database schema should be managed by migrations in production."
-        )
-
-    with get_connection_context() as conn:
+    with db.get_connection_context() as conn:
         with conn.cursor() as cursor:
             # Create vault_access table
             access_schema = """

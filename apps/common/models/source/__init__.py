@@ -16,6 +16,7 @@ from typing import TypedDict, NotRequired, Unpack
 from apps.common.models.base import BaseRecord
 from apps.common.errors import api_errors
 from common.utils import uid, utc_time
+from common import devops
 from storage import get_collection
 
 SourceID = str
@@ -23,6 +24,7 @@ SourceID = str
 TABLE = "sources"
 
 
+@devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the collections needed by the model.
 

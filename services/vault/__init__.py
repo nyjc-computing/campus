@@ -41,6 +41,7 @@ USAGE EXAMPLE:
 import os
 
 from common.utils import uid, utc_time
+from common import devops
 
 from . import access, db
 
@@ -62,19 +63,13 @@ def get_vault(label: str) -> "Vault":
     return Vault(label)
 
 
+@devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the tables needed by the model.
 
     This function is intended to be called only in a test environment or
     staging.
     """
-    # Safety check: prevent running in production
-    if os.getenv('ENV', 'development') == 'production':
-        raise AssertionError(
-            "Vault table initialization detected in production environment. "
-            "Database schema should be managed by migrations in production."
-        )
-
     # Initialize vault table
     with db.get_connection_context() as conn:
         with conn.cursor() as cursor:

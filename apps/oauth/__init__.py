@@ -6,6 +6,7 @@ OAuth2 routes for integrations.
 from flask import Blueprint, Flask
 
 from apps.common import errors
+from common import devops
 
 from . import google
 
@@ -34,6 +35,7 @@ def init_app(app: Flask | Blueprint) -> None:
     google.init_app(bp)
     app.register_blueprint(bp)
 
+@devops.block_env(devops.PRODUCTION)
 def init_db() -> None:
     """Initialise the tables needed by oauth.
     

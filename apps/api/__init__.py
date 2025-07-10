@@ -15,6 +15,7 @@ from apps.api.routes.circles import circles
 from apps.api.routes.clients import clients
 from apps.api.routes.emailotp import emailotp
 from apps.api.routes.users import users
+from common import devops
 
 __all__ = [
     'create_app',
@@ -48,6 +49,7 @@ def init_app(app: Flask | Blueprint) -> None:
     routes.emailotp.init_app(bp)
     app.register_blueprint(bp)
 
+@devops.block_env(devops.PRODUCTION)
 def init_db() -> None:
     """Initialise the tables needed by api.
     
@@ -56,9 +58,9 @@ def init_db() -> None:
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
-    from apps.common.models import client, otp, user
+    from apps.common.models import client, emailotp, user
 
-    for model in (client, otp, user):
+    for model in (client, emailotp, user):
         model.init_db()
 
 def purge() -> None:
