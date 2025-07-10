@@ -27,6 +27,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
+from common import devops
 from storage.tables.interface import TableInterface, PK
 from storage.errors import NotFoundError, NoChangesAppliedError
 
@@ -180,23 +181,16 @@ class PostgreSQLTable(TableInterface):
                     raise NoChangesAppliedError("delete", query, self.name)
                 conn.commit()
 
+    @devops.block_env(devops.PRODUCTION)
     def init_table(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
-        
+
         This method is intended for development/testing environments.
         In production, schema management should be handled by migrations.
-        
+
         Args:
             schema: SQL CREATE TABLE statement defining the table structure.
         """
-        import os
-        
-        # Safety check: prevent running in production
-        if os.getenv('ENV', 'development') == 'production':
-            raise AssertionError(
-                "Table initialization detected in production environment"
-            )
-            
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(schema)

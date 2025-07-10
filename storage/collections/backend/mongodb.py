@@ -27,6 +27,7 @@ import os
 from pymongo import MongoClient
 from pymongo.collection import Collection
 
+from common import devops
 from storage.collections.interface import CollectionInterface, PK
 from storage.errors import NotFoundError, NoChangesAppliedError
 
@@ -138,22 +139,15 @@ class MongoDBCollection(CollectionInterface):
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
+    @devops.block_env(devops.PRODUCTION)
     def init_collection(self) -> None:
         """Initialize the collection.
-        
+
         This method is intended for development/testing environments.
         For MongoDB, collections are created automatically on first insert,
         so this method primarily ensures the collection exists and can be used
         for any setup operations if needed in the future.
         """
-        import os
-        
-        # Safety check: prevent running in production  
-        if os.getenv('ENV', 'development') == 'production':
-            raise AssertionError(
-                "Collection initialization detected in production environment"
-            )
-        
         # For MongoDB, collections are created automatically on first insert
         # This method exists for interface compatibility and future extensibility
         pass
