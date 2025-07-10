@@ -11,7 +11,19 @@ Modules:
 
 from . import errors, models
 
+circles = models.circle.Circle()
+users = models.user.User()
+# venues = models.venue.Venue()
+clients = models.client.Client()
+emailotp = models.emailotp.EmailOTPAuth()
+
+
 __all__ = [
     "errors",
     "models",
+    "circles",
+    "users",
+    # "venues",
+    "clients",
+    "emailotp",
 ]

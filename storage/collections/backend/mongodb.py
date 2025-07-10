@@ -26,9 +26,10 @@ collection.delete_by_id("123")
 import os
 from pymongo import MongoClient
 from pymongo.collection import Collection
-from pymongo.errors import DuplicateKeyError
 
+from common import devops
 from storage.collections.interface import CollectionInterface, PK
+from storage.errors import NotFoundError, NoChangesAppliedError
 
 DB_URI = os.environ["MONGODB_URI"]
 DB_NAME = os.environ["MONGODB_NAME"]
@@ -37,13 +38,14 @@ MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
 class MongoRecord(dict):
     """Handles transparent mapping between Campus and MongoDB primary keys.
-    
+
     Maps Campus `id` field to MongoDB's `_id` field.
-    
+
     Example:
         record = MongoRecord({"id": "123", "name": "John"})
         mongo_doc = record.to_mongo()  # {"_id": "123", "name": "John"}
     """
+
     def __init__(self, *args, **kwargs):
         """Initialize the MongoRecord with given arguments."""
         super().__init__(*args, **kwargs)
@@ -53,19 +55,19 @@ class MongoRecord(dict):
         """Create a MongoRecord from a MongoDB document."""
         mongo_doc[PK] = mongo_doc.pop(MONGO_PK)
         return cls(mongo_doc)
-    
+
     @classmethod
     def from_record(cls, record: dict) -> "MongoRecord":
         """Create a MongoRecord from an API document."""
         record[MONGO_PK] = record.pop(PK)
         return cls(record)
-    
+
     def to_mongo(self) -> dict:
         """Convert the MongoRecord to a MongoDB document."""
         mongo_doc = dict(self)
         mongo_doc[MONGO_PK] = mongo_doc.pop(PK)
         return mongo_doc
-    
+
     def to_record(self) -> dict:
         """Convert the MongoRecord to an API document."""
         record = dict(self)
@@ -75,10 +77,10 @@ class MongoRecord(dict):
 
 class MongoDBCollection(CollectionInterface):
     """MongoDB backend for the Collections storage interface.
-    
+
     Uses MongoDB's native document storage with automatic primary key mapping
     between Campus `id` and MongoDB `_id` fields.
-    
+
     Example:
         collection = MongoDBCollection("users")
         collection.insert_one({"id": "123", "name": "John"})
@@ -115,36 +117,37 @@ class MongoDBCollection(CollectionInterface):
 
     def update_by_id(self, doc_id: str, update: dict) -> None:
         """Update a document in the collection."""
-        self.collection.update_one({PK: doc_id}, {"$set": update})
+        result = self.collection.update_one({PK: doc_id}, {"$set": update})
+        if result.matched_count == 0:
+            raise NotFoundError(doc_id, self.name)
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
-        self.collection.update_many(query, {"$set": update})
+        result = self.collection.update_many(query, {"$set": update})
+        if result.matched_count == 0:
+            raise NoChangesAppliedError("update", query, self.name)
 
     def delete_by_id(self, doc_id: str) -> None:
         """Delete a document from the collection."""
-        self.collection.delete_one({PK: doc_id})
+        result = self.collection.delete_one({PK: doc_id})
+        if result.deleted_count == 0:
+            raise NotFoundError(doc_id, self.name)
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
-        self.collection.delete_many(query)
+        result = self.collection.delete_many(query)
+        if result.deleted_count == 0:
+            raise NoChangesAppliedError("delete", query, self.name)
 
+    @devops.block_env(devops.PRODUCTION)
     def init_collection(self) -> None:
         """Initialize the collection.
-        
+
         This method is intended for development/testing environments.
         For MongoDB, collections are created automatically on first insert,
         so this method primarily ensures the collection exists and can be used
         for any setup operations if needed in the future.
         """
-        import os
-        
-        # Safety check: prevent running in production  
-        if os.getenv('ENV', 'development') == 'production':
-            raise AssertionError(
-                "Collection initialization detected in production environment"
-            )
-        
         # For MongoDB, collections are created automatically on first insert
         # This method exists for interface compatibility and future extensibility
         pass

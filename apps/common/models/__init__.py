@@ -96,12 +96,14 @@ resources.
 """
 
 from . import (
+    circle,
     client,
     emailotp,
     user
 )
 
 __all__ = [
+    "circle",
     "client",
     "emailotp",
     "user"
