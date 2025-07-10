@@ -6,6 +6,12 @@ Each vault is identified by a unique label and stores key-value pairs of secrets
 Client access to vault labels is controlled through bitflag permissions.
 Clients are identified by the CLIENT_ID environment variable.
 
+DATABASE ACCESS:
+This service uses direct PostgreSQL connectivity instead of the storage module
+to avoid circular dependencies. Since other services may depend on vault for
+secrets management, vault must be independent of the storage layer. The vault
+connects directly to PostgreSQL using the VAULTDB_URI environment variable.
+
 PERMISSION SYSTEM:
 The vault uses bitflag permissions to control what operations clients can perform:
 
@@ -33,30 +39,19 @@ USAGE EXAMPLE:
 """
 
 import os
-from storage import get_table
-from . import access
-# from .access import (
-#     has_access, grant_access, revoke_access, init_access_db,
-#     READ, CREATE, UPDATE, DELETE, ALL
-# )
+
+from common.utils import uid, utc_time
+
+from . import access, db
 
 TABLE = "vault"
 
 __all__ = [
     "get_vault",
-    "Vault", 
+    "Vault",
     "VaultAccessDeniedError",
     "VaultKeyError",
     "init_db",
-    # Re-export access functions for convenience
-    # "grant_access",
-    # "revoke_access", 
-    # "has_access",
-    # "READ",
-    # "CREATE",
-    # "UPDATE",
-    # "DELETE", 
-    # "ALL",
 ]
 
 
@@ -73,19 +68,28 @@ def init_db():
     This function is intended to be called only in a test environment or
     staging.
     """
-    vault_storage = get_table(TABLE)
-    vault_schema = """
-        CREATE TABLE IF NOT EXISTS vault (
-            id TEXT PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            label TEXT NOT NULL,
-            key TEXT NOT NULL,
-            value TEXT NOT NULL,
-            UNIQUE(label, key)
+    # Safety check: prevent running in production
+    if os.getenv('ENV', 'development') == 'production':
+        raise AssertionError(
+            "Vault table initialization detected in production environment. "
+            "Database schema should be managed by migrations in production."
         )
-    """
-    vault_storage.init_table(vault_schema)
-    
+
+    # Initialize vault table
+    with db.get_connection_context() as conn:
+        with conn.cursor() as cursor:
+            vault_schema = """
+                CREATE TABLE IF NOT EXISTS vault (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    UNIQUE(label, key)
+                )
+            """
+            cursor.execute(vault_schema)
+
     # Initialize access control table
     access.init_db()
 
@@ -94,7 +98,8 @@ class VaultAccessDeniedError(ValueError):
     """Custom error for when a client doesn't have access to a vault label."""
 
     def __init__(self, client_id: str, label: str):
-        super().__init__(f"Client '{client_id}' does not have access to vault label '{label}'.")
+        super().__init__(
+            f"Client '{client_id}' does not have access to vault label '{label}'.")
         self.client_id = client_id
         self.label = label
 
@@ -122,29 +127,28 @@ class Vault:
         if not client_id:
             raise ValueError("CLIENT_ID environment variable is required")
         self.client_id = client_id
-        self.storage = get_table(TABLE)
 
     def __repr__(self) -> str:
         return f"Vault(label={self.label!r})"
 
     def _check_access(self, required_permission: int) -> None:
         """Check if the client has the required permission for this vault label.
-        
+
         This method uses bitwise operations to verify permissions:
         1. Calls access.has_access() which does: (granted & required) == required
         2. If access is denied, builds a human-readable error message
         3. The error message shows which specific permissions are missing
-        
+
         BITWISE PERMISSION CHECKING:
         - Client granted: READ | CREATE (value: 3, binary: 0011)
         - Required: UPDATE (value: 4, binary: 0100)  
         - Check: (3 & 4) == 4 → (0011 & 0100) == 0100 → 0000 == 0100 → False
         - Result: Access denied, UPDATE permission missing
-        
+
         Args:
             required_permission: The permission bitflag required for the operation
                                 Can be READ (1), CREATE (2), UPDATE (4), or DELETE (8)
-            
+
         Raises:
             VaultAccessDeniedError: If the client lacks the required permission.
                                    Error message includes which permissions are missing.
@@ -159,124 +163,157 @@ class Vault:
                 permission_names.append("UPDATE")
             if required_permission & access.DELETE:
                 permission_names.append("DELETE")
-            
-            permission_str = "|".join(permission_names) if permission_names else str(required_permission)
+
+            permission_str = (
+                "|".join(permission_names) if permission_names
+                else str(required_permission)
+            )
             raise VaultAccessDeniedError(
-                self.client_id, 
+                self.client_id,
                 f"{self.label} (missing {permission_str} permission)"
             )
 
     def get(self, key: str) -> str:
         """Get a secret from the vault.
-        
+
         Requires READ permission. This is the most basic operation and is typically
         granted to most clients that need access to secrets.
-        
+
         Args:
             key: The secret key name to retrieve
-            
+
         Returns:
             The secret value as a string
-            
+
         Raises:
             VaultAccessDeniedError: If client lacks READ permission
             VaultKeyError: If the secret key doesn't exist in this vault
         """
         self._check_access(access.READ)
-        
-        secret_records = self.storage.get_matching({"label": self.label, "key": key})
-        if not secret_records:
-            raise VaultKeyError(
-                f"Secret '{key}' not found in vault '{self.label}'."
+
+        with db.get_connection_context() as conn:
+            secret_record = db.execute_query(
+                conn,
+                "SELECT value FROM vault WHERE label = %s AND key = %s",
+                (self.label, key),
+                fetch_one=True
             )
-        return secret_records[0]["value"]
+
+            if not secret_record:
+                raise VaultKeyError(
+                    f"Secret '{key}' not found in vault '{self.label}'."
+                )
+            return secret_record["value"]
 
     def has(self, key: str) -> bool:
         """Check if a secret exists in the vault.
-        
+
         Requires READ permission. This allows clients to check for the existence
         of a secret without retrieving its value.
-        
+
         Args:
             key: The secret key name to check
-            
+
         Returns:
             True if the secret exists, False otherwise
-            
+
         Raises:
             VaultAccessDeniedError: If client lacks READ permission
         """
         self._check_access(access.READ)
-        
-        secret_records = self.storage.get_matching({"label": self.label, "key": key})
-        return bool(secret_records)
+
+        with db.get_connection_context() as conn:
+            secret_record = db.execute_query(
+                conn,
+                "SELECT id FROM vault WHERE label = %s AND key = %s",
+                (self.label, key),
+                fetch_one=True
+            )
+            return bool(secret_record)
 
     def set(self, key: str, value: str) -> None:
         """Set a secret in the vault.
-        
+
         This method has smart permission checking:
         - If the key doesn't exist: Requires CREATE permission (adding new secret)
         - If the key already exists: Requires UPDATE permission (modifying existing secret)
-        
+
         This allows fine-grained control where some clients can only add new secrets
         but not modify existing ones, or vice versa.
-        
+
         Args:
             key: The secret key name
             value: The secret value to store
-            
+
         Raises:
             VaultAccessDeniedError: If client lacks CREATE (new key) or UPDATE (existing key)
-            
+
         Examples:
             # Client with CREATE permission can add new secrets
             vault.set("new_api_key", "abc123")  # Requires CREATE
-            
+
             # Client with UPDATE permission can modify existing secrets  
             vault.set("existing_key", "new_value")  # Requires UPDATE
-            
+
             # Client with CREATE | UPDATE can do both operations
         """
-        # Check if the key already exists for this label
-        existing_records = self.storage.get_matching({"label": self.label, "key": key})
-        if existing_records:
-            # Update existing secret - requires UPDATE permission
-            self._check_access(access.UPDATE)
-            record_id = existing_records[0]["id"]
-            self.storage.update_by_id(record_id, {"value": value})
-        else:
-            # Create new secret - requires CREATE permission
-            self._check_access(access.CREATE)
-            from common.utils import uid, utc_time
-            secret_id = uid.generate_category_uid(TABLE, length=16)
-            new_secret = {
-                "id": secret_id,
-                "created_at": utc_time.now(),
-                "label": self.label,
-                "key": key,
-                "value": value
-            }
-            self.storage.insert_one(new_secret)
+        with db.get_connection_context() as conn:
+            # Check if the key already exists for this label
+            existing_record = db.execute_query(
+                conn,
+                "SELECT id FROM vault WHERE label = %s AND key = %s",
+                (self.label, key),
+                fetch_one=True
+            )
+
+            if existing_record:
+                # Update existing secret - requires UPDATE permission
+                self._check_access(access.UPDATE)
+                db.execute_query(
+                    conn,
+                    "UPDATE vault SET value = %s WHERE id = %s",
+                    (value, existing_record["id"]),
+                    fetch_one=False,
+                    fetch_all=False
+                )
+            else:
+                # Create new secret - requires CREATE permission
+                self._check_access(access.CREATE)
+                secret_id = uid.generate_category_uid(TABLE, length=16)
+                db.execute_query(
+                    conn,
+                    (
+                        "INSERT INTO vault (id, created_at, label, key, value)"
+                        "VALUES (%s, %s, %s, %s, %s)"
+                    ),
+                    (secret_id, utc_time.now(), self.label, key, value),
+                    fetch_one=False,
+                    fetch_all=False
+                )
 
     def delete(self, key: str) -> None:
         """Delete a secret from the vault.
-        
+
         Requires DELETE permission. This is typically the most restricted permission
         since deleting secrets can break applications that depend on them.
-        
+
         Args:
             key: The secret key name to delete
-            
+
         Raises:
             VaultAccessDeniedError: If client lacks DELETE permission
-            
+
         Note:
             If the secret doesn't exist, this method silently succeeds (no error).
             Use vault.has(key) first if you need to verify existence.
         """
         self._check_access(access.DELETE)
-        
-        secret_records = self.storage.get_matching({"label": self.label, "key": key})
-        if secret_records:
-            record_id = secret_records[0]["id"]
-            self.storage.delete_by_id(record_id)
+
+        with db.get_connection_context() as conn:
+            db.execute_query(
+                conn,
+                "DELETE FROM vault WHERE label = %s AND key = %s",
+                (self.label, key),
+                fetch_one=False,
+                fetch_all=False
+            )

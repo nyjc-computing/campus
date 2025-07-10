@@ -27,27 +27,29 @@ To check if a permission is granted, we use the bitwise AND operator (&):
 This allows efficient storage and checking of multiple permissions in one integer.
 """
 
-from storage import get_table
 from common.utils import uid, utc_time
+
+from .db import get_connection_context, execute_query
 
 TABLE = "vault_access"
 
 # Access permission bitflags
 # Each permission is a power of 2, allowing them to be combined with | (OR)
 READ = 1    # 0001 in binary - Can read existing secrets
-CREATE = 2  # 0010 in binary - Can create new secrets  
+CREATE = 2  # 0010 in binary - Can create new secrets
 UPDATE = 4  # 0100 in binary - Can modify existing secrets
 DELETE = 8  # 1000 in binary - Can delete secrets
-ALL = READ | CREATE | UPDATE | DELETE  # 1111 in binary - All permissions (value: 15)
+# 1111 in binary - All permissions (value: 15)
+ALL = READ | CREATE | UPDATE | DELETE
 
 __all__ = [
     "grant_access",
-    "revoke_access", 
+    "revoke_access",
     "has_access",
     "init_db",
     "READ",
     "CREATE",
-    "UPDATE", 
+    "UPDATE",
     "DELETE",
     "ALL",
 ]
@@ -55,10 +57,10 @@ __all__ = [
 
 def grant_access(client_id: str, label: str, access: int = ALL) -> None:
     """Grant a client access to a vault label with specified permissions.
-    
+
     The access parameter uses bitflags to specify which operations are allowed.
     You can combine multiple permissions using the | (OR) operator.
-    
+
     Args:
         client_id: The client identifier
         label: The vault label  
@@ -68,44 +70,60 @@ def grant_access(client_id: str, label: str, access: int = ALL) -> None:
                 - READ | CREATE: Read and create new secrets
                 - READ | UPDATE: Read and modify existing secrets
                 - ALL: All permissions (READ | CREATE | UPDATE | DELETE)
-    
+
     Examples:
         grant_access("client-123", "api-keys", READ)  # Read-only access
         grant_access("client-456", "api-keys", READ | CREATE)  # Read + create
         grant_access("admin-789", "api-keys", ALL)  # Full access
     """
-    access_storage = get_table(TABLE)
-    
-    # Check if access already exists
-    existing_access = access_storage.get_matching({"client_id": client_id, "label": label})
-    if existing_access:
-        # Update existing access permissions
-        record_id = existing_access[0]["id"]
-        access_storage.update_by_id(record_id, {"access": access})
-    else:
-        # Create new access record
-        access_id = uid.generate_category_uid(TABLE, length=16)
-        access_record = {
-            "id": access_id,
-            "created_at": utc_time.now(),
-            "client_id": client_id,
-            "label": label,
-            "access": access
-        }
-        access_storage.insert_one(access_record)
+    with get_connection_context() as conn:
+        # Check if access already exists
+        existing_access = execute_query(
+            conn,
+            "SELECT * FROM vault_access WHERE client_id = %s AND label = %s",
+            (client_id, label),
+            fetch_one=True
+        )
+
+        if existing_access:
+            # Update existing access permissions
+            execute_query(
+                conn,
+                "UPDATE vault_access SET access = %s WHERE id = %s",
+                (access, existing_access["id"]),
+                fetch_one=False,
+                fetch_all=False
+            )
+        else:
+            # Create new access record
+            access_id = uid.generate_category_uid(TABLE, length=16)
+            execute_query(
+                conn,
+                (
+                    "INSERT INTO vault_access (id, created_at, client_id, label, access)"
+                    "VALUES (%s, %s, %s, %s, %s)"
+                ),
+                (access_id, utc_time.now(), client_id, label, access),
+                fetch_one=False,
+                fetch_all=False
+            )
 
 
 def revoke_access(client_id: str, label: str) -> None:
     """Revoke a client's access to a vault label."""
-    access_storage = get_table(TABLE)
-    access_records = access_storage.get_matching({"client_id": client_id, "label": label})
-    for record in access_records:
-        access_storage.delete_by_id(record["id"])
+    with get_connection_context() as conn:
+        execute_query(
+            conn,
+            "DELETE FROM vault_access WHERE client_id = %s AND label = %s",
+            (client_id, label),
+            fetch_one=False,
+            fetch_all=False
+        )
 
 
 def has_access(client_id: str, label: str, required_access: int = READ) -> bool:
     """Check if a client has the required access permissions for a vault label.
-    
+
     This function uses bitwise AND (&) to check if the client's granted permissions
     include all the required permissions. For example:
     - Client has READ | CREATE (value: 3)
@@ -113,7 +131,7 @@ def has_access(client_id: str, label: str, required_access: int = READ) -> bool:
     - Check: (3 & 1) == 1 → True (client has READ access)
     - We check for DELETE permission (value: 8)  
     - Check: (3 & 8) == 8 → False (client lacks delete access)
-    
+
     Args:
         client_id: The client identifier
         label: The vault label
@@ -122,21 +140,27 @@ def has_access(client_id: str, label: str, required_access: int = READ) -> bool:
                         Examples:
                         - READ: Check if client can read
                         - READ | UPDATE: Check if client can both read AND update
-        
+
     Returns:
         True if the client has ALL the required permissions, False otherwise
-        
+
     Examples:
         has_access("client-123", "secrets", READ)  # Can client read?
         has_access("client-123", "secrets", READ | UPDATE)  # Can client read AND update?
     """
-    access_storage = get_table(TABLE)
-    access_records = access_storage.get_matching({"client_id": client_id, "label": label})
-    if not access_records:
-        return False
-    
-    granted_access = access_records[0]["access"]
-    return (granted_access & required_access) == required_access
+    with get_connection_context() as conn:
+        access_record = execute_query(
+            conn,
+            "SELECT access FROM vault_access WHERE client_id = %s AND label = %s",
+            (client_id, label),
+            fetch_one=True
+        )
+
+        if not access_record:
+            return False
+
+        granted_access = access_record["access"]
+        return (granted_access & required_access) == required_access
 
 
 def init_db():
@@ -145,15 +169,26 @@ def init_db():
     This function is intended to be called only in a test environment or
     staging.
     """
-    access_storage = get_table(TABLE)
-    access_schema = """
-        CREATE TABLE IF NOT EXISTS vault_access (
-            id TEXT PRIMARY KEY,
-            created_at TEXT NOT NULL,
-            client_id TEXT NOT NULL,
-            label TEXT NOT NULL,
-            access INTEGER NOT NULL DEFAULT 0,
-            UNIQUE(client_id, label)
+    import os
+
+    # Safety check: prevent running in production
+    if os.getenv('ENV', 'development') == 'production':
+        raise AssertionError(
+            "Access table initialization detected in production environment. "
+            "Database schema should be managed by migrations in production."
         )
-    """
-    access_storage.init_table(access_schema)
+
+    with get_connection_context() as conn:
+        with conn.cursor() as cursor:
+            # Create vault_access table
+            access_schema = """
+                CREATE TABLE IF NOT EXISTS vault_access (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    client_id TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    access INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(client_id, label)
+                )
+            """
+            cursor.execute(access_schema)
