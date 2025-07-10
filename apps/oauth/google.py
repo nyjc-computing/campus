@@ -18,7 +18,7 @@ from apps.common.webauth.oauth2 import (
 )
 from apps.common.webauth.token import CredentialToken
 from common import integration
-from common.services.vault import get_vault
+from services.vault import get_vault
 import common.validation.flask as flask_validation
 from common.utils import utc_time
 
