@@ -1,18 +1,12 @@
-"""common.services.email.base
+"""services.email.base
 
 Base classes for email sending services.
 """
 
 from abc import abstractmethod
-from typing import Any, Literal, NamedTuple, Protocol, Sequence
-
-from common.schema import Message, Response
+from typing import Any, Protocol, Sequence
 
 EmailAddress = str
-
-
-class EmailResponse(Response):
-    """Represents a response from an email sending operation."""
 
 
 class EmailSenderInterface(Protocol):
@@ -26,7 +20,7 @@ class EmailSenderInterface(Protocol):
             body: str,
             html_body: str | None = None,
             attachments: Sequence[Any] | None = None
-    ) -> EmailResponse:
+    ) -> dict:
         """Send an email to a recipient.
 
         Args:
@@ -39,4 +33,4 @@ class EmailSenderInterface(Protocol):
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-        pass
+        ...

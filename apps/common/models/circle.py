@@ -21,6 +21,7 @@ from apps.common.models.base import BaseRecord
 from storage import get_collection
 from common.schema import CampusID
 from common.utils import uid, utc_time
+from common import devops
 
 # TODO: Replace with OpenAPI-based string-pattern schema
 AccessValue = int
@@ -35,6 +36,7 @@ COLLECTION = "circles"
 
 
 # TODO: Refactor settings into a separate model
+@devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the collections needed by the model.
 

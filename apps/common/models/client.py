@@ -9,6 +9,7 @@ from typing import NotRequired, TypedDict, Unpack
 from apps.common.errors import api_errors
 from apps.common.models.base import BaseRecord
 from common.utils import secret, uid, utc_time
+from common import devops
 from storage import get_table
 
 APIName = str
@@ -18,6 +19,7 @@ Email = str
 TABLE = "clients"
 
 
+@devops.block_env(devops.PRODUCTION)
 def init_db() -> None:
     """Initialize the tables needed by the model.
 

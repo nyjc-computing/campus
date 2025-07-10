@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
 from common.devops import Env
+from common import devops
 from storage import get_collection
 
 from . import config, schema
@@ -24,6 +25,7 @@ __all__ = [
 
 
 # TODO: Refactor settings into a separate model
+@devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the collections needed by the model.
 

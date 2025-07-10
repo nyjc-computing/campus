@@ -5,6 +5,8 @@ Web endpoints for Campus authentication.
 
 from flask import Blueprint, Flask
 
+from common import devops
+
 from .authentication import (
     authenticate_client,
     client_auth_required
@@ -37,6 +39,7 @@ def init_app(app: Flask | Blueprint) -> None:
     from . import routes
     routes.init_app(app)
 
+@devops.block_env(devops.PRODUCTION)
 def init_db() -> None:
     """Initialise the tables needed.
     

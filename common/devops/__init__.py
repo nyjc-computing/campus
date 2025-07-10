@@ -28,15 +28,29 @@ assert ENV in (
 
 
 def require_env(*envs: str):
-    """Decorator to enforce the current environment matches the required
-    environment before calling the decorated function.
+    """Decorator to require specified environments for function execution.
     """
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             if ENV not in envs:
                 raise RuntimeError(
-                    f"ENV={ENV}: A {envs} environment is required."
+                    f"ENV={ENV}: {func.__name__}() requires {envs} environment."
+                )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def block_env(*envs: str):
+    """Decorator to block function execution in specified environments.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if ENV in envs:
+                raise RuntimeError(
+                    f"ENV={ENV}: {func.__name__}() cannot be called in {envs} environment."
                 )
             return func(*args, **kwargs)
         return wrapper

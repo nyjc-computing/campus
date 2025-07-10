@@ -16,6 +16,7 @@ from typing import TypedDict, NotRequired, Unpack
 from apps.common.models.base import BaseRecord
 from apps.common.errors import api_errors
 from common.utils import uid, utc_time
+from common import devops
 from storage import get_collection
 
 SourceID = str
@@ -23,6 +24,7 @@ SourceID = str
 TABLE = "sources"
 
 
+@devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the collections needed by the model.
 
@@ -107,12 +109,7 @@ class Source:
         It should only be done by an admin/owner.
         """
         try:
-            deleted_count = self.storage.delete_by_id(source_id)
-            if deleted_count == 0:
-                raise api_errors.ConflictError(
-                    message="Source not found",
-                    id=source_id
-                )
+            self.storage.delete_by_id(source_id)
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
@@ -145,12 +142,7 @@ class Source:
     def update(self, source_id: str, **updates: Unpack[SourceUpdate]) -> None:
         """Update a source by id."""
         try:
-            updated_count = self.storage.update_by_id(source_id, dict(updates))
-            if updated_count == 0:
-                raise api_errors.ConflictError(
-                    message="Source not found",
-                    id=source_id
-                )
+            self.storage.update_by_id(source_id, dict(updates))
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is

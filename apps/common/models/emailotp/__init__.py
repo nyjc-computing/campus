@@ -14,11 +14,13 @@ import bcrypt
 from apps.common.errors import api_errors
 from apps.common.models.base import BaseRecord
 from common.utils import uid, utc_time
+from common import devops
 from storage import get_table
 
 TABLE = "emailotp"
 
 
+@devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the tables needed by the model.
 
