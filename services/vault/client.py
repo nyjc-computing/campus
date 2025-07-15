@@ -43,6 +43,15 @@ class ClientResource(TypedDict, total=True):
     secret_hash: NotRequired[str]
 
 
+class ClientResourceWithSecret(TypedDict, total=True):
+    """Response body schema for new client creation including the secret."""
+    id: str
+    name: str
+    description: str
+    created_at: str
+    secret: str
+
+
 class VaultClientSecretResponse(TypedDict, total=True):
     """Response body schema for client secret operations."""
     secret: str

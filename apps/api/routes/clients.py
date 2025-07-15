@@ -36,8 +36,8 @@ def new_client() -> flask_validation.JsonResponse:
     response_data = dict(resource)
     response_data["secret"] = client_secret
     flask_validation.validate_json_response(
-        vault_client.ClientResource.__annotations__,
-        resource,
+        vault_client.ClientResourceWithSecret.__annotations__,
+        response_data,
         on_error=api_errors.raise_api_error,
     )
     return response_data, 201
