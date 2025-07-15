@@ -68,7 +68,6 @@ def _get_mongodb_name() -> str:
         RuntimeError: If vault secret retrieval fails
     """
     try:
-        from services.vault import get_vault
         storage_vault = get_vault("storage")
         return storage_vault.get("MONGODB_NAME")
     except Exception as e:
