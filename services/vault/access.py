@@ -56,7 +56,7 @@ __all__ = [
 ]
 
 
-def grant_access(client_id: str, label: str, access: int = ALL) -> None:
+def grant_access(client_id: str, label: str, access: int) -> None:
     """Grant a client access to a vault label with specified permissions.
 
     The access parameter uses bitflags to specify which operations are allowed.
@@ -122,7 +122,7 @@ def revoke_access(client_id: str, label: str) -> None:
         )
 
 
-def has_access(client_id: str, label: str, required_access: int = READ) -> bool:
+def has_access(client_id: str, label: str, required_access: int) -> bool:
     """Check if a client has the required access permissions for a vault label.
 
     This function uses bitwise AND (&) to check if the client's granted permissions
