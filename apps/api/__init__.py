@@ -10,9 +10,8 @@ from apps.common import errors
 
 # These aliased model imports allow the api package to be used similarly
 # to the Campus API
-# e.g. api.clients.new(), api.emailotp.request()
+# e.g. api.circles.new(), api.emailotp.request()
 from apps.api.routes.circles import circles
-from apps.api.routes.clients import clients
 from apps.api.routes.emailotp import emailotp
 from apps.api.routes.users import users
 from common import devops
@@ -22,7 +21,6 @@ __all__ = [
     'init_app',
     'init_db',
     'circles',
-    'clients',
     'emailotp',
     'users'
 ]
@@ -58,10 +56,14 @@ def init_db() -> None:
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
-    from apps.common.models import client, emailotp, user
+    from apps.common.models import emailotp, user
+    from services.vault import client as vault_client
 
-    for model in (client, emailotp, user):
+    for model in (emailotp, user):
         model.init_db()
+    
+    # Initialize vault client database
+    vault_client.init_db()
 
 def purge() -> None:
     """Purge the database.
