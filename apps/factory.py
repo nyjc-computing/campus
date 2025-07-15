@@ -7,6 +7,8 @@ necessary services.
 
 from flask import Flask
 
+from services.vault import Vault
+
 
 def create_app_from_modules(*modules) -> Flask:
     """Factory function to create the Flask app.
@@ -16,4 +18,5 @@ def create_app_from_modules(*modules) -> Flask:
     app = Flask(__name__)
     for module in modules:
         module.init_app(app)
+    app.config['SECRET_KEY'] = Vault('campus').get('SECRET_KEY')
     return app
