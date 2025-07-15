@@ -2,8 +2,9 @@
 
 This module provides the PostgreSQL backend for the Tables storage interface.
 
-Environment Variables:
-- DB_URI: PostgreSQL connection string (required)
+Vault Integration:
+The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the 'storage' 
+vault. The storage system depends on the vault service for database credentials.
 
 Implementation:
 Uses direct column mapping where record keys correspond to table column names.
@@ -22,16 +23,34 @@ table.delete_by_id("123")
 ```
 """
 
-import os
-
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from common import devops
+from services.vault import get_vault
 from storage.tables.interface import TableInterface, PK
 from storage.errors import NotFoundError, NoChangesAppliedError
 
-DB_URI = os.environ["DB_URI"]
+
+def _get_db_uri() -> str:
+    """Get the database URI from vault.
+
+    Retrieves POSTGRESDB_URI from the 'storage' vault.
+
+    Returns:
+        PostgreSQL connection string
+
+    Raises:
+        RuntimeError: If vault secret retrieval fails for any reason
+    """
+    try:
+        storage_vault = get_vault("storage")
+        return storage_vault.get("POSTGRESDB_URI")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "
+            f"in 'storage' vault: {e}"
+        ) from e
 
 
 class PostgreSQLTable(TableInterface):
@@ -46,8 +65,16 @@ class PostgreSQLTable(TableInterface):
     """
 
     def _get_connection(self):
-        """Get a connection to the PostgreSQL database."""
-        return psycopg2.connect(DB_URI)
+        """Get a connection to the PostgreSQL database.
+
+        Retrieves the database URI from vault and establishes connection.
+
+        Raises:
+            RuntimeError: If vault secret retrieval fails
+            psycopg2.Error: If database connection fails
+        """
+        db_uri = _get_db_uri()
+        return psycopg2.connect(db_uri)
 
     @staticmethod
     def _build_where_clause(query: dict) -> tuple[str, list]:
