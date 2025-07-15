@@ -10,6 +10,12 @@ depend on vault for secrets management.
 This module implements its own client storage using direct database access
 to the vault database, maintaining compatibility with the main client schema
 where possible.
+
+SECRET_KEY USAGE:
+This module intentionally uses the SECRET_KEY environment variable rather than
+retrieving it from the vault to maintain independence and avoid circular 
+dependencies. The vault service must be able to authenticate its own clients
+without depending on itself.
 """
 
 import os
