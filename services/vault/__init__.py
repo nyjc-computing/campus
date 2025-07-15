@@ -105,7 +105,7 @@ def init_db():
 
     # Initialize access control table
     access.init_db()
-    
+
     # Initialize vault client table
     client.init_db()
 
@@ -134,34 +134,34 @@ class Vault:
     A vault stores secrets as key-value pairs in a table.
     Each secret is stored as a separate row with label, key, and value.
     The vault is recognised by a unique label and access is controlled per client.
-    
+
     CLIENT AUTHENTICATION:
     Client identity is determined by the CLIENT_ID environment variable.
     Client authentication is performed using the CLIENT_SECRET environment variable.
     Both environment variables must be set for vault operations to succeed.
-    
+
     The vault authenticates clients using its own client storage system to avoid
     circular dependencies with the main storage layer.
     """
 
     def __init__(self, label: str):
         self.label = label
-        
+
         # Get client credentials from environment
         client_id = os.environ.get("CLIENT_ID")
         client_secret = os.environ.get("CLIENT_SECRET")
-        
+
         if not client_id:
             raise ValueError("CLIENT_ID environment variable is required")
         if not client_secret:
             raise ValueError("CLIENT_SECRET environment variable is required")
-        
+
         # Authenticate the client
         try:
             client.authenticate_client(client_id, client_secret)
         except client.VaultClientAuthenticationError as e:
             raise ValueError(f"Client authentication failed: {e}") from e
-        
+
         self.client_id = client_id
 
     def __repr__(self) -> str:
