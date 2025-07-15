@@ -6,7 +6,7 @@ This context is pushed to the flask g object for use in the API routes.
 
 from flask import g
 
-from apps.common.models.client import ClientResource
+from services.vault.client import ClientResource
 from apps.common.models.credentials import (
     ClientCredentialsSchema,
     UserCredentialsSchema,

@@ -2,9 +2,9 @@
 
 This module provides the MongoDB backend for the Collections storage interface.
 
-Environment Variables:
-- MONGODB_URI: MongoDB connection string (required)
-- MONGODB_NAME: Database name (required)
+Vault Integration:
+The MongoDB connection URI is retrieved from the vault secret 'MONGODB_URI' in the 'storage' 
+vault. The database name is retrieved from the vault secret 'MONGODB_NAME' in the same vault.
 
 Implementation:
 Uses MongoDB's native document storage with transparent primary key mapping
@@ -28,12 +28,53 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 
 from common import devops
+from services.vault import get_vault
 from storage.collections.interface import CollectionInterface, PK
 from storage.errors import NotFoundError, NoChangesAppliedError
 
-DB_URI = os.environ["MONGODB_URI"]
-DB_NAME = os.environ["MONGODB_NAME"]
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
+
+
+def _get_mongodb_uri() -> str:
+    """Get the MongoDB URI from vault.
+
+    Retrieves MONGODB_URI from the 'storage' vault.
+
+    Returns:
+        MongoDB connection string
+
+    Raises:
+        RuntimeError: If vault secret retrieval fails
+    """
+    try:
+        storage_vault = get_vault("storage")
+        return storage_vault.get("MONGODB_URI")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to retrieve MongoDB URI from vault secret 'MONGODB_URI' "
+            f"in 'storage' vault: {e}"
+        ) from e
+
+
+def _get_mongodb_name() -> str:
+    """Get the MongoDB database name from vault.
+
+    Retrieves MONGODB_NAME from the 'storage' vault.
+
+    Returns:
+        MongoDB database name
+
+    Raises:
+        RuntimeError: If vault secret retrieval fails
+    """
+    try:
+        storage_vault = get_vault("storage")
+        return storage_vault.get("MONGODB_NAME")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to retrieve MongoDB database name from vault secret 'MONGODB_NAME' "
+            f"in 'storage' vault: {e}"
+        ) from e
 
 
 class MongoRecord(dict):
@@ -88,10 +129,19 @@ class MongoDBCollection(CollectionInterface):
     """
 
     def __init__(self, name: str):
-        """Initialize the MongoDB collection with a name."""
+        """Initialize the MongoDB collection with a name.
+
+        Retrieves MongoDB connection details from vault and establishes connection.
+
+        Raises:
+            RuntimeError: If vault secret retrieval fails
+            pymongo.errors.ConnectionFailure: If MongoDB connection fails
+        """
         super().__init__(name)
-        self.client = MongoClient(DB_URI)
-        self.db = self.client[DB_NAME]
+        mongodb_uri = _get_mongodb_uri()
+        mongodb_name = _get_mongodb_name()
+        self.client = MongoClient(mongodb_uri)
+        self.db = self.client[mongodb_name]
         self.collection: Collection = self.db[name]
 
     def get_by_id(self, doc_id: str) -> dict:

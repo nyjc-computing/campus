@@ -4,13 +4,22 @@ Vault service for managing secrets and sensitive system data in Campus.
 
 Each vault is identified by a unique label and stores key-value pairs of secrets.
 Client access to vault labels is controlled through bitflag permissions.
-Clients are identified by the CLIENT_ID environment variable.
+Clients are identified and authenticated using CLIENT_ID and CLIENT_SECRET environment variables.
 
 DATABASE ACCESS:
 This service uses direct PostgreSQL connectivity instead of the storage module
 to avoid circular dependencies. Since other services may depend on vault for
 secrets management, vault must be independent of the storage layer. The vault
 connects directly to PostgreSQL using the VAULTDB_URI environment variable.
+
+CLIENT AUTHENTICATION:
+The vault service maintains its own client storage system to avoid circular
+dependencies with the main client model. Vault clients are stored in the
+vault_clients table and authenticated using client ID and secret pairs.
+
+Both CLIENT_ID and CLIENT_SECRET environment variables must be set:
+- CLIENT_ID: Identifies the client making the request
+- CLIENT_SECRET: Authenticates the client's identity
 
 PERMISSION SYSTEM:
 The vault uses bitflag permissions to control what operations clients can perform:
@@ -26,11 +35,19 @@ Permissions can be combined using the | operator:
 - ALL: Can perform all operations (READ | CREATE | UPDATE | DELETE)
 
 USAGE EXAMPLE:
+    # Create vault client (typically done by admin)
+    from services.vault.client import create_client
+    client_resource, client_secret = create_client(
+        name="my-app", 
+        description="My application"
+    )
+    
     # Grant permissions (typically done by admin)
     from services.vault.access import grant_access, READ, CREATE
-    grant_access("client-123", "api-secrets", READ | CREATE)
+    grant_access(client_resource["id"], "api-secrets", READ | CREATE)
     
-    # Use vault (CLIENT_ID env var must be set to "client-123")
+    # Use vault (CLIENT_ID and CLIENT_SECRET env vars must be set)
+    # CLIENT_ID=<client_id> CLIENT_SECRET=<client_secret>
     vault = get_vault("api-secrets")
     vault.set("api_key", "secret123")  # Requires CREATE (new key)
     secret = vault.get("api_key")      # Requires READ
@@ -43,7 +60,7 @@ import os
 from common.utils import uid, utc_time
 from common import devops
 
-from . import access, db
+from . import access, db, client
 
 TABLE = "vault"
 
@@ -53,6 +70,7 @@ __all__ = [
     "VaultAccessDeniedError",
     "VaultKeyError",
     "init_db",
+    "client",
 ]
 
 
@@ -88,6 +106,9 @@ def init_db():
     # Initialize access control table
     access.init_db()
 
+    # Initialize vault client table
+    client.init_db()
+
 
 class VaultAccessDeniedError(ValueError):
     """Custom error for when a client doesn't have access to a vault label."""
@@ -113,14 +134,34 @@ class Vault:
     A vault stores secrets as key-value pairs in a table.
     Each secret is stored as a separate row with label, key, and value.
     The vault is recognised by a unique label and access is controlled per client.
+
+    CLIENT AUTHENTICATION:
     Client identity is determined by the CLIENT_ID environment variable.
+    Client authentication is performed using the CLIENT_SECRET environment variable.
+    Both environment variables must be set for vault operations to succeed.
+
+    The vault authenticates clients using its own client storage system to avoid
+    circular dependencies with the main storage layer.
     """
 
     def __init__(self, label: str):
         self.label = label
+
+        # Get client credentials from environment
         client_id = os.environ.get("CLIENT_ID")
+        client_secret = os.environ.get("CLIENT_SECRET")
+
         if not client_id:
             raise ValueError("CLIENT_ID environment variable is required")
+        if not client_secret:
+            raise ValueError("CLIENT_SECRET environment variable is required")
+
+        # Authenticate the client
+        try:
+            client.authenticate_client(client_id, client_secret)
+        except client.ClientAuthenticationError as e:
+            raise ValueError(f"Client authentication failed: {e}") from e
+
         self.client_id = client_id
 
     def __repr__(self) -> str:

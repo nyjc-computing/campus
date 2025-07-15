@@ -14,10 +14,8 @@ from flask import request
 from flask.wrappers import Response
 
 from apps.campusauth.context import ctx
-from apps.common.models.client import Client
+from services.vault import client as vault_client
 from apps.common.webauth import http
-
-clients = Client()
 
 
 def authenticate_client() -> tuple[dict[str, str], int] | None:
@@ -39,15 +37,19 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
     match auth.scheme:
         case "basic":
             client_id, client_secret = auth.credentials()
-            clients.validate_credentials(client_id, client_secret)
-            ctx.client = clients.get(client_id)
+            try:
+                vault_client.authenticate_client(client_id, client_secret)
+                ctx.client = vault_client.get_client(client_id)
+            except vault_client.ClientAuthenticationError:
+                return {"message": "Invalid client credentials"}, 403
         case "bearer":
             return {"message": "Bearer auth not implemented"}, 501
+
 
 def client_auth_required(vf) -> Callable:
     """View function decorator to enforce HTTP Basic Authentication."""
     @wraps(vf)
-    def authenticatedvf(*args, **kwargs) -> tuple[Response, int]:
+    def authenticatedvf(*args, **kwargs):
         """Wrapper function that returns the error response from
         authentication, or calls the original function if authentication
         is successful.
