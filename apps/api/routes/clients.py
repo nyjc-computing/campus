@@ -8,20 +8,19 @@ from flask import Blueprint, Flask
 import common.validation.flask as flask_validation
 from apps.campusauth import authenticate_client
 from apps.common.errors import api_errors
-from apps.common.models import client, user
+from apps.common.models import user
+from services.vault import client as vault_client
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)
 
 # Database Models
-clients = client.Client()
-# apikeys = client.ClientAPIKey()
 users = user.User()
 
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise client routes with the given Flask app/blueprint."""
-    client.init_db()
+    vault_client.init_db()
     app.register_blueprint(bp)
 
 
@@ -29,54 +28,87 @@ def init_app(app: Flask | Blueprint) -> None:
 def new_client() -> flask_validation.JsonResponse:
     """Create a new client id and secret."""
     payload = flask_validation.validate_request_and_extract_json(
-        client.ClientNew.__annotations__,
+        vault_client.VaultClientNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resource = clients.new(**payload)
+    resource, client_secret = vault_client.create_client(**payload)
+    # Return both the resource and the secret
+    response_data = dict(resource)
+    response_data["secret"] = client_secret
     flask_validation.validate_json_response(
-        client.ClientResource.__annotations__,
+        vault_client.VaultClientResource.__annotations__,
         resource,
         on_error=api_errors.raise_api_error,
     )
-    return dict(resource), 201
+    return response_data, 201
+
+
+@bp.get('/')
+def list_clients() -> flask_validation.JsonResponse:
+    """List all clients."""
+    clients_list = vault_client.list_clients()
+    return {"clients": clients_list}, 200
 
 
 @bp.delete('/<string:client_id>')
 def delete_client(client_id: str) -> flask_validation.JsonResponse:
     """Delete a client id and secret."""
-    clients.delete(client_id)
-    return {}, 200
+    try:
+        vault_client.delete_client(client_id)
+        return {}, 200
+    except vault_client.VaultClientAuthenticationError as e:
+        raise api_errors.ConflictError(
+            "Client not found",
+            client_id=client_id
+        ) from e
 
 
 @bp.get('/<string:client_id>')
 def get_client_details(client_id: str) -> flask_validation.JsonResponse:
     """Get details of a client."""
-    resource = clients.get(client_id)
-    flask_validation.validate_json_response(
-        client.ClientResource.__annotations__,
-        resource,
-        on_error=api_errors.raise_api_error,
-    )
-    return dict(resource), 200
+    try:
+        resource = vault_client.get_client(client_id)
+        flask_validation.validate_json_response(
+            vault_client.VaultClientResource.__annotations__,
+            resource,
+            on_error=api_errors.raise_api_error,
+        )
+        return dict(resource), 200
+    except vault_client.VaultClientAuthenticationError as e:
+        raise api_errors.ConflictError(
+            "Client not found",
+            client_id=client_id
+        ) from e
 
 
 @bp.patch('/<string:client_id>')
 def edit_client(client_id: str) -> flask_validation.JsonResponse:
     """Edit name, description, or admins of client."""
     payload = flask_validation.validate_request_and_extract_json(
-        client.ClientUpdate.__annotations__,
+        vault_client.VaultClientNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    clients.update(client_id, **payload)
-    return {}, 200
+    try:
+        vault_client.update_client(client_id, **payload)
+        return {}, 200
+    except vault_client.VaultClientAuthenticationError as e:
+        raise api_errors.ConflictError(
+            "Client not found",
+            client_id=client_id
+        ) from e
 
 
 @bp.post('/<string:client_id>/replace')
 def revoke_client(client_id: str) -> flask_validation.JsonResponse:
     """Revoke a client id and secret, and reissue them."""
-    new_secret = clients.replace(client_id)
-    assert "secret" in new_secret
-    return new_secret, 201
+    try:
+        new_secret = vault_client.replace_client_secret(client_id)
+        return {"secret": new_secret}, 201
+    except vault_client.VaultClientAuthenticationError as e:
+        raise api_errors.ConflictError(
+            "Client not found",
+            client_id=client_id
+        ) from e
 
 # @bp.get('/<string:client_id>/apikeys')
 # def get_client_apikeys(client_id: str):
