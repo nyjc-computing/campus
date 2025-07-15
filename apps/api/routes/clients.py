@@ -28,7 +28,7 @@ def init_app(app: Flask | Blueprint) -> None:
 def new_client() -> flask_validation.JsonResponse:
     """Create a new client id and secret."""
     payload = flask_validation.validate_request_and_extract_json(
-        vault_client.VaultClientNew.__annotations__,
+        vault_client.ClientNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
     resource, client_secret = vault_client.create_client(**payload)
@@ -36,7 +36,7 @@ def new_client() -> flask_validation.JsonResponse:
     response_data = dict(resource)
     response_data["secret"] = client_secret
     flask_validation.validate_json_response(
-        vault_client.VaultClientResource.__annotations__,
+        vault_client.ClientResource.__annotations__,
         resource,
         on_error=api_errors.raise_api_error,
     )
@@ -56,7 +56,7 @@ def delete_client(client_id: str) -> flask_validation.JsonResponse:
     try:
         vault_client.delete_client(client_id)
         return {}, 200
-    except vault_client.VaultClientAuthenticationError as e:
+    except vault_client.ClientAuthenticationError as e:
         raise api_errors.ConflictError(
             "Client not found",
             client_id=client_id
@@ -69,12 +69,12 @@ def get_client_details(client_id: str) -> flask_validation.JsonResponse:
     try:
         resource = vault_client.get_client(client_id)
         flask_validation.validate_json_response(
-            vault_client.VaultClientResource.__annotations__,
+            vault_client.ClientResource.__annotations__,
             resource,
             on_error=api_errors.raise_api_error,
         )
         return dict(resource), 200
-    except vault_client.VaultClientAuthenticationError as e:
+    except vault_client.ClientAuthenticationError as e:
         raise api_errors.ConflictError(
             "Client not found",
             client_id=client_id
@@ -85,13 +85,13 @@ def get_client_details(client_id: str) -> flask_validation.JsonResponse:
 def edit_client(client_id: str) -> flask_validation.JsonResponse:
     """Edit name, description, or admins of client."""
     payload = flask_validation.validate_request_and_extract_json(
-        vault_client.VaultClientNew.__annotations__,
+        vault_client.ClientNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
     try:
         vault_client.update_client(client_id, **payload)
         return {}, 200
-    except vault_client.VaultClientAuthenticationError as e:
+    except vault_client.ClientAuthenticationError as e:
         raise api_errors.ConflictError(
             "Client not found",
             client_id=client_id
@@ -104,7 +104,7 @@ def revoke_client(client_id: str) -> flask_validation.JsonResponse:
     try:
         new_secret = vault_client.replace_client_secret(client_id)
         return {"secret": new_secret}, 201
-    except vault_client.VaultClientAuthenticationError as e:
+    except vault_client.ClientAuthenticationError as e:
         raise api_errors.ConflictError(
             "Client not found",
             client_id=client_id

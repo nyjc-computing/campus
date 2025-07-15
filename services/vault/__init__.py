@@ -159,7 +159,7 @@ class Vault:
         # Authenticate the client
         try:
             client.authenticate_client(client_id, client_secret)
-        except client.VaultClientAuthenticationError as e:
+        except client.ClientAuthenticationError as e:
             raise ValueError(f"Client authentication failed: {e}") from e
 
         self.client_id = client_id

@@ -28,13 +28,13 @@ from . import db
 CLIENT_TABLE = "vault_clients"
 
 
-class VaultClientNew(TypedDict, total=True):
+class ClientNew(TypedDict, total=True):
     """Request body schema for creating a new vault client."""
     name: str
     description: str
 
 
-class VaultClientResource(TypedDict, total=True):
+class ClientResource(TypedDict, total=True):
     """Response body schema representing a vault client."""
     id: str
     name: str
@@ -48,7 +48,7 @@ class VaultClientSecretResponse(TypedDict, total=True):
     secret: str
 
 
-class VaultClientAuthenticationError(Exception):
+class ClientAuthenticationError(Exception):
     """Custom error for client authentication failures."""
     
     def __init__(self, message: str, client_id: str | None = None):
@@ -80,7 +80,7 @@ def init_db():
             cursor.execute(client_schema)
 
 
-def create_client(**fields: Unpack[VaultClientNew]) -> tuple[VaultClientResource, str]:
+def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
     """Create a new vault client with authentication credentials.
     
     Args:
@@ -118,11 +118,11 @@ def create_client(**fields: Unpack[VaultClientNew]) -> tuple[VaultClientResource
         )
     
     # Return client resource without secret_hash
-    client_resource: VaultClientResource = {k: v for k, v in record.items() if k != "secret_hash"}  # type: ignore
+    client_resource: ClientResource = {k: v for k, v in record.items() if k != "secret_hash"}  # type: ignore
     return client_resource, client_secret
 
 
-def get_client(client_id: str) -> VaultClientResource:
+def get_client(client_id: str) -> ClientResource:
     """Retrieve a vault client by its ID.
     
     Args:
@@ -143,7 +143,7 @@ def get_client(client_id: str) -> VaultClientResource:
         )
         
         if not client_record:
-            raise VaultClientAuthenticationError(
+            raise ClientAuthenticationError(
                 f"Vault client '{client_id}' not found",
                 client_id=client_id
             )
@@ -151,7 +151,7 @@ def get_client(client_id: str) -> VaultClientResource:
         return client_record
 
 
-def list_clients() -> list[VaultClientResource]:
+def list_clients() -> list[ClientResource]:
     """List all vault clients.
     
     Returns:
@@ -239,26 +239,26 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
         )
         
         if not client_record:
-            raise VaultClientAuthenticationError(
+            raise ClientAuthenticationError(
                 f"Vault client '{client_id}' not found",
                 client_id=client_id
             )
         
         if not client_record["secret_hash"]:
-            raise VaultClientAuthenticationError(
+            raise ClientAuthenticationError(
                 f"Vault client '{client_id}' has no secret configured",
                 client_id=client_id
             )
         
         expected_hash = secret.hash_client_secret(client_secret, os.environ["SECRET_KEY"])
         if client_record["secret_hash"] != expected_hash:
-            raise VaultClientAuthenticationError(
+            raise ClientAuthenticationError(
                 f"Invalid secret for vault client '{client_id}'",
                 client_id=client_id
             )
 
 
-def update_client(client_id: str, **updates: Unpack[VaultClientNew]) -> None:
+def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
     """Update a vault client's information.
     
     Args:

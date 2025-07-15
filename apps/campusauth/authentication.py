@@ -40,7 +40,7 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
             try:
                 vault_client.authenticate_client(client_id, client_secret)
                 ctx.client = vault_client.get_client(client_id)
-            except vault_client.VaultClientAuthenticationError:
+            except vault_client.ClientAuthenticationError:
                 return {"message": "Invalid client credentials"}, 403
         case "bearer":
             return {"message": "Bearer auth not implemented"}, 501
