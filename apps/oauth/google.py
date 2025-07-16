@@ -8,7 +8,7 @@ Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 import os
 from typing import NotRequired, Required, TypedDict
 
-from flask import Blueprint, Flask, redirect, url_for
+from flask import Blueprint, Flask, redirect, request, url_for
 from werkzeug.wrappers import Response
 
 from apps.common.errors import api_errors
@@ -20,7 +20,7 @@ from apps.common.webauth.token import CredentialToken
 from common import integration
 from services.vault import get_vault
 import common.validation.flask as flask_validation
-from common.utils import utc_time
+from common.utils import url, utc_time
 
 PROVIDER = 'google'
 
@@ -89,7 +89,7 @@ def authorize() -> Response:
         target=params.pop('target'),
     )
     session.store()
-    redirect_uri = os.environ['REDIRECT_URI']
+    redirect_uri = url.create_url("https", request.host, url_for('.callback'))
     authorization_url = session.get_authorization_url(
         redirect_uri,
         **params
