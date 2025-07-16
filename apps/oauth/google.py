@@ -64,7 +64,8 @@ class GoogleTokenResponseSchema(TypedDict):
     token_type: str  # Type of the token (e.g., "Bearer")
     expires_in: int  # Lifetime of the access token in seconds
     scope: str  # Scopes granted by the access token
-    refresh_token: NotRequired[str]  # Optional refresh token for long-lived sessions
+    # Optional refresh token for long-lived sessions
+    refresh_token: NotRequired[str]
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -95,6 +96,7 @@ def authorize() -> Response:
     )
     return redirect(authorization_url)
 
+
 @bp.get('/callback')
 def callback() -> Response:
     """Handle a Google OAuth callback request."""
@@ -120,7 +122,7 @@ def callback() -> Response:
                 )
             token_response = session.exchange_code_for_token(
                 code=code,
-                client_secret= vault.get('CLIENT_SECRET'),
+                client_secret=vault.get('CLIENT_SECRET'),
             )
         case _:
             api_errors.raise_api_error(400, **params)
