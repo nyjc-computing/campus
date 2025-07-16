@@ -5,12 +5,8 @@ Base types and classes for all Campus models.
 
 from typing import TypedDict
 
-from common.schema import CampusID, Response, UserID
+from common.schema import CampusID, UserID
 from common.utils import utc_time
-
-
-class ModelResponse(Response):
-    """Represents a response from any model operation."""
 
 
 class BaseRecord(TypedDict):
