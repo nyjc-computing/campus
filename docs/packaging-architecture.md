@@ -29,8 +29,9 @@ We adopted a **namespace package** approach using the `campus.*` namespace, whic
 campus/
 ├── apps/           # Web applications and API endpoints
 ├── common/         # Shared utilities and schemas
-├── services/       # Backend services (vault, email, etc.)
-└── storage/        # Storage interfaces and backends
+├── services/       # Backend services (email, etc.)
+├── storage/        # Storage interfaces and backends
+└── vault/          # Secure secrets management service
 ```
 
 ### Package Responsibilities
@@ -66,8 +67,18 @@ campus/
 - External service integrations
 
 **Key modules:**
-- `campus.services.vault` - Secure secrets management
 - `campus.services.email` - Email delivery service
+
+#### `campus.vault`
+- Secure secrets management service
+- **Completely independent** of other campus modules to avoid circular dependencies
+- Direct PostgreSQL connectivity - cannot use campus.storage since storage depends on vault
+- Other services depend on vault for secrets, so vault must be self-contained
+
+**Key modules:**
+- `campus.vault.client` - Vault client management
+- `campus.vault.access` - Permission and access control
+- `campus.vault.db` - Direct database operations (independent of campus.storage)
 
 #### `campus.storage`
 - Database and storage abstractions
@@ -91,6 +102,11 @@ campus/
 - Moved `campus.apps.common.{errors,models,webauth}` directly to `campus.apps.*`
 - Simplified import paths and reduced namespace depth
 
+### Phase 3: Top-Level Package Preparation (Completed)
+- Moved `campus.services.vault` to `campus.vault` for independent packaging
+- Updated all import references to use new vault location
+- Positioned vault as top-level package ready for distribution
+
 ## Import Patterns
 
 ### Recommended Import Style
@@ -106,7 +122,7 @@ from campus.apps.models import user
 from campus.apps.errors import api_errors
 
 # Services
-from campus.services.vault import get_vault
+from campus.vault import get_vault
 from campus.services.email import create_email_sender
 
 # Storage
@@ -117,13 +133,19 @@ from campus.storage import get_collection, get_table
 
 Dependency flow follows this hierarchy:
 ```
-apps → services → storage → common
+apps → services, storage → vault → common
+     ↘         ↙
+      vault (for secrets)
 ```
 
+**Dependency Rules:**
 - `campus.apps` can import from any other package
-- `campus.services` can import from `campus.storage` and `campus.common`
-- `campus.storage` can import from `campus.common`
+- `campus.services` can import from `campus.storage`, `campus.vault`, and `campus.common`
+- `campus.storage` can import from `campus.vault` and `campus.common` (uses vault for database secrets)
+- `campus.vault` can **only** import from `campus.common` (must be independent)
 - `campus.common` should be self-contained (minimal external dependencies)
+
+**Key Constraint:** Vault must remain independent since all other modules depend on it for secrets management.
 
 ## Benefits Achieved
 
@@ -139,4 +161,5 @@ apps → services → storage → common
 - ✅ All imports updated
 - ✅ Application running successfully
 - ✅ Structure cleanup completed
+- ✅ Vault positioned as top-level package
 - 🔄 Subpackaging implementation (in progress)

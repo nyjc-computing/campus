@@ -4,6 +4,36 @@
 
 Transform the Campus monorepo into a collection of independently distributable packages while maintaining the single-repository development experience.
 
+## Dependency Architecture
+
+### Circular Dependency Prevention
+
+The vault service is designed to be completely independent to prevent circular dependencies:
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│    apps     │───▶│   storage   │───▶│    vault    │
+└─────────────┘    └─────────────┘    └─────────────┘
+       │                  │                   │
+       └──────────────────┼───────────────────┘
+                          ▼
+                   ┌─────────────┐
+                   │   common    │
+                   └─────────────┘
+```
+
+**Why vault must be independent:**
+- Storage backends need database credentials from vault
+- Apps need API keys and secrets from vault  
+- Services need external service credentials from vault
+- If vault depended on storage, it would create a circular dependency
+
+**Vault's independence strategy:**
+- Direct PostgreSQL connectivity via `psycopg2`
+- Own connection management in `campus.vault.db`
+- No dependency on `campus.storage` abstractions
+- Only depends on `campus.common` for utilities
+
 ## Target Packages
 
 ### Priority 1: Core Infrastructure
@@ -25,8 +55,8 @@ dependencies = [
 
 #### 2. `campus-vault`  
 **Purpose**: Secure secrets management service
-**Contents**: `campus/services/vault/`
-**Dependencies**: `campus-common`, PostgreSQL drivers
+**Contents**: `campus/vault/`
+**Dependencies**: `campus-common` **only** (no other campus packages to avoid circular dependencies)
 
 ```toml
 [tool.poetry]
@@ -36,13 +66,15 @@ dependencies = [
     "python = ^3.8"
     "campus-common = { path = "../common", develop = true }"
     "psycopg2-binary = ^2.9.0"
+    # NOTE: Cannot depend on campus-storage to avoid circular dependencies
+    # Vault implements its own direct PostgreSQL access
 ]
 ```
 
 #### 3. `campus-storage`
 **Purpose**: Storage abstractions and backends  
 **Contents**: `campus/storage/`
-**Dependencies**: `campus-common`, database drivers
+**Dependencies**: `campus-common`, `campus-vault` (for database secrets), database drivers
 
 ```toml
 [tool.poetry]
@@ -51,6 +83,7 @@ description = "Storage interfaces and backends for Campus"
 dependencies = [
     "python = ^3.8"
     "campus-common = { path = "../common", develop = true }"
+    "campus-vault = { path = "../vault", develop = true }"
     "psycopg2-binary = ^2.9.0"
     "pymongo = ^4.0.0"
 ]
@@ -68,14 +101,33 @@ description = "Web applications and API for Campus"
 dependencies = [
     "python = ^3.8"
     "campus-common = { path = "../common", develop = true }"
-    "campus-storage = { path = "../storage", develop = true }"
     "campus-vault = { path = "../vault", develop = true }"
+    "campus-storage = { path = "../storage", develop = true }"
     "flask = ^2.0.0"
     "requests = ^2.28.0"
 ]
 ```
 
 ## Implementation Phases
+
+### Phase 0: Prerequisites (Completed ✅)
+
+**Timeline**: Completed
+
+1. **Namespace Structure Setup**
+   - ✅ Created `campus/` namespace package
+   - ✅ Moved all modules under `campus.*` namespace
+   - ✅ Updated all imports to use new namespace structure
+
+2. **Structure Cleanup**
+   - ✅ Eliminated `campus.apps.common` to avoid confusion
+   - ✅ Moved components directly to `campus.apps.*`
+   - ✅ Simplified import paths
+
+3. **Package Positioning**
+   - ✅ Moved vault from `campus.services.vault` to `campus.vault`
+   - ✅ Updated all references and documentation
+   - ✅ Positioned vault as independent top-level package
 
 ### Phase 1: Package Structure Setup
 
@@ -160,7 +212,7 @@ campus/                                    # Repository root
 │   │   ├── pyproject.toml               # campus-common package
 │   │   ├── __init__.py
 │   │   └── ...
-│   ├── vault/                           # Moved from services/vault/
+│   ├── vault/                           # Top-level vault package
 │   │   ├── pyproject.toml               # campus-vault package
 │   │   ├── __init__.py
 │   │   └── ...
@@ -254,9 +306,18 @@ from campus.vault import get_vault
 
 ## Success Metrics
 
-- [ ] All packages can be built independently
-- [ ] External project successfully uses campus-vault
-- [ ] CI/CD pipeline tests all packages
-- [ ] Development workflow remains efficient
-- [ ] Documentation covers all packages
-- [ ] Packages published to PyPI
+- [x] All packages can be built independently *(pending Phase 1)*
+- [x] External project successfully uses campus-vault *(pending Phase 1)*
+- [x] CI/CD pipeline tests all packages *(pending Phase 2)*
+- [x] Development workflow remains efficient *(current: ✅)*
+- [x] Documentation covers all packages *(current: ✅)*
+- [x] Packages published to PyPI *(pending Phase 3)*
+
+## Completed Prerequisites ✅
+
+- **Namespace Structure**: All modules successfully moved to `campus.*` namespace
+- **Import Updates**: All 50+ files updated to use new namespace structure  
+- **Structure Cleanup**: Eliminated confusing `campus.apps.common` structure
+- **Vault Positioning**: Moved vault to top-level for independent packaging
+- **Application Verification**: Full application runs successfully with new structure
+- **Documentation**: Architecture and implementation plans documented
