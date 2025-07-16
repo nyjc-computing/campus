@@ -14,7 +14,7 @@ from flask import request
 from flask.wrappers import Response
 
 from apps.campusauth.context import ctx
-from services.vault import client as vault_client
+from services.vault import client
 from apps.common.webauth import http
 
 
@@ -38,9 +38,9 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
         case "basic":
             client_id, client_secret = auth.credentials()
             try:
-                vault_client.authenticate_client(client_id, client_secret)
-                ctx.client = vault_client.get_client(client_id)
-            except vault_client.ClientAuthenticationError:
+                client.authenticate_client(client_id, client_secret)
+                ctx.client = client.get_client(client_id)
+            except client.ClientAuthenticationError:
                 return {"message": "Invalid client credentials"}, 403
         case "bearer":
             return {"message": "Bearer auth not implemented"}, 501

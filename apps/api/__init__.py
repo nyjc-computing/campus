@@ -59,13 +59,13 @@ def init_db() -> None:
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
     from apps.common.models import emailotp, user
-    from services.vault import client as vault_client
+    from services.vault import client
 
     for model in (emailotp, user):
         model.init_db()
 
     # Initialize vault client database
-    vault_client.init_db()
+    client.init_db()
 
 
 @devops.block_env(devops.PRODUCTION)
