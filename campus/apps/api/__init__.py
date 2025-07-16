@@ -58,8 +58,8 @@ def init_db() -> None:
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
-    from apps.common.models import emailotp, user
-    from services.vault import client
+    from campus.apps.models import emailotp, user
+    from campus.services.vault import client
 
     for model in (emailotp, user):
         model.init_db()
@@ -78,7 +78,7 @@ def purge() -> None:
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically not used in production.
     from warnings import warn  # type: ignore[import-untyped]
-    from storage import purge_all  # type: ignore[import-untyped]
+    from campus.storage import purge_all  # type: ignore[import-untyped]
 
     if devops.ENV == devops.STAGING:
         warn(f"Purging database in {devops.ENV} environment.", stacklevel=2)
