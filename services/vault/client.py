@@ -59,7 +59,7 @@ class VaultClientSecretResponse(TypedDict, total=True):
 
 class ClientAuthenticationError(Exception):
     """Custom error for client authentication failures."""
-    
+
     def __init__(self, message: str, client_id: str | None = None):
         super().__init__(message)
         self.client_id = client_id
@@ -91,28 +91,29 @@ def init_db():
 
 def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
     """Create a new vault client with authentication credentials.
-    
+
     Args:
         **fields: Client creation fields (name, description)
-        
+
     Returns:
         Tuple of (client_resource, client_secret)
         The client_secret should be securely provided to the client.
-        
+
     Raises:
         Exception: If client creation fails (e.g., name already exists)
     """
     client_id = uid.generate_category_uid("client", length=12)
     client_secret = secret.generate_client_secret()
-    secret_hash = secret.hash_client_secret(client_secret, os.environ["SECRET_KEY"])
-    
+    secret_hash = secret.hash_client_secret(
+        client_secret, os.environ["SECRET_KEY"])
+
     record = {
         "id": client_id,
         "created_at": utc_time.now(),
         "secret_hash": secret_hash,
         **fields,
     }
-    
+
     with db.get_connection_context() as conn:
         db.execute_query(
             conn,
@@ -120,26 +121,27 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
             INSERT INTO {CLIENT_TABLE} (id, secret_hash, name, description, created_at)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (record["id"], record["secret_hash"], record["name"], 
+            (record["id"], record["secret_hash"], record["name"],
              record["description"], record["created_at"]),
             fetch_one=False,
             fetch_all=False
         )
-    
+
     # Return client resource without secret_hash
-    client_resource: ClientResource = {k: v for k, v in record.items() if k != "secret_hash"}  # type: ignore
+    client_resource: ClientResource = {
+        k: v for k, v in record.items() if k != "secret_hash"}  # type: ignore
     return client_resource, client_secret
 
 
 def get_client(client_id: str) -> ClientResource:
     """Retrieve a vault client by its ID.
-    
+
     Args:
         client_id: The client identifier
-        
+
     Returns:
         Client resource without secret_hash
-        
+
     Raises:
         VaultClientAuthenticationError: If client not found
     """
@@ -150,19 +152,19 @@ def get_client(client_id: str) -> ClientResource:
             (client_id,),
             fetch_one=True
         )
-        
+
         if not client_record:
             raise ClientAuthenticationError(
                 f"Vault client '{client_id}' not found",
                 client_id=client_id
             )
-        
+
         return client_record
 
 
 def list_clients() -> list[ClientResource]:
     """List all vault clients.
-    
+
     Returns:
         List of client resources without secret_hash
     """
@@ -173,22 +175,22 @@ def list_clients() -> list[ClientResource]:
             (),
             fetch_all=True
         )
-        
+
         return client_records or []
 
 
 def delete_client(client_id: str) -> None:
     """Delete a vault client by its ID.
-    
+
     Args:
         client_id: The client identifier
-        
+
     Raises:
         VaultClientAuthenticationError: If client not found
     """
     # Check if client exists first
     get_client(client_id)  # This will raise if not found
-    
+
     with db.get_connection_context() as conn:
         db.execute_query(
             conn,
@@ -201,22 +203,23 @@ def delete_client(client_id: str) -> None:
 
 def replace_client_secret(client_id: str) -> str:
     """Replace a client's secret with a new one.
-    
+
     Args:
         client_id: The client identifier
-        
+
     Returns:
         The new client secret
-        
+
     Raises:
         VaultClientAuthenticationError: If client not found
     """
     # Check if client exists first
     get_client(client_id)  # This will raise if not found
-    
+
     new_secret = secret.generate_client_secret()
-    secret_hash = secret.hash_client_secret(new_secret, os.environ["SECRET_KEY"])
-    
+    secret_hash = secret.hash_client_secret(
+        new_secret, os.environ["SECRET_KEY"])
+
     with db.get_connection_context() as conn:
         db.execute_query(
             conn,
@@ -225,17 +228,17 @@ def replace_client_secret(client_id: str) -> str:
             fetch_one=False,
             fetch_all=False
         )
-    
+
     return new_secret
 
 
 def authenticate_client(client_id: str, client_secret: str) -> None:
     """Authenticate a client using their ID and secret.
-    
+
     Args:
         client_id: The client identifier
         client_secret: The client secret
-        
+
     Raises:
         VaultClientAuthenticationError: If authentication fails
     """
@@ -246,20 +249,21 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
             (client_id,),
             fetch_one=True
         )
-        
+
         if not client_record:
             raise ClientAuthenticationError(
                 f"Vault client '{client_id}' not found",
                 client_id=client_id
             )
-        
+
         if not client_record["secret_hash"]:
             raise ClientAuthenticationError(
                 f"Vault client '{client_id}' has no secret configured",
                 client_id=client_id
             )
-        
-        expected_hash = secret.hash_client_secret(client_secret, os.environ["SECRET_KEY"])
+
+        expected_hash = secret.hash_client_secret(
+            client_secret, os.environ["SECRET_KEY"])
         if client_record["secret_hash"] != expected_hash:
             raise ClientAuthenticationError(
                 f"Invalid secret for vault client '{client_id}'",
@@ -269,34 +273,34 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
 
 def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
     """Update a vault client's information.
-    
+
     Args:
         client_id: The client identifier
         **updates: Fields to update (name, description)
-        
+
     Raises:
         VaultClientAuthenticationError: If client not found
     """
     if not updates:
         return
-    
+
     # Check if client exists first
     get_client(client_id)  # This will raise if not found
-    
+
     # Build dynamic update query
     set_clauses = []
     values = []
-    
+
     for field, value in updates.items():
         if field in ("name", "description"):
             set_clauses.append(f"{field} = %s")
             values.append(value)
-    
+
     if not set_clauses:
         return
-    
+
     values.append(client_id)
-    
+
     with db.get_connection_context() as conn:
         db.execute_query(
             conn,
