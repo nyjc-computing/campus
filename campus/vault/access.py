@@ -1,4 +1,4 @@
-"""services.vault.access
+"""vault.access
 
 Access control module for the vault service.
 

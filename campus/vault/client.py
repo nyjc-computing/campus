@@ -1,4 +1,4 @@
-"""services.vault.client
+"""vault.client
 
 Client authentication module for the vault service.
 

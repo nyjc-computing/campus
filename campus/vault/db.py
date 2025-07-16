@@ -1,4 +1,4 @@
-"""services.vault.db
+"""vault.db
 
 Direct PostgreSQL database access for the vault service.
 
@@ -10,7 +10,7 @@ Environment Variables:
 - VAULTDB_URI: PostgreSQL connection string for vault database (required)
 
 Usage:
-    from services.vault.db import get_connection, execute_query
+    from vault.db import get_connection, execute_query
     
     with get_connection() as conn:
         results = execute_query(conn, "SELECT * FROM vault WHERE label = %s", ("api-keys",))

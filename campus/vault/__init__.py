@@ -1,4 +1,4 @@
-"""services.vault
+"""vault
 
 Vault service for managing secrets and sensitive system data in Campus.
 
@@ -36,14 +36,14 @@ Permissions can be combined using the | operator:
 
 USAGE EXAMPLE:
     # Create vault client (typically done by admin)
-    from services.vault.client import create_client
+    from vault.client import create_client
     client_resource, client_secret = create_client(
         name="my-app", 
         description="My application"
     )
     
     # Grant permissions (typically done by admin)
-    from services.vault.access import grant_access, READ, CREATE
+    from vault.access import grant_access, READ, CREATE
     grant_access(client_resource["id"], "api-secrets", READ | CREATE)
     
     # Use vault (CLIENT_ID and CLIENT_SECRET env vars must be set)
