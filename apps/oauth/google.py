@@ -8,7 +8,7 @@ Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 import os
 from typing import NotRequired, Required, TypedDict
 
-from flask import Blueprint, Flask, redirect, url_for
+from flask import Blueprint, Flask, redirect, request, url_for
 from werkzeug.wrappers import Response
 
 from apps.common.errors import api_errors
@@ -20,7 +20,7 @@ from apps.common.webauth.token import CredentialToken
 from common import integration
 from services.vault import get_vault
 import common.validation.flask as flask_validation
-from common.utils import utc_time
+from common.utils import url, utc_time
 
 PROVIDER = 'google'
 
@@ -64,7 +64,8 @@ class GoogleTokenResponseSchema(TypedDict):
     token_type: str  # Type of the token (e.g., "Bearer")
     expires_in: int  # Lifetime of the access token in seconds
     scope: str  # Scopes granted by the access token
-    refresh_token: NotRequired[str]  # Optional refresh token for long-lived sessions
+    # Optional refresh token for long-lived sessions
+    refresh_token: NotRequired[str]
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -88,12 +89,13 @@ def authorize() -> Response:
         target=params.pop('target'),
     )
     session.store()
-    redirect_uri = os.environ['REDIRECT_URI']
+    redirect_uri = url.create_url("https", request.host, url_for('.callback'))
     authorization_url = session.get_authorization_url(
         redirect_uri,
         **params
     )
     return redirect(authorization_url)
+
 
 @bp.get('/callback')
 def callback() -> Response:
@@ -120,7 +122,7 @@ def callback() -> Response:
                 )
             token_response = session.exchange_code_for_token(
                 code=code,
-                client_secret= vault.get('CLIENT_SECRET'),
+                client_secret=vault.get('CLIENT_SECRET'),
             )
         case _:
             api_errors.raise_api_error(400, **params)
