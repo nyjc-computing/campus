@@ -19,7 +19,6 @@ users = user.User()
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise users routes with the given Flask app/blueprint."""
-    user.init_db()
     app.register_blueprint(bp)
     app.add_url_rule('/me', 'get_authenticated_user', get_authenticated_user)
 

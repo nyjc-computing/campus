@@ -20,7 +20,6 @@ circles = circle.Circle()
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
-    circle.init_db()
     app.register_blueprint(bp)
 
 
