@@ -6,22 +6,6 @@ This module provides direct PostgreSQL connectivity to avoid circular dependenci
 with the storage module. The vault needs to be independent since other services
 may depend on it for secrets management.
 
-Lazy Loading Pattern:
-This module uses lazy loading to defer importing psycopg2 until first use. This improves
-startup time and reduces memory usage when the vault is not needed.
-
-Implementation:
-- psycopg2 imports are in TYPE_CHECKING block for type hints only
-- Runtime placeholders (_psycopg2, _RealDictCursor) start as None
-- Private function _get_psycopg2_modules() handles lazy loading implementation details
-- importlib.import_module() loads modules on first database operation
-- Global variables cache imports to avoid repeated loading
-
-Benefits:
-- Faster application startup when vault not immediately needed
-- Reduced memory footprint in applications that don't use vault
-- Optional dependency - apps can run without psycopg2 if vault unused
-
 Environment Variables:
 - VAULTDB_URI: PostgreSQL connection string for vault database (required)
 
@@ -32,43 +16,15 @@ Usage:
         results = execute_query(conn, "SELECT * FROM vault WHERE label = %s", ("api-keys",))
 """
 
-import importlib
 import os
 from contextlib import contextmanager
-from typing import Generator, Any, Optional, TypeAlias, TYPE_CHECKING
+from typing import Generator, Any, Optional
 
-# Lazy Loading Pattern Implementation:
-# Import database modules only for type checking, not at runtime
-if TYPE_CHECKING:
-    import psycopg2
-    from psycopg2.extras import RealDictCursor
-
-_PsycoConn: TypeAlias = "psycopg2.extensions.connection"
-
-# Runtime placeholders - start as None, populated on first use
-_psycopg2: Any | None = None   # Will hold psycopg2 module when loaded
-_RealDictCursor: Any | None = None   # Will hold RealDictCursor class when loaded
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 
-def _get_psycopg2_modules():
-    """Get psycopg2 modules, loading them lazily on first use.
-    
-    Returns:
-        Tuple of (psycopg2 module, RealDictCursor class)
-        
-    Note:
-        This function handles the lazy loading implementation details,
-        keeping the business logic in connection methods clean and focused.
-    """
-    global _psycopg2, _RealDictCursor
-    if _psycopg2 is None:      # Lazy loading: import only on first real use
-        _psycopg2 = importlib.import_module("psycopg2")
-        _RealDictCursor = importlib.import_module(
-            "psycopg2.extras").RealDictCursor
-    return _psycopg2, _RealDictCursor
-
-
-def get_connection() -> _PsycoConn:
+def get_connection() -> psycopg2.extensions.connection:
     """Get a PostgreSQL connection using the VAULTDB_URI environment variable.
 
     Returns:
@@ -82,17 +38,13 @@ def get_connection() -> _PsycoConn:
     if not vault_db_uri:
         raise ValueError("VAULTDB_URI environment variable is required")
 
-    # Get psycopg2 modules (lazy loaded)
-    psycopg2_module, real_dict_cursor = _get_psycopg2_modules()
-    
-    # Use the dynamically imported modules
-    conn = psycopg2_module.connect(vault_db_uri, cursor_factory=real_dict_cursor)
+    conn = psycopg2.connect(vault_db_uri)
     conn.autocommit = False
     return conn
 
 
 @contextmanager
-def get_connection_context() -> Generator[_PsycoConn, None, None]:
+def get_connection_context() -> Generator[psycopg2.extensions.connection, None, None]:
     """Context manager for PostgreSQL connections.
 
     Automatically handles connection cleanup and provides transaction management.
@@ -119,7 +71,7 @@ def get_connection_context() -> Generator[_PsycoConn, None, None]:
 
 
 def execute_query(
-    conn: _PsycoConn,
+    conn: psycopg2.extensions.connection,
     query: str,
     params: tuple = (),
     fetch_one: bool = False,
@@ -149,7 +101,7 @@ def execute_query(
         # Insert/Update (no return value needed)
         execute_query(conn, "INSERT INTO vault ...", (...,), fetch_one=False, fetch_all=False)
     """
-    with conn.cursor() as cursor:
+    with conn.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute(query, params)
 
         if fetch_one:
