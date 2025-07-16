@@ -6,6 +6,24 @@ Vault Integration:
 The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the 'storage' 
 vault. The storage system depends on the vault service for database credentials.
 
+Lazy Loading Pattern:
+This module uses lazy loading to defer importing psycopg2 until first use, following
+the same pattern as services.vault.db. This improves startup time and reduces memory
+usage when PostgreSQL storage is not immediately needed.
+
+Implementation:
+- psycopg2 imports are in TYPE_CHECKING block for type hints only
+- Runtime placeholders (_psycopg2, _RealDictCursor) start as None
+- Private function _get_psycopg2_modules() handles lazy loading implementation details
+- importlib.import_module() loads modules on first database operation
+- Global variables cache imports to avoid repeated loading
+- Connection factory is set at connection level, not per cursor
+
+Benefits:
+- Faster application startup when PostgreSQL storage not immediately needed
+- Reduced memory footprint in applications using only MongoDB storage
+- Optional dependency - apps can run without psycopg2 if PostgreSQL unused
+
 Implementation:
 Uses direct column mapping where record keys correspond to table column names.
 Tables are assumed to exist with correct schema. Record validation is handled
@@ -23,13 +41,42 @@ table.delete_by_id("123")
 ```
 """
 
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-from common import devops
-from services.vault import get_vault
-from storage.tables.interface import TableInterface, PK
 from storage.errors import NotFoundError, NoChangesAppliedError
+from storage.tables.interface import TableInterface, PK
+from services.vault import get_vault
+from common import devops
+import importlib
+from typing import Any, TYPE_CHECKING
+
+# Lazy Loading Pattern Implementation:
+# Import database modules only for type checking, not at runtime
+if TYPE_CHECKING:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+_PsycoConn = "psycopg2.extensions.connection"
+
+# Runtime placeholders - start as None, populated on first use
+_psycopg2: Any | None = None   # Will hold psycopg2 module when loaded
+_RealDictCursor: Any | None = None   # Will hold RealDictCursor class when loaded
+
+
+def _get_psycopg2_modules():
+    """Get psycopg2 modules, loading them lazily on first use.
+    
+    Returns:
+        Tuple of (psycopg2 module, RealDictCursor class)
+        
+    Note:
+        This function handles the lazy loading implementation details,
+        keeping the business logic in connection methods clean and focused.
+    """
+    global _psycopg2, _RealDictCursor
+    if _psycopg2 is None:      # Lazy loading: import only on first real use
+        _psycopg2 = importlib.import_module("psycopg2")
+        _RealDictCursor = importlib.import_module(
+            "psycopg2.extras").RealDictCursor
+    return _psycopg2, _RealDictCursor
 
 
 def _get_db_uri() -> str:
@@ -74,7 +121,13 @@ class PostgreSQLTable(TableInterface):
             psycopg2.Error: If database connection fails
         """
         db_uri = _get_db_uri()
-        return psycopg2.connect(db_uri)
+
+        _psycopg2, _RealDictCursor = _get_psycopg2_modules()
+
+        # Use the dynamically imported modules
+        # Note: cursor_factory is set here so individual cursors don't need it
+        # type: ignore
+        return _psycopg2.connect(db_uri, cursor_factory=_RealDictCursor)
 
     @staticmethod
     def _build_where_clause(query: dict) -> tuple[str, list]:
@@ -116,7 +169,7 @@ class PostgreSQLTable(TableInterface):
     def get_by_id(self, row_id: str) -> dict:
         """Retrieve a row by its ID."""
         with self._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            with conn.cursor() as cursor:
                 cursor.execute(
                     f"SELECT * FROM {self.name} WHERE {PK} = %s",
                     (row_id,)
@@ -127,7 +180,7 @@ class PostgreSQLTable(TableInterface):
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve rows matching a query."""
         with self._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            with conn.cursor() as cursor:
                 where_clause, params = self._build_where_clause(query)
                 sql = f"SELECT * FROM {self.name} {where_clause}"
                 cursor.execute(sql, params)
@@ -237,7 +290,12 @@ def purge_tables() -> None:
     """
     try:
         uri = _get_db_uri()
-        conn = psycopg2.connect(uri)
+        
+        # Get psycopg2 modules (lazy loaded)
+        psycopg2_module, _ = _get_psycopg2_modules()
+        
+        # Use the dynamically imported module
+        conn = psycopg2_module.connect(uri)  # type: ignore
         conn.autocommit = False
 
         with conn.cursor() as cursor:

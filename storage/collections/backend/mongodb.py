@@ -6,6 +6,24 @@ Vault Integration:
 The MongoDB connection URI is retrieved from the vault secret 'MONGODB_URI' in the 'storage' 
 vault. The database name is retrieved from the vault secret 'MONGODB_NAME' in the same vault.
 
+Lazy Loading Pattern:
+This module uses lazy loading to defer importing pymongo until first use, following
+the same pattern as services.vault.db. This improves startup time and reduces memory
+usage when MongoDB storage is not immediately needed.
+
+Implementation:
+- pymongo imports are in TYPE_CHECKING block for type hints only
+- Runtime placeholder (_pymongo_client) starts as None
+- Private function _get_mongo_client() handles lazy loading implementation details
+- importlib.import_module() loads MongoClient on first database operation
+- Global variable caches import to avoid repeated loading
+- Collection type is used only for type hints, not runtime instantiation
+
+Benefits:
+- Faster application startup when MongoDB storage not immediately needed
+- Reduced memory footprint in applications using only PostgreSQL storage
+- Optional dependency - apps can run without pymongo if MongoDB unused
+
 Implementation:
 Uses MongoDB's native document storage with transparent primary key mapping
 between Campus `id` and MongoDB `_id` fields. Collections are created automatically.
@@ -23,8 +41,14 @@ collection.delete_by_id("123")
 ```
 """
 
-from pymongo import MongoClient
-from pymongo.collection import Collection
+import importlib
+from typing import Any, TYPE_CHECKING
+
+# Lazy Loading Pattern Implementation:
+# Import database modules only for type checking, not at runtime
+if TYPE_CHECKING:
+    from pymongo import MongoClient
+    from pymongo.collection import Collection
 
 from common import devops
 from services.vault import get_vault
@@ -32,6 +56,9 @@ from storage.collections.interface import CollectionInterface, PK
 from storage.errors import NotFoundError, NoChangesAppliedError
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
+
+# Runtime placeholder - starts as None, populated on first use
+_pymongo_client: Any | None = None   # Will hold MongoClient class when loaded
 
 
 def _get_mongodb_uri() -> str:
@@ -74,6 +101,22 @@ def _get_mongodb_name() -> str:
             f"Failed to retrieve MongoDB database name from vault secret 'MONGODB_NAME' "
             f"in 'storage' vault: {e}"
         ) from e
+
+
+def _get_mongo_client():
+    """Get the MongoClient class, loading it lazily on first use.
+    
+    Returns:
+        MongoClient class from pymongo
+        
+    Note:
+        This function handles the lazy loading implementation details,
+        keeping the business logic in __init__ clean and focused.
+    """
+    global _pymongo_client
+    if _pymongo_client is None:      # Lazy loading: import only on first real use
+        _pymongo_client = importlib.import_module("pymongo").MongoClient
+    return _pymongo_client
 
 
 class MongoRecord(dict):
@@ -139,9 +182,11 @@ class MongoDBCollection(CollectionInterface):
         super().__init__(name)
         mongodb_uri = _get_mongodb_uri()
         mongodb_name = _get_mongodb_name()
-        self.client = MongoClient(mongodb_uri)
+        
+        mongo_client_class = _get_mongo_client()
+        self.client = mongo_client_class(mongodb_uri)  # type: ignore
         self.db = self.client[mongodb_name]
-        self.collection: Collection = self.db[name]
+        self.collection: "Collection" = self.db[name]
 
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
@@ -215,7 +260,8 @@ def purge_collections() -> None:
         uri = _get_mongodb_uri()
         db_name = _get_mongodb_name()
 
-        client = MongoClient(uri)
+        mongo_client_class = _get_mongo_client()
+        client = mongo_client_class(uri)  # type: ignore
         db = client[db_name]
 
         # Drop all collections
