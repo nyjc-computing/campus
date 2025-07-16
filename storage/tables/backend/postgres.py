@@ -222,3 +222,30 @@ class PostgreSQLTable(TableInterface):
             with conn.cursor() as cursor:
                 cursor.execute(schema)
                 conn.commit()
+
+
+@devops.block_env(devops.PRODUCTION)
+def purge_tables() -> None:
+    """Purge all tables by dropping and recreating the schema.
+
+    This function is intended for development/testing environments only.
+    It drops the entire public schema and recreates it, effectively
+    removing all tables and data.
+
+    Raises:
+        RuntimeError: If database connection or schema operations fail
+    """
+    try:
+        uri = _get_db_uri()
+        conn = psycopg2.connect(uri)
+        conn.autocommit = False
+
+        with conn.cursor() as cursor:
+            cursor.execute("DROP SCHEMA IF EXISTS public CASCADE;")
+            cursor.execute("CREATE SCHEMA public;")
+
+        conn.commit()
+        conn.close()
+
+    except Exception as e:
+        raise RuntimeError(f"Failed to purge PostgreSQL database: {e}") from e
