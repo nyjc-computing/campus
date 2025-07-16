@@ -3,20 +3,20 @@
 This entrypoint is only used for development purposes.
 It will be removed in production.
 """
-import os
 
 from flask import redirect, url_for
 
-from apps import api, oauth, create_app_from_modules
-
-# Set environment variables for OAuth2 configuration
-os.environ['REDIRECT_URI'] = ""
+from apps import api, create_app_from_modules, oauth
 
 app = create_app_from_modules(api, oauth)
 
 
 @app.route('/')
 def index():
+    return "Campus API running", 200
+
+@app.route('/login')
+def login():
     return redirect(url_for('oauth.google.authorize', target='/home'))
 
 @app.route('/home')
