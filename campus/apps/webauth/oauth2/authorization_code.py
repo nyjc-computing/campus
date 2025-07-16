@@ -9,8 +9,8 @@ from urllib.parse import urlencode
 import requests
 from flask import session
 
-from campus.apps.common.webauth.http import HttpScheme
-from campus.apps.common.webauth.token import CredentialToken
+from campus.apps.webauth.http import HttpScheme
+from campus.apps.webauth.token import CredentialToken
 from campus.common.utils import uid, utc_time
 
 from .base import (

@@ -7,8 +7,8 @@ from flask import Blueprint, Flask
 
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
-from campus.apps.common.errors import api_errors
-from campus.apps.common.models import circle
+from campus.apps.errors import api_errors
+from campus.apps.models import circle
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')
 bp.before_request(authenticate_client)

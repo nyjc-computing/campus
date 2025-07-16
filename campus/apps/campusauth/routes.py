@@ -7,7 +7,7 @@ from typing import Unpack
 
 from flask import Blueprint, Flask
 
-from campus.apps.common.errors import api_errors
+from campus.apps.errors import api_errors
 import campus.common.validation.flask as flask_validation
 
 # No url prefix because authentication endpoints are not only used by the API

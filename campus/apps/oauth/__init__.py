@@ -5,7 +5,7 @@ OAuth2 routes for integrations.
 
 from flask import Blueprint, Flask
 
-from campus.apps.common import errors
+from campus.apps import errors
 from campus.common import devops
 
 from . import google

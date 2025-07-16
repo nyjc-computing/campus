@@ -11,12 +11,12 @@ from typing import NotRequired, Required, TypedDict
 from flask import Blueprint, Flask, redirect, request, url_for
 from werkzeug.wrappers import Response
 
-from campus.apps.common.errors import api_errors
-from campus.apps.common.models.credentials import UserCredentials
-from campus.apps.common.webauth.oauth2 import (
+from campus.apps.errors import api_errors
+from campus.apps.models.credentials import UserCredentials
+from campus.apps.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
-from campus.apps.common.webauth.token import CredentialToken
+from campus.apps.webauth.token import CredentialToken
 from campus.common import integration
 from campus.services.vault import get_vault
 import campus.common.validation.flask as flask_validation

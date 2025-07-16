@@ -9,8 +9,8 @@ Credentials are assumed to be issued by a provider.
 
 from typing import NotRequired, TypedDict, Unpack
 
-from campus.apps.common.errors import api_errors
-from campus.apps.common.webauth.token import TokenSchema
+from campus.apps.errors import api_errors
+from campus.apps.webauth.token import TokenSchema
 from campus.storage import get_collection
 from campus.common.schema import CampusID
 from campus.common.utils import utc_time

@@ -13,8 +13,8 @@ Main operations:
 
 from typing import TypedDict, NotRequired, Unpack
 
-from campus.apps.common.models.base import BaseRecord
-from campus.apps.common.errors import api_errors
+from campus.apps.models.base import BaseRecord
+from campus.apps.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
 from campus.storage import get_collection

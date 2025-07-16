@@ -7,11 +7,11 @@ This context is pushed to the flask g object for use in the API routes.
 from flask import g
 
 from campus.services.vault.client import ClientResource
-from campus.apps.common.models.credentials import (
+from campus.apps.models.credentials import (
     ClientCredentialsSchema,
     UserCredentialsSchema,
 )
-from campus.apps.common.models.user import UserResource
+from campus.apps.models.user import UserResource
 
 __all__ = ["ctx"]
 

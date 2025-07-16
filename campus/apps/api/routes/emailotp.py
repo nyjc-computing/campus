@@ -7,11 +7,11 @@ from flask import Blueprint, Flask
 
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
-from campus.apps.common.errors import api_errors
-from campus.apps.common.models import emailotp
+from campus.apps.errors import api_errors
+from campus.apps.models import emailotp
 from campus.services.email import create_email_sender
 
-from campus.apps.common.models.emailotp import template
+from campus.apps.models.emailotp import template
 
 bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
 # All routes in this blueprint can be called by a client without token auth
