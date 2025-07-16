@@ -27,7 +27,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 
 from campus.common import devops
-from campus.services.vault import get_vault
+from campus.vault import get_vault
 from campus.storage.collections.interface import CollectionInterface, PK
 from campus.storage.errors import NotFoundError, NoChangesAppliedError
 

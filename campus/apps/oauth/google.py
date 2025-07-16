@@ -18,7 +18,7 @@ from campus.apps.webauth.oauth2 import (
 )
 from campus.apps.webauth.token import CredentialToken
 from campus.common import integration
-from campus.services.vault import get_vault
+from campus.vault import get_vault
 import campus.common.validation.flask as flask_validation
 from campus.common.utils import url, utc_time
 

@@ -9,7 +9,7 @@ import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
 from campus.apps.errors import api_errors
 from campus.apps.models import user
-from campus.services.vault import client
+from campus.vault import client
 
 bp = Blueprint('clients', __name__, url_prefix='/clients')
 bp.before_request(authenticate_client)

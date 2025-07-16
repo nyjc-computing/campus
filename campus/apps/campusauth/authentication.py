@@ -13,7 +13,7 @@ from typing import Callable
 from flask import request
 
 from campus.apps.campusauth.context import ctx
-from campus.services.vault import client
+from campus.vault import client
 from campus.apps.webauth import http
 
 

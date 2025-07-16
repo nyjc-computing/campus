@@ -7,7 +7,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from campus.services.vault import get_vault
+from campus.vault import get_vault
 
 from .base import EmailSenderInterface
 

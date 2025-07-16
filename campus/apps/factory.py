@@ -7,7 +7,7 @@ necessary services.
 
 from flask import Flask
 
-from campus.services.vault import Vault
+from campus.vault import Vault
 
 
 def create_app_from_modules(*modules) -> Flask:

@@ -27,7 +27,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from campus.common import devops
-from campus.services.vault import get_vault
+from campus.vault import get_vault
 from campus.storage.tables.interface import TableInterface, PK
 from campus.storage.errors import NotFoundError, NoChangesAppliedError
 
