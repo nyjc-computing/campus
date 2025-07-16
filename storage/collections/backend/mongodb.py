@@ -23,7 +23,6 @@ collection.delete_by_id("123")
 ```
 """
 
-import os
 from pymongo import MongoClient
 from pymongo.collection import Collection
 
@@ -200,4 +199,30 @@ class MongoDBCollection(CollectionInterface):
         """
         # For MongoDB, collections are created automatically on first insert
         # This method exists for interface compatibility and future extensibility
-        pass
+
+
+@devops.block_env(devops.PRODUCTION)
+def purge_collections() -> None:
+    """Purge all collections by dropping the entire database.
+
+    This function is intended for development/testing environments only.
+    It drops all collections in the MongoDB database.
+
+    Raises:
+        RuntimeError: If database connection or purge operations fail
+    """
+    try:
+        uri = _get_mongodb_uri()
+        db_name = _get_mongodb_name()
+
+        client = MongoClient(uri)
+        db = client[db_name]
+
+        # Drop all collections
+        for collection_name in db.list_collection_names():
+            db.drop_collection(collection_name)
+
+        client.close()
+
+    except Exception as e:
+        raise RuntimeError(f"Failed to purge MongoDB collections: {e}") from e
