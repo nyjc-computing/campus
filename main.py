@@ -6,7 +6,7 @@ It will be removed in production.
 
 from flask import redirect, url_for
 
-from apps import api, create_app_from_modules, oauth
+from campus.apps import api, create_app_from_modules, oauth
 
 app = create_app_from_modules(api, oauth)
 
@@ -27,7 +27,7 @@ def home():
 
 
 if __name__ == '__main__':
-    from common import devops
+    from campus.common import devops
     match devops.ENV:
         case devops.PRODUCTION | devops.STAGING:
             app.run('0.0.0.0', port=5000)
