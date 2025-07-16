@@ -11,7 +11,6 @@ from functools import wraps
 from typing import Callable
 
 from flask import request
-from flask.wrappers import Response
 
 from apps.campusauth.context import ctx
 from services.vault import client
