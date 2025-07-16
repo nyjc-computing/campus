@@ -18,5 +18,5 @@ def create_app_from_modules(*modules) -> Flask:
     app = Flask(__name__)
     for module in modules:
         module.init_app(app)
-    app.config['SECRET_KEY'] = Vault('campus').get('SECRET_KEY')
+    app.secret_key = Vault('campus').get('SECRET_KEY')
     return app
