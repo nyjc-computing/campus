@@ -1,4 +1,4 @@
-"""apps.common.models
+"""campus.models
 
 # Campus API Model
 

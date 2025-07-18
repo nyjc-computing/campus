@@ -6,7 +6,7 @@ import os
 
 from typing import NotRequired, TypedDict, Unpack
 
-from campus.apps.models.base import BaseRecord
+from campus.models.base import BaseRecord
 from campus.apps.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
