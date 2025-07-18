@@ -17,7 +17,7 @@ from collections.abc import Iterator, Mapping
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.apps.errors import api_errors
-from campus.apps.models.base import BaseRecord
+from campus.models.base import BaseRecord
 from campus.storage import get_collection
 from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time

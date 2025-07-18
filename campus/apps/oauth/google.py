@@ -12,7 +12,7 @@ from flask import Blueprint, Flask, redirect, request, url_for
 from werkzeug.wrappers import Response
 
 from campus.apps.errors import api_errors
-from campus.apps.models.credentials import UserCredentials
+from campus.models.credentials import UserCredentials
 from campus.apps.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )

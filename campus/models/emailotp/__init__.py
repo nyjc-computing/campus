@@ -12,7 +12,7 @@ from typing import TypedDict, Unpack
 import bcrypt
 
 from campus.apps.errors import api_errors
-from campus.apps.models.base import BaseRecord
+from campus.models.base import BaseRecord
 from campus.common.utils import uid, utc_time
 from campus.common import devops
 from campus.storage import get_table
