@@ -89,7 +89,38 @@ dependencies = [
 ]
 ```
 
-#### 4. `campus-apps`
+#### 4. `campus-client`
+**Purpose**: General-purpose client libraries for external integrations
+**Contents**: `campus/client/`
+**Dependencies**: `campus-common`, HTTP client libraries
+
+```toml
+[tool.poetry]
+name = "campus-client"
+description = "Client libraries for external API integrations"
+dependencies = [
+    "python = ^3.8"
+    "campus-common = { path = "../common", develop = true }"
+    "requests = ^2.28.0"
+]
+```
+
+#### 5. `campus-models`
+**Purpose**: Data models and schemas
+**Contents**: `campus/models/`
+**Dependencies**: `campus-common`, validation libraries
+
+```toml
+[tool.poetry]
+name = "campus-models"
+description = "Data models and schemas for Campus"
+dependencies = [
+    "python = ^3.8"
+    "campus-common = { path = "../common", develop = true }"
+]
+```
+
+#### 6. `campus-apps`
 **Purpose**: Web applications and API endpoints
 **Contents**: `campus/apps/`  
 **Dependencies**: All other campus packages, Flask, web frameworks
@@ -103,6 +134,8 @@ dependencies = [
     "campus-common = { path = "../common", develop = true }"
     "campus-vault = { path = "../vault", develop = true }"
     "campus-storage = { path = "../storage", develop = true }"
+    "campus-client = { path = "../client", develop = true }"
+    "campus-models = { path = "../models", develop = true }"
     "flask = ^2.0.0"
     "requests = ^2.28.0"
 ]
@@ -133,6 +166,7 @@ dependencies = [
    - ✅ Moved models from `campus.apps.models` to `campus.models`
      - **Reason**: Centralizing models in the root folder simplifies access and improves organization.
    - ✅ Updated all import statements to reflect the new model locations
+   - ✅ Added re-exports in `campus/__init__.py` for static type checker compatibility
 
 ### Phase 1: Package Structure Setup
 
@@ -332,5 +366,8 @@ from campus.vault import get_vault
 - **Import Updates**: All 50+ files updated to use new namespace structure  
 - **Structure Cleanup**: Eliminated confusing `campus.apps.common` structure
 - **Vault Positioning**: Moved vault to top-level for independent packaging
+- **Client Positioning**: Moved client to top-level for general-purpose use
+- **Models Positioning**: Moved models to top-level for centralized access
+- **Static Type Checker Support**: Added simple re-exports in `campus/__init__.py` for junior developer onboarding
 - **Application Verification**: Full application runs successfully with new structure
 - **Documentation**: Architecture and implementation plans documented
