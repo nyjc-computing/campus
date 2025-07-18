@@ -9,6 +9,7 @@ packages = [{include = "campus"}]
 python = "^3.11"
 campus-common = {path = "../common", develop = true}
 bcrypt = "^4.2.1"
+flask = "^3.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
