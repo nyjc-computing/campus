@@ -12,7 +12,7 @@ The vault service is designed to be completely independent to prevent circular d
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│    apps     │───▶│   storage   │───▶│    vault    │
+│    apps     │──▶│   storage   │──▶│    vault    │
 └─────────────┘    └─────────────┘    └─────────────┘
        │                  │                   │
        └──────────────────┼───────────────────┘
@@ -128,6 +128,11 @@ dependencies = [
    - ✅ Moved vault from `campus.services.vault` to `campus.vault`
    - ✅ Updated all references and documentation
    - ✅ Positioned vault as independent top-level package
+   - ✅ Moved `campus.apps.client` to `campus.client`
+     - **Reason**: The `client` module provides general-purpose classes and functions for interacting with APIs of integration providers. It is not application-specific and should be moved out of `campus.apps` to better align with its purpose.
+   - ✅ Moved models from `campus.apps.models` to `campus.models`
+     - **Reason**: Centralizing models in the root folder simplifies access and improves organization.
+   - ✅ Updated all import statements to reflect the new model locations
 
 ### Phase 1: Package Structure Setup
 
@@ -218,6 +223,14 @@ campus/                                    # Repository root
 │   │   └── ...
 │   ├── storage/
 │   │   ├── pyproject.toml               # campus-storage package
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── client/                          # General-purpose client module
+│   │   ├── pyproject.toml               # campus-client package
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── models/                          # Centralized models directory
+│   │   ├── pyproject.toml               # campus-models package
 │   │   ├── __init__.py
 │   │   └── ...
 │   └── apps/
