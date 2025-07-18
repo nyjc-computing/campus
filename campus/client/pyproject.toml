@@ -3,7 +3,9 @@ name = "campus-client"
 version = "0.1.0"
 description = "Client libraries for external API integrations"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
-packages = [{include = "campus"}]
+packages = [
+    {include = "campus/client", from = "../.."},
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"

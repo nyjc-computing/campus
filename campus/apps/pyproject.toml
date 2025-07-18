@@ -1,9 +1,11 @@
 [tool.poetry]
 name = "campus-apps"
 version = "0.1.0"
-description = "Web applications and API for Campus"
+description = "Web applications and services"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
-packages = [{include = "campus"}]
+packages = [
+    {include = "campus/apps", from = "../.."},
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"

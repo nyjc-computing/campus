@@ -1,9 +1,11 @@
 [tool.poetry]
 name = "campus-storage"
 version = "0.1.0"
-description = "Storage interfaces and backends for Campus"
+description = "Storage backends for collections and tables"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
-packages = [{include = "campus"}]
+packages = [
+    {include = "campus/storage", from = "../.."},
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"

@@ -3,6 +3,7 @@ name = "campus-workspace"
 version = "0.1.0"
 description = "Campus ecosystem workspace - contains all Campus packages"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
+package-mode = false
 
 # Workspace configuration - install all packages in development mode
 [tool.poetry.dependencies]

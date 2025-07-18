@@ -1,7 +1,7 @@
 import unittest
 from flask import Flask
-from common.validation import flask as flask_validation
-from common.validation import record as record_validation
+from campus.common.validation import flask as flask_validation
+from campus.common.validation import record as record_validation
 
 class TestSchemaValidation(unittest.TestCase):
     def setUp(self):
