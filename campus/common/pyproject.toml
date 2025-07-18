@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Shared utilities and foundational components for Campus ecosystem"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 packages = [
-    {include = "campus", from = "../.."},
+    {include = "campus/common", from = "../.."},
 ]
 
 [tool.poetry.dependencies]

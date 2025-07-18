@@ -3,7 +3,9 @@ name = "campus-vault"
 version = "0.1.0"
 description = "Secure vault service for managing secrets"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
-packages = [{include = "campus"}]
+packages = [
+    {include = "campus/vault", from = "../.."},
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"
