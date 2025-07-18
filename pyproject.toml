@@ -1,17 +1,22 @@
 [tool.poetry]
-name = "campus-suite"
+name = "campus-workspace"
 version = "0.1.0"
-description = ""
+description = "Campus ecosystem workspace - contains all Campus packages"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 
+# Workspace configuration - install all packages in development mode
 [tool.poetry.dependencies]
 python = ">=3.11.0,<3.12"
-flask = "^3.0.0"
-gunicorn = "^21.2.0"
-bcrypt = "4.2.1"
-psycopg2-binary = "2.9.10"
-pymongo = {extras = ["srv"], version = "^4.13.2"}
-requests = "^2.32.4"
+# Local packages installed in development mode
+campus-common = {path = "./campus/common", develop = true}
+campus-vault = {path = "./campus/vault", develop = true}
+campus-storage = {path = "./campus/storage", develop = true}
+campus-client = {path = "./campus/client", develop = true}
+campus-models = {path = "./campus/models", develop = true}
+campus-apps = {path = "./campus/apps", develop = true}
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0"
 
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md

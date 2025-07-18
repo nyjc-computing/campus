@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "campus-storage"
+version = "0.1.0"
+description = "Storage interfaces and backends for Campus"
+authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
+packages = [{include = "campus"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+campus-common = {path = "../common", develop = true}
+campus-vault = {path = "../vault", develop = true}
+psycopg2-binary = "^2.9.0"
+pymongo = {extras = ["srv"], version = "^4.13.2"}
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

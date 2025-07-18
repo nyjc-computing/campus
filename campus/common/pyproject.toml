@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "campus-common"
+version = "0.1.0"
+description = "Shared utilities and foundational components for Campus ecosystem"
+authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
+packages = [{include = "campus"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

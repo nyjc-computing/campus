@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "campus-client"
+version = "0.1.0"
+description = "Client libraries for external API integrations"
+authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
+packages = [{include = "campus"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+campus-common = {path = "../common", develop = true}
+requests = "^2.32.4"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
