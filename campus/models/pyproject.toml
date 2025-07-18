@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "campus-models"
+version = "0.1.0"
+description = "Data models and schemas"
+authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
+packages = [
+    {include = "campus/models", from = "../.."},
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+campus-common = {path = "../common", develop = true}
+bcrypt = "^4.2.1"
+flask = "^3.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

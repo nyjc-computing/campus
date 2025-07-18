@@ -1,5 +1,5 @@
 import unittest
-from apps import api
+from campus.apps import api
 
 
 class TestClients(unittest.TestCase):
