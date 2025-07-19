@@ -361,6 +361,11 @@ def create_vault_app():
     
     app = Flask(__name__)
     
+    @app.route("/")
+    def root_health_check():
+        """Root health check endpoint for deployments"""
+        return jsonify({"status": "healthy", "service": "campus-vault"})
+    
     @app.route("/health")
     def health_check():
         """Health check endpoint"""

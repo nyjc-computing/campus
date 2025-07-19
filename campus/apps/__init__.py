@@ -25,6 +25,12 @@ def create_app_from_modules(*modules) -> Flask:
     for module in modules:
         module.init_app(app)
     app.secret_key = Vault('campus').get('SECRET_KEY')
+    
+    # Health check route for deployments
+    @app.route('/')
+    def health_check():
+        return {'status': 'healthy', 'service': 'campus-apps'}, 200
+    
     return app
 
 
