@@ -353,3 +353,67 @@ class Vault:
                 fetch_one=False,
                 fetch_all=False
             )
+
+
+def create_vault_app():
+    """Create Flask app for vault service"""
+    from flask import Flask, jsonify, request
+    
+    app = Flask(__name__)
+    
+    @app.route("/health")
+    def health_check():
+        """Health check endpoint"""
+        return jsonify({"status": "healthy", "service": "campus-vault"})
+    
+    @app.route("/vaults")
+    def list_vaults():
+        """List available vault labels"""
+        try:
+            # Simple implementation - just return known labels
+            return jsonify({"vaults": ["campus", "storage", "oauth"]})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route("/vault/<label>/<key>")
+    def get_secret(label, key):
+        """Get a secret from a vault"""
+        try:
+            vault = get_vault(label)
+            value = vault.get(key)
+            return jsonify({"key": key, "value": value})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    @app.route("/vault/<label>/<key>", methods=["POST"])
+    def set_secret(label, key):
+        """Set a secret in a vault"""
+        try:
+            data = request.get_json()
+            value = data.get("value")
+            
+            vault = get_vault(label)
+            vault.set(key, value)
+            return jsonify({"status": "success", "key": key})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    
+    return app
+
+
+def run_server():
+    """Entry point for running vault as a standalone service"""
+    import os
+    
+    app = create_vault_app()
+    
+    # Replit configuration
+    host = "0.0.0.0"
+    port = int(os.environ.get("PORT", 5000))
+    
+    print(f"🔐 Starting Campus Vault Service on {host}:{port}")
+    app.run(host=host, port=port, debug=False)
+
+
+if __name__ == '__main__':
+    run_server()

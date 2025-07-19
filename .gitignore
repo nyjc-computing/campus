@@ -119,8 +119,18 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Environment variables
 .env
+
+# Development database
+test.db
+
+# IDE and editor files
+.vscode/settings.json
+.idea/
+
+# Deployment flag (keep deploy.* templates)
+deploy
 .venv
 env/
 venv/

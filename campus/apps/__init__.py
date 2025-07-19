@@ -10,14 +10,34 @@ This module contains the main applications for Campus.
 - oauth: Campus OAuth2 implementation.
 """
 
+from flask import Flask
+from campus.vault import Vault
+
 from . import api, campusauth, oauth
 from .campusauth import ctx
-from .factory import create_app_from_modules
+
+def create_app_from_modules(*modules) -> Flask:
+    """Factory function to create the Flask app.
+    
+    This is called if api is run as a standalone app.
+    """
+    app = Flask(__name__)
+    for module in modules:
+        module.init_app(app)
+    app.secret_key = Vault('campus').get('SECRET_KEY')
+    return app
+
+
+def create_app() -> Flask:
+    """Create the main Campus app with all modules"""
+    return create_app_from_modules(api, campusauth, oauth)
+
 
 __all__ = [
     "api",
-    "campusauth",
+    "campusauth", 
     "oauth",
     "create_app_from_modules",
+    "create_app",
     "ctx",
 ]
