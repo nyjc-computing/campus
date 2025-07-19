@@ -1,10 +1,7 @@
-# This is a deployment-ready pyproject.toml that works with older Poetry versions
-# It treats the entire workspace as a single package rather than using package-mode = false
-
 [tool.poetry]
-name = "campus"
+name = "campus-workspace"
 version = "0.1.0"
-description = "Campus ecosystem - modular platform for educational technology"
+description = "Campus ecosystem meta-package - complete Campus system for deployment"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
 packages = [{include = "campus"}]
@@ -12,7 +9,7 @@ packages = [{include = "campus"}]
 [tool.poetry.dependencies]
 python = ">=3.11.0,<3.12"
 
-# All dependencies from subpackages consolidated
+# All the dependencies from individual packages
 # Common dependencies
 flask = "^3.0.0"
 bcrypt = "^4.2.1"
@@ -32,9 +29,6 @@ werkzeug = "^3.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
-
-[tool.poetry.scripts]
-campus-server = "campus.apps.factory:create_app"
 
 [tool.pyright]
 useLibraryCodeForTypes = true
