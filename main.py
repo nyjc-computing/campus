@@ -1,35 +1,51 @@
-"""main
+#!/usr/bin/env python3
+"""
+Campus Service Entry Point
 
-This entrypoint is only used for development purposes.
-It will be removed in production.
+Unified entry point for all Campus services.
+Deployment mode is determined by the content of the 'deploy' file.
 """
 
-from flask import redirect, url_for
+import os
+from pathlib import Path
 
-from campus.apps import api, create_app_from_modules, oauth
+def get_deployment_mode():
+    """Get deployment mode from deploy file"""
+    deploy_file = Path(__file__).parent / "deploy"
+    
+    if not deploy_file.exists():
+        raise FileNotFoundError(
+            "Deployment mode file 'deploy' not found. "
+            "Create it with: echo 'vault' > deploy or echo 'apps' > deploy"
+        )
+    
+    mode = deploy_file.read_text().strip().lower()
+    if mode not in ["vault", "apps"]:
+        raise ValueError(
+            f"Invalid deployment mode '{mode}'. "
+            "Valid modes are: vault, apps"
+        )
+    
+    return mode
 
-app = create_app_from_modules(api, oauth)
+def main():
+    """Start the appropriate Campus service based on deployment mode"""
+    mode = get_deployment_mode()
+    
+    # Configuration
+    host = "0.0.0.0"
+    port = 5000
+    
+    if mode == "vault":
+        print(f"🔐 Starting Campus Vault Service on {host}:{port}")
+        from campus.vault import create_vault_app
+        app = create_vault_app()
+    else:
+        print(f"🚀 Starting Campus Apps Service on {host}:{port}")
+        from campus.apps import create_app
+        app = create_app()
+    
+    app.run(host=host, port=port, debug=False)
 
-
-@app.route('/')
-def index():
-    return "Campus API running", 200
-
-@app.route('/login')
-def login():
-    return redirect(url_for('oauth.google.authorize', target='/home'))
-
-@app.route('/home')
-def home():
-    # TODO: Implement authentication check
-    # TODO: Implement user session management
-    return "Welcome to the home page! You are authenticated."
-
-
-if __name__ == '__main__':
-    from campus.common import devops
-    match devops.ENV:
-        case devops.PRODUCTION | devops.STAGING:
-            app.run('0.0.0.0', port=5000)
-        case devops.DEVELOPMENT | devops.TESTING:
-            app.run('127.0.0.1', port=5000)
+if __name__ == "__main__":
+    main()
