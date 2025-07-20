@@ -16,7 +16,7 @@ from .model import Vault, VaultKeyError
 bp = Blueprint('vault', __name__, url_prefix='/vault')
 
 
-@bp.route("/vaults")
+@bp.route("/list")
 @require_vault_permission(access.READ)  # Basic read permission to list available vaults
 def list_vaults(client_id, **kwargs):
     """List available vault labels"""
@@ -98,7 +98,7 @@ def delete_secret(client_id, label, key):
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route("/<label>/keys")
+@bp.route("/<label>/list")
 @require_vault_permission(access.READ)
 def list_keys(client_id, label):
     """List all keys in a vault"""
