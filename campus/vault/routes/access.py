@@ -15,15 +15,13 @@ from ..auth import require_vault_permission
 bp = Blueprint('access', __name__, url_prefix='/access')
 
 
-@bp.route("", methods=["POST"])
+@bp.route("/<target_client_id>/<label>", methods=["POST"])
 @require_vault_permission(access.ALL)  # Require admin-level permissions
-def grant_vault_access(client_id):
+def grant_vault_access(client_id, target_client_id, label):
     """Grant access to a vault for a client
     
-    POST /access
+    POST /access/{client_id}/{label}
     Body: {
-        "client_id": "target_client_id",
-        "label": "vault_label", 
         "permissions": ["READ", "CREATE"] or 7
     }
     """
@@ -32,13 +30,9 @@ def grant_vault_access(client_id):
         if not data:
             return jsonify({"error": "Missing request body"}), 400
             
-        required_fields = ["client_id", "label", "permissions"]
-        missing_fields = [field for field in required_fields if field not in data]
-        if missing_fields:
-            return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
+        if "permissions" not in data:
+            return jsonify({"error": "Missing required field: permissions"}), 400
             
-        target_client_id = data["client_id"]
-        label = data["label"]
         permissions = data["permissions"]
         
         # Validate permissions - should be an integer or list of permission names
@@ -99,7 +93,7 @@ def revoke_vault_access(client_id, target_client_id, label):
 
 @bp.route("/<target_client_id>/<label>", methods=["GET"])
 @require_vault_permission(access.READ)
-def check_vault_access(client_id, target_client_id, label):
+def get_vault_access(client_id, target_client_id, label):
     """Check if a client has access to a vault
     
     GET /access/{client_id}/{label}
