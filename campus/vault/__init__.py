@@ -57,6 +57,8 @@ USAGE EXAMPLE:
 
 import os
 
+from flask import Blueprint, Flask
+
 from campus.common.utils import uid, utc_time
 from campus.common import devops
 
@@ -69,6 +71,8 @@ __all__ = [
     "Vault",
     "VaultAccessDeniedError",
     "VaultKeyError",
+    "create_app",
+    "init_app",
     "init_db",
     "client",
 ]
@@ -79,6 +83,31 @@ def get_vault(label: str) -> "Vault":
     if not isinstance(label, str):
         raise TypeError(f"label must be a string, got {type(label).__name__}")
     return Vault(label)
+
+
+def create_app() -> Flask:
+    """Factory function to create the vault app.
+    
+    This is called if vault is run as a standalone app.
+    """
+    app = Flask(__name__)
+    init_app(app)
+    return app
+
+
+def init_app(app: Flask | Blueprint) -> None:
+    """Initialize the vault blueprint with the given Flask app."""
+    from flask import jsonify
+    from . import routes
+    
+    # Add health check endpoint directly to the app (not part of vault API)
+    @app.route("/health")
+    def health_check():
+        """Health check endpoint for deployment monitoring"""
+        return jsonify({"status": "healthy", "service": "campus-vault"})
+    
+    # Register vault API routes
+    routes.init_app(app)
 
 
 @devops.block_env(devops.PRODUCTION)
@@ -355,61 +384,15 @@ class Vault:
             )
 
 
-def create_vault_app():
-    """Create Flask app for vault service"""
-    from flask import Flask, jsonify, request
-    
-    app = Flask(__name__)
-    
-    @app.route("/health")
-    def health_check():
-        """Health check endpoint"""
-        return jsonify({"status": "healthy", "service": "campus-vault"})
-    
-    @app.route("/vaults")
-    def list_vaults():
-        """List available vault labels"""
-        try:
-            # Simple implementation - just return known labels
-            return jsonify({"vaults": ["campus", "storage", "oauth"]})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    
-    @app.route("/vault/<label>/<key>")
-    def get_secret(label, key):
-        """Get a secret from a vault"""
-        try:
-            vault = get_vault(label)
-            value = vault.get(key)
-            return jsonify({"key": key, "value": value})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    
-    @app.route("/vault/<label>/<key>", methods=["POST"])
-    def set_secret(label, key):
-        """Set a secret in a vault"""
-        try:
-            data = request.get_json()
-            value = data.get("value")
-            
-            vault = get_vault(label)
-            vault.set(key, value)
-            return jsonify({"status": "success", "key": key})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    
-    return app
-
-
 def run_server():
     """Entry point for running vault as a standalone service"""
     import os
     
-    app = create_vault_app()
+    app = create_app()
     
     # Replit configuration
     host = "0.0.0.0"
-    port = int(os.environ.get("PORT", 5000))
+    port = 5000
     
     print(f"🔐 Starting Campus Vault Service on {host}:{port}")
     app.run(host=host, port=port, debug=False)
