@@ -1,4 +1,4 @@
-"""vault.routes
+"""vault.routes.vault
 
 Flask routes for the vault web API service.
 
@@ -8,9 +8,9 @@ This follows the principle of handling cross-cutting concerns at the appropriate
 
 from flask import Blueprint, Flask, jsonify, request
 
-from . import access
-from .auth import require_vault_permission
-from .model import Vault, VaultKeyError
+from .. import access
+from ..auth import require_vault_permission
+from ..model import Vault, VaultKeyError
 
 # Create blueprint for vault routes
 bp = Blueprint('vault', __name__, url_prefix='/vault')
@@ -24,6 +24,18 @@ def list_vaults(client_id, **kwargs):
         # TODO: In a more sophisticated implementation, this would return
         # only the vaults that the authenticated client has access to
         return jsonify({"vaults": ["campus", "storage", "oauth"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/<label>/list")
+@require_vault_permission(access.READ)
+def list_keys(client_id, label):
+    """List all keys in a vault"""
+    try:
+        vault = Vault(label)
+        keys = vault.list_keys()
+        return jsonify({"label": label, "keys": keys})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -61,7 +73,7 @@ def set_secret(client_id, label, key):
         required_permission = access.UPDATE if key_exists else access.CREATE
         
         # Import auth functions locally to avoid circular imports during module loading
-        from .auth import check_vault_access, authenticate_client
+        from ..auth import check_vault_access, authenticate_client
         
         # Re-authenticate and check specific permission
         client_id = authenticate_client()
@@ -94,18 +106,6 @@ def delete_secret(client_id, label, key):
         else:
             return jsonify({"error": f"Secret '{key}' not found in vault '{label}'"}), 404
             
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("/<label>/list")
-@require_vault_permission(access.READ)
-def list_keys(client_id, label):
-    """List all keys in a vault"""
-    try:
-        vault = Vault(label)
-        keys = vault.list_keys()
-        return jsonify({"label": label, "keys": keys})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

@@ -36,8 +36,8 @@ def create_app():
 
     if mode == "vault":
         print(f"🔐 Creating Campus Vault Service")
-        from campus.vault import create_vault_app
-        return create_vault_app()
+        from campus.vault import create_app
+        return create_app()
     else:
         print(f"🚀 Creating Campus Apps Service")
         from campus.apps import create_app

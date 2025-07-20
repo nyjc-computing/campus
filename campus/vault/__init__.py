@@ -38,7 +38,10 @@ ARCHITECTURE:
 This module follows separation of concerns:
 - model.py: Pure data access layer (no auth/permissions)
 - auth.py: Authentication and authorization utilities  
-- routes.py: HTTP routes with auth decorators
+- routes/: HTTP routes with auth decorators organized by function
+  - routes/vault.py: Secret management endpoints
+  - routes/access.py: Access control endpoints
+  - routes/client.py: Client management endpoints
 - access.py: Permission checking logic
 - client.py: Client management
 - db.py: Database utilities
@@ -192,7 +195,7 @@ def create_app() -> Flask:
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
     from flask import jsonify
-    from . import routes, access_routes, client_routes
+    from .routes import init_vault_routes, init_access_routes, init_client_routes
     
     # Add health check endpoint directly to the app (not part of vault API)
     @app.route("/health")
@@ -201,9 +204,9 @@ def init_app(app: Flask | Blueprint) -> None:
         return jsonify({"status": "healthy", "service": "campus-vault"})
     
     # Register all vault-related blueprints
-    routes.init_app(app)        # /vault/* - secret management
-    access_routes.init_app(app) # /access/* - access control  
-    client_routes.init_app(app) # /client/* - client management
+    init_vault_routes(app)   # /vault/* - secret management
+    init_access_routes(app)  # /access/* - access control  
+    init_client_routes(app)  # /client/* - client management
 
 
 @devops.block_env(devops.PRODUCTION)
