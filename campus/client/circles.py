@@ -1,28 +1,6 @@
-"""Campus Circles Client
+"""client.circles
 
-Provides HTTP-like interface for circle (group) operations:
-- circles["circle123"] - Get circle by ID (GET /circles/circle123)
-- circles.new(data) - Create new circle (POST /circles)
-- circles.list() - List all circles (GET /circles)
-- circles["circle123"].update(data) - Update circle (PUT /circles/circle123)
-- circles["circle123"].delete() - Delete circle (DELETE /circles/circle123)
-- circles["circle123"].members() - Get circle members
-- circles["circle123"].add_member(user_id) - Add member to circle
-- circles["circle123"].remove_member(user_id) - Remove member from circle
-
-Usage:
-    import campus.client.circles as circles
-    import campus.client.users as users
-    
-    circle = circles["circle123"]
-    new_circle = circles.new(name="Developers", description="Dev team")
-    
-    # Add members
-    user = users["user123"]
-    circle.add_member(user.id)
-    
-    # List members
-    members = circle.members()
+Circle (group) management client for creating and managing organizational units.
 """
 
 from typing import List, Dict, Any, Optional

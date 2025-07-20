@@ -1,25 +1,6 @@
-"""Campus Vault Client Management Client
+"""client.vault_client
 
-Provides HTTP-like interface for vault client operations:
-- vault.client.new(name, description) - POST /client
-- vault.client.get(client_id) - GET /client/{client_id}
-- vault.client.list() - GET /client
-- vault.client.delete(client_id) - DELETE /client/{client_id}
-
-Usage:
-    import campus.client.vault as vault
-    
-    # Create a new client
-    client_data, secret = vault.client.new("My App", "Application client")
-    
-    # List all clients
-    clients = vault.client.list()
-    
-    # Get specific client
-    client_info = vault.client.get("client_abc123")
-    
-    # Delete client
-    vault.client.delete("client_abc123")
+Vault client management for creating and managing vault authentication clients.
 """
 
 from typing import List, Dict, Any, Tuple

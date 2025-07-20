@@ -1,3 +1,8 @@
+"""client.users
+
+User management client for creating and managing user accounts.
+"""
+
 import sys
 from typing import List, Dict, Any, Optional
 from .base import BaseClient

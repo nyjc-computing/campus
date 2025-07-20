@@ -1,21 +1,6 @@
-"""Campus Vault Access Management Client
+"""client.vault_access
 
-Provides HTTP-like interface for vault access operations:
-- vault.access.grant(client_id, label, permissions) - POST /access/{label}
-- vault.access.revoke(client_id, label) - DELETE /access/{client_id}/{label}  
-- vault.access.check(client_id, label) - GET /access/{client_id}/{label}
-
-Usage:
-    import campus.client.vault as vault
-    
-    # Grant access
-    vault.access.grant("user123", "apps", 3)  # bitflag permissions
-    
-    # Check access
-    permissions = vault.access.check("user123", "apps")
-    
-    # Revoke access
-    vault.access.revoke("user123", "apps")
+Vault access management client for managing permissions and client access.
 """
 
 from typing import List, Dict, Any, Union

@@ -1,3 +1,8 @@
+"""client.vault
+
+Main vault client interface for secrets management and access control.
+"""
+
 import sys
 from typing import List
 from .base import BaseClient
