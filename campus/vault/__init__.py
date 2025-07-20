@@ -34,6 +34,15 @@ Permissions can be combined using the | operator:
 - READ | UPDATE: Can read and modify existing secrets
 - ALL: Can perform all operations (READ | CREATE | UPDATE | DELETE)
 
+ARCHITECTURE:
+This module follows separation of concerns:
+- model.py: Pure data access layer (no auth/permissions)
+- auth.py: Authentication and authorization utilities  
+- routes.py: HTTP routes with auth decorators
+- access.py: Permission checking logic
+- client.py: Client management
+- db.py: Database utilities
+
 USAGE EXAMPLE:
     # Create vault client (typically done by admin)
     from vault.client import create_client
@@ -46,43 +55,128 @@ USAGE EXAMPLE:
     from vault.access import grant_access, READ, CREATE
     grant_access(client_resource["id"], "api-secrets", READ | CREATE)
     
-    # Use vault (CLIENT_ID and CLIENT_SECRET env vars must be set)
-    # CLIENT_ID=<client_id> CLIENT_SECRET=<client_secret>
+    # Use vault programmatically (CLIENT_ID and CLIENT_SECRET env vars must be set)
     vault = get_vault("api-secrets")
     vault.set("api_key", "secret123")  # Requires CREATE (new key)
     secret = vault.get("api_key")      # Requires READ
     vault.set("api_key", "newsecret")  # Requires UPDATE (existing key)
-    vault.delete("api_key")            # Requires DELETE - would fail!
+    vault.delete("api_key")            # Requires DELETE
+    
+    # Use vault via HTTP API
+    # POST /vault/api-secrets/my_key with {"value": "secret123"}
+    # GET /vault/api-secrets/my_key
+    # DELETE /vault/api-secrets/my_key
 """
 
 import os
 
 from flask import Blueprint, Flask
 
-from campus.common.utils import uid, utc_time
 from campus.common import devops
 
 from . import access, db, client
-
-TABLE = "vault"
+from .model import Vault, VaultKeyError
+from .auth import VaultAuthError, ClientAuthenticationError, VaultAccessDeniedError
 
 __all__ = [
     "get_vault",
+    "get_authenticated_vault",
     "Vault",
+    "AuthenticatedVault",
+    "VaultKeyError", 
+    "VaultAuthError",
+    "ClientAuthenticationError",
     "VaultAccessDeniedError",
-    "VaultKeyError",
     "create_app",
     "init_app",
     "init_db",
+    "access",
     "client",
 ]
 
 
-def get_vault(label: str) -> "Vault":
-    """Get a Vault instance by label using the CLIENT_ID environment variable."""
-    if not isinstance(label, str):
-        raise TypeError(f"label must be a string, got {type(label).__name__}")
+def get_vault(label: str) -> Vault:
+    """Get a Vault instance by label.
+    
+    This is a convenience function for programmatic access to vaults.
+    For HTTP API access, use the routes which handle authentication.
+    
+    Note: When using this function programmatically, CLIENT_ID and CLIENT_SECRET
+    environment variables must be set for the vault operations to work.
+    
+    For the new architecture, this returns a Vault model instance.
+    Authentication and permission checking should be handled at the application layer.
+    """
     return Vault(label)
+
+
+class AuthenticatedVault:
+    """Backward-compatible vault wrapper that includes authentication.
+    
+    This class provides the same interface as the old Vault class for
+    backward compatibility, while using the new separated architecture.
+    """
+    
+    def __init__(self, label: str):
+        self.label = label
+        self.vault = Vault(label)
+        
+        # Authenticate client using the new auth system
+        from .auth import authenticate_client
+        self.client_id = authenticate_client()
+    
+    def __repr__(self) -> str:
+        return f"AuthenticatedVault(label={self.label!r})"
+    
+    def get(self, key: str) -> str:
+        """Get a secret from the vault with authentication and permission checking."""
+        from .auth import check_vault_access
+        check_vault_access(self.client_id, self.label, access.READ)
+        return self.vault.get(key)
+    
+    def has(self, key: str) -> bool:
+        """Check if a secret exists in the vault with authentication and permission checking."""
+        from .auth import check_vault_access
+        check_vault_access(self.client_id, self.label, access.READ)
+        return self.vault.has(key)
+    
+    def set(self, key: str, value: str) -> None:
+        """Set a secret in the vault with authentication and permission checking."""
+        from .auth import check_vault_access
+        
+        # Check if key exists to determine required permission
+        key_exists = self.vault.has(key) if self._can_read() else False
+        required_permission = access.UPDATE if key_exists else access.CREATE
+        check_vault_access(self.client_id, self.label, required_permission)
+        
+        self.vault.set(key, value)
+    
+    def delete(self, key: str) -> None:
+        """Delete a secret from the vault with authentication and permission checking."""
+        from .auth import check_vault_access
+        check_vault_access(self.client_id, self.label, access.DELETE)
+        self.vault.delete(key)
+    
+    def _can_read(self) -> bool:
+        """Check if client can read from this vault (for internal use)."""
+        try:
+            from .auth import check_vault_access
+            check_vault_access(self.client_id, self.label, access.READ)
+            return True
+        except VaultAccessDeniedError:
+            return False
+
+
+def get_authenticated_vault(label: str) -> AuthenticatedVault:
+    """Get an authenticated vault instance with the old interface.
+    
+    This function provides backward compatibility for code that expects
+    the old Vault behavior with built-in authentication and permission checking.
+    
+    For new code, prefer using the routes for HTTP access or the model.Vault
+    class directly with explicit authentication handling.
+    """
+    return AuthenticatedVault(label)
 
 
 def create_app() -> Flask:
@@ -137,251 +231,6 @@ def init_db():
 
     # Initialize vault client table
     client.init_db()
-
-
-class VaultAccessDeniedError(ValueError):
-    """Custom error for when a client doesn't have access to a vault label."""
-
-    def __init__(self, client_id: str, label: str):
-        super().__init__(
-            f"Client '{client_id}' does not have access to vault label '{label}'.")
-        self.client_id = client_id
-        self.label = label
-
-
-class VaultKeyError(KeyError):
-    """Custom error for when a key is not found in the vault."""
-
-    def __init__(self, key: str):
-        super().__init__(f"Key '{key}' not found in vault.")
-        self.key = key
-
-
-class Vault:
-    """Vault model for managing secrets in the Campus system.
-
-    A vault stores secrets as key-value pairs in a table.
-    Each secret is stored as a separate row with label, key, and value.
-    The vault is recognised by a unique label and access is controlled per client.
-
-    CLIENT AUTHENTICATION:
-    Client identity is determined by the CLIENT_ID environment variable.
-    Client authentication is performed using the CLIENT_SECRET environment variable.
-    Both environment variables must be set for vault operations to succeed.
-
-    The vault authenticates clients using its own client storage system to avoid
-    circular dependencies with the main storage layer.
-    """
-
-    def __init__(self, label: str):
-        self.label = label
-
-        # Get client credentials from environment
-        client_id = os.environ.get("CLIENT_ID")
-        client_secret = os.environ.get("CLIENT_SECRET")
-
-        if not client_id:
-            raise ValueError("CLIENT_ID environment variable is required")
-        if not client_secret:
-            raise ValueError("CLIENT_SECRET environment variable is required")
-
-        # Authenticate the client
-        try:
-            client.authenticate_client(client_id, client_secret)
-        except client.ClientAuthenticationError as e:
-            raise ValueError(f"Client authentication failed: {e}") from e
-
-        self.client_id = client_id
-
-    def __repr__(self) -> str:
-        return f"Vault(label={self.label!r})"
-
-    def _check_access(self, required_permission: int) -> None:
-        """Check if the client has the required permission for this vault label.
-
-        This method uses bitwise operations to verify permissions:
-        1. Calls access.has_access() which does: (granted & required) == required
-        2. If access is denied, builds a human-readable error message
-        3. The error message shows which specific permissions are missing
-
-        BITWISE PERMISSION CHECKING:
-        - Client granted: READ | CREATE (value: 3, binary: 0011)
-        - Required: UPDATE (value: 4, binary: 0100)  
-        - Check: (3 & 4) == 4 → (0011 & 0100) == 0100 → 0000 == 0100 → False
-        - Result: Access denied, UPDATE permission missing
-
-        Args:
-            required_permission: The permission bitflag required for the operation
-                                Can be READ (1), CREATE (2), UPDATE (4), or DELETE (8)
-
-        Raises:
-            VaultAccessDeniedError: If the client lacks the required permission.
-                                   Error message includes which permissions are missing.
-        """
-        if not access.has_access(self.client_id, self.label, required_permission):
-            permission_names = []
-            if required_permission & access.READ:
-                permission_names.append("READ")
-            if required_permission & access.CREATE:
-                permission_names.append("CREATE")
-            if required_permission & access.UPDATE:
-                permission_names.append("UPDATE")
-            if required_permission & access.DELETE:
-                permission_names.append("DELETE")
-
-            permission_str = (
-                "|".join(permission_names) if permission_names
-                else str(required_permission)
-            )
-            raise VaultAccessDeniedError(
-                self.client_id,
-                f"{self.label} (missing {permission_str} permission)"
-            )
-
-    def get(self, key: str) -> str:
-        """Get a secret from the vault.
-
-        Requires READ permission. This is the most basic operation and is typically
-        granted to most clients that need access to secrets.
-
-        Args:
-            key: The secret key name to retrieve
-
-        Returns:
-            The secret value as a string
-
-        Raises:
-            VaultAccessDeniedError: If client lacks READ permission
-            VaultKeyError: If the secret key doesn't exist in this vault
-        """
-        self._check_access(access.READ)
-
-        with db.get_connection_context() as conn:
-            secret_record = db.execute_query(
-                conn,
-                "SELECT value FROM vault WHERE label = %s AND key = %s",
-                (self.label, key),
-                fetch_one=True
-            )
-
-            if not secret_record:
-                raise VaultKeyError(
-                    f"Secret '{key}' not found in vault '{self.label}'."
-                )
-            return secret_record["value"]
-
-    def has(self, key: str) -> bool:
-        """Check if a secret exists in the vault.
-
-        Requires READ permission. This allows clients to check for the existence
-        of a secret without retrieving its value.
-
-        Args:
-            key: The secret key name to check
-
-        Returns:
-            True if the secret exists, False otherwise
-
-        Raises:
-            VaultAccessDeniedError: If client lacks READ permission
-        """
-        self._check_access(access.READ)
-
-        with db.get_connection_context() as conn:
-            secret_record = db.execute_query(
-                conn,
-                "SELECT id FROM vault WHERE label = %s AND key = %s",
-                (self.label, key),
-                fetch_one=True
-            )
-            return bool(secret_record)
-
-    def set(self, key: str, value: str) -> None:
-        """Set a secret in the vault.
-
-        This method has smart permission checking:
-        - If the key doesn't exist: Requires CREATE permission (adding new secret)
-        - If the key already exists: Requires UPDATE permission (modifying existing secret)
-
-        This allows fine-grained control where some clients can only add new secrets
-        but not modify existing ones, or vice versa.
-
-        Args:
-            key: The secret key name
-            value: The secret value to store
-
-        Raises:
-            VaultAccessDeniedError: If client lacks CREATE (new key) or UPDATE (existing key)
-
-        Examples:
-            # Client with CREATE permission can add new secrets
-            vault.set("new_api_key", "abc123")  # Requires CREATE
-
-            # Client with UPDATE permission can modify existing secrets  
-            vault.set("existing_key", "new_value")  # Requires UPDATE
-
-            # Client with CREATE | UPDATE can do both operations
-        """
-        with db.get_connection_context() as conn:
-            # Check if the key already exists for this label
-            existing_record = db.execute_query(
-                conn,
-                "SELECT id FROM vault WHERE label = %s AND key = %s",
-                (self.label, key),
-                fetch_one=True
-            )
-
-            if existing_record:
-                # Update existing secret - requires UPDATE permission
-                self._check_access(access.UPDATE)
-                db.execute_query(
-                    conn,
-                    "UPDATE vault SET value = %s WHERE id = %s",
-                    (value, existing_record["id"]),
-                    fetch_one=False,
-                    fetch_all=False
-                )
-            else:
-                # Create new secret - requires CREATE permission
-                self._check_access(access.CREATE)
-                secret_id = uid.generate_category_uid(TABLE, length=16)
-                db.execute_query(
-                    conn,
-                    (
-                        "INSERT INTO vault (id, created_at, label, key, value)"
-                        "VALUES (%s, %s, %s, %s, %s)"
-                    ),
-                    (secret_id, utc_time.now(), self.label, key, value),
-                    fetch_one=False,
-                    fetch_all=False
-                )
-
-    def delete(self, key: str) -> None:
-        """Delete a secret from the vault.
-
-        Requires DELETE permission. This is typically the most restricted permission
-        since deleting secrets can break applications that depend on them.
-
-        Args:
-            key: The secret key name to delete
-
-        Raises:
-            VaultAccessDeniedError: If client lacks DELETE permission
-
-        Note:
-            If the secret doesn't exist, this method silently succeeds (no error).
-            Use vault.has(key) first if you need to verify existence.
-        """
-        self._check_access(access.DELETE)
-
-        with db.get_connection_context() as conn:
-            db.execute_query(
-                conn,
-                "DELETE FROM vault WHERE label = %s AND key = %s",
-                (self.label, key),
-                fetch_one=False,
-                fetch_all=False
-            )
 
 
 def run_server():
