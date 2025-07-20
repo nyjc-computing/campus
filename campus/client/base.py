@@ -1,4 +1,6 @@
-"""Base client functionality for Campus services.
+"""client.base
+
+Base client functionality for Campus services.
 
 Provides common authentication, HTTP handling, and utility methods
 that are shared across all service clients.
@@ -20,7 +22,11 @@ from .errors import (
 
 
 class BaseClient:
-    """Base class for all Campus service clients."""
+    """Base class for all Campus service clients.
+    
+    Provides common functionality including authentication, HTTP request handling,
+    and error management that is shared across all service-specific clients.
+    """
 
     def __init__(self, base_url: Optional[str] = None):
         """Initialize base client.
@@ -37,11 +43,18 @@ class BaseClient:
         self._load_credentials_from_env()
 
     def _get_default_base_url(self) -> str:
-        """Get the default base URL for this service."""
+        """Get the default base URL for this service.
+        
+        Returns:
+            str: The default base URL for the service
+        """
         return "https://vault.campus.nyjc.dev"
 
     def _load_credentials_from_env(self) -> None:
-        """Load client credentials from environment variables."""
+        """Load client credentials from environment variables.
+        
+        Attempts to load CLIENT_ID and CLIENT_SECRET from environment variables.
+        """
         self._client_id = os.getenv("CLIENT_ID")
         self._client_secret = os.getenv("CLIENT_SECRET")
 
@@ -57,7 +70,11 @@ class BaseClient:
         self._access_token = None  # Clear any cached token
 
     def _ensure_authenticated(self) -> None:
-        """Ensure the client is authenticated."""
+        """Ensure the client is authenticated.
+        
+        Raises:
+            AuthenticationError: If no credentials are available
+        """
         if not self._client_id or not self._client_secret:
             raise AuthenticationError(
                 "No credentials available. Set CLIENT_ID and CLIENT_SECRET "
@@ -70,7 +87,11 @@ class BaseClient:
             self._access_token = f"token_for_{self._client_id}"
 
     def _get_headers(self) -> Dict[str, str]:
-        """Get headers for API requests."""
+        """Get headers for API requests.
+        
+        Returns:
+            Dict[str, str]: Headers including authorization and content type
+        """
         self._ensure_authenticated()
         return {
             "Authorization": f"Bearer {self._access_token}",
@@ -147,17 +168,48 @@ class BaseClient:
             raise NetworkError(f"Network request failed: {e}")
 
     def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Make a GET request."""
+        """Make a GET request.
+        
+        Args:
+            path: API path to request
+            params: Optional query parameters
+            
+        Returns:
+            Dict[str, Any]: Parsed JSON response
+        """
         return self._make_request("GET", path, params=params)
 
     def _post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Make a POST request."""
+        """Make a POST request.
+        
+        Args:
+            path: API path to request
+            data: Request body data
+            
+        Returns:
+            Dict[str, Any]: Parsed JSON response
+        """
         return self._make_request("POST", path, data=data)
 
     def _put(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Make a PUT request."""
+        """Make a PUT request.
+        
+        Args:
+            path: API path to request
+            data: Request body data
+            
+        Returns:
+            Dict[str, Any]: Parsed JSON response
+        """
         return self._make_request("PUT", path, data=data)
 
     def _delete(self, path: str) -> Dict[str, Any]:
-        """Make a DELETE request."""
+        """Make a DELETE request.
+        
+        Args:
+            path: API path to request
+            
+        Returns:
+            Dict[str, Any]: Parsed JSON response
+        """
         return self._make_request("DELETE", path)

@@ -9,7 +9,11 @@ from .errors import NotFoundError
 
 
 class Circle:
-    """Represents a circle resource with HTTP-like methods."""
+    """Represents a circle resource with HTTP-like methods.
+    
+    Provides an interface for interacting with individual circle resources,
+    including properties for accessing circle data and methods for operations.
+    """
 
     def __init__(self, circles_client: BaseClient, circle_id: str, data: Optional[Dict[str, Any]] = None):
         """Initialize circle resource.
@@ -25,34 +29,58 @@ class Circle:
 
     @property
     def id(self) -> str:
-        """Get the circle ID."""
+        """Get the circle ID.
+        
+        Returns:
+            str: The unique identifier for this circle
+        """
         return self._circle_id
 
     @property
     def data(self) -> Dict[str, Any]:
-        """Get the circle data, loading it if necessary."""
+        """Get the circle data, loading it if necessary.
+        
+        Returns:
+            Dict[str, Any]: The complete circle data from the API
+        """
         if self._data is None:
             self._data = self._client._get(f"/circles/{self._circle_id}")
         return self._data
 
     @property
     def name(self) -> str:
-        """Get the circle's name."""
+        """Get the circle's name.
+        
+        Returns:
+            str: The display name of the circle
+        """
         return self.data.get("name", "")
 
     @property
     def description(self) -> str:
-        """Get the circle's description."""
+        """Get the circle's description.
+        
+        Returns:
+            str: The description text of the circle
+        """
         return self.data.get("description", "")
 
     @property
     def created_at(self) -> str:
-        """Get the circle's creation timestamp."""
+        """Get the circle's creation timestamp.
+        
+        Returns:
+            str: ISO formatted timestamp of when the circle was created
+        """
         return self.data.get("created_at", "")
 
     @property
     def owner_id(self) -> str:
-        """Get the circle owner's user ID."""
+        """Get the circle owner's user ID.
+        
+        Returns:
+            str: The user ID of the circle's owner
+        """
         return self.data.get("owner_id", "")
 
     def update(self, **kwargs) -> None:
@@ -134,7 +162,11 @@ class Circle:
 
 
 class CirclesClient(BaseClient):
-    """Client for circle operations following HTTP API conventions."""
+    """Client for circle operations following HTTP API conventions.
+    
+    Provides methods for creating, retrieving, updating, and deleting circles,
+    as well as managing circle memberships and relationships.
+    """
 
     def _get_default_base_url(self) -> str:
         """Get the default base URL for the circles service."""

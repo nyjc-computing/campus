@@ -1,4 +1,6 @@
-"""Campus Client Package
+"""client
+
+Campus Client Package
 
 Provides individual service clients that can be imported independently,
 avoiding circular dependencies while maintaining a clean HTTP-like API.

@@ -12,7 +12,11 @@ from .vault_client import VaultClientManagement
 
 
 class VaultCollection:
-    """Represents a vault collection with HTTP-like methods."""
+    """Represents a vault collection with HTTP-like methods.
+    
+    Provides an interface for managing secrets within a specific vault collection,
+    including operations for storing, retrieving, and deleting secret values.
+    """
 
     def __init__(self, vault_client: BaseClient, label: str):
         """Initialize vault collection.
@@ -31,7 +35,7 @@ class VaultCollection:
             key: The secret key name
 
         Returns:
-            The secret value
+            str: The secret value
 
         Raises:
             NotFoundError: If the key doesn't exist

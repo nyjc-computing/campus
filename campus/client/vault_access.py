@@ -8,7 +8,11 @@ from .base import BaseClient
 
 
 class VaultAccessClient:
-    """Client for vault access management operations."""
+    """Client for vault access management operations.
+    
+    Provides methods for granting, revoking, and listing client access permissions
+    for vault collections and their secrets.
+    """
     
     def __init__(self, vault_client: BaseClient):
         """Initialize access client.
