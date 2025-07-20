@@ -73,4 +73,4 @@ class VaultAccessClient:
             permissions = vault.access.check("user123", "apps")
             print(permissions["permissions"]["READ"])  # True/False
         """
-        return self._client._get(f"/access/{client_id}/{label}")
+        return self._client._get(f"/access/{label}", params={"client_id": client_id})
