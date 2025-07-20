@@ -168,9 +168,66 @@ dependencies = [
    - ✅ Updated all import statements to reflect the new model locations
    - ✅ Added re-exports in `campus/__init__.py` for static type checker compatibility
 
+### Phase 0.5: Circular Dependency Resolution (Completed ✅)
+
+**Timeline**: Completed - July 2025  
+**Critical breakthrough that unblocks true package independence**
+
+1. **Circular Dependency Analysis**
+   - ✅ Identified circular dependency: `campus.models` ↔ `campus.apps`
+   - ✅ Root cause: Models importing `campus.apps.errors` while apps import models
+   - ✅ Secondary issue: Models importing `campus.apps.webauth.token`
+
+2. **Shared Component Migration**
+   - ✅ **Moved `campus.apps.errors` → `campus.common.errors`**
+     - Rationale: Error definitions are shared infrastructure, not app-specific
+     - Updated 7+ model files and 8+ app route files
+   - ✅ **Moved `campus.apps.webauth` → `campus.common.webauth`**
+     - Rationale: Authentication schemas are shared infrastructure used by both models and apps
+     - Updated all internal cross-references and imports
+
+3. **Import Structure Fixes**
+   - ✅ **Eliminated eager imports from `campus/__init__.py`**
+     - Removed forced imports that masked dependency issues
+     - Allows individual packages to import cleanly without side effects
+   - ✅ **Fixed workspace namespace package imports**
+     - Changed `from campus import common` → `import campus.common as common`
+     - Resolved linting errors and follows proper namespace package conventions
+   - ✅ **Temporarily disabled client imports in workspace**
+     - Client being refactored in separate branch (`campus-client`)
+     - Added TODO comments for re-enabling when complete
+
+4. **Dependency Architecture Achievement**
+   ```
+   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+   │    apps     │──▶│   models    │──▶│   common    │
+   └─────────────┘    └─────────────┘    └─────────────┘
+          │                  │                   │
+          │            ┌─────────────┐           │
+          └──────────▶│   storage   │───────────┘
+          │            └─────────────┘           │
+          │                  │                   │
+          └──────────────────▼───────────────────┘
+                       ┌─────────────┐
+                       │    vault    │
+                       └─────────────┘
+   ```
+   - ✅ **Clean dependency hierarchy established**
+   - ✅ **No circular dependencies remaining**
+   - ✅ **True package independence now possible**
+
+5. **Validation and Testing**
+   - ✅ All individual packages can import without circular dependency errors
+   - ✅ `campus.workspace` imports successfully (database initialization issues are separate)
+   - ✅ `campus.client` modules work independently
+   - ✅ Cross-package imports follow proper dependency flow
+
+**Impact**: This phase resolved the fundamental architectural blocker that would have prevented true package independence in Phase 1. All packages can now be isolated and built independently.
+
 ### Phase 1: Package Structure Setup
 
-**Timeline**: 1-2 weeks
+**Timeline**: 1-2 weeks  
+**Status**: 🟢 **Ready to begin** (circular dependencies resolved)
 
 1. **Create pyproject.toml files**
    - Add Poetry configuration for each package
@@ -186,6 +243,8 @@ dependencies = [
    - Configure Poetry workspace for development
    - Set up editable installs for local development
    - Update development scripts
+
+**Prerequisites met**: ✅ Clean dependency architecture with no circular dependencies
 
 ### Phase 2: Build and Test Infrastructure
 

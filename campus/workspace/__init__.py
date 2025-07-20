@@ -15,10 +15,10 @@ modular development structure.
 ## Quick Start
 
 ```python
-# Import everything
-import campus.workspace
+# Import everything via workspace
+import campus.workspace as workspace
 
-# Or import specific modules
+# Or import specific modules directly from namespace
 from campus import models, vault, storage, apps
 ```
 
@@ -61,15 +61,19 @@ like Replit that use older Poetry versions:
 
 ```python
 # Import the complete Campus system
-import campus.workspace
+import campus.workspace as workspace
 
 # Or import specific modules directly
 from campus import models, vault, storage
 from campus.apps import factory
 
-# All functionality available through campus namespace
-user = campus.models.User(...)
-vault = campus.vault.get_vault("storage")
+# Option 1: Use through workspace re-exports
+user = workspace.models.User(...)
+vault_client = workspace.vault.get_vault("storage")
+
+# Option 2: Use direct namespace imports
+user = models.User(...)
+secret = vault.get_secret("database_url")
 ```
 
 ## Development vs Deployment
@@ -80,19 +84,19 @@ vault = campus.vault.get_vault("storage")
 """
 
 # Import all Campus packages to make them available
-from campus import common
-from campus import vault  
-from campus import storage
-from campus import client
-from campus import models
-from campus import apps
+import campus.common as common
+import campus.vault as vault
+import campus.storage as storage
+# import campus.client as client  # TODO: Re-enable when client refactoring is complete
+import campus.models as models
+import campus.apps as apps
 
 # Re-export for convenience
 __all__ = [
     'common',
     'vault', 
     'storage',
-    'client',
+    # 'client',  # TODO: Re-enable when client refactoring is complete
     'models',
     'apps'
 ]

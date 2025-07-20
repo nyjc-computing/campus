@@ -1,4 +1,4 @@
-"""apps.common.webauth.http
+"""common.webauth.http
 
 HTTP Authentication configs and models.
 
@@ -9,8 +9,8 @@ The HTTP authentication scheme comprises two types of authentication:
 
 from typing import Literal, Unpack
 
-from campus.apps.errors import api_errors
-from campus.apps.webauth.header import HttpAuthProperty, HttpHeaderDict
+from campus.common.errors import api_errors
+from campus.common.webauth.header import HttpAuthProperty, HttpHeaderDict
 from campus.common.integration.config import SecurityConfigSchema
 
 from .base import SecurityError, SecurityScheme
