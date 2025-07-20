@@ -1,7 +1,23 @@
-"""apps.client
+"""Campus Client Package
 
-This module provides classes and functions for browsing the APIs of integration
-providers.
+Provides individual service clients that can be imported independently,
+avoiding circular dependencies while maintaining a clean HTTP-like API.
 """
 
-# from campus.common.integration
+from .errors import (
+    CampusClientError,
+    AuthenticationError,
+    AccessDeniedError,
+    NotFoundError,
+    ValidationError,
+    NetworkError
+)
+
+__all__ = [
+    'CampusClientError',
+    'AuthenticationError', 
+    'AccessDeniedError',
+    'NotFoundError',
+    'ValidationError',
+    'NetworkError'
+]
