@@ -1,4 +1,4 @@
-"""vault.client_routes
+"""vault.routes.client
 
 Flask routes for vault client management.
 
@@ -8,8 +8,8 @@ Admin operations require ALL permissions, read operations require READ permissio
 
 from flask import Blueprint, Flask, jsonify, request
 
-from . import access, client
-from .auth import require_vault_permission
+from .. import access, client
+from ..auth import require_vault_permission
 
 # Create blueprint for client management routes
 bp = Blueprint('client', __name__, url_prefix='/client')

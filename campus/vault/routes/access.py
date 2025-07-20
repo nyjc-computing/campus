@@ -1,15 +1,15 @@
-"""vault.access_routes
+"""vault.routes.access
 
-Flask routes for vault access management.
+Flask routes for vault access control management.
 
-These routes handle granting, revoking, and checking vault access permissions
-for clients. All routes require admin-level permissions.
+These routes handle granting, revoking, and checking access permissions for vault clients.
+Admin operations require ALL permissions, access checking requires READ permissions.
 """
 
 from flask import Blueprint, Flask, jsonify, request
 
-from . import access
-from .auth import require_vault_permission
+from .. import access
+from ..auth import require_vault_permission
 
 # Create blueprint for access management routes
 bp = Blueprint('access', __name__, url_prefix='/access')
