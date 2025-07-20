@@ -102,6 +102,7 @@ Ready for commit!
 - [ ] Package README for campus.client
 - [ ] Resource/subresource documentation
 - [ ] Available verbs documentation
+- [ ] `pyproject.toml` for campus.client
 
 ---
 
