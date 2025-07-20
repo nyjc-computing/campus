@@ -57,7 +57,7 @@ class VaultAccessClient:
         Example:
             vault.access.revoke("user123", "apps")
         """
-        return self._client._delete(f"/access/{client_id}/{label}")
+        return self._client._delete(f"/access/{label}", params={"client_id": client_id})
     
     def check(self, client_id: str, label: str) -> Dict[str, Any]:
         """Check if a client has access to a vault.
