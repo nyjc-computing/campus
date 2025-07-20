@@ -3,9 +3,9 @@
 # Deployment mode determined by 'deploy' file content
 
 [tool.poetry]
-name = "campus-service"
+name = "campus-vault"
 version = "0.1.0"
-description = "Campus - Unified educational technology platform"
+description = "Vault - Secrets management service for Campus"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
 packages = [{include = "campus"}]
