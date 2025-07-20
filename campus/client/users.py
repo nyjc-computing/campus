@@ -6,6 +6,7 @@ User management client for creating and managing user accounts.
 import sys
 from typing import List, Dict, Any, Optional
 from .base import BaseClient
+from . import config
 
 
 class User:
@@ -78,8 +79,12 @@ class UsersClient(BaseClient):
     """
 
     def _get_default_base_url(self) -> str:
-        """Get the default base URL for the users service."""
-        return "https://api.campus.nyjc.dev"
+        """Get the default base URL for the users service.
+        
+        Returns:
+            str: Base URL for the apps deployment
+        """
+        return config.get_service_base_url("users")
 
     def __getitem__(self, user_id: str) -> User:
         """Get a user by ID."""

@@ -19,6 +19,7 @@ from .errors import (
     ValidationError,
     NetworkError
 )
+from . import config
 
 
 class BaseClient:
@@ -45,10 +46,15 @@ class BaseClient:
     def _get_default_base_url(self) -> str:
         """Get the default base URL for this service.
         
+        Subclasses should override this to specify their service name,
+        or clients can pass base_url explicitly to the constructor.
+        
         Returns:
             str: The default base URL for the service
         """
-        return "https://vault.campus.nyjc.dev"
+        # Default to vault URL for backward compatibility
+        # Subclasses should override this method
+        return config.get_vault_base_url()
 
     def _load_credentials_from_env(self) -> None:
         """Load client credentials from environment variables.

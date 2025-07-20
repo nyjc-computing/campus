@@ -9,6 +9,7 @@ from .base import BaseClient
 from .errors import NotFoundError
 from .vault_access import VaultAccessClient
 from .vault_client import VaultClientManagement
+from . import config
 
 
 class VaultCollection:
@@ -103,6 +104,14 @@ class VaultCollection:
 
 class VaultClient(BaseClient):
     """Client for vault operations following HTTP API conventions."""
+
+    def _get_default_base_url(self) -> str:
+        """Get the default base URL for the vault service.
+        
+        Returns:
+            str: Base URL for the vault deployment
+        """
+        return config.get_service_base_url("vault")
 
     def __getitem__(self, label: str) -> VaultCollection:
         """Get a vault collection by label.

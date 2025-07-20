@@ -6,6 +6,7 @@ Circle (group) management client for creating and managing organizational units.
 from typing import List, Dict, Any, Optional
 from .base import BaseClient
 from .errors import NotFoundError
+from . import config
 
 
 class Circle:
@@ -169,8 +170,12 @@ class CirclesClient(BaseClient):
     """
 
     def _get_default_base_url(self) -> str:
-        """Get the default base URL for the circles service."""
-        return "https://api.campus.nyjc.dev"
+        """Get the default base URL for the circles service.
+        
+        Returns:
+            str: Base URL for the apps deployment
+        """
+        return config.get_service_base_url("circles")
 
     def __getitem__(self, circle_id: str) -> Circle:
         """Get a circle by ID.
