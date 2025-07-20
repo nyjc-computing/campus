@@ -25,6 +25,10 @@ def grant_vault_access(client_id, label):
         "client_id": "target_client_id",
         "permissions": ["READ", "CREATE"] or 7
     }
+    
+    Args:
+        client_id: The authenticated client making this request (injected by decorator)
+        label: The vault label from the URL path
     """
     try:
         data = request.get_json()
@@ -80,6 +84,10 @@ def revoke_vault_access(client_id, label):
     """Revoke access to a vault for a client
     
     DELETE /access/{vault_label}?client_id={client_id}
+    
+    Args:
+        client_id: The authenticated client making this request (injected by decorator)
+        label: The vault label from the URL path
     """
     try:
         target_client_id = request.args.get("client_id")
@@ -115,6 +123,10 @@ def get_vault_access(client_id, label):
             "DELETE": false
         }
     }
+    
+    Args:
+        client_id: The authenticated client making this request (injected by decorator)
+        label: The vault label from the URL path
     """
     try:
         target_client_id = request.args.get("client_id")
