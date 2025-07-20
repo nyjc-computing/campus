@@ -1,4 +1,4 @@
-"""apps.common.errors
+"""common.errors
 
 API error handling for Campus.
 """

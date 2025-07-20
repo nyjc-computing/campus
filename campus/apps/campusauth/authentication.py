@@ -14,7 +14,7 @@ from flask import request
 
 from campus.apps.campusauth.context import ctx
 from campus.vault import client
-from campus.apps.webauth import http
+from campus.common.webauth import http
 
 
 def authenticate_client() -> tuple[dict[str, str], int] | None:

@@ -11,7 +11,7 @@ from typing import TypedDict, Unpack
 
 import bcrypt
 
-from campus.apps.errors import api_errors
+from campus.common.errors import api_errors
 from campus.models.base import BaseRecord
 from campus.common.utils import uid, utc_time
 from campus.common import devops

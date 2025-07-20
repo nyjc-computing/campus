@@ -83,7 +83,7 @@ vault = campus.vault.get_vault("storage")
 from campus import common
 from campus import vault  
 from campus import storage
-from campus import client
+# from campus import client  # TODO: Re-enable when client refactoring is complete
 from campus import models
 from campus import apps
 
@@ -92,7 +92,7 @@ __all__ = [
     'common',
     'vault', 
     'storage',
-    'client',
+    # 'client',  # TODO: Re-enable when client refactoring is complete
     'models',
     'apps'
 ]

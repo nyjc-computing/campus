@@ -1,4 +1,4 @@
-"""apps.common.errors.base
+"""common.errors.base
 
 Base error definitions, enums, and constants for Campus.
 These errors are used to catch common API errors and return
