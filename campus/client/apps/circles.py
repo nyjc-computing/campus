@@ -154,6 +154,30 @@ class Circle:
         except NotFoundError:
             return False
 
+    def move(self, parent_circle_id: str) -> None:
+        """Move the circle to a new parent.
+
+        Args:
+            parent_circle_id: ID of the new parent circle
+
+        Raises:
+            ValueError: If parent_circle_id is the same as the current circle ID
+        """
+        if parent_circle_id == self._circle_id:
+            raise ValueError("The parent_circle_id cannot be the same as the current circle ID.")
+        self._client._post(f"/circles/{self._circle_id}/move", {
+            "parent_circle_id": parent_circle_id
+        })
+
+    def get_users(self) -> List[Dict[str, Any]]:
+        """Get users in the circle.
+
+        Returns:
+            List of user data with role information
+        """
+        response = self._client._get(f"/circles/{self._circle_id}/users")
+        return response.get("users", [])
+
     def __str__(self) -> str:
         """String representation of the circle."""
         return f"Circle(id={self._circle_id}, name={self.name})"
