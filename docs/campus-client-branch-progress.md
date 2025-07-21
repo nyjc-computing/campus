@@ -102,6 +102,7 @@ Ready for commit!
 - [x] `campus/client/__init__.py` - Updated for new organization
 - [x] Removed old flat files: `users.py`, `circles.py`, `vault*.py`
 - [x] **Updated all imports to use absolute imports** (from `..base` to `campus.client.base`)
+- [x] **Fixed BaseClient HTTP methods** - Added `params` support to `_delete`, `_put`, `_post` for API consistency
 
 ### Validation
 ✅ Service imports work: `from campus.client.apps import users, circles`
