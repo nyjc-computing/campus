@@ -14,7 +14,7 @@ weekly → staging → main
 
 - **`main`** - Stable, production-ready packages for external projects
 - **`staging`** - Extended testing, migration validation, pre-production quality
-- **`weekly`** - Active development, student work, expected breakage welcome!
+- **`weekly`** - Active development, all new work, expected breakage welcome!
 
 ## 🚀 Getting Started
 
@@ -33,6 +33,8 @@ poetry install
 ```
 
 ### 2. Development Workflow
+
+**We use GitHub Pull Requests for all changes to teach proper collaborative development practices.**
 
 ```bash
 # Create your feature branch from weekly
@@ -53,33 +55,97 @@ git commit -m "feat: describe your changes"
 git push origin feature/your-feature-name
 ```
 
-### 3. Create Pull Request
+### 3. Create Pull Request (Required!)
 
-- **Target branch**: `weekly` (not main!)
-- **Title**: Clear description of what you built
-- **Description**: Why this change is needed
+**All changes must go through Pull Requests - no direct pushes to weekly/staging/main.**
 
-## 🎯 Branch Promotion Flow
+1. **Go to GitHub** and create a Pull Request
+2. **Target branch**: `weekly` (for all development work)
+3. **Title**: Clear, descriptive title (e.g., "feat: add user authentication", "fix: resolve import circular dependency")
+4. **Description**: 
+   - What you changed and why
+   - Testing you performed
+   - Any breaking changes or special considerations
 
-### Weekly → Staging
+### 4. PR Review Process
+
+- **Automated checks**: CI/CD will test your changes across all packages
+- **Code review**: Maintainers or peers review your code
+- **Feedback**: Address any requested changes
+- **Approval**: Once approved, maintainers will merge
+
+**Educational Goal**: This mirrors real-world software development practices!
+
+### 5. Choosing the Right Target Branch
+
+**For all development work:**
+- **Target**: `weekly` 
+- **Use for**: New features, bug fixes, experiments, infrastructure improvements
+
+**Never target `main` or `staging` directly** - these are managed through the promotion flow.
+
+**Examples:**
+```bash
+# New authentication feature
+git checkout weekly
+git checkout -b feature/oauth-integration
+# PR: feature/oauth-integration → weekly
+
+# Fix package build issue  
+git checkout weekly
+git checkout -b fix/poetry-dependencies
+# PR: fix/poetry-dependencies → weekly
+```
+
+## 🎯 Branch Promotion Flow (Maintainer Workflow)
+
+**All promotions happen through Pull Requests to maintain transparency and teach best practices.**
+
+### Upstream Flow (Requires PRs)
+**All promotions to higher stability levels require Pull Requests and review.**
+
+#### Weekly → Staging
 After weekly sprint review, stable features get promoted:
 
 ```bash
-# Maintainer workflow
-git checkout staging
-git merge weekly  # Only tested, stable features
-git push origin staging
+# Create PR from weekly to staging
+git checkout weekly
+git pull origin weekly
+# Create Pull Request: weekly → staging
+# Title: "promote: weekly sprint [YYYY-MM-DD] to staging"
+# Review and merge via GitHub UI
 ```
 
-### Staging → Main
-After extended validation (typically end of semester):
+#### Staging → Main
+After extended validation (typically end of term):
 
 ```bash
-# Maintainer workflow
-git checkout main
-git merge staging  # Fully validated, production-ready
-git push origin main
+# Create PR from staging to main  
+git checkout staging
+git pull origin staging
+# Create Pull Request: staging → main
+# Title: "release: promote staging to production main"
+# Review and merge via GitHub UI
+# Tag the release: git tag v1.x.x && git push origin v1.x.x
 ```
+
+### Downstream Flow (Automatic)
+**Changes flow automatically from higher to lower stability branches since they were already reviewed.**
+
+#### Main → Staging & Weekly
+When changes are merged to `main`, they automatically flow downstream:
+- **Main → Staging**: Automated merge (no PR needed)
+- **Main → Weekly**: Automated merge (no PR needed)
+- **Staging → Weekly**: Automated merge when staging is updated
+
+**Rationale**: These changes were already reviewed and approved when going upstream, so they should be reflected in all downstream environments without manual overhead.
+
+### Direct Pushes (Limited Cases)
+**Only for emergencies:**
+- Security fixes requiring immediate deployment
+- All other changes go through the upstream PR flow
+
+**Teaching Goal**: Contributors learn that production systems require review processes, but approved changes flow efficiently downstream!
 
 ## 📦 Package Architecture
 
@@ -221,7 +287,7 @@ Campus is developed by the **NYJC Computing Department** as both:
 - **Educational tool** - Learn modern Python architecture patterns
 - **Practical platform** - Solve real institutional management needs
 
-Your contributions help other students learn while building something genuinely useful!
+Your contributions help other developers learn while building something genuinely useful!
 
 ---
 

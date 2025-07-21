@@ -1,39 +1,136 @@
-name: Sync Branches with Main
+name: Auto-Sync Downstream Branches
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]  # Trigger on updates to upstream branches
+  pull_request:
+    types: [closed]
+    branches: [main, staging]  # Trigger when PRs are merged
+  workflow_dispatch:  # Allow manual triggering
 
 permissions:
   contents: write
 
 jobs:
-  sync:
+  sync-from-main:
+    if: >
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        branches: [palmtree]  # Add new branches here
     steps:
-      - name: Checkout Main Branch
-        uses: actions/checkout@v3
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Git User
         run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync with ${{ matrix.branch }}
+      - name: Sync Main to Staging
         run: |
-          TARGET_BRANCH="${{ matrix.branch }}"
-          git checkout $TARGET_BRANCH
-          git pull origin $TARGET_BRANCH || echo "No changes to pull for $TARGET_BRANCH"
-          git reset --hard origin/main
-          git merge --squash origin/main || echo "No changes to merge for $TARGET_BRANCH"
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Squash merge changes from main into $TARGET_BRANCH"
-            git push origin $TARGET_BRANCH || echo "Failed to push $TARGET_BRANCH"
+          # Fetch latest changes
+          git fetch origin main staging
+          # Check if staging exists
+          if ! git show-ref --verify --quiet refs/remotes/origin/staging; then
+            echo "Staging branch doesn't exist, skipping sync"
+            exit 0
           fi
-          git reset --hard main
-          git push origin $TARGET_BRANCH --force || echo "Failed to force push $TARGET_BRANCH"
+
+          # Check if main has new commits not in staging
+          BEHIND_COUNT=$(git rev-list --count origin/staging..origin/main)
+          echo "Staging is $BEHIND_COUNT commits behind main"
+
+          if [ "$BEHIND_COUNT" -gt 0 ]; then
+            echo "Syncing main → staging (direct merge)"
+            git checkout -B staging origin/staging
+            LOG_OUTPUT=$(git log staging..origin/main --oneline \
+              --max-count=10)
+            if [ -z "$LOG_OUTPUT" ]; then
+              LOG_OUTPUT="No new changes detected in main."
+            fi
+            git merge origin/main --no-ff \
+              -m "auto-sync: merge approved changes from main to staging"
+
+            git push origin staging
+            echo "✅ Successfully synced main → staging"
+          else
+            echo "Staging is already up to date with main"
+          fi
+
+      - name: Sync Main to Weekly
+        run: |
+          # Fetch latest changes
+          git fetch origin main weekly
+          # Check if weekly exists
+          if ! git show-ref --verify --quiet refs/remotes/origin/weekly; then
+            echo "Weekly branch doesn't exist, skipping sync"
+            exit 0
+          fi
+
+          # Check if main has new commits not in weekly
+          BEHIND_COUNT=$(git rev-list --count origin/weekly..origin/main)
+          echo "Weekly is $BEHIND_COUNT commits behind main"
+
+          if [ "$BEHIND_COUNT" -gt 0 ]; then
+            echo "Syncing main → weekly (direct merge)"
+            git checkout -B weekly origin/weekly
+            git merge origin/main --no-ff \
+              -m "auto-sync: merge approved changes from main to weekly"
+
+            git push origin weekly
+            echo "✅ Successfully synced main → weekly"
+          else
+            echo "Weekly is already up to date with main"
+          fi
+
+  sync-from-staging:
+    if: >
+      github.ref == 'refs/heads/staging' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'staging')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git User
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync Staging to Weekly
+        run: |
+          # Fetch latest changes
+          git fetch origin staging weekly
+          # Check if weekly exists
+          if ! git show-ref --verify --quiet refs/remotes/origin/weekly; then
+            echo "Weekly branch doesn't exist, skipping sync"
+            exit 0
+          fi
+
+          # Check if staging has new commits not in weekly
+          BEHIND_COUNT=$(git rev-list --count origin/weekly..origin/staging)
+          echo "Weekly is $BEHIND_COUNT commits behind staging"
+
+          if [ "$BEHIND_COUNT" -gt 0 ]; then
+            echo "Syncing staging → weekly (direct merge)"
+            git checkout -B weekly origin/weekly
+            git merge origin/staging --no-ff \
+              -m "auto-sync: merge approved changes from staging to weekly"
+
+            git push origin weekly
+            echo "✅ Successfully synced staging → weekly"
+          else
+            echo "Weekly is already up to date with staging"
+          fi
