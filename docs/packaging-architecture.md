@@ -119,7 +119,7 @@ from campus.common import devops
 # Application modules
 from campus.apps.api import routes
 from campus.apps.models import user
-from campus.apps.errors import api_errors
+from campus.common.errors import api_errors
 
 # Services
 from campus.vault import get_vault
