@@ -1,0 +1,228 @@
+# Campus Development Guide
+
+Welcome to Campus development! This guide will help you understand our development workflow and get you contributing quickly.
+
+## 🌳 Branch Structure
+
+Campus uses a simple three-branch model designed for educational development:
+
+```
+weekly → staging → main
+```
+
+### Branch Purposes
+
+- **`main`** - Stable, production-ready packages for external projects
+- **`staging`** - Extended testing, migration validation, pre-production quality
+- **`weekly`** - Active development, student work, expected breakage welcome!
+
+## 🚀 Getting Started
+
+### 1. Initial Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/nyjc-computing/campus.git
+cd campus
+
+# Switch to active development branch
+git checkout weekly
+
+# Install dependencies
+poetry install
+```
+
+### 2. Development Workflow
+
+```bash
+# Create your feature branch from weekly
+git checkout weekly
+git pull origin weekly
+git checkout -b feature/your-feature-name
+
+# Make your changes
+# ... edit files ...
+
+# Test your changes
+poetry run python -m pytest
+cd campus/vault && poetry build  # Test individual packages
+
+# Commit and push
+git add .
+git commit -m "feat: describe your changes"
+git push origin feature/your-feature-name
+```
+
+### 3. Create Pull Request
+
+- **Target branch**: `weekly` (not main!)
+- **Title**: Clear description of what you built
+- **Description**: Why this change is needed
+
+## 🎯 Branch Promotion Flow
+
+### Weekly → Staging
+After weekly sprint review, stable features get promoted:
+
+```bash
+# Maintainer workflow
+git checkout staging
+git merge weekly  # Only tested, stable features
+git push origin staging
+```
+
+### Staging → Main
+After extended validation (typically end of semester):
+
+```bash
+# Maintainer workflow
+git checkout main
+git merge staging  # Fully validated, production-ready
+git push origin main
+```
+
+## 📦 Package Architecture
+
+Campus is organized as modular packages:
+
+```
+campus/
+├── common/         # Shared utilities (no dependencies)
+├── vault/          # Secrets management (depends on common)
+├── client/         # External API integrations (depends on common)
+├── models/         # Data models (depends on common)
+├── storage/        # Storage interfaces (depends on common + vault)
+├── apps/           # Web applications (depends on all others)
+└── workspace/      # Full deployment package (depends on all others)
+```
+
+### Key Principles
+
+1. **Clear dependencies** - Follow the dependency flow diagram
+2. **Independent builds** - Each package builds on its own
+3. **Lazy loading** - External resources loaded only when needed
+4. **Environment isolation** - Packages work without production secrets
+
+## 🧪 Testing Your Changes
+
+### Individual Package Testing
+
+```bash
+# Test a specific package builds
+cd campus/vault && poetry build
+cd campus/common && poetry build
+
+# Run package tests
+cd campus/vault && poetry run python -m pytest
+```
+
+### Full System Testing
+
+```bash
+# Run all tests
+poetry run python -m pytest
+
+# Test workspace integration
+python -c "import campus.workspace; print('✅ Workspace works')"
+```
+
+### CI/CD Validation
+
+Our GitHub Actions will automatically:
+- Build all packages independently
+- Run the full test suite
+- Validate dependency ordering
+- Check for import issues
+
+## 🎓 Educational Goals
+
+This workflow teaches:
+
+- **Industry-standard branching** (weekly/staging/main mirrors dev/staging/production)
+- **Release management** (controlled promotion between environments)
+- **Quality gates** (testing at each stability level)
+- **Modular architecture** (independent, composable packages)
+
+## 📋 Contribution Guidelines
+
+### Code Style
+
+- Follow existing patterns in the codebase
+- Use type hints where appropriate
+- Add docstrings for public functions
+- Keep functions focused and testable
+
+### Commit Messages
+
+Use conventional commit format:
+```
+feat: add new user authentication method
+fix: resolve circular import in storage module  
+docs: update API documentation
+test: add coverage for vault access controls
+```
+
+### Testing Requirements
+
+- Add tests for new functionality
+- Ensure existing tests still pass
+- Test package builds independently
+- Update documentation as needed
+
+## 🔧 Development Environment
+
+### Required Tools
+
+- **Python 3.11+** - Language runtime
+- **Poetry** - Dependency management
+- **Git** - Version control
+
+### Recommended Setup
+
+```bash
+# Install Poetry if not already installed
+curl -sSL https://install.python-poetry.org | python3 -
+
+# Configure Poetry for this project
+poetry config virtualenvs.in-project true
+poetry install
+
+# Install pre-commit hooks (optional)
+poetry run pre-commit install
+```
+
+## 🚨 Common Issues
+
+### Import Errors
+- Check dependency ordering in the package architecture
+- Ensure you're importing from the correct package
+- Use lazy loading for external resources
+
+### Build Failures
+- Verify all dependencies are in pyproject.toml
+- Check for circular dependencies
+- Ensure environment variables are handled gracefully
+
+### Test Failures
+- Run tests locally before pushing
+- Check that mock data is properly set up
+- Verify database connections use lazy loading
+
+## 📞 Getting Help
+
+- **Documentation**: Check package-specific READMEs in each `campus/` subdirectory
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/nyjc-computing/campus/issues)
+- **Discussions**: Ask questions in [GitHub Discussions](https://github.com/nyjc-computing/campus/discussions)
+- **Code Review**: Tag maintainers in your pull requests
+
+## 🏫 Academic Context
+
+Campus is developed by the **NYJC Computing Department** as both:
+- **Educational tool** - Learn modern Python architecture patterns
+- **Practical platform** - Solve real institutional management needs
+
+Your contributions help other students learn while building something genuinely useful!
+
+---
+
+**Ready to contribute?** Create your feature branch from `weekly` and start building! 🚀
