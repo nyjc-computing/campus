@@ -5,7 +5,7 @@ Session model for the Campus API.
 Sessions are short-lived processes, typically used for authentication state.
 """
 
-from campus.apps.errors import api_errors
+from campus.common.errors import api_errors
 from campus.storage import get_collection
 from campus.common.schema import CampusID
 

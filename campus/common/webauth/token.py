@@ -1,4 +1,4 @@
-"""apps.common.webauth.token
+"""common.webauth.token
 
 Token management schemas and models
 """

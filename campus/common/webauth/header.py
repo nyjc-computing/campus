@@ -1,4 +1,4 @@
-"""apps.common.webauth.header
+"""common.webauth.header
 
 Utility functions and classes for handling HTTP headers
 """
