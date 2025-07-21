@@ -95,14 +95,36 @@ Ready for commit!
 
 ## PR 4: Documentation
 
-**Status:** Not Started
+**Status:** Partially Complete
 **Goal:** Create comprehensive documentation
 
 ### Deliverables
 - [ ] Package README for campus.client
 - [ ] Resource/subresource documentation
 - [ ] Available verbs documentation
-- [ ] `pyproject.toml` for campus.client
+- [x] `pyproject.toml` for campus.client
+
+### Completed Work
+- Created `campus/client/pyproject.toml` following established subpackage pattern
+- Package name: `campus-client`
+- Minimal dependencies: only `requests` (no campus dependencies)
+- Independent distribution ready
+- Follows same structure as other subpackages (`campus-vault`, `campus-apps`, etc.)
+
+### Configuration Details
+```toml
+[tool.poetry]
+name = "campus-client"
+version = "0.1.0"
+description = "HTTP client library for Campus vault and apps services"
+packages = [{include = "campus/client", from = "../.."}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.32.4"
+```
+
+This enables independent installation: `pip install campus-client` with no server dependencies.
 
 ---
 
