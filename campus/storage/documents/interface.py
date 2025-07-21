@@ -1,6 +1,6 @@
-"""campus.storage.collections.interface
+"""campus.storage.documents.interface
 
-This module provides the Collections storage interface.
+This module provides the Documents storage interface.
 
 Each document in the collection is assumed to have:
 1. An `id` primary key (when retrieved; backend implementation

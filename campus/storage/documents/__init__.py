@@ -1,8 +1,8 @@
-"""campus.storage.collections
+"""campus.storage.documents
 
-This module provides the Collections storage interface.
+This module provides the Documents storage interface.
 
-Collections are used for storing documents that can have different schema.
+Documents are used for storing documents that can have different schema.
 These documents can be thought of as JSON-like objects, where each document
 can have its own structure and fields.
 This interface is usually provided by document-oriented databases like MongoDB

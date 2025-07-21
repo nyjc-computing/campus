@@ -1,6 +1,6 @@
-"""storage.collections.backend.mongodb
+"""storage.documents.backend.mongodb
 
-This module provides the MongoDB backend for the Collections storage interface.
+This module provides the MongoDB backend for the Documents storage interface.
 
 Vault Integration:
 The MongoDB connection URI is retrieved from the vault secret 'MONGODB_URI' in the 'storage' 
@@ -13,7 +13,7 @@ Record validation is handled before storage and is not the responsibility of thi
 
 Usage Example:
 ```python
-from campus.storage.collections.backend.mongodb import MongoDBCollection
+from campus.storage.documents.backend.mongodb import MongoDBCollection
 
 collection = MongoDBCollection("users")
 collection.insert_one({"id": "123", "name": "John"})
@@ -28,7 +28,7 @@ from pymongo.collection import Collection
 
 from campus.common import devops
 from campus.vault import get_vault
-from campus.storage.collections.interface import CollectionInterface, PK
+from campus.storage.documents.interface import CollectionInterface, PK
 from campus.storage.errors import NotFoundError, NoChangesAppliedError
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
@@ -116,7 +116,7 @@ class MongoRecord(dict):
 
 
 class MongoDBCollection(CollectionInterface):
-    """MongoDB backend for the Collections storage interface.
+    """MongoDB backend for the Documents storage interface.
 
     Uses MongoDB's native document storage with automatic primary key mapping
     between Campus `id` and MongoDB `_id` fields.
