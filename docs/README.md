@@ -7,6 +7,7 @@
 
 ## Development
 
+- [Development Guidelines](development-guidelines.md) - Architectural patterns, design decisions, and best practices
 - [Development Setup](development-setup.md) - Getting started with Campus development *(coming soon)*
 - [Contributing Guidelines](contributing.md) - How to contribute to Campus *(coming soon)*
 

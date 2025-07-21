@@ -119,7 +119,8 @@ class MongoDBCollection(CollectionInterface):
     """MongoDB backend for the Documents storage interface.
 
     Uses MongoDB's native document storage with automatic primary key mapping
-    between Campus `id` and MongoDB `_id` fields.
+    between Campus `id` and MongoDB `_id` fields. Connection is established
+    lazily on first use.
 
     Example:
         collection = MongoDBCollection("users")
@@ -130,18 +131,34 @@ class MongoDBCollection(CollectionInterface):
     def __init__(self, name: str):
         """Initialize the MongoDB collection with a name.
 
-        Retrieves MongoDB connection details from vault and establishes connection.
+        Connection is established lazily on first database operation.
+        """
+        super().__init__(name)
+        self._client = None
+        self._db = None
+        self._collection = None
+
+    def _ensure_connection(self):
+        """Ensure MongoDB connection is established.
+        
+        Establishes connection on first call, subsequent calls are no-ops.
 
         Raises:
             RuntimeError: If vault secret retrieval fails
             pymongo.errors.ConnectionFailure: If MongoDB connection fails
         """
-        super().__init__(name)
-        mongodb_uri = _get_mongodb_uri()
-        mongodb_name = _get_mongodb_name()
-        self.client = MongoClient(mongodb_uri)
-        self.db = self.client[mongodb_name]
-        self.collection: Collection = self.db[name]
+        if self._collection is None:
+            mongodb_uri = _get_mongodb_uri()
+            mongodb_name = _get_mongodb_name()
+            self._client = MongoClient(mongodb_uri)
+            self._db = self._client[mongodb_name]
+            self._collection: Collection = self._db[self.name]
+
+    @property
+    def collection(self) -> Collection:
+        """Get the MongoDB collection, establishing connection if needed."""
+        self._ensure_connection()
+        return self._collection
 
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
@@ -199,6 +216,16 @@ class MongoDBCollection(CollectionInterface):
         """
         # For MongoDB, collections are created automatically on first insert
         # This method exists for interface compatibility and future extensibility
+        # Accessing the collection property ensures connection is established
+        _ = self.collection
+
+    def close(self) -> None:
+        """Close the MongoDB connection if it was established."""
+        if self._client is not None:
+            self._client.close()
+            self._client = None
+            self._db = None
+            self._collection = None
 
 
 @devops.block_env(devops.PRODUCTION)
