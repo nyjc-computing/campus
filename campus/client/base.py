@@ -211,6 +211,19 @@ class BaseClient:
         """
         return self._make_request("PUT", path, data=data, params=params)
 
+    def _patch(self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Make a PATCH request.
+
+        Args:
+            path: API path to request
+            data: Request body data
+            params: Optional query parameters
+
+        Returns:
+            Dict[str, Any]: Parsed JSON response
+        """
+        return self._make_request("PATCH", path, data=data, params=params)
+
     def _delete(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a DELETE request.
 
