@@ -37,7 +37,6 @@ jobs:
         run: |
           # Fetch latest changes
           git fetch origin main staging
-
           # Check if staging exists
           if ! git show-ref --verify --quiet refs/remotes/origin/staging; then
             echo "Staging branch doesn't exist, skipping sync"
@@ -69,7 +68,6 @@ jobs:
         run: |
           # Fetch latest changes
           git fetch origin main weekly
-
           # Check if weekly exists
           if ! git show-ref --verify --quiet refs/remotes/origin/weekly; then
             echo "Weekly branch doesn't exist, skipping sync"
@@ -116,7 +114,6 @@ jobs:
         run: |
           # Fetch latest changes
           git fetch origin staging weekly
-
           # Check if weekly exists
           if ! git show-ref --verify --quiet refs/remotes/origin/weekly; then
             echo "Weekly branch doesn't exist, skipping sync"
