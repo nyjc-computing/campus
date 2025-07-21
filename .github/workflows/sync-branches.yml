@@ -43,12 +43,12 @@ jobs:
           fi
 
           # Check if main has new commits not in staging
-          BEHIND_COUNT=$(git rev-list --count staging..main)
+          BEHIND_COUNT=$(git rev-list --count origin/staging..origin/main)
           echo "Staging is $BEHIND_COUNT commits behind main"
 
           if [ "$BEHIND_COUNT" -gt 0 ]; then
             echo "Syncing main → staging (direct merge)"
-            git checkout staging
+            git checkout -B staging origin/staging
             LOG_OUTPUT=$(git log staging..origin/main --oneline \
               --max-count=10)
             if [ -z "$LOG_OUTPUT" ]; then
@@ -74,12 +74,12 @@ jobs:
           fi
 
           # Check if main has new commits not in weekly
-          BEHIND_COUNT=$(git rev-list --count weekly..main)
+          BEHIND_COUNT=$(git rev-list --count origin/weekly..origin/main)
           echo "Weekly is $BEHIND_COUNT commits behind main"
 
           if [ "$BEHIND_COUNT" -gt 0 ]; then
             echo "Syncing main → weekly (direct merge)"
-            git checkout weekly
+            git checkout -B weekly origin/weekly
             git merge origin/main --no-ff \
               -m "auto-sync: merge approved changes from main to weekly"
 
@@ -120,12 +120,12 @@ jobs:
           fi
 
           # Check if staging has new commits not in weekly
-          BEHIND_COUNT=$(git rev-list --count weekly..staging)
+          BEHIND_COUNT=$(git rev-list --count origin/weekly..origin/staging)
           echo "Weekly is $BEHIND_COUNT commits behind staging"
 
           if [ "$BEHIND_COUNT" -gt 0 ]; then
             echo "Syncing staging → weekly (direct merge)"
-            git checkout weekly
+            git checkout -B weekly origin/weekly
             git merge origin/staging --no-ff \
               -m "auto-sync: merge approved changes from staging to weekly"
 
