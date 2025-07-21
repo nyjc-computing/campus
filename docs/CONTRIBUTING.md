@@ -61,25 +61,51 @@ git push origin feature/your-feature-name
 
 ## 🎯 Branch Promotion Flow
 
-### Weekly → Staging
+### Upstream Flow (Requires PRs)
+**All promotions to higher stability levels require Pull Requests and review.**
+
+#### Weekly → Staging
 After weekly sprint review, stable features get promoted:
 
 ```bash
-# Maintainer workflow
-git checkout staging
-git merge weekly  # Only tested, stable features
-git push origin staging
+# Create PR from weekly to staging
+git checkout weekly
+git pull origin weekly
+# Create Pull Request: weekly → staging
+# Title: "promote: weekly sprint [YYYY-MM-DD] to staging"
+# Review and merge via GitHub UI
 ```
 
-### Staging → Main
-After extended validation (typically end of semester):
+#### Staging → Main
+After extended validation (typically end of term):
 
 ```bash
-# Maintainer workflow
-git checkout main
-git merge staging  # Fully validated, production-ready
-git push origin main
+# Create PR from staging to main  
+git checkout staging
+git pull origin staging
+# Create Pull Request: staging → main
+# Title: "release: promote staging to production main"
+# Review and merge via GitHub UI
+# Tag the release: git tag v1.x.x && git push origin v1.x.x
 ```
+
+### Downstream Flow (Automatic)
+**Changes flow automatically from higher to lower stability branches since they were already reviewed.**
+
+#### Main → Staging & Weekly
+When changes are merged to `main`, they automatically flow downstream:
+- **Main → Staging**: Automated merge (no PR needed)
+- **Main → Weekly**: Automated merge (no PR needed)
+- **Staging → Weekly**: Automated merge when staging is updated
+
+**Rationale**: These changes were already reviewed and approved when going upstream, so they should be reflected in all downstream environments without manual overhead.
+
+### Direct Pushes (Limited Cases)
+**Only for emergencies:**
+- Security fixes requiring immediate deployment
+- All other changes go through the upstream PR flow
+
+**Teaching Goal**: Contributors learn that production systems require review processes, but approved changes flow efficiently downstream!
 
 ## 📦 Package Architecture
 

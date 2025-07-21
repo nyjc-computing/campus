@@ -154,23 +154,31 @@ Git-based dependencies provide:
 - ✅ **Real-world validation** - Test packages in external environments
 - ✅ **Educational value** - Students learn industry packaging practices
 
-### 2.4 Branch Promotion Workflow
+### 2.4 Branch Workflow
 
+#### Upstream Flow (Manual PRs Required)
 ```bash
-# Create the branch structure
-git checkout -b weekly  # Latest development features
-git checkout -b staging # Extended testing (1-2 weeks)
-git checkout -b main    # Production stable
+# Feature development → weekly
+git checkout weekly
+git checkout -b feature/new-auth
+# ... make changes, create PR: feature/new-auth → weekly
 
-# Weekly promotion cycle
-git checkout staging
-git merge weekly        # Promote weekly features to staging
+# Weekly → staging (after sprint review)
+# Create PR: weekly → staging (requires review)
 
-# After testing period
-git checkout main  
-git merge staging       # Promote tested features to production
-git tag v1.2.3         # Tag stable releases
+# Staging → main (after extended testing)
+# Create PR: staging → main (requires review)
 ```
+
+#### Downstream Flow (Automatic Sync)
+```bash
+# Changes automatically flow downstream via GitHub Actions
+main → staging    # Auto-sync (no PR needed)
+main → weekly     # Auto-sync (no PR needed)  
+staging → weekly  # Auto-sync (no PR needed)
+```
+
+**Rationale**: Changes that passed review going upstream should automatically flow to all downstream environments without manual overhead.
 
 ---
 
