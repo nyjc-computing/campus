@@ -90,7 +90,7 @@ files = [
 ]
 
 [[package]]
-name = "campus-client"
+name = "campus-suite-client"
 version = "0.1.0"
 description = "HTTP client library for Campus vault and apps services"
 optional = false
@@ -107,7 +107,7 @@ type = "directory"
 url = "../client"
 
 [[package]]
-name = "campus-common"
+name = "campus-suite-common"
 version = "0.1.0"
 description = "Shared utilities and foundational components for Campus ecosystem"
 optional = false
@@ -125,7 +125,7 @@ type = "directory"
 url = "../common"
 
 [[package]]
-name = "campus-models"
+name = "campus-suite-models"
 version = "0.1.0"
 description = "Data models and schemas"
 optional = false
@@ -136,7 +136,7 @@ develop = true
 
 [package.dependencies]
 bcrypt = "^4.2.1"
-campus-common = {path = "../common", develop = true}
+campus-suite-common = {path = "../common", develop = true}
 flask = "^3.0.0"
 
 [package.source]
@@ -144,7 +144,7 @@ type = "directory"
 url = "../models"
 
 [[package]]
-name = "campus-storage"
+name = "campus-suite-storage"
 version = "0.1.0"
 description = "Storage backends for collections and tables"
 optional = false
@@ -154,8 +154,8 @@ files = []
 develop = true
 
 [package.dependencies]
-campus-common = {path = "../common", develop = true}
-campus-vault = {path = "../vault", develop = true}
+campus-suite-common = {path = "../common", develop = true}
+campus-suite-vault = {path = "../vault", develop = true}
 psycopg2-binary = "^2.9.0"
 pymongo = {version = "^4.13.2", extras = ["srv"]}
 
@@ -164,7 +164,7 @@ type = "directory"
 url = "../storage"
 
 [[package]]
-name = "campus-vault"
+name = "campus-suite-vault"
 version = "0.1.0"
 description = "Secure vault service for managing secrets"
 optional = false
@@ -174,7 +174,7 @@ files = []
 develop = true
 
 [package.dependencies]
-campus-common = {path = "../common", develop = true}
+campus-suite-common = {path = "../common", develop = true}
 psycopg2-binary = "^2.9.0"
 
 [package.source]
@@ -837,4 +837,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "9b2ab3b1c703210eff715b78704312d9cc77fa7ba2ffdd652f17ff74dfa45d9f"
+content-hash = "e3ad5a46ba2338beae141143ab691dbf195f92ccd704bea53ba04c15d1806a95"

@@ -760,4 +760,4 @@ vault = ["bcrypt", "flask", "gunicorn", "psycopg2-binary", "werkzeug"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "d9317545e69aa138aec2aa0c985c1ee646eb03d2055ac7a84dab2b1e7b9925af"
+content-hash = "251c01e1ad73e4b82c9926ea66985d61fa32a76ec999ebdcaef59a4d95645fa3"

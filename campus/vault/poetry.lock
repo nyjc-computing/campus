@@ -90,7 +90,7 @@ files = [
 ]
 
 [[package]]
-name = "campus-common"
+name = "campus-suite-common"
 version = "0.1.0"
 description = "Shared utilities and foundational components for Campus ecosystem"
 optional = false
@@ -460,4 +460,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "29b228961bf2d8c9d4c2ed748924893d21df17477cfbee1ba8c0a517c625a1d5"
+content-hash = "dc447bd96864bd31ffeca90cebc83218e285c78aa7140b8fb5f12196ad67822b"
