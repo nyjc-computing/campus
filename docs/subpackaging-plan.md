@@ -78,10 +78,30 @@ cd campus/storage && poetry build   # ✅ Works
 ```
 
 ### Next Steps for Phase 3
-1. **Set up stability branches** (stable, dev, nightly) (1 day)
+1. **Set up modular stability branches** (stable, dev, nightly) from campus-subpackaging (1 day)
 2. **Create git dependency templates** for external projects (1 day)
 3. **Test external usage** with git dependencies (1 day)
 4. **Document branch policies** and update workflows (1 day)
+
+### Branch Strategy
+
+**Modular Architecture Track** (for external packages):
+```
+nightly → dev → stable
+    ↑         ↑
+campus-subpackaging (current)
+```
+
+**Legacy Monorepo Track** (for existing deployments):
+```
+main (maintenance only)
+```
+
+**Flow:**
+- `campus-subpackaging` → `dev` (daily merges)
+- `dev` → `stable` (weekly promotions after testing)
+- `nightly` ← automated builds from latest development
+- `main` ← separate maintenance track (security fixes only)
 
 ### Git Dependency Patterns for External Projects
 

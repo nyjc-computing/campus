@@ -14,13 +14,13 @@ While Campus packages are still in active development, git-based dependencies pr
 ### Branch Structure
 
 **Stability Levels** (all packages together):
-- `stable` - Tested, reliable versions for production use
+- `stable` - Tested, reliable versions for production use (modular architecture)
 - `dev` - Latest development with all features, daily updates
 - `nightly` - Automated builds, cutting-edge but potentially unstable
 
 **Legacy/Maintenance**:
 - `campus-subpackaging` - Current development branch (will become `dev`)
-- `main` - Original monorepo version (maintenance mode)
+- `main` - Original monorepo version (legacy deployments, maintenance mode)
 
 ## Usage Patterns
 
