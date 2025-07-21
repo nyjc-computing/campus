@@ -14,7 +14,7 @@ weekly → staging → main
 
 - **`main`** - Stable, production-ready packages for external projects
 - **`staging`** - Extended testing, migration validation, pre-production quality
-- **`weekly`** - Active development, student work, expected breakage welcome!
+- **`weekly`** - Active development, all new work, expected breakage welcome!
 
 ## 🚀 Getting Started
 
@@ -60,7 +60,7 @@ git push origin feature/your-feature-name
 **All changes must go through Pull Requests - no direct pushes to weekly/staging/main.**
 
 1. **Go to GitHub** and create a Pull Request
-2. **Target branch**: `weekly` (for new features) or `campus-subpackaging` (for packaging work)
+2. **Target branch**: `weekly` (for all development work)
 3. **Title**: Clear, descriptive title (e.g., "feat: add user authentication", "fix: resolve import circular dependency")
 4. **Description**: 
    - What you changed and why
@@ -78,13 +78,9 @@ git push origin feature/your-feature-name
 
 ### 5. Choosing the Right Target Branch
 
-**For most student work:**
+**For all development work:**
 - **Target**: `weekly` 
-- **Use for**: New features, bug fixes, experiments, learning projects
-
-**For packaging/infrastructure work:**
-- **Target**: `campus-subpackaging`
-- **Use for**: Package structure changes, CI/CD updates, build system improvements
+- **Use for**: New features, bug fixes, experiments, infrastructure improvements
 
 **Never target `main` or `staging` directly** - these are managed through the promotion flow.
 
@@ -96,9 +92,9 @@ git checkout -b feature/oauth-integration
 # PR: feature/oauth-integration → weekly
 
 # Fix package build issue  
-git checkout campus-subpackaging
+git checkout weekly
 git checkout -b fix/poetry-dependencies
-# PR: fix/poetry-dependencies → campus-subpackaging
+# PR: fix/poetry-dependencies → weekly
 ```
 
 ## 🎯 Branch Promotion Flow (Maintainer Workflow)
@@ -131,12 +127,11 @@ git pull origin staging
 ```
 
 ### Direct Pushes (Limited Cases)
-**Only for emergencies or initial setup:**
+**Only for emergencies:**
 - Security fixes requiring immediate deployment
-- Repository setup/administrative changes
 - All other changes go through PRs
 
-**Teaching Goal**: Students learn that production systems require review processes!
+**Teaching Goal**: Contributors learn that production systems require review processes!
 
 ## 📦 Package Architecture
 
@@ -278,7 +273,7 @@ Campus is developed by the **NYJC Computing Department** as both:
 - **Educational tool** - Learn modern Python architecture patterns
 - **Practical platform** - Solve real institutional management needs
 
-Your contributions help other students learn while building something genuinely useful!
+Your contributions help other developers learn while building something genuinely useful!
 
 ---
 
