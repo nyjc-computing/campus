@@ -28,7 +28,7 @@ def create_app() -> Flask:
     
     This is called if campusauth is run as a standalone app.
     """
-    from apps.common import errors
+    from campus.common import errors
     app = Flask(__name__)
     init_app(app)
     errors.init_app(app)
