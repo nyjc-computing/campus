@@ -42,13 +42,21 @@ jobs:
           if [ "$BEHIND_COUNT" -gt 0 ]; then
             echo "Syncing main → staging (direct merge - changes already reviewed)"
             git checkout staging
-            git merge origin/main --no-ff -m "auto-sync: merge approved changes from main to staging
+            LOG_OUTPUT=$(git log staging..origin/main --oneline --max-count=10)
+            if [ -z "$LOG_OUTPUT" ]; then
+              LOG_OUTPUT="No new changes detected in main."
+            fi
+            COMMIT_MESSAGE=$(cat <<EOF
+auto-sync: merge approved changes from main to staging
 
 These changes were already reviewed and approved when merged to main.
 Automatically syncing to staging for extended testing.
 
 Changes included:
-$(git log staging..origin/main --oneline --max-count=10)"
+$LOG_OUTPUT
+EOF
+            )
+            git merge origin/main --no-ff -m "$COMMIT_MESSAGE"
             
             git push origin staging
             echo "✅ Successfully synced main → staging"
