@@ -161,5 +161,9 @@ class VaultModule:
         return self._client
 
 
-# Replace this module with our custom class
-sys.modules[__name__] = VaultModule()  # type: ignore
+# Replace this module with our custom class, but preserve class access
+_module_instance = VaultModule()
+_module_instance.VaultModule = VaultModule  # Make class available for import
+_module_instance.VaultClient = VaultClient
+_module_instance.VaultCollection = VaultCollection
+sys.modules[__name__] = _module_instance  # type: ignore

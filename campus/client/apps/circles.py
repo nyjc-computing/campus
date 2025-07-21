@@ -164,7 +164,8 @@ class Circle:
             ValueError: If parent_circle_id is the same as the current circle ID
         """
         if parent_circle_id == self._circle_id:
-            raise ValueError("The parent_circle_id cannot be the same as the current circle ID.")
+            raise ValueError(
+                "The parent_circle_id cannot be the same as the current circle ID.")
         self._client._post(f"/circles/{self._circle_id}/move", {
             "parent_circle_id": parent_circle_id
         })
@@ -340,5 +341,9 @@ class CirclesModule:
         return self._client
 
 
-# Replace this module with our custom class
-sys.modules[__name__] = CirclesModule()  # type: ignore
+# Replace this module with our custom class, but preserve class access
+_module_instance = CirclesModule()
+_module_instance.CirclesModule = CirclesModule  # Make class available for import
+_module_instance.CirclesClient = CirclesClient
+_module_instance.Circle = Circle
+sys.modules[__name__] = _module_instance  # type: ignore
