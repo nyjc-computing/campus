@@ -118,14 +118,15 @@ campus-subpackaging (current work, will become weekly)
 **Branch Purpose:**
 - **`main`** - Stable, production-ready packages for external projects
 - **`staging`** - Extended testing, migration validation, pre-production
-- **`weekly`** - Active development, student work, expected breakage
+- **`weekly`** - Active development, all new work, expected breakage
 
 **Flow:**
-- `campus-subpackaging` → `weekly` (rename current branch)
-- `weekly` → `staging` (promote after weekly sprint testing)
-- `staging` → `main` (promote after extended validation)
+- **Upstream (Manual PRs)**: `weekly` → `staging` → `main` (requires review)
+- **Downstream (Automatic)**: `main` → `staging` → `weekly` (auto-sync approved changes)
 
-**GitHub Default:** `main` (users get stable packages by default)
+**GitHub Workflow:** 
+- Upstream promotions require Pull Requests for quality gates
+- Downstream syncs are automatic since changes were already reviewed
 
 ### Git Dependency Patterns for External Projects
 
