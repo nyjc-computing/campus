@@ -57,7 +57,6 @@ class VaultAccessClient:
         Example:
             vault.access.revoke("user123", "apps")
         """
-        # Use query params for DELETE request
         return self._client._delete(f"/access/{label}", params={"client_id": client_id})
 
     def check(self, client_id: str, label: str) -> Dict[str, Any]:
