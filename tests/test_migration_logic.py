@@ -6,14 +6,11 @@ These tests focus on import patterns, API structure, and migration compatibility
 """
 
 import unittest
-import sys
-from unittest.mock import patch, Mock, MagicMock
 from tests.migration_test_helpers import (
     MigrationTestCase,
     MockVaultClient,
     MockClientResource,
     mock_only_test,
-    skip_if_no_environment
 )
 
 
