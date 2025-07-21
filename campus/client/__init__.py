@@ -2,7 +2,7 @@
 
 Campus Client Package
 
-Provides individual service clients that can be imported independently,
+Provides clean service module interfaces for Campus Apps and Vault services,
 avoiding circular dependencies while maintaining a clean HTTP-like API.
 """
 
@@ -15,11 +15,19 @@ from .errors import (
     NetworkError
 )
 
+# Convenience imports to service modules
+from .apps import users, circles
+from .vault import vault, access, client
+
 __all__ = [
+    # Errors
     'CampusClientError',
-    'AuthenticationError', 
+    'AuthenticationError',
     'AccessDeniedError',
     'NotFoundError',
     'ValidationError',
-    'NetworkError'
+    'NetworkError',
+    # Service modules
+    'users', 'circles',
+    'vault', 'access', 'client'
 ]

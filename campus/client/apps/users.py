@@ -1,17 +1,17 @@
-"""client.users
+"""client.apps.users
 
 User management client for creating and managing user accounts.
 """
 
 import sys
 from typing import List, Dict, Any, Optional
-from .base import BaseClient
-from . import config
+from campus.client.base import BaseClient
+from campus.client import config
 
 
 class User:
     """Represents a user resource.
-    
+
     Provides an interface for interacting with individual user resources,
     including properties for accessing user data and methods for operations.
     """
@@ -31,7 +31,7 @@ class User:
     @property
     def id(self) -> str:
         """Get the user ID.
-        
+
         Returns:
             str: The unique identifier for this user
         """
@@ -40,7 +40,7 @@ class User:
     @property
     def data(self) -> Dict[str, Any]:
         """Get the user data, loading it if necessary.
-        
+
         Returns:
             Dict[str, Any]: The complete user data from the API
         """
@@ -51,7 +51,7 @@ class User:
     @property
     def email(self) -> str:
         """Get the user's email.
-        
+
         Returns:
             str: The email address of the user
         """
@@ -60,7 +60,7 @@ class User:
     @property
     def name(self) -> str:
         """Get the user's name.
-        
+
         Returns:
             str: The display name of the user
         """
@@ -73,14 +73,14 @@ class User:
 
 class UsersClient(BaseClient):
     """Client for user operations following HTTP API conventions.
-    
+
     Provides methods for creating, retrieving, updating, and deleting users,
     as well as managing user authentication and profile information.
     """
 
     def _get_default_base_url(self) -> str:
         """Get the default base URL for the users service.
-        
+
         Returns:
             str: Base URL for the apps deployment
         """
