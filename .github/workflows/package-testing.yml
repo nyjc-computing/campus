@@ -55,9 +55,9 @@ name: Package Testing
 
 on:
   push:
-    branches: [main, campus-subpackaging]
+    branches: [main]  # Only run on main branch pushes
   pull_request:
-    branches: [main]
+    branches: [main]  # Run on PRs targeting main
 
 jobs:
   # First, test that packages can be built in dependency order
