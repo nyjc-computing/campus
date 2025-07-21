@@ -3,6 +3,8 @@
 User management client for creating and managing user accounts.
 """
 
+# pylint: disable=attribute-defined-outside-init
+
 import sys
 from typing import List, Dict, Any, Optional
 from campus.client.base import BaseClient
@@ -181,9 +183,13 @@ class UsersModule:
         return self._client
 
 
-# Replace this module with our custom class, but preserve class access
+# Module Replacement Pattern:
+# Replace this module with a custom class instance to support both:
+# 1. Direct usage: users["user123"] 
+# 2. Class imports: from campus.client.apps.users import UsersModule
 _module_instance = UsersModule()
-_module_instance.UsersModule = UsersModule  # Make class available for import
-_module_instance.UsersClient = UsersClient
-_module_instance.User = User
+# Dynamic attribute assignment for class imports - linter warnings expected
+_module_instance.UsersModule = UsersModule  # type: ignore[attr-defined]
+_module_instance.UsersClient = UsersClient  # type: ignore[attr-defined]
+_module_instance.User = User  # type: ignore[attr-defined]
 sys.modules[__name__] = _module_instance  # type: ignore

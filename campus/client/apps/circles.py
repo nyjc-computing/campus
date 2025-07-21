@@ -1,7 +1,9 @@
 """client.apps.circles
 
-Circle (group) management client for creating and managing organizational units.
+Circle management client for creating and managing circles.
 """
+
+# pylint: disable=attribute-defined-outside-init
 
 import sys
 from typing import List, Dict, Any, Optional
@@ -341,9 +343,13 @@ class CirclesModule:
         return self._client
 
 
-# Replace this module with our custom class, but preserve class access
+# Module Replacement Pattern:
+# Replace this module with a custom class instance to support both:
+# 1. Direct usage: circles["circle123"]
+# 2. Class imports: from campus.client.apps.circles import CirclesModule
 _module_instance = CirclesModule()
-_module_instance.CirclesModule = CirclesModule  # Make class available for import
-_module_instance.CirclesClient = CirclesClient
-_module_instance.Circle = Circle
+# Dynamic attribute assignment for class imports - linter warnings expected
+_module_instance.CirclesModule = CirclesModule  # type: ignore[attr-defined]
+_module_instance.CirclesClient = CirclesClient  # type: ignore[attr-defined]
+_module_instance.Circle = Circle  # type: ignore[attr-defined]
 sys.modules[__name__] = _module_instance  # type: ignore
