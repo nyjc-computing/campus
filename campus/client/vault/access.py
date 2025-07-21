@@ -58,9 +58,7 @@ class VaultAccessClient:
             vault.access.revoke("user123", "apps")
         """
         # Use query params for DELETE request
-        response = self._client._make_request(
-            "DELETE", f"/access/{label}", params={"client_id": client_id})
-        return response
+        return self._client._delete(f"/access/{label}", params={"client_id": client_id})
 
     def check(self, client_id: str, label: str) -> Dict[str, Any]:
         """Check if a client has access to a vault.
