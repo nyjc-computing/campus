@@ -1,11 +1,11 @@
-# Campus Service - Unified Deployment
-# This configuration supports both vault and apps deployments
+# Campus - Deployment Orchestrator & Client Library
+# This configuration supports deployment orchestration and client library distribution
 # Deployment mode determined by 'deploy' file content
 
 [tool.poetry]
-name = "campus-vault"
+name = "campus"
 version = "0.1.0"
-description = "Vault - Secrets management service for Campus"
+description = "Campus deployment orchestrator and client library for vault and apps services"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
 packages = [{include = "campus"}]
@@ -13,14 +13,22 @@ packages = [{include = "campus"}]
 [tool.poetry.dependencies]
 python = ">=3.11.0,<3.12"
 
-# All dependencies bundled for simplicity
-flask = "^3.0.0"
-bcrypt = "^4.2.1"
-psycopg2-binary = "^2.9.0"
-pymongo = {extras = ["srv"], version = "^4.8.0"}
+# Client library dependencies (minimal for HTTP requests)
 requests = "^2.32.4"
-gunicorn = "^21.2.0"
-werkzeug = "^3.0.0"
+
+# Deployment orchestration dependencies (all services)
+flask = {version = "^3.0.0", optional = true}
+bcrypt = {version = "^4.2.1", optional = true}
+psycopg2-binary = {version = "^2.9.0", optional = true}
+pymongo = {extras = ["srv"], version = "^4.8.0", optional = true}
+gunicorn = {version = "^21.2.0", optional = true}
+werkzeug = {version = "^3.0.0", optional = true}
+
+[tool.poetry.extras]
+# Optional dependency groups for deployment modes
+vault = ["flask", "bcrypt", "psycopg2-binary", "gunicorn", "werkzeug"]
+apps = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
+full = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
