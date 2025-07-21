@@ -7,6 +7,7 @@ import sys
 from typing import List, Dict, Any, Optional
 from campus.client.base import BaseClient
 from campus.client import config
+from campus.client.errors import AuthenticationError
 
 
 class User:
@@ -143,9 +144,6 @@ class UsersClient(BaseClient):
             AuthenticationError: If the user is not authenticated.
         """
         response = self._get("/me")
-        if response.status_code == 401:  # Unauthorized
-            raise AuthenticationError(
-                "User is not authenticated. Please check your credentials.")
         user_data = response.get("user", response)
         user_id = user_data["id"]
         return User(self, user_id, user_data)
