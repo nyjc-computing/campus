@@ -32,13 +32,15 @@ All campus-client branch improvements have been successfully merged:
 #### Migration Strategy:
 - Replace direct `campus.vault` model imports with `campus.client` equivalents
 - Update authentication contexts to use client-based vault access
-- Remove VAULTDB_URI dependency where possible
+- **Eliminate VAULTDB_URI dependency** - apps should not directly connect to vault database
+- **Retrieve MongoDB URIs through vault client** instead of environment variables
 - Update documentation for new patterns
 
 #### Security Improvements:
-- Client-based vault access (no direct DB connection needed)
-- Proper authentication flows through campus.client
-- Elimination of hardcoded database URIs in application code
+- **No direct database connections** from application layers
+- **Secrets managed centrally** through vault service HTTP API
+- **Service-based authentication** flows through campus.client
+- **Environment variables only for service discovery** (base URLs), not secrets
 
 ---
 
@@ -57,3 +59,27 @@ campus/
 ```
 
 Each subpackage has its own `pyproject.toml` and can be installed independently.
+
+### Migration Testing Strategy
+
+**Current Architecture Issue:**
+The failing tests reveal that `campus.storage` and `campus.apps` currently make **direct database connections** via environment variables:
+- `VAULTDB_URI` - Direct PostgreSQL access to vault database
+- `MONGODB_URI` - Direct MongoDB access from storage layer
+
+**Target Architecture:**
+After migration, the application layers should:
+- ✅ **No direct database access** from apps/storage
+- ✅ **Secrets retrieved via HTTP** through `campus.client.vault`
+- ✅ **Only service URLs in environment** (e.g., `CAMPUS_VAULT_BASE_URL`)
+- ✅ **Database URIs managed centrally** by vault service
+
+**Testing Approach:**
+1. **Current State Testing**: Fix tests by providing required environment variables temporarily
+2. **Migration Testing**: Verify equivalent functionality through vault client
+3. **Final State Testing**: Ensure apps work without direct database environment variables
+
+**Security Benefits:**
+- Application code never sees database credentials
+- Centralized secret rotation through vault service  
+- Clean separation between service discovery and secret management
