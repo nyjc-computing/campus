@@ -121,9 +121,12 @@ campus-subpackaging (current work, will become weekly)
 - **`weekly`** - Active development, student work, expected breakage
 
 **Flow:**
-- `campus-subpackaging` → `weekly` (rename current branch)
-- `weekly` → `staging` (promote after weekly sprint testing)
-- `staging` → `main` (promote after extended validation)
+- Development work → `weekly` (via PR)
+- Infrastructure work → `campus-subpackaging` (via PR)  
+- `weekly` → `staging` (promote after weekly sprint testing, via PR)
+- `staging` → `main` (promote after extended validation, via PR)
+
+**GitHub Workflow:** All changes go through Pull Requests to teach proper collaborative development practices.
 
 **GitHub Default:** `main` (users get stable packages by default)
 

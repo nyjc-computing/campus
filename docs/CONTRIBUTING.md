@@ -34,6 +34,8 @@ poetry install
 
 ### 2. Development Workflow
 
+**We use GitHub Pull Requests for all changes to teach proper collaborative development practices.**
+
 ```bash
 # Create your feature branch from weekly
 git checkout weekly
@@ -53,33 +55,88 @@ git commit -m "feat: describe your changes"
 git push origin feature/your-feature-name
 ```
 
-### 3. Create Pull Request
+### 3. Create Pull Request (Required!)
 
-- **Target branch**: `weekly` (not main!)
-- **Title**: Clear description of what you built
-- **Description**: Why this change is needed
+**All changes must go through Pull Requests - no direct pushes to weekly/staging/main.**
 
-## 🎯 Branch Promotion Flow
+1. **Go to GitHub** and create a Pull Request
+2. **Target branch**: `weekly` (for new features) or `campus-subpackaging` (for packaging work)
+3. **Title**: Clear, descriptive title (e.g., "feat: add user authentication", "fix: resolve import circular dependency")
+4. **Description**: 
+   - What you changed and why
+   - Testing you performed
+   - Any breaking changes or special considerations
+
+### 4. PR Review Process
+
+- **Automated checks**: CI/CD will test your changes across all packages
+- **Code review**: Maintainers or peers review your code
+- **Feedback**: Address any requested changes
+- **Approval**: Once approved, maintainers will merge
+
+**Educational Goal**: This mirrors real-world software development practices!
+
+### 5. Choosing the Right Target Branch
+
+**For most student work:**
+- **Target**: `weekly` 
+- **Use for**: New features, bug fixes, experiments, learning projects
+
+**For packaging/infrastructure work:**
+- **Target**: `campus-subpackaging`
+- **Use for**: Package structure changes, CI/CD updates, build system improvements
+
+**Never target `main` or `staging` directly** - these are managed through the promotion flow.
+
+**Examples:**
+```bash
+# New authentication feature
+git checkout weekly
+git checkout -b feature/oauth-integration
+# PR: feature/oauth-integration → weekly
+
+# Fix package build issue  
+git checkout campus-subpackaging
+git checkout -b fix/poetry-dependencies
+# PR: fix/poetry-dependencies → campus-subpackaging
+```
+
+## 🎯 Branch Promotion Flow (Maintainer Workflow)
+
+**All promotions happen through Pull Requests to maintain transparency and teach best practices.**
 
 ### Weekly → Staging
 After weekly sprint review, stable features get promoted:
 
 ```bash
-# Maintainer workflow
-git checkout staging
-git merge weekly  # Only tested, stable features
-git push origin staging
+# Create PR from weekly to staging
+git checkout weekly
+git pull origin weekly
+# Create Pull Request: weekly → staging
+# Title: "promote: weekly sprint [YYYY-MM-DD] to staging"
+# Review and merge via GitHub UI
 ```
 
 ### Staging → Main
 After extended validation (typically end of semester):
 
 ```bash
-# Maintainer workflow
-git checkout main
-git merge staging  # Fully validated, production-ready
-git push origin main
+# Create PR from staging to main  
+git checkout staging
+git pull origin staging
+# Create Pull Request: staging → main
+# Title: "release: promote staging to production main"
+# Review and merge via GitHub UI
+# Tag the release: git tag v1.x.x && git push origin v1.x.x
 ```
+
+### Direct Pushes (Limited Cases)
+**Only for emergencies or initial setup:**
+- Security fixes requiring immediate deployment
+- Repository setup/administrative changes
+- All other changes go through PRs
+
+**Teaching Goal**: Students learn that production systems require review processes!
 
 ## 📦 Package Architecture
 
