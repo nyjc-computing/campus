@@ -90,6 +90,123 @@ files = [
 ]
 
 [[package]]
+name = "campus-apps"
+version = "0.1.0"
+description = "Web applications and services"
+optional = false
+python-versions = "^3.11"
+groups = ["main"]
+files = []
+develop = true
+
+[package.dependencies]
+campus-client = {path = "../client", develop = true}
+campus-common = {path = "../common", develop = true}
+campus-models = {path = "../models", develop = true}
+campus-storage = {path = "../storage", develop = true}
+campus-vault = {path = "../vault", develop = true}
+flask = "^3.0.0"
+gunicorn = "^21.2.0"
+requests = "^2.32.4"
+werkzeug = "^3.0.0"
+
+[package.source]
+type = "directory"
+url = "../apps"
+
+[[package]]
+name = "campus-client"
+version = "0.1.0"
+description = "HTTP client library for Campus vault and apps services"
+optional = false
+python-versions = "^3.11"
+groups = ["main"]
+files = []
+develop = true
+
+[package.dependencies]
+requests = "^2.32.4"
+
+[package.source]
+type = "directory"
+url = "../client"
+
+[[package]]
+name = "campus-common"
+version = "0.1.0"
+description = "Shared utilities and foundational components for Campus ecosystem"
+optional = false
+python-versions = "^3.11"
+groups = ["main"]
+files = []
+develop = true
+
+[package.dependencies]
+bcrypt = "^4.2.1"
+flask = "^3.0.0"
+
+[package.source]
+type = "directory"
+url = "../common"
+
+[[package]]
+name = "campus-models"
+version = "0.1.0"
+description = "Data models and schemas"
+optional = false
+python-versions = "^3.11"
+groups = ["main"]
+files = []
+develop = true
+
+[package.dependencies]
+bcrypt = "^4.2.1"
+campus-common = {path = "../common", develop = true}
+flask = "^3.0.0"
+
+[package.source]
+type = "directory"
+url = "../models"
+
+[[package]]
+name = "campus-storage"
+version = "0.1.0"
+description = "Storage backends for collections and tables"
+optional = false
+python-versions = "^3.11"
+groups = ["main"]
+files = []
+develop = true
+
+[package.dependencies]
+campus-common = {path = "../common", develop = true}
+campus-vault = {path = "../vault", develop = true}
+psycopg2-binary = "^2.9.0"
+pymongo = {version = "^4.13.2", extras = ["srv"]}
+
+[package.source]
+type = "directory"
+url = "../storage"
+
+[[package]]
+name = "campus-vault"
+version = "0.1.0"
+description = "Secure vault service for managing secrets"
+optional = false
+python-versions = "^3.11"
+groups = ["main"]
+files = []
+develop = true
+
+[package.dependencies]
+campus-common = {path = "../common", develop = true}
+psycopg2-binary = "^2.9.0"
+
+[package.source]
+type = "directory"
+url = "../vault"
+
+[[package]]
 name = "certifi"
 version = "2025.7.14"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -742,4 +859,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "9b014c795bfea378e1b1f830f9d78639679a5662442050bf6cfa406640f717bb"
+content-hash = "a694af06d4b10c917e035b10e1445fb81c3724e782dd84b6e40891b112e170ed"
