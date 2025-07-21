@@ -40,10 +40,11 @@ apps, workspace ──┐
 - **Development guidelines**: Architectural patterns documented
 - **Quality assurance**: Dependency ordering enforced
 
-### ⏳ **Phase 3: Distribution** (Next)
-- **PyPI publishing**: Configure automated package releases
-- **External validation**: Test packages in external projects
-- **Documentation**: Package-specific installation guides
+### ⏳ **Phase 3: Development Distribution** (Next)
+- **Git-based distribution**: External projects use git dependencies during development
+- **Branch stability**: Maintain stable development branches for external consumption
+- **Documentation**: Installation guides for git-based dependencies
+- **Testing framework**: Validate packages work in external projects
 
 ## Key Achievements
 
@@ -77,16 +78,40 @@ cd campus/storage && poetry build   # ✅ Works
 ```
 
 ### Next Steps for Phase 3
-1. **Configure PyPI publishing** (1-2 days)
-2. **Test external usage** of campus-vault (1 day)
-3. **Create installation guides** (1 day)
-4. **Release first packages** (milestone)
+1. **Set up stability branches** (stable, dev, nightly) (1 day)
+2. **Create git dependency templates** for external projects (1 day)
+3. **Test external usage** with git dependencies (1 day)
+4. **Document branch policies** and update workflows (1 day)
+
+### Git Dependency Patterns for External Projects
+
+**Stable Dependencies (Recommended):**
+```toml
+# All packages from same stability branch - guaranteed compatibility
+[tool.poetry.dependencies]
+campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
+campus-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
+```
+
+**Development Dependencies:**
+```toml
+# Latest features for development/testing
+[tool.poetry.group.dev.dependencies]
+campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "dev"}
+```
+
+**Why This Works:**
+- ✅ **Dependency compatibility** - All packages from same branch work together
+- ✅ **Simple maintenance** - No individual package version coordination
+- ✅ **Clear stability levels** - Users choose their risk/feature balance
+- ✅ **Realistic scope** - Matches how monorepo packages actually depend on each other
 
 ### Reference Documentation
 - **Development Patterns**: [development-guidelines.md](development-guidelines.md)
 - **Package Architecture**: [packaging-architecture.md](packaging-architecture.md)  
 - **Build Progress**: [campus-client-branch-progress.md](campus-client-branch-progress.md)
+- **Git Dependencies**: [git-dependencies-guide.md](git-dependencies-guide.md)
 
 ---
 
-**Success Metrics**: ✅ Independent builds | ✅ CI/CD automation | ✅ Lazy loading | ✅ Documentation | ⏳ PyPI distribution
+**Success Metrics**: ✅ Independent builds | ✅ CI/CD automation | ✅ Lazy loading | ✅ Documentation | ⏳ Git distribution
