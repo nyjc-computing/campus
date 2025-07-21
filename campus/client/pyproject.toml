@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "campus-client"
+version = "0.1.0"
+description = "HTTP client library for Campus vault and apps services"
+authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
+packages = [
+    {include = "campus/client", from = "../.."},
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+requests = "^2.32.4"
+
+[tool.poetry.group.dev.dependencies]
+pylint = "^3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
