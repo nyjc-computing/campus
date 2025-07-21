@@ -70,6 +70,28 @@ class User:
         """String representation of the user."""
         return f"User(id={self._user_id}, email={self.email})"
 
+    def update(self, **kwargs) -> None:
+        """Update the user.
+
+        Args:
+            **kwargs: Fields to update (email, name, etc.)
+        """
+        self._client._patch(f"/users/{self._user_id}", kwargs)
+        # Clear cached data to force reload on next access
+        self._data = None
+
+    def delete(self) -> None:
+        """Delete the user."""
+        self._client._delete(f"/users/{self._user_id}")
+
+    def get_profile(self) -> Dict[str, Any]:
+        """Get the user's detailed profile.
+
+        Returns:
+            Dict[str, Any]: The user's profile data
+        """
+        return self._client._get(f"/users/{self._user_id}/profile")
+
 
 class UsersClient(BaseClient):
     """Client for user operations following HTTP API conventions.
@@ -108,6 +130,17 @@ class UsersClient(BaseClient):
             for user_data in users_data
         ]
 
+    def me(self) -> User:
+        """Get the authenticated user.
+        
+        Returns:
+            User: The authenticated user instance
+        """
+        response = self._get("/me")
+        user_data = response.get("user", response)
+        user_id = user_data["id"]
+        return User(self, user_id, user_data)
+
 
 class UsersModule:
     """Custom module wrapper that supports subscription syntax."""
@@ -126,6 +159,10 @@ class UsersModule:
     def list_users(self) -> List[User]:
         """List all users."""
         return self._client.list()
+
+    def me(self) -> User:
+        """Get the authenticated user."""
+        return self._client.me()
 
     def set_credentials(self, client_id: str, client_secret: str) -> None:
         """Set authentication credentials."""
