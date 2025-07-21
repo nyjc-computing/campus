@@ -3,9 +3,9 @@
 # Deployment mode determined by 'deploy' file content
 
 [tool.poetry]
-name = "campus"
+name = "campus-suite"
 version = "0.1.0"
-description = "Campus deployment orchestrator and client library for vault and apps services"
+description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
 packages = [{include = "campus"}]

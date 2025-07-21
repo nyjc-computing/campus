@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-storage"
+name = "campus-suite-storage"
 version = "0.1.0"
 description = "Storage backends for collections and tables"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]

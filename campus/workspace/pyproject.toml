@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-workspace"
+name = "campus-suite-workspace"
 version = "0.1.0"
 description = "Campus ecosystem meta-package - complete Campus system for deployment"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]

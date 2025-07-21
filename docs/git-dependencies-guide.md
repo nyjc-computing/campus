@@ -29,9 +29,9 @@ While Campus packages are still in active development, git-based dependencies pr
 ```toml
 # All packages from stable branch - versions guaranteed compatible
 [tool.poetry.dependencies]
-campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
-campus-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
-campus-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "stable"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
+campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
+campus-suite-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "stable"}
 ```
 
 ### 2. Development Dependencies
@@ -39,8 +39,8 @@ campus-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirec
 ```toml
 # Latest features, updated frequently
 [tool.poetry.dependencies]
-campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "dev"}
-campus-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "dev"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "dev"}
+campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "dev"}
 ```
 
 ### 3. Mixed Stability (Advanced)
@@ -48,11 +48,11 @@ campus-common = {git = "https://github.com/nyjc-computing/campus.git", subdirect
 ```toml
 [tool.poetry.dependencies]
 # Production: Use stable for critical dependencies
-campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
 
 [tool.poetry.group.dev.dependencies]  
 # Development: Use latest for testing new features
-campus-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "dev"}
+campus-suite-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "dev"}
 ```
 
 ## Installation Commands
@@ -86,8 +86,8 @@ pip install git+https://github.com/nyjc-computing/campus.git@abc123def456#subdir
 # External project using stable Campus vault
 # pyproject.toml
 [tool.poetry.dependencies]
-campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
-campus-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
+campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
 
 # main.py
 from campus.vault import get_vault
@@ -102,10 +102,10 @@ db_url = vault["database"].get("url")
 [tool.poetry.dependencies]
 python = "^3.11"
 # All from same stability level - guaranteed compatibility
-campus-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
-campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
-campus-models = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/models", branch = "stable"}
-campus-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "stable"}
+campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
+campus-suite-models = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/models", branch = "stable"}
+campus-suite-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "stable"}
 ```
 
 ## Maintenance Workflow

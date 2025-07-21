@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-common"
+name = "campus-suite-common"
 version = "0.1.0"
 description = "Shared utilities and foundational components for Campus ecosystem"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]

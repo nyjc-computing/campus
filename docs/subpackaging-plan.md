@@ -6,13 +6,13 @@ Transform the Campus monorepo into independently distributable packages while ma
 ## Package Architecture
 
 ### Target Packages (7 total)
-- **campus-common**: Shared utilities (no dependencies)
-- **campus-vault**: Secure secrets management (depends on common)
-- **campus-client**: External API integrations (depends on common)
-- **campus-models**: Data models and schemas (depends on common)
-- **campus-storage**: Storage interfaces/backends (depends on common + vault)
-- **campus-apps**: Web applications (depends on all others)
-- **campus-workspace**: Full deployment package (depends on all others)
+- **campus-suite-common**: Shared utilities (no dependencies)
+- **campus-suite-vault**: Secure secrets management (depends on common)
+- **campus-suite-client**: External API integrations (depends on common)
+- **campus-suite-models**: Data models and schemas (depends on common)
+- **campus-suite-storage**: Storage interfaces/backends (depends on common + vault)
+- **campus-suite-apps**: Web applications (depends on all others)
+- **campus-suite-workspace**: Full deployment package (depends on all others)
 
 ### Dependency Flow
 ```
@@ -89,15 +89,15 @@ cd campus/storage && poetry build   # ✅ Works
 ```toml
 # All packages from same stability branch - guaranteed compatibility
 [tool.poetry.dependencies]
-campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
-campus-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
+campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
 ```
 
 **Development Dependencies:**
 ```toml
 # Latest features for development/testing
 [tool.poetry.group.dev.dependencies]
-campus-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "dev"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "dev"}
 ```
 
 **Why This Works:**

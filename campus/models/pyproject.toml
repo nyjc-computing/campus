@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-models"
+name = "campus-suite-models"
 version = "0.1.0"
 description = "Data models and schemas"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
