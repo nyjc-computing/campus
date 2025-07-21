@@ -1,4 +1,4 @@
-name: Python Tests
+name: Integration Tests
 
 on:
   pull_request:
@@ -17,7 +17,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry
-      - name: Install dependencies
-        run: poetry install --no-root
-      - name: Run tests
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite (full deployment mode)
+        run: poetry install --no-root --extras full
+      - name: Run Integration Tests
         run: poetry run python run_tests.py

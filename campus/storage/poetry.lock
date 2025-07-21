@@ -90,7 +90,7 @@ files = [
 ]
 
 [[package]]
-name = "campus-common"
+name = "campus-suite-common"
 version = "0.1.0"
 description = "Shared utilities and foundational components for Campus ecosystem"
 optional = false
@@ -108,7 +108,7 @@ type = "directory"
 url = "../common"
 
 [[package]]
-name = "campus-vault"
+name = "campus-suite-vault"
 version = "0.1.0"
 description = "Secure vault service for managing secrets"
 optional = false
@@ -118,7 +118,7 @@ files = []
 develop = true
 
 [package.dependencies]
-campus-common = {path = "../common", develop = true}
+campus-suite-common = {path = "../common", develop = true}
 psycopg2-binary = "^2.9.0"
 
 [package.source]
@@ -579,4 +579,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "a06354a5cd1654685967900e1ac748faf95533214f0b43fef51d9dbd91a726c0"
+content-hash = "2f8048539bcf423005fd002e715a52287bc1b6e0a7c32389134bdfdae55ea135"
