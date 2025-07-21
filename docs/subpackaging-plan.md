@@ -52,6 +52,7 @@ apps, workspace ──┐
 2. **Import Shadowing**: Renamed `collections/` to `documents/` to avoid Python stdlib conflicts  
 3. **Build Failures**: Implemented lazy loading pattern for database connections
 4. **CI/CD Reliability**: Standardized Poetry configuration and dependency ordering
+5. **Version Inconsistencies**: Aligned pymongo versions across all packages (^4.13.2)
 
 ### Architectural Patterns Established
 - **Lazy Loading**: External resources loaded only when needed ([docs/development-guidelines.md](development-guidelines.md))
