@@ -4,12 +4,12 @@ This module provides the common storage interface for the campus application.
 
 Two kinds of storage interface are provided:
 1. Tables: For storing rows following a common schema.
-2. Collections: For storing documents that can have different schemas.
+2. Documents: For storing documents that can have different schemas.
 """
 
-from . import collections, tables
+from . import documents, tables
 
-from .collections import CollectionInterface
+from .documents import CollectionInterface
 from .tables import TableInterface
 from .errors import StorageError, NotFoundError, NoChangesAppliedError
 
@@ -21,7 +21,7 @@ def get_table(name: str):
 
 def get_collection(name: str):
     """Get a collection by name."""
-    return collections.get_db(name)
+    return documents.get_db(name)
 
 
 def purge_tables() -> None:
@@ -46,7 +46,7 @@ def purge_collections() -> None:
     Raises:
         RuntimeError: If purge operation fails
     """
-    from .collections.backend.mongodb import purge_collections as _purge_collections
+    from .documents.backend.mongodb import purge_collections as _purge_collections
     _purge_collections()
 
 
