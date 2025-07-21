@@ -1,20 +1,18 @@
-"""client.vault
+"""client.vault.vault
 
 Main vault client interface for secrets management and access control.
 """
 
 import sys
 from typing import List
-from .base import BaseClient
-from .errors import NotFoundError
-from .vault_access import VaultAccessClient
-from .vault_client import VaultClientManagement
-from . import config
+from ..base import BaseClient
+from ..errors import NotFoundError
+from .. import config
 
 
 class VaultCollection:
     """Represents a vault collection with HTTP-like methods.
-    
+
     Provides an interface for managing secrets within a specific vault collection,
     including operations for storing, retrieving, and deleting secret values.
     """
@@ -107,7 +105,7 @@ class VaultClient(BaseClient):
 
     def _get_default_base_url(self) -> str:
         """Get the default base URL for the vault service.
-        
+
         Returns:
             str: Base URL for the vault deployment
         """
@@ -134,12 +132,14 @@ class VaultClient(BaseClient):
         return response.get("vaults", [])
 
 
-# Create a custom module class that supports subscription
 class VaultModule:
     """Custom module wrapper that supports subscription syntax."""
 
     def __init__(self):
         self._client = VaultClient()
+        # Import here to avoid circular imports
+        from .access import VaultAccessClient
+        from .client import VaultClientManagement
         self.access = VaultAccessClient(self._client)
         self.client = VaultClientManagement(self._client)
 

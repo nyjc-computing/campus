@@ -1,17 +1,18 @@
-"""client.circles
+"""client.apps.circles
 
 Circle (group) management client for creating and managing organizational units.
 """
 
+import sys
 from typing import List, Dict, Any, Optional
-from .base import BaseClient
-from .errors import NotFoundError
-from . import config
+from ..base import BaseClient
+from ..errors import NotFoundError
+from .. import config
 
 
 class Circle:
     """Represents a circle resource with HTTP-like methods.
-    
+
     Provides an interface for interacting with individual circle resources,
     including properties for accessing circle data and methods for operations.
     """
@@ -31,7 +32,7 @@ class Circle:
     @property
     def id(self) -> str:
         """Get the circle ID.
-        
+
         Returns:
             str: The unique identifier for this circle
         """
@@ -40,7 +41,7 @@ class Circle:
     @property
     def data(self) -> Dict[str, Any]:
         """Get the circle data, loading it if necessary.
-        
+
         Returns:
             Dict[str, Any]: The complete circle data from the API
         """
@@ -51,7 +52,7 @@ class Circle:
     @property
     def name(self) -> str:
         """Get the circle's name.
-        
+
         Returns:
             str: The display name of the circle
         """
@@ -60,7 +61,7 @@ class Circle:
     @property
     def description(self) -> str:
         """Get the circle's description.
-        
+
         Returns:
             str: The description text of the circle
         """
@@ -69,7 +70,7 @@ class Circle:
     @property
     def created_at(self) -> str:
         """Get the circle's creation timestamp.
-        
+
         Returns:
             str: ISO formatted timestamp of when the circle was created
         """
@@ -78,7 +79,7 @@ class Circle:
     @property
     def owner_id(self) -> str:
         """Get the circle owner's user ID.
-        
+
         Returns:
             str: The user ID of the circle's owner
         """
@@ -164,14 +165,14 @@ class Circle:
 
 class CirclesClient(BaseClient):
     """Client for circle operations following HTTP API conventions.
-    
+
     Provides methods for creating, retrieving, updating, and deleting circles,
     as well as managing circle memberships and relationships.
     """
 
     def _get_default_base_url(self) -> str:
         """Get the default base URL for the circles service.
-        
+
         Returns:
             str: Base URL for the apps deployment
         """
@@ -275,56 +276,45 @@ class CirclesClient(BaseClient):
         ]
 
 
-# Module-level singleton instance
-_circles_client = CirclesClient()
+class CirclesModule:
+    """Custom module wrapper that supports subscription syntax."""
 
-# Module-level functions that delegate to the singleton
+    def __init__(self):
+        self._client = CirclesClient()
 
+    def __getitem__(self, circle_id: str) -> Circle:
+        """Support circles["circle123"] syntax."""
+        return self._client[circle_id]
 
-def __getitem__(circle_id: str) -> Circle:
-    """Get a circle by ID.
+    def get_by_id(self, circle_id: str) -> Circle:
+        """Get a circle by ID."""
+        return self._client.get_by_id(circle_id)
 
-    Usage:
-        import campus.client.circles as circles
-        circle = circles["circle123"]
-    """
-    return _circles_client[circle_id]
+    def new(self, name: str, description: str = "", **kwargs) -> Circle:
+        """Create a new circle."""
+        return self._client.new(name, description, **kwargs)
 
+    def list(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[Circle]:
+        """List all circles."""
+        return self._client.list(limit, offset)
 
-def get_by_id(circle_id: str) -> Circle:
-    """Get a circle by ID."""
-    return _circles_client.get_by_id(circle_id)
+    def search(self, query: str) -> List[Circle]:
+        """Search for circles."""
+        return self._client.search(query)
 
+    def list_by_user(self, user_id: str) -> List[Circle]:
+        """List circles that a user is a member of."""
+        return self._client.list_by_user(user_id)
 
-def new(name: str, description: str = "", **kwargs) -> Circle:
-    """Create a new circle."""
-    return _circles_client.new(name, description, **kwargs)
+    def set_credentials(self, client_id: str, client_secret: str) -> None:
+        """Set authentication credentials."""
+        self._client.set_credentials(client_id, client_secret)
 
-
-def list(limit: Optional[int] = None, offset: Optional[int] = None) -> List[Circle]:
-    """List all circles."""
-    return _circles_client.list(limit, offset)
-
-
-def search(query: str) -> List[Circle]:
-    """Search for circles."""
-    return _circles_client.search(query)
-
-
-def list_by_user(user_id: str) -> List[Circle]:
-    """List circles that a user is a member of."""
-    return _circles_client.list_by_user(user_id)
-
-
-def set_credentials(client_id: str, client_secret: str) -> None:
-    """Set authentication credentials.
-
-    Args:
-        client_id: The client ID for authentication
-        client_secret: The client secret for authentication
-    """
-    _circles_client.set_credentials(client_id, client_secret)
+    @property
+    def client(self) -> CirclesClient:
+        """Direct access to the client instance."""
+        return self._client
 
 
-# For direct access to the client instance if needed
-client = _circles_client
+# Replace this module with our custom class
+sys.modules[__name__] = CirclesModule()  # type: ignore
