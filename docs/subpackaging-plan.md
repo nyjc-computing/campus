@@ -78,46 +78,47 @@ cd campus/storage && poetry build   # ✅ Works
 ```
 
 ### Next Steps for Phase 3
-1. **Set up modular stability branches** (stable, dev, nightly) from campus-subpackaging (1 day)
+1. **Set up branch structure** (weekly, staging, main) from campus-subpackaging (1 day)
 2. **Create git dependency templates** for external projects (1 day)
 3. **Test external usage** with git dependencies (1 day)
 4. **Document branch policies** and update workflows (1 day)
 
 ### Branch Strategy
 
-**Modular Architecture Track** (for external packages):
+**Simple Three-Branch Model:**
 ```
-nightly → dev → stable
-    ↑         ↑
-campus-subpackaging (current)
+weekly → staging → main
+   ↑        ↑
+campus-subpackaging (current work, will become weekly)
 ```
 
-**Legacy Monorepo Track** (for existing deployments):
-```
-main (maintenance only)
-```
+**Branch Purpose:**
+- **`main`** - Stable, production-ready packages for external projects
+- **`staging`** - Extended testing, migration validation, pre-production
+- **`weekly`** - Active development, student work, expected breakage
 
 **Flow:**
-- `campus-subpackaging` → `dev` (daily merges)
-- `dev` → `stable` (weekly promotions after testing)
-- `nightly` ← automated builds from latest development
-- `main` ← separate maintenance track (security fixes only)
+- `campus-subpackaging` → `weekly` (rename current branch)
+- `weekly` → `staging` (promote after weekly sprint testing)
+- `staging` → `main` (promote after extended validation)
+
+**GitHub Default:** `main` (users get stable packages by default)
 
 ### Git Dependency Patterns for External Projects
 
 **Stable Dependencies (Recommended):**
 ```toml
-# All packages from same stability branch - guaranteed compatibility
+# All packages from main branch - stable, tested versions
 [tool.poetry.dependencies]
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "stable"}
-campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "stable"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "main"}
+campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "main"}
 ```
 
 **Development Dependencies:**
 ```toml
 # Latest features for development/testing
 [tool.poetry.group.dev.dependencies]
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "dev"}
+campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "staging"}
 ```
 
 **Why This Works:**
