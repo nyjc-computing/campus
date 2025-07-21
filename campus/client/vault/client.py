@@ -4,7 +4,7 @@ Vault client management for creating and managing vault authentication clients.
 """
 
 from typing import List, Dict, Any, Tuple
-from ..base import BaseClient
+from campus.client.base import BaseClient
 
 
 class VaultClientManagement:

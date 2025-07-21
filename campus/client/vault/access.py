@@ -4,7 +4,7 @@ Vault access management client for managing permissions and client access.
 """
 
 from typing import List, Dict, Any, Union
-from ..base import BaseClient
+from campus.client.base import BaseClient
 
 
 class VaultAccessClient:

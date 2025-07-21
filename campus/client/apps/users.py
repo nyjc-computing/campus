@@ -5,8 +5,8 @@ User management client for creating and managing user accounts.
 
 import sys
 from typing import List, Dict, Any, Optional
-from ..base import BaseClient
-from .. import config
+from campus.client.base import BaseClient
+from campus.client import config
 
 
 class User:

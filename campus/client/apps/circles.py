@@ -5,9 +5,9 @@ Circle (group) management client for creating and managing organizational units.
 
 import sys
 from typing import List, Dict, Any, Optional
-from ..base import BaseClient
-from ..errors import NotFoundError
-from .. import config
+from campus.client.base import BaseClient
+from campus.client.errors import NotFoundError
+from campus.client import config
 
 
 class Circle:
