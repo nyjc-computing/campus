@@ -9,8 +9,8 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-campus-common = {path = "../common", develop = true}
-campus-vault = {path = "../vault", develop = true}
+campus-suite-common = {path = "../common", develop = true}
+campus-suite-vault = {path = "../vault", develop = true}
 psycopg2-binary = "^2.9.0"
 pymongo = {extras = ["srv"], version = "^4.13.2"}
 
