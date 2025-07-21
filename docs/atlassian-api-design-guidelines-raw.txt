@@ -1,0 +1,921 @@
+Support for Server products ended Feb. 15, 2024. Learn what this means for you.
+Atlassian SDK
+Guides
+Reference
+Resources
+Support
+Log in
+
+    Latest updates
+
+    Introduction and basics
+
+    Set up the Atlassian Plugin SDK and build a project
+    Adding resources to your project
+    Configuring the plugin descriptor
+    atlassian-plugin.xml element reference
+    Frequently used commands
+    Atlassian JavaDoc
+
+Security
+
+    REST and os_authType
+
+Learning
+
+    Tutorials and guides
+    Product-specific tutorials
+    Writing and running plugin tests
+    Shared Access Layer
+        About SAL development
+        Adding SAL dependency
+        SAL code samples
+        SAL services
+    Using the Atlassian Audit API
+
+Updates
+
+    AMPS SDK release notes
+        AMPS Latest
+        AMPS 9.5.0
+        AMPS 9.4.1
+        AMPS 9.4.0
+        AMPS 9.3.6
+        AMPS 9.3.5
+        AMPS 9.3.4
+        AMPS 9.3.3
+        AMPS 9.3.2
+        AMPS 9.3.1
+        AMPS 9.3.0
+        AMPS 9.2.6
+        AMPS 9.2.5
+        AMPS 9.2.4
+        AMPS 9.2.3
+        AMPS 9.2.2
+        AMPS 9.2.1
+        AMPS 9.2.0
+        AMPS 9.1.11
+        AMPS 9.1.10
+        AMPS 9.1.8
+        AMPS 9.1.6
+        AMPS 9.1.5
+        AMPS 9.1.4
+        AMPS 9.1.3
+        AMPS 9.1.1
+        AMPS 9.1.0
+        AMPS 9.0.6
+        AMPS 9.0.2
+        AMPS 9.0.1
+        AMPS 9.0.0
+        AMPS 8.17.7
+        AMPS 8.17.6
+        AMPS 8.17.5
+        AMPS 8.17.4
+        AMPS 8.17.2
+        AMPS 8.17.0
+        AMPS 8.16.0
+        AMPS 8.15.4
+        AMPS 8.15.0
+        AMPS 8.14.3
+        AMPS 8.14.2
+        AMPS 8.14.1
+        AMPS 8.14.0
+        AMPS 8.13.5
+        AMPS 8.13.4
+        AMPS 8.13.3
+        AMPS 8.13.2
+        AMPS 8.13.1
+        AMPS 8.13.0
+        AMPS 8.12.4
+        AMPS 8.12.3
+        AMPS 8.12.2
+        AMPS 8.12.1
+        AMPS 8.12.0
+        AMPS 8.11.2
+        AMPS 8.11.1
+        AMPS 8.10.4
+        AMPS 8.10.3
+        AMPS 8.10.2
+        AMPS 8.10.1
+        AMPS 8.9.2
+        AMPS 8.9.1
+        AMPS 8.9.0
+        AMPS 8.8.1
+        AMPS 8.8.0
+        AMPS 8.7.0
+        AMPS 8.6.0
+        AMPS 8.5.0
+        AMPS 8.4.2
+        AMPS 8.4.1
+        AMPS 8.4.0
+        AMPS 8.3.3
+        AMPS 8.3.2
+        AMPS 8.3.1
+        AMPS 8.3.0
+        AMPS 8.2.3
+        AMPS 8.2.2
+        AMPS 8.2.1
+        AMPS 8.2.0
+        AMPS 8.1.2
+        AMPS 8.1.1
+        AMPS 8.1.0
+        AMPS 8.0.4
+        AMPS 8.0.3
+        AMPS 8.0.2
+        AMPS 8.0.1
+        AMPS 8.0.0
+        AMPS 6.3.21
+        AMPS 6.3.20
+        AMPS 6.3.19
+        AMPS 6.3.18
+        AMPS 6.3.17
+        AMPS 6.3.16
+        AMPS 6.3.15
+        AMPS 6.3.14
+        AMPS 6.3.13
+        AMPS 6.3.12
+        AMPS 6.3.11
+        AMPS 6.3.10
+        AMPS 6.3.7
+        AMPS 6.3.6
+        AMPS 6.3.5
+        AMPS 6.3.4
+        AMPS 6.3.3
+        AMPS 6.3.2
+        AMPS 6.3.1
+        AMPS 6.3.0
+    REST plugin release notes
+        REST plugin 2.1 release notes
+        REST plugin 2.2 release notes
+        REST plugin 2.3 release notes
+    Maven Packages
+        Change to mirrors provided through packages.atlassian.com
+    LESS transformer removal
+
+FAQ and troubleshooting
+
+    FAQ
+        Getting started tutorial FAQ
+        Plugin Framework FAQ
+        Writing your first plugin FAQ
+    Troubleshooting
+
+Other considerations
+
+        Atlassian Marketplace
+        Atlassian UI library
+        Design guideliness
+        App licensing
+        Advanced Topics
+        OSGi and Spring reference documents
+        Plugin Framework glossary
+
+Last updated Dec 8, 2017
+Atlassian REST API design guidelines version 1
+On This Page
+
+    Background to Atlassian REST APIs
+    Goal of these Guidelines
+    Using these Guidelines
+    REST Resources
+    Version Control for APIs
+    Security
+
+    Caching
+    Concurrency
+    Not Yet Covered in these Guidelines
+    Appendix A: Response Codes
+    Appendix B: Basic Data Types
+
+This document provides guidelines to Atlassian developers who are designing REST APIs for Atlassian applications. We are publishing these design principles and guidelines for viewing by the wider community for these reasons:
+
+    If you are a developer/administrator who wants to interact with the REST API in one or more of the Atlassian applications, it will help you to know the principles behind our REST API design.
+    If you are developing a plugin that exposes a REST API, you can follow these guidelines to ensure consistency between your plugin and the host application's APIs.
+    We invite and welcome feedback on these design principles.
+
+REST API Principle Policy
+
+These design guidelines focus on the implementation details for REST modules. Any implementations must also follow the Atlassian REST API policy which define the principles behind Atlassian's REST APIs.
+Background to Atlassian REST APIs
+
+Atlassian has been working towards creating standardised REST APIs across all of our applications. Some of our applications already provide REST APIs, and some applications are providing new REST APIs or updating their existing APIs in an upcoming release.
+
+Each application (Confluence, Jira, Crowd, etc) will provide its own REST APIs, exposing the application-specific functionality. The goal is for these application-specific APIs to share common design standards, as described on this page.
+
+For details of each application's APIs, please refer to the development hub in the documentation for the application concerned.
+Goal of these Guidelines
+
+These guidelines are for Atlassian developers who are designing REST APIs for Atlassian applications. The goal is to keep REST API implementations as consistent as possible. These guidelines apply to all REST APIs, including:
+
+    REST APIs that use Atlassian's Jersey-based REST plugin module type.
+    Other REST APIs not based on the plugin.
+
+Using these Guidelines
+Following or Moving Away from the Guidelines
+
+These guidelines provide one way of doing things that might not always be the only way nor the best way. If you think that is the case, feel free to move away from the guidelines. You should be aware of potential repercussions such as security issues, consistency issues, etc.
+
+We strongly recommend that someone who is familiar with these guidelines should review your REST API code.
+Examples used in the Guidelines
+
+The examples used in these guidelines assume that we have a REST API supplied by an Atlassian plugin called the 'Unified Plugin Manager' plugin, 'UPM' or 'upm'. (This is a real plugin that is currently under development.) The UPM allows you to discover and manage the plugins installed on an Atlassian application.
+REST Resources
+URIs for Resources
+URI Structure
+
+Given a list of foo entities, the following URI scheme provides access to the list of foo entities and to a particular foo:
+
+URI
+	
+
+Notes
+
+/foo
+	
+
+This returns a list of the foo items. By default items in the list are a minimal representation of a foo entity. Note that we use the singular for the directory name.
+
+Method: GET.
+
+/foo/{key}
+	
+
+This returns the full content of the foo identified by the given key.
+
+Method: GET.
+
+Sub-elements of a foo entity are made available as sub-resources of /foo/{key}.
+Examples
+
+For our example, let's take a plugin resource within the 'upm' REST API.
+
+Use this URI to access a list of plugins:
+
+http://host:port/context/rest/upm/1/plugin
+
+Use this URI to access the plugin resource with a key of a-plugin-key:
+
+http://host:port/context/rest/upm/1/plugin/a-plugin-key
+
+Structure of the above URI:
+
+    host and port define the host and port where the application lives.
+    context is the servlet context of the application. For example, for Confluence this would typically be confluence.
+    rest denotes the REST API.
+    upm is the path declared in the REST module type in the plugin descriptor.
+    1 is the API version. See the section on API version control below.
+
+Standard Query Parameters in URIs
+
+Below is a list of standard query parameters. These names are reserved in our REST APIs and should be used according to the notes in the table below.
+
+Query Parameter
+	
+
+Notes
+
+expand
+	
+
+Used for title expansion. See section on title expansion below.
+
+start-index
+	
+
+An integer specifying the starting point when paging through a list of entities. Defaults to 0.
+
+max-results
+	
+
+The maximum number of results when paging through a list of entities. No default is provided. We recommend that APIs should define their own default. Applications should also define a hard limit on the number of items that can be requested at the same time.
+Entities
+Representations (Content Types) of Entities
+
+By default, REST APIs must support multiple content types.
+
+Representation
+	
+
+Requested via...
+
+JSON
+	
+
+Requested via one of the following:
+
+    application/json in the HTTP Accept header
+    .json extension
+
+XML
+	
+
+Requested via one of the following:
+
+    application/xml in the HTTP Accept header
+    .xml extension
+
+Hypertext Linking within an Entity
+
+Entities can have links to each other. This is represented by the <link> tag. The <link> tag supports the following attributes:
+
+Attribute
+	
+
+Description
+
+href
+	
+
+The URI of the entity linked to.
+
+rel
+	
+
+The relationship between the containing entity and the entity linked to.
+Examples of possible values:
+
+    self -- denotes that the URI points to the entity itself, see Entity ID below.
+    edit -- denotes the URI used to update the entity,
+    delete -- denotes the URI used to delete the entity,
+    add -- denotes the URI used to create the entity.
+
+title
+	
+
+Optional. A short description of the entity linked to.
+
+Links to the URI that will perform operations on an entity have their rel attribute set to edit, delete or add. We recommend that entities provide these links as part of their content.
+
+Links should follow some simple rules:
+
+    Links use the same base URL independently of server-side implementation. So, if the REST API is available at http://host:port/context/rest/api/, then links to other resources should use this as their base URL.
+    Whenever the user specifies an extension, such as .xml, .json, etc, links should have this same extension as far as possible.
+    Links do not have query parameters.
+
+Example
+
+The following plugin entity has a <link> tag with a rel attribute identifying the entity's own ID via a URI pointing to itself:
+
+<plugin key="a-plugin-key" enabled="true" expand="modules,info">
+  <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key" />
+  <info name="A plugin"/>
+  <modules size="2" expand="module"/>
+</plugin>
+
+Entity ID
+
+Every addressable entity should have a <link> tag with the attribute rel="self" pointing to its own URI. See the section on linking above.
+Version Control for Entities
+
+Entities SHOULD be served with an ETag header
+
+.
+
+Read-only entities and lists of entities may be served without an ETag header. Providing an ETag header for these resources will help with caches and conditional requests, but the header need not be included if calculating the ETag is too expensive or difficult.
+
+The ETag for a resource MUST be the same regardless of the requested representation or title expansion state.
+
+The server MUST treat If-Match
+and If-None-Match headers provided by clients as defined in RFC 2616
+
+.
+
+PUT or DELETE API requests SHOULD provide an If-Match
+
+header, and SHOULD react meaningfully to 412 (Precondition Failed) responses.
+Collections of Entities
+
+Collections of entities should define the following attributes:
+
+Attribute
+	
+
+Description
+
+size
+	
+
+The total size of items available in the collection. This can be different from the actual number of items currently listed in the collection if the start-index and max-result query parameters have been used.
+
+start-index
+	
+
+If used to filter the collection elements.
+
+max-result
+	
+
+If used to filter the collection elements.
+Example
+
+In the response below, the <modules> entity has a size attribute indicating that there are 2 plugin modules in the collection:
+
+<plugin key="a-plugin-key" enabled="true" expand="modules,info">
+  <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key" />
+  <info name="A plugin"/>
+  <modules size="2" expand="module"/>
+</plugin>
+
+Title Expansion for Entities
+
+In order to be minimise network traffic and simplify some APIs from the client perspective, we recommend that APIs provide title expansion. This works by using the expand query parameter and setting its value to the last path element of the entity's schema.
+
+The expand query parameter allows a comma-separated list of identifiers to expand. For example, the value modules,info requests the expansion of entities for which the expand identifier is modules and info.
+
+You can use the dot notation to specify expansion of entities within another entity. For example modules.module would expand the plugin entity (because its expand identifier is modules) and the module entities within the plugin. See example 4 below.
+
+Expandable entities should be declared by parent entities in the form of an expand attribute. In example 1, the plugin entity declares modules and info as being expandable. The attribute should not be confused with the query parameter which specifies which entities are expanded.
+Example 1. Accessing a Resource without Title Expansion
+
+For our example, let's take a plugin resource within the 'upm' REST API.
+
+Use this URI to access the plugin resource without specifying title expansion:
+http://host:port/context/rest/upm/1/plugin/a-plugin-key
+
+The response will contain:
+
+<plugin key="a-plugin-key" enabled="true" expand="modules,info">
+  <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key" />
+  <info name="A plugin"/>
+  <modules size="2" expand="module"/>
+</plugin>
+
+Example 2. Expanding the info Element
+
+Use the following URI to expand the info element in our plugin resource:
+http://host:port/context/rest/upm/1/plugin/a-plugin-key?expand=info
+
+Now the response will contain:
+
+<plugin key="a-plugin-key" enabled="true" expand="modules,info">
+  <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key" />
+  <info name="A plugin">
+    <description>This is an awesome plugin</description>
+    <version>1.1</version>
+  </info>
+  <modules size="2" expand="module"/>
+</plugin>
+
+Example 3. Expanding the Collection of Modules
+
+Use this URI to expand the module collection in our plugin resource:
+http://host:port/context/rest/upm/1/plugin/a-plugin-key?expand=modules
+
+The response will contain:
+
+<plugin key="a-plugin-key" enabled="true" expand="modules,info">
+  <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key" />
+  <info name="A plugin"/>
+  <modules size="2" expand="module">
+    <module key="module-key-1">
+      <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key/module/module-key-1" />
+    </module>
+    <module key="module-key-2">
+      <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key/module/module-key-2" />
+    </module>
+  </modules>
+</plugin>
+
+Note that the above URI does not expand each individual module.
+Example 4: Using the Dot Notation to Expand Entities within another Entity
+
+Use the following URI to expand the modules inside the collection within our plugin resource:
+http://host:port/context/rest/upm/1/plugin/a-plugin-key?expand=modules.module
+
+The response will contain:
+
+<plugin key="a-plugin-key" enabled="true" expand="modules,info">
+  <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key" />
+  <info name="A plugin"/>
+  <modules size="2" expand="module">
+    <module key="module-key-1">
+      <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key/module/module-key-1" />
+      <name>Module 1</name>
+      <description>This is my first module</description>
+    </module>
+    <module key="module-key-2">
+      <link rel="self" href="http://host:port/context/rest/upm/1/plugin/a-plugin-key/module/module-key-2" />
+      <name>Module 2</name>
+      <description>This is my second module</description>
+    </module>
+  </modules>
+</plugin>
+
+Using Index Values to Expand a Collection
+
+You can also set indices to expand a given set of items in the collection. The index is 0 based:
+
+    modules[3] will expand only the module at index 3 of the collection.
+    modules[1:3] will expand modules ranging from index 1 to 3 (included). Note that [:3] and [3:] notations also work and the range goes respectively from the beginning of the collection and to the end of the collection.
+    modules[-1] will expand the last module. Other negative index values also work and indices are counted from the end of the collection.
+
+Version Control for APIs
+
+APIs must be subject to version control. The version number of an API appears in its URI. For example, use this URI structure to request version 1 of the 'upm' API:
+
+http://host:port/context/rest/upm/1/...
+
+When an API has multiple versions, we recommend:
+
+    Two versions should be supported at the same time.
+    If two or more versions are available, applications may provide a shortcut to the latest version using the latest key-word.
+
+For example, if versions 1 and 2 of the 'upm' API are available, the following two URIs would point to the same resources:
+
+    host:port/context/rest/upm/latest/
+    http:host:port/context/rest/upm/2/
+
+When to Change the Version
+
+A version number indicates a certain level of backwards-compatibility the client can expect, and as such, extra care should be taken to maintain this trust. The following lists which types of changes necessitate a new version and which don't:
+Changes That Don't Require a New Version
+
+    New resources
+    New HTTP methods on existing resources
+    New data formats
+    New attributes or elements on existing data types
+
+Change That Require a New Version
+
+    Removed or renamed URIs
+    Different data returned for same URI
+    Removal of support for HTTP methods on existing URIs
+
+Security
+Authentication
+
+Every REST API MUST at least accept basic authentication
+
+.
+
+Other authentication options are optional, such as Trusted Apps, OS username and password as query parameters, or 'remember me' cookies.
+
+By default, access to all resources (using any method) requires the client to be authenticated. Resources that should be available anonymously MUST be marked as such. The default implementation SHOULD use the AnonymousAllowed annotation.
+Authorisation
+
+Authorisation is NOT handled by the REST APIs themselves. It is the responsibility of the service layer to make sure the authenticated client (user) has the correct permissions to access the given resource.
+Cross-site request forgery 
+
+Atlassian uses the XSRF acronym for Cross-site request forgery
+
+and not CSRF.
+
+To protect against XSRF
+
+ attacks:
+
+    Ensure that GET requests are idempotent
+
+    For REST API classes or methods that will not be used in normal browser 'form' posts
+
+        annotate them with @Consumes({MediaType.APPLICATION\_XML, MediaType.APPLICATION\_JSON}):
+
+Class example:
+@Path("/a")
+@Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+public class RestHelloWorldService { ... }
+
+ 
+Method example:
+public class RestAnotherService { 
+...
+    @Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+    @POST
+    @Path("/b")
+    public Response getUncompletedUsers() { ... }
+}
+
+This protects against XSRF as browser cross-domain simple requests cannot have a content type of MediaType.APPLICATION_XML or MediaType.APPLICATION_JSON. See 
+http://www.w3.org/TR/cors/#terminology
+
+ for further information on 'simple requests'.
+
+It is also noting that because of issues in the implementation of the beacon API
+in Chrome, atlassian-rest performs origin xsrf checks on requests in some cases to prevent content-types that should not be allowed to be sent cross-domain without CORS permitting them
+
+.
+
+For atlassian-rest versions prior to 3.0.0, annotate them with @com.atlassian.plugins.rest.common.security.RequiresXsrfCheck. The atlassian-rest-refimpl-plugin has an example of using this annotation
+
+    . See RequiresXsrfCheck for further information.
+
+    In atlassian-rest version 3.0.0 and later mutative resources such as POST are automatically XSRF protected.
+
+For REST API classes or methods that will be used from normal browser 'form' posts
+
+    As of atlassian-rest 2.8.0-m9 the @com.atlassian.plugins.rest.common.security.RequiresXsrfCheck annotaion can be used to perform XSRF token validation on rest form submissions. This XSRF token validation implementation uses the SAL provided XsrfTokenValidator and XsrfTokenAccessor interfaces. See RequiresXsrfCheck for further information.
+
+A plugin which uses this annotation to provide XSRF token validation on a REST method will need to ensure that in all corresponding forms there is a hidden XSRF token parameter with a XSRF token value obtained from the [XsrfTokenAccessor](https://developer.atlassian.com/ static/javadoc/sal/2.6/reference/com/atlassian/sal/api/xsrf/XsrfTokenAccessor.html) interface.
+
+For example, the exampleXsrfTokenProtectedMethod method annotated with the RequiresXsrfCheck annotation in the following class
+
+@Path("/exampleXsrfTokenProtectedMethod")
+@Consumes({MediaType.TEXT_PLAIN})
+public class RestHelloWorldService {
+ 
+ @POST
+ @com.atlassian.plugins.rest.common.security.RequiresXsrfCheck 
+ public Response exampleXsrfTokenProtectedMethod( args... ) { ... }
+ 
+}
+
+would have a corresponding form similar to the following
+
+        <form name="do-something" action="/rest/examplePlugin/latest/exampleXsrfTokenProtectedMethod" method="post" enctype="text/plain">
+                 <input type="hidden" name="atl_token" value="xsrfTokenValueHere">
+                 <input type="text" name="something">
+        </form>
+
+Migrating to Atlassian Rest 3.0.0
+
+In version 3.0.0 and later of atlassian-rest XSRF protection is enabled by default. It is possible to opt-out of XSRF protection for a rest method by using the com.atlassian.annotations.security.XsrfProtectionExcluded annotation as provided by Atlassian annotations (versions >= 0.12). Please avoid using the XsrfProtectionExcluded annotation as much as possible.
+
+For completeness, here is an example of using the XsrfProtectionExcluded annotation.
+
+package com.random.plugin.code.rest;
+
+import com.atlassian.annotations.security.XsrfProtectionExcluded;
+
+import javax.ws.rs.Path;
+import javax.ws.rs.POST;
+
+/**
+ */
+@Path ("/thing")
+public class XsrfCheck
+{
+    @Path("post")
+    @POST
+    @XsrfProtectionExcluded // does not mutate state.
+    public String nonMutativePost()
+    {
+        return "Request succeeded";
+    }
+
+}
+
+The following diagram shows when XSRF protection is enforced on a request to a rest resource in atlassian-rest 3.0.0 and later versions. 
+
+Also in atlassian-rest 3.0.0 a value of "nocheck" for the X-Atlassian-Token XSRF header has been deprecated and will result in a warning when used appearing in the logs. Since, rest 2.9.1 a value of "no-check", is accepted in addition to the old "nocheck" rest value for the X-Atlassian-Token header ( REST-263
+
+- REST-164 Implemented checking the X-Atlassian-Token header with the wrong value Resolved ).
+Using the jQuery ajaxSetup or ajaxPrefilter function to add the XSRF header to jQuery ajax requests
+
+By using jQuery's ajaxSetup
+ or the ajaxPrefilter  function it is possible to make all same origin 
+
+jQuery ajax requests contain the CSRF X-Atlassian-Token header. This is incredibly useful as it means that existing jQuery ajax usages should not need to be modified.
+
+For example bamboo uses the ajaxPrefilter function like so:
+
+AJS.$.ajaxPrefilter(
+        function(options, originalOptions, jqXHR) {
+            function isMutativeHttpMethod(method) {
+                return !(/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+            }
+            if (isMutativeHttpMethod(options.type)) {
+                options.crossDomain = false;
+                jqXHR.setRequestHeader("X-Atlassian-Token", "no-check");
+            }
+        });
+
+Here is an example using ajaxSetup instead of ajaxPrefilter:
+
+function isMutativeHttpMethod(method) {
+        return !(/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+    }
+ 
+$.ajaxSetup({
+    crossDomain: false,
+    beforeSend: function(xhr, settings) {
+        if (isMutativeHttpMethod(settings.type)) {
+            xhr.setRequestHeader("X-Atlassian-Token", "no-check");
+        }
+    }
+});
+
+CORS
+
+If CORS
+
+ is configured in a product such that it permits setting the content-type or the X-Atlassian-Token header then XSRF protection can be bypassed by CORS allowed origins. This is intentional and supported by design.
+Caching
+
+REST APIs SHOULD support conditional GET requests. This will allow the client to cache resource representations. For conditional GET requests to work, the client MUST send the ETag
+value when requesting resources using the If-None-Match
+
+request header. The ETag is the one provided by a previous request to that same URI. See the section on version control for entities below.
+
+Server implementations should acknowledge the If-None-Match header and check whether the response should be a 304 (Not Modified). See the section on response codes below.
+Concurrency
+
+PUT or DELETE API requests SHOULD provide an If-Match
+
+header, and SHOULD react meaningfully to 412 (Precondition Failed) responses. See the section on response codes below.
+
+The ETag is the one provided by a previous GET request to that same URI. See the section on version control for entities below.
+Not Yet Covered in these Guidelines
+
+Some items worth discussing in the guidelines are currently out of scope:
+
+    Common entities
+    Batching
+    Gzip
+    OpenSearch
+    Internationalisation (i18n)
+
+Appendix A: Response Codes
+
+This list shows the common HTTP response codes and some brief guidelines on how to use them. For the complete list of HTTP response codes, please refer to section 6 of RFC 2616
+
+.
+
+Code
+	
+
+Description
+
+200
+	
+
+Request was processed as expected.
+
+Name: OK.
+
+Notes:
+
+    GET request returns a representation of the requested entity,
+    The body of other requests will be a Status entity as described in the Status section of this document below.
+
+201
+	
+
+Request created an entity.
+
+Name: Created.
+
+Notes:
+
+    This cannot happen on GET or DELETE requests.
+    This will happen on POST and may happen on PUT requests.
+    The response should set the Location header to the URI for the created resource.
+    The body of the response is a Status entity as described in the Status section of this document below.
+
+202
+	
+
+The request has been acknowledged but cannot be processed in real time.
+For example, the request may have scheduled a job on the server.
+
+Name: Accepted.
+
+Notes:
+
+    The response should set the Location header with the URI to the resource representing the pending action.
+    The body of the response is a Status entity as described in the Status section of this document below.
+
+204
+	
+
+Name: No content.
+
+301
+	
+
+The requested resource has been moved to another location (URI).
+
+Name: Moved Permanently.
+
+Notes:
+
+    The response should set the Location header to the URI of the new location of the resource.
+    The body of the response is a Status entity as described in the Status_ section of this document below.
+
+304
+	
+
+The requested resource has not been modified.
+The client's cached representation is still valid.
+
+Name: Not Modified.
+
+Notes:
+
+    No body is allowed for these responses.
+
+401
+	
+
+Client is not authenticated or does not have sufficient permission to perform this request.
+
+Name: Unauthorized.
+
+Notes:
+
+    The body of the response is a Status entity as described in the Status section of this document below.
+
+404
+	
+
+No resource was found at this location (URI).
+
+Name: Not found.
+
+Notes:
+
+    The body of the response is a Status entity as described in the Status section of this document below.
+
+412
+	
+
+The client specified some preconditions that are not valid.
+
+Name: Precondition Failed.
+
+Notes:
+
+    The body of the response is a Status entity as described in the Status section of this document below.
+
+5xx
+	
+
+Any server-side error.
+
+Name: Server-Side Error.
+
+Notes:
+
+    These codes should not be set programmatically and are reserved for unexpected errors.
+
+Appendix B: Basic Data Types
+Link
+
+The link element is used for hyperlinking entities and as entity IDs:
+
+<link title="This is my resource" rel="edit" href="http://host:port/context/rest/api/1/myresource" />
+
+See the sections on linking and entity IDs above.
+Status
+
+Any request which produces a status code with no body will have a body formatted like this:
+
+<status>
+  <plugin key="a-plugin-key" version="1.0" />
+  <status-code>201</status-code>
+  <sub-code>604</sub-code>
+  <message>Some human readable message</message>
+  <etag>233223</etag>
+  <resources-created>
+    <link rel="self" href="http:..." />
+  </resources-created>
+  <resources-updated />
+</status>
+
+Element
+	
+
+Description
+
+plugin
+	
+
+Describes the plugin which provides the REST API. This element is present only if the REST API is provided by a plugin.
+
+status-code
+	
+
+The actual HTTP code of the response. See the section on response codes above.
+
+sub-code
+	
+
+Another code that defines the error more specifically. It is up to REST API developers to define their various codes.
+
+resources-created
+	
+
+This element is present when resources have been created. It consists of link elements to the created resources.
+
+resources-updated
+	
+
+This element is present when resources have been updated. It consists of link elements to the updated resources.
+RELATED TOPICS
+
+Developing a REST Service Plugin
+REST Plugin Module
+Basics of Exposing REST APIs via Plugins
+
+Rate this page:
+Unusable
+Poor
+Okay
+Good
+Excellent
+Changelog
+System status
+Privacy
+Notice at Collection
+Developer Terms
+Trademark
+© 2025 Atlassian
