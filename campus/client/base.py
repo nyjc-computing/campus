@@ -24,7 +24,7 @@ from . import config
 
 class BaseClient:
     """Base class for all Campus service clients.
-    
+
     Provides common functionality including authentication, HTTP request handling,
     and error management that is shared across all service-specific clients.
     """
@@ -45,10 +45,10 @@ class BaseClient:
 
     def _get_default_base_url(self) -> str:
         """Get the default base URL for this service.
-        
+
         Subclasses should override this to specify their service name,
         or clients can pass base_url explicitly to the constructor.
-        
+
         Returns:
             str: The default base URL for the service
         """
@@ -58,7 +58,7 @@ class BaseClient:
 
     def _load_credentials_from_env(self) -> None:
         """Load client credentials from environment variables.
-        
+
         Attempts to load CLIENT_ID and CLIENT_SECRET from environment variables.
         """
         self._client_id = os.getenv("CLIENT_ID")
@@ -77,7 +77,7 @@ class BaseClient:
 
     def _ensure_authenticated(self) -> None:
         """Ensure the client is authenticated.
-        
+
         Raises:
             AuthenticationError: If no credentials are available
         """
@@ -94,7 +94,7 @@ class BaseClient:
 
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for API requests.
-        
+
         Returns:
             Dict[str, str]: Headers including authorization and content type
         """
@@ -175,47 +175,50 @@ class BaseClient:
 
     def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a GET request.
-        
+
         Args:
             path: API path to request
             params: Optional query parameters
-            
+
         Returns:
             Dict[str, Any]: Parsed JSON response
         """
         return self._make_request("GET", path, params=params)
 
-    def _post(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _post(self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a POST request.
-        
+
         Args:
             path: API path to request
             data: Request body data
-            
+            params: Optional query parameters
+
         Returns:
             Dict[str, Any]: Parsed JSON response
         """
-        return self._make_request("POST", path, data=data)
+        return self._make_request("POST", path, data=data, params=params)
 
-    def _put(self, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _put(self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a PUT request.
-        
+
         Args:
             path: API path to request
             data: Request body data
-            
+            params: Optional query parameters
+
         Returns:
             Dict[str, Any]: Parsed JSON response
         """
-        return self._make_request("PUT", path, data=data)
+        return self._make_request("PUT", path, data=data, params=params)
 
-    def _delete(self, path: str) -> Dict[str, Any]:
+    def _delete(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a DELETE request.
-        
+
         Args:
             path: API path to request
-            
+            params: Optional query parameters
+
         Returns:
             Dict[str, Any]: Parsed JSON response
         """
-        return self._make_request("DELETE", path)
+        return self._make_request("DELETE", path, params=params)
