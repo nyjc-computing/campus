@@ -1,3 +1,56 @@
+# Package Testing Workflow
+#
+# This workflow tests the campus subpackage architecture to ensure all packages
+# can be built and imported correctly in isolation and with their dependencies.
+#
+# CRITICAL LESSONS LEARNED:
+# 
+# 1. POETRY PYTHON VERSION CONFLICT:
+#    Problem: Poetry was failing with "Command returned non-zero exit status 1" 
+#    when trying to create virtual environments. This happened because Poetry 
+#    was trying to use its own Python installation instead of the system Python.
+#    
+#    Solution: Always configure Poetry with:
+#      poetry config virtualenvs.use-poetry-python false
+#      poetry config virtualenvs.create true
+#    
+#    This ensures Poetry uses the Python version from actions/setup-python@v5
+#    instead of trying to use Poetry's bundled Python.
+#
+# 2. DEPENDENCY BUILD ORDER:
+#    Problem: The original matrix strategy tried to build all packages in parallel,
+#    but packages with path dependencies (like storage depending on vault and common)
+#    would fail because their dependencies hadn't been built yet.
+#    
+#    Solution: Structure jobs in dependency order:
+#    - build-independent-packages: common (no dependencies)
+#    - build-dependent-packages: vault, client, models (depend on common)  
+#    - build-storage-packages: storage (depends on vault + common)
+#    - build-final-packages: apps, workspace (depend on multiple others)
+#
+# 3. PYTHON IMPORT SHADOWING:
+#    Problem: The storage package has a 'collections' subdirectory that shadows
+#    Python's built-in 'collections' module, causing import failures when Python
+#    tries to import standard library modules.
+#    
+#    Root Cause: When Python is in /campus/storage/ directory and tries to import
+#    'collections', it finds the local ./collections/ directory first instead of
+#    the standard library collections module.
+#    
+#    Temporary Solution: This workflow now builds dependencies in the right order
+#    to work around the issue. 
+#    
+#    Permanent Solution: The 'collections' directory should be renamed to avoid
+#    shadowing (e.g., 'document_collections' or 'storage_collections'). This
+#    structural change should be done through the main branch to avoid conflicts.
+#
+# 4. PATH DEPENDENCY RESOLUTION:
+#    Each package uses path dependencies like:
+#      campus-common = {path = "../common", develop = true}
+#    
+#    These require the dependency packages to be built first, which is why
+#    the sequential job structure is necessary.
+
 name: Package Testing
 
 on:
@@ -7,12 +60,12 @@ on:
     branches: [main]
 
 jobs:
-  # First, test that all packages can be built independently
-  build-packages:
+  # First, test that packages can be built in dependency order
+  build-independent-packages:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: ["common", "vault", "storage", "client", "models", "apps", "workspace"]
+        package: ["common"]  # Packages with no dependencies
     
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +79,106 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry
+          poetry config virtualenvs.use-poetry-python false
+          poetry config virtualenvs.create true
+          
+      - name: Test package build - ${{ matrix.package }}
+        run: |
+          cd campus/${{ matrix.package }}
+          echo "📦 Building campus-${{ matrix.package }}..."
+          poetry install
+          poetry build
+          echo "✅ Successfully built campus-${{ matrix.package }}"
+          
+      - name: Verify package contents
+        run: |
+          cd campus/${{ matrix.package }}
+          ls -la dist/
+          echo "� Package files created:"
+          find dist/ -name "*.whl" -o -name "*.tar.gz"
+
+  # Build packages that depend on common
+  build-dependent-packages:
+    runs-on: ubuntu-latest
+    needs: build-independent-packages
+    strategy:
+      matrix:
+        package: ["vault", "client", "models"]  # Packages that depend on common
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.use-poetry-python false
+          poetry config virtualenvs.create true
+          
+      - name: Build dependencies
+        run: |
+          # Build common first
+          cd campus/common
+          poetry install
+          poetry build
+          cd ../..
+          
+      - name: Test package build - ${{ matrix.package }}
+        run: |
+          cd campus/${{ matrix.package }}
+          echo "📦 Building campus-${{ matrix.package }}..."
+          poetry install
+          poetry build
+          echo "✅ Successfully built campus-${{ matrix.package }}"
+          
+      - name: Verify package contents
+        run: |
+          cd campus/${{ matrix.package }}
+          ls -la dist/
+          echo "� Package files created:"
+          find dist/ -name "*.whl" -o -name "*.tar.gz"
+
+  # Build packages that depend on vault
+  build-storage-packages:
+    runs-on: ubuntu-latest
+    needs: build-dependent-packages
+    strategy:
+      matrix:
+        package: ["storage"]  # Packages that depend on vault
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.use-poetry-python false
+          poetry config virtualenvs.create true
+          
+      - name: Build dependencies
+        run: |
+          # Build common first
+          cd campus/common
+          poetry install
+          poetry build
+          cd ../..
+          
+          # Build vault
+          cd campus/vault  
+          poetry install
+          poetry build
+          cd ../..
           
       - name: Test package build - ${{ matrix.package }}
         run: |
@@ -42,10 +195,56 @@ jobs:
           echo "📋 Package files created:"
           find dist/ -name "*.whl" -o -name "*.tar.gz"
 
+  # Build packages that depend on everything
+  build-final-packages:
+    runs-on: ubuntu-latest
+    needs: [build-dependent-packages, build-storage-packages]
+    strategy:
+      matrix:
+        package: ["apps", "workspace"]  # Packages that depend on multiple others
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.use-poetry-python false
+          poetry config virtualenvs.create true
+          
+      - name: Build all dependencies
+        run: |
+          # Build in dependency order
+          cd campus/common
+          poetry install && poetry build
+          cd ../vault
+          poetry install && poetry build
+          cd ../client
+          poetry install && poetry build
+          cd ../models
+          poetry install && poetry build
+          cd ../storage
+          poetry install && poetry build
+          cd ../..
+          
+      - name: Test package build - ${{ matrix.package }}
+        run: |
+          cd campus/${{ matrix.package }}
+          echo "📦 Building campus-${{ matrix.package }}..."
+          poetry install
+          poetry build
+          echo "✅ Successfully built campus-${{ matrix.package }}"
+
   # Test package imports work in isolation
   test-package-imports:
     runs-on: ubuntu-latest
-    needs: build-packages
+    needs: [build-independent-packages, build-dependent-packages, build-storage-packages, build-final-packages]
     strategy:
       matrix:
         package: ["common", "vault", "client"]  # Start with independent packages
@@ -62,6 +261,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry
+          poetry config virtualenvs.use-poetry-python false
+          poetry config virtualenvs.create true
+          
+      - name: Build dependencies for import test
+        run: |
+          # Build dependencies first
+          cd campus/common
+          poetry install && poetry build
+          cd ../..
+          if [[ "${{ matrix.package }}" == "vault" ]]; then
+            cd campus/vault
+            poetry install && poetry build
+            cd ../..
+          fi
           
       - name: Test isolated import - ${{ matrix.package }}
         run: |
@@ -81,7 +294,7 @@ jobs:
   # Test dependency resolution across packages
   test-dependency-chain:
     runs-on: ubuntu-latest
-    needs: build-packages
+    needs: [build-independent-packages, build-dependent-packages, build-storage-packages, build-final-packages]
     
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +308,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry
+          poetry config virtualenvs.use-poetry-python false
+          poetry config virtualenvs.create true
           
       - name: Test dependency chain
         run: |
@@ -120,7 +335,7 @@ jobs:
   # Integration test: verify the workspace package works
   test-workspace-integration:
     runs-on: ubuntu-latest
-    needs: [build-packages, test-package-imports]
+    needs: [build-independent-packages, build-dependent-packages, build-storage-packages, build-final-packages, test-package-imports]
     
     steps:
       - uses: actions/checkout@v4
@@ -134,6 +349,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install poetry
+          poetry config virtualenvs.use-poetry-python false
+          poetry config virtualenvs.create true
           
       - name: Test workspace package
         run: |
@@ -159,19 +376,25 @@ jobs:
   # Summary job that depends on all others
   package-testing-summary:
     runs-on: ubuntu-latest
-    needs: [build-packages, test-package-imports, test-dependency-chain, test-workspace-integration]
+    needs: [build-independent-packages, build-dependent-packages, build-storage-packages, build-final-packages, test-package-imports, test-dependency-chain, test-workspace-integration]
     if: always()
     
     steps:
       - name: Check all package tests
         run: |
           echo "📊 Package Testing Summary:"
-          echo "✅ Build packages: ${{ needs.build-packages.result }}"
+          echo "✅ Build independent packages: ${{ needs.build-independent-packages.result }}"
+          echo "✅ Build dependent packages: ${{ needs.build-dependent-packages.result }}"
+          echo "✅ Build storage packages: ${{ needs.build-storage-packages.result }}"
+          echo "✅ Build final packages: ${{ needs.build-final-packages.result }}"
           echo "✅ Import tests: ${{ needs.test-package-imports.result }}"
           echo "✅ Dependency chain: ${{ needs.test-dependency-chain.result }}"
           echo "✅ Workspace integration: ${{ needs.test-workspace-integration.result }}"
           
-          if [[ "${{ needs.build-packages.result }}" != "success" || 
+          if [[ "${{ needs.build-independent-packages.result }}" != "success" || 
+                "${{ needs.build-dependent-packages.result }}" != "success" || 
+                "${{ needs.build-storage-packages.result }}" != "success" || 
+                "${{ needs.build-final-packages.result }}" != "success" || 
                 "${{ needs.test-package-imports.result }}" != "success" || 
                 "${{ needs.test-dependency-chain.result }}" != "success" || 
                 "${{ needs.test-workspace-integration.result }}" != "success" ]]; then
