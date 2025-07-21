@@ -133,10 +133,18 @@ class UsersClient(BaseClient):
     def me(self) -> User:
         """Get the authenticated user.
         
+        This method requires the user to be authenticated. If the user is not
+        authenticated, an AuthenticationError will be raised.
+        
         Returns:
             User: The authenticated user instance
+        
+        Raises:
+            AuthenticationError: If the user is not authenticated.
         """
         response = self._get("/me")
+        if response.status_code == 401:  # Unauthorized
+            raise AuthenticationError("User is not authenticated. Please check your credentials.")
         user_data = response.get("user", response)
         user_id = user_data["id"]
         return User(self, user_id, user_data)

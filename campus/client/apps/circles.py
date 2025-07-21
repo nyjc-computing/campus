@@ -159,7 +159,12 @@ class Circle:
 
         Args:
             parent_circle_id: ID of the new parent circle
+
+        Raises:
+            ValueError: If parent_circle_id is the same as the current circle ID
         """
+        if parent_circle_id == self._circle_id:
+            raise ValueError("The parent_circle_id cannot be the same as the current circle ID.")
         self._client._post(f"/circles/{self._circle_id}/move", {
             "parent_circle_id": parent_circle_id
         })
