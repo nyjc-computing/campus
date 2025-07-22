@@ -5,33 +5,33 @@ Campus Development Server
 Development and testing entry point for Campus services.
 For production deployment, use wsgi.py with Gunicorn or other WSGI servers.
 
-Deployment mode is determined by the content of the 'deploy' file:
-- 'vault': Deploys the vault service only  
-- 'apps': Deploys the full apps service
+Deployment mode is determined by the DEPLOY environment variable:
+- DEPLOY=vault: Deploys the vault service only  
+- DEPLOY=apps: Deploys the full apps service (default)
 
 Usage:
-    python main.py          # Start development server
-    gunicorn wsgi:app       # Production deployment
+    DEPLOY=vault python main.py     # Start vault development server
+    DEPLOY=apps python main.py      # Start apps development server
+    gunicorn wsgi:app               # Production deployment
 """
 
-from pathlib import Path
+import os
 
 
 def get_deployment_mode():
-    """Get deployment mode from deploy file"""
-    deploy_file = Path(__file__).parent / "deploy"
-
-    if not deploy_file.exists():
-        raise FileNotFoundError(
-            "Deployment mode file 'deploy' not found. "
-            "Create it with: echo 'vault' > deploy or echo 'apps' > deploy"
+    """Get deployment mode from DEPLOY environment variable"""
+    if "DEPLOY" not in os.environ:
+        raise EnvironmentError(
+            "Deployment mode not set. "
+            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
         )
+    mode = os.environ["DEPLOY"]
 
-    mode = deploy_file.read_text().strip().lower()
     if mode not in ["vault", "apps"]:
         raise ValueError(
             f"Invalid deployment mode '{mode}'. "
-            "Valid modes are: vault, apps"
+            "Valid modes are: vault, apps. "
+            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
         )
 
     return mode
