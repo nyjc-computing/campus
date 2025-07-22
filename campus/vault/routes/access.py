@@ -9,13 +9,14 @@ Admin operations require ALL permissions, access checking requires READ permissi
 from flask import Blueprint, Flask, jsonify, request
 
 from .. import access
-from ..auth import require_vault_permission
+from ..auth import require_client_authentication, require_vault_permission
 
 # Create blueprint for access management routes
 bp = Blueprint('access', __name__, url_prefix='/access')
 
 
 @bp.route("/<label>", methods=["POST"])
+@require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def grant_vault_access(client_id, label):
     """Grant access to a vault for a client
@@ -79,6 +80,7 @@ def grant_vault_access(client_id, label):
 
 
 @bp.route("/<label>", methods=["DELETE"])
+@require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def revoke_vault_access(client_id, label):
     """Revoke access to a vault for a client
@@ -108,6 +110,7 @@ def revoke_vault_access(client_id, label):
 
 
 @bp.route("/<label>", methods=["GET"])
+@require_client_authentication()
 @require_vault_permission(access.READ)
 def get_vault_access(client_id, label):
     """Check if a client has access to a vault

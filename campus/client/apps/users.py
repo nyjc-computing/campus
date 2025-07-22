@@ -3,10 +3,13 @@
 User management client for creating and managing user accounts.
 """
 
+# pylint: disable=attribute-defined-outside-init
+
 import sys
 from typing import List, Dict, Any, Optional
 from campus.client.base import BaseClient
 from campus.client import config
+from campus.client.errors import AuthenticationError
 
 
 class User:
@@ -132,19 +135,17 @@ class UsersClient(BaseClient):
 
     def me(self) -> User:
         """Get the authenticated user.
-        
+
         This method requires the user to be authenticated. If the user is not
         authenticated, an AuthenticationError will be raised.
-        
+
         Returns:
             User: The authenticated user instance
-        
+
         Raises:
             AuthenticationError: If the user is not authenticated.
         """
         response = self._get("/me")
-        if response.status_code == 401:  # Unauthorized
-            raise AuthenticationError("User is not authenticated. Please check your credentials.")
         user_data = response.get("user", response)
         user_id = user_data["id"]
         return User(self, user_id, user_data)
@@ -182,5 +183,13 @@ class UsersModule:
         return self._client
 
 
-# Replace this module with our custom class
-sys.modules[__name__] = UsersModule()  # type: ignore
+# Module Replacement Pattern:
+# Replace this module with a custom class instance to support both:
+# 1. Direct usage: users["user123"] 
+# 2. Class imports: from campus.client.apps.users import UsersModule
+_module_instance = UsersModule()
+# Dynamic attribute assignment for class imports - linter warnings expected
+_module_instance.UsersModule = UsersModule  # type: ignore[attr-defined]
+_module_instance.UsersClient = UsersClient  # type: ignore[attr-defined]
+_module_instance.User = User  # type: ignore[attr-defined]
+sys.modules[__name__] = _module_instance  # type: ignore

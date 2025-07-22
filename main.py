@@ -1,35 +1,37 @@
 #!/usr/bin/env python3
 """
-Campus Deployment Orchestrator
+Campus Development Server
 
-Entry point for deploying Campus services (vault or apps).
-The campus.client library can be used independently to communicate with these deployments.
+Development and testing entry point for Campus services.
+For production deployment, use wsgi.py with Gunicorn or other WSGI servers.
 
-Deployment mode is determined by the content of the 'deploy' file:
-- 'vault': Deploys the vault service only  
-- 'apps': Deploys the full apps service
+Deployment mode is determined by the DEPLOY environment variable:
+- DEPLOY=vault: Deploys the vault service only  
+- DEPLOY=apps: Deploys the full apps service (default)
 
-Clients use campus.client library to make HTTP requests to these deployed services.
+Usage:
+    DEPLOY=vault python main.py     # Start vault development server
+    DEPLOY=apps python main.py      # Start apps development server
+    gunicorn wsgi:app               # Production deployment
 """
 
-from pathlib import Path
+import os
 
 
 def get_deployment_mode():
-    """Get deployment mode from deploy file"""
-    deploy_file = Path(__file__).parent / "deploy"
-
-    if not deploy_file.exists():
-        raise FileNotFoundError(
-            "Deployment mode file 'deploy' not found. "
-            "Create it with: echo 'vault' > deploy or echo 'apps' > deploy"
+    """Get deployment mode from DEPLOY environment variable"""
+    if "DEPLOY" not in os.environ:
+        raise EnvironmentError(
+            "Deployment mode not set. "
+            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
         )
+    mode = os.environ["DEPLOY"]
 
-    mode = deploy_file.read_text().strip().lower()
     if mode not in ["vault", "apps"]:
         raise ValueError(
             f"Invalid deployment mode '{mode}'. "
-            "Valid modes are: vault, apps"
+            "Valid modes are: vault, apps. "
+            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
         )
 
     return mode
@@ -55,16 +57,17 @@ def create_app():
 
 
 def main():
-    """Start the appropriate Campus service based on deployment mode"""
-    # Configuration
+    """Development server entry point for testing Campus services locally"""
+    # Development server configuration
     host = "0.0.0.0"
     port = 5000
 
-    # WSGI entry point for Gunicorn
+    # Create app instance for development server
     app = create_app()
 
-    print(f"Starting service on {host}:{port}")
-    app.run(host=host, port=port, debug=False)
+    print(f"🧪 Starting development server on {host}:{port}")
+    print("📝 For production deployment, use wsgi.py with Gunicorn")
+    app.run(host=host, port=port, debug=True)
 
 
 if __name__ == "__main__":

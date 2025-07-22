@@ -12,12 +12,12 @@ packages = [
 python = ">=3.11.0,<3.12"
 
 # Include all campus packages as dependencies
-campus-common = {path = "../common", develop = true}
-campus-vault = {path = "../vault", develop = true}
-campus-storage = {path = "../storage", develop = true}
-campus-client = {path = "../client", develop = true}
-campus-models = {path = "../models", develop = true}
-campus-apps = {path = "../apps", develop = true}
+campus-suite-common = {path = "../common", develop = true}
+campus-suite-vault = {path = "../vault", develop = true}
+campus-suite-storage = {path = "../storage", develop = true}
+campus-suite-client = {path = "../client", develop = true}
+campus-suite-models = {path = "../models", develop = true}
+campus-suite-apps = {path = "../apps", develop = true}
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
