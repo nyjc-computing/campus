@@ -118,6 +118,38 @@ def check_vault_access(client_id: str, vault_label: str, required_permission: in
         raise VaultAccessDeniedError(client_id, vault_label, permission_str)
 
 
+def require_client_authentication():
+    """Decorator to require client authentication only.
+    
+    This decorator:
+    1. Authenticates the client
+    2. Injects client_id into the route function
+    
+    Usage:
+        @require_client_authentication()
+        def create_client(client_id):
+            # Route implementation
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            try:
+                # Authenticate client
+                client_id = authenticate_client()
+                
+                # Inject client_id into kwargs and call the route function
+                kwargs['client_id'] = client_id
+                return f(*args, **kwargs)
+                
+            except ClientAuthenticationError as e:
+                return jsonify({"error": f"Authentication failed: {e}"}), 401
+            except Exception as e:
+                return jsonify({"error": f"Internal error: {e}"}), 500
+                
+        return decorated_function
+    return decorator
+
+
 def require_vault_permission(required_permission: int):
     """Decorator to require vault permission for a route.
     
