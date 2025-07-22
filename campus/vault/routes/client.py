@@ -8,15 +8,15 @@ Admin operations require ALL permissions, read operations require READ permissio
 
 from flask import Blueprint, Flask, jsonify, request
 
-from .. import access, client
-from ..auth import require_vault_permission
+from .. import client
+from ..auth import require_client_authentication
 
 # Create blueprint for client management routes
 bp = Blueprint('client', __name__, url_prefix='/client')
 
 
 @bp.route("", methods=["POST"])
-@require_vault_permission(access.ALL)  # Require admin-level permissions
+@require_client_authentication()
 def create_vault_client(client_id):
     """Create a new vault client
     
@@ -64,7 +64,7 @@ def create_vault_client(client_id):
 
 
 @bp.route("", methods=["GET"])
-@require_vault_permission(access.READ)
+@require_client_authentication()
 def list_vault_clients(client_id):
     """List all vault clients
     
@@ -89,7 +89,7 @@ def list_vault_clients(client_id):
 
 
 @bp.route("/<target_client_id>", methods=["GET"])
-@require_vault_permission(access.READ)
+@require_client_authentication()
 def get_vault_client(client_id, target_client_id):
     """Get details of a specific vault client
     
@@ -112,7 +112,7 @@ def get_vault_client(client_id, target_client_id):
 
 
 @bp.route("/<target_client_id>", methods=["DELETE"])
-@require_vault_permission(access.ALL)  # Require admin-level permissions
+@require_client_authentication()
 def delete_vault_client(client_id, target_client_id):
     """Delete a vault client
     
