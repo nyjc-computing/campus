@@ -71,7 +71,7 @@ class MockVaultClient:
             'storage': {
                 'MONGODB_URI': 'mongodb://mocked:uri@localhost/test'
             },
-            'apps': {
+            'campus': {
                 'SECRET_KEY': 'mocked-secret-key'
             }
         }
@@ -402,8 +402,10 @@ def create_test_vault_data() -> Dict[str, Dict[str, str]]:
             'MONGODB_URI': 'mongodb://test:test@localhost/test_storage',
             'REDIS_URI': 'redis://test:test@localhost/test_redis'
         },
+        'campus': {
+            'SECRET_KEY': 'test-secret-key-123'
+        },
         'apps': {
-            'SECRET_KEY': 'test-secret-key-123',
             'DATABASE_URL': 'postgresql://test:test@localhost/test_apps'
         },
         'auth': {
