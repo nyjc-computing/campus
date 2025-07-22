@@ -127,8 +127,7 @@ Campus follows a **modular monolith** architecture with clear service boundaries
 Campus uses environment variables for configuration:
 
 ```bash
-# Application
-SECRET_KEY="your-secret-key"
+# Application - No SECRET_KEY needed (stored in vault)
 FLASK_ENV="development"
 
 # Vault Service

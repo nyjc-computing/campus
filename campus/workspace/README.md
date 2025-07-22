@@ -192,7 +192,7 @@ export STORAGE_URI="postgresql://..."
 # Authentication
 export CLIENT_ID="your_client_id"
 export CLIENT_SECRET="your_client_secret"
-export SECRET_KEY="your_app_secret"
+# SECRET_KEY now stored in vault under 'campus' label - no environment variable needed
 
 # Optional: Service-specific configs
 export FLASK_ENV="production"
