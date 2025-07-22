@@ -197,11 +197,10 @@ def init_app(app: Flask | Blueprint) -> None:
     from flask import jsonify
     from .routes import init_vault_routes, init_access_routes, init_client_routes
     
-    # Add health check endpoint directly to the app (not part of vault API)
-    @app.route("/health")
+    # Health check route for deployments
+    @app.route('/')
     def health_check():
-        """Health check endpoint for deployment monitoring"""
-        return jsonify({"status": "healthy", "service": "campus-vault"})
+        return {'status': 'healthy', 'service': 'campus-vault'}, 200
     
     # Register all vault-related blueprints
     init_vault_routes(app)   # /vault/* - secret management
