@@ -4,7 +4,7 @@ Specific migration tests for individual components.
 These tests focus on the specific files and imports that need to be migrated:
 1. campus/workspace/__init__.py - vault import
 2. campus/apps/campusauth/context.py - ClientResource import  
-3. campus/storage/collections/backend/mongodb.py - MongoDB URI retrieval
+3. campus/storage/documents/backend/mongodb.py - MongoDB URI retrieval
 """
 
 import unittest
@@ -191,7 +191,7 @@ class TestCampusAuthContextMigration(unittest.TestCase, MigrationTestMixin):
 
 
 class TestStorageMongoDBAMigration(unittest.TestCase, MigrationTestMixin):
-    """Test migration of campus/storage/collections/backend/mongodb.py."""
+    """Test migration of campus/storage/documents/backend/mongodb.py."""
 
     def setUp(self):
         self.setUp_migration_env()
