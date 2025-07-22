@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-apps"
+name = "campus-suite-apps"
 version = "0.1.0"
 description = "Web applications and services"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
@@ -9,11 +9,11 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-campus-common = {path = "../common", develop = true}
-campus-vault = {path = "../vault", develop = true}
-campus-storage = {path = "../storage", develop = true}
-campus-client = {path = "../client", develop = true}
-campus-models = {path = "../models", develop = true}
+campus-suite-common = {path = "../common", develop = true}
+campus-suite-vault = {path = "../vault", develop = true}
+campus-suite-storage = {path = "../storage", develop = true}
+campus-suite-client = {path = "../client", develop = true}
+campus-suite-models = {path = "../models", develop = true}
 flask = "^3.0.0"
 gunicorn = "^21.2.0"
 requests = "^2.32.4"

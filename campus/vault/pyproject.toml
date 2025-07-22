@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-vault"
+name = "campus-suite-vault"
 version = "0.1.0"
 description = "Secure vault service for managing secrets"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
@@ -9,7 +9,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-campus-common = {path = "../common", develop = true}
+campus-suite-common = {path = "../common", develop = true}
 psycopg2-binary = "^2.9.0"
 
 [tool.poetry.group.dev.dependencies]

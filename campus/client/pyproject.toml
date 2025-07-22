@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-client"
+name = "campus-suite-client"
 version = "0.1.0"
 description = "HTTP client library for Campus vault and apps services"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]

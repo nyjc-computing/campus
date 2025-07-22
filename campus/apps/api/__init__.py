@@ -6,7 +6,7 @@ Web API for Campus services.
 from flask import Blueprint, Flask
 
 from campus.apps.api import routes
-from campus.apps import errors
+from campus.common import errors
 
 # These aliased model imports allow the api package to be used similarly
 # to the Campus API

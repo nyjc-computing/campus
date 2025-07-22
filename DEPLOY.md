@@ -10,7 +10,7 @@ Clients use `campus.client` library to communicate with deployments via HTTP API
 poetry install --extras vault
 
 # Configure deployment mode
-echo 'vault' > deploy
+export DEPLOY=vault
 python main.py
 ```
 
@@ -25,8 +25,8 @@ python main.py
 # Install with apps dependencies
 poetry install --extras apps
 
-# Configure deployment mode
-echo 'apps' > deploy
+# Configure deployment mode  
+export DEPLOY=apps
 python main.py
 ```
 
@@ -48,23 +48,37 @@ from campus.client.vault import VaultClient
 from campus.client.users import UsersClient
 ```
 
-## 🎯 Replit Instructions
+## 🎯 Platform Instructions
 
-**For Vault:**
-1. In Shell: `echo 'vault' > deploy`
-2. Click Run button (or `python main.py`)
+### Railway
+Set environment variable in Railway dashboard:
+- `DEPLOY=vault` or `DEPLOY=apps`
+- Start command: `gunicorn --bind "0.0.0.0:$PORT" wsgi:app`
 
-**For Apps:**
-1. In Shell: `echo 'apps' > deploy`
-2. Click Run button (or `python main.py`)
+### Replit
+In Secrets tab, add:
+- Key: `DEPLOY`
+- Value: `vault` or `apps`
 
-**No pyproject.toml switching needed!** 
+Then click Run button (or `python main.py`)
+
+### Local Development
+```bash
+# Vault mode
+export DEPLOY=vault
+python main.py
+
+# Apps mode  
+export DEPLOY=apps
+python main.py
+```
 
 ## 📁 How It Works
 
-- `deploy` file contains either "vault" or "apps" (gitignored)
-- `main.py` reads the file and starts the appropriate service
-- Missing or invalid `deploy` file defaults to "apps"
+- `DEPLOY` environment variable contains either "vault" or "apps"
+- `main.py` reads the environment variable and starts the appropriate service
+- Missing `DEPLOY` variable defaults to "apps"
+- For production, use `wsgi.py` with Gunicorn
 
 **Valid deploy modes:** `vault`, `apps`
 

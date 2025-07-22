@@ -1,5 +1,9 @@
 # Campus Documentation
 
+## Getting Started
+
+- **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, branch strategy, and onboarding for new developers
+
 ## Architecture and Design
 
 - [Packaging Architecture](packaging-architecture.md) - Overview of the namespace package structure and design decisions
@@ -7,8 +11,9 @@
 
 ## Development
 
+- [Development Guidelines](development-guidelines.md) - Architectural patterns, design decisions, and best practices
+- [Git Dependencies Guide](git-dependencies-guide.md) - Using Campus packages as dependencies in external projects
 - [Development Setup](development-setup.md) - Getting started with Campus development *(coming soon)*
-- [Contributing Guidelines](contributing.md) - How to contribute to Campus *(coming soon)*
 
 ## Packages
 

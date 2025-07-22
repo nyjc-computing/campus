@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-storage"
+name = "campus-suite-storage"
 version = "0.1.0"
 description = "Storage backends for collections and tables"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
@@ -9,8 +9,8 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-campus-common = {path = "../common", develop = true}
-campus-vault = {path = "../vault", develop = true}
+campus-suite-common = {path = "../common", develop = true}
+campus-suite-vault = {path = "../vault", develop = true}
 psycopg2-binary = "^2.9.0"
 pymongo = {extras = ["srv"], version = "^4.13.2"}
 

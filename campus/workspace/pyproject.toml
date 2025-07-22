@@ -1,31 +1,23 @@
 [tool.poetry]
-name = "campus-workspace"
+name = "campus-suite-workspace"
 version = "0.1.0"
 description = "Campus ecosystem meta-package - complete Campus system for deployment"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
-packages = [{include = "campus"}]
+packages = [
+    {include = "campus/workspace", from = "../.."}
+]
 
 [tool.poetry.dependencies]
 python = ">=3.11.0,<3.12"
 
-# All the dependencies from individual packages
-# Common dependencies
-flask = "^3.0.0"
-bcrypt = "^4.2.1"
-
-# Vault dependencies  
-psycopg2-binary = "^2.9.0"
-
-# Storage dependencies
-pymongo = {extras = ["srv"], version = "^4.8.0"}
-
-# Client dependencies
-requests = "^2.32.4"
-
-# Apps dependencies (web server)
-gunicorn = "^21.2.0"
-werkzeug = "^3.0.0"
+# Include all campus packages as dependencies
+campus-suite-common = {path = "../common", develop = true}
+campus-suite-vault = {path = "../vault", develop = true}
+campus-suite-storage = {path = "../storage", develop = true}
+campus-suite-client = {path = "../client", develop = true}
+campus-suite-models = {path = "../models", develop = true}
+campus-suite-apps = {path = "../apps", develop = true}
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"

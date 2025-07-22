@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "campus-models"
+name = "campus-suite-models"
 version = "0.1.0"
 description = "Data models and schemas"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
@@ -9,7 +9,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.11"
-campus-common = {path = "../common", develop = true}
+campus-suite-common = {path = "../common", develop = true}
 bcrypt = "^4.2.1"
 flask = "^3.0.0"
 
