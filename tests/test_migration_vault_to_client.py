@@ -40,7 +40,7 @@ class TestVaultMigration(unittest.TestCase):
             mock_conn.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value = mock_cursor
             
             # Import and test current behavior
-            from campus.storage.collections.backend.mongodb import _get_mongodb_uri
+            from campus.storage.documents.backend.mongodb import _get_mongodb_uri
             
             # This should work with VAULTDB_URI
             uri = _get_mongodb_uri()
@@ -233,7 +233,7 @@ class TestMigrationIntegration(unittest.TestCase):
             mock_vault_conn.return_value.__enter__.return_value.cursor.return_value.__enter__.return_value = mock_cursor
             
             # This represents current behavior
-            from campus.storage.collections.backend.mongodb import _get_mongodb_uri
+            from campus.storage.documents.backend.mongodb import _get_mongodb_uri
             current_uri = _get_mongodb_uri()
         
         # Test target flow: storage → client → vault service

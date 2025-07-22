@@ -185,7 +185,7 @@ class UsersModule:
 
 # Module Replacement Pattern:
 # Replace this module with a custom class instance to support both:
-# 1. Direct usage: users["user123"] 
+# 1. Direct usage: users["user123"]
 # 2. Class imports: from campus.client.apps.users import UsersModule
 _module_instance = UsersModule()
 # Dynamic attribute assignment for class imports - linter warnings expected

@@ -171,7 +171,7 @@ class TestImportSafety(MigrationTestCase):
         """Test that we can identify which imports require database environment."""
         problematic_modules = [
             'campus.apps.api',
-            'campus.storage.collections.backend.mongodb',
+            'campus.storage.documents.backend.mongodb',
             'campus.models.circle'  # Due to storage dependency
         ]
 

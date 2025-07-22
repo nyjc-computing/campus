@@ -57,7 +57,7 @@ on:
   push:
     branches: [main]  # Only run on main branch pushes
   pull_request:
-    branches: [main]  # Run on PRs targeting main
+    branches: [main, staging]  # Run on PRs targeting main
 
 jobs:
   # First, test that packages can be built in dependency order

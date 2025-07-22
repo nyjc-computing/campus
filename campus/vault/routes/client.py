@@ -19,13 +19,13 @@ bp = Blueprint('client', __name__, url_prefix='/client')
 @require_client_authentication()
 def create_vault_client(client_id):
     """Create a new vault client
-    
+
     POST /client
     Body: {
         "name": "Client Name",
         "description": "Client description"
     }
-    
+
     Returns: {
         "status": "success",
         "client": {
@@ -41,24 +41,26 @@ def create_vault_client(client_id):
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing request body"}), 400
-            
+
         required_fields = ["name", "description"]
-        missing_fields = [field for field in required_fields if field not in data]
+        missing_fields = [
+            field for field in required_fields if field not in data
+        ]
         if missing_fields:
             return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
-            
+
         # Create the client
         client_resource, client_secret = client.create_client(
             name=data["name"],
             description=data["description"]
         )
-        
+
         return jsonify({
             "status": "success",
             "client": client_resource,
             "client_secret": client_secret
         }), 201
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -67,7 +69,7 @@ def create_vault_client(client_id):
 @require_client_authentication()
 def list_vault_clients(client_id):
     """List all vault clients
-    
+
     GET /client
     Returns: {
         "clients": [
@@ -83,7 +85,7 @@ def list_vault_clients(client_id):
     try:
         clients = client.list_clients()
         return jsonify({"clients": clients})
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -92,7 +94,7 @@ def list_vault_clients(client_id):
 @require_client_authentication()
 def get_vault_client(client_id, target_client_id):
     """Get details of a specific vault client
-    
+
     GET /client/{client_id}
     Returns: {
         "client": {
@@ -106,7 +108,7 @@ def get_vault_client(client_id, target_client_id):
     try:
         client_resource = client.get_client(target_client_id)
         return jsonify({"client": client_resource})
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -115,7 +117,7 @@ def get_vault_client(client_id, target_client_id):
 @require_client_authentication()
 def delete_vault_client(client_id, target_client_id):
     """Delete a vault client
-    
+
     DELETE /client/{client_id}
     Returns: {
         "status": "success",
@@ -125,13 +127,13 @@ def delete_vault_client(client_id, target_client_id):
     """
     try:
         client.delete_client(target_client_id)
-        
+
         return jsonify({
             "status": "success",
             "client_id": target_client_id,
             "action": "deleted"
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

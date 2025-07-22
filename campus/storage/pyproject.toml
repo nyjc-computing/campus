@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "campus-suite-storage"
 version = "0.1.0"
-description = "Storage backends for collections and tables"
+description = "Storage backends for documents and tables"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 packages = [
     {include = "campus/storage", from = "../.."},
