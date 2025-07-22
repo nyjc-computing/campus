@@ -1,7 +1,9 @@
 """client.apps.circles
 
-Circle (group) management client for creating and managing organizational units.
+Circle management client for creating and managing circles.
 """
+
+# pylint: disable=attribute-defined-outside-init
 
 import sys
 from typing import List, Dict, Any, Optional
@@ -164,7 +166,8 @@ class Circle:
             ValueError: If parent_circle_id is the same as the current circle ID
         """
         if parent_circle_id == self._circle_id:
-            raise ValueError("The parent_circle_id cannot be the same as the current circle ID.")
+            raise ValueError(
+                "The parent_circle_id cannot be the same as the current circle ID.")
         self._client._post(f"/circles/{self._circle_id}/move", {
             "parent_circle_id": parent_circle_id
         })
@@ -340,5 +343,13 @@ class CirclesModule:
         return self._client
 
 
-# Replace this module with our custom class
-sys.modules[__name__] = CirclesModule()  # type: ignore
+# Module Replacement Pattern:
+# Replace this module with a custom class instance to support both:
+# 1. Direct usage: circles["circle123"]
+# 2. Class imports: from campus.client.apps.circles import CirclesModule
+_module_instance = CirclesModule()
+# Dynamic attribute assignment for class imports - linter warnings expected
+_module_instance.CirclesModule = CirclesModule  # type: ignore[attr-defined]
+_module_instance.CirclesClient = CirclesClient  # type: ignore[attr-defined]
+_module_instance.Circle = Circle  # type: ignore[attr-defined]
+sys.modules[__name__] = _module_instance  # type: ignore

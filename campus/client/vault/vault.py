@@ -3,6 +3,8 @@
 Main vault client interface for secrets management and access control.
 """
 
+# pylint: disable=attribute-defined-outside-init
+
 import sys
 from typing import List
 from campus.client.base import BaseClient
@@ -161,5 +163,13 @@ class VaultModule:
         return self._client
 
 
-# Replace this module with our custom class
-sys.modules[__name__] = VaultModule()  # type: ignore
+# Module Replacement Pattern:
+# Replace this module with a custom class instance to support both:
+# 1. Direct usage: vault["storage"]
+# 2. Class imports: from campus.client.vault.vault import VaultModule
+_module_instance = VaultModule()
+# Dynamic attribute assignment for class imports - linter warnings expected
+_module_instance.VaultModule = VaultModule  # type: ignore[attr-defined]
+_module_instance.VaultClient = VaultClient  # type: ignore[attr-defined]
+_module_instance.VaultCollection = VaultCollection  # type: ignore[attr-defined]
+sys.modules[__name__] = _module_instance  # type: ignore
