@@ -2,7 +2,7 @@
 
 Storage-specific error definitions for Campus storage backends.
 
-These errors are used by storage backends (collections and tables) to handle
+These errors are used by storage backends (documents and tables) to handle
 common error conditions like documents not found or no changes applied.
 """
 

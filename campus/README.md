@@ -128,8 +128,8 @@ export CLIENT_SECRET="your_client_secret"
 # Storage service  
 export STORAGE_URI="postgresql://..."
 
-# Application secrets
-export SECRET_KEY="your_secret_key"
+# Application secrets - SECRET_KEY now stored in vault under 'campus' label
+# No SECRET_KEY environment variable needed
 ```
 
 ### Development
