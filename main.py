@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Campus Deployment Orchestrator
+Campus Development Server
 
-Entry point for deploying Campus services (vault or apps).
-The campus.client library can be used independently to communicate with these deployments.
+Development and testing entry point for Campus services.
+For production deployment, use wsgi.py with Gunicorn or other WSGI servers.
 
 Deployment mode is determined by the content of the 'deploy' file:
 - 'vault': Deploys the vault service only  
 - 'apps': Deploys the full apps service
 
-Clients use campus.client library to make HTTP requests to these deployed services.
+Usage:
+    python main.py          # Start development server
+    gunicorn wsgi:app       # Production deployment
 """
 
 from pathlib import Path
@@ -55,16 +57,17 @@ def create_app():
 
 
 def main():
-    """Start the appropriate Campus service based on deployment mode"""
-    # Configuration
+    """Development server entry point for testing Campus services locally"""
+    # Development server configuration
     host = "0.0.0.0"
     port = 5000
 
-    # WSGI entry point for Gunicorn
+    # Create app instance for development server
     app = create_app()
 
-    print(f"Starting service on {host}:{port}")
-    app.run(host=host, port=port, debug=False)
+    print(f"🧪 Starting development server on {host}:{port}")
+    print("📝 For production deployment, use wsgi.py with Gunicorn")
+    app.run(host=host, port=port, debug=True)
 
 
 if __name__ == "__main__":
