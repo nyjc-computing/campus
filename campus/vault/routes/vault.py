@@ -58,10 +58,11 @@ def get_secret(client_id, label, key):
 
 @bp.route("/<label>/<key>", methods=["POST"])
 @require_client_authentication()
-@require_vault_permission(access.CREATE, access.UPDATE)  # Client needs CREATE OR UPDATE
+# Client needs CREATE OR UPDATE
+@require_vault_permission(access.CREATE, access.UPDATE)
 def set_secret(client_id, label, key):
     """Set a secret in a vault
-    
+
     Requires CREATE permission for new keys, UPDATE permission for existing keys.
     The decorator ensures the client has at least one of these permissions.
     """
@@ -69,31 +70,31 @@ def set_secret(client_id, label, key):
         data = request.get_json()
         if not data or "value" not in data:
             return jsonify({"error": "Missing 'value' in request body"}), 400
-            
+
         value = data.get("value")
         if not isinstance(value, str):
             return jsonify({"error": "'value' must be a string"}), 400
-        
+
         vault = Vault(label)
-        
+
         # Check if key exists to determine specific permission and validate
         key_exists = vault.has(key)
         required_permission = access.UPDATE if key_exists else access.CREATE
-        
+
         # Verify client has the specific permission required for this operation
         from ..auth import check_vault_access
         check_vault_access(client_id, label, required_permission)
-        
+
         # Perform the operation
         is_new = vault.set(key, value)
         action = "created" if is_new else "updated"
-        
+
         return jsonify({
-            "status": "success", 
-            "key": key, 
+            "status": "success",
+            "key": key,
             "action": action
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -106,12 +107,12 @@ def delete_secret(client_id, label, key):
     try:
         vault = Vault(label)
         deleted = vault.delete(key)
-        
+
         if deleted:
             return jsonify({"status": "success", "key": key, "action": "deleted"})
         else:
             return jsonify({"error": f"Secret '{key}' not found in vault '{label}'"}), 404
-            
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
