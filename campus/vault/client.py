@@ -12,10 +12,11 @@ to the vault database, maintaining compatibility with the main client schema
 where possible.
 
 SECRET_KEY USAGE:
-This module intentionally uses the SECRET_KEY environment variable rather than
-retrieving it from the vault to maintain independence and avoid circular 
-dependencies. The vault service must be able to authenticate its own clients
-without depending on itself.
+This module retrieves the SECRET_KEY from the vault itself (from the 'campus' 
+vault label) on demand. While this creates additional database load, it provides
+consistency with the vault-first architecture and eliminates environment variable
+dependencies. Performance optimizations (such as API keys) can be addressed
+when needed.
 """
 
 import os
