@@ -51,14 +51,17 @@ api_key = campus.vault["secrets"]["API_KEY"]
 #### Environment Variables
 
 ```bash
-# Service base URLs
-export CAMPUS_APPS_BASE_URL="https://api.campus.example.com"
-export CAMPUS_VAULT_BASE_URL="https://vault.campus.example.com"
-
 # Authentication
 export CLIENT_ID="your_client_id"
 export CLIENT_SECRET="your_client_secret"
+
+# Environment (optional, defaults to development)
+export ENV="production"  # or "development", "testing", "staging"
 ```
+
+Service URLs are automatically configured based on the environment:
+- **Production**: `https://api.campus.nyjc.app` and `https://vault.campus.nyjc.app`
+- **Other environments**: `https://api.campus.nyjc.dev` and `https://vault.campus.nyjc.dev`
 
 ## API Reference
 

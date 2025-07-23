@@ -25,13 +25,21 @@ campus.vault    # Secret and configuration management
 Set environment variables for automatic authentication:
 
 ```bash
-export CAMPUS_APPS_BASE_URL="https://api.campus.example.com"
-export CAMPUS_VAULT_BASE_URL="https://vault.campus.example.com"
+# Authentication
 export CLIENT_ID="your_client_id"
 export CLIENT_SECRET="your_client_secret"
+
+# Environment (optional, defaults to development)
+export ENV="production"  # or "development", "testing", "staging"
 ```
 
-The Campus client automatically loads credentials from `CLIENT_ID` and `CLIENT_SECRET` environment variables. No manual credential configuration is required.
+The Campus client automatically:
+- Loads credentials from `CLIENT_ID` and `CLIENT_SECRET` environment variables
+- Selects appropriate service URLs based on the `ENV` environment variable:
+  - **Production**: `https://api.campus.nyjc.app` and `https://vault.campus.nyjc.app`
+  - **Other environments**: `https://api.campus.nyjc.dev` and `https://vault.campus.nyjc.dev`
+
+No manual URL configuration is required.
 
 ## Users Resource
 
@@ -204,6 +212,282 @@ circle_resource.delete()
 
 ---
 
+## Vault Resource
+
+The Vault resource provides secure storage and retrieval of secrets and configuration data through the unified Campus interface.
+
+### Access Pattern
+
+```python
+from campus.client import Campus
+campus = Campus()
+
+# All vault operations are accessed through campus.vault
+vault_client = campus.vault
+```
+
+### Chained Subscription Interface
+
+The vault supports intuitive chained subscription for accessing secrets:
+
+```python
+# Access secrets using chained subscription
+api_key = campus.vault["secrets"]["API_KEY"]
+database_url = campus.vault["config"]["DATABASE_URL"]
+
+# Get secret values
+api_key_value = str(api_key)  # Convert to string
+api_key_value = api_key.get()  # Explicit get method
+
+# Set secret values
+api_key.set(value="new_api_key_value")
+
+# Delete secrets
+api_key.delete()
+```
+
+### Vault Collection Methods
+
+#### `campus.vault[vault_label] -> VaultCollection`
+
+Access a specific vault collection by label.
+
+**Parameters:**
+- `vault_label` (str): The vault identifier (e.g., "secrets", "config", "oauth")
+
+**Returns:** `VaultCollection` object for the specified vault
+
+**Example:**
+```python
+secrets_vault = campus.vault["secrets"]
+config_vault = campus.vault["config"]
+```
+
+#### `campus.vault[vault_label].list() -> List[str]`
+
+List all keys in a vault collection.
+
+**Returns:** List of key names
+
+**Example:**
+```python
+secret_keys = campus.vault["secrets"].list()
+print(f"Available secrets: {secret_keys}")
+```
+
+### Individual Secret Access
+
+#### `campus.vault[vault_label][key] -> VaultKey`
+
+Access individual secrets using chained subscription.
+
+**Returns:** `VaultKey` object with methods for secret operations
+
+#### VaultKey Methods
+
+##### `vault_key.get() -> str`
+
+Get the secret value.
+
+**Returns:** The secret value as a string
+
+**Raises:** `NotFoundError` if the key doesn't exist
+
+**Example:**
+```python
+api_key = campus.vault["secrets"]["API_KEY"].get()
+```
+
+##### `vault_key.set(*, value: str) -> str`
+
+Set the secret value.
+
+**Parameters:**
+- `value` (str): The secret value to store
+
+**Returns:** The secret value that was stored
+
+**Example:**
+```python
+campus.vault["secrets"]["API_KEY"].set(value="new_secret_value")
+```
+
+##### `vault_key.delete() -> bool`
+
+Delete the secret.
+
+**Returns:** True if deleted successfully
+
+**Raises:** `NotFoundError` if the key doesn't exist
+
+**Example:**
+```python
+campus.vault["secrets"]["old_key"].delete()
+```
+
+##### `str(vault_key) -> str`
+
+Convert VaultKey to string (convenience method for getting value).
+
+**Example:**
+```python
+# These are equivalent:
+api_key = str(campus.vault["secrets"]["API_KEY"])
+api_key = campus.vault["secrets"]["API_KEY"].get()
+```
+
+### Vault Management
+
+#### `campus.vault.list_vaults() -> List[str]`
+
+List all available vault labels.
+
+**Returns:** List of vault label strings
+
+**Example:**
+```python
+vaults = campus.vault.list_vaults()
+print(f"Available vaults: {vaults}")
+```
+
+### Access Management
+
+The Access resource manages permissions for vault access through the unified Campus interface.
+
+#### Access Pattern
+
+```python
+from campus.client import Campus
+campus = Campus()
+
+# Access management is available through campus.vault.access
+access_client = campus.vault.access
+```
+
+#### Methods
+
+##### `campus.vault.access.grant(client_id: str, vault_label: str, permissions: List[str]) -> None`
+
+Grant vault access to a client.
+
+**Parameters:**
+- `client_id` (str): Client identifier
+- `vault_label` (str): Vault to grant access to
+- `permissions` (List[str]): List of permissions ("read", "write", "admin")
+
+**Example:**
+```python
+campus.vault.access.grant("app_client_123", "secrets", ["read", "write"])
+```
+
+##### `campus.vault.access.revoke(client_id: str, vault_label: str) -> None`
+
+Revoke vault access from a client.
+
+**Parameters:**
+- `client_id` (str): Client identifier
+- `vault_label` (str): Vault to revoke access from
+
+**Example:**
+```python
+campus.vault.access.revoke("app_client_123", "secrets")
+```
+
+##### `campus.vault.access.check(client_id: str, vault_label: str) -> Dict[str, Any]`
+
+Check client permissions for a vault.
+
+**Parameters:**
+- `client_id` (str): Client identifier
+- `vault_label` (str): Vault to check
+
+**Returns:** Dictionary with permission details
+
+**Example:**
+```python
+permissions = campus.vault.access.check("app_client_123", "secrets")
+print(f"Permissions: {permissions['permissions']}")
+```
+
+### Client Management
+
+The Client resource manages vault client registrations through the unified Campus interface.
+
+#### Access Pattern
+
+```python
+from campus.client import Campus
+campus = Campus()
+
+# Client management is available through campus.vault.client
+client_mgmt = campus.vault.client
+```
+
+#### Methods
+
+##### `campus.vault.client.new(name: str, description: str = "") -> Dict[str, Any]`
+
+Create a new vault client.
+
+**Parameters:**
+- `name` (str): Client name
+- `description` (str, optional): Client description
+
+**Returns:** Dictionary with client information including ID and credentials
+
+**Example:**
+```python
+client = campus.vault.client.new("MyApp", "Application for processing data")
+print(f"Client ID: {client['client_id']}")
+print(f"Client Secret: {client['client_secret']}")
+```
+
+##### `campus.vault.client.list() -> List[Dict[str, Any]]`
+
+List all vault clients.
+
+**Returns:** List of client dictionaries
+
+**Example:**
+```python
+clients = campus.vault.client.list()
+for client in clients:
+    print(f"Client: {client['name']} (ID: {client['client_id']})")
+```
+
+##### `campus.vault.client.get(client_id: str) -> Dict[str, Any]`
+
+Get details for a specific client.
+
+**Parameters:**
+- `client_id` (str): Client identifier
+
+**Returns:** Dictionary with client details
+
+**Raises:** `NotFoundError` if client doesn't exist
+
+**Example:**
+```python
+client = campus.vault.client.get("client_123")
+print(f"Client name: {client['name']}")
+```
+
+##### `campus.vault.client.delete(client_id: str) -> None`
+
+Delete a vault client.
+
+**Parameters:**
+- `client_id` (str): Client identifier
+
+**Warning:** This will revoke all vault access for this client.
+
+**Example:**
+```python
+campus.vault.client.delete("client_123")
+```
+
+---
+
 ## Error Handling
 
 All Campus Client operations may raise the following exceptions:
@@ -256,7 +540,8 @@ Here's a complete example showing the unified Campus Client interface:
 from campus.client import Campus
 from campus.client.errors import AuthenticationError, NotFoundError
 
-# Initialize Campus client
+# Initialize Campus client - URLs are automatically configured based on ENV
+# Just need to set CLIENT_ID and CLIENT_SECRET environment variables
 campus = Campus()
 
 try:
@@ -281,7 +566,7 @@ try:
     print(f"API Key: {api_key}")
     
 except AuthenticationError:
-    print("Authentication required")
+    print("Authentication required - set CLIENT_ID and CLIENT_SECRET environment variables")
 except NotFoundError as e:
     print(f"Resource not found: {e}")
 ```
@@ -293,9 +578,10 @@ Campus services implement rate limiting. Clients should handle `429 Too Many Req
 ## Best Practices
 
 1. **Use the unified interface**: Import `Campus` and access all services through it
-2. **Set environment variables**: Configure `CLIENT_ID` and `CLIENT_SECRET` for automatic authentication
-3. **Handle dictionary responses**: All methods return dictionaries, not objects
-4. **Handle errors gracefully**: Always catch and handle specific exception types
-5. **Use chained subscription**: Access vault secrets with `campus.vault["label"]["key"]`
-6. **Validate inputs**: Check data before making API calls
-7. **Log operations**: Include request IDs for debugging
+2. **Set authentication environment variables**: Configure `CLIENT_ID` and `CLIENT_SECRET`
+3. **Use correct environment**: Set `ENV` to "production" for production deployments
+4. **Handle dictionary responses**: All methods return dictionaries, not objects
+5. **Handle errors gracefully**: Always catch and handle specific exception types
+6. **Use chained subscription**: Access vault secrets with `campus.vault["label"]["key"]`
+7. **Validate inputs**: Check data before making API calls
+8. **Log operations**: Include request IDs for debugging
