@@ -239,7 +239,7 @@ class CirclesClient(HttpClient):
             Circle instance for the created circle
         """
         data = {"name": name, "description": description, **kwargs}
-        response = self._post("/circles", data)
+        response = self.post("/circles", data)
         circle_data = response.get("circle", response)
         circle_id = circle_data["id"]
         return Circle(self, circle_id, circle_data)
@@ -260,7 +260,7 @@ class CirclesClient(HttpClient):
         if offset is not None:
             params["offset"] = offset
 
-        response = self._get("/circles", params=params if params else None)
+        response = self.get("/circles", params=params if params else None)
         circles_data = response.get("circles", [])
 
         return [
@@ -277,7 +277,7 @@ class CirclesClient(HttpClient):
         Returns:
             List of matching Circle instances
         """
-        response = self._get("/circles/search", params={"q": query})
+        response = self.get("/circles/search", params={"q": query})
         circles_data = response.get("circles", [])
 
         return [
@@ -294,7 +294,7 @@ class CirclesClient(HttpClient):
         Returns:
             List of Circle instances
         """
-        response = self._get(f"/users/{user_id}/circles")
+        response = self.get(f"/users/{user_id}/circles")
         circles_data = response.get("circles", [])
 
         return [
