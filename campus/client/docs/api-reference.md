@@ -28,9 +28,6 @@ Set environment variables for automatic authentication:
 # Authentication
 export CLIENT_ID="your_client_id"
 export CLIENT_SECRET="your_client_secret"
-
-# Environment (optional, defaults to development)
-export ENV="production"  # or "development", "testing", "staging"
 ```
 
 The Campus client automatically:

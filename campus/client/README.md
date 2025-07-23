@@ -54,9 +54,6 @@ api_key = campus.vault["secrets"]["API_KEY"]
 # Authentication
 export CLIENT_ID="your_client_id"
 export CLIENT_SECRET="your_client_secret"
-
-# Environment (optional, defaults to development)
-export ENV="production"  # or "development", "testing", "staging"
 ```
 
 Service URLs are automatically configured based on the environment:
