@@ -605,36 +605,29 @@ keys = vault["app_secrets"].list()
 print(f"Available secrets: {keys}")
 ```
 
-##### `vault_instance.get(key: str) -> str`
+##### `vault["vault_label"]["key"]` → Individual Secret Access
 
-Retrieve a secret value.
+**New Interface:** Access individual secrets using chained subscription syntax.
 
-**Parameters:**
-- `key` (str): The secret key name
-
-**Returns:** Secret value as string
-
-**Raises:** `NotFoundError` if key doesn't exist
+**Returns:** `VaultKey` object with methods: `get()`, `set(*, value: str)`, `delete()`
 
 **Example:**
 ```python
-api_key = vault["app_secrets"].get("external_api_key")
+# Access specific secret
+api_key_secret = vault["app_secrets"]["API_KEY"]
+
+# Get value (multiple ways)
+api_key = str(api_key_secret)  # Convert to string
+api_key = api_key_secret.get()  # Explicit get method
+
+# Set value
+api_key_secret.set(value="new_api_key_value")
+
+# Delete secret
+api_key_secret.delete()
 ```
 
-##### `vault_instance.set(key: str, value: str) -> None`
-
-Store a secret value.
-
-**Parameters:**
-- `key` (str): The secret key name
-- `value` (str): The secret value
-
-**Example:**
-```python
-vault["app_secrets"].set("database_password", "secure_password_123")
-```
-
-##### `vault_instance.delete(key: str) -> None`
+##### `vault_instance.delete(key: str) -> bool`
 
 Delete a secret.
 

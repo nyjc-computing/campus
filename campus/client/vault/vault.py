@@ -14,6 +14,76 @@ from .access import VaultAccessClient
 from .client import VaultClientManagement
 
 
+class VaultKey:
+    """Represents a specific key in a vault collection.
+    
+    Provides access to individual secret operations.
+    """
+
+    def __init__(self, vault_client: HttpClient, label: str, key: str):
+        """Initialize vault key.
+
+        Args:
+            vault_client: The vault client instance
+            label: The vault label (e.g., "apps", "storage", "oauth")
+            key: The secret key name
+        """
+        self._client = vault_client
+        self._label = label
+        self._key = key
+
+    def get(self) -> str:
+        """Get the secret value.
+
+        Returns:
+            str: The secret value
+
+        Raises:
+            NotFoundError: If the key doesn't exist
+        """
+        try:
+            response = self._client.get(f"/vault/{self._label}/{self._key}")
+            return response["value"]
+        except NotFoundError as exc:
+            raise NotFoundError(
+                f"Secret '{self._key}' not found in vault '{self._label}'"
+            ) from exc
+
+    def set(self, *, value: str) -> str:
+        """Set the secret value.
+
+        Args:
+            value: The secret value to store
+
+        Returns:
+            str: The secret value that was stored
+        """
+        data = {"value": value}
+        response = self._client.post(f"/vault/{self._label}/{self._key}", data)
+        return response.get("value", value)
+
+    def delete(self) -> bool:
+        """Delete the secret.
+
+        Returns:
+            bool: True if deleted successfully
+
+        Raises:
+            NotFoundError: If the key doesn't exist
+        """
+        try:
+            self._client.delete(f"/vault/{self._label}/{self._key}")
+            return True
+        except NotFoundError as exc:
+            raise NotFoundError(
+                f"Secret '{self._key}' not found in vault '{self._label}'"
+            ) from exc
+
+    def __str__(self) -> str:
+        """Get the secret value as string (convenience method)."""
+        return self.get()
+
+
 class VaultCollection:
     """Represents a vault collection with HTTP-like methods.
 
@@ -31,53 +101,17 @@ class VaultCollection:
         self._client = vault_client
         self._label = label
 
-    def get(self, key: str) -> str:
-        """Get a secret value from the vault.
+    def __getitem__(self, key: str) -> VaultKey:
+        """Get a specific key in this vault collection.
 
         Args:
             key: The secret key name
 
         Returns:
-            str: The secret value
-
-        Raises:
-            NotFoundError: If the key doesn't exist
+            VaultKey: Object for accessing the specific secret
         """
-        try:
-            response = self._client.get(f"/vault/{self._label}/{key}")
-            return response["value"]
-        except NotFoundError as exc:
-            raise NotFoundError(
-                f"Secret '{key}' not found in vault '{self._label}'") from exc
+        return VaultKey(self._client, self._label, key)
 
-    def set(self, *, key: str, value: str) -> str:
-        """Set a secret value in the vault.
-
-        Args:
-            key: The secret key name
-            value: The secret value
-
-        Returns:
-            Action performed ("created" or "updated")
-        """
-        response = self._client.post(
-            f"/vault/{self._label}/{key}", {"value": value})
-        return response.get("action", "updated")
-
-    def delete(self, key: str) -> bool:
-        """Delete a secret from the vault.
-
-        Args:
-            key: The secret key name
-
-        Returns:
-            True if deleted, False if key didn't exist
-        """
-        try:
-            self._client.delete(f"/vault/{self._label}/{key}")
-            return True
-        except NotFoundError:
-            return False
 
     def list(self) -> List[str]:
         """List all keys in the vault.
@@ -87,21 +121,6 @@ class VaultCollection:
         """
         response = self._client.get(f"/vault/{self._label}/list")
         return response.get("keys", [])
-
-    def has(self, key: str) -> bool:
-        """Check if a key exists in the vault.
-
-        Args:
-            key: The secret key name
-
-        Returns:
-            True if key exists, False otherwise
-        """
-        try:
-            self.get(key)
-            return True
-        except NotFoundError:
-            return False
 
 
 class VaultClient(HttpClient):
