@@ -35,7 +35,7 @@ user = campus.users.new(email="alice@example.com", name="Alice")
 print(f"Created user: {user['email']}")
 
 # Update user information
-campus.users.update(name="Alice Smith")
+user = campus.users.update(user_id=user["id"], name="Alice Smith")
 
 # Work with circles (groups)
 circle = campus.circles.new(name="Engineering Team", description="Software engineering team")

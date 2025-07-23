@@ -3,8 +3,6 @@
 User management client for creating and managing user accounts.
 """
 
-# pylint: disable=attribute-defined-outside-init
-
 from typing import Dict, Any, Optional
 from campus.client.base import HttpClient
 from campus.client import config
@@ -113,27 +111,36 @@ class UsersClient(HttpClient):
         """Get a user by ID."""
         return User(self, user_id)
 
-    def new(self, *, email: str, name: str) -> User:
+    def new(self, *, email: str, name: str) -> Dict[str, Any]:
         """Create a new user."""
         data = {"email": email, "name": name}
         response = self.post("/users", data)
-        user_data = response.get("user", response)
-        user_id = user_data["id"]
-        return User(self, user_id, user_data)
+        return response.get("user", response)
 
-    def me(self) -> User:
+    def me(self) -> Dict[str, Any]:
         """Get the authenticated user.
 
         This method requires the user to be authenticated. If the user is not
         authenticated, an AuthenticationError will be raised.
 
         Returns:
-            User: The authenticated user instance
+            Dict[str, Any]: The authenticated user data
 
         Raises:
             AuthenticationError: If the user is not authenticated.
         """
         response = self.get("/me")
-        user_data = response.get("user", response)
-        user_id = user_data["id"]
-        return User(self, user_id, user_data)
+        return response.get("user", response)
+
+    def update(self, *, user_id: str, **kwargs) -> Dict[str, Any]:
+        """Update a user.
+
+        Args:
+            user_id: The user ID to update
+            **kwargs: Fields to update (email, name, etc.)
+
+        Returns:
+            Dict[str, Any]: The updated user data
+        """
+        response = self.patch(f"/users/{user_id}", kwargs)
+        return response.get("user", response)

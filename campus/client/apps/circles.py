@@ -233,7 +233,7 @@ class CirclesClient(HttpClient):
         """
         return Circle(self, circle_id)
 
-    def new(self, *, name: str, description: str = "", **kwargs) -> Circle:
+    def new(self, *, name: str, description: str = "", **kwargs) -> Dict[str, Any]:
         """Create a new circle.
 
         Server: POST /circles
@@ -244,10 +244,33 @@ class CirclesClient(HttpClient):
             **kwargs: Additional circle fields
 
         Returns:
-            Circle instance for the created circle
+            Dict[str, Any]: The created circle data
         """
         data = {"name": name, "description": description, **kwargs}
         response = self.post("/circles", data)
-        circle_data = response.get("circle", response)
-        circle_id = circle_data["id"]
-        return Circle(self, circle_id)
+        return response.get("circle", response)
+
+    def update(self, *, circle_id: str, **kwargs) -> Dict[str, Any]:
+        """Update a circle.
+
+        Args:
+            circle_id: The circle ID to update
+            **kwargs: Fields to update (name, description, etc.)
+
+        Returns:
+            Dict[str, Any]: The updated circle data
+        """
+        response = self.patch(f"/circles/{circle_id}", kwargs)
+        return response.get("circle", response)
+
+    def get_circle(self, circle_id: str) -> Dict[str, Any]:
+        """Get a circle by ID.
+
+        Args:
+            circle_id: The circle ID
+
+        Returns:
+            Dict[str, Any]: The circle data
+        """
+        response = super().get(f"/circles/{circle_id}")
+        return response.get("circle", response)
