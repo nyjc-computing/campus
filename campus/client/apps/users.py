@@ -48,7 +48,7 @@ class User:
             Dict[str, Any]: The complete user data from the API
         """
         if self._data is None:
-            self._data = self._client._get(f"/users/{self._user_id}")
+            self._data = self._client.get(f"/users/{self._user_id}")
         return self._data
 
     @property
@@ -79,13 +79,13 @@ class User:
         Args:
             **kwargs: Fields to update (email, name, etc.)
         """
-        self._client._patch(f"/users/{self._user_id}", kwargs)
+        self._client.patch(f"/users/{self._user_id}", kwargs)
         # Clear cached data to force reload on next access
         self._data = None
 
     def delete(self) -> None:
         """Delete the user."""
-        self._client._delete(f"/users/{self._user_id}")
+        self._client.delete(f"/users/{self._user_id}")
 
     def get_profile(self) -> Dict[str, Any]:
         """Get the user's detailed profile.
@@ -93,7 +93,7 @@ class User:
         Returns:
             Dict[str, Any]: The user's profile data
         """
-        return self._client._get(f"/users/{self._user_id}/profile")
+        return self._client.get(f"/users/{self._user_id}/profile")
 
 
 class UsersClient(HttpClient):
@@ -118,14 +118,14 @@ class UsersClient(HttpClient):
     def new(self, email: str, name: str) -> User:
         """Create a new user."""
         data = {"email": email, "name": name}
-        response = self._post("/users", data)
+        response = self.post("/users", data)
         user_data = response.get("user", response)
         user_id = user_data["id"]
         return User(self, user_id, user_data)
 
     def list(self) -> List[User]:
         """List all users."""
-        response = self._get("/users")
+        response = self.get("/users")
         users_data = response.get("users", [])
 
         return [
@@ -145,7 +145,7 @@ class UsersClient(HttpClient):
         Raises:
             AuthenticationError: If the user is not authenticated.
         """
-        response = self._get("/me")
+        response = self.get("/me")
         user_data = response.get("user", response)
         user_id = user_data["id"]
         return User(self, user_id, user_data)

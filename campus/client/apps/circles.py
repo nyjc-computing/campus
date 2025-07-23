@@ -48,7 +48,7 @@ class Circle:
             Dict[str, Any]: The complete circle data from the API
         """
         if self._data is None:
-            self._data = self._client._get(f"/circles/{self._circle_id}")
+            self._data = self._client.get(f"/circles/{self._circle_id}")
         return self._data
 
     @property
@@ -93,13 +93,13 @@ class Circle:
         Args:
             **kwargs: Fields to update (name, description, etc.)
         """
-        self._client._put(f"/circles/{self._circle_id}", kwargs)
+        self._client.put(f"/circles/{self._circle_id}", kwargs)
         # Clear cached data to force reload on next access
         self._data = None
 
     def delete(self) -> None:
         """Delete the circle."""
-        self._client._delete(f"/circles/{self._circle_id}")
+        self._client.delete(f"/circles/{self._circle_id}")
 
     def members(self) -> List[Dict[str, Any]]:
         """Get circle members.
@@ -107,7 +107,7 @@ class Circle:
         Returns:
             List of member data with user info and role
         """
-        response = self._client._get(f"/circles/{self._circle_id}/members")
+        response = self._client.get(f"/circles/{self._circle_id}/members")
         return response.get("members", [])
 
     def add_member(self, user_id: str, role: str = "member") -> None:
@@ -117,7 +117,7 @@ class Circle:
             user_id: User ID to add
             role: Member role (default: "member")
         """
-        self._client._post(f"/circles/{self._circle_id}/members", {
+        self._client.post(f"/circles/{self._circle_id}/members", {
             "user_id": user_id,
             "role": role
         })
@@ -128,7 +128,7 @@ class Circle:
         Args:
             user_id: User ID to remove
         """
-        self._client._delete(f"/circles/{self._circle_id}/members/{user_id}")
+        self._client.delete(f"/circles/{self._circle_id}/members/{user_id}")
 
     def update_member_role(self, user_id: str, role: str) -> None:
         """Update a member's role in the circle.
@@ -137,7 +137,7 @@ class Circle:
             user_id: User ID to update
             role: New role for the member
         """
-        self._client._put(f"/circles/{self._circle_id}/members/{user_id}", {
+        self._client.put(f"/circles/{self._circle_id}/members/{user_id}", {
             "role": role
         })
 
@@ -151,7 +151,7 @@ class Circle:
             True if user is a member, False otherwise
         """
         try:
-            self._client._get(f"/circles/{self._circle_id}/members/{user_id}")
+            self._client.get(f"/circles/{self._circle_id}/members/{user_id}")
             return True
         except NotFoundError:
             return False
@@ -168,7 +168,7 @@ class Circle:
         if parent_circle_id == self._circle_id:
             raise ValueError(
                 "The parent_circle_id cannot be the same as the current circle ID.")
-        self._client._post(f"/circles/{self._circle_id}/move", {
+        self._client.post(f"/circles/{self._circle_id}/move", {
             "parent_circle_id": parent_circle_id
         })
 
@@ -178,7 +178,7 @@ class Circle:
         Returns:
             List of user data with role information
         """
-        response = self._client._get(f"/circles/{self._circle_id}/users")
+        response = self._client.get(f"/circles/{self._circle_id}/users")
         return response.get("users", [])
 
     def __str__(self) -> str:
