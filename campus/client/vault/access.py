@@ -4,7 +4,7 @@ Vault access management client for managing permissions and client access.
 """
 
 from typing import List, Dict, Any, Union
-from campus.client.base import BaseClient
+from campus.client.base import HttpClient
 
 
 class VaultAccessClient:
@@ -14,7 +14,7 @@ class VaultAccessClient:
     for vault collections and their secrets.
     """
 
-    def __init__(self, vault_client: BaseClient):
+    def __init__(self, vault_client: HttpClient):
         """Initialize access client.
 
         Args:
@@ -79,7 +79,7 @@ class VaultAccessClient:
 class VaultAccessModule:
     """Custom module wrapper for vault access operations."""
 
-    def __init__(self, vault_client: BaseClient):
+    def __init__(self, vault_client: HttpClient):
         self._access_client = VaultAccessClient(vault_client)
 
     def grant(self, client_id: str, label: str, permissions: Union[List[str], int]) -> Dict[str, Any]:
