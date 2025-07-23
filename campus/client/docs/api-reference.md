@@ -11,7 +11,7 @@ The Campus Client provides a unified interface for accessing all Campus services
 ```python
 from campus.client import Campus
 
-# Initialize with environment variables or manual configuration
+# Initialize with automatic credential loading from environment variables
 campus = Campus()
 
 # Access all services through the unified interface
@@ -22,21 +22,16 @@ campus.vault    # Secret and configuration management
 
 ### Configuration
 
-Set environment variables for automatic configuration:
+Set environment variables for automatic authentication:
 
 ```bash
 export CAMPUS_APPS_BASE_URL="https://api.campus.example.com"
 export CAMPUS_VAULT_BASE_URL="https://vault.campus.example.com"
-export CAMPUS_CLIENT_ID="your_client_id"
-export CAMPUS_CLIENT_SECRET="your_client_secret"
+export CLIENT_ID="your_client_id"
+export CLIENT_SECRET="your_client_secret"
 ```
 
-Or configure programmatically:
-
-```python
-campus = Campus()
-campus.set_credentials(client_id="your_client_id", client_secret="your_client_secret")
-```
+The Campus client automatically loads credentials from `CLIENT_ID` and `CLIENT_SECRET` environment variables. No manual credential configuration is required.
 
 ## Users Resource
 
@@ -224,8 +219,7 @@ from campus.client.errors import AuthenticationError
 try:
     user = campus.users.me()
 except AuthenticationError:
-    print("Please set your credentials")
-    campus.set_credentials(client_id="...", client_secret="...")
+    print("Please set CLIENT_ID and CLIENT_SECRET environment variables")
 ```
 
 ### `AccessDeniedError`
@@ -299,8 +293,8 @@ Campus services implement rate limiting. Clients should handle `429 Too Many Req
 ## Best Practices
 
 1. **Use the unified interface**: Import `Campus` and access all services through it
-2. **Handle dictionary responses**: All methods return dictionaries, not objects
-3. **Cache credentials**: Set credentials once per application lifecycle
+2. **Set environment variables**: Configure `CLIENT_ID` and `CLIENT_SECRET` for automatic authentication
+3. **Handle dictionary responses**: All methods return dictionaries, not objects
 4. **Handle errors gracefully**: Always catch and handle specific exception types
 5. **Use chained subscription**: Access vault secrets with `campus.vault["label"]["key"]`
 6. **Validate inputs**: Check data before making API calls

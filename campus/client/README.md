@@ -55,9 +55,9 @@ api_key = campus.vault["secrets"]["API_KEY"]
 export CAMPUS_APPS_BASE_URL="https://api.campus.example.com"
 export CAMPUS_VAULT_BASE_URL="https://vault.campus.example.com"
 
-# Authentication (optional - can be set programmatically)
-export CAMPUS_CLIENT_ID="your_client_id"
-export CAMPUS_CLIENT_SECRET="your_client_secret"
+# Authentication
+export CLIENT_ID="your_client_id"
+export CLIENT_SECRET="your_client_secret"
 ```
 
 ## API Reference

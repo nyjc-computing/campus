@@ -72,7 +72,7 @@ class VaultClientManagement:
             for client in clients:
                 print(f"Client: {client['name']} (ID: {client['id']})")
         """
-        response = self._client._get("/client")
+        response = self._client.get("/client")
         return response["clients"]
 
     def delete(self, client_id: str) -> Dict[str, Any]:
@@ -88,7 +88,7 @@ class VaultClientManagement:
             result = vault.client.delete("client_abc123")
             print(f"Action: {result['action']}")
         """
-        return self._client._delete(f"/client/{client_id}")
+        return self._client.delete(f"/client/{client_id}")
 
 
 class VaultClientModule:
