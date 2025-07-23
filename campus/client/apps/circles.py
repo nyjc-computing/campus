@@ -253,15 +253,6 @@ class CirclesClient(HttpClient):
         circle_id = circle_data["id"]
         return Circle(self, circle_id)
 
-    def set_credentials(self, client_id: str, client_secret: str) -> None:
-        """Set authentication credentials.
-
-        Args:
-            client_id: The client ID for authentication
-            client_secret: The client secret for authentication
-        """
-        super().set_credentials(client_id, client_secret)
-
 
 # Module Replacement Pattern:
 # Replace this module with a CirclesClient instance to support both:

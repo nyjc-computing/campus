@@ -140,14 +140,10 @@ class UsersClient(HttpClient):
         user_id = user_data["id"]
         return User(self, user_id, user_data)
 
-    def set_credentials(self, client_id: str, client_secret: str) -> None:
-        """Set authentication credentials.
-
-        Args:
-            client_id: The client ID for authentication
-            client_secret: The client secret for authentication
-        """
-        super().set_credentials(client_id, client_secret)
+        response = self.get("/me")
+        user_data = response.get("user", response)
+        user_id = user_data["id"]
+        return User(self, user_id, user_data)
 
 
 # Module Replacement Pattern:
