@@ -164,15 +164,3 @@ class VaultClient(HttpClient):
             VaultClientManagement: Client for managing vault authentication clients
         """
         return self._client_mgmt
-
-
-# Module Replacement Pattern:
-# Replace this module with a VaultClient instance to support both:
-# 1. Direct usage: vault["storage"]
-# 2. Class imports: from campus.client.vault.vault import VaultClient
-_module_instance = VaultClient()
-# Dynamic attribute assignment for class imports - linter warnings expected
-_module_instance.VaultClient = VaultClient  # type: ignore[attr-defined]
-# type: ignore[attr-defined]
-_module_instance.VaultCollection = VaultCollection
-sys.modules[__name__] = _module_instance  # type: ignore

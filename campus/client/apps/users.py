@@ -139,19 +139,3 @@ class UsersClient(HttpClient):
         user_data = response.get("user", response)
         user_id = user_data["id"]
         return User(self, user_id, user_data)
-
-        response = self.get("/me")
-        user_data = response.get("user", response)
-        user_id = user_data["id"]
-        return User(self, user_id, user_data)
-
-
-# Module Replacement Pattern:
-# Replace this module with a UsersClient instance to support both:
-# 1. Direct usage: users["user123"]
-# 2. Class imports: from campus.client.apps.users import UsersClient
-_module_instance = UsersClient()
-# Dynamic attribute assignment for class imports - linter warnings expected
-_module_instance.UsersClient = UsersClient  # type: ignore[attr-defined]
-_module_instance.User = User  # type: ignore[attr-defined]
-sys.modules[__name__] = _module_instance  # type: ignore

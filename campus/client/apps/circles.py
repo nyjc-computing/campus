@@ -252,14 +252,3 @@ class CirclesClient(HttpClient):
         circle_data = response.get("circle", response)
         circle_id = circle_data["id"]
         return Circle(self, circle_id)
-
-
-# Module Replacement Pattern:
-# Replace this module with a CirclesClient instance to support both:
-# 1. Direct usage: circles["circle123"]
-# 2. Class imports: from campus.client.apps.circles import CirclesClient
-_module_instance = CirclesClient()
-# Dynamic attribute assignment for class imports - linter warnings expected
-_module_instance.CirclesClient = CirclesClient  # type: ignore[attr-defined]
-_module_instance.Circle = Circle  # type: ignore[attr-defined]
-sys.modules[__name__] = _module_instance  # type: ignore
