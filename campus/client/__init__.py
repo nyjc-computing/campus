@@ -2,7 +2,7 @@
 
 Campus Client Package
 
-Provides unified Campus client interface and individual service modules.
+Provides unified Campus client interface.
 """
 
 from .campus import Campus
@@ -15,10 +15,6 @@ from .errors import (
     NetworkError
 )
 
-# Convenience imports to service modules (for backward compatibility)
-from .apps import users, circles
-from .vault import vault, access, client
-
 __all__ = [
     # Unified interface
     'Campus',
@@ -29,7 +25,4 @@ __all__ = [
     'NotFoundError',
     'ValidationError',
     'NetworkError',
-    # Service modules (backward compatibility)
-    'users', 'circles',
-    'vault', 'access', 'client'
 ]
