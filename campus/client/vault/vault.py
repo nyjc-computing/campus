@@ -11,6 +11,9 @@ from campus.client.base import HttpClient
 from campus.client.errors import NotFoundError
 from campus.client import config
 
+from .access import VaultAccessClient
+from .client import VaultClientManagement
+
 
 class VaultCollection:
     """Represents a vault collection with HTTP-like methods.
@@ -105,6 +108,17 @@ class VaultCollection:
 class VaultClient(HttpClient):
     """Client for vault operations following HTTP API conventions."""
 
+    def __init__(self, base_url=None):
+        """Initialize vault client.
+
+        Args:
+            base_url: Optional base URL override for the vault service
+        """
+        super().__init__(base_url)
+        # Import here to avoid circular imports
+        self._access = VaultAccessClient(self)
+        self._client_mgmt = VaultClientManagement(self)
+
     def _get_default_base_url(self) -> str:
         """Get the default base URL for the vault service.
 
@@ -133,43 +147,41 @@ class VaultClient(HttpClient):
         response = self.get("/vault/list")
         return response.get("vaults", [])
 
+    @property
+    def access(self):
+        """Access to vault access management.
 
-class VaultModule:
-    """Custom module wrapper that supports subscription syntax."""
-
-    def __init__(self):
-        self._client = VaultClient()
-        # Import here to avoid circular imports
-        from .access import VaultAccessClient
-        from .client import VaultClientManagement
-        self.access = VaultAccessClient(self._client)
-        self.client = VaultClientManagement(self._client)
-
-    def __getitem__(self, label: str) -> VaultCollection:
-        """Support vault["apps"] syntax."""
-        return self._client[label]
-
-    def list_vaults(self) -> List[str]:
-        """List available vault labels."""
-        return self._client.list_vaults()
-
-    def set_credentials(self, client_id: str, client_secret: str) -> None:
-        """Set authentication credentials."""
-        self._client.set_credentials(client_id, client_secret)
+        Returns:
+            VaultAccessClient: Client for managing vault access permissions
+        """
+        return self._access
 
     @property
-    def vault_client(self) -> VaultClient:
-        """Direct access to the vault client instance."""
-        return self._client
+    def client(self):
+        """Access to vault client management.
+
+        Returns:
+            VaultClientManagement: Client for managing vault authentication clients
+        """
+        return self._client_mgmt
+
+    def set_credentials(self, client_id: str, client_secret: str) -> None:
+        """Set authentication credentials.
+
+        Args:
+            client_id: The client ID for authentication
+            client_secret: The client secret for authentication
+        """
+        super().set_credentials(client_id, client_secret)
 
 
 # Module Replacement Pattern:
-# Replace this module with a custom class instance to support both:
+# Replace this module with a VaultClient instance to support both:
 # 1. Direct usage: vault["storage"]
-# 2. Class imports: from campus.client.vault.vault import VaultModule
-_module_instance = VaultModule()
+# 2. Class imports: from campus.client.vault.vault import VaultClient
+_module_instance = VaultClient()
 # Dynamic attribute assignment for class imports - linter warnings expected
-_module_instance.VaultModule = VaultModule  # type: ignore[attr-defined]
 _module_instance.VaultClient = VaultClient  # type: ignore[attr-defined]
-_module_instance.VaultCollection = VaultCollection  # type: ignore[attr-defined]
+# type: ignore[attr-defined]
+_module_instance.VaultCollection = VaultCollection
 sys.modules[__name__] = _module_instance  # type: ignore
