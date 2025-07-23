@@ -61,6 +61,17 @@ class CircleMembers:
         data = {"user_id": user_id}
         self._client.delete(f"/circles/{self._circle_id}/members/remove", data)
 
+    def users(self) -> Dict[str, Any]:
+        """Get users in the circle.
+        
+        Server: GET /circles/{circle_id}/users
+        Status: Returns 501 (not implemented yet)
+
+        Returns:
+            Dict containing users data
+        """
+        return self._client.get(f"/circles/{self._circle_id}/users")
+
     def __getitem__(self, member_circle_id: str) -> 'CircleMember':
         """Get a specific member for updates.
         

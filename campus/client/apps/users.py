@@ -123,16 +123,6 @@ class UsersClient(HttpClient):
         user_id = user_data["id"]
         return User(self, user_id, user_data)
 
-    def list(self) -> List[User]:
-        """List all users."""
-        response = self.get("/users")
-        users_data = response.get("users", [])
-
-        return [
-            User(self, user_data["id"], user_data)
-            for user_data in users_data
-        ]
-
     def me(self) -> User:
         """Get the authenticated user.
 
