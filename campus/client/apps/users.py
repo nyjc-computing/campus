@@ -150,46 +150,22 @@ class UsersClient(HttpClient):
         user_id = user_data["id"]
         return User(self, user_id, user_data)
 
-
-class UsersModule:
-    """Custom module wrapper that supports subscription syntax."""
-
-    def __init__(self):
-        self._client = UsersClient()
-
-    def __getitem__(self, user_id: str) -> User:
-        """Support users["user123"] syntax."""
-        return self._client[user_id]
-
-    def new(self, email: str, name: str) -> User:
-        """Create a new user."""
-        return self._client.new(email, name)
-
-    def list_users(self) -> List[User]:
-        """List all users."""
-        return self._client.list()
-
-    def me(self) -> User:
-        """Get the authenticated user."""
-        return self._client.me()
-
     def set_credentials(self, client_id: str, client_secret: str) -> None:
-        """Set authentication credentials."""
-        self._client.set_credentials(client_id, client_secret)
+        """Set authentication credentials.
 
-    @property
-    def client(self) -> UsersClient:
-        """Direct access to the client instance."""
-        return self._client
+        Args:
+            client_id: The client ID for authentication
+            client_secret: The client secret for authentication
+        """
+        super().set_credentials(client_id, client_secret)
 
 
 # Module Replacement Pattern:
-# Replace this module with a custom class instance to support both:
+# Replace this module with a UsersClient instance to support both:
 # 1. Direct usage: users["user123"]
-# 2. Class imports: from campus.client.apps.users import UsersModule
-_module_instance = UsersModule()
+# 2. Class imports: from campus.client.apps.users import UsersClient
+_module_instance = UsersClient()
 # Dynamic attribute assignment for class imports - linter warnings expected
-_module_instance.UsersModule = UsersModule  # type: ignore[attr-defined]
 _module_instance.UsersClient = UsersClient  # type: ignore[attr-defined]
 _module_instance.User = User  # type: ignore[attr-defined]
 sys.modules[__name__] = _module_instance  # type: ignore

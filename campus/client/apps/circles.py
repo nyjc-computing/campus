@@ -302,54 +302,22 @@ class CirclesClient(HttpClient):
             for circle_data in circles_data
         ]
 
-
-class CirclesModule:
-    """Custom module wrapper that supports subscription syntax."""
-
-    def __init__(self):
-        self._client = CirclesClient()
-
-    def __getitem__(self, circle_id: str) -> Circle:
-        """Support circles["circle123"] syntax."""
-        return self._client[circle_id]
-
-    def get_by_id(self, circle_id: str) -> Circle:
-        """Get a circle by ID."""
-        return self._client.get_by_id(circle_id)
-
-    def new(self, name: str, description: str = "", **kwargs) -> Circle:
-        """Create a new circle."""
-        return self._client.new(name, description, **kwargs)
-
-    def list(self, limit: Optional[int] = None, offset: Optional[int] = None) -> List[Circle]:
-        """List all circles."""
-        return self._client.list(limit, offset)
-
-    def search(self, query: str) -> List[Circle]:
-        """Search for circles."""
-        return self._client.search(query)
-
-    def list_by_user(self, user_id: str) -> List[Circle]:
-        """List circles that a user is a member of."""
-        return self._client.list_by_user(user_id)
-
     def set_credentials(self, client_id: str, client_secret: str) -> None:
-        """Set authentication credentials."""
-        self._client.set_credentials(client_id, client_secret)
+        """Set authentication credentials.
 
-    @property
-    def client(self) -> CirclesClient:
-        """Direct access to the client instance."""
-        return self._client
+        Args:
+            client_id: The client ID for authentication
+            client_secret: The client secret for authentication
+        """
+        super().set_credentials(client_id, client_secret)
 
 
 # Module Replacement Pattern:
-# Replace this module with a custom class instance to support both:
+# Replace this module with a CirclesClient instance to support both:
 # 1. Direct usage: circles["circle123"]
-# 2. Class imports: from campus.client.apps.circles import CirclesModule
-_module_instance = CirclesModule()
+# 2. Class imports: from campus.client.apps.circles import CirclesClient
+_module_instance = CirclesClient()
 # Dynamic attribute assignment for class imports - linter warnings expected
-_module_instance.CirclesModule = CirclesModule  # type: ignore[attr-defined]
 _module_instance.CirclesClient = CirclesClient  # type: ignore[attr-defined]
 _module_instance.Circle = Circle  # type: ignore[attr-defined]
 sys.modules[__name__] = _module_instance  # type: ignore
