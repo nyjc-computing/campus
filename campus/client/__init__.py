@@ -16,9 +16,7 @@ from .errors import (
 )
 
 __all__ = [
-    # Unified interface
     'Campus',
-    # Errors
     'CampusClientError',
     'AuthenticationError',
     'AccessDeniedError',
