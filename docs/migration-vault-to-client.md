@@ -16,7 +16,7 @@ secret = vault.get("MONGODB_URI")
 **TO**: HTTP-based client access
 ```python
 import campus.client.vault as vault
-secret = vault["storage"].get("MONGODB_URI")
+secret = vault["storage"]["MONGODB_URI"]
 ```
 
 ## Benefits
@@ -127,80 +127,70 @@ Since client architecture is proven functional:
 - **Rollback method**: Revert import statements and usage patterns
 - **No database changes**: Migration is purely code-level
 
-## Future Interface Refactor
+## Client Refactor Strategy
 
-### Proposed Client Instance Pattern
+### ✅ **Bottom-Up Approach** (Current Session)
 
-**Current Interface** (Module Singleton):
+**Goal**: Refactor individual service modules independently, starting with `campus.client.vault`
+
+**Vault Module Refactor** (In Progress):
+- **Eliminate**: `VaultModule` wrapper class
+- **Target**: Module replacement uses `VaultClient` directly
+- **Maintain API**: Same subscription syntax and property access
+
+**Current State**:
 ```python
 import campus.client.vault as vault
-secret = vault["storage"].get("MONGODB_URI")
+vault                    # -> VaultModule instance
+vault["storage"]         # -> VaultCollection (via VaultModule.__getitem__)
+vault.access            # -> VaultAccessClient (property of VaultModule)
+vault.client            # -> VaultClientManagement (property of VaultModule)
 ```
 
-**Proposed Interface** (Client Instance - OpenAPI Style):
+**Target State**:
 ```python
-from campus.client import Client
-
-# Uses CLIENT_ID and CLIENT_SECRET environment variables automatically
-campus = Client()
-secret = campus.vault["storage"].get("MONGODB_URI")
+import campus.client.vault as vault
+vault                    # -> VaultClient directly
+vault["storage"]         # -> VaultCollection (via VaultClient.__getitem__)  
+vault.access            # -> VaultAccess client (property of VaultClient)
+vault.client            # -> VaultClientManagement (property of VaultClient)
 ```
 
-### Benefits of Client Instance Pattern
+**Implementation Plan**:
+1. Add `.access` and `.client` properties to `VaultClient` class
+2. Remove `VaultModule` class
+3. Update module replacement pattern to use `VaultClient` instance
+4. Test API compatibility
+5. Apply same pattern to `users` and `circles` modules
 
-1. **Familiar**: Matches OpenAPI client patterns developers know
-2. **Explicit**: Clear that you're working with a client instance
-3. **Flexible**: Easier to support multiple authentication contexts
-4. **Extensible**: Can add client-level configuration options
+**Benefits of Bottom-Up Approach**:
+- **Independent**: Each service module can be refactored separately
+- **Simpler**: No complex resource tree management in top-level client
+- **Incremental**: Changes isolated to individual service modules
+- **Maintainable**: Module changes don't affect other services
 
-### Implementation Plan
+### Alternative: Top-Down Client Instance Pattern
 
-**Phase 1: Create Client Class**
-- Add `Client` class to `campus/client/__init__.py`
-- Client instance manages authentication state
-- Provides `.vault`, `.users`, `.circles` properties
-- Maintains backward compatibility with current module pattern
+**Previously Considered**: Single `Client()` class managing all services
+**Issue**: Required complex resource tree setup in `__init__`, making updates difficult
+**Decision**: Deferred in favor of bottom-up approach
 
-**Phase 2: Update Documentation**
-- Update README and API docs to use Client instance pattern
-- Provide migration examples from module pattern
-- Document both patterns during transition period
-
-**Phase 3: Migration Strategy**
-- Current module pattern remains functional (backward compatibility)
-- New code uses Client instance pattern
-- Gradual migration over time
-- Eventually deprecate module pattern
-
-### Technical Feasibility
-
-✅ **Highly Feasible**: Current architecture already supports this pattern
-- `BaseClient` provides authentication foundation
-- Service modules (`VaultModule`, etc.) can be properties of Client class
-- Module replacement pattern can coexist with Client instances
-- No breaking changes to existing code required
-
-### Implementation Scope
-
-- **New file**: `campus/client/client.py` - Main Client class
-- **Update**: `campus/client/__init__.py` - Export Client class
-- **Maintain**: Existing module pattern for backward compatibility
-- **Add**: Client instance examples to documentation
-
-*Status: Documented for future session*
+*Top-down approach may be reconsidered after bottom-up refactor completes*
 
 ## Next Steps
 
-1. **Current Migration**: Complete vault→client import migration (10 files)
-2. **Future Refactor**: Implement Client instance pattern (separate session)
-3. **Choose migration order**: Start with least critical files
-4. **File-by-file migration**: Update imports and usage patterns
-5. **Test each migration**: Verify functionality preserved
-6. **Update dependencies**: Remove direct vault dependencies from package files
-7. **Final validation**: Full integration testing
+1. **Vault Module Refactor**: Complete bottom-up refactor of `campus.client.vault` (Current Session) 🔄
+2. **Current Migration**: Complete vault→client import migration (10 files)
+3. **Users/Circles Refactor**: Apply same bottom-up pattern to other service modules
+4. **Choose migration order**: Start with least critical files for import migration
+5. **File-by-file migration**: Update imports and usage patterns  
+6. **Test each migration**: Verify functionality preserved
+7. **Update dependencies**: Remove direct vault dependencies from package files
+8. **Final validation**: Full integration testing
+9. **Future Consideration**: Evaluate top-down Client instance pattern after bottom-up completion
 
 ---
 
-*Last updated: July 22, 2025*
-*Migration status: ~25% complete*
-*Client refactor: Documented for future session*
+*Last updated: July 23, 2025*
+*Migration status: ~25% complete (vault→client imports)*
+*Current refactor: Bottom-up vault module refactor (In Progress)*
