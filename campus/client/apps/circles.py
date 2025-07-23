@@ -38,7 +38,7 @@ class CircleMembers:
         """
         return self._client.get(f"/circles/{self._circle_id}/members")
 
-    def add(self, user_id: str, **kwargs) -> None:
+    def add(self, *, user_id: str, **kwargs) -> None:
         """Add a member to the circle.
         
         Server: POST /circles/{circle_id}/members/add
@@ -181,7 +181,7 @@ class Circle:
         """
         return CircleMembers(self._client, self._circle_id)
 
-    def move(self, parent_circle_id: str) -> None:
+    def move(self, *, parent_circle_id: str) -> None:
         """Move the circle to a new parent.
         
         Server: POST /circles/{circle_id}/move
@@ -234,7 +234,7 @@ class CirclesClient(HttpClient):
         """
         return Circle(self, circle_id)
 
-    def new(self, name: str, description: str = "", **kwargs) -> Circle:
+    def new(self, *, name: str, description: str = "", **kwargs) -> Circle:
         """Create a new circle.
         
         Server: POST /circles

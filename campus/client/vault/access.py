@@ -22,7 +22,7 @@ class VaultAccessClient:
         """
         self._client = vault_client
 
-    def grant(self, client_id: str, label: str, permissions: Union[List[str], int]) -> Dict[str, Any]:
+    def grant(self, *, client_id: str, label: str, permissions: Union[List[str], int]) -> Dict[str, Any]:
         """Grant access to a vault for a client.
 
         Args:
@@ -44,22 +44,23 @@ class VaultAccessClient:
         }
         return self._client.post(f"/access/{label}", data)
 
-    def revoke(self, client_id: str, label: str) -> Dict[str, Any]:
+    def revoke(self, *, client_id: str, label: str) -> Dict[str, Any]:
         """Revoke access to a vault for a client.
 
         Args:
             client_id: Target client ID to revoke access from
-            label: Vault label
+            label: Vault label (e.g., "apps", "storage", "oauth")
 
         Returns:
-            Response confirming revocation
+            Response confirming access revocation
 
         Example:
             vault.access.revoke("user123", "apps")
         """
-        return self._client.delete(f"/access/{label}", params={"client_id": client_id})
+        data = {"client_id": client_id}
+        return self._client.delete(f"/access/{label}", data)
 
-    def check(self, client_id: str, label: str) -> Dict[str, Any]:
+    def check(self, *, client_id: str, label: str) -> Dict[str, Any]:
         """Check if a client has access to a vault.
 
         Args:
@@ -82,17 +83,17 @@ class VaultAccessModule:
     def __init__(self, vault_client: HttpClient):
         self._access_client = VaultAccessClient(vault_client)
 
-    def grant(self, client_id: str, label: str, permissions: Union[List[str], int]) -> Dict[str, Any]:
+    def grant(self, *, client_id: str, label: str, permissions: Union[List[str], int]) -> Dict[str, Any]:
         """Grant access to a vault for a client."""
-        return self._access_client.grant(client_id, label, permissions)
+        return self._access_client.grant(client_id=client_id, label=label, permissions=permissions)
 
-    def revoke(self, client_id: str, label: str) -> Dict[str, Any]:
+    def revoke(self, *, client_id: str, label: str) -> Dict[str, Any]:
         """Revoke access to a vault for a client."""
-        return self._access_client.revoke(client_id, label)
+        return self._access_client.revoke(client_id=client_id, label=label)
 
-    def check(self, client_id: str, label: str) -> Dict[str, Any]:
+    def check(self, *, client_id: str, label: str) -> Dict[str, Any]:
         """Check if a client has access to a vault."""
-        return self._access_client.check(client_id, label)
+        return self._access_client.check(client_id=client_id, label=label)
 
     @property
     def client(self) -> VaultAccessClient:

@@ -51,7 +51,7 @@ class VaultCollection:
             raise NotFoundError(
                 f"Secret '{key}' not found in vault '{self._label}'") from exc
 
-    def set(self, key: str, value: str) -> str:
+    def set(self, *, key: str, value: str) -> str:
         """Set a secret value in the vault.
 
         Args:

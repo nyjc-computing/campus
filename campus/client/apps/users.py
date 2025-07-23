@@ -115,7 +115,7 @@ class UsersClient(HttpClient):
         """Get a user by ID."""
         return User(self, user_id)
 
-    def new(self, email: str, name: str) -> User:
+    def new(self, *, email: str, name: str) -> User:
         """Create a new user."""
         data = {"email": email, "name": name}
         response = self.post("/users", data)
