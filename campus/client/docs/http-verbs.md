@@ -19,7 +19,7 @@ Campus Client follows RESTful API conventions with clear mappings between HTTP v
 - Supports query parameters for filtering
 
 **Client Methods:**
-- `BaseClient._get(path, params=None)`
+- `HttpClient._get(path, params=None)`
 
 **Usage Patterns:**
 
@@ -57,7 +57,7 @@ user_circles = circles.list_by_user("user_123")  # GET /users/user_123/circles
 - May include Location header for new resources
 
 **Client Methods:**
-- `BaseClient._post(path, data, params=None)`
+- `HttpClient._post(path, data, params=None)`
 
 **Usage Patterns:**
 
@@ -94,7 +94,7 @@ vault.access.grant("client_id", "vault_label", ["read", "write"])  # POST /acces
 - More efficient than PUT for partial updates
 
 **Client Methods:**
-- `BaseClient._patch(path, data, params=None)`
+- `HttpClient._patch(path, data, params=None)`
 
 **Usage Patterns:**
 
@@ -138,7 +138,7 @@ circle.update_member_role("user_123", "admin")  # PATCH /circles/{id}/members/us
 - Less commonly used than PATCH
 
 **Client Methods:**
-- `BaseClient._put(path, data, params=None)`
+- `HttpClient._put(path, data, params=None)`
 
 **Usage Patterns:**
 
@@ -169,7 +169,7 @@ user_data = {
 - Returns confirmation or empty response
 
 **Client Methods:**
-- `BaseClient._delete(path, params=None)`
+- `HttpClient._delete(path, params=None)`
 
 **Usage Patterns:**
 

@@ -7,7 +7,7 @@ Main vault client interface for secrets management and access control.
 
 import sys
 from typing import List
-from campus.client.base import BaseClient
+from campus.client.base import HttpClient
 from campus.client.errors import NotFoundError
 from campus.client import config
 
@@ -19,7 +19,7 @@ class VaultCollection:
     including operations for storing, retrieving, and deleting secret values.
     """
 
-    def __init__(self, vault_client: BaseClient, label: str):
+    def __init__(self, vault_client: HttpClient, label: str):
         """Initialize vault collection.
 
         Args:
@@ -102,7 +102,7 @@ class VaultCollection:
             return False
 
 
-class VaultClient(BaseClient):
+class VaultClient(HttpClient):
     """Client for vault operations following HTTP API conventions."""
 
     def _get_default_base_url(self) -> str:

@@ -7,7 +7,7 @@ Circle management client for creating and managing circles.
 
 import sys
 from typing import List, Dict, Any, Optional
-from campus.client.base import BaseClient
+from campus.client.base import HttpClient
 from campus.client.errors import NotFoundError
 from campus.client import config
 
@@ -19,7 +19,7 @@ class Circle:
     including properties for accessing circle data and methods for operations.
     """
 
-    def __init__(self, circles_client: BaseClient, circle_id: str, data: Optional[Dict[str, Any]] = None):
+    def __init__(self, circles_client: HttpClient, circle_id: str, data: Optional[Dict[str, Any]] = None):
         """Initialize circle resource.
 
         Args:
@@ -190,7 +190,7 @@ class Circle:
         return f"Circle(id={self._circle_id}, name={self.name}, description={self.description})"
 
 
-class CirclesClient(BaseClient):
+class CirclesClient(HttpClient):
     """Client for circle operations following HTTP API conventions.
 
     Provides methods for creating, retrieving, updating, and deleting circles,

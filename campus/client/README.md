@@ -228,7 +228,7 @@ This design hides implementation details and provides intuitive APIs.
 
 ### HTTP Client
 
-All service modules share a common `BaseClient` that handles:
+All service modules share a common `HttpClient` that handles:
 
 - **Authentication**: OAuth2 token management
 - **Request/Response**: JSON serialization and HTTP error handling

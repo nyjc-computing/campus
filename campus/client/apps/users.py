@@ -7,7 +7,7 @@ User management client for creating and managing user accounts.
 
 import sys
 from typing import List, Dict, Any, Optional
-from campus.client.base import BaseClient
+from campus.client.base import HttpClient
 from campus.client import config
 from campus.client.errors import AuthenticationError
 
@@ -19,7 +19,7 @@ class User:
     including properties for accessing user data and methods for operations.
     """
 
-    def __init__(self, users_client: BaseClient, user_id: str, data: Optional[Dict[str, Any]] = None):
+    def __init__(self, users_client: HttpClient, user_id: str, data: Optional[Dict[str, Any]] = None):
         """Initialize user resource.
 
         Args:
@@ -96,7 +96,7 @@ class User:
         return self._client._get(f"/users/{self._user_id}/profile")
 
 
-class UsersClient(BaseClient):
+class UsersClient(HttpClient):
     """Client for user operations following HTTP API conventions.
 
     Provides methods for creating, retrieving, updating, and deleting users,

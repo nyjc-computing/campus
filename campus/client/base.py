@@ -1,9 +1,9 @@
 """client.base
 
-Base client functionality for Campus services.
+HTTP client functionality for Campus services.
 
 Provides common authentication, HTTP handling, and utility methods
-that are shared across all service clients.
+that are shared across all service clients using composition pattern.
 """
 
 import os
@@ -22,11 +22,12 @@ from .errors import (
 from . import config
 
 
-class BaseClient:
-    """Base class for all Campus service clients.
+class HttpClient:
+    """HTTP client for Campus service communication.
 
-    Provides common functionality including authentication, HTTP request handling,
-    and error management that is shared across all service-specific clients.
+    Provides common functionality including authentication, HTTP request
+    handling, and error management. Used via composition by service-specific
+    clients.
     """
 
     def __init__(self, base_url: Optional[str] = None):

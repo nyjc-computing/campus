@@ -4,7 +4,7 @@ Vault client management for creating and managing vault authentication clients.
 """
 
 from typing import List, Dict, Any, Tuple
-from campus.client.base import BaseClient
+from campus.client.base import HttpClient
 
 
 class VaultClientManagement:
@@ -14,7 +14,7 @@ class VaultClientManagement:
     clients that can access vault secrets with appropriate permissions.
     """
 
-    def __init__(self, vault_client: BaseClient):
+    def __init__(self, vault_client: HttpClient):
         """Initialize client management.
 
         Args:
@@ -94,7 +94,7 @@ class VaultClientManagement:
 class VaultClientModule:
     """Custom module wrapper for vault client management operations."""
 
-    def __init__(self, vault_client: BaseClient):
+    def __init__(self, vault_client: HttpClient):
         self._client_mgmt = VaultClientManagement(vault_client)
 
     def new(self, name: str, description: str) -> Tuple[Dict[str, Any], str]:
