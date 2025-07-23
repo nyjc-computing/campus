@@ -1,6 +1,6 @@
 # Campus Client API Reference
 
-This document provides comprehensive reference documentation for all Campus Client resources and their available operations.
+This document provides comprehensive reference documentation for all Campus Client resources and their available operations, based on the actual server API implementation.
 
 ## Apps Service Resources
 
@@ -14,9 +14,11 @@ The Users resource provides functionality for managing user accounts and authent
 from campus.client.apps import users
 ```
 
-#### Methods
+#### Implemented Endpoints
 
 ##### `users.new(email: str, name: str) -> User`
+**Server:** `POST /users`
+**Status:** ✅ Implemented
 
 Create a new user account.
 
@@ -32,22 +34,218 @@ user = users.new("alice@example.com", "Alice Smith")
 print(f"Created user {user.id} with email {user.email}")
 ```
 
-##### `users["user_id"] -> User`
+##### `users["user_id"]` → User resource operations
+**Server:** Various `/users/{user_id}` endpoints
 
-Retrieve an existing user by their ID.
+###### `users["user_id"].get() -> Dict[str, Any]`
+**Server:** `GET /users/{user_id}`
+**Status:** ✅ Implemented
 
-**Parameters:**
-- `user_id` (str): The unique identifier for the user
-
-**Returns:** `User` object
-
-**Raises:** `NotFoundError` if user doesn't exist
+Get user summary including profile data.
 
 **Example:**
 ```python
 user = users["user_123"]
-print(f"User name: {user.name}")
+data = user.get()  # or user.data property
 ```
+
+###### `users["user_id"].update(**kwargs) -> None`
+**Server:** `PATCH /users/{user_id}`
+**Status:** ✅ Implemented
+
+Update user profile information.
+
+**Example:**
+```python
+user = users["user_123"]
+user.update(name="New Name", email="new@example.com")
+```
+
+###### `users["user_id"].delete() -> None`
+**Server:** `DELETE /users/{user_id}`
+**Status:** ✅ Implemented
+
+Delete a user account.
+
+**Example:**
+```python
+user = users["user_123"]
+user.delete()
+```
+
+###### `users["user_id"].get_profile() -> Dict[str, Any]`
+**Server:** `GET /users/{user_id}/profile`
+**Status:** ✅ Implemented
+
+Get detailed user profile information.
+
+**Example:**
+```python
+user = users["user_123"]
+profile = user.get_profile()
+```
+
+#### Special Endpoints
+
+##### `users.me() -> User`
+**Server:** `GET /me`
+**Status:** ⏳ Not implemented (returns 501)
+
+Get the authenticated user.
+
+**Example:**
+```python
+current_user = users.me()  # Will return 501 error
+```
+
+---
+
+### Circles Resource
+
+The Circles resource provides functionality for managing circles (groups) and their memberships.
+
+#### Module Interface
+
+```python
+from campus.client.apps import circles
+```
+
+#### Implemented Endpoints
+
+##### `circles.new(name: str, description: str = "", **kwargs) -> Circle`
+**Server:** `POST /circles`
+**Status:** ✅ Implemented
+
+Create a new circle.
+
+**Parameters:**
+- `name` (str): Circle name
+- `description` (str): Circle description (optional)
+- `**kwargs`: Additional circle fields
+
+**Returns:** `Circle` object for the newly created circle
+
+**Example:**
+```python
+circle = circles.new("Engineering", "Development team")
+print(f"Created circle {circle.id}")
+```
+
+##### `circles["circle_id"]` → Circle resource operations
+**Server:** Various `/circles/{circle_id}` endpoints
+
+###### `circles["circle_id"].get() -> Dict[str, Any]`
+**Server:** `GET /circles/{circle_id}`
+**Status:** ✅ Implemented
+
+Get circle details.
+
+**Example:**
+```python
+circle = circles["circle_123"]
+data = circle.get()  # or circle.data property
+```
+
+###### `circles["circle_id"].update(**kwargs) -> None`
+**Server:** `PATCH /circles/{circle_id}`
+**Status:** ✅ Implemented
+
+Update circle name or description.
+
+**Example:**
+```python
+circle = circles["circle_123"]
+circle.update(name="New Name", description="Updated description")
+```
+
+###### `circles["circle_id"].delete() -> None`
+**Server:** `DELETE /circles/{circle_id}`
+**Status:** ✅ Implemented
+
+Delete a circle.
+
+**Example:**
+```python
+circle = circles["circle_123"]
+circle.delete()
+```
+
+#### Circle Member Management
+
+##### `circles["circle_id"].members` → Members sub-resource
+
+###### `circles["circle_id"].members.list() -> Dict[str, Any]`
+**Server:** `GET /circles/{circle_id}/members`
+**Status:** ✅ Implemented
+
+Get circle members and their access values.
+
+**Example:**
+```python
+circle = circles["circle_123"]
+members_data = circle.members.list()
+```
+
+###### `circles["circle_id"].members.add(user_id: str, **kwargs) -> None`
+**Server:** `POST /circles/{circle_id}/members/add`
+**Status:** ✅ Implemented
+
+Add a member to the circle.
+
+**Example:**
+```python
+circle = circles["circle_123"]
+circle.members.add(user_id="user_456", role="admin")
+```
+
+###### `circles["circle_id"].members.remove(user_id: str) -> None`
+**Server:** `DELETE /circles/{circle_id}/members/remove`
+**Status:** ✅ Implemented
+
+Remove a member from the circle.
+
+**Example:**
+```python
+circle = circles["circle_123"]
+circle.members.remove(user_id="user_456")
+```
+
+###### `circles["circle_id"].members["member_circle_id"].update(**kwargs) -> None`
+**Server:** `PATCH /circles/{circle_id}/members/{member_circle_id}`
+**Status:** ✅ Implemented
+
+Update a member's access in the circle.
+
+**Example:**
+```python
+circle = circles["circle_123"]
+circle.members["member_circle_456"].update(access=15)
+```
+
+#### Not Yet Implemented Endpoints
+
+##### `circles["circle_id"].move(parent_circle_id: str) -> None`
+**Server:** `POST /circles/{circle_id}/move`
+**Status:** ⏳ Not implemented (returns 501)
+
+Move a circle to a new parent.
+
+##### `circles["circle_id"].users.list() -> List[Dict[str, Any]]`
+**Server:** `GET /circles/{circle_id}/users`
+**Status:** ⏳ Not implemented (returns 501)
+
+Get users in a circle.
+
+#### Missing Collection Endpoints
+
+The following endpoints are commonly expected but not implemented in the server:
+
+- `GET /circles` - List all circles
+- `GET /circles/search?q={query}` - Search circles
+- `GET /users` - List all users
+- `GET /users/{user_id}/circles` - List circles for a user
+
+These would need to be implemented server-side before the client can support them.
 
 ##### `users.me() -> User`
 
@@ -61,20 +259,6 @@ Get the currently authenticated user.
 ```python
 current_user = users.me()
 print(f"Logged in as: {current_user.email}")
-```
-
-##### `users.list_users() -> List[User]`
-
-List all users in the system.
-
-**Returns:** List of `User` objects
-
-**Note:** This may be a large result set. Consider pagination for production use.
-
-**Example:**
-```python
-all_users = users.list_users()
-print(f"Total users: {len(all_users)}")
 ```
 
 ##### `users.set_credentials(client_id: str, client_secret: str) -> None`
