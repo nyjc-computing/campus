@@ -1,10 +1,30 @@
 # HTTP Verbs and API Patterns
 
-This document describes the HTTP verbs used by Campus Client and the patterns for using them effectively.
+This document describes the HTTP verbs used by Campus Client and the patterns for using them effectively with the unified Campus interface.
 
 ## Overview
 
-Campus Client follows RESTful API conventions with clear mappings between HTTP verbs and operations. Understanding these patterns helps you predict API behavior and handle responses correctly.
+Campus Client follows RESTful API conventions with clear mappings between HTTP verbs and operations. The unified Campus interface provides consistent access patterns that map to HTTP methods behind the scenes.
+
+## HTTP Method to Campus Client Mapping
+
+### Path Parameters vs Query Parameters
+
+**Path Parameters** - Used for resource identification:
+```python
+# Path parameters are mapped using subscription syntax []
+campus.users["user_123"]           # → GET /users/user_123
+campus.circles["circle_456"]       # → GET /circles/circle_456  
+campus.vault["secrets"]["API_KEY"] # → GET /vault/secrets/API_KEY
+```
+
+**Query Parameters** - Used for method arguments:
+```python
+# Query parameters are mapped using method calls with keyword arguments
+campus.users.new(email="alice@example.com", name="Alice")        # → POST /users
+campus.circles.new(name="Engineering", description="Dev team")   # → POST /circles
+campus.users.update(user_id="user_123", name="New Name")        # → PATCH /users/user_123
+```
 
 ## HTTP Verb Reference
 
@@ -18,31 +38,31 @@ Campus Client follows RESTful API conventions with clear mappings between HTTP v
 - Returns resource data
 - Supports query parameters for filtering
 
-**Client Methods:**
-- `HttpClient._get(path, params=None)`
+**Campus Client Patterns:**
 
-**Usage Patterns:**
+**Campus Client Patterns:**
 
 ```python
-# Get single resources
-user = users["user_123"]  # GET /users/user_123
-circle = circles["circle_456"]  # GET /circles/circle_456
-secret = vault["app"]["api_key"]  # GET /vault/app/api_key
+# Resource access via path parameters (subscription syntax)
+user_resource = campus.users["user_123"]     # → GET /users/user_123 (when accessed)
+circle_resource = campus.circles["circle_456"] # → GET /circles/circle_456 (when accessed)
+vault_key = campus.vault["secrets"]["API_KEY"] # → GET /vault/secrets/API_KEY (when accessed)
 
-# Get collections
-all_users = users.list_users()  # GET /users
-all_circles = circles.list()  # GET /circles
-vault_keys = vault["app"].list()  # GET /vault/app/list
+# Direct data retrieval methods
+current_user = campus.users.me()             # → GET /me
+vault_keys = campus.vault["secrets"].list()  # → GET /vault/secrets/list
+available_vaults = campus.vault.list_vaults() # → GET /vault/list
 
-# Get with parameters
-search_results = circles.search("engineering")  # GET /circles/search?q=engineering
-user_circles = circles.list_by_user("user_123")  # GET /users/user_123/circles
+# Resource object methods (legacy interface)
+user_profile = campus.users["user_123"].get_profile() # → GET /users/user_123/profile
+circle_data = campus.circles["circle_456"].get()      # → GET /circles/circle_456
+members_data = campus.circles["circle_456"].members.list() # → GET /circles/circle_456/members
 ```
 
 **Response Patterns:**
-- Single resources return the resource object
-- Collections return arrays wrapped in response objects
-- Empty results return empty arrays, not 404 errors
+- Dictionary-based responses: `user['email']`, `circle["name"]`
+- Resource objects for advanced operations
+- Collections return lists or dictionaries
 
 ---
 
@@ -56,30 +76,28 @@ user_circles = circles.list_by_user("user_123")  # GET /users/user_123/circles
 - Returns created resource or action result
 - May include Location header for new resources
 
-**Client Methods:**
-- `HttpClient._post(path, data, params=None)`
-
-**Usage Patterns:**
+**Campus Client Patterns:**
 
 ```python
-# Create new resources
-user = users.new("alice@example.com", "Alice")  # POST /users
-circle = circles.new("Engineering", "Dev team")  # POST /circles
-vault_client = vault.client.new("MyApp", "Description")  # POST /client
+# Create new resources (returns dictionaries)
+user = campus.users.new(email="alice@example.com", name="Alice")     # → POST /users
+circle = campus.circles.new(name="Engineering", description="Dev team") # → POST /circles
 
-# Trigger actions
-circle.add_member("user_123", "admin")  # POST /circles/{id}/members/add
-circle.move("parent_circle_id")  # POST /circles/{id}/move
-vault["secrets"].set("key", "value")  # POST /vault/secrets/key
+# Vault secret operations
+campus.vault["secrets"]["API_KEY"].set(value="secret_value")         # → POST /vault/secrets/API_KEY
 
-# Grant permissions
-vault.access.grant("client_id", "vault_label", ["read", "write"])  # POST /access/vault_label
+# Vault management
+vault_client = campus.vault.client.new(name="MyApp", description="App") # → POST /client
+
+# Trigger actions via resource objects
+campus.circles["circle_456"].members.add(user_id="user_123", role="admin") # → POST /circles/circle_456/members/add
+campus.vault.access.grant(client_id="client_123", vault_label="secrets", permissions=["read"]) # → POST /access/secrets
 ```
 
 **Response Patterns:**
-- Created resources return the new resource with generated ID
+- Created resources return dictionaries with generated IDs
 - Actions return success confirmation or result data
-- May include metadata like creation timestamps
+- Access via dictionary keys: `user['id']`, `circle["name"]`
 
 ---
 
@@ -93,22 +111,19 @@ vault.access.grant("client_id", "vault_label", ["read", "write"])  # POST /acces
 - Returns updated resource or confirmation
 - More efficient than PUT for partial updates
 
-**Client Methods:**
-- `HttpClient._patch(path, data, params=None)`
-
-**Usage Patterns:**
+**Campus Client Patterns:**
 
 ```python
-# Update user information
-user.update(name="New Name")  # PATCH /users/{id}
-user.update(email="new@example.com", name="Updated Name")  # PATCH /users/{id}
+# Update via unified interface methods
+updated_user = campus.users.update(user_id="user_123", name="New Name")           # → PATCH /users/user_123
+updated_circle = campus.circles.update(circle_id="circle_456", description="New") # → PATCH /circles/circle_456
 
-# Update circle details
-circle.update(description="New description")  # PATCH /circles/{id}
-circle.update(name="Renamed Circle", description="Updated")  # PATCH /circles/{id}
+# Update via resource objects (legacy interface)
+campus.users["user_123"].update(name="New Name", email="new@example.com")         # → PATCH /users/user_123
+campus.circles["circle_456"].update(description="New description")                # → PATCH /circles/circle_456
 
-# Update member roles
-circle.update_member_role("user_123", "admin")  # PATCH /circles/{id}/members/user_123
+# Update member access
+campus.circles["circle_456"].members["member_id"].update(access=15)               # → PATCH /circles/circle_456/members/member_id
 ```
 
 **Request Body Patterns:**
@@ -121,9 +136,9 @@ circle.update_member_role("user_123", "admin")  # PATCH /circles/{id}/members/us
 ```
 
 **Response Patterns:**
-- Usually returns the updated resource
-- May return just success confirmation
-- Includes updated timestamps
+- Unified interface methods return updated resource dictionaries
+- Resource object methods may return confirmation
+- Includes updated timestamps and data
 
 ---
 
@@ -168,116 +183,125 @@ user_data = {
 - May support query parameters
 - Returns confirmation or empty response
 
-**Client Methods:**
-- `HttpClient._delete(path, params=None)`
-
-**Usage Patterns:**
+**Campus Client Patterns:**
 
 ```python
-# Delete resources
-user.delete()  # DELETE /users/{id}
-circle.delete()  # DELETE /circles/{id}
-vault["secrets"].delete("old_key")  # DELETE /vault/secrets/old_key
+# Delete via resource objects
+campus.users["user_123"].delete()                    # → DELETE /users/user_123
+campus.circles["circle_456"].delete()                # → DELETE /circles/circle_456
+
+# Delete vault secrets
+campus.vault["secrets"]["old_key"].delete()          # → DELETE /vault/secrets/old_key
 
 # Remove relationships
-circle.remove_member("user_123")  # DELETE /circles/{id}/members/remove?user_id=user_123
-vault.access.revoke("client_id", "vault_label")  # DELETE /access/vault_label?client_id=client_id
+campus.circles["circle_456"].members.remove(user_id="user_123") # → DELETE /circles/circle_456/members/remove
 
-# Delete vault clients
-vault.client.delete("client_123")  # DELETE /client/client_123
+# Delete vault clients and revoke access
+campus.vault.client.delete(client_id="client_123")   # → DELETE /client/client_123
+campus.vault.access.revoke(client_id="client_123", vault_label="secrets") # → DELETE /access/secrets
 ```
 
 **Response Patterns:**
-- Usually returns empty response (204 No Content)
+- Usually returns boolean `True` for success
 - May return confirmation message
 - Idempotent: deleting already-deleted resource succeeds
 
 ---
 
-## API Design Patterns
+## Campus Client API Patterns
 
 ### Resource Identification
 
-Campus APIs use consistent patterns for identifying resources:
+Campus Client uses consistent patterns for identifying resources through subscription syntax:
 
 ```python
-# Single resource access
-users["user_123"]           # /users/user_123
-circles["circle_456"]       # /circles/circle_456
-vault["app_secrets"]        # /vault/app_secrets
+# Path parameter mapping via subscription []
+campus.users["user_123"]           # → /users/user_123
+campus.circles["circle_456"]       # → /circles/circle_456
+campus.vault["app_secrets"]        # → /vault/app_secrets
+
+# Chained path parameters
+campus.vault["app_secrets"]["api_key"]  # → /vault/app_secrets/api_key
 
 # Nested resource access
-vault["app_secrets"]["api_key"]  # /vault/app_secrets/api_key
-circle.members()                 # /circles/{id}/members
-user.get_profile()              # /users/{id}/profile
+campus.circles["circle_456"].members           # → /circles/circle_456/members/*
+campus.circles["circle_456"].members["mem_789"] # → /circles/circle_456/members/mem_789
 ```
 
-### Query Parameters
+### Query Parameter Mapping
 
-GET requests support filtering and pagination through query parameters:
+Method arguments become query parameters or request body data:
 
 ```python
-# Search and filtering
-circles.search("engineering")    # ?q=engineering
-circles.list_by_user("user_123") # ?user_id=user_123
+# Query parameters via method arguments
+campus.users.new(email="alice@example.com", name="Alice")
+# → POST /users with body: {"email": "alice@example.com", "name": "Alice"}
 
-# Future pagination support
-# users.list(limit=50, offset=100)  # ?limit=50&offset=100
+campus.users.update(user_id="user_123", name="New Name")  
+# → PATCH /users/user_123 with body: {"name": "New Name"}
+
+campus.circles["circle_456"].members.add(user_id="user_123", role="admin")
+# → POST /circles/circle_456/members/add with body: {"user_id": "user_123", "role": "admin"}
+```
+
+### Unified vs Legacy Interface
+
+**Unified Interface** (Recommended):
+```python
+# Dictionary responses, simple method calls
+user = campus.users.new(email="alice@example.com", name="Alice")  # Returns Dict[str, Any]
+updated_user = campus.users.update(user_id=user["id"], name="Alice Smith")
+```
+
+**Legacy Resource Interface** (Advanced use cases):
+```python
+# Object-oriented access for complex operations
+user_resource = campus.users["user_123"]    # Returns User object
+user_profile = user_resource.get_profile()  # Advanced method
+user_resource.delete()                       # Direct resource manipulation
 ```
 
 ### Request Bodies
 
-POST and PATCH requests use JSON request bodies:
+POST and PATCH requests use JSON request bodies generated from method arguments:
 
 ```python
-# Create requests
-users.new("email@example.com", "Name")
+# Create requests - keyword arguments become request body
+campus.users.new(email="alice@example.com", name="Alice")
 # → POST /users
-# → {"email": "email@example.com", "name": "Name"}
+# → Body: {"email": "alice@example.com", "name": "Alice"}
 
-# Update requests  
-user.update(name="New Name", email="new@example.com")
-# → PATCH /users/{id}
-# → {"name": "New Name", "email": "new@example.com"}
+# Update requests - only specified fields included
+campus.users.update(user_id="user_123", name="New Name", email="new@example.com")
+# → PATCH /users/user_123  
+# → Body: {"name": "New Name", "email": "new@example.com"}
+
+# Action requests - all arguments become body data
+campus.circles["circle_456"].members.add(user_id="user_123", role="admin")
+# → POST /circles/circle_456/members/add
+# → Body: {"user_id": "user_123", "role": "admin"}
 ```
 
 ### Response Formats
 
-APIs return consistent JSON response formats:
+Campus Client returns dictionaries for easy data access:
 
-```json
-// Single resource
-{
-  "id": "user_123",
-  "email": "user@example.com",
-  "name": "User Name",
-  "created_at": "2025-07-21T10:00:00Z"
-}
+```python
+# User creation response
+user = campus.users.new(email="alice@example.com", name="Alice")
+print(user['id'])       # Access via dictionary key
+print(user['email'])    # alice@example.com
+print(user['name'])     # Alice
 
-// Collection response
-{
-  "users": [
-    {
-      "id": "user_123",
-      "email": "user@example.com",
-      "name": "User Name"
-    }
-  ],
-  "total": 1,
-  "limit": 50,
-  "offset": 0
-}
+# Circle creation response  
+circle = campus.circles.new(name="Engineering", description="Dev team")
+print(circle["id"])     # Generated circle ID
+print(circle["name"])   # Engineering
 
-// Action response
-{
-  "success": true,
-  "message": "User added to circle",
-  "result": {
-    "user_id": "user_123",
-    "circle_id": "circle_456",
-    "role": "member"
-  }
-}
+# Vault secret response
+api_key_value = str(campus.vault["secrets"]["API_KEY"])  # Direct string conversion
+# OR
+api_key_value = campus.vault["secrets"]["API_KEY"].get()  # Explicit get method
 ```
 
 ## Error Responses
@@ -362,12 +386,12 @@ Understand which operations are idempotent:
 
 ```python
 # Idempotent - safe to retry
-user = users["user_123"]        # GET
-user.update(name="New Name")    # PATCH  
-user.delete()                   # DELETE
+user_data = campus.users["user_123"].get()      # GET
+updated_user = campus.users.update(user_id="user_123", name="New Name")  # PATCH  
+campus.users["user_123"].delete()               # DELETE
 
-# Not idempotent - creates new resources
-user = users.new("email", "name")  # POST
+# Not idempotent - creates new resources each time
+user = campus.users.new(email="alice@example.com", name="Alice")  # POST
 ```
 
 ### Error Handling
@@ -375,51 +399,56 @@ user = users.new("email", "name")  # POST
 Handle specific error types appropriately:
 
 ```python
-from campus.client.errors import NotFoundError, ValidationError
+from campus.client.errors import NotFoundError, ValidationError, AuthenticationError
 
 try:
-    user = users["user_123"]
-    user.update(email="new@example.com")
+    user = campus.users.new(email="alice@example.com", name="Alice")
+    updated_user = campus.users.update(user_id=user["id"], email="new@example.com")
 except NotFoundError:
     print("User does not exist")
 except ValidationError as e:
     print(f"Invalid update data: {e}")
+except AuthenticationError:
+    print("Please set CLIENT_ID and CLIENT_SECRET environment variables")
 ```
 
-### Resource Lifecycle
+### Resource Lifecycle with Dictionary Interface
 
-Follow standard resource lifecycle patterns:
+Follow standard resource lifecycle patterns using the unified interface:
 
 ```python
 # Create → Read → Update → Delete
-user = users.new("alice@example.com", "Alice")  # POST
-user_data = user.data                           # GET (cached)
-user.update(name="Alice Smith")                 # PATCH
-user.delete()                                   # DELETE
+user = campus.users.new(email="alice@example.com", name="Alice")  # POST → Dict
+print(f"Created user: {user['email']}")                          # Dict access
+updated_user = campus.users.update(user_id=user["id"], name="Alice Smith")  # PATCH → Dict
+campus.users[user["id"]].delete()                                # DELETE
 ```
 
-### Batch Operations
+### Path vs Query Parameter Selection
 
-For multiple operations, consider grouping:
+**Use Path Parameters (subscription syntax) for:**
+- Resource identification: `campus.users["user_123"]`
+- Hierarchical access: `campus.vault["secrets"]["API_KEY"]`
+- Nested resources: `campus.circles["circle_456"].members`
+
+**Use Query Parameters (method arguments) for:**
+- Resource creation: `campus.users.new(email="...", name="...")`
+- Resource updates: `campus.users.update(user_id="...", name="...")`
+- Action parameters: `members.add(user_id="...", role="...")`
+
+### Caching Behavior
+
+Understand client-side caching with resource objects:
 
 ```python
-# Less efficient - multiple requests
-for user_id in user_ids:
-    users[user_id].delete()
+# Resource object caching (legacy interface)
+user_resource = campus.users["user_123"]
+print(user_resource.name)       # Fetches data from server
+print(user_resource.name)       # Uses cached data
 
-# More efficient - batch operations (when available)
-# users.delete_batch(user_ids)  # Future enhancement
-```
+user_resource.update(name="New Name")  # Clears cache
+print(user_resource.name)       # Fetches fresh data
 
-### Caching
-
-Understand client-side caching behavior:
-
-```python
-user = users["user_123"]
-print(user.name)       # Fetches data from server
-print(user.name)       # Uses cached data
-
-user.update(name="New Name")  # Clears cache
-print(user.name)       # Fetches fresh data
+# Unified interface (no caching - always fresh)
+user = campus.users.update(user_id="user_123", name="New Name")  # Always returns fresh data
 ```
