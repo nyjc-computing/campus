@@ -42,7 +42,7 @@ class VaultAccessClient:
             "client_id": client_id,
             "permissions": permissions
         }
-        return self._client._post(f"/access/{label}", data)
+        return self._client.post(f"/access/{label}", data)
 
     def revoke(self, client_id: str, label: str) -> Dict[str, Any]:
         """Revoke access to a vault for a client.
@@ -57,7 +57,7 @@ class VaultAccessClient:
         Example:
             vault.access.revoke("user123", "apps")
         """
-        return self._client._delete(f"/access/{label}", params={"client_id": client_id})
+        return self._client.delete(f"/access/{label}", params={"client_id": client_id})
 
     def check(self, client_id: str, label: str) -> Dict[str, Any]:
         """Check if a client has access to a vault.
@@ -73,7 +73,7 @@ class VaultAccessClient:
             permissions = vault.access.check("user123", "apps")
             print(permissions["permissions"]["READ"])  # True/False
         """
-        return self._client._get(f"/access/{label}", params={"client_id": client_id})
+        return self._client.get(f"/access/{label}", params={"client_id": client_id})
 
 
 class VaultAccessModule:

@@ -42,7 +42,7 @@ class VaultCollection:
             NotFoundError: If the key doesn't exist
         """
         try:
-            response = self._client._get(f"/vault/{self._label}/{key}")
+            response = self._client.get(f"/vault/{self._label}/{key}")
             return response["value"]
         except NotFoundError as exc:
             raise NotFoundError(
@@ -58,7 +58,7 @@ class VaultCollection:
         Returns:
             Action performed ("created" or "updated")
         """
-        response = self._client._post(
+        response = self._client.post(
             f"/vault/{self._label}/{key}", {"value": value})
         return response.get("action", "updated")
 
@@ -72,7 +72,7 @@ class VaultCollection:
             True if deleted, False if key didn't exist
         """
         try:
-            self._client._delete(f"/vault/{self._label}/{key}")
+            self._client.delete(f"/vault/{self._label}/{key}")
             return True
         except NotFoundError:
             return False
@@ -83,7 +83,7 @@ class VaultCollection:
         Returns:
             List of key names
         """
-        response = self._client._get(f"/vault/{self._label}/list")
+        response = self._client.get(f"/vault/{self._label}/list")
         return response.get("keys", [])
 
     def has(self, key: str) -> bool:
@@ -130,7 +130,7 @@ class VaultClient(HttpClient):
         Returns:
             List of available vault labels
         """
-        response = self._get("/vault/list")
+        response = self.get("/vault/list")
         return response.get("vaults", [])
 
 

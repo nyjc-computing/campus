@@ -40,7 +40,7 @@ class VaultClientManagement:
             "name": name,
             "description": description
         }
-        response = self._client._post("/client", data)
+        response = self._client.post("/client", data)
         client_data = response["client"]
         client_secret = response["client_secret"]
         return client_data, client_secret
@@ -58,7 +58,7 @@ class VaultClientManagement:
             client_info = vault.client.get("client_abc123")
             print(f"Client: {client_info['name']}")
         """
-        response = self._client._get(f"/client/{client_id}")
+        response = self._client.get(f"/client/{client_id}")
         return response["client"]
 
     def list(self) -> List[Dict[str, Any]]:
