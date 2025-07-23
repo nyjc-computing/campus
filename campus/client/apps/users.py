@@ -5,11 +5,9 @@ User management client for creating and managing user accounts.
 
 # pylint: disable=attribute-defined-outside-init
 
-import sys
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 from campus.client.base import HttpClient
 from campus.client import config
-from campus.client.errors import AuthenticationError
 
 
 class User:

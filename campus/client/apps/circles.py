@@ -5,16 +5,14 @@ Circle management client for creating and managing circles.
 
 # pylint: disable=attribute-defined-outside-init
 
-import sys
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from campus.client.base import HttpClient
-from campus.client.errors import NotFoundError
 from campus.client import config
 
 
 class CircleMembers:
     """Represents circle members sub-resource.
-    
+
     Provides methods for managing circle membership following the server API.
     """
 
@@ -30,7 +28,7 @@ class CircleMembers:
 
     def list(self) -> Dict[str, Any]:
         """Get circle members and their access values.
-        
+
         Server: GET /circles/{circle_id}/members
 
         Returns:
@@ -40,7 +38,7 @@ class CircleMembers:
 
     def add(self, *, user_id: str, **kwargs) -> None:
         """Add a member to the circle.
-        
+
         Server: POST /circles/{circle_id}/members/add
 
         Args:
@@ -52,7 +50,7 @@ class CircleMembers:
 
     def remove(self, user_id: str) -> None:
         """Remove a member from the circle.
-        
+
         Server: DELETE /circles/{circle_id}/members/remove
 
         Args:
@@ -63,7 +61,7 @@ class CircleMembers:
 
     def users(self) -> Dict[str, Any]:
         """Get users in the circle.
-        
+
         Server: GET /circles/{circle_id}/users
         Status: Returns 501 (not implemented yet)
 
@@ -74,10 +72,10 @@ class CircleMembers:
 
     def __getitem__(self, member_circle_id: str) -> 'CircleMember':
         """Get a specific member for updates.
-        
+
         Args:
             member_circle_id: The member circle ID
-            
+
         Returns:
             CircleMember instance for patch operations
         """
@@ -101,13 +99,14 @@ class CircleMember:
 
     def update(self, **kwargs) -> None:
         """Update a member's access in the circle.
-        
+
         Server: PATCH /circles/{circle_id}/members/{member_circle_id}
 
         Args:
             **kwargs: Fields to update (e.g., access)
         """
-        self._client.patch(f"/circles/{self._circle_id}/members/{self._member_circle_id}", kwargs)
+        self._client.patch(
+            f"/circles/{self._circle_id}/members/{self._member_circle_id}", kwargs)
 
 
 class Circle:
@@ -138,7 +137,7 @@ class Circle:
 
     def get(self) -> Dict[str, Any]:
         """Get circle details.
-        
+
         Server: GET /circles/{circle_id}
 
         Returns:
@@ -157,7 +156,7 @@ class Circle:
 
     def update(self, **kwargs) -> None:
         """Update the circle.
-        
+
         Server: PATCH /circles/{circle_id}
 
         Args:
@@ -167,7 +166,7 @@ class Circle:
 
     def delete(self) -> None:
         """Delete the circle.
-        
+
         Server: DELETE /circles/{circle_id}
         """
         self._client.delete(f"/circles/{self._circle_id}")
@@ -183,7 +182,7 @@ class Circle:
 
     def move(self, *, parent_circle_id: str) -> None:
         """Move the circle to a new parent.
-        
+
         Server: POST /circles/{circle_id}/move
         Status: Not implemented (returns 501)
 
@@ -236,7 +235,7 @@ class CirclesClient(HttpClient):
 
     def new(self, *, name: str, description: str = "", **kwargs) -> Circle:
         """Create a new circle.
-        
+
         Server: POST /circles
 
         Args:
