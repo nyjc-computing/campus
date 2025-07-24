@@ -42,7 +42,9 @@ class VaultKey:
             NotFoundError: If the key doesn't exist
         """
         try:
-            response = self._client.get(f"/vault/{self._label}/{self._key}")
+            response = self._client.get(
+                f"/vault/{self._label}/{self._key}"
+            )
             return response["value"]
         except NotFoundError as exc:
             raise NotFoundError(
