@@ -10,8 +10,8 @@ from campus.client.base import HttpClient
 from campus.client.errors import NotFoundError
 from campus.client import config
 
-from .access import VaultAccessClient
-from .client import VaultClientManagement
+from campus.client.vault.access import VaultAccessClient
+from campus.client.vault.client import VaultClientManagement
 
 
 class VaultKey:

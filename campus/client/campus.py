@@ -3,9 +3,9 @@
 Unified Campus client interface providing consistent access to all services.
 """
 
-from .vault.vault import VaultClient
-from .apps.users import UsersClient
-from .apps.circles import CirclesClient
+from campus.client.vault.vault import VaultClient
+from campus.client.apps.users import UsersClient
+from campus.client.apps.circles import CirclesClient
 
 
 class Campus:

@@ -13,14 +13,14 @@ from urllib.parse import urljoin
 
 import requests
 
-from .errors import (
+from campus.client.errors import (
     AuthenticationError,
     AccessDeniedError,
     NotFoundError,
     ValidationError,
     NetworkError
 )
-from . import config
+from campus.client import config
 
 
 class HttpClient:

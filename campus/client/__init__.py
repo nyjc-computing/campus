@@ -5,8 +5,8 @@ Campus Client Package
 Provides unified Campus client interface.
 """
 
-from .campus import Campus
-from .errors import (
+from campus.client.campus import Campus
+from campus.client.errors import (
     CampusClientError,
     AuthenticationError,
     AccessDeniedError,
