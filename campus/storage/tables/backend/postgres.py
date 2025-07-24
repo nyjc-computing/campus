@@ -27,25 +27,19 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from campus.common import devops
-from campus.vault import get_vault
+from campus.client import Campus
 from campus.storage.tables.interface import TableInterface, PK
 from campus.storage.errors import NotFoundError, NoChangesAppliedError
 
 
+# Singleton Campus client for this backend
+_campus_client = Campus()
+
+
 def _get_db_uri() -> str:
-    """Get the database URI from vault.
-
-    Retrieves POSTGRESDB_URI from the 'storage' vault.
-
-    Returns:
-        PostgreSQL connection string
-
-    Raises:
-        RuntimeError: If vault secret retrieval fails for any reason
-    """
+    """Get the database URI from the vault using the client API."""
     try:
-        storage_vault = get_vault("storage")
-        return storage_vault.get("POSTGRESDB_URI")
+        return _campus_client.vault["storage"]["POSTGRESDB_URI"].get()
     except Exception as e:
         raise RuntimeError(
             f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "
