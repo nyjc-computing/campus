@@ -9,7 +9,11 @@ This follows the principle of handling cross-cutting concerns at the appropriate
 from flask import Blueprint, Flask, jsonify, request
 
 from .. import access
-from ..auth import require_client_authentication, require_vault_permission
+from ..auth import (
+    check_vault_access,
+    require_client_authentication,
+    require_vault_permission
+)
 from ..model import Vault, VaultKeyError
 
 # Create blueprint for vault routes
@@ -82,7 +86,6 @@ def set_secret(client_id, label, key):
         required_permission = access.UPDATE if key_exists else access.CREATE
 
         # Verify client has the specific permission required for this operation
-        from ..auth import check_vault_access
         check_vault_access(client_id, label, required_permission)
 
         # Perform the operation
