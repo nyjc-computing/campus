@@ -178,4 +178,4 @@ GET /circles/{circle_id}/users
 - Server implementations should follow the response formats specified
 - Error handling should be consistent with existing endpoints
 - Authentication and authorization should follow existing patterns
-- BaseClient now supports PATCH requests for update operations
+- HttpClient now supports PATCH requests for update operations

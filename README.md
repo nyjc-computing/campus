@@ -127,8 +127,7 @@ Campus follows a **modular monolith** architecture with clear service boundaries
 Campus uses environment variables for configuration:
 
 ```bash
-# Application
-SECRET_KEY="your-secret-key"
+# Application - No SECRET_KEY needed (stored in vault)
 FLASK_ENV="development"
 
 # Vault Service
@@ -363,3 +362,25 @@ Campus is developed by the **NYJC Computing Department** as an open-source educa
 ---
 
 **Ready to get started?** Check out the [Campus Architecture Guide](campus/README.md) for detailed technical documentation.
+
+## Installable Subpackages
+
+The following subpackages can be installed independently. Each provides an `install.sh` script for reliable installation with all dependencies:
+
+- `campus/client` — The client library for interacting with Campus APIs.
+- `campus/vault` — The Vault service and related tools.
+- `campus/apps` — The main application server and API endpoints.
+- `campus/workspace` — The meta-package for a full Campus deployment (installs all components).
+
+**To install any subpackage:**
+
+```bash
+cd campus/<subpackage>
+bash install.sh
+```
+
+Replace `<subpackage>` with `client`, `vault`, `apps`, or `workspace` as needed.
+
+> **Note:** Do not use `pip install` or `poetry install` directly for these subpackages unless you are developing locally. The install scripts ensure all dependencies are present and installed in the correct order.
+
+For more details, see the README in each subpackage directory.

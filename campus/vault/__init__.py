@@ -86,7 +86,7 @@ __all__ = [
     "get_authenticated_vault",
     "Vault",
     "AuthenticatedVault",
-    "VaultKeyError", 
+    "VaultKeyError",
     "VaultAuthError",
     "ClientAuthenticationError",
     "VaultAccessDeniedError",
@@ -100,13 +100,13 @@ __all__ = [
 
 def get_vault(label: str) -> Vault:
     """Get a Vault instance by label.
-    
+
     This is a convenience function for programmatic access to vaults.
     For HTTP API access, use the routes which handle authentication.
-    
+
     Note: When using this function programmatically, CLIENT_ID and CLIENT_SECRET
     environment variables must be set for the vault operations to work.
-    
+
     For the new architecture, this returns a Vault model instance.
     Authentication and permission checking should be handled at the application layer.
     """
@@ -115,51 +115,51 @@ def get_vault(label: str) -> Vault:
 
 class AuthenticatedVault:
     """Backward-compatible vault wrapper that includes authentication.
-    
+
     This class provides the same interface as the old Vault class for
     backward compatibility, while using the new separated architecture.
     """
-    
+
     def __init__(self, label: str):
         self.label = label
         self.vault = Vault(label)
-        
+
         # Authenticate client using the new auth system
         from .auth import authenticate_client
         self.client_id = authenticate_client()
-    
+
     def __repr__(self) -> str:
         return f"AuthenticatedVault(label={self.label!r})"
-    
+
     def get(self, key: str) -> str:
         """Get a secret from the vault with authentication and permission checking."""
         from .auth import check_vault_access
         check_vault_access(self.client_id, self.label, access.READ)
         return self.vault.get(key)
-    
+
     def has(self, key: str) -> bool:
         """Check if a secret exists in the vault with authentication and permission checking."""
         from .auth import check_vault_access
         check_vault_access(self.client_id, self.label, access.READ)
         return self.vault.has(key)
-    
+
     def set(self, key: str, value: str) -> None:
         """Set a secret in the vault with authentication and permission checking."""
         from .auth import check_vault_access
-        
+
         # Check if key exists to determine required permission
         key_exists = self.vault.has(key) if self._can_read() else False
         required_permission = access.UPDATE if key_exists else access.CREATE
         check_vault_access(self.client_id, self.label, required_permission)
-        
+
         self.vault.set(key, value)
-    
+
     def delete(self, key: str) -> None:
         """Delete a secret from the vault with authentication and permission checking."""
         from .auth import check_vault_access
         check_vault_access(self.client_id, self.label, access.DELETE)
         self.vault.delete(key)
-    
+
     def _can_read(self) -> bool:
         """Check if client can read from this vault (for internal use)."""
         try:
@@ -172,10 +172,10 @@ class AuthenticatedVault:
 
 def get_authenticated_vault(label: str) -> AuthenticatedVault:
     """Get an authenticated vault instance with the old interface.
-    
+
     This function provides backward compatibility for code that expects
     the old Vault behavior with built-in authentication and permission checking.
-    
+
     For new code, prefer using the routes for HTTP access or the model.Vault
     class directly with explicit authentication handling.
     """
@@ -184,7 +184,7 @@ def get_authenticated_vault(label: str) -> AuthenticatedVault:
 
 def create_app() -> Flask:
     """Factory function to create the vault app.
-    
+
     This is called if vault is run as a standalone app.
     """
     app = Flask(__name__)
@@ -196,16 +196,15 @@ def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
     from flask import jsonify
     from .routes import init_vault_routes, init_access_routes, init_client_routes
-    
-    # Add health check endpoint directly to the app (not part of vault API)
-    @app.route("/health")
+
+    # Health check route for deployments
+    @app.route('/')
     def health_check():
-        """Health check endpoint for deployment monitoring"""
-        return jsonify({"status": "healthy", "service": "campus-vault"})
-    
+        return {'status': 'healthy', 'service': 'campus-vault'}, 200
+
     # Register all vault-related blueprints
     init_vault_routes(app)   # /vault/* - secret management
-    init_access_routes(app)  # /access/* - access control  
+    init_access_routes(app)  # /access/* - access control
     init_client_routes(app)  # /client/* - client management
 
 
@@ -241,13 +240,13 @@ def init_db():
 def run_server():
     """Entry point for running vault as a standalone service"""
     import os
-    
+
     app = create_app()
-    
+
     # Replit configuration
     host = "0.0.0.0"
     port = 5000
-    
+
     print(f"🔐 Starting Campus Vault Service on {host}:{port}")
     app.run(host=host, port=port, debug=False)
 

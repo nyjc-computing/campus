@@ -9,23 +9,24 @@ Admin operations require ALL permissions, access checking requires READ permissi
 from flask import Blueprint, Flask, jsonify, request
 
 from .. import access
-from ..auth import require_vault_permission
+from ..auth import require_client_authentication, require_vault_permission
 
 # Create blueprint for access management routes
 bp = Blueprint('access', __name__, url_prefix='/access')
 
 
 @bp.route("/<label>", methods=["POST"])
+@require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def grant_vault_access(client_id, label):
     """Grant access to a vault for a client
-    
+
     POST /access/{vault_label}
     Body: {
         "client_id": "target_client_id",
         "permissions": ["READ", "CREATE"] or 7
     }
-    
+
     Args:
         client_id: The authenticated client making this request (injected by decorator)
         label: The vault label from the URL path
@@ -34,26 +35,27 @@ def grant_vault_access(client_id, label):
         data = request.get_json()
         if not data:
             return jsonify({"error": "Missing request body"}), 400
-            
+
         required_fields = ["client_id", "permissions"]
-        missing_fields = [field for field in required_fields if field not in data]
+        missing_fields = [
+            field for field in required_fields if field not in data]
         if missing_fields:
             return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
-            
+
         target_client_id = data["client_id"]
         permissions = data["permissions"]
-        
+
         # Validate permissions - should be an integer or list of permission names
         if isinstance(permissions, list):
             # Convert permission names to bitflags
             permission_map = {
                 "READ": access.READ,
-                "CREATE": access.CREATE, 
+                "CREATE": access.CREATE,
                 "UPDATE": access.UPDATE,
                 "DELETE": access.DELETE,
                 "ALL": access.ALL
             }
-            
+
             access_flags = 0
             for perm in permissions:
                 if perm not in permission_map:
@@ -62,29 +64,32 @@ def grant_vault_access(client_id, label):
         elif isinstance(permissions, int):
             access_flags = permissions
         else:
-            return jsonify({"error": "Permissions must be integer or list of permission names"}), 400
-            
+            return jsonify({
+                "error": "Permissions must be integer or list of permission names"
+            }), 400
+
         # Grant the access
         access.grant_access(target_client_id, label, access_flags)
-        
+
         return jsonify({
             "status": "success",
             "client_id": target_client_id,
             "label": label,
             "permissions": access_flags
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @bp.route("/<label>", methods=["DELETE"])
+@require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def revoke_vault_access(client_id, label):
     """Revoke access to a vault for a client
-    
+
     DELETE /access/{vault_label}?client_id={client_id}
-    
+
     Args:
         client_id: The authenticated client making this request (injected by decorator)
         label: The vault label from the URL path
@@ -93,25 +98,26 @@ def revoke_vault_access(client_id, label):
         target_client_id = request.args.get("client_id")
         if not target_client_id:
             return jsonify({"error": "Missing required query parameter: client_id"}), 400
-        
+
         access.revoke_access(target_client_id, label)
-        
+
         return jsonify({
             "status": "success",
             "client_id": target_client_id,
             "label": label,
             "action": "revoked"
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @bp.route("/<label>", methods=["GET"])
+@require_client_authentication()
 @require_vault_permission(access.READ)
 def get_vault_access(client_id, label):
     """Check if a client has access to a vault
-    
+
     GET /access/{vault_label}?client_id={client_id}
     Returns: {
         "client_id": "...",
@@ -123,7 +129,7 @@ def get_vault_access(client_id, label):
             "DELETE": false
         }
     }
-    
+
     Args:
         client_id: The authenticated client making this request (injected by decorator)
         label: The vault label from the URL path
@@ -132,21 +138,21 @@ def get_vault_access(client_id, label):
         target_client_id = request.args.get("client_id")
         if not target_client_id:
             return jsonify({"error": "Missing required query parameter: client_id"}), 400
-        
+
         # Check each permission level
         permissions = {
             "READ": access.has_access(target_client_id, label, access.READ),
             "CREATE": access.has_access(target_client_id, label, access.CREATE),
-            "UPDATE": access.has_access(target_client_id, label, access.UPDATE), 
+            "UPDATE": access.has_access(target_client_id, label, access.UPDATE),
             "DELETE": access.has_access(target_client_id, label, access.DELETE)
         }
-        
+
         return jsonify({
             "client_id": target_client_id,
             "label": label,
             "permissions": permissions
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

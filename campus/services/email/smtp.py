@@ -7,7 +7,7 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from campus.vault import get_vault
+from campus.client import Campus
 
 from .base import EmailSenderInterface
 
@@ -33,21 +33,22 @@ class SMTPEmailSender(EmailSenderInterface):
         attachments: Sequence[Any] | None = None
     ) -> dict:
         """Send an email to a recipient via SMTP.
-    
+
         Args:
             recipient: Email address of the recipient
             subject: Email subject line
             body: Plain text email body
             html_body: Optional HTML formatted email body
             attachments: Optional list of attachment objects
-    
+
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-        vault = get_vault("smtp")
-        username = vault.get('SMTP_USERNAME')
-        password = vault.get('SMTP_PASSWORD')
-        host = vault.get('SMTP_HOST')
+        campus_client = Campus()
+        vault = campus_client.vault["smtp"]
+        username = vault["SMTP_USERNAME"].get()
+        password = vault["SMTP_PASSWORD"].get()
+        host = vault["SMTP_HOST"].get()
 
         msg = EmailMessage()
         msg['Subject'] = subject

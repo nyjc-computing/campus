@@ -6,7 +6,6 @@ This context is pushed to the flask g object for use in the API routes.
 
 from flask import g
 
-from campus.vault.client import ClientResource
 from campus.models.credentials import (
     ClientCredentialsSchema,
     UserCredentialsSchema,
@@ -51,15 +50,15 @@ class CampusContext:
         g.user_credentials = value
 
     @property
-    def client(self) -> ClientResource:
-        """Get the client context."""
+    def client(self) -> dict:
+        """Get the client context as a dictionary."""
         if "client" not in g:
             raise ContextError("Client context not found")
         return g.client
 
     @client.setter
-    def client(self, value: ClientResource):
-        """Set the client context."""
+    def client(self, value: dict):
+        """Set the client context as a dictionary."""
         g.client = value
 
     @property

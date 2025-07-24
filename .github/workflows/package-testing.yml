@@ -57,7 +57,7 @@ on:
   push:
     branches: [main]  # Only run on main branch pushes
   pull_request:
-    branches: [main]  # Run on PRs targeting main
+    branches: [main, staging]  # Run on PRs targeting main
 
 jobs:
   # First, test that packages can be built in dependency order
@@ -86,8 +86,14 @@ jobs:
         run: |
           cd campus/${{ matrix.package }}
           echo "📦 Building campus-${{ matrix.package }}..."
-          poetry install
-          poetry build
+          if [[ "${{ matrix.package }}" == "common" || "${{ matrix.package }}" == "models" ]]; then
+            # Only use poetry install/build for non-installable packages
+            poetry install
+            poetry build
+          else
+            # Use install.sh for installable subpackages
+            bash install.sh
+          fi
           echo "✅ Successfully built campus-${{ matrix.package }}"
           
       - name: Verify package contents
@@ -127,13 +133,16 @@ jobs:
           poetry install
           poetry build
           cd ../..
-          
       - name: Test package build - ${{ matrix.package }}
         run: |
           cd campus/${{ matrix.package }}
           echo "📦 Building campus-${{ matrix.package }}..."
-          poetry install
-          poetry build
+          if [[ "${{ matrix.package }}" == "models" ]]; then
+            poetry install
+            poetry build
+          else
+            bash install.sh
+          fi
           echo "✅ Successfully built campus-${{ matrix.package }}"
           
       - name: Verify package contents
@@ -173,19 +182,16 @@ jobs:
           poetry install
           poetry build
           cd ../..
-          
-          # Build vault
-          cd campus/vault  
-          poetry install
-          poetry build
+          # Build vault using install.sh (not poetry install)
+          cd campus/vault
+          bash install.sh
           cd ../..
           
       - name: Test package build - ${{ matrix.package }}
         run: |
           cd campus/${{ matrix.package }}
           echo "📦 Building campus-${{ matrix.package }}..."
-          poetry install
-          poetry build
+          bash install.sh
           echo "✅ Successfully built campus-${{ matrix.package }}"
           
       - name: Verify package contents
@@ -224,21 +230,20 @@ jobs:
           cd campus/common
           poetry install && poetry build
           cd ../vault
-          poetry install && poetry build
+          bash install.sh
           cd ../client
-          poetry install && poetry build
+          bash install.sh
           cd ../models
           poetry install && poetry build
           cd ../storage
-          poetry install && poetry build
+          bash install.sh
           cd ../..
           
       - name: Test package build - ${{ matrix.package }}
         run: |
           cd campus/${{ matrix.package }}
           echo "📦 Building campus-${{ matrix.package }}..."
-          poetry install
-          poetry build
+          bash install.sh
           echo "✅ Successfully built campus-${{ matrix.package }}"
 
   # Test package imports work in isolation
@@ -247,7 +252,7 @@ jobs:
     needs: [build-independent-packages, build-dependent-packages, build-storage-packages, build-final-packages]
     strategy:
       matrix:
-        package: ["common", "vault", "client"]  # Start with independent packages
+        package: ["vault", "client"]  # Only test installable packages
     
     steps:
       - uses: actions/checkout@v4
@@ -264,24 +269,12 @@ jobs:
           poetry config virtualenvs.use-poetry-python false
           poetry config virtualenvs.create true
           
-      - name: Build dependencies for import test
-        run: |
-          # Build dependencies first
-          cd campus/common
-          poetry install && poetry build
-          cd ../..
-          if [[ "${{ matrix.package }}" == "vault" ]]; then
-            cd campus/vault
-            poetry install && poetry build
-            cd ../..
-          fi
-          
-      - name: Test isolated import - ${{ matrix.package }}
+      - name: Install package using install.sh - ${{ matrix.package }}
         run: |
           cd campus/${{ matrix.package }}
-          poetry install
+          bash install.sh
           echo "🧪 Testing isolated import of campus.${{ matrix.package }}..."
-          poetry run python -c "
+          PYTHONPATH=$(realpath ../..) poetry run python -c "
           import sys
           try:
               import campus.${{ matrix.package }}
@@ -317,17 +310,17 @@ jobs:
           
           # Test vault (should only need common)
           cd campus/vault
-          poetry install
+          bash install.sh
           echo "✅ campus-vault dependencies resolved"
           
           # Test storage (needs vault + common)
           cd ../storage
-          poetry install
+          bash install.sh
           echo "✅ campus-storage dependencies resolved"
           
           # Test apps (needs all packages)
           cd ../apps
-          poetry install
+          bash install.sh
           echo "✅ campus-apps dependencies resolved"
           
           echo "🎉 All dependency chains working!"
@@ -355,7 +348,7 @@ jobs:
       - name: Test workspace package
         run: |
           cd campus/workspace
-          poetry install
+          bash install.sh
           echo "🏢 Testing workspace integration..."
           poetry run python -c "
           import sys

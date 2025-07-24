@@ -9,7 +9,11 @@ This follows the principle of handling cross-cutting concerns at the appropriate
 from flask import Blueprint, Flask, jsonify, request
 
 from .. import access
-from ..auth import require_vault_permission
+from ..auth import (
+    check_vault_access,
+    require_client_authentication,
+    require_vault_permission
+)
 from ..model import Vault, VaultKeyError
 
 # Create blueprint for vault routes
@@ -17,7 +21,7 @@ bp = Blueprint('vault', __name__, url_prefix='/vault')
 
 
 @bp.route("/list")
-@require_vault_permission(access.READ)  # Basic read permission to list available vaults
+@require_client_authentication()
 def list_vaults(client_id, **kwargs):
     """List available vault labels"""
     try:
@@ -29,6 +33,7 @@ def list_vaults(client_id, **kwargs):
 
 
 @bp.route("/<label>/list")
+@require_client_authentication()
 @require_vault_permission(access.READ)
 def list_keys(client_id, label):
     """List all keys in a vault"""
@@ -41,6 +46,7 @@ def list_keys(client_id, label):
 
 
 @bp.route("/<label>/<key>")
+@require_client_authentication()
 @require_vault_permission(access.READ)
 def get_secret(client_id, label, key):
     """Get a secret from a vault"""
@@ -55,57 +61,61 @@ def get_secret(client_id, label, key):
 
 
 @bp.route("/<label>/<key>", methods=["POST"])
+@require_client_authentication()
+# Client needs CREATE OR UPDATE
+@require_vault_permission(access.CREATE, access.UPDATE)
 def set_secret(client_id, label, key):
-    """Set a secret in a vault"""
+    """Set a secret in a vault
+
+    Requires CREATE permission for new keys, UPDATE permission for existing keys.
+    The decorator ensures the client has at least one of these permissions.
+    """
     try:
         data = request.get_json()
         if not data or "value" not in data:
             return jsonify({"error": "Missing 'value' in request body"}), 400
-            
+
         value = data.get("value")
         if not isinstance(value, str):
             return jsonify({"error": "'value' must be a string"}), 400
-        
+
         vault = Vault(label)
-        
-        # Check if key exists to determine required permission
+
+        # Check if key exists to determine specific permission and validate
         key_exists = vault.has(key)
         required_permission = access.UPDATE if key_exists else access.CREATE
-        
-        # Import auth functions locally to avoid circular imports during module loading
-        from ..auth import check_vault_access, authenticate_client
-        
-        # Re-authenticate and check specific permission
-        client_id = authenticate_client()
+
+        # Verify client has the specific permission required for this operation
         check_vault_access(client_id, label, required_permission)
-        
+
         # Perform the operation
         is_new = vault.set(key, value)
         action = "created" if is_new else "updated"
-        
+
         return jsonify({
-            "status": "success", 
-            "key": key, 
+            "status": "success",
+            "key": key,
             "action": action
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @bp.route("/<label>/<key>", methods=["DELETE"])
+@require_client_authentication()
 @require_vault_permission(access.DELETE)
 def delete_secret(client_id, label, key):
     """Delete a secret from a vault"""
     try:
         vault = Vault(label)
         deleted = vault.delete(key)
-        
+
         if deleted:
             return jsonify({"status": "success", "key": key, "action": "deleted"})
         else:
             return jsonify({"error": f"Secret '{key}' not found in vault '{label}'"}), 404
-            
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

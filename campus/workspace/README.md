@@ -53,6 +53,20 @@ from campus import models
 from campus import apps
 ```
 
+## Installation
+
+This is the recommended way to install all Campus services and dependencies for a complete deployment.
+
+**Recommended installation method:**
+
+```bash
+bash install.sh
+```
+
+This script will build and install all required subpackages in the correct order.
+
+> **Note:** Do not use `pip install` or `poetry install` directly for this meta-package unless you are developing locally. The install script ensures all dependencies are present and compatible.
+
 ## Usage
 
 ### Complete System Import
@@ -192,7 +206,7 @@ export STORAGE_URI="postgresql://..."
 # Authentication
 export CLIENT_ID="your_client_id"
 export CLIENT_SECRET="your_client_secret"
-export SECRET_KEY="your_app_secret"
+# SECRET_KEY now stored in vault under 'campus' label - no environment variable needed
 
 # Optional: Service-specific configs
 export FLASK_ENV="production"

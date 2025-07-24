@@ -94,7 +94,7 @@ campus/
 - Collection and table interfaces
 
 **Key modules:**
-- `campus.storage.collections` - Document storage interface
+- `campus.storage.documents` - Document storage interface
 - `campus.storage.tables` - Relational storage interface
 
 ### 1.5 Cross-Package Dependencies

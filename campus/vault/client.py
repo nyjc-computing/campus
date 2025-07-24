@@ -12,20 +12,34 @@ to the vault database, maintaining compatibility with the main client schema
 where possible.
 
 SECRET_KEY USAGE:
-This module intentionally uses the SECRET_KEY environment variable rather than
-retrieving it from the vault to maintain independence and avoid circular 
-dependencies. The vault service must be able to authenticate its own clients
-without depending on itself.
+This module retrieves the SECRET_KEY from the vault itself (from the 'campus' 
+vault label) on demand. While this creates additional database load, it provides
+consistency with the vault-first architecture and eliminates environment variable
+dependencies. Performance optimizations (such as API keys) can be addressed
+when needed.
 """
 
-import os
 from typing import TypedDict, NotRequired, Unpack
 
 from campus.common.utils import secret, uid, utc_time
 from campus.common import devops
 from . import db
+from .model import Vault
 
 CLIENT_TABLE = "vault_clients"
+
+
+def _get_secret_key() -> str:
+    """Get the SECRET_KEY from the campus vault on demand.
+
+    Returns:
+        The SECRET_KEY value from the 'campus' vault
+
+    Raises:
+        VaultKeyError: If SECRET_KEY is not found in the campus vault
+    """
+    campus_vault = Vault("campus")
+    return campus_vault.get("SECRET_KEY")
 
 
 class ClientNew(TypedDict, total=True):
@@ -105,7 +119,7 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
     client_id = uid.generate_category_uid("client", length=12)
     client_secret = secret.generate_client_secret()
     secret_hash = secret.hash_client_secret(
-        client_secret, os.environ["SECRET_KEY"])
+        client_secret, _get_secret_key())
 
     record = {
         "id": client_id,
@@ -218,7 +232,7 @@ def replace_client_secret(client_id: str) -> str:
 
     new_secret = secret.generate_client_secret()
     secret_hash = secret.hash_client_secret(
-        new_secret, os.environ["SECRET_KEY"])
+        new_secret, _get_secret_key())
 
     with db.get_connection_context() as conn:
         db.execute_query(
@@ -263,7 +277,7 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
             )
 
         expected_hash = secret.hash_client_secret(
-            client_secret, os.environ["SECRET_KEY"])
+            client_secret, _get_secret_key())
         if client_record["secret_hash"] != expected_hash:
             raise ClientAuthenticationError(
                 f"Invalid secret for vault client '{client_id}'",
