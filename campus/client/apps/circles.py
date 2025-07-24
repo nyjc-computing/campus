@@ -5,7 +5,7 @@ Circle management client for creating and managing circles.
 
 # pylint: disable=attribute-defined-outside-init
 
-from typing import List, Dict, Any
+from typing import Dict, Any
 from campus.client.base import HttpClient
 from campus.client import config
 
