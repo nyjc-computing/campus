@@ -8,9 +8,10 @@ that are shared across all service clients using composition pattern.
 
 import os
 import json
-import requests
 from typing import Optional, Dict, Any, Union
 from urllib.parse import urljoin
+
+import requests
 
 from .errors import (
     AuthenticationError,
