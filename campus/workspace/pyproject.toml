@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Campus ecosystem meta-package - complete Campus system for deployment"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
-packages = [
     {include = "campus/workspace", from = "../.."}
 ]
 
