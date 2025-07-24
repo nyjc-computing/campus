@@ -10,13 +10,15 @@ if [ ! -f "$SCRIPT_DIR/campus/__init__.py" ]; then
   cp "$REPO_ROOT/campus/__init__.py" "$SCRIPT_DIR/campus/__init__.py"
 fi
 
-# Build and install campus-suite-common first
+# Install dependencies for campus-suite-common using Poetry
 cd "$REPO_ROOT/campus/common"
+poetry install --no-root
 poetry build
 pip install "$REPO_ROOT/campus/common/dist/"campus_suite_common-*.whl
 
-# Build and install campus-suite-client
+# Install dependencies for campus-suite-client using Poetry
 cd "$REPO_ROOT/campus/client"
+poetry install --no-root
 poetry build
 pip install "$REPO_ROOT/campus/client/dist/"campus_suite_client-*.whl
 
