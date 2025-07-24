@@ -11,26 +11,28 @@ This module contains the main applications for Campus.
 """
 
 from flask import Flask
-from campus.vault import Vault
+from campus.client import Campus
 
 from . import api, campusauth, oauth
 from .campusauth import ctx
 
+
 def create_app_from_modules(*modules) -> Flask:
     """Factory function to create the Flask app.
-    
+
     This is called if api is run as a standalone app.
     """
     app = Flask(__name__)
     for module in modules:
         module.init_app(app)
-    app.secret_key = Vault('campus').get('SECRET_KEY')
-    
+    campus_client = Campus()
+    app.secret_key = campus_client.vault["campus"]["SECRET_KEY"].get()
+
     # Health check route for deployments
     @app.route('/')
     def health_check():
         return {'status': 'healthy', 'service': 'campus-apps'}, 200
-    
+
     return app
 
 
@@ -41,7 +43,7 @@ def create_app() -> Flask:
 
 __all__ = [
     "api",
-    "campusauth", 
+    "campusauth",
     "oauth",
     "create_app_from_modules",
     "create_app",
