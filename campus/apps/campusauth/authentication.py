@@ -13,7 +13,7 @@ from typing import Callable
 from flask import request
 
 from campus.apps.campusauth.context import ctx
-from campus.vault import client
+from campus.client import Campus
 from campus.common.webauth import http
 
 
@@ -36,10 +36,12 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
     match auth.scheme:
         case "basic":
             client_id, client_secret = auth.credentials()
+            campus_client = Campus()
             try:
-                client.authenticate_client(client_id, client_secret)
-                ctx.client = client.get_client(client_id)
-            except client.ClientAuthenticationError:
+                campus_client.vault.authenticate_client(
+                    client_id, client_secret)
+                ctx.client = campus_client.vault.get_client(client_id)
+            except Exception:
                 return {"message": "Invalid client credentials"}, 403
         case "bearer":
             return {"message": "Bearer auth not implemented"}, 501
