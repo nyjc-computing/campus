@@ -2,64 +2,69 @@
 
 Configuration for Campus client base URLs and service mappings.
 
-This module provides deployment-agnostic configuration for client base URLs.
-Base URLs should be explicitly specified per deployment rather than hardcoded.
+This module provides environment-aware configuration for client base URLs
+using the common.devops environment enums for consistency.
 """
 
-import os
 from typing import Set
-
-# Default base URLs - should be overridden per deployment
-# These are fallback values only
-DEFAULT_APPS_BASE_URL = "https://api.campus.nyjc.dev"
-DEFAULT_VAULT_BASE_URL = "https://vault.campus.nyjc.dev"
-
-# Environment variable names for base URL configuration
-APPS_BASE_URL_ENV = "CAMPUS_APPS_BASE_URL"
-VAULT_BASE_URL_ENV = "CAMPUS_VAULT_BASE_URL"
+from campus.common import devops
 
 # Service mappings - which services use which deployment
 APPS_SERVICES: Set[str] = {
     "circles",
-    "users", 
+    "users",
     "emailotp",
     "clients"
 }
 
 VAULT_SERVICES: Set[str] = {
     "vault",
-    "vault_access", 
+    "vault_access",
     "vault_client"
 }
 
 
 def get_apps_base_url() -> str:
-    """Get the base URL for apps services.
-    
+    """Get the base URL for apps services based on environment.
+
     Returns:
-        str: Base URL for apps deployment, from environment or default
+        str: Base URL for apps deployment
     """
-    return os.getenv(APPS_BASE_URL_ENV, DEFAULT_APPS_BASE_URL)
+    match devops.ENV:
+        case devops.PRODUCTION:
+            return "https://api.campus.nyjc.app"
+        case devops.STAGING:
+            return "https://api.campus.nyjc.dev"
+        case devops.TESTING | devops.DEVELOPMENT:
+            return "https://campusapps-development.up.railway.app/"
+    raise ValueError(f"Unknown environment: {devops.ENV}")
 
 
 def get_vault_base_url() -> str:
-    """Get the base URL for vault services.
-    
+    """Get the base URL for vault services based on environment.
+
     Returns:
-        str: Base URL for vault deployment, from environment or default
+        str: Base URL for vault deployment
     """
-    return os.getenv(VAULT_BASE_URL_ENV, DEFAULT_VAULT_BASE_URL)
+    match devops.ENV:
+        case devops.PRODUCTION:
+            return "https://vault.campus.nyjc.app"
+        case devops.STAGING:
+            return "https://vault.campus.nyjc.dev"
+        case devops.TESTING | devops.DEVELOPMENT:
+            return "https://campusvault-development.up.railway.app/"
+    raise ValueError(f"Unknown environment: {devops.ENV}")
 
 
 def get_service_base_url(service_name: str) -> str:
     """Get the appropriate base URL for a given service.
-    
+
     Args:
         service_name: Name of the service (e.g., "circles", "vault")
-        
+
     Returns:
         str: Base URL for the service's deployment
-        
+
     Raises:
         ValueError: If service_name is not recognized
     """
@@ -72,6 +77,6 @@ def get_service_base_url(service_name: str) -> str:
 
 
 # Legacy constants for backward compatibility
-# These will be deprecated in favor of the functions above
+# These are now environment-aware
 APPS_BASE_URL = get_apps_base_url()
 VAULT_BASE_URL = get_vault_base_url()

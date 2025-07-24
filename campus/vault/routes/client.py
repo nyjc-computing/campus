@@ -90,6 +90,33 @@ def list_vault_clients(client_id):
         return jsonify({"error": str(e)}), 500
 
 
+# Authenticate a vault client by client_id and client_secret
+@bp.route("/authenticate", methods=["POST"])
+def authenticate_vault_client():
+    """Authenticate a vault client by client_id and client_secret.
+
+    POST /client/authenticate
+    Body: {"client_id": ..., "client_secret": ...}
+
+    Returns: {"status": "success", "client_id": ...} or error JSON
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Missing request body"}), 400
+        client_id = data.get("client_id")
+        client_secret = data.get("client_secret")
+        if not client_id or not client_secret:
+            return jsonify({"error": "Missing client_id or client_secret"}), 400
+        try:
+            client.authenticate_client(client_id, client_secret)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 403
+        return jsonify({"status": "success", "client_id": client_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @bp.route("/<target_client_id>", methods=["GET"])
 @require_client_authentication()
 def get_vault_client(client_id, target_client_id):

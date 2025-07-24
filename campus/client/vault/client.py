@@ -4,7 +4,7 @@ Vault client management for creating and managing vault authentication clients.
 """
 
 from typing import List, Dict, Any, Tuple
-from campus.client.base import BaseClient
+from campus.client.base import HttpClient
 
 
 class VaultClientManagement:
@@ -14,13 +14,29 @@ class VaultClientManagement:
     clients that can access vault secrets with appropriate permissions.
     """
 
-    def __init__(self, vault_client: BaseClient):
+    def __init__(self, vault_client: HttpClient):
         """Initialize client management.
 
         Args:
             vault_client: The vault client instance
         """
         self._client = vault_client
+
+    def authenticate(self, client_id: str, client_secret: str) -> bool:
+        """Authenticate a vault client using client_id and client_secret.
+
+        Args:
+            client_id: The client ID
+            client_secret: The client secret
+
+        Returns:
+            True if authentication is successful, raises Exception otherwise
+        """
+        data = {"client_id": client_id, "client_secret": client_secret}
+        response = self._client.post("/client/authenticate", data)
+        if response.get("status") == "success":
+            return True
+        raise Exception(response.get("error", "Authentication failed"))
 
     def new(self, name: str, description: str) -> Tuple[Dict[str, Any], str]:
         """Create a new vault client.
@@ -40,7 +56,7 @@ class VaultClientManagement:
             "name": name,
             "description": description
         }
-        response = self._client._post("/client", data)
+        response = self._client.post("/client", data)
         client_data = response["client"]
         client_secret = response["client_secret"]
         return client_data, client_secret
@@ -58,7 +74,7 @@ class VaultClientManagement:
             client_info = vault.client.get("client_abc123")
             print(f"Client: {client_info['name']}")
         """
-        response = self._client._get(f"/client/{client_id}")
+        response = self._client.get(f"/client/{client_id}")
         return response["client"]
 
     def list(self) -> List[Dict[str, Any]]:
@@ -72,7 +88,7 @@ class VaultClientManagement:
             for client in clients:
                 print(f"Client: {client['name']} (ID: {client['id']})")
         """
-        response = self._client._get("/client")
+        response = self._client.get("/client")
         return response["clients"]
 
     def delete(self, client_id: str) -> Dict[str, Any]:
@@ -88,13 +104,13 @@ class VaultClientManagement:
             result = vault.client.delete("client_abc123")
             print(f"Action: {result['action']}")
         """
-        return self._client._delete(f"/client/{client_id}")
+        return self._client.delete(f"/client/{client_id}")
 
 
 class VaultClientModule:
     """Custom module wrapper for vault client management operations."""
 
-    def __init__(self, vault_client: BaseClient):
+    def __init__(self, vault_client: HttpClient):
         self._client_mgmt = VaultClientManagement(vault_client)
 
     def new(self, name: str, description: str) -> Tuple[Dict[str, Any], str]:
