@@ -5,7 +5,6 @@ Routes for Google OAuth2.
 Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 """
 
-import os
 from typing import NotRequired, Required, TypedDict
 
 from flask import Blueprint, Flask, redirect, request, url_for
