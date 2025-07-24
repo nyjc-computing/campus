@@ -22,6 +22,22 @@ class VaultClientManagement:
         """
         self._client = vault_client
 
+    def authenticate(self, client_id: str, client_secret: str) -> bool:
+        """Authenticate a vault client using client_id and client_secret.
+
+        Args:
+            client_id: The client ID
+            client_secret: The client secret
+
+        Returns:
+            True if authentication is successful, raises Exception otherwise
+        """
+        data = {"client_id": client_id, "client_secret": client_secret}
+        response = self._client.post("/client/authenticate", data)
+        if response.get("status") == "success":
+            return True
+        raise Exception(response.get("error", "Authentication failed"))
+
     def new(self, name: str, description: str) -> Tuple[Dict[str, Any], str]:
         """Create a new vault client.
 
