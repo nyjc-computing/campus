@@ -12,16 +12,19 @@ if [ ! -f "$SCRIPT_DIR/campus/__init__.py" ]; then
   cp "$REPO_ROOT/campus/__init__.py" "$SCRIPT_DIR/campus/__init__.py"
 fi
 
+# Build and install campus-suite-common first
 cd "$REPO_ROOT/campus/common"
-poetry install
 poetry build
+pip install "$REPO_ROOT/campus/common/dist/"campus_suite_common-*.whl
 
+# Build and install campus-suite-vault
 cd "$REPO_ROOT/campus/vault"
-bash install.sh
-
-cd "$REPO_ROOT/campus/storage"
-poetry install
 poetry build
-poetry run pip install dist/*.whl
+pip install "$REPO_ROOT/campus/vault/dist/"campus_suite_vault-*.whl
 
-echo "✅ campus-storage and dependencies installed."
+# Build and install campus-suite-storage
+cd "$REPO_ROOT/campus/storage"
+poetry build
+pip install "$REPO_ROOT/campus/storage/dist/"campus_suite_storage-*.whl
+
+echo "✅ campus-suite-storage and dependencies installed successfully."
