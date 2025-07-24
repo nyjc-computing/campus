@@ -252,7 +252,7 @@ jobs:
     needs: [build-independent-packages, build-dependent-packages, build-storage-packages, build-final-packages]
     strategy:
       matrix:
-        package: ["common", "vault", "client"]  # Start with independent packages
+        package: ["vault", "client"]  # Only test installable packages
     
     steps:
       - uses: actions/checkout@v4
