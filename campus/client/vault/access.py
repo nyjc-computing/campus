@@ -22,7 +22,13 @@ class VaultAccessClient:
         """
         self._client = vault_client
 
-    def grant(self, *, client_id: str, label: str, permissions: Union[List[str], int]) -> Dict[str, Any]:
+    def grant(
+            self,
+            *,
+            client_id: str,
+            label: str,
+            permissions: Union[List[str], int]
+    ) -> Dict[str, Any]:
         """Grant access to a vault for a client.
 
         Args:
@@ -83,7 +89,13 @@ class VaultAccessModule:
     def __init__(self, vault_client: HttpClient):
         self._access_client = VaultAccessClient(vault_client)
 
-    def grant(self, *, client_id: str, label: str, permissions: Union[List[str], int]) -> Dict[str, Any]:
+    def grant(
+            self,
+            *,
+            client_id: str,
+            label: str,
+            permissions: Union[List[str], int]
+    ) -> Dict[str, Any]:
         """Grant access to a vault for a client."""
         return self._access_client.grant(client_id=client_id, label=label, permissions=permissions)
 

@@ -187,7 +187,12 @@ class HttpClient:
         """
         return self._make_request("GET", path, params=params)
 
-    def post(self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def post(
+            self,
+            path: str,
+            data: Dict[str, Any],
+            params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Make a POST request.
 
         Args:
@@ -200,7 +205,12 @@ class HttpClient:
         """
         return self._make_request("POST", path, data=data, params=params)
 
-    def put(self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def put(
+            self,
+            path: str,
+            data: Dict[str, Any],
+            params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Make a PUT request.
 
         Args:
@@ -213,7 +223,12 @@ class HttpClient:
         """
         return self._make_request("PUT", path, data=data, params=params)
 
-    def patch(self, path: str, data: Dict[str, Any], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def patch(
+            self,
+            path: str,
+            data: Dict[str, Any],
+            params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Make a PATCH request.
 
         Args:
@@ -226,7 +241,11 @@ class HttpClient:
         """
         return self._make_request("PATCH", path, data=data, params=params)
 
-    def delete(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def delete(
+            self,
+            path: str,
+            params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """Make a DELETE request.
 
         Args:

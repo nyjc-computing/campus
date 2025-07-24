@@ -64,7 +64,9 @@ def grant_vault_access(client_id, label):
         elif isinstance(permissions, int):
             access_flags = permissions
         else:
-            return jsonify({"error": "Permissions must be integer or list of permission names"}), 400
+            return jsonify({
+                "error": "Permissions must be integer or list of permission names"
+            }), 400
 
         # Grant the access
         access.grant_access(target_client_id, label, access_flags)

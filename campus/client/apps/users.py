@@ -15,7 +15,12 @@ class User:
     including properties for accessing user data and methods for operations.
     """
 
-    def __init__(self, users_client: HttpClient, user_id: str, data: Optional[Dict[str, Any]] = None):
+    def __init__(
+            self,
+            users_client: HttpClient,
+            user_id: str,
+            data: Optional[Dict[str, Any]] = None
+    ):
         """Initialize user resource.
 
         Args:
