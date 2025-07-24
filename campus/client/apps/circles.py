@@ -272,5 +272,5 @@ class CirclesClient(HttpClient):
         Returns:
             Dict[str, Any]: The circle data
         """
-        response = super().get(f"/circles/{circle_id}")
+        response = self.get(f"/circles/{circle_id}")
         return response.get("circle", response)
