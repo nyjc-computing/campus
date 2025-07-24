@@ -280,6 +280,7 @@ jobs:
         run: |
           cd campus/${{ matrix.package }}
           poetry install
+          cd ../..  # Move to project root so campus namespace is discoverable
           echo "🧪 Testing isolated import of campus.${{ matrix.package }}..."
           poetry run python -c "
           import sys
