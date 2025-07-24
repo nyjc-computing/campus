@@ -17,9 +17,21 @@ Campus Client provides a convenient, Pythonic interface for accessing Campus ser
 
 ## Installation
 
+This subpackage is intended for users who need only the client library, or for advanced deployments.
+
+**Recommended installation method:**
+
 ```bash
-pip install campus-client
+bash install.sh
 ```
+
+This script will build and install `campus-suite-client` and its dependencies in the correct order.
+
+> **Note:** Do not use `pip install` or `poetry install` directly for this subpackage unless you are developing locally. The install script ensures all dependencies are present.
+
+## Not for Standalone Use
+
+This package is not intended to be used standalone by most users. For a full Campus deployment, use the `campus/workspace` meta-package.
 
 ## Quick Start
 

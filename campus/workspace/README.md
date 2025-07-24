@@ -53,6 +53,20 @@ from campus import models
 from campus import apps
 ```
 
+## Installation
+
+This is the recommended way to install all Campus services and dependencies for a complete deployment.
+
+**Recommended installation method:**
+
+```bash
+bash install.sh
+```
+
+This script will build and install all required subpackages in the correct order.
+
+> **Note:** Do not use `pip install` or `poetry install` directly for this meta-package unless you are developing locally. The install script ensures all dependencies are present and compatible.
+
 ## Usage
 
 ### Complete System Import
