@@ -189,15 +189,14 @@ campus/
 3. **Storage**: `storage` (depends on `vault` + `common`)
 4. **Final**: `apps`, `workspace` (depend on multiple others)
 
-### Path Dependencies
+### Development Setup
 
-**Pattern**: Use path dependencies for local development, version dependencies for distribution.
+**Pattern**: Use Poetry's editable install for local development.
 
-**pyproject.toml**:
-```toml
-[tool.poetry.dependencies]
-campus-common = {path = "../common", develop = true}
-campus-vault = {path = "../vault", develop = true}
+**Command**:
+```bash
+# In the campus root directory
+poetry install --all-extras
 ```
 
 ## Testing and CI/CD
@@ -248,6 +247,30 @@ package/
 │   └── implementation.py
 ├── errors.py                # Package-specific exceptions
 └── utils.py                 # Utility functions
+```
+
+### Dependency Management
+
+**Pattern**: Include campus-suite as a git dependency.
+
+```toml
+# Production use
+[tool.poetry.dependencies]
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main"}
+
+# Development use (staging branch)
+[tool.poetry.group.dev.dependencies]
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "staging"}
+
+# Pin to specific commit for reproducibility
+[tool.poetry.dependencies]
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", rev = "abc123def"}
+
+# Install with specific features
+[tool.poetry.dependencies]
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["vault"]}  # vault only
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["apps"]}   # apps only
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["full"]}   # all features
 ```
 
 ### Import Organization
