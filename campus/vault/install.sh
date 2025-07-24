@@ -8,9 +8,11 @@ cd "$REPO_ROOT/campus/common"
 poetry build
 cd "$REPO_ROOT/campus/vault"
  
-# Ensure namespace marker is present
-mkdir -p "$SCRIPT_DIR/campus"
-cp "$REPO_ROOT/campus/__init__.py" "$SCRIPT_DIR/campus/__init__.py"
+# Ensure namespace marker is present in the local package tree (do not overwrite real __init__.py)
+if [ ! -f "$SCRIPT_DIR/campus/__init__.py" ]; then
+  mkdir -p "$SCRIPT_DIR/campus"
+  cp "$REPO_ROOT/campus/__init__.py" "$SCRIPT_DIR/campus/__init__.py"
+fi
 
 poetry build
 
