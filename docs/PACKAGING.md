@@ -2,13 +2,12 @@
 
 ## Overview
 
-Campus has been restructured to support a modular, namespace-based packaging architecture that allows individual components to be distributed as separate packages while maintaining a cohesive development experience. This comprehensive guide covers architecture decisions, packaging strategy, distribution workflows, integration patterns, advanced operations, troubleshooting, and long-term migration plans.
+Campus is structured as a monorepo with a single, centralized package that includes all components. This approach ensures consistent versioning and simplified dependency management while maintaining a clean, modular codebase structure. This guide covers architecture decisions, packaging strategy, distribution workflows, integration patterns, advanced operations, and troubleshooting.
 
 **Target Audience:**
-- Package maintainers managing releases and branch promotions
 - DevOps contributors setting up CI/CD and automation
-- External integrators using Campus packages in other projects
-- Senior students learning advanced packaging concepts
+- External integrators using Campus in other projects
+- Senior students learning Python packaging concepts
 
 ---
 
@@ -22,14 +21,15 @@ The original Campus codebase had several challenges:
 - Unclear separation between global utilities and app-specific modules
 - Potential for naming conflicts between `common` and `apps/common`
 
-### 1.2 Solution: Namespace Packages
+### 1.2 Solution: Monorepo with Centralized Dependencies
 
-We adopted a **namespace package** approach using the `campus.*` namespace, which provides:
+We adopted a **monorepo** approach with centralized dependency management in the root `pyproject.toml`, which provides:
 
-1. **Clean separation** of concerns
-2. **Independent distribution** of packages
-3. **Consistent import structure** across all packages
-4. **Scalable architecture** for future growth
+1. **Clean separation** of concerns through modular code organization
+2. **Simplified distribution** as a single package
+3. **Consistent import structure** across all modules
+4. **Unified versioning** for all components
+5. **Centralized dependency management** for easier maintenance
 
 ### 1.3 Current Structure
 
@@ -130,20 +130,19 @@ apps → services, storage → vault → common
 - Current: `campus-subpackaging` → will become `weekly`
 - Legacy: Original monorepo remains in git history
 
-### 2.2 Campus Suite Package Names
+### 2.2 Campus Suite Package Structure
 
 ```
-campus-suite-*           Import Namespace
-├── campus-suite-common  → campus.common
-├── campus-suite-vault   → campus.vault  
-├── campus-suite-client  → campus.client
-├── campus-suite-models  → campus.models
-├── campus-suite-storage → campus.storage
-├── campus-suite-apps    → campus.apps
-└── campus-suite-workspace → campus.workspace
+campus-suite             Import Namespace
+├── campus.common       # Shared utilities and schemas
+├── campus.vault        # Secure secrets management
+├── campus.client       # Client libraries
+├── campus.models       # Data models
+├── campus.storage      # Storage interfaces
+└── campus.apps         # Web applications
 ```
 
-**Key Principle:** All packages from the same branch are guaranteed compatible.
+**Key Principle:** All modules are versioned together and guaranteed compatible.
 
 ### 2.3 Distribution Benefits
 
@@ -207,11 +206,9 @@ from campus.storage import get_collection, get_table
 ### 3.2 Production Dependencies (Recommended)
 
 ```toml
-# pyproject.toml - All packages from main branch
+# pyproject.toml - Production environment
 [tool.poetry.dependencies]
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "main"}
-campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "main"}
-campus-suite-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "main"}
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main"}
 ```
 
 ### 3.3 Pre-Production Testing
@@ -219,8 +216,7 @@ campus-suite-storage = {git = "https://github.com/nyjc-computing/campus.git", su
 ```toml
 # Test upcoming releases before they hit main
 [tool.poetry.dependencies]
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "staging"}
-campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "staging"}
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "staging"}
 ```
 
 ### 3.4 Development Integration
@@ -228,8 +224,7 @@ campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", sub
 ```toml
 # Latest features for development environments
 [tool.poetry.group.dev.dependencies]
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "weekly"}
-campus-suite-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "weekly"}
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
 ```
 
 ### 3.5 Pinned Versions (High Stability)
@@ -245,28 +240,29 @@ campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subd
 #### Poetry Integration
 
 ```bash
-# Production packages
-poetry add git+https://github.com/nyjc-computing/campus.git#subdirectory=campus/vault&branch=main
-poetry add git+https://github.com/nyjc-computing/campus.git#subdirectory=campus/common&branch=main
+# Production installation
+poetry add git+https://github.com/nyjc-computing/campus.git@main
 
-# Development packages
-poetry add git+https://github.com/nyjc-computing/campus.git#subdirectory=campus/vault&branch=staging --group dev
+# Development installation
+poetry add git+https://github.com/nyjc-computing/campus.git@staging --group dev
 
 # Specific commit (for reproducible builds)
-poetry add git+https://github.com/nyjc-computing/campus.git@abc123def456#subdirectory=campus/vault
+poetry add git+https://github.com/nyjc-computing/campus.git@abc123def456
 ```
 
 #### Direct pip Installation
 
 ```bash
 # Install from main branch
-pip install git+https://github.com/nyjc-computing/campus.git#subdirectory=campus/vault&branch=main
+pip install git+https://github.com/nyjc-computing/campus.git@main
 
 # Install specific commit
-pip install git+https://github.com/nyjc-computing/campus.git@abc123def456#subdirectory=campus/vault
+pip install git+https://github.com/nyjc-computing/campus.git@abc123def456
 
 # Install with extras
-pip install "git+https://github.com/nyjc-computing/campus.git#subdirectory=campus/storage&branch=main[mongodb]"
+pip install "git+https://github.com/nyjc-computing/campus.git@main[vault]"  # for vault only
+pip install "git+https://github.com/nyjc-computing/campus.git@main[apps]"   # for apps only
+pip install "git+https://github.com/nyjc-computing/campus.git@main[full]"   # for all features
 ```
 
 ### 3.7 Integration Examples
@@ -279,8 +275,7 @@ For projects needing only secrets management:
 # pyproject.toml
 [tool.poetry.dependencies]
 python = "^3.11"
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "main"}
-campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "main"}
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["vault"]}
 ```
 
 ```python
@@ -302,15 +297,12 @@ For comprehensive educational platform integration:
 # pyproject.toml
 [tool.poetry.dependencies]
 python = "^3.11"
-# Core packages (all from main branch for compatibility)
-campus-suite-common = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/common", branch = "main"}
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", branch = "main"}
-campus-suite-models = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/models", branch = "main"}
-campus-suite-storage = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/storage", branch = "main"}
+# Install complete suite with all features
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["full"]}
 
 [tool.poetry.group.dev.dependencies]
 # Testing with upcoming features
-campus-suite-apps = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/apps", branch = "staging"}
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "staging", extras = ["full"]}
 ```
 
 ```python
@@ -440,21 +432,19 @@ git tag v1.2.3
 git push origin main --tags
 ```
 
-### 4.5 Package Compatibility Validation
+### 4.5 Package Validation
 
-Ensure cross-package compatibility during development:
+Ensure all components work during development:
 
 ```bash
-# Test all packages against each other
+# Install and test the package
 cd /workspaces/campus
+poetry install
 
-# Build and test each package
-for pkg in common vault models storage client apps workspace; do
-    echo "Testing campus-suite-$pkg..."
-    cd campus/$pkg
-    poetry install
-    poetry run python -c "import campus.$pkg; print('✅ $pkg imports successfully')"
-    cd ../..
+# Test all modules
+for module in common vault models storage client apps; do
+    echo "Testing campus.$module..."
+    poetry run python -c "import campus.$module; print('✅ $module imports successfully')"
 done
 
 # Test integration scenarios
