@@ -18,7 +18,7 @@ from campus.common.webauth.oauth2 import (
 )
 from campus.common.webauth.token import CredentialToken
 from campus.common import integration
-from campus.vault import get_vault
+from campus.client import Campus
 import campus.common.validation.flask as flask_validation
 from campus.common.utils import url, utc_time
 
@@ -26,7 +26,8 @@ PROVIDER = 'google'
 
 google_user_credentials = UserCredentials(PROVIDER)
 
-vault = get_vault(PROVIDER)
+campus_client = Campus()
+vault = campus_client.vault[PROVIDER]
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = integration.get_config(PROVIDER)
 oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
@@ -84,7 +85,7 @@ def authorize() -> Response:
     )
     # Store session with target URL
     session = oauth2.create_session(
-        client_id=vault.get('CLIENT_ID'),
+        client_id=vault["CLIENT_ID"].get(),
         scopes=oauth2.scopes,
         target=params.pop('target'),
     )
@@ -122,7 +123,7 @@ def callback() -> Response:
                 )
             token_response = session.exchange_code_for_token(
                 code=code,
-                client_secret=vault.get('CLIENT_SECRET'),
+                client_secret=vault["CLIENT_SECRET"].get(),
             )
         case _:
             api_errors.raise_api_error(400, **params)
@@ -179,8 +180,8 @@ def get_valid_token(user_id: str) -> CredentialToken:
         # token is refreshed in-place
         oauth2.refresh_token(
             token=token,
-            client_id=vault.get('CLIENT_ID'),
-            client_secret=vault.get('CLIENT_SECRET'),
+            client_id=vault["CLIENT_ID"].get(),
+            client_secret=vault["CLIENT_SECRET"].get(),
         )
         google_user_credentials.store(
             user_id=record["user_id"],
