@@ -6,23 +6,12 @@ Web API for Campus services.
 from flask import Blueprint, Flask
 
 from campus.apps.api import routes
-from campus.common import errors
-
-# These aliased model imports allow the api package to be used similarly
-# to the Campus API
-# e.g. api.circles.new(), api.emailotp.request()
-from campus.apps.api.routes.circles import circles
-from campus.apps.api.routes.emailotp import emailotp
-from campus.apps.api.routes.users import users
-from campus.common import devops
+from campus.common import devops, errors
 
 __all__ = [
     'create_app',
     'init_app',
     'init_db',
-    'circles',
-    'emailotp',
-    'users'
 ]
 
 
@@ -43,9 +32,9 @@ def init_app(app: Flask | Blueprint) -> None:
     bp = Blueprint('v1', __name__, url_prefix='/api/v1')
     # Users need to be initialised first as other blueprints
     # rely on user table
-    routes.users.init_app(bp)
-    routes.clients.init_app(bp)
+    routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
+    routes.users.init_app(bp)
     app.register_blueprint(bp)
 
 

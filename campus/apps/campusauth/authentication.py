@@ -38,9 +38,8 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
             client_id, client_secret = auth.credentials()
             campus_client = Campus()
             try:
-                campus_client.vault.authenticate_client(
-                    client_id, client_secret)
-                ctx.client = campus_client.vault.get_client(client_id)
+                campus_client.vault.client.authenticate(client_id, client_secret)
+                ctx.client = campus_client.vault.client.get(client_id)
             except Exception:
                 return {"message": "Invalid client credentials"}, 403
         case "bearer":
