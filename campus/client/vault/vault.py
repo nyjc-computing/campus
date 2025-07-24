@@ -16,7 +16,7 @@ from campus.client.vault.client import VaultClientManagement
 
 class VaultKey:
     """Represents a specific key in a vault collection.
-    
+
     Provides access to individual secret operations.
     """
 
@@ -113,7 +113,6 @@ class VaultCollection:
             VaultKey: Object for accessing the specific secret
         """
         return VaultKey(self._client, self._label, key)
-
 
     def list(self) -> List[str]:
         """List all keys in the vault.
