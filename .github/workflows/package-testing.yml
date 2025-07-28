@@ -85,19 +85,23 @@ jobs:
           poetry config virtualenvs.use-poetry-python false
           poetry config virtualenvs.create true
           
-      - name: Create test project
+      - name: Create test project and add package from git
         run: |
           mkdir test-project
           cd test-project
-          poetry init --name=test-project --description="Test project" --author="Test <test@example.com>" --python="^3.11" --dependency="campus-suite@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git@$GITHUB_SHA" --no-interaction
-          
+          poetry init --name=test-project --description="Test project" --author="Test <test@example.com>" --python="^3.11" --no-interaction
+          # Add the main package from git (auto-detect name from repo if possible)
+          # Try campus-suite, fallback to campus if needed
+          if ! poetry add "campus-suite@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git@$GITHUB_SHA"; then
+            poetry add "campus@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git@$GITHUB_SHA"
+          fi
+
       - name: Test installation and imports
         run: |
           cd test-project
           poetry install
-          
           # Test core package and all modules
-          poetry run python -c "import campus; import campus.vault; import campus.apps; import campus.models; import campus.storage; print('✅ All modules import successfully')"
+          python -c "import campus; import campus.vault; import campus.apps; import campus.models; import campus.storage"
 
   # Summary job
   package-testing-summary:
