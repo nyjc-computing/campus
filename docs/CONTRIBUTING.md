@@ -46,7 +46,7 @@ git checkout -b feature/your-feature-name
 # ... edit files ...
 
 # Test your changes
-poetry run python -m pytest
+python run_tests.py
 cd campus/vault && poetry build  # Test individual packages
 
 # Commit and push
@@ -158,8 +158,7 @@ campus/
 ├── client/         # External API integrations (depends on common)
 ├── models/         # Data models (depends on common)
 ├── storage/        # Storage interfaces (depends on common + vault)
-├── apps/           # Web applications (depends on all others)
-└── workspace/      # Full deployment package (depends on all others)
+└── apps/           # Web applications (depends on all others)
 ```
 
 ### Key Principles
@@ -179,17 +178,18 @@ cd campus/vault && poetry build
 cd campus/common && poetry build
 
 # Run package tests
-cd campus/vault && poetry run python -m pytest
+python run_tests.py
 ```
 
 ### Full System Testing
 
 ```bash
 # Run all tests
-poetry run python -m pytest
+python run_tests.py
 
-# Test workspace integration
-python -c "import campus.workspace; print('✅ Workspace works')"
+# (If you need to test integration across packages, ensure all relevant packages are installed and importable.)
+# Example:
+# python -c "import campus.client, campus.vault; print('✅ Core packages import successfully')"
 ```
 
 ### CI/CD Validation

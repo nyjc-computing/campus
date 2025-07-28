@@ -29,10 +29,6 @@ This will install `campus-suite-client` and all dependencies in a Poetry-managed
 
 > **Note:** Use `poetry install` for development and deployment. Ensure you are in the correct directory for the subpackage you wish to install.
 
-## Not for Standalone Use
-
-This package is not intended to be used standalone by most users. For a full Campus deployment, use the `campus/workspace` meta-package.
-
 ## Quick Start
 
 ### Basic Usage

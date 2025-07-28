@@ -27,4 +27,4 @@ from campus.apps.oauth import GoogleOAuth
 
 ## Not for Standalone Use
 
-This package is not intended to be used standalone by most users. For a full Campus deployment, use the `campus/workspace` meta-package.
+This package is not intended to be used standalone by most users. For a full Campus deployment, use the `campus` meta-package (the root of the repository).
