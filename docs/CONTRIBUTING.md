@@ -158,8 +158,7 @@ campus/
 ├── client/         # External API integrations (depends on common)
 ├── models/         # Data models (depends on common)
 ├── storage/        # Storage interfaces (depends on common + vault)
-├── apps/           # Web applications (depends on all others)
-└── workspace/      # Full deployment package (depends on all others)
+└── apps/           # Web applications (depends on all others)
 ```
 
 ### Key Principles
@@ -188,8 +187,9 @@ cd campus/vault && poetry run python -m pytest
 # Run all tests
 poetry run python -m pytest
 
-# Test workspace integration
-python -c "import campus.workspace; print('✅ Workspace works')"
+# (If you need to test integration across packages, ensure all relevant packages are installed and importable.)
+# Example:
+# python -c "import campus.client, campus.vault; print('✅ Core packages import successfully')"
 ```
 
 ### CI/CD Validation
