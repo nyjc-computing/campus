@@ -9,12 +9,12 @@ This subpackage is intended to be installed as part of a larger Campus deploymen
 **Recommended installation method:**
 
 ```bash
-bash install.sh
+poetry install
 ```
 
-This script will build and install `campus-suite-apps` and its dependencies in the correct order.
+This will install `campus-suite-apps` and all dependencies in a Poetry-managed virtual environment.
 
-> **Note:** Do not use `pip install` or `poetry install` directly for this subpackage unless you are developing locally. The install script ensures all dependencies are present.
+> **Note:** Use `poetry install` for development and deployment. Ensure you are in the correct directory for the subpackage you wish to install.
 
 ## Usage
 
