@@ -29,9 +29,7 @@ jobs:
   # Test package build and installation with different feature sets
   build-and-test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        extras: ["vault", "apps", "full", ""]  # Empty string for no extras
+    # No extras matrix needed
     
     steps:
       - uses: actions/checkout@v4
@@ -51,29 +49,14 @@ jobs:
       - name: Build package
         run: |
           echo "📦 Building campus-suite..."
-          poetry install ${{ matrix.extras && format('[{0}]', matrix.extras) }}
+          poetry install
           poetry build
           echo "✅ Successfully built campus-suite"
           
       - name: Test imports
         run: |
-          # Test core package
-          poetry run python -c "import campus; print('✅ Core package imports')"
-          
-          # Test extras if specified
-          if [ "${{ matrix.extras }}" = "vault" ]; then
-            poetry run python -c "import campus.vault; print('✅ Vault imports')"
-          elif [ "${{ matrix.extras }}" = "apps" ]; then
-            poetry run python -c "import campus.apps; print('✅ Apps imports')"
-          elif [ "${{ matrix.extras }}" = "full" ]; then
-            poetry run python -c "
-              import campus.vault
-              import campus.apps
-              import campus.models
-              import campus.storage
-              print('✅ All modules import successfully')
-            "
-          fi
+          # Test core package and all modules
+          poetry run python -c "import campus; import campus.vault; import campus.apps; import campus.models; import campus.storage; print('✅ All modules import successfully')"
           
       - name: Verify package artifacts
         run: |
@@ -85,9 +68,7 @@ jobs:
   test-git-install:
     needs: build-and-test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        extras: ["vault", "apps", "full", ""]  # Empty string for no extras
+    # No extras matrix needed
 
     steps:
       - uses: actions/checkout@v4
@@ -108,29 +89,15 @@ jobs:
         run: |
           mkdir test-project
           cd test-project
-          poetry init --name=test-project --description="Test project" --author="Test <test@example.com>" --python="^3.11" --dependency="campus-suite@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git@$GITHUB_SHA${{ matrix.extras && format('[{0}]', matrix.extras) }}" --no-interaction
+          poetry init --name=test-project --description="Test project" --author="Test <test@example.com>" --python="^3.11" --dependency="campus-suite@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git@$GITHUB_SHA" --no-interaction
           
       - name: Test installation and imports
         run: |
           cd test-project
           poetry install
           
-          # Test imports based on extras
-          if [ "${{ matrix.extras }}" = "vault" ]; then
-            poetry run python -c "import campus.vault; print('✅ Vault imports')"
-          elif [ "${{ matrix.extras }}" = "apps" ]; then
-            poetry run python -c "import campus.apps; print('✅ Apps imports')"
-          elif [ "${{ matrix.extras }}" = "full" ]; then
-            poetry run python -c "
-              import campus.vault
-              import campus.apps
-              import campus.models
-              import campus.storage
-              print('✅ All modules import successfully')
-            "
-          else
-            poetry run python -c "import campus; print('✅ Core package imports')"
-          fi
+          # Test core package and all modules
+          poetry run python -c "import campus; import campus.vault; import campus.apps; import campus.models; import campus.storage; print('✅ All modules import successfully')"
 
   # Summary job
   package-testing-summary:
