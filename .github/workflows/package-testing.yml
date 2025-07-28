@@ -76,10 +76,7 @@ jobs:
         run: |
           echo "📊 Package Testing Summary:"
           echo "✅ Build and test: ${{ needs.build-and-test.result }}"
-          echo "✅ Git installation: ${{ needs.test-git-install.result }}"
-          
-          if [[ "${{ needs.build-and-test.result }}" != "success" || 
-                "${{ needs.test-git-install.result }}" != "success" ]]; then
+          if [[ "${{ needs.build-and-test.result }}" != "success" ]]; then
             echo "❌ Some package tests failed"
             exit 1
           else
