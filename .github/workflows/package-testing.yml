@@ -92,8 +92,8 @@ jobs:
           poetry init --name=test-project --description="Test project" --author="Test <test@example.com>" --python="^3.11" --no-interaction
           # Add the main package from git (auto-detect name from repo if possible)
           # Try campus-suite, fallback to campus if needed
-          if ! poetry add "campus-suite@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git@$GITHUB_SHA"; then
-            poetry add "campus@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git@$GITHUB_SHA"
+          if ! poetry add "campus-suite@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"; then
+            poetry add "campus@git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           fi
 
       - name: Test installation and imports
