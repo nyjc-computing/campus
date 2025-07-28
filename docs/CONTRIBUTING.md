@@ -46,7 +46,7 @@ git checkout -b feature/your-feature-name
 # ... edit files ...
 
 # Test your changes
-poetry run python -m pytest
+python run_tests.py
 cd campus/vault && poetry build  # Test individual packages
 
 # Commit and push
@@ -178,14 +178,14 @@ cd campus/vault && poetry build
 cd campus/common && poetry build
 
 # Run package tests
-cd campus/vault && poetry run python -m pytest
+python run_tests.py
 ```
 
 ### Full System Testing
 
 ```bash
 # Run all tests
-poetry run python -m pytest
+python run_tests.py
 
 # (If you need to test integration across packages, ensure all relevant packages are installed and importable.)
 # Example:
