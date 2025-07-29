@@ -6,9 +6,6 @@ __pycache__/
 # C extensions
 *.so
 
-.DS_Store
-Campus/.DS_Store
-
 # Distribution / packaging
 .Python
 build/
@@ -180,3 +177,6 @@ replit.nix
 # VS Code
 # Workspace configuration file on local machine
 *.code-workspace
+
+# System files
+*.DS_Store
