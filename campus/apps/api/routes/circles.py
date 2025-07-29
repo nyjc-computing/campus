@@ -5,6 +5,8 @@ API routes for the circles resource.
 
 from flask import Blueprint, Flask
 
+import campus_yapper
+
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
 from campus.common.errors import api_errors
@@ -17,6 +19,7 @@ bp.before_request(authenticate_client)
 circles = circle.Circle()
 # users = user.User()
 
+yapper = campus_yapper.create()
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
@@ -36,12 +39,18 @@ def new_circle(*_: str) -> flask_validation.JsonResponse:
         resource,
         on_error=api_errors.raise_api_error,
     )
+    
+    yapper.emit('campus.circles.new')
+    
     return dict(resource), 201
 
 @bp.delete('/<string:circle_id>')
 def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Delete a circle."""
     circles.delete(circle_id)
+        
+    yapper.emit('campus.circles.delete')
+        
     return {}, 200
 
 @bp.get('/<string:circle_id>')
@@ -63,6 +72,9 @@ def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error,
     )
     circles.update(circle_id, **params)
+    
+    yapper.emit('campus.circles.update')
+    
     return {}, 200
 
 @bp.post('/<string:circle_id>/move')

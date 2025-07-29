@@ -8,11 +8,15 @@ Admin operations require ALL permissions, read operations require READ permissio
 
 from flask import Blueprint, Flask, jsonify, request
 
+import campus_yapper
+
 from .. import client
 from ..auth import require_client_authentication
 
 # Create blueprint for client management routes
 bp = Blueprint('client', __name__, url_prefix='/client')
+
+yapper = campus_yapper.create()
 
 
 @bp.route("", methods=["POST"])
@@ -154,6 +158,8 @@ def delete_vault_client(client_id, target_client_id):
     """
     try:
         client.delete_client(target_client_id)
+        
+        yapper.emit('campus.clients.delete')
 
         return jsonify({
             "status": "success",
