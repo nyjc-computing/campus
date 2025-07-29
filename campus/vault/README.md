@@ -9,12 +9,12 @@ This subpackage is intended for users who need only the vault service, or for ad
 **Recommended installation method:**
 
 ```bash
-bash install.sh
+poetry install
 ```
 
-This script will build and install `campus-suite-vault` and its dependencies in the correct order.
+This will install `campus-suite-vault` and all dependencies in a Poetry-managed virtual environment.
 
-> **Note:** Do not use `pip install` or `poetry install` directly for this subpackage unless you are developing locally. The install script ensures all dependencies are present.
+> **Note:** Use `poetry install` for development and deployment. Ensure you are in the correct directory for the subpackage you wish to install.
 
 ## Usage
 
@@ -26,4 +26,4 @@ from campus.vault import Vault, get_vault
 
 ## Not for Standalone Use
 
-This package is not intended to be used standalone by most users. For a full Campus deployment, use the `campus/workspace` meta-package.
+This package is not intended to be used standalone by most users. For a full Campus deployment, use the `campus` meta-package (the root of the repository).

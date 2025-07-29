@@ -4,12 +4,13 @@ This package provides storage services for the Campus platform.
 
 ## Installation
 
-To install `campus-storage` and all its dependencies, use the provided install script:
+
+To install `campus-storage` and all its dependencies, use Poetry:
 
 ```bash
-bash install.sh
+poetry install
 ```
 
-This script will build and install `campus-storage` and its dependencies in the correct order.
+This will install `campus-storage` and all dependencies in a Poetry-managed virtual environment.
 
-> **Note:** Do not use `pip install` or `poetry install` directly unless you are developing locally. The install script ensures all dependencies are present and installed in the correct order.
+> **Note:** Use `poetry install` for development and deployment. Ensure you are in the correct directory for the subpackage you wish to install.

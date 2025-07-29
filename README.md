@@ -42,9 +42,6 @@ poetry install
 cp .env.example .env
 # Edit .env with your configuration
 
-# Initialize the database
-poetry run python -c "from campus.vault.db import init_db; init_db()"
-
 # Run the application
 poetry run python main.py
 ```
@@ -127,27 +124,19 @@ Campus follows a **modular monolith** architecture with clear service boundaries
 Campus uses environment variables for configuration:
 
 ```bash
-# Application - No SECRET_KEY needed (stored in vault)
-FLASK_ENV="development"
+# Environment Configuration
+ENV="development"  # or "staging", "production"
 
-# Vault Service
+# Client Authentication (Required for campus.client)
+CLIENT_ID="your-client-id"
+CLIENT_SECRET="your-client-secret"
+
+# Vault Database (Only required when using campus.vault service)
 VAULTDB_URI="postgresql://user:pass@localhost/vault"
-CLIENT_ID="your-vault-client-id"
-CLIENT_SECRET="your-vault-client-secret"
 
-# Storage Service
-STORAGE_URI="postgresql://user:pass@localhost/campus"
-# or: STORAGE_URI="mongodb://localhost:27017/campus"
-
-# OAuth (optional)
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
-
-# Email Service (optional)
-SMTP_SERVER="smtp.gmail.com"
-SMTP_PORT="587"
-SMTP_USER="your-email@gmail.com"
-SMTP_PASS="your-app-password"
+All other configuration (storage, OAuth, email, etc.) is managed through campus.vault
+and should not be set as environment variables. Use the vault service to manage these
+secrets securely.
 ```
 
 ## 📚 Documentation
@@ -161,159 +150,15 @@ SMTP_PASS="your-app-password"
 
 ## 🚀 Deployment
 
-Campus supports multiple deployment strategies:
+See [DEPLOY.md](DEPLOY.md).
 
 ### 🔬 Development
 
-```bash
-# Individual service development
-cd campus/vault && poetry install && poetry run python -m pytest
-
-# Full system development  
-poetry install && poetry run python main.py
-```
-
-### 🚀 Production (Integrated)
-
-```bash
-# Single application deployment
-poetry install --no-dev
-poetry run gunicorn main:app
-```
-
-### ☁️ Cloud Platforms
-
-- **Replit**: Uses `campus.workspace` for compatibility
-- **Heroku**: Standard Python buildpack with `Procfile`
-- **Railway/Render**: Modern deployment platforms
-- **AWS/GCP/Azure**: Container or serverless deployment
-
-### 🐳 Docker
-
-```bash
-# Build and run
-docker build -t campus .
-docker run -p 5000:5000 campus
-
-# With docker-compose (includes PostgreSQL)
-docker-compose up -d
-```
-
-## 🧪 Testing
-
-Campus includes comprehensive test coverage:
-
-```bash
-# Run all tests
-poetry run python -m pytest
-
-# Run specific service tests
-poetry run python -m pytest tests/test_vault.py
-poetry run python -m pytest tests/test_models.py
-
-# Run with coverage
-poetry run python -m pytest --cov=campus --cov-report=html
-```
-
-### Test Organization
-
-- **Unit Tests**: Individual service functionality
-- **Integration Tests**: Cross-service communication
-- **API Tests**: HTTP endpoint validation
-- **Client Tests**: Interface behavior verification
-
-## 🔌 API Usage
-
-Campus provides clean, HTTP-like interfaces:
-
-### Vault (Secrets Management)
-
-```python
-import campus.client.vault as vault
-
-# Store secrets
-vault["database"].set("postgresql://...")
-vault["api-key"].set("secret-key-123")
-
-# Retrieve secrets
-db_url = vault["database"].get()
-api_key = vault["api-key"].get()
-
-# List available secrets
-secrets = vault.list_vaults()
-```
-
-### User Management
-
-```python
-import campus.client.users as users
-
-# Create user
-user = users.create(
-    username="student123",
-    email="student@school.edu",
-    role="student"
-)
-
-# Retrieve user
-user = users["student123"]
-profile = user.get()
-
-# Update user
-user.update({"email": "new-email@school.edu"})
-```
-
-### Circle (Group) Management
-
-```python
-import campus.client.circles as circles
-
-# Create circle
-circle = circles.create(
-    name="Math Class 2025",
-    type="class",
-    description="Advanced Mathematics"
-)
-
-# Add members
-circle = circles["math-2025"]
-circle.add_member("student123", role="student")
-circle.add_member("teacher456", role="instructor")
-```
+See [docs/development-guidelines.md](docs/development-guidelines.md).
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our contributing guidelines:
-
-### Development Setup
-
-1. **Fork and Clone**:
-   ```bash
-   git clone https://github.com/your-username/campus.git
-   cd campus
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   poetry install
-   poetry run pre-commit install
-   ```
-
-3. **Create Feature Branch**:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-4. **Make Changes and Test**:
-   ```bash
-   poetry run python -m pytest
-   poetry run python -m pytest --cov=campus
-   ```
-
-5. **Submit Pull Request**:
-   - Ensure tests pass
-   - Add documentation for new features
-   - Follow existing code style
+We welcome contributions! Please see our [contributing guidelines](docs/CONTRIBUTING.md).
 
 ### Guidelines
 
@@ -322,26 +167,6 @@ We welcome contributions! Please see our contributing guidelines:
 - **Documentation**: Update READMEs and docstrings
 - **Security**: Never commit secrets or credentials
 - **Modularity**: Keep services independent and loosely coupled
-
-## 🔒 Security
-
-- **Authentication**: Multi-factor with OAuth and email verification
-- **Authorization**: Role-based with fine-grained permissions
-- **Secrets**: Encrypted storage with access auditing
-- **Transport**: HTTPS/TLS for all communication
-- **Database**: Connection encryption and query parameterization
-
-## 📋 Requirements
-
-- **Python**: 3.11+ (for modern typing and performance)
-- **Flask**: 3.0+ (latest security features)
-- **PostgreSQL**: 12+ (for vault and primary storage)
-- **MongoDB**: 4.4+ (optional alternative storage)
-- **Poetry**: Any version (workspace package ensures compatibility)
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🏫 About
 

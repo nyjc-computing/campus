@@ -7,7 +7,7 @@ using the common.devops environment enums for consistency.
 """
 
 from typing import Set
-from campus.common.devops import ENV, PRODUCTION
+from campus.common import devops
 
 # Service mappings - which services use which deployment
 APPS_SERVICES: Set[str] = {
@@ -30,10 +30,14 @@ def get_apps_base_url() -> str:
     Returns:
         str: Base URL for apps deployment
     """
-    if ENV == PRODUCTION:
-        return "https://api.campus.nyjc.app"
-    else:
-        return "https://api.campus.nyjc.dev"
+    match devops.ENV:
+        case devops.PRODUCTION:
+            return "https://api.campus.nyjc.app"
+        case devops.STAGING:
+            return "https://api.campus.nyjc.dev"
+        case devops.TESTING | devops.DEVELOPMENT:
+            return "https://campusapps-development.up.railway.app/"
+    raise ValueError(f"Unknown environment: {devops.ENV}")
 
 
 def get_vault_base_url() -> str:
@@ -42,10 +46,14 @@ def get_vault_base_url() -> str:
     Returns:
         str: Base URL for vault deployment
     """
-    if ENV == PRODUCTION:
-        return "https://vault.campus.nyjc.app"
-    else:
-        return "https://vault.campus.nyjc.dev"
+    match devops.ENV:
+        case devops.PRODUCTION:
+            return "https://vault.campus.nyjc.app"
+        case devops.STAGING:
+            return "https://vault.campus.nyjc.dev"
+        case devops.TESTING | devops.DEVELOPMENT:
+            return "https://campusvault-development.up.railway.app/"
+    raise ValueError(f"Unknown environment: {devops.ENV}")
 
 
 def get_service_base_url(service_name: str) -> str:
