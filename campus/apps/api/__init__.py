@@ -6,7 +6,7 @@ Web API for Campus services.
 from flask import Blueprint, Flask
 
 from campus.apps.api import routes
-from campus.common import devops, errors
+from campus.common import errors
 
 __all__ = [
     'create_app',
