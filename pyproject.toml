@@ -28,6 +28,10 @@ werkzeug = "^3.0.0"
 campus-yapper = {git = "https://github.com/nyjc-computing/yapper-python.git"}
 
 [tool.poetry.extras]
+# Optional dependency groups for deployment modes
+vault = ["flask", "bcrypt", "psycopg2-binary", "gunicorn", "werkzeug"]
+apps = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
+full = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
