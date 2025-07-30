@@ -7,6 +7,8 @@ Two kinds of storage interface are provided:
 2. Documents: For storing documents that can have different schemas.
 """
 
+from campus.common import devops
+
 from . import documents, tables
 
 from .documents import CollectionInterface
@@ -24,6 +26,7 @@ def get_collection(name: str):
     return documents.get_db(name)
 
 
+@devops.block_env(devops.PRODUCTION, devops.STAGING)
 def purge_tables() -> None:
     """Purge all tables in the database.
 
@@ -37,6 +40,7 @@ def purge_tables() -> None:
     _purge_tables()
 
 
+@devops.block_env(devops.PRODUCTION, devops.STAGING)
 def purge_collections() -> None:
     """Purge all collections in the database.
 
@@ -50,6 +54,7 @@ def purge_collections() -> None:
     _purge_collections()
 
 
+@devops.block_env(devops.PRODUCTION, devops.STAGING)
 def purge_all() -> None:
     """Purge all tables and collections.
 
