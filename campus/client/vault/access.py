@@ -1,4 +1,4 @@
-"""client.vault.access
+"""campus.client.vault.access
 
 Vault access management client for managing permissions and client access.
 """

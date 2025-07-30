@@ -1,4 +1,4 @@
-"""apps.common.models.user
+"""campus.models.user
 
 This module provides classes for managing Campus users.
 """

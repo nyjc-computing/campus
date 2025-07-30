@@ -1,4 +1,4 @@
-"""apps.api.routes.admin
+"""campus.apps.api.routes.admin
 
 Admin routes for Campus API.
 """

@@ -1,4 +1,4 @@
-"""apps.api.routes.users
+"""campus.apps.api.routes.users
 
 API routes for the users resource.
 """

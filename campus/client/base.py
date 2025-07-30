@@ -1,4 +1,4 @@
-"""client.base
+"""campus.client.base
 
 HTTP client functionality for Campus services.
 

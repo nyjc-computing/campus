@@ -1,4 +1,4 @@
-"""apps
+"""campus.apps
 
 This module contains the main applications for Campus.
 

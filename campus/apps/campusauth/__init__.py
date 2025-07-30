@@ -1,4 +1,4 @@
-"""apps/campusauth
+"""campus.apps.campusauth
 
 Web endpoints for Campus authentication.
 """

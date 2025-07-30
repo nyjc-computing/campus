@@ -1,4 +1,4 @@
-"""apps.common.models.source.sourcetype
+"""campus.models.source.sourcetype
 SourceType Models
 
 This module provides classes for creating and managing Campus source types,

@@ -1,4 +1,4 @@
-"""common.errors.api_errors
+"""campus.common.errors.api_errors
 
 API error definitions for Campus.
 These errors represent all possible API errors that would be raised.

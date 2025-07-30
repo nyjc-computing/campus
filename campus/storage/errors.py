@@ -1,4 +1,4 @@
-"""storage.errors
+"""campus.storage.errors
 
 Storage-specific error definitions for Campus storage backends.
 
