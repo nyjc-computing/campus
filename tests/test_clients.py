@@ -1,33 +1,36 @@
 import unittest
-from campus.apps import api
+from campus.apps.api.routes import admin
+from campus.models import client
 
 
 class TestClients(unittest.TestCase):
 
     def setUp(self):
-        api.purge()
-        api.init_db()
+        admin.purge_db()
+        admin.init_db()
 
     def test_client_creation(self):
         data = {
             "name": "Test Client",
             "description": "A test client.",
         }
-        resp = api.clients.new(**data)
-        self.assertEqual(resp.status, "ok", f"Failed to create client: {resp.message}, Response data: {resp.data}")
+        client_obj = client.Client()
+        resp = client_obj.new(**data)
+        self.assertIsNotNone(resp)
 \
     def test_validating_credentials(self):
         data = {
             "name": "Test Client",
             "description": "A test client.",
         }
-        client = api.clients.new(**data).data
-        client_id = client["id"]
-        result = api.clients.replace(client_id).data
+        client_obj = client.Client()
+        client_data = client_obj.new(**data)
+        client_id = client_data["id"]
+        result = client_obj.replace(client_id)
         secret_hash = result["secret"]
 
         # Test credential validation
-        is_valid = api.clients.validate_credentials(client_id, secret_hash)
+        is_valid = client_obj.validate_credentials(client_id, secret_hash)
         self.assertTrue(is_valid, f"Failed to validate client credentials. Client ID: {client_id}, Secret Hash: {secret_hash}")
 
 if __name__ == "__main__":
