@@ -11,7 +11,6 @@ from campus.common import devops, errors
 __all__ = [
     'create_app',
     'init_app',
-    'init_db',
 ]
 
 
@@ -37,35 +36,3 @@ def init_app(app: Flask | Blueprint) -> None:
     routes.users.init_app(bp)
     routes.admin.init_app(bp)
     app.register_blueprint(bp)
-
-
-@devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
-def init_db() -> None:
-    """Initialise the tables needed by api.
-
-    This convenience function makes it easier to initialise tables for all
-    models.
-    """
-    # These imports do not appear at the top of the file to avoid namespace
-    # pollution, as they are typically only used in staging.
-    from campus import models, vault
-
-    models.circle.init_db()
-    models.emailotp.init_db()
-    models.user.init_db()
-    vault.client.init_db()
-
-
-@devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
-def purge() -> None:
-    """Purge the database.
-
-    This function is intended to be used in a test environment to reset the
-    database state.
-    """
-    # These imports do not appear at the top of the file to avoid namespace
-    # pollution, as they are typically not used in production.
-    from campus.storage import purge_all  # type: ignore[import-untyped]
-    purge_all()
