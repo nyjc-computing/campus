@@ -55,7 +55,7 @@ def init_db() -> None:
     vault.client.init_db()
 
 
-@devops.block_env(devops.PRODUCTION)
+@devops.block_env(devops.PRODUCTION, devops.STAGING)
 def purge() -> None:
     """Purge the database.
 
