@@ -47,14 +47,12 @@ def init_db() -> None:
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically only used in staging.
-    from campus.models import emailotp, user
-    from campus.vault import client
+    from campus import models, vault
 
-    for model in (emailotp, user):
-        model.init_db()
-
-    # Initialize vault client database
-    client.init_db()
+    models.circle.init_db()
+    models.emailotp.init_db()
+    models.user.init_db()
+    vault.client.init_db()
 
 
 @devops.block_env(devops.PRODUCTION)
