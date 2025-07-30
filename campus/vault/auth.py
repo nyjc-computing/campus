@@ -1,4 +1,4 @@
-"""vault.auth
+"""campus.vault.auth
 
 Authentication and authorization utilities for vault routes.
 

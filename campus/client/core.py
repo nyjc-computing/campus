@@ -1,4 +1,4 @@
-"""campus.client.Campus
+"""campus.client.core
 
 Unified Campus client interface providing consistent access to all services.
 """

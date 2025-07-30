@@ -1,4 +1,4 @@
-"""common.webauth.http
+"""campus.common.webauth.http
 
 HTTP Authentication configs and models.
 

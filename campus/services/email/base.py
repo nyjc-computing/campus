@@ -1,4 +1,4 @@
-"""services.email.base
+"""campus.services.email.base
 
 Base classes for email sending services.
 """

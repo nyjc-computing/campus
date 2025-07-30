@@ -1,4 +1,4 @@
-"""vault.client
+"""campus.vault.client
 
 Client authentication module for the vault service.
 

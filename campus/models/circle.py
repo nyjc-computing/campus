@@ -1,4 +1,4 @@
-"""apps.common.models.circle
+"""campus.models.circle
 
 This module provides classes for managing Campus circles.
 

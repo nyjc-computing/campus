@@ -1,4 +1,4 @@
-"""services.email
+"""campus.services.email
 
 Email sending services for Campus digital services.
 """

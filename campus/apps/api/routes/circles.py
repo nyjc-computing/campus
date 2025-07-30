@@ -1,4 +1,4 @@
-"""apps.api.routes.circles
+"""campus.apps.api.routes.circles
 
 API routes for the circles resource.
 """
