@@ -15,11 +15,10 @@ from campus.models import circle
 bp = Blueprint('circles', __name__, url_prefix='/circles')
 bp.before_request(authenticate_client)
 
-# Database Models
 circles = circle.Circle()
 # users = user.User()
-
 yapper = campus_yapper.create()
+
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
@@ -39,19 +38,17 @@ def new_circle(*_: str) -> flask_validation.JsonResponse:
         resource,
         on_error=api_errors.raise_api_error,
     )
-    
     yapper.emit('campus.circles.new')
-    
     return dict(resource), 201
+
 
 @bp.delete('/<string:circle_id>')
 def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Delete a circle."""
     circles.delete(circle_id)
-        
     yapper.emit('campus.circles.delete')
-        
     return {}, 200
+
 
 @bp.get('/<string:circle_id>')
 def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
@@ -64,6 +61,7 @@ def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
     )
     return dict(resource), 200
 
+
 @bp.patch('/<string:circle_id>')
 def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Edit name or description of a circle."""
@@ -72,15 +70,15 @@ def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error,
     )
     circles.update(circle_id, **params)
-    
     yapper.emit('campus.circles.update')
-    
     return {}, 200
+
 
 @bp.post('/<string:circle_id>/move')
 def move_circle(circle_id: str) -> flask_validation.JsonResponse:
     """Move a circle to a new parent."""
     return {"message": "Not implemented"}, 501
+
 
 @bp.get('/<string:circle_id>/members')
 def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
@@ -88,6 +86,7 @@ def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
     resource = circles.members.list(circle_id)
     # TODO: validate response
     return resource, 200
+
 
 @bp.post('/<string:circle_id>/members/add')
 def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
@@ -98,6 +97,7 @@ def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     )
     circles.members.add(circle_id, **params)
     return {}, 200
+
 
 @bp.delete('/<string:circle_id>/members/remove')
 def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
@@ -111,6 +111,8 @@ def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     return {}, 200
 
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
+
+
 @bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
 def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     """Update a member's access in a circle."""
@@ -121,6 +123,7 @@ def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     circles.members.set(circle_id, **params)
     # TODO: validate response
     return {}, 200
+
 
 @bp.get('/<string:circle_id>/users')
 def get_circle_users(circle_id: str) -> flask_validation.JsonResponse:

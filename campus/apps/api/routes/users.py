@@ -15,10 +15,9 @@ from campus.models import user
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
 
-
 users = user.User()
-
 yapper = campus_yapper.create()
+
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise users routes with the given Flask app/blueprint."""
@@ -47,9 +46,7 @@ def new_user() -> flask_validation.JsonResponse:
         resource,
         on_error=api_errors.raise_api_error,
     )
-    
     yapper.emit('campus.users.new')
-    
     return dict(resource), 201
 
 
@@ -57,9 +54,7 @@ def new_user() -> flask_validation.JsonResponse:
 def delete_user(user_id: str) -> flask_validation.JsonResponse:
     """Delete a user."""
     users.delete(user_id)
-    
     yapper.emit('campus.users.delete')
-    
     return {}, 200
 
 
@@ -74,7 +69,6 @@ def get_user(user_id: str) -> flask_validation.JsonResponse:
         user.UserResource.__annotations__,
         on_error=api_errors.raise_api_error
     )
-        
     # future calls for other user info go here
     return summary, 200
 
@@ -87,9 +81,7 @@ def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error,
     )
     users.update(user_id, **payload)
-    
     yapper.emit('campus.users.update')
-    
     return {}, 200
 
 
