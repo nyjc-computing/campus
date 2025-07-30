@@ -96,6 +96,7 @@ def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error,
     )
     circles.members.add(circle_id, **params)
+    yapper.emit('campus.circles.members.add')
     return {}, 200
 
 
@@ -108,6 +109,7 @@ def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     )
     circles.members.remove(circle_id, **params)
     # TODO: validate response
+    yapper.emit('campus.circles.members.remove')
     return {}, 200
 
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
@@ -122,6 +124,7 @@ def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
     )
     circles.members.set(circle_id, **params)
     # TODO: validate response
+    yapper.emit('campus.circles.members.set')
     return {}, 200
 
 
