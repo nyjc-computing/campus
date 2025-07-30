@@ -1,4 +1,4 @@
-"""storage.tables.backend.postgres
+"""campus.storage.tables.backend.postgres
 
 This module provides the PostgreSQL backend for the Tables storage interface.
 

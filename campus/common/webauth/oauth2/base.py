@@ -1,4 +1,4 @@
-"""apps.common.webauth.oauth2.base
+"""campus.common.webauth.oauth2.base
 
 OAuth2 security scheme base configs and models.
 

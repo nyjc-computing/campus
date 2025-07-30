@@ -1,4 +1,4 @@
-"""apps.api.routes.emailotp.template
+"""campus.models.emailotp.template
 
 Email templates for OTP authentication.
 """

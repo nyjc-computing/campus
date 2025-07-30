@@ -1,4 +1,4 @@
-"""apps.common.models.session
+"""campus.models.session
 
 Session model for the Campus API.
 

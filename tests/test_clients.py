@@ -1,6 +1,6 @@
 import unittest
 from campus.apps.api.routes import admin
-from campus.models import client
+from campus.vault import client
 
 
 class TestClients(unittest.TestCase):

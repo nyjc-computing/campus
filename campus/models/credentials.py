@@ -1,4 +1,4 @@
-"""apps.common.models.credentials
+"""campus.models.credentials
 
 Credentials model for the Campus API.
 

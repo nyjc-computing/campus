@@ -1,4 +1,4 @@
-"""vault.db
+"""campus.vault.db
 
 Direct PostgreSQL database access for the vault service.
 

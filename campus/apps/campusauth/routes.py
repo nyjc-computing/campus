@@ -1,4 +1,4 @@
-"""apps/api/routes/campusauth
+"""campus.apps.campusauth.routes
 
 Routes for Campus authentication - clients and users.
 """

@@ -1,4 +1,4 @@
-"""client.errors
+"""campus.client.errors
 
 Common error types used across all campus client modules.
 """

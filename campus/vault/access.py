@@ -1,4 +1,4 @@
-"""vault.access
+"""campus.vault.access
 
 Access control module for the vault service.
 
