@@ -2,8 +2,6 @@
 
 This module provides classes for managing Campus users.
 """
-import os
-
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.models.base import BaseRecord
