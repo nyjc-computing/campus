@@ -39,6 +39,7 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def init_db() -> None:
     """Initialise the tables needed by api.
 
@@ -55,7 +56,8 @@ def init_db() -> None:
     vault.client.init_db()
 
 
-@devops.block_env(devops.PRODUCTION, devops.STAGING)
+@devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def purge() -> None:
     """Purge the database.
 
@@ -64,13 +66,5 @@ def purge() -> None:
     """
     # These imports do not appear at the top of the file to avoid namespace
     # pollution, as they are typically not used in production.
-    from warnings import warn  # type: ignore[import-untyped]
     from campus.storage import purge_all  # type: ignore[import-untyped]
-
-    if devops.ENV == devops.STAGING:
-        warn(f"Purging database in {devops.ENV} environment.", stacklevel=2)
-        if input("Are you sure? (y/n): ").lower() == 'y':
-            # User confirmed the purge
-            purge_all()
-    else:
-        purge_all()
+    purge_all()
