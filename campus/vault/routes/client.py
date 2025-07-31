@@ -8,11 +8,14 @@ Admin operations require ALL permissions, read operations require READ permissio
 
 from flask import Blueprint, Flask, jsonify, request
 
+import campus_yapper
+
 from .. import client
 from ..auth import require_client_authentication
 
 # Create blueprint for client management routes
 bp = Blueprint('client', __name__, url_prefix='/client')
+yapper = campus_yapper.create()
 
 
 @bp.route("", methods=["POST"])
@@ -48,19 +51,16 @@ def create_vault_client(client_id):
         ]
         if missing_fields:
             return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
-
         # Create the client
         client_resource, client_secret = client.create_client(
             name=data["name"],
             description=data["description"]
         )
-
         return jsonify({
             "status": "success",
             "client": client_resource,
             "client_secret": client_secret
         }), 201
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -134,10 +134,9 @@ def get_vault_client(client_id, target_client_id):
     """
     try:
         client_resource = client.get_client(target_client_id)
-        return jsonify({"client": client_resource})
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    return jsonify({"client": client_resource})
 
 
 @bp.route("/<target_client_id>", methods=["DELETE"])
@@ -154,16 +153,15 @@ def delete_vault_client(client_id, target_client_id):
     """
     try:
         client.delete_client(target_client_id)
-
-        return jsonify({
-            "status": "success",
-            "client_id": target_client_id,
-            "action": "deleted"
-        })
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+    finally:
+        yapper.emit('campus.clients.delete')
+    return jsonify({
+        "status": "success",
+        "client_id": target_client_id,
+        "action": "deleted"
+    })
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the client routes with the given Flask app or blueprint."""
