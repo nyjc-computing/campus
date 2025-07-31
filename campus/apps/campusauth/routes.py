@@ -20,6 +20,26 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 ## Campus authentication routes
+from flask import jsonify
+
+def not_implemented():
+    return jsonify({"message": "Not implemented"}), 404
+
+@bp.route('/authorize', methods=['POST'])
+def authorize():
+    return not_implemented()
+
+@bp.route('/token', methods=['POST'])
+def token():
+    return not_implemented()
+
+@bp.route('/login', methods=['POST'])
+def login():
+    return not_implemented()
+
+@bp.route('/logout', methods=['POST'])
+def logout():
+    return not_implemented()
 
 # @bp.post('/authorize')  # OAuth2 authorization endpoint for user consent and code grant
 # @unpack_request_json
