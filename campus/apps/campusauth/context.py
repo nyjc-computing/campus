@@ -1,4 +1,4 @@
-"""apps.campusauth.context
+"""campus.apps.campusauth.context
 
 This module defines the client and user context for the Campus API.
 This context is pushed to the flask g object for use in the API routes.

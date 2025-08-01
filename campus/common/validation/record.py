@@ -1,4 +1,4 @@
-"""common.validation.record
+"""campus.common.validation.record
 
 This module contains utility functions for validating records (dictionaries).
 """

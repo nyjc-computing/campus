@@ -1,4 +1,4 @@
-"""vault.model
+"""campus.vault.model
 
 Vault data model for managing secrets storage and retrieval.
 

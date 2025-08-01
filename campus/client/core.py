@@ -1,11 +1,12 @@
-"""campus.client.Campus
+"""campus.client.core
 
 Unified Campus client interface providing consistent access to all services.
 """
 
-from campus.client.vault.vault import VaultClient
-from campus.client.apps.users import UsersClient
+from campus.client.apps.admin import AdminClient
 from campus.client.apps.circles import CirclesClient
+from campus.client.apps.users import UsersClient
+from campus.client.vault.vault import VaultClient
 
 
 class Campus:
@@ -27,3 +28,4 @@ class Campus:
         self.vault = VaultClient()
         self.users = UsersClient()
         self.circles = CirclesClient()
+        self.admin = AdminClient()

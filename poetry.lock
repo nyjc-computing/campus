@@ -92,6 +92,25 @@ files = [
 ]
 
 [[package]]
+name = "campus-yapper"
+version = "0.1.0"
+description = "Message broker for the digital campus"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = []
+develop = false
+
+[package.dependencies]
+psycopg2-binary = ">=2.9.10,<3.0.0"
+
+[package.source]
+type = "git"
+url = "https://github.com/nyjc-computing/yapper-python.git"
+reference = "HEAD"
+resolved_reference = "97a885339ed6c9ad97efd2434950aede6fd24792"
+
+[[package]]
 name = "certifi"
 version = "2025.7.14"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -503,7 +522,6 @@ description = "psycopg2 - Python-PostgreSQL Database Adapter"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"vault\" or extra == \"apps\" or extra == \"full\""
 files = [
     {file = "psycopg2-binary-2.9.10.tar.gz", hash = "sha256:4b3df0e6990aa98acda57d983942eff13d824135fe2250e6522edaa782a06de2"},
     {file = "psycopg2_binary-2.9.10-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:0ea8e3d0ae83564f2fc554955d327fa081d065c8ca5cc6d2abb643e2c9c1200f"},
@@ -760,4 +778,4 @@ vault = ["bcrypt", "flask", "gunicorn", "psycopg2-binary", "werkzeug"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "db22f30dbf5c1ab58311e0c94e3a09ff4b1ab7dbb4a2ea3f50d2fdcb081c7408"
+content-hash = "e3ac789f4a10ef6dba3598e029e2cee6251df02feddffab97dd022992880367c"

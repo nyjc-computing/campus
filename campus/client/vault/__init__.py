@@ -1,4 +1,4 @@
-"""Campus Vault service clients.
+"""campus.client.vault
 
 Provides clean module interfaces for Campus Vault service resources.
 """

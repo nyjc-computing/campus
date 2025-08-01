@@ -1,4 +1,4 @@
-"""common.devops
+"""campus.common.devops
 
 This module contains the DevOps-related functionality for the Campus project.
 """

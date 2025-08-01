@@ -1,4 +1,4 @@
-"""apps.common.models.otp
+"""campus.models.emailotp
 
 This module provides classes and utilities for handling one-time
 passwords (OTPs) used in email authentication. It includes functionality

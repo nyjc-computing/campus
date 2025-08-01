@@ -1,4 +1,4 @@
-"""common.validation.name
+"""campus.common.validation.name
 
 Common functions used for validation of names and labels.
 """

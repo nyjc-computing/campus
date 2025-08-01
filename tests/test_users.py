@@ -1,24 +1,26 @@
 import unittest
-from campus.apps import api
+from campus.apps.api.routes import admin
+from campus.models import user
 
 
 class TestUsers(unittest.TestCase):
 
     def setUp(self):
-        api.purge()
-        api.init_db()
+        admin.purge_db()
+        admin.init_db()
 
     def test_user_creation_and_activation(self):
         email = "test.user@example.com"
         user_id, _ = email.split('@')
 
         # Test user creation
-        resp = api.users.new(email=email, name="Test User")
-        self.assertEqual(resp.status, "ok", f"Failed to create user: {resp.message}, Response data: {resp.data}")
+        user_obj = user.User()
+        resp = user_obj.new(email=email, name="Test User")
+        self.assertIsNotNone(resp)
 
         # Test user activation
-        resp = api.users.activate(email)
-        self.assertEqual(resp.status, "ok", f"Failed to activate user: {resp.message}, Response data: {resp.data}")
+        user_obj.activate(email)
+
 
 if __name__ == "__main__":
     unittest.main()

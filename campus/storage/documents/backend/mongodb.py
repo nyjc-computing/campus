@@ -1,4 +1,4 @@
-"""storage.documents.backend.mongodb
+"""campus.storage.documents.backend.mongodb
 
 This module provides the MongoDB backend for the Documents storage interface.
 

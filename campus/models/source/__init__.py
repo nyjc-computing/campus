@@ -1,4 +1,4 @@
-"""apps.common.models.source
+"""campus.models.source
 Source Models
 
 This module provides classes for creating and managing Campus sources, which

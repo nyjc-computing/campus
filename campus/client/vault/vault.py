@@ -1,4 +1,4 @@
-"""client.vault.vault
+"""campus.client.vault.vault
 
 Main vault client interface for secrets management and access control.
 """

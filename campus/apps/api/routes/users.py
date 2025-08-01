@@ -1,9 +1,11 @@
-"""apps.api.routes.users
+"""campus.apps.api.routes.users
 
 API routes for the users resource.
 """
 
 from flask import Blueprint, Flask
+
+import campus_yapper
 
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
@@ -13,8 +15,8 @@ from campus.models import user
 bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
 
-
 users = user.User()
+yapper = campus_yapper.create()
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -44,6 +46,7 @@ def new_user() -> flask_validation.JsonResponse:
         resource,
         on_error=api_errors.raise_api_error,
     )
+    yapper.emit('campus.users.new')
     return dict(resource), 201
 
 
@@ -51,6 +54,7 @@ def new_user() -> flask_validation.JsonResponse:
 def delete_user(user_id: str) -> flask_validation.JsonResponse:
     """Delete a user."""
     users.delete(user_id)
+    yapper.emit('campus.users.delete')
     return {}, 200
 
 
@@ -77,6 +81,7 @@ def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error,
     )
     users.update(user_id, **payload)
+    yapper.emit('campus.users.update')
     return {}, 200
 
 
