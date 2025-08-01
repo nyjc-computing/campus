@@ -30,6 +30,12 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 status=status,
                 **body
             )
+        case 404:
+            raise NotFoundError(
+                message="Not found",
+                status=status,
+                **body
+            )
         case 409:
             raise ConflictError(
                 message="Conflict",
@@ -82,6 +88,23 @@ class InvalidRequestError(APIError):
             self,
             message: str = "Invalid request",
             error_code: str = ErrorConstant.INVALID_REQUEST,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
+class NotFoundError(APIError):
+    """Not Found error.
+
+    Error indicates that the requested resource does not exist.
+    E.g. trying to access a user, circle, or document that is missing.
+    """
+    status_code: int = 404
+
+    def __init__(
+            self,
+            message: str = "Not found",
+            error_code: str = ErrorConstant.NOT_FOUND,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)

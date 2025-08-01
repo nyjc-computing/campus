@@ -19,6 +19,7 @@ class ErrorConstant(str):
     FORBIDDEN = "FORBIDDEN"
     INVALID_REQUEST = "INVALID_REQUEST"
     SERVER_ERROR = "SERVER_ERROR"
+    NOT_FOUND = "NOT_FOUND"
 
 
 class APIError(Exception):
