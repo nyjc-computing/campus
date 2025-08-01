@@ -10,11 +10,13 @@ Credentials are assumed to be issued by a provider.
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.common.errors import api_errors
-from campus.common.webauth.token import TokenSchema
-from campus.storage import get_collection
 from campus.common.schema import CampusID
 from campus.common.utils import utc_time
-from campus.storage import errors as storage_errors
+from campus.common.webauth.token import TokenSchema
+from campus.storage import (
+    errors as storage_errors,
+    get_collection
+)
 
 COLLECTION = "credentials"
 

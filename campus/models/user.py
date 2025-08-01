@@ -4,12 +4,14 @@ This module provides classes for managing Campus users.
 """
 from typing import NotRequired, TypedDict, Unpack
 
-from campus.models.base import BaseRecord
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.storage import get_table
-from campus.storage import errors as storage_errors
+from campus.models.base import BaseRecord
+from campus.storage import (
+    errors as storage_errors,
+    get_table
+)
 
 TABLE = "users"
 

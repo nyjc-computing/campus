@@ -17,12 +17,14 @@ from collections.abc import Iterator, Mapping
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.common.errors import api_errors
-from campus.storage import errors as storage_errors
-from campus.models.base import BaseRecord
-from campus.storage import get_collection
 from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time
 from campus.common import devops
+from campus.models.base import BaseRecord
+from campus.storage import (
+    errors as storage_errors,
+    get_collection
+)
 
 # TODO: Replace with OpenAPI-based string-pattern schema
 AccessValue = int
