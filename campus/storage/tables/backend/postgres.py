@@ -26,8 +26,8 @@ table.delete_by_id("123")
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from campus.common import devops
 from campus.client import Campus
+from campus.common import devops
 from campus.storage.tables.interface import TableInterface, PK
 from campus.storage import errors
 
