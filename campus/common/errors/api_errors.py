@@ -30,6 +30,12 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 status=status,
                 **body
             )
+        case 404:
+            raise NotFoundError(
+                message="Not found",
+                status=status,
+                **body
+            )
         case 409:
             raise ConflictError(
                 message="Conflict",
@@ -51,6 +57,43 @@ def raise_api_error(status: int, **body) -> NoReturn:
     raise ValueError(
         f"Unexpected status code: {status}"
     )
+
+
+class ConflictError(APIError):
+    """Conflict error.
+
+    Error indicates that the request conflicts with the current state of the
+    server.
+    E.g. trying to create a resource that already exists, delete a resource
+      that does not exist, etc.
+    """
+    status_code: int = 409
+
+    def __init__(
+            self,
+            message: str = "Conflict",
+            error_code: str = ErrorConstant.CONFLICT,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
+class ForbiddenError(APIError):
+    """Forbidden error.
+
+    Error indicates that the request is authenticated but the user does not
+    have permission to access the requested resource.
+    E.g. trying to access a resource that the user does not have permission to access.
+    """
+    status_code: int = 403
+
+    def __init__(
+            self,
+            message: str = "Forbidden",
+            error_code: str = ErrorConstant.FORBIDDEN,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
 
 
 class InternalError(APIError):
@@ -87,6 +130,23 @@ class InvalidRequestError(APIError):
         super().__init__(message, error_code, **details)
 
 
+class NotFoundError(APIError):
+    """Not Found error.
+
+    Error indicates that the requested resource does not exist.
+    E.g. trying to access a user, circle, or document that is missing.
+    """
+    status_code: int = 404
+
+    def __init__(
+            self,
+            message: str = "Not found",
+            error_code: str = ErrorConstant.NOT_FOUND,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
 class UnauthorizedError(APIError):
     """Unauthorized error.
 
@@ -99,43 +159,6 @@ class UnauthorizedError(APIError):
             self,
             message: str = "Unauthorized",
             error_code: str = ErrorConstant.UNAUTHORIZED,
-            **details
-    ) -> None:
-        super().__init__(message, error_code, **details)
-
-
-class ForbiddenError(APIError):
-    """Forbidden error.
-
-    Error indicates that the request is authenticated but the user does not
-    have permission to access the requested resource.
-    E.g. trying to access a resource that the user does not have permission to access.
-    """
-    status_code: int = 403
-
-    def __init__(
-            self,
-            message: str = "Forbidden",
-            error_code: str = ErrorConstant.FORBIDDEN,
-            **details
-    ) -> None:
-        super().__init__(message, error_code, **details)
-
-
-class ConflictError(APIError):
-    """Conflict error.
-
-    Error indicates that the request conflicts with the current state of the
-    server.
-    E.g. trying to create a resource that already exists, delete a resource
-      that does not exist, etc.
-    """
-    status_code: int = 409
-
-    def __init__(
-            self,
-            message: str = "Conflict",
-            error_code: str = ErrorConstant.CONFLICT,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)

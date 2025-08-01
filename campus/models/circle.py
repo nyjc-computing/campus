@@ -17,11 +17,14 @@ from collections.abc import Iterator, Mapping
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.common.errors import api_errors
-from campus.models.base import BaseRecord
-from campus.storage import get_collection
 from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time
 from campus.common import devops
+from campus.models.base import BaseRecord
+from campus.storage import (
+    errors as storage_errors,
+    get_collection
+)
 
 # TODO: Replace with OpenAPI-based string-pattern schema
 AccessValue = int
@@ -208,9 +211,12 @@ class CircleMember:
                     id=circle_id
                 )
             return record.get("members", {})
-        except Exception as e:
-            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
-                raise  # Re-raise API errors as-is
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="Circle not found",
+                id=circle_id
+            )
+        except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
     def add(self, circle_id: CircleID, **fields: Unpack[CircleMemberAdd]) -> None:
@@ -225,21 +231,32 @@ class CircleMember:
                     message="Member circle not found",
                     id=member_id
                 )
-        except Exception as e:
-            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
-                raise  # Re-raise API errors as-is
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="Member circle not found",
+                id=member_id
+            )
+        except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
-        storage.update_matching(
-            {"id": circle_id},
-            {
-                "$set": {
-                    f"members.{member_id}": access_value
-                }
-            },
-        )
+        try:
+            storage.update_matching(
+                {"id": circle_id},
+                {
+                    "$set": {
+                        f"members.{member_id}": access_value
+                    }
+                },
+            )
+        except storage_errors.NoChangesAppliedError as e:
+            raise api_errors.ConflictError(
+                message="No changes applied when adding member",
+                id=circle_id
+            )
+        except storage_errors.StorageError as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def remove(self, circle_id: CircleID, **fields: Unpack[CircleMemberRemove]) -> None:
         """Remove a member from a circle."""
@@ -257,21 +274,32 @@ class CircleMember:
                     message="Member not found in circle",
                     id=member_id
                 )
-        except Exception as e:
-            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
-                raise  # Re-raise API errors as-is
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="Circle not found",
+                id=circle_id
+            )
+        except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
-        storage.update_matching(
-            {"id": circle_id},
-            {
-                "$unset": {
-                    f"members.{member_id}": ""
-                }
-            },
-        )
+        try:
+            storage.update_matching(
+                {"id": circle_id},
+                {
+                    "$unset": {
+                        f"members.{member_id}": ""
+                    }
+                },
+            )
+        except storage_errors.NoChangesAppliedError as e:
+            raise api_errors.ConflictError(
+                message="No changes applied when removing member",
+                id=circle_id
+            )
+        except storage_errors.StorageError as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def set(self, circle_id: CircleID, **fields: Unpack[CircleMemberSet]) -> None:
         """Set the access of a member of a circle.
@@ -322,9 +350,10 @@ class Circle:
                                  access_value=access_value)
             # Return as CircleResource (add sources field)
             resource = CircleResource(**record)
-            resource["sources"] = {}  # TODO: join with sources and access values
+            # TODO: join with sources and access values
+            resource["sources"] = {}
             return resource
-        except Exception as e:
+        except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
     def delete(self, circle_id: str) -> None:
@@ -336,7 +365,12 @@ class Circle:
         # TODO: Check circle ancestry, remove from parents' members
         try:
             self.storage.delete_by_id(circle_id)
-        except Exception as e:
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="Circle not found",
+                id=circle_id
+            )
+        except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
     def get(self, circle_id: str) -> CircleResource:
@@ -350,20 +384,29 @@ class Circle:
                 )
             # TODO: join with sources and access values
             resource = CircleResource(**record)
-            resource["sources"] = {}  # TODO: join with sources and access values
+            # TODO: join with sources and access values
+            resource["sources"] = {}
             return resource
-        except Exception as e:
-            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
-                raise  # Re-raise API errors as-is
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="Circle not found",
+                id=circle_id
+            )
+        except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
     def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> None:
         """Update a circle by id."""
         try:
             self.storage.update_by_id(circle_id, dict(updates))
-        except Exception as e:
-            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
-                raise  # Re-raise API errors as-is
+        except storage_errors.NoChangesAppliedError as e:
+            return None  # No changes applied, nothing to do
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="Circle not found",
+                id=circle_id
+            )
+        except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
 
