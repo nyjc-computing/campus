@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ENV: testing
+      CLIENT_ID: test-client-id
+      CLIENT_SECRET: test-client-secret
     # No extras matrix needed
     
     steps:
