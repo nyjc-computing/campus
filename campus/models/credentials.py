@@ -14,6 +14,7 @@ from campus.common.webauth.token import TokenSchema
 from campus.storage import get_collection
 from campus.common.schema import CampusID
 from campus.common.utils import utc_time
+from campus.storage import errors as storage_errors
 
 COLLECTION = "credentials"
 
@@ -56,6 +57,11 @@ class ClientCredentials:
         """Delete a client credential by its ID."""
         try:
             self.storage.delete_by_id(client_id)
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="Client credential not found",
+                client_id=client_id
+            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -63,13 +69,15 @@ class ClientCredentials:
         """Retrieve a client credential by its ID."""
         try:
             record = self.storage.get_by_id(client_id)
-            if record is None:
-                api_errors.raise_api_error(404, message="Client not found")
-            return record
+        except storage_errors.NotFoundError as e:
+            api_errors.raise_api_error(404, message="Client credential not found")
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
             raise api_errors.InternalError(message=str(e), error=e)
+        if record is None:
+            api_errors.raise_api_error(404, message="Client credential not found")
+        return record
 
     def store(self, credentials: dict) -> None:
         """Store a client credential with the given ID and data."""
@@ -77,14 +85,35 @@ class ClientCredentials:
             # Add id primary key which is needed by the backend interface.
             assert "id" in credentials, "Client credentials must have an ID"
             credentials_data = dict(credentials)
-            
+
             # Check if record already exists
-            existing_record = self.storage.get_by_id(credentials_data["id"])
+            try:
+                existing_record = self.storage.get_by_id(credentials_data["id"])
+            except storage_errors.NotFoundError:
+                existing_record = None
+            # Other exceptions are handled below
             if existing_record is not None:
                 # If the record already exists, we update it.
-                self.storage.update_by_id(credentials_data["id"], credentials_data)
+                try:
+                    self.storage.update_by_id(
+                        credentials_data["id"],
+                        credentials_data
+                    )
+                except storage_errors.NoChangesAppliedError as e:
+                    raise api_errors.ConflictError(
+                        message="No client credential updated",
+                        client_id=credentials_data["id"]
+                    ) from e
+                # Other exceptions are handled below
             else:
-                self.storage.insert_one(credentials_data)
+                try:
+                    self.storage.insert_one(credentials_data)
+                except storage_errors.ConflictError as e:
+                    raise api_errors.ConflictError(
+                        message="Client credential conflict",
+                        client_id=credentials_data["id"]
+                    ) from e
+                # Other exceptions are handled below
         except Exception as e:
             if isinstance(e, AssertionError):
                 raise  # Re-raise assertion errors as-is
@@ -112,6 +141,11 @@ class UserCredentials:
             self.storage.delete_matching(
                 {"provider": self.provider, "user_id": user_id}
             )
+        except storage_errors.NotFoundError as e:
+            raise api_errors.ConflictError(
+                message="User credentials not found",
+                user_id=user_id
+            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -121,12 +155,14 @@ class UserCredentials:
             records = self.storage.get_matching(
                 {"provider": self.provider, "user_id": user_id}
             )
-            if not records:
-                api_errors.raise_api_error(
-                    404,
-                    message="User credentials not found"
-                )
-            
+        except storage_errors.NotFoundError as e:
+            raise api_errors.NotFoundError(
+                message="User credentials not found",
+                user_id=user_id
+            ) from e
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        else:
             record = records[0]
             # Remove the primary key field from the record
             # Make a copy to avoid modifying the original
@@ -134,31 +170,41 @@ class UserCredentials:
             if "id" in credentials_data:
                 del credentials_data["id"]
             return credentials_data  # type: ignore
-        except Exception as e:
-            if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
-                raise  # Re-raise API errors as-is
-            api_errors.raise_api_error(500)
 
     def store(self, **credentials: Unpack[UserCredentialsSchema]) -> None:
         """Store user credentials with the given data."""
+        assert credentials.get("provider", self.provider) == self.provider, \
+            "Provider mismatch in credentials"
+        # Add id primary key which is needed by the backend interface.
+        token_id = self.provider + ":" + credentials["user_id"]
+        credentials_data = dict(credentials)
+        credentials_data["id"] = token_id
+        credentials_data["provider"] = self.provider
         try:
-            assert credentials.get("provider", self.provider) == self.provider, \
-                "Provider mismatch in credentials"
-            
-            # Add id primary key which is needed by the backend interface.
-            token_id = self.provider + ":" + credentials["user_id"]
-            credentials_data = dict(credentials)
-            credentials_data["id"] = token_id
-            credentials_data["provider"] = self.provider
-            
             # Check if record already exists
-            existing_record = self.storage.get_by_id(token_id)
+            try:
+                existing_record = self.storage.get_by_id(token_id)
+            except storage_errors.NotFoundError:
+                existing_record = None
+            # Other exceptions are handled below
             if existing_record is not None:
                 # If the record already exists, update it.
-                self.storage.update_by_id(token_id, credentials_data)
+                try:
+                    self.storage.update_by_id(token_id, credentials_data)
+                except storage_errors.NoChangesAppliedError as e:
+                    raise api_errors.ConflictError(
+                        message="No user credentials updated",
+                        user_id=token_id
+                    ) from e
+                # Other exceptions are handled below
             else:
-                self.storage.insert_one(credentials_data)
+                try:
+                    self.storage.insert_one(credentials_data)
+                except storage_errors.ConflictError as e:
+                    raise api_errors.ConflictError(
+                        message="User credentials conflict",
+                        user_id=token_id
+                    ) from e
+                # Other exceptions are handled below
         except Exception as e:
-            if isinstance(e, AssertionError):
-                raise  # Re-raise assertion errors as-is
             raise api_errors.InternalError(message=str(e), error=e)
