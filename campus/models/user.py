@@ -9,6 +9,7 @@ from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
 from campus.storage import get_table
+from campus.storage import errors as storage_errors
 
 TABLE = "users"
 
@@ -63,15 +64,13 @@ class User:
         user_id = uid.generate_user_uid(email)
         try:
             self.storage.update_by_id(user_id, {'activated_at': utc_time.now()})
-        except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
-        # Check if user was actually found and updated
-        user = self.storage.get_by_id(user_id)
-        if not user:
+        except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
             )
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
 
     def new(self, **fields: Unpack[UserNew]) -> UserResource:
         """Create a new user."""
@@ -84,21 +83,26 @@ class User:
         )
         try:
             self.storage.insert_one(record)
-            return record  # type: ignore
+        except storage_errors.ConflictError as e:
+            raise api_errors.ConflictError(
+                message="User already exists",
+                user_id=user_id,
+                error=e
+            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return record  # type: ignore
 
     def delete(self, user_id: str) -> None:
         """Delete a user by id."""
-        # Check if user exists first
-        user = self.storage.get_by_id(user_id)
-        if not user:
+        try:
+            self.storage.delete_by_id(user_id)
+        except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            )
-        try:
-            self.storage.delete_by_id(user_id)
+            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -106,27 +110,24 @@ class User:
         """Get a user by id."""
         try:
             user = self.storage.get_by_id(user_id)
-            if not user:
-                raise api_errors.ConflictError(
-                    message="User not found",
-                    user_id=user_id
-                )
-            return user  # type: ignore
-        except api_errors.ConflictError:
-            raise
+        except storage_errors.NotFoundError as e:
+            raise api_errors.NotFoundError(
+                message="User not found",
+                user_id=user_id
+            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return user  # type: ignore
 
     def update(self, user_id: str, **updates: Unpack[UserUpdate]) -> None:
         """Update a user by id."""
-        # Check if user exists first
-        user = self.storage.get_by_id(user_id)
-        if not user:
+        try:
+            self.storage.update_by_id(user_id, dict(updates))
+        except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            )
-        try:
-            self.storage.update_by_id(user_id, dict(updates))
+            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
