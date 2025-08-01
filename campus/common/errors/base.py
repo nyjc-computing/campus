@@ -15,11 +15,11 @@ JsonDict = dict[str, JsonValues]
 class ErrorConstant(str):
     """Error enums"""
     CONFLICT = "CONFLICT"
-    UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
     INVALID_REQUEST = "INVALID_REQUEST"
-    SERVER_ERROR = "SERVER_ERROR"
     NOT_FOUND = "NOT_FOUND"
+    SERVER_ERROR = "SERVER_ERROR"
+    UNAUTHORIZED = "UNAUTHORIZED"
 
 
 class APIError(Exception):
