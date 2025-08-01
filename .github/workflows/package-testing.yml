@@ -29,6 +29,8 @@ jobs:
   # Test package build and installation with different feature sets
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      ENV: testing
     # No extras matrix needed
     
     steps:
