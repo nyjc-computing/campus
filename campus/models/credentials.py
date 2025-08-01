@@ -70,13 +70,15 @@ class ClientCredentials:
         try:
             record = self.storage.get_by_id(client_id)
         except storage_errors.NotFoundError as e:
-            api_errors.raise_api_error(404, message="Client credential not found")
+            api_errors.raise_api_error(
+                404, message="Client credential not found")
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
             raise api_errors.InternalError(message=str(e), error=e)
         if record is None:
-            api_errors.raise_api_error(404, message="Client credential not found")
+            api_errors.raise_api_error(
+                404, message="Client credential not found")
         return record
 
     def store(self, credentials: dict) -> None:
@@ -88,7 +90,8 @@ class ClientCredentials:
 
             # Check if record already exists
             try:
-                existing_record = self.storage.get_by_id(credentials_data["id"])
+                existing_record = self.storage.get_by_id(
+                    credentials_data["id"])
             except storage_errors.NotFoundError:
                 existing_record = None
             # Other exceptions are handled below
