@@ -5,7 +5,7 @@ Routes for Campus authentication - clients and users.
 
 from typing import Unpack
 
-from flask import Blueprint, Flask
+from flask import Blueprint, Flask, jsonify
 
 from campus.common.errors import api_errors
 import campus.common.validation.flask as flask_validation
@@ -20,8 +20,6 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 ## Campus authentication routes
-from flask import jsonify
-
 def not_implemented():
     return jsonify({"message": "Not implemented"}), 404
 
