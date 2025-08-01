@@ -25,11 +25,16 @@ collection.delete_by_id("123")
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
+from pymongo.errors import DuplicateKeyError
 
 from campus.common import devops
 from campus.client import Campus
 from campus.storage.documents.interface import CollectionInterface, PK
-from campus.storage.errors import NotFoundError, NoChangesAppliedError
+from campus.storage.errors import (
+    ConflictError,
+    NoChangesAppliedError,
+    NotFoundError,
+)
 
 # Singleton Campus client for this backend
 _campus_client = Campus()
@@ -145,14 +150,20 @@ class MongoDBCollection(CollectionInterface):
 
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
-        record = self.collection.find_one({PK: doc_id})
+        try:
+            record = self.collection.find_one({PK: doc_id})
+        except Exception as e:
+            raise RuntimeError(f"Failed to retrieve document by id: {e}") from e
         if record:
             return MongoRecord.from_mongo(record).to_record()
         return {}
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve documents matching a query."""
-        cursor = self.collection.find(query)
+        try:
+            cursor = self.collection.find(query)
+        except Exception as e:
+            raise RuntimeError(f"Failed to retrieve documents matching query: {e}") from e
         return [
             MongoRecord.from_mongo(record).to_record()
             for record in cursor
@@ -160,31 +171,58 @@ class MongoDBCollection(CollectionInterface):
 
     def insert_one(self, row: dict) -> None:
         """Insert a document into the collection."""
-        self.collection.insert_one(
-            MongoRecord.from_record(row).to_mongo()
-        )
+        try:
+            self.collection.insert_one(
+                MongoRecord.from_record(row).to_mongo()
+            )
+        except Exception as e:
+            # Duplicate key error (conflict)
+            # pymongo.errors.DuplicateKeyError is the canonical error, but fallback to message check
+            if isinstance(e, DuplicateKeyError) or 'duplicate key' in str(e).lower():
+                raise ConflictError(
+                    message="Conflict occurred during insert",
+                    collection_name=self.name,
+                    details={"row": row, "error": str(e)}
+                ) from e
+            raise
 
     def update_by_id(self, doc_id: str, update: dict) -> None:
         """Update a document in the collection."""
-        result = self.collection.update_one({PK: doc_id}, {"$set": update})
+        if not update:
+            return
+        try:
+            result = self.collection.update_one({PK: doc_id}, {"$set": update})
+        except Exception as e:
+            raise RuntimeError(f"Failed to update document by id: {e}") from e
         if result.matched_count == 0:
             raise NotFoundError(doc_id, self.name)
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
-        result = self.collection.update_many(query, {"$set": update})
+        if not update:
+            return
+        try:
+            result = self.collection.update_many(query, {"$set": update})
+        except Exception as e:
+            raise RuntimeError(f"Failed to update documents matching query: {e}") from e
         if result.matched_count == 0:
             raise NoChangesAppliedError("update", query, self.name)
 
     def delete_by_id(self, doc_id: str) -> None:
         """Delete a document from the collection."""
-        result = self.collection.delete_one({PK: doc_id})
+        try:
+            result = self.collection.delete_one({PK: doc_id})
+        except Exception as e:
+            raise RuntimeError(f"Failed to delete document by id: {e}") from e
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
-        result = self.collection.delete_many(query)
+        try:
+            result = self.collection.delete_many(query)
+        except Exception as e:
+            raise RuntimeError(f"Failed to delete documents matching query: {e}") from e
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 

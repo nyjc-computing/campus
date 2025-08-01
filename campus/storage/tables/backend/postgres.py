@@ -29,7 +29,7 @@ from psycopg2.extras import RealDictCursor
 from campus.common import devops
 from campus.client import Campus
 from campus.storage.tables.interface import TableInterface, PK
-from campus.storage.errors import NotFoundError, NoChangesAppliedError
+from campus.storage import errors
 
 
 # Singleton Campus client for this backend
@@ -135,11 +135,23 @@ class PostgreSQLTable(TableInterface):
                 column_names, placeholders, values = self._build_columns_and_values(
                     row)
 
-                cursor.execute(
-                    f"INSERT INTO {self.name} ({column_names}) VALUES ({placeholders})",
-                    values
-                )
-                conn.commit()
+                try:
+                    cursor.execute(
+                        f"INSERT INTO {self.name} ({column_names}) VALUES ({placeholders})",
+                        values
+                    )
+                except psycopg2.IntegrityError as e:
+                    conn.rollback()
+                    raise errors.ConflictError(
+                        message="Conflict occurred during insert",
+                        collection_name=self.name,
+                        details={"row": row, "error": str(e)}
+                    ) from e
+                except psycopg2.Error as e:
+                    conn.rollback()
+                    raise
+                else:
+                    conn.commit()
 
     def update_by_id(self, row_id: str, update: dict) -> None:
         """Update a row in the specified table."""
@@ -151,13 +163,19 @@ class PostgreSQLTable(TableInterface):
                 set_clause, params = self._build_set_clause(update)
                 params.append(row_id)
 
-                cursor.execute(
-                    f"UPDATE {self.name} SET {set_clause} WHERE {PK} = %s",
-                    params
-                )
-                if cursor.rowcount == 0:
-                    raise NotFoundError(row_id, self.name)
-                conn.commit()
+                try:
+                    cursor.execute(
+                        f"UPDATE {self.name} SET {set_clause} WHERE {PK} = %s",
+                        params
+                    )
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NotFoundError(
+                            row_id, self.name
+                        )
+                    conn.commit()
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update rows matching a query in the specified table."""
@@ -172,35 +190,50 @@ class PostgreSQLTable(TableInterface):
                 params = set_params + where_params
                 sql = f"UPDATE {self.name} SET {set_clause} {where_clause}"
 
-                cursor.execute(sql, params)
-                if cursor.rowcount == 0:
-                    raise NoChangesAppliedError("update", query, self.name)
-                conn.commit()
+                try:
+                    cursor.execute(sql, params)
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NoChangesAppliedError(
+                            "update", query, self.name)
+                    conn.commit()
 
     def delete_by_id(self, row_id: str) -> None:
         """Delete a row from the specified table."""
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    f"DELETE FROM {self.name} WHERE {PK} = %s",
-                    (row_id,)
-                )
-                if cursor.rowcount == 0:
-                    raise NotFoundError(row_id, self.name)
-                conn.commit()
+                try:
+                    cursor.execute(
+                        f"DELETE FROM {self.name} WHERE {PK} = %s",
+                        (row_id,)
+                    )
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NotFoundError(row_id, self.name)
+                    conn.commit()
 
     def delete_matching(self, query: dict) -> None:
         """Delete rows matching a query in the specified table."""
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 where_clause, params = self._build_where_clause(query)
-                cursor.execute(
-                    f"DELETE FROM {self.name} {where_clause}",
-                    params
-                )
-                if cursor.rowcount == 0:
-                    raise NoChangesAppliedError("delete", query, self.name)
-                conn.commit()
+                try:
+                    cursor.execute(
+                        f"DELETE FROM {self.name} {where_clause}",
+                        params
+                    )
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NoChangesAppliedError(
+                            "delete", query, self.name
+                        )
+                    conn.commit()
 
     @devops.block_env(devops.PRODUCTION)
     def init_table(self, schema: str) -> None:
