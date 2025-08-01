@@ -12,6 +12,10 @@ from typing import Optional
 class StorageError(Exception):
     """Base class for all storage-related errors."""
 
+    def __init__(self, message: str = "An error occurred in storage."):
+        super().__init__(message)
+        self.message = message
+
 
 class ConflictError(StorageError):
     """Error raised when a storage operation encounters a conflict.
