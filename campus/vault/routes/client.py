@@ -155,7 +155,7 @@ def delete_vault_client(client_id, target_client_id):
         client.delete_client(target_client_id)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
+    else:
         yapper.emit('campus.clients.delete')
     return jsonify({
         "status": "success",
