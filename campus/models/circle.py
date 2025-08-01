@@ -348,7 +348,8 @@ class Circle:
                                  access_value=access_value)
             # Return as CircleResource (add sources field)
             resource = CircleResource(**record)
-            resource["sources"] = {}  # TODO: join with sources and access values
+            # TODO: join with sources and access values
+            resource["sources"] = {}
             return resource
         except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
@@ -381,7 +382,8 @@ class Circle:
                 )
             # TODO: join with sources and access values
             resource = CircleResource(**record)
-            resource["sources"] = {}  # TODO: join with sources and access values
+            # TODO: join with sources and access values
+            resource["sources"] = {}
             return resource
         except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(

@@ -63,7 +63,8 @@ class User:
         """Actions to perform upon first sign-in."""
         user_id = uid.generate_user_uid(email)
         try:
-            self.storage.update_by_id(user_id, {'activated_at': utc_time.now()})
+            self.storage.update_by_id(
+                user_id, {'activated_at': utc_time.now()})
         except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",

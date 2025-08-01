@@ -196,7 +196,8 @@ class EmailOTPAuth:
         try:
             # Get the latest OTP for this email
             try:
-                otp_records = self.storage.get_matching({"email": data['email']})
+                otp_records = self.storage.get_matching(
+                    {"email": data['email']})
             except storage_errors.NotFoundError:
                 raise api_errors.ConflictError("OTP not found")
             # Get the most recent OTP record (assuming they're ordered by creation time)
