@@ -96,19 +96,19 @@ name = "campus-yapper"
 version = "0.1.0"
 description = "Message broker for the digital campus"
 optional = false
-python-versions = ">=3.11"
+python-versions = ">=3.11.0,<3.12"
 groups = ["main"]
 files = []
 develop = false
 
 [package.dependencies]
-psycopg2-binary = ">=2.9.10,<3.0.0"
+psycopg2-binary = "^2.9.0"
 
 [package.source]
 type = "git"
 url = "https://github.com/nyjc-computing/yapper-python.git"
-reference = "HEAD"
-resolved_reference = "97a885339ed6c9ad97efd2434950aede6fd24792"
+reference = "main"
+resolved_reference = "4303c17a8acea60e994e58897d95ba1b0713dd21"
 
 [[package]]
 name = "certifi"
@@ -778,4 +778,4 @@ vault = ["bcrypt", "flask", "gunicorn", "psycopg2-binary", "werkzeug"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.12"
-content-hash = "e3ac789f4a10ef6dba3598e029e2cee6251df02feddffab97dd022992880367c"
+content-hash = "cf77e7c27911fb7788aaf0bbf4609f245169162055e127341e27451bff7b39d9"
