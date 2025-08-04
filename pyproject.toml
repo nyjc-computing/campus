@@ -25,7 +25,7 @@ gunicorn = "^21.2.0"
 werkzeug = "^3.0.0"
 
 # Campus internal dependencies
-campus-yapper = {git = "https://github.com/nyjc-computing/yapper-python.git"}
+campus-yapper = {git = "https://github.com/nyjc-computing/yapper-python.git", branch = "main"}
 
 [tool.poetry.extras]
 # Optional dependency groups for deployment modes
