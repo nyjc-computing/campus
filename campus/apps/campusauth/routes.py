@@ -5,7 +5,7 @@ Routes for Campus authentication - clients and users.
 
 from typing import Unpack
 
-from flask import Blueprint, Flask
+from flask import Blueprint, Flask, redirect, url_for
 
 from campus.common.errors import api_errors
 import campus.common.validation.flask as flask_validation
@@ -35,7 +35,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
 @bp.get('/login')
 def login() -> flask_validation.JsonResponse:
     """Login endpoint."""
-    return {"message": "Not implemented"}, 501
+    return redirect(url_for('campus.oauth.google.authorize'))
 
 
 @bp.post('/logout')
