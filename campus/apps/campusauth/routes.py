@@ -29,6 +29,7 @@ def oauth2_authorize() -> flask_validation.JsonResponse:
 @bp.post('/oauth2/token')
 def oauth2_token() -> flask_validation.JsonResponse:
     """OAuth2 token endpoint for exchanging authorization code for access token."""
+    # minor change for demo purposes
     return {"message": "Not implemented"}, 501
 
 
