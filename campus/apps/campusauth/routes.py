@@ -5,7 +5,7 @@ Routes for Campus authentication - clients and users.
 
 from typing import Unpack
 
-from flask import Blueprint, Flask
+from flask import Blueprint, Flask, redirect, url_for
 
 from campus.common.errors import api_errors
 import campus.common.validation.flask as flask_validation
@@ -19,29 +19,26 @@ def init_app(app: Flask | Blueprint) -> None:
     app.register_blueprint(bp)
 
 
-## Campus authentication routes
+# OAuth2 endpoints
+@bp.get('/oauth2/authorize')
+def oauth2_authorize() -> flask_validation.JsonResponse:
+    """OAuth2 authorization endpoint for user consent and code grant."""
+    return {"message": "Not implemented"}, 501
 
-# @bp.post('/authorize')  # OAuth2 authorization endpoint for user consent and code grant
-# @unpack_request_json
-# @validate(
-#     request=AuthorizeSchema.__annotations__,
-#     response={"message": str},
-#     on_error=api_errors.raise_api_error
-# )
-# def authorize(*_, **data: Unpack[AuthorizeSchema]) -> FlaskResponse:
-#     """Handle a Campus OAuth authorization request."""
-#     return {"message": "Not implemented"}, 501
 
-# @bp.post('/token')  # OAuth2 token endpoint for exchanging authorization code for access token
-# @unpack_request_json
-# @validate(
-#     request=TokenSchema.__annotations__,
-#     response={"message": str},
-#     on_error=api_errors.raise_api_error
-# )
-# def verify_otp(*_, **data: Unpack[TokenSchema]) -> FlaskResponse:
-#     """Verify an OTP for email authentication."""
-#     return {"message": "Not implemented"}, 501
+@bp.post('/oauth2/token')
+def oauth2_token() -> flask_validation.JsonResponse:
+    """OAuth2 token endpoint for exchanging authorization code for access token."""
+    return {"message": "Not implemented"}, 501
 
-# TODO: /login
-# TODO: /logout
+
+@bp.get('/login')
+def login() -> flask_validation.JsonResponse:
+    """Login endpoint."""
+    return redirect(url_for('campus.oauth.google.authorize'))
+
+
+@bp.post('/logout')
+def logout() -> flask_validation.JsonResponse:
+    """Logout endpoint."""
+    return {"message": "Not implemented"}, 501
