@@ -5,13 +5,22 @@ Routes for Campus authentication - clients and users.
 
 from typing import TypedDict, Unpack
 
-from flask import Blueprint, Flask, redirect, request, url_for
+from flask import (
+    Blueprint,
+    Flask,
+    redirect,
+    session as flask_session,
+    url_for
+)
 
 from campus.common.errors import api_errors
+from campus.models.token import Tokens
 import campus.common.validation.flask as flask_validation
 
 # No url prefix because authentication endpoints are not only used by the API
 bp = Blueprint('campusauth', __name__, url_prefix='/')
+
+tokens = Tokens()
 
 
 class AuthorizationCodeRequest(TypedDict):
@@ -44,6 +53,23 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
         AuthorizationCodeRequest.__annotations__,
         on_error=api_errors.raise_api_error
     )  # type: ignore
+    if "session_id" not in flask_session:
+        # TODO: redirect to google for authentication
+        return "Not implemented", 501
+    else:
+        session = tokens.get_session(
+            session_id=flask_session["session_id"]
+        )
+        if not session:
+            # TODO: Redirect to login with error message
+            return "Session not found", 404
+        # Verify client_id and user_id
+        if session["client_id"] != req_json["client_id"]:
+            # TODO: Redirect to login with error message
+            return "Invalid client_id", 401
+        if session["user_id"] != flask_session["user_id"]:
+            # TODO: Redirect to login with error message
+            return "Invalid user_id", 401
     return "Not implemented", 501
 
 
