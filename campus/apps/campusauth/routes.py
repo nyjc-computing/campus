@@ -44,7 +44,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
         AuthorizationCodeRequest.__annotations__,
         on_error=api_errors.raise_api_error
     )  # type: ignore
-    return {"message": "Not implemented"}, 501
+    return "Not implemented", 501
 
 
 @bp.post('/oauth2/token')
@@ -63,4 +63,4 @@ def login() -> flask_validation.HtmlResponse:
 @bp.post('/logout')
 def logout() -> flask_validation.HtmlResponse:
     """Logout endpoint."""
-    return {"message": "Not implemented"}, 501
+    return "Not implemented", 501
