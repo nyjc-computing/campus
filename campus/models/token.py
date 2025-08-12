@@ -45,3 +45,17 @@ class Tokens:
             return self.storage.get_by_id(session_id)
         except storage_errors.NotFoundError:
             return {}
+        
+    def validate_scope(
+            self,
+            session: dict,
+            scopes: str | list[str]
+    ) -> list[str]:
+        """Validate the requested scopes against the session's granted scopes.
+        """
+        if isinstance(scopes, str):
+            scopes = scopes.split(" ")
+        return [
+            scope for scope in scopes
+            if scope not in session["scopes"]
+        ]

@@ -70,6 +70,13 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
         if session["user_id"] != flask_session["user_id"]:
             # TODO: Redirect to login with error message
             return "Invalid user_id", 401
+        # Validate scopes
+        missing_scopes = tokens.validate_scope(
+            session=session,
+            scopes=req_json.get("scope") or ""
+        )
+        if missing_scopes:
+            return f"Missing scopes: {missing_scopes}", 403
     return "Not implemented", 501
 
 
