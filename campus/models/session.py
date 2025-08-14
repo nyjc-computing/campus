@@ -12,6 +12,11 @@ from typing import TypedDict
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
+from campus.common.utils import (
+    uid,
+    utc_time,
+)
+import campus.common.validation.record as record_validation
 from campus.models.base import BaseRecord
 from campus.storage import (
     errors as storage_errors,
@@ -64,10 +69,25 @@ class Session:
             ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
-        # Remove id primary key: only needed by the backend interface.
-        # Make a copy to avoid modifying the original
-        session_data = dict(record)
-        if "id" in session_data and "state" in session_data:
-            assert session_data["id"] == session_data["state"]
-            del session_data["id"]
-        return session_data
+        else:
+            return record
+
+    def new(self, session_data: dict, *, expiry_seconds: int) -> dict:
+        """Create a new OAuth session."""
+        record_validation.validate_keys(
+            session_data,
+            valid_keys=SessionNew.__annotations__,
+            ignore_extra=False,
+        )
+        session_data["id"] = uid.generate_category_uid(COLLECTION)
+        dt_now = utc_time.now()
+        session_data["created_at"] = utc_time.to_rfc3339(dt_now)
+        session_data["expires_at"] = utc_time.to_rfc3339(
+            utc_time.after(dt_now, seconds=expiry_seconds)
+        )
+        try:
+            self.storage.insert_one(session_data)
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return session_data
