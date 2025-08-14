@@ -34,16 +34,6 @@ class Session:
                 message="Session not found",
                 session_id=session_id
             ) from e
-        except storage_errors.ConflictError as e:
-            raise api_errors.ConflictError(
-                message="Session conflict",
-                session_id=session_id
-            ) from e
-        except storage_errors.NoChangesAppliedError as e:
-            raise api_errors.ConflictError(
-                message="No session deleted",
-                session_id=session_id
-            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -65,18 +55,3 @@ class Session:
             assert session_data["id"] == session_data["state"]
             del session_data["id"]
         return session_data
-
-    def store(self, session: dict) -> None:
-        """Store an OAuth session."""
-        session_data = dict(session)
-        session_data["id"] = session_data["state"]
-        try:
-            # Add id primary key which is needed by the backend interface.
-            self.storage.insert_one(session_data)
-        except storage_errors.ConflictError as e:
-            raise api_errors.ConflictError(
-                message="Session conflict",
-                session_id=session.get("state")
-            ) from e
-        except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
