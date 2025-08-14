@@ -3,16 +3,32 @@
 Session model for the Campus API.
 
 Sessions are short-lived processes, typically used for authentication state.
+Sessions are identified by a unique session ID, which is stored client-side
+    using cookies or local storage.
+Sessions must have an expiry datetime, for pruning.
 """
+
+from typing import TypedDict
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
+from campus.models.base import BaseRecord
 from campus.storage import (
     errors as storage_errors,
     get_collection
 )
 
 COLLECTION = "sessions"
+
+
+class SessionRecord(BaseRecord):
+    """Schema for a full session record."""
+    expires_at: str
+
+
+class SessionNew(TypedDict, total=False):
+    """Schema for a new session request."""
+    expires_at: str
 
 
 class Session:
