@@ -32,6 +32,7 @@ ViewFunctionDecorator = Callable[["ViewFunction"], "ViewFunction"]
 # able to handle
 # But Campus API sticks to JSON-serializable return values, with a status code
 JsonResponse = tuple[dict[str, Any], StatusCode]
+HtmlResponse = tuple[str, StatusCode]
 
 
 class ErrorHandler(Protocol):

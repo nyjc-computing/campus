@@ -3,16 +3,40 @@
 Session model for the Campus API.
 
 Sessions are short-lived processes, typically used for authentication state.
+Sessions are identified by a unique session ID, which is stored client-side
+    using cookies or local storage.
+Sessions must have an expiry datetime, for pruning.
 """
+
+from typing import NotRequired, Required, TypedDict
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
+from campus.common.utils import (
+    uid,
+    utc_time,
+)
+import campus.common.validation.record as record_validation
+from campus.models.base import BaseRecord
 from campus.storage import (
     errors as storage_errors,
     get_collection
 )
 
 COLLECTION = "sessions"
+
+
+class SessionRecord(BaseRecord):
+    """Schema for a full session record."""
+    expires_at: str
+    scopes: NotRequired[list[str]]
+
+
+class SessionNew(TypedDict, total=False):
+    """Schema for a new session request."""
+    expires_at: Required[str]
+    # A session may include specific scopes
+    scopes: list[str]
 
 
 class Session:
@@ -34,16 +58,6 @@ class Session:
                 message="Session not found",
                 session_id=session_id
             ) from e
-        except storage_errors.ConflictError as e:
-            raise api_errors.ConflictError(
-                message="Session conflict",
-                session_id=session_id
-            ) from e
-        except storage_errors.NoChangesAppliedError as e:
-            raise api_errors.ConflictError(
-                message="No session deleted",
-                session_id=session_id
-            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -58,25 +72,39 @@ class Session:
             ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
-        # Remove id primary key: only needed by the backend interface.
-        # Make a copy to avoid modifying the original
-        session_data = dict(record)
-        if "id" in session_data and "state" in session_data:
-            assert session_data["id"] == session_data["state"]
-            del session_data["id"]
-        return session_data
+        else:
+            return record
 
-    def store(self, session: dict) -> None:
-        """Store an OAuth session."""
-        session_data = dict(session)
-        session_data["id"] = session_data["state"]
+    def new(self, session_data: dict, *, expiry_seconds: int) -> dict:
+        """Create a new OAuth session."""
+        record_validation.validate_keys(
+            session_data,
+            valid_keys=SessionNew.__annotations__,
+            ignore_extra=False,
+        )
+        session_data["id"] = uid.generate_category_uid(COLLECTION)
+        dt_now = utc_time.now()
+        session_data["created_at"] = utc_time.to_rfc3339(dt_now)
+        session_data["expires_at"] = utc_time.to_rfc3339(
+            utc_time.after(dt_now, seconds=expiry_seconds)
+        )
         try:
-            # Add id primary key which is needed by the backend interface.
             self.storage.insert_one(session_data)
-        except storage_errors.ConflictError as e:
-            raise api_errors.ConflictError(
-                message="Session conflict",
-                session_id=session.get("state")
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return session_data
+
+    def update(self, session_id: CampusID, **update) -> dict:
+        """Update an existing session."""
+        try:
+            self.storage.update_by_id(session_id, update)
+        except storage_errors.NotFoundError as e:
+            raise api_errors.NotFoundError(
+                message="Session not found",
+                session_id=session_id
             ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return self.get(session_id)
