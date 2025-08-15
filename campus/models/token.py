@@ -1,12 +1,16 @@
 """campus.models.token
 
-(Authorization) Token model for the Campus API.
+(Bearer) Token model for the Campus API.
 
-Tokens are tagged to a specific client (by client_id), user (by user_id),
-and session (by session_id).
+Tokens are tagged to:
+- a specific client (by client_id)
+- a specific user (by user_id)
+- specific scopes
 """
 
 from campus.common import devops
+from campus.common.utils import secret, uid, utc_time
+from campus.common.schema import CampusID, UserID
 from campus.storage import (
     errors as storage_errors,
     get_table
@@ -26,10 +30,33 @@ def init_db():
     storage = get_table(TABLE)
     schema = f"""
         CREATE TABLE IF NOT EXISTS "{TABLE}" (
-            ...
+            id TEXT PRIMARY KEY,
+            created_at TEXT,
+            expires_at TEXT,
+            client_id TEXT,
+            user_id TEXT,
+            access_token TEXT,
+            scopes TEXT,
         )
     """
     storage.init_table(schema)
+
+
+class TokenRecord(BaseRecord):
+    """Schema for a full token record."""
+    created_at: str
+    expires_at: str
+    client_id: CampusID
+    user_id: UserID
+    access_token: str
+    scopes: str
+
+
+class TokenNew(TypedDict):
+    """Schema for a new token request."""
+    client_id: CampusID
+    user_id: UserID
+    scopes: list[str]
 
 
 class Tokens:
@@ -38,6 +65,28 @@ class Tokens:
     def __init__(self):
         """Initialize the Token model with a table storage interface."""
         self.storage = get_table(TABLE)
+
+    def delete(self, token_id: CampusID) -> None:
+        """Delete a token from the database."""
+        self.storage.delete_by_id(token_id)
+
+    def get(self, token_id: CampusID) -> dict:
+        """Retrieve a token from the database by its ID."""
+        return self.storage.get_by_id(token_id)
+
+    def new(self, token_data: TokenNew, *, expiry_seconds: int) -> dict:
+        """Create a new token in the database."""
+        token = dict(token_data)
+        token["id"] = uid.generate_category_uid("token")
+        now = utc_time.now()
+        token["created_at"] = utc_time.to_rfc3339(now)
+        token["expires_at"] = utc_time.to_rfc3339(
+            utc_time.after(now, seconds=expiry_seconds)
+        )
+        token["access_token"] = secret.generate_access_code()
+        token["scopes"] = " ".join(token_data.get("scopes", []))
+        self.storage.insert_one(token)
+        return token
 
     def validate_scope(
             self,
