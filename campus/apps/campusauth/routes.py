@@ -34,6 +34,15 @@ class AuthorizationCodeRequest(TypedDict):
     state: NotRequired[str]
 
 
+class TokenRequest(TypedDict):
+    """Request data for OAuth2 token request."""
+    grant_type: str
+    code: str
+    redirect_uri: str
+    client_id: str
+    client_secret: str
+
+
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise campusauth routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
@@ -99,8 +108,25 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
 @bp.post('/oauth2/token')
 def oauth2_token() -> flask_validation.JsonResponse:
     """OAuth2 token endpoint for exchanging authorization code for access token."""
-    # TODO: retrieve session, verify session auth_code
-
+    req_json: TokenRequest = flask_validation.validate_request_and_extract_json(
+        AuthorizationCodeRequest.__annotations__,
+        on_error=api_errors.raise_api_error
+    )  # type: ignore
+    # No valid session
+    if "session_id" not in flask_session:
+        return {"error": "Not authenticated"}, 401
+    session = tokens.get_session(
+        session_id=flask_session["session_id"]
+    )
+    if not session:
+        return {"error": "Not authenticated"}, 401
+    if not req_json["grant_type"] == "authorization_code":
+        return {"error": "Invalid grant_type"}, 400
+    if not req_json["redirect_uri"] == session["redirect_uri"]:
+        return {"error": "Invalid redirect_uri"}, 400
+    if req_json["code"] != session["authorization_code"]:
+        return {"error": "Invalid authorization code"}, 400
+    # TODO: Issue token
     return {"message": "Not implemented"}, 501
 
 
