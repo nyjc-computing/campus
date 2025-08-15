@@ -127,7 +127,8 @@ def oauth2_token() -> flask_validation.JsonResponse:
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
     # TODO: Issue token
-    # TODO: OAuth2 flow complete, revoke session
+    # OAuth2 flow complete, revoke session
+    sessions.delete(session["id"])
     return {"message": "Not implemented"}, 501
 
 
