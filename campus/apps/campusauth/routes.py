@@ -3,7 +3,8 @@
 Routes for Campus authentication - clients and users.
 """
 
-from typing import TypedDict, Unpack
+from typing import NotRequired, TypedDict, Unpack
+from urllib.parse import urlencode
 
 from flask import (
     Blueprint,
@@ -16,6 +17,7 @@ from flask import (
 from campus.common.errors import api_errors
 from campus.models.token import Tokens
 import campus.common.validation.flask as flask_validation
+from campus.common.utils import secret
 
 # No url prefix because authentication endpoints are not only used by the API
 bp = Blueprint('campusauth', __name__, url_prefix='/')
@@ -28,8 +30,8 @@ class AuthorizationCodeRequest(TypedDict):
     client_id: str
     response_type: str
     redirect_uri: str
-    scope: str | None
-    state: str | None
+    scope: NotRequired[str]
+    state: NotRequired[str]
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -70,13 +72,30 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
         if session["user_id"] != flask_session["user_id"]:
             # TODO: Redirect to login with error message
             return "Invalid user_id", 401
-        # Validate scopes
+        # Verify scope of consent
         missing_scopes = tokens.validate_scope(
             session=session,
             scopes=req_json.get("scope") or ""
         )
         if missing_scopes:
-            return f"Missing scopes: {missing_scopes}", 403
+            # TODO: redirect for additional scope authorization
+            return "Not implemented", 501
+        # Issue authorization code
+        authorization_code = secret.generate_authorization_code()
+        # TODO: Handle update errors
+        session = tokens.update_session(
+            session["id"],
+            authorization_code=authorization_code
+        )
+        # Redirect user to the specified redirect URI
+        params = {
+            "code": authorization_code,
+        }
+        if "state" in req_json:
+            params["state"] = req_json["state"]
+        redirect_uri = f'{req_json["redirect_uri"]}?{urlencode(params)}'
+        return redirect(redirect_uri), 302
+
     return "Not implemented", 501
 
 
