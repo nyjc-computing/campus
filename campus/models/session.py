@@ -8,7 +8,7 @@ Sessions are identified by a unique session ID, which is stored client-side
 Sessions must have an expiry datetime, for pruning.
 """
 
-from typing import TypedDict
+from typing import NotRequired, Required, TypedDict
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
@@ -29,11 +29,14 @@ COLLECTION = "sessions"
 class SessionRecord(BaseRecord):
     """Schema for a full session record."""
     expires_at: str
+    scopes: NotRequired[list[str]]
 
 
 class SessionNew(TypedDict, total=False):
     """Schema for a new session request."""
-    expires_at: str
+    expires_at: Required[str]
+    # A session may include specific scopes
+    scopes: list[str]
 
 
 class Session:
