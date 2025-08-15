@@ -56,8 +56,8 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
         on_error=api_errors.raise_api_error
     )  # type: ignore
     if "session_id" not in flask_session:
-        # TODO: redirect to google for authentication
-        return "Not implemented", 501
+        # TODO: redirect to login for authentication
+        return redirect(url_for("campusauth.login"))
     session = tokens.get_session(
         session_id=flask_session["session_id"]
     )
@@ -107,10 +107,12 @@ def oauth2_token() -> flask_validation.JsonResponse:
 @bp.get('/login')
 def login() -> flask_validation.HtmlResponse:
     """Login endpoint."""
+    # TODO: Initialise auth session
     return redirect(url_for('campus.oauth.google.authorize'))
 
 
 @bp.post('/logout')
 def logout() -> flask_validation.HtmlResponse:
     """Logout endpoint."""
+    # TODO: Revoke session
     return "Not implemented", 501
