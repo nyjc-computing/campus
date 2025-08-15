@@ -26,6 +26,8 @@ bp = Blueprint('campusauth', __name__, url_prefix='/')
 tokens = Tokens()
 sessions = Session()
 
+DEFAULT_EXPIRY = 600
+
 
 class AuthorizationCodeRequest(TypedDict):
     """Request data for OAuth2 authorization code request."""
@@ -132,7 +134,17 @@ def oauth2_token() -> flask_validation.JsonResponse:
 @bp.get('/login')
 def login() -> flask_validation.HtmlResponse:
     """Login endpoint."""
-    # TODO: Initialise auth session
+    if "session_id" in flask_session:
+        # User already logged in, redirect to home or dashboard
+        return redirect(url_for('campus.home'))
+    session = sessions.new(
+        {
+            "user_id": flask_session["user_id"],
+            "client_id": flask_session["client_id"]
+        },
+        expiry_seconds=DEFAULT_EXPIRY
+    )
+    flask_session["session_id"] = session["id"]
     return redirect(url_for('campus.oauth.google.authorize'))
 
 
