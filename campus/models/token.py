@@ -39,18 +39,6 @@ class Tokens:
         """Initialize the Token model with a table storage interface."""
         self.storage = get_table(TABLE)
 
-    def get_session(self, session_id: str) -> dict:
-        """Get the session data for the given session ID."""
-        try:
-            return self.storage.get_by_id(session_id)
-        except storage_errors.NotFoundError:
-            return {}
-
-    def update_session(self, session_id: str, **update) -> dict:
-        """Update the session data for the given session ID."""
-        self.storage.update_by_id(session_id, update)
-        return self.get_session(session_id)
-
     def validate_scope(
             self,
             session: dict,

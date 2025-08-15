@@ -15,6 +15,7 @@ from flask import (
 )
 
 from campus.common.errors import api_errors
+from campus.models.session import Session
 from campus.models.token import Tokens
 import campus.common.validation.flask as flask_validation
 from campus.common.utils import secret
@@ -23,6 +24,7 @@ from campus.common.utils import secret
 bp = Blueprint('campusauth', __name__, url_prefix='/')
 
 tokens = Tokens()
+sessions = Session()
 
 
 class AuthorizationCodeRequest(TypedDict):
@@ -67,9 +69,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
     if "session_id" not in flask_session:
         # TODO: redirect to login for authentication
         return redirect(url_for("campusauth.login"))
-    session = tokens.get_session(
-        session_id=flask_session["session_id"]
-    )
+    session = sessions.get(flask_session["session_id"])
     if not session:
         # TODO: Redirect to login with error message
         return "Session not found", 404
@@ -91,7 +91,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
     # Issue authorization code
     authorization_code = secret.generate_authorization_code()
     # TODO: Handle update errors
-    session = tokens.update_session(
+    session = sessions.update(
         session["id"],
         authorization_code=authorization_code
     )
@@ -115,9 +115,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
     # No valid session
     if "session_id" not in flask_session:
         return {"error": "Not authenticated"}, 401
-    session = tokens.get_session(
-        session_id=flask_session["session_id"]
-    )
+    session = sessions.get(flask_session["session_id"])
     if not session:
         return {"error": "Not authenticated"}, 401
     if not req_json["grant_type"] == "authorization_code":

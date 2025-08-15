@@ -94,3 +94,17 @@ class Session:
             raise api_errors.InternalError(message=str(e), error=e)
         else:
             return session_data
+
+    def update(self, session_id: CampusID, **update) -> dict:
+        """Update an existing session."""
+        try:
+            self.storage.update_by_id(session_id, update)
+        except storage_errors.NotFoundError as e:
+            raise api_errors.NotFoundError(
+                message="Session not found",
+                session_id=session_id
+            ) from e
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return self.get(session_id)
