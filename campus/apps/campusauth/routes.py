@@ -111,7 +111,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
 def oauth2_token() -> flask_validation.JsonResponse:
     """OAuth2 token endpoint for exchanging authorization code for access token."""
     req_json: TokenRequest = flask_validation.validate_request_and_extract_json(
-        AuthorizationCodeRequest.__annotations__,
+        TokenRequest.__annotations__,
         on_error=api_errors.raise_api_error
     )  # type: ignore
     # No valid session
