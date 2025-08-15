@@ -126,7 +126,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
         return {"error": "Invalid redirect_uri"}, 400
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
-    # TODO: Issue token
+    # TODO: Issue token; get client_id from header, user_id from session
     # OAuth2 flow complete, revoke session
     sessions.delete(session["id"])
     return {"message": "Not implemented"}, 501
