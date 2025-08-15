@@ -52,6 +52,10 @@ def generate_authorization_code() -> str:
     """Generate an OAuth2 authorization code"""
     return secrets.token_urlsafe(32)
 
+def generate_access_code() -> str:
+    """Generate a secure random access code."""
+    return secrets.token_urlsafe(32)
+
 def generate_client_secret(length: int = 64) -> str:
     """Generate a secure random client secret.
 
