@@ -58,51 +58,49 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
     if "session_id" not in flask_session:
         # TODO: redirect to google for authentication
         return "Not implemented", 501
-    else:
-        session = tokens.get_session(
-            session_id=flask_session["session_id"]
-        )
-        if not session:
-            # TODO: Redirect to login with error message
-            return "Session not found", 404
-        # Verify client_id and user_id
-        if session["client_id"] != req_json["client_id"]:
-            # TODO: Redirect to login with error message
-            return "Invalid client_id", 401
-        if session["user_id"] != flask_session["user_id"]:
-            # TODO: Redirect to login with error message
-            return "Invalid user_id", 401
-        # Verify scope of consent
-        missing_scopes = tokens.validate_scope(
-            session=session,
-            scopes=req_json.get("scope") or ""
-        )
-        if missing_scopes:
-            # TODO: redirect for additional scope authorization
-            return "Not implemented", 501
-        # Issue authorization code
-        authorization_code = secret.generate_authorization_code()
-        # TODO: Handle update errors
-        session = tokens.update_session(
-            session["id"],
-            authorization_code=authorization_code
-        )
-        # Redirect user to the specified redirect URI
-        params = {
-            "code": authorization_code,
-        }
-        if "state" in req_json:
-            params["state"] = req_json["state"]
-        redirect_uri = f'{req_json["redirect_uri"]}?{urlencode(params)}'
-        return redirect(redirect_uri), 302
-
-    return "Not implemented", 501
+    session = tokens.get_session(
+        session_id=flask_session["session_id"]
+    )
+    if not session:
+        # TODO: Redirect to login with error message
+        return "Session not found", 404
+    # Verify client_id and user_id
+    if session["client_id"] != req_json["client_id"]:
+        # TODO: Redirect to login with error message
+        return "Invalid client_id", 401
+    if session["user_id"] != flask_session["user_id"]:
+        # TODO: Redirect to login with error message
+        return "Invalid user_id", 401
+    # Verify scope of consent
+    missing_scopes = tokens.validate_scope(
+        session=session,
+        scopes=req_json.get("scope") or ""
+    )
+    if missing_scopes:
+        # TODO: redirect for additional scope authorization
+        return "Not implemented", 501
+    # Issue authorization code
+    authorization_code = secret.generate_authorization_code()
+    # TODO: Handle update errors
+    session = tokens.update_session(
+        session["id"],
+        authorization_code=authorization_code
+    )
+    # Redirect user to the specified redirect URI
+    params = {
+        "code": authorization_code,
+    }
+    if "state" in req_json:
+        params["state"] = req_json["state"]
+    redirect_uri = f'{req_json["redirect_uri"]}?{urlencode(params)}'
+    return redirect(redirect_uri), 302
 
 
 @bp.post('/oauth2/token')
 def oauth2_token() -> flask_validation.JsonResponse:
     """OAuth2 token endpoint for exchanging authorization code for access token."""
-    # minor change for demo purposes
+    # TODO: retrieve session, verify session auth_code
+
     return {"message": "Not implemented"}, 501
 
 
