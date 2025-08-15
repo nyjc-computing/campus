@@ -127,6 +127,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
     # TODO: Issue token
+    # TODO: OAuth2 flow complete, revoke session
     return {"message": "Not implemented"}, 501
 
 
@@ -140,5 +141,5 @@ def login() -> flask_validation.HtmlResponse:
 @bp.post('/logout')
 def logout() -> flask_validation.HtmlResponse:
     """Logout endpoint."""
-    # TODO: Revoke session
+    # TODO: Revoke login token
     return "Not implemented", 501
