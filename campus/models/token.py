@@ -45,7 +45,12 @@ class Tokens:
             return self.storage.get_by_id(session_id)
         except storage_errors.NotFoundError:
             return {}
-        
+
+    def update_session(self, session_id: str, **update) -> dict:
+        """Update the session data for the given session ID."""
+        self.storage.update_by_id(session_id, update)
+        return self.get_session(session_id)
+
     def validate_scope(
             self,
             session: dict,
