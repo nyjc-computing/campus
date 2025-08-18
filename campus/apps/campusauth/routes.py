@@ -137,6 +137,7 @@ def login() -> flask_validation.HtmlResponse:
     if "session_id" in flask_session:
         # User already logged in, redirect to home or dashboard
         return redirect(url_for('campus.home'))
+    # TODO: get user_id, client_id from auth header
     session = sessions.new(
         {
             "user_id": flask_session["user_id"],
