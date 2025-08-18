@@ -169,7 +169,7 @@ def get_circle_meta() -> "CircleMeta":
 
 
 def get_root_circle() -> "CircleRecord":
-    """Get the root circle ID from the settings collection."""
+    """Get the root circle."""
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
         raise api_errors.InternalError(
