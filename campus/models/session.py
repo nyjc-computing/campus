@@ -30,6 +30,9 @@ class SessionRecord(BaseRecord):
     """Schema for a full session record."""
     expires_at: str
     scopes: NotRequired[list[str]]
+    # fields for OAuth sessions
+    authorization_code: NotRequired[str]
+    redirect_uri: NotRequired[str]
 
 
 class SessionNew(TypedDict, total=False):
