@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 
 import requests
 
+from campus.common.utils import secret
 from campus.client.errors import (
     AuthenticationError,
     AccessDeniedError,
@@ -31,16 +32,23 @@ class HttpClient:
     clients.
     """
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(
+            self,
+            base_url: Optional[str] = None,
+            *,
+            auth_scheme: str = "basic"
+    ):
         """Initialize base client.
 
         Args:
             base_url: Override default base URL for the service
+            auth_scheme: 'basic' or 'bearer' (default: 'basic')
         """
         self.base_url = base_url or self._get_default_base_url()
         self._client_id: Optional[str] = None
         self._client_secret: Optional[str] = None
         self._access_token: Optional[str] = None
+        self.auth_scheme = auth_scheme
 
         # Try to load credentials from environment
         self._load_credentials_from_env()
@@ -101,11 +109,27 @@ class HttpClient:
             Dict[str, str]: Headers including authorization and content type
         """
         self._ensure_authenticated()
-        return {
-            "Authorization": f"Bearer {self._access_token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        if self.auth_scheme == "basic":
+            if not self._client_id or not self._client_secret:
+                raise AuthenticationError(
+                    "Client ID and secret must be set for Basic auth"
+                )
+            return {
+                "Authorization": secret.encode_http_basic_auth(
+                    self._client_id,
+                    self._client_secret
+                ),
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        elif self.auth_scheme == "bearer":
+            return {
+                "Authorization": f"Bearer {self._access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        else:
+            raise ValueError("Unknown authentication scheme")
 
     def _make_request(
         self,
