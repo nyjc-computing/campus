@@ -54,7 +54,13 @@ def init_db():
     # Ensure meta record exists
     meta_list = storage.get_matching({"@meta": True})
     if not meta_list:
-        storage.insert_one({"@meta": True})
+        # The meta document id is unused but required by the
+        # storage interface
+        storage.insert_one({
+            "id": uid.generate_category_uid("meta", length=8),
+            "created_at": utc_time.now(),
+            "@meta": True
+        })
         meta_list = storage.get_matching({"@meta": True})
     meta_record = meta_list[0]
 
