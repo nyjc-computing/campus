@@ -146,7 +146,7 @@ def login() -> flask_validation.HtmlResponse:
         expiry_seconds=DEFAULT_EXPIRY
     )
     flask_session["session_id"] = session["id"]
-    return redirect(url_for('campus.oauth.google.authorize'))
+    return redirect(url_for('oauth.google.authorize'))
 
 
 @bp.post('/logout')
