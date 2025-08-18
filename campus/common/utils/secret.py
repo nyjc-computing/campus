@@ -65,6 +65,39 @@ def generate_client_secret(length: int = 64) -> str:
     """
     return secrets.token_urlsafe(length)
 
+def encode_http_basic_auth(username: str, password: str) -> str:
+    """Encode username and password into an HTTP Basic Auth header value.
+
+    Args:
+        username: The username (or client_id).
+        password: The password (or client_secret).
+
+    Returns:
+        The value for the Authorization header (e.g., 'Basic ...').
+    """
+    credentials = f"{username}:{password}".encode("utf-8")
+    b64 = base64.b64encode(credentials).decode("utf-8")
+    return f"Basic {b64}"
+
+def decode_http_basic_auth(header_value: str) -> tuple[str, str]:
+    """Decode an HTTP Basic Auth header value into username and password.
+
+    Args:
+        header_value: The value of the Authorization header (e.g., 'Basic ...').
+
+    Returns:
+        A tuple of (username, password).
+    Raises:
+        ValueError: If the header is not a valid Basic Auth header.
+    """
+    if not header_value.lower().startswith("basic "):
+        raise ValueError("Not a Basic Auth header")
+    b64 = header_value[6:].strip()
+    decoded = base64.b64decode(b64).decode("utf-8")
+    if ':' not in decoded:
+        raise ValueError("Invalid Basic Auth credentials")
+    username, password = decoded.split(':', 1)
+    return username, password
 def hash_client_secret(secret: str, key: str) -> str:
     """Hash the client secret using HMAC for secure storage.
 
