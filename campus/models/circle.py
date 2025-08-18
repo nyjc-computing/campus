@@ -52,8 +52,8 @@ def init_db():
     storage.init_collection()
 
     # Ensure meta record exists
-    meta_list = storage.get_matching({"@meta": True})
-    if not meta_list:
+    meta_record = get_circle_meta()
+    if not meta_record:
         # The meta document id is unused but required by the
         # storage interface
         storage.insert_one({
@@ -61,8 +61,7 @@ def init_db():
             "created_at": utc_time.now(),
             "@meta": True
         })
-        meta_list = storage.get_matching({"@meta": True})
-    meta_record = meta_list[0]
+        meta_record = get_circle_meta()
 
     # Check for existing root circle
     if not "root" not in meta_record or not meta_record["root"]:
