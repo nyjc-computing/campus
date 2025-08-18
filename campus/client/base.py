@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 
 import requests
 
+from campus.common.utils import secret
 from campus.client.errors import (
     AuthenticationError,
     AccessDeniedError,
@@ -108,11 +109,27 @@ class HttpClient:
             Dict[str, str]: Headers including authorization and content type
         """
         self._ensure_authenticated()
-        return {
-            "Authorization": f"Bearer {self._access_token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        if self.auth_scheme == "basic":
+            if not self._client_id or not self._client_secret:
+                raise AuthenticationError(
+                    "Client ID and secret must be set for Basic auth"
+                )
+            return {
+                "Authorization": secret.encode_http_basic_auth(
+                    self._client_id,
+                    self._client_secret
+                ),
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        elif self.auth_scheme == "bearer":
+            return {
+                "Authorization": f"Bearer {self._access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        else:
+            raise ValueError("Unknown authentication scheme")
 
     def _make_request(
         self,
