@@ -13,7 +13,12 @@ from . import documents, tables
 
 from .documents import CollectionInterface
 from .tables import TableInterface
-from .errors import StorageError, NotFoundError, NoChangesAppliedError
+from .errors import (
+    StorageError,
+    ConflictError,
+    NotFoundError,
+    NoChangesAppliedError
+)
 
 
 def get_table(name: str):
@@ -75,6 +80,7 @@ __all__ = [
     "CollectionInterface",
     "TableInterface",
     "StorageError",
+    "ConflictError",
     "NotFoundError",
     "NoChangesAppliedError",
     "get_table",
