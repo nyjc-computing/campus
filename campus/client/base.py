@@ -31,16 +31,23 @@ class HttpClient:
     clients.
     """
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(
+            self,
+            base_url: Optional[str] = None,
+            *,
+            auth_scheme: str = "basic"
+    ):
         """Initialize base client.
 
         Args:
             base_url: Override default base URL for the service
+            auth_scheme: 'basic' or 'bearer' (default: 'basic')
         """
         self.base_url = base_url or self._get_default_base_url()
         self._client_id: Optional[str] = None
         self._client_secret: Optional[str] = None
         self._access_token: Optional[str] = None
+        self.auth_scheme = auth_scheme
 
         # Try to load credentials from environment
         self._load_credentials_from_env()
