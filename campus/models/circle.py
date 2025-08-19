@@ -65,28 +65,41 @@ def init_db():
         })
         meta_record = get_circle_meta()
 
-    # Check for existing root circle
-    if "root" not in meta_record or not meta_record["root"]:
-        # Create admin and root circles
+    # Check for existing root circle, otherwise create one
+    root_circles = storage.get_matching({"name": DOMAIN})
+    assert len(root_circles) <= 1, (
+        root_circles, "More than one root circle found"
+    )
+    if not root_circles:
         root_circle = Circle().new(
             name=DOMAIN,
             description="Root circle",
             tag="root",
             parents={}
         )
-        Circle().new(
-            name="campus-admin",
-            description="Campus admin circle",
-            tag="admin",
-            parents={root_circle["id"]: 15}
-        )
-        # Update circle meta record using storage interface
+    else:
+        root_circle = root_circles[0]
+    if "root" not in meta_record or not meta_record["root"]:
         update_circle_meta(
             {
                 "root": root_circle["id"],
-                root_circle["id"]: {},  # circle address tree
+                root_circle["id"]: {}
             }
         )
+    # Check for existing admin circle, otherwise create one
+    admin_circles = storage.get_matching({"name": "campus-admin"})
+    assert len(admin_circles) <= 1, (
+        admin_circles, "More than one admin circle found"
+    )
+    if not admin_circles:
+        admin_circle = Circle().new(
+                name="campus-admin",
+                description="Campus admin circle",
+                tag="admin",
+            parents={root_circle["id"]: 15}
+        )
+    else:
+        admin_circle = admin_circles[0]
 
 
 class CircleNew(TypedDict, total=True):
