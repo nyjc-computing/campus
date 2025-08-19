@@ -151,7 +151,7 @@ class MongoDBCollection(CollectionInterface):
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
         try:
-            record = self.collection.find_one({PK: doc_id})
+            record = self.collection.find_one({MONGO_PK: doc_id})
         except Exception as e:
             raise RuntimeError(f"Failed to retrieve document by id: {e}") from e
         if record:
@@ -191,7 +191,7 @@ class MongoDBCollection(CollectionInterface):
         if not update:
             return
         try:
-            result = self.collection.update_one({PK: doc_id}, {"$set": update})
+            result = self.collection.update_one({MONGO_PK: doc_id}, {"$set": update})
         except Exception as e:
             raise RuntimeError(f"Failed to update document by id: {e}") from e
         if result.matched_count == 0:
@@ -211,7 +211,7 @@ class MongoDBCollection(CollectionInterface):
     def delete_by_id(self, doc_id: str) -> None:
         """Delete a document from the collection."""
         try:
-            result = self.collection.delete_one({PK: doc_id})
+            result = self.collection.delete_one({MONGO_PK: doc_id})
         except Exception as e:
             raise RuntimeError(f"Failed to delete document by id: {e}") from e
         if result.deleted_count == 0:
