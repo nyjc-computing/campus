@@ -277,13 +277,9 @@ class CircleMember:
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
         try:
-            storage.update_matching(
-                {"id": circle_id},
-                {
-                    "$set": {
-                        f"members.{member_id}": access_value
-                    }
-                },
+            storage.update_by_id(
+                circle_id,
+                {f"members.{member_id}": access_value},
             )
         except storage_errors.NoChangesAppliedError as e:
             raise api_errors.ConflictError(
@@ -320,8 +316,8 @@ class CircleMember:
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
         try:
-            storage.update_matching(
-                {"id": circle_id},
+            storage.update_by_id(
+                circle_id,
                 {
                     "$unset": {
                         f"members.{member_id}": ""
