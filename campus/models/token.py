@@ -5,14 +5,13 @@
 Tokens are issued for:
 - a specific Campus client (by client_id)
 - a specific Campus user (by user_id)
-- a specific user agent (by session_id)
-  - i.e. a specific browser or device
-  - browser is expected to store the session_id in a client-side cookie
 - specific scopes
 
-Note that the session_id is not the same as the id used by the Session model.
-Tokens are long-lived and the session stored by the browser may persist over multiple days,
-whereas sessions in the Session model are short-lived and not expected to be longer than a couple of hours.
+Tokens follow storage interface requirements and will have `id` and `created_at` fields.
+
+The browser/device is expected to store the token id in a client-side cookie. This enables multiple sign-in sessions per user-device.
+
+Tokens are long-lived and the session stored by the browser may persist over multiple days.
 """
 
 from typing import TypedDict
@@ -46,7 +45,6 @@ def init_db():
             expires_at TEXT,
             client_id TEXT,
             user_id TEXT,
-            session_id TEXT,
             agent_string TEXT,
             access_token TEXT,
             scopes TEXT,
@@ -62,7 +60,6 @@ class TokenRecord(BaseRecord):
     expires_at: str
     client_id: CampusID
     user_id: UserID
-    session_id: CampusID
     agent_string: str
     access_token: str
     scopes: str
@@ -72,7 +69,6 @@ class TokenNew(TypedDict):
     """Schema for a new token request."""
     client_id: CampusID
     user_id: UserID
-    session_id: CampusID
     agent_string: str
     scopes: list[str]
 
