@@ -13,8 +13,16 @@ weekly → staging → main
 ### Branch Purposes
 
 - **`main`** - Stable, production-ready packages for external projects
+  - ✔️ only PR from `staging` is allowed
+  - 🛡️ requires approval from project owner
 - **`staging`** - Extended testing, migration validation, pre-production quality
+  - ✔️ requires PR
+  - 🔒 PR must have at least one review
 - **`weekly`** - Active development, all new work, expected breakage welcome!
+  - ✔️ requires PR
+  - 👀 PR for critical/major features should be reviewed by a collaborator
+
+Bugfixes, CI/CD work, general documentation updates may be PRed to `staging` directly if urgent and does not need to pass through weekly review
 
 ## 🚀 Getting Started
 
@@ -35,6 +43,8 @@ poetry install
 ### 2. Development Workflow
 
 **We use GitHub Pull Requests for all changes to teach proper collaborative development practices.**
+
+See our best practices on [code reviews](https://nyjc-computing.github.io/nanyang-system-developers/contributors/training/code-reviews.html)
 
 ```bash
 # Create your feature branch from weekly

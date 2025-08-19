@@ -119,7 +119,7 @@ class UsersClient(HttpClient):
     def new(self, *, email: str, name: str) -> Dict[str, Any]:
         """Create a new user."""
         data = {"email": email, "name": name}
-        response = self.post("/users", data)
+        response = self.post("/users/", data)
         return response.get("user", response)
 
     def me(self) -> Dict[str, Any]:

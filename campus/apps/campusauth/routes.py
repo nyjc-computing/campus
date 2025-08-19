@@ -111,7 +111,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
 def oauth2_token() -> flask_validation.JsonResponse:
     """OAuth2 token endpoint for exchanging authorization code for access token."""
     req_json: TokenRequest = flask_validation.validate_request_and_extract_json(
-        AuthorizationCodeRequest.__annotations__,
+        TokenRequest.__annotations__,
         on_error=api_errors.raise_api_error
     )  # type: ignore
     # No valid session
@@ -138,6 +138,7 @@ def login() -> flask_validation.HtmlResponse:
     if "session_id" in flask_session:
         # User already logged in, redirect to home or dashboard
         return redirect(url_for('campus.home'))
+    # TODO: get user_id, client_id from auth header
     session = sessions.new(
         {
             "user_id": flask_session["user_id"],
@@ -146,7 +147,7 @@ def login() -> flask_validation.HtmlResponse:
         expiry_seconds=DEFAULT_EXPIRY
     )
     flask_session["session_id"] = session["id"]
-    return redirect(url_for('campus.oauth.google.authorize'))
+    return redirect(url_for('oauth.google.authorize'))
 
 
 @bp.post('/logout')

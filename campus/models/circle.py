@@ -52,48 +52,54 @@ def init_db():
     storage.init_collection()
 
     # Ensure meta record exists
-    meta_list = storage.get_matching({"@meta": True})
-    if not meta_list:
-        storage.insert_one({"@meta": True})
-        meta_list = storage.get_matching({"@meta": True})
-    meta_record = meta_list[0]
+    try:
+        meta_record = get_circle_meta()
+    except api_errors.NotFoundError:
+        # Circle meta record not found in collection
+        storage.insert_one({
+            # The meta document id is unused but required by the
+            # storage interface
+            "id": uid.generate_category_uid("meta", length=8),
+            "created_at": utc_time.now(),
+            "@meta": True
+        })
+        meta_record = get_circle_meta()
 
-    # Check for existing root circle
-    if not "root" not in meta_record or not meta_record["root"]:
-        # Create admin and root circles
+    # Check for existing root circle, otherwise create one
+    root_circles = storage.get_matching({"name": DOMAIN})
+    assert len(root_circles) <= 1, (
+        root_circles, "More than one root circle found"
+    )
+    if not root_circles:
         root_circle = Circle().new(
             name=DOMAIN,
             description="Root circle",
             tag="root",
             parents={}
         )
-        Circle().new(
+    else:
+        root_circle = root_circles[0]
+    if "root" not in meta_record or not meta_record["root"]:
+        update_circle_meta(
+            {
+                "root": root_circle["id"],
+                root_circle["id"]: {}
+            }
+        )
+    # Check for existing admin circle, otherwise create one
+    admin_circles = storage.get_matching({"name": "campus-admin"})
+    assert len(admin_circles) <= 1, (
+        admin_circles, "More than one admin circle found"
+    )
+    if not admin_circles:
+        admin_circle = Circle().new(
             name="campus-admin",
             description="Campus admin circle",
             tag="admin",
             parents={root_circle["id"]: 15}
         )
-        # Create or update circle meta record using storage interface
-        storage.update_matching(
-            {"@meta": True},
-            {
-                "root": root_circle["id"],
-                root_circle["id"]: {},  # circle address tree
-            }
-        )
-
-
-class CircleMeta(TypedDict, total=False):
-    """Circle meta schema for the circles collection.
-
-    This is used to store the root circle and the address tree.
-    """
-    # Some keys are required but (intentionally) cannot be represented
-    # in TypedDict
-    # These are added here for documentation purposes
-    # @meta: bool  # always True
-    # <circle_id>: CircleTree  # circle address tree
-    root: CircleID
+    else:
+        admin_circle = admin_circles[0]
 
 
 class CircleNew(TypedDict, total=True):
@@ -146,25 +152,55 @@ class CircleMemberSet(CircleMemberRemove):
     access_value: AccessValue
 
 
-def get_circle_meta() -> "CircleMeta":
+# Meta record classes and helper functions
+
+class CircleMeta(TypedDict, total=False):
+    """Circle meta schema for the circles collection.
+
+    A meta record is used to store metadata about the circle collection.
+    This record must be present before any circle operations are attempted.
+    This is used to store the root circle and the address tree.
+    """
+    root: CircleID
+    # Some keys are required but (intentionally) are unrepresentable
+    # in TypedDict
+    # These are added here for documentation purposes
+    # @meta: bool  # always True
+    # <circle_id>: CircleTree  # circle address tree
+
+
+def get_circle_meta() -> dict:
     """Get the circle meta record from the settings collection."""
     storage = get_collection(COLLECTION)
     try:
-        circle_meta = storage.get_matching({"@meta": True})
-        if not circle_meta:
-            raise api_errors.InternalError(
+        circle_metas = storage.get_matching({"@meta": True})
+        if not circle_metas:
+            raise api_errors.NotFoundError(
                 message=f"Circle meta record not found in collection {COLLECTION}",
                 id=DOMAIN
             )
-        # Since some keys required in CircleMeta cannot be represented as
-        # identifiers, we use the TypedDict constructor
-        return TypedDict("CircleMeta", circle_meta[0])  # type: ignore
+        assert len(circle_metas) == 1, (
+            circle_metas, "Expected exactly one circle meta record"
+        )
+        return circle_metas[0]
+    except Exception as e:
+        raise api_errors.InternalError(message=str(e), error=e)
+
+
+def update_circle_meta(update: dict) -> None:
+    """Update the circle meta record in the settings collection."""
+    storage = get_collection(COLLECTION)
+    try:
+        storage.update_matching(
+            {"@meta": True},
+            update
+        )
     except Exception as e:
         raise api_errors.InternalError(message=str(e), error=e)
 
 
 def get_root_circle() -> "CircleRecord":
-    """Get the root circle ID from the settings collection."""
+    """Get the root circle."""
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
         raise api_errors.InternalError(
@@ -242,13 +278,9 @@ class CircleMember:
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
         try:
-            storage.update_matching(
-                {"id": circle_id},
-                {
-                    "$set": {
-                        f"members.{member_id}": access_value
-                    }
-                },
+            storage.update_by_id(
+                circle_id,
+                {f"members.{member_id}": access_value},
             )
         except storage_errors.NoChangesAppliedError as e:
             raise api_errors.ConflictError(
@@ -285,13 +317,9 @@ class CircleMember:
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
         try:
-            storage.update_matching(
-                {"id": circle_id},
-                {
-                    "$unset": {
-                        f"members.{member_id}": ""
-                    }
-                },
+            storage.update_by_id(
+                circle_id,
+                {f"members.{member_id}": None},
             )
         except storage_errors.NoChangesAppliedError as e:
             raise api_errors.ConflictError(
