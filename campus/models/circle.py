@@ -64,7 +64,7 @@ def init_db():
         meta_record = get_circle_meta()
 
     # Check for existing root circle
-    if not "root" not in meta_record or not meta_record["root"]:
+    if "root" not in meta_record or not meta_record["root"]:
         # Create admin and root circles
         root_circle = Circle().new(
             name=DOMAIN,
