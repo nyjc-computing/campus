@@ -89,19 +89,6 @@ def init_db():
         )
 
 
-class CircleMeta(TypedDict, total=False):
-    """Circle meta schema for the circles collection.
-
-    This is used to store the root circle and the address tree.
-    """
-    # Some keys are required but (intentionally) cannot be represented
-    # in TypedDict
-    # These are added here for documentation purposes
-    # @meta: bool  # always True
-    # <circle_id>: CircleTree  # circle address tree
-    root: CircleID
-
-
 class CircleNew(TypedDict, total=True):
     """Request body schema for a circles.new operation.
 
@@ -152,6 +139,23 @@ class CircleMemberSet(CircleMemberRemove):
     access_value: AccessValue
 
 
+# Meta record classes and helper functions
+
+class CircleMeta(TypedDict, total=False):
+    """Circle meta schema for the circles collection.
+
+    A meta record is used to store metadata about the circle collection.
+    This record must be present before any circle operations are attempted.
+    This is used to store the root circle and the address tree.
+    """
+    root: CircleID
+    # Some keys are required but (intentionally) are unrepresentable
+    # in TypedDict
+    # These are added here for documentation purposes
+    # @meta: bool  # always True
+    # <circle_id>: CircleTree  # circle address tree
+
+
 def get_circle_meta() -> "CircleMeta":
     """Get the circle meta record from the settings collection."""
     storage = get_collection(COLLECTION)
@@ -178,6 +182,7 @@ def update_circle_meta(update: dict) -> None:
         )
     except Exception as e:
         raise api_errors.InternalError(message=str(e), error=e)
+
 
 def get_root_circle() -> "CircleRecord":
     """Get the root circle."""
