@@ -74,6 +74,8 @@ class MongoRecord(dict):
     """Handles transparent mapping between Campus and MongoDB primary keys.
 
     Maps Campus `id` field to MongoDB's `_id` field.
+    Internally, MongoRecord stores the document id under the `id` key, following
+    Campus schema; `_id` is only generated when exporting to MongoDB.
 
     Example:
         record = MongoRecord({"id": "123", "name": "John"})
@@ -87,26 +89,24 @@ class MongoRecord(dict):
     @classmethod
     def from_mongo(cls, mongo_doc: dict) -> "MongoRecord":
         """Create a MongoRecord from a MongoDB document."""
-        mongo_doc[PK] = mongo_doc.pop(MONGO_PK)
-        return cls(mongo_doc)
+        record = mongo_doc.copy()
+        record[PK] = record.pop(MONGO_PK)
+        return cls(record)
 
     @classmethod
     def from_record(cls, record: dict) -> "MongoRecord":
         """Create a MongoRecord from an API document."""
-        record[MONGO_PK] = record.pop(PK)
         return cls(record)
 
     def to_mongo(self) -> dict:
         """Convert the MongoRecord to a MongoDB document."""
         mongo_doc = dict(self)
-        mongo_doc[PK] = mongo_doc.pop(MONGO_PK)
+        mongo_doc[MONGO_PK] = mongo_doc.pop(PK)
         return mongo_doc
 
     def to_record(self) -> dict:
         """Convert the MongoRecord to an API document."""
-        record = dict(self)
-        record[PK] = record.pop(MONGO_PK)
-        return record
+        return dict(self)
 
 
 class MongoDBCollection(CollectionInterface):
