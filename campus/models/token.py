@@ -96,7 +96,6 @@ class Tokens:
             "find() by id is not allowed.\n" 
             "use get() instead."
         )
-        raise NotImplementedError
         tokens = self.storage.get_matching(match)
         for token in tokens:
             del token["id"]
