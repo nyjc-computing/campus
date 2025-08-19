@@ -52,11 +52,13 @@ def init_db():
     storage.init_collection()
 
     # Ensure meta record exists
-    meta_record = get_circle_meta()
-    if not meta_record:
-        # The meta document id is unused but required by the
-        # storage interface
+    try:
+        meta_record = get_circle_meta()
+    except api_errors.InternalError:
+        # Circle meta record not found in collection
         storage.insert_one({
+            # The meta document id is unused but required by the
+            # storage interface
             "id": uid.generate_category_uid("meta", length=8),
             "created_at": utc_time.now(),
             "@meta": True
