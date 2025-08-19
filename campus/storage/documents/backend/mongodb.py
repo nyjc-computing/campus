@@ -99,7 +99,7 @@ class MongoRecord(dict):
     def to_mongo(self) -> dict:
         """Convert the MongoRecord to a MongoDB document."""
         mongo_doc = dict(self)
-        mongo_doc[MONGO_PK] = mongo_doc.pop(PK)
+        mongo_doc[PK] = mongo_doc.pop(MONGO_PK)
         return mongo_doc
 
     def to_record(self) -> dict:
