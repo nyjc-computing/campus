@@ -34,6 +34,7 @@ from campus.storage.errors import (
     ConflictError,
     NoChangesAppliedError,
     NotFoundError,
+    StorageError
 )
 
 # Singleton Campus client for this backend
@@ -42,12 +43,17 @@ _campus_client = Campus()
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
 
+class MongoCollectionError(StorageError):
+    """Custom error class for MongoDB collection operations."""
+    ...
+
+
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
     try:
         return _campus_client.vault["storage"]["MONGODB_URI"].get()
     except Exception as e:
-        raise RuntimeError(
+        raise MongoCollectionError(
             f"Failed to retrieve MongoDB URI from vault secret 'MONGODB_URI' "
             f"in 'storage' vault: {e}"
         ) from e
@@ -58,7 +64,7 @@ def _get_mongodb_name() -> str:
     try:
         return _campus_client.vault["storage"]["MONGODB_NAME"].get()
     except Exception as e:
-        raise RuntimeError(
+        raise MongoCollectionError(
             f"Failed to retrieve MongoDB database name from vault secret 'MONGODB_NAME' "
             f"in 'storage' vault: {e}"
         ) from e
@@ -132,7 +138,7 @@ class MongoDBCollection(CollectionInterface):
         Establishes connection on first call, subsequent calls are no-ops.
 
         Raises:
-            RuntimeError: If vault secret retrieval fails
+            MongoCollectionError: If vault secret retrieval fails
             pymongo.errors.ConnectionFailure: If MongoDB connection fails
         """
         if self._collection is None:
@@ -153,7 +159,7 @@ class MongoDBCollection(CollectionInterface):
         try:
             record = self.collection.find_one({MONGO_PK: doc_id})
         except Exception as e:
-            raise RuntimeError(f"Failed to retrieve document by id: {e}") from e
+            raise MongoCollectionError(f"Failed to retrieve document by id: {e}") from e
         if record:
             return MongoRecord.from_mongo(record).to_record()
         return {}
@@ -163,7 +169,7 @@ class MongoDBCollection(CollectionInterface):
         try:
             cursor = self.collection.find(query)
         except Exception as e:
-            raise RuntimeError(f"Failed to retrieve documents matching query: {e}") from e
+            raise MongoCollectionError(f"Failed to retrieve documents matching query: {e}") from e
         return [
             MongoRecord.from_mongo(record).to_record()
             for record in cursor
@@ -193,7 +199,7 @@ class MongoDBCollection(CollectionInterface):
         try:
             result = self.collection.update_one({MONGO_PK: doc_id}, {"$set": update})
         except Exception as e:
-            raise RuntimeError(f"Failed to update document by id: {e}") from e
+            raise MongoCollectionError(f"Failed to update document by id: {e}") from e
         if result.matched_count == 0:
             raise NotFoundError(doc_id, self.name)
 
@@ -204,7 +210,7 @@ class MongoDBCollection(CollectionInterface):
         try:
             result = self.collection.update_many(query, {"$set": update})
         except Exception as e:
-            raise RuntimeError(f"Failed to update documents matching query: {e}") from e
+            raise MongoCollectionError(f"Failed to update documents matching query: {e}") from e
         if result.matched_count == 0:
             raise NoChangesAppliedError("update", query, self.name)
 
@@ -213,7 +219,7 @@ class MongoDBCollection(CollectionInterface):
         try:
             result = self.collection.delete_one({MONGO_PK: doc_id})
         except Exception as e:
-            raise RuntimeError(f"Failed to delete document by id: {e}") from e
+            raise MongoCollectionError(f"Failed to delete document by id: {e}") from e
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
@@ -222,7 +228,7 @@ class MongoDBCollection(CollectionInterface):
         try:
             result = self.collection.delete_many(query)
         except Exception as e:
-            raise RuntimeError(f"Failed to delete documents matching query: {e}") from e
+            raise MongoCollectionError(f"Failed to delete documents matching query: {e}") from e
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
@@ -257,7 +263,7 @@ def purge_collections() -> None:
     It drops all collections in the MongoDB database.
 
     Raises:
-        RuntimeError: If database connection or purge operations fail
+        MongoCollectionError: If database connection or purge operations fail
     """
     try:
         uri = _get_mongodb_uri()
@@ -273,4 +279,4 @@ def purge_collections() -> None:
         client.close()
 
     except Exception as e:
-        raise RuntimeError(f"Failed to purge MongoDB collections: {e}") from e
+        raise MongoCollectionError(f"Failed to purge MongoDB collections: {e}") from e
