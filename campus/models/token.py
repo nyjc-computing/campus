@@ -124,7 +124,7 @@ class Tokens:
         self.storage.insert_one(token)
         return token
 
-    def of(self, access_token: str) -> dict:
+    def validate_token(self, access_token: str) -> dict:
         """Retrieve and return a token by its access token."""
         toks = self.storage.get_matching({"access_token": access_token})
         if not toks:
