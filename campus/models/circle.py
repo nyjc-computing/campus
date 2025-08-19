@@ -52,14 +52,19 @@ def init_db():
     storage.init_collection()
 
     # Ensure meta record exists
-    meta_list = storage.get_matching({"@meta": True})
-    if not meta_list:
-        storage.insert_one({"@meta": True})
-        meta_list = storage.get_matching({"@meta": True})
-    meta_record = meta_list[0]
+    meta_record = get_circle_meta()
+    if not meta_record:
+        # The meta document id is unused but required by the
+        # storage interface
+        storage.insert_one({
+            "id": uid.generate_category_uid("meta", length=8),
+            "created_at": utc_time.now(),
+            "@meta": True
+        })
+        meta_record = get_circle_meta()
 
     # Check for existing root circle
-    if not "root" not in meta_record or not meta_record["root"]:
+    if "root" not in meta_record or not meta_record["root"]:
         # Create admin and root circles
         root_circle = Circle().new(
             name=DOMAIN,
@@ -164,7 +169,7 @@ def get_circle_meta() -> "CircleMeta":
 
 
 def get_root_circle() -> "CircleRecord":
-    """Get the root circle ID from the settings collection."""
+    """Get the root circle."""
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
         raise api_errors.InternalError(
