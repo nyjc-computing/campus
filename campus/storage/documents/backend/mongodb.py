@@ -168,6 +168,7 @@ class MongoDBCollection(CollectionInterface):
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve documents matching a query."""
+        assert "id" not in query, "Matching by 'id' is not allowed"
         try:
             cursor = self.collection.find(query)
         except Exception as e:
@@ -218,6 +219,7 @@ class MongoDBCollection(CollectionInterface):
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
+        assert "id" not in query, "Matching by 'id' is not allowed"
         if not update:
             return
         try:
@@ -248,6 +250,7 @@ class MongoDBCollection(CollectionInterface):
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
+        assert "id" not in query, "Matching by 'id' is not allowed"
         try:
             result = self.collection.delete_many(query)
         except Exception as e:
