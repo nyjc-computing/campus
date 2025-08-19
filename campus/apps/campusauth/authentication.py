@@ -28,10 +28,11 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
 
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
+    req_header = dict(request.headers)
     auth = (
         http.HttpAuthenticationScheme
-        .from_header("campus", request.headers)
-        .get_auth(request.headers)
+        .from_header(provider="campus", header=req_header)
+        .get_auth(header=req_header)
     )
     match auth.scheme:
         case "basic":
