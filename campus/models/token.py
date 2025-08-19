@@ -7,11 +7,14 @@ Tokens are issued for:
 - a specific Campus user (by user_id)
 - specific scopes
 
-Tokens follow storage interface requirements and will have `id` and `created_at` fields.
+Tokens follow storage interface requirements and will have
+`id` and `created_at` fields.
 
-The browser/device is expected to store the token id in a client-side cookie. This enables multiple sign-in sessions per user-device.
+The browser/device is expected to store the token id in a client-side cookie.
+This enables multiple sign-in sessions per user-device.
 
-Tokens are long-lived and the session stored by the browser may persist over multiple days.
+Tokens are long-lived and the session stored by the browser may persist over
+multiple days.
 """
 
 from typing import TypedDict
@@ -93,7 +96,7 @@ class Tokens:
         are stripped.
         """
         assert "id" not in match, (
-            "find() by id is not allowed.\n" 
+            "find() by id is not allowed.\n"
             "use get() instead."
         )
         tokens = self.storage.get_matching(match)
