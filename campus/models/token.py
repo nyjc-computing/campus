@@ -125,7 +125,7 @@ class Tokens:
         return token
 
     def of(self, access_token: str) -> dict:
-        """Retrieve a token by its access token."""
+        """Retrieve and return a token by its access token."""
         toks = self.storage.get_matching({"access_token": access_token})
         if not toks:
             raise api_errors.NotFoundError(
@@ -141,6 +141,7 @@ class Tokens:
             scopes: str | list[str]
     ) -> list[str]:
         """Validate the requested scopes against the session's granted scopes.
+        Returns the missing scopes.
         """
         if isinstance(scopes, str):
             scopes = scopes.split(" ")
