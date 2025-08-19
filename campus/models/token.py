@@ -42,8 +42,11 @@ def init_db():
             client_id TEXT,
             user_id TEXT,
             agent_id TEXT,
+            agent_string TEXT,
             access_token TEXT,
             scopes TEXT,
+            UNIQUE(agent_id),
+            UNIQUE
         )
     """
     storage.init_table(schema)
@@ -55,6 +58,7 @@ class TokenRecord(BaseRecord):
     client_id: CampusID
     user_id: UserID
     agent_id: CampusID
+    agent_string: str
     access_token: str
     scopes: str
 
@@ -64,6 +68,7 @@ class TokenNew(TypedDict):
     client_id: CampusID
     user_id: UserID
     agent_id: CampusID
+    agent_string: str
     scopes: list[str]
 
 
