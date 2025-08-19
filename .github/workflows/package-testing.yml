@@ -33,6 +33,7 @@ jobs:
       ENV: testing
       CLIENT_ID: test-client-id
       CLIENT_SECRET: test-client-secret
+      YAPPERDB_URI: ${{ secrets.YAPPERDB_URI }}
     # No extras matrix needed
     
     steps:
