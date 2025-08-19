@@ -10,6 +10,8 @@ Implementation:
 Uses MongoDB's native document storage with transparent primary key mapping
 between Campus `id` and MongoDB `_id` fields. Collections are created automatically.
 Record validation is handled before storage and is not the responsibility of this module.
+Null values are not allowed. `None` values passed in update dicts will be
+treated as an $unset operation.
 
 Usage Example:
 ```python
@@ -74,6 +76,8 @@ class MongoRecord(dict):
     """Handles transparent mapping between Campus and MongoDB primary keys.
 
     Maps Campus `id` field to MongoDB's `_id` field.
+    Internally, MongoRecord stores the document id under the `id` key, following
+    Campus schema; `_id` is only generated when exporting to MongoDB.
 
     Example:
         record = MongoRecord({"id": "123", "name": "John"})
@@ -87,26 +91,24 @@ class MongoRecord(dict):
     @classmethod
     def from_mongo(cls, mongo_doc: dict) -> "MongoRecord":
         """Create a MongoRecord from a MongoDB document."""
-        mongo_doc[PK] = mongo_doc.pop(MONGO_PK)
-        return cls(mongo_doc)
+        record = mongo_doc.copy()
+        record[PK] = record.pop(MONGO_PK)
+        return cls(record)
 
     @classmethod
     def from_record(cls, record: dict) -> "MongoRecord":
         """Create a MongoRecord from an API document."""
-        record[MONGO_PK] = record.pop(PK)
         return cls(record)
 
     def to_mongo(self) -> dict:
         """Convert the MongoRecord to a MongoDB document."""
         mongo_doc = dict(self)
-        mongo_doc[PK] = mongo_doc.pop(MONGO_PK)
+        mongo_doc[MONGO_PK] = mongo_doc.pop(PK)
         return mongo_doc
 
     def to_record(self) -> dict:
         """Convert the MongoRecord to an API document."""
-        record = dict(self)
-        record[PK] = record.pop(MONGO_PK)
-        return record
+        return dict(self)
 
 
 class MongoDBCollection(CollectionInterface):
@@ -157,30 +159,32 @@ class MongoDBCollection(CollectionInterface):
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
         try:
-            record = self.collection.find_one({MONGO_PK: doc_id})
+            mongo_doc = self.collection.find_one({MONGO_PK: doc_id})
         except Exception as e:
-            raise MongoCollectionError(f"Failed to retrieve document by id: {e}") from e
-        if record:
-            return MongoRecord.from_mongo(record).to_record()
+            raise MongoCollectionError(
+                f"Failed to retrieve document by id: {e}") from e
+        if mongo_doc:
+            return MongoRecord.from_mongo(mongo_doc).to_record()
         return {}
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve documents matching a query."""
+        assert "id" not in query, "Matching by 'id' is not allowed"
         try:
             cursor = self.collection.find(query)
         except Exception as e:
-            raise MongoCollectionError(f"Failed to retrieve documents matching query: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to retrieve documents matching query: {e}") from e
         return [
-            MongoRecord.from_mongo(record).to_record()
-            for record in cursor
+            MongoRecord.from_mongo(mongo_doc).to_record()
+            for mongo_doc in cursor
         ]
 
-    def insert_one(self, row: dict) -> None:
+    def insert_one(self, record: dict) -> None:
         """Insert a document into the collection."""
+        mongo_doc = MongoRecord.from_record(record).to_mongo()
         try:
-            self.collection.insert_one(
-                MongoRecord.from_record(row).to_mongo()
-            )
+            self.collection.insert_one(mongo_doc)
         except Exception as e:
             # Duplicate key error (conflict)
             # pymongo.errors.DuplicateKeyError is the canonical error, but fallback to message check
@@ -188,29 +192,54 @@ class MongoDBCollection(CollectionInterface):
                 raise ConflictError(
                     message="Conflict occurred during insert",
                     collection_name=self.name,
-                    details={"row": row, "error": str(e)}
+                    details={"row": record, "error": str(e)}
                 ) from e
             raise
 
     def update_by_id(self, doc_id: str, update: dict) -> None:
-        """Update a document in the collection."""
+        """Update a document in the collection.
+        Keys where the associated value is None are considered unset.
+        """
         if not update:
             return
         try:
-            result = self.collection.update_one({MONGO_PK: doc_id}, {"$set": update})
+            result = self.collection.update_one(
+                {MONGO_PK: doc_id},
+                {
+                    "$set": {
+                        k: v for k, v in update.items() if v is not None
+                    },
+                    "$unset": {
+                        k: "" for k, v in update.items() if v is None
+                    }
+                }
+            )
         except Exception as e:
-            raise MongoCollectionError(f"Failed to update document by id: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to update document by id: {e}") from e
         if result.matched_count == 0:
             raise NotFoundError(doc_id, self.name)
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
+        assert "id" not in query, "Matching by 'id' is not allowed"
         if not update:
             return
         try:
-            result = self.collection.update_many(query, {"$set": update})
+            result = self.collection.update_many(
+                query,
+                {
+                    "$set": {
+                        k: v for k, v in update.items() if v is not None
+                    },
+                    "$unset": {
+                        k: "" for k, v in update.items() if v is None
+                    }
+                }
+            )
         except Exception as e:
-            raise MongoCollectionError(f"Failed to update documents matching query: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to update documents matching query: {e}") from e
         if result.matched_count == 0:
             raise NoChangesAppliedError("update", query, self.name)
 
@@ -219,16 +248,19 @@ class MongoDBCollection(CollectionInterface):
         try:
             result = self.collection.delete_one({MONGO_PK: doc_id})
         except Exception as e:
-            raise MongoCollectionError(f"Failed to delete document by id: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to delete document by id: {e}") from e
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
+        assert "id" not in query, "Matching by 'id' is not allowed"
         try:
             result = self.collection.delete_many(query)
         except Exception as e:
-            raise MongoCollectionError(f"Failed to delete documents matching query: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to delete documents matching query: {e}") from e
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
@@ -279,4 +311,5 @@ def purge_collections() -> None:
         client.close()
 
     except Exception as e:
-        raise MongoCollectionError(f"Failed to purge MongoDB collections: {e}") from e
+        raise MongoCollectionError(
+            f"Failed to purge MongoDB collections: {e}") from e
