@@ -10,6 +10,8 @@ Implementation:
 Uses MongoDB's native document storage with transparent primary key mapping
 between Campus `id` and MongoDB `_id` fields. Collections are created automatically.
 Record validation is handled before storage and is not the responsibility of this module.
+Null values are not allowed. `None` values passed in update dicts will be
+treated as an $unset operation.
 
 Usage Example:
 ```python
@@ -192,11 +194,23 @@ class MongoDBCollection(CollectionInterface):
             raise
 
     def update_by_id(self, doc_id: str, update: dict) -> None:
-        """Update a document in the collection."""
+        """Update a document in the collection.
+        Keys where the associated value is None are considered unset.
+        """
         if not update:
             return
         try:
-            result = self.collection.update_one({MONGO_PK: doc_id}, {"$set": update})
+            result = self.collection.update_one(
+                {MONGO_PK: doc_id},
+                {
+                    "$set": {
+                        k: v for k, v in update.items() if v is not None
+                    },
+                    "$unset": {
+                        k: "" for k, v in update.items() if v is None
+                    }
+                }
+            )
         except Exception as e:
             raise MongoCollectionError(f"Failed to update document by id: {e}") from e
         if result.matched_count == 0:
@@ -207,7 +221,17 @@ class MongoDBCollection(CollectionInterface):
         if not update:
             return
         try:
-            result = self.collection.update_many(query, {"$set": update})
+            result = self.collection.update_many(
+                query,
+                {
+                    "$set": {
+                        k: v for k, v in update.items() if v is not None
+                    },
+                    "$unset": {
+                        k: "" for k, v in update.items() if v is None
+                    }
+                }
+            )
         except Exception as e:
             raise MongoCollectionError(f"Failed to update documents matching query: {e}") from e
         if result.matched_count == 0:
