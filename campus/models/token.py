@@ -2,9 +2,11 @@
 
 (Bearer) Token model for the Campus API.
 
-Tokens are tagged to:
-- a specific client (by client_id)
-- a specific user (by user_id)
+Tokens are issued for:
+- a specific Campus client (by client_id)
+- a specific Campus user (by user_id)
+- a specific user agent (by agent_id)
+  - i.e. a specific browser or device that stores the agent_id in a client-side cookie
 - specific scopes
 """
 
@@ -39,6 +41,7 @@ def init_db():
             expires_at TEXT,
             client_id TEXT,
             user_id TEXT,
+            agent_id TEXT,
             access_token TEXT,
             scopes TEXT,
         )
@@ -51,6 +54,7 @@ class TokenRecord(BaseRecord):
     expires_at: str
     client_id: CampusID
     user_id: UserID
+    agent_id: CampusID
     access_token: str
     scopes: str
 
@@ -59,6 +63,7 @@ class TokenNew(TypedDict):
     """Schema for a new token request."""
     client_id: CampusID
     user_id: UserID
+    agent_id: CampusID
     scopes: list[str]
 
 
