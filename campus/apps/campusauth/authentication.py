@@ -10,9 +10,8 @@ This module handles:
 from functools import wraps
 from typing import Callable
 
-from flask import request
+from flask import g, request
 
-from campus.apps.campusauth.context import ctx
 from campus.client import Campus
 from campus.common.webauth import http
 
@@ -34,16 +33,19 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
         .from_header(provider="campus", header=req_header)
         .get_auth(header=req_header)
     )
+    campus_client = Campus()
     match auth.scheme:
         case "basic":
             client_id, client_secret = auth.credentials()
-            campus_client = Campus()
-            try:
-                campus_client.vault.client.authenticate(client_id, client_secret)
-                ctx.client = campus_client.vault.client.get(client_id)
-            except Exception:
+            if not campus_client.vault.client.authenticate(
+                client_id, client_secret
+            ):
                 return {"message": "Invalid client credentials"}, 403
+            else:
+                g.current_client = campus_client.vault.client.get(client_id)
         case "bearer":
+            token = auth.value
+            # TODO: authenticate token
             return {"message": "Bearer auth not implemented"}, 501
 
 
