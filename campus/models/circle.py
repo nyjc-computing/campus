@@ -54,7 +54,7 @@ def init_db():
     # Ensure meta record exists
     try:
         meta_record = get_circle_meta()
-    except api_errors.InternalError:
+    except api_errors.NotFoundError:
         # Circle meta record not found in collection
         storage.insert_one({
             # The meta document id is unused but required by the
