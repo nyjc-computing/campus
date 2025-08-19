@@ -319,11 +319,7 @@ class CircleMember:
         try:
             storage.update_by_id(
                 circle_id,
-                {
-                    "$unset": {
-                        f"members.{member_id}": ""
-                    }
-                },
+                {f"members.{member_id}": None},
             )
         except storage_errors.NoChangesAppliedError as e:
             raise api_errors.ConflictError(
