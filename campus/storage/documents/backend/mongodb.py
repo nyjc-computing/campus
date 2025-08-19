@@ -157,11 +157,11 @@ class MongoDBCollection(CollectionInterface):
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
         try:
-            record = self.collection.find_one({MONGO_PK: doc_id})
+            mongo_doc = self.collection.find_one({MONGO_PK: doc_id})
         except Exception as e:
             raise MongoCollectionError(f"Failed to retrieve document by id: {e}") from e
-        if record:
-            return MongoRecord.from_mongo(record).to_record()
+        if mongo_doc:
+            return MongoRecord.from_mongo(mongo_doc).to_record()
         return {}
 
     def get_matching(self, query: dict) -> list[dict]:
@@ -171,16 +171,15 @@ class MongoDBCollection(CollectionInterface):
         except Exception as e:
             raise MongoCollectionError(f"Failed to retrieve documents matching query: {e}") from e
         return [
-            MongoRecord.from_mongo(record).to_record()
-            for record in cursor
+            MongoRecord.from_mongo(mongo_doc).to_record()
+            for mongo_doc in cursor
         ]
 
-    def insert_one(self, row: dict) -> None:
+    def insert_one(self, record: dict) -> None:
         """Insert a document into the collection."""
+        mongo_doc = MongoRecord.from_record(record).to_mongo()
         try:
-            self.collection.insert_one(
-                MongoRecord.from_record(row).to_mongo()
-            )
+            self.collection.insert_one(mongo_doc)
         except Exception as e:
             # Duplicate key error (conflict)
             # pymongo.errors.DuplicateKeyError is the canonical error, but fallback to message check
@@ -188,7 +187,7 @@ class MongoDBCollection(CollectionInterface):
                 raise ConflictError(
                     message="Conflict occurred during insert",
                     collection_name=self.name,
-                    details={"row": row, "error": str(e)}
+                    details={"row": record, "error": str(e)}
                 ) from e
             raise
 
