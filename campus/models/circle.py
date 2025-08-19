@@ -80,9 +80,8 @@ def init_db():
             tag="admin",
             parents={root_circle["id"]: 15}
         )
-        # Create or update circle meta record using storage interface
-        storage.update_matching(
-            {"@meta": True},
+        # Update circle meta record using storage interface
+        update_circle_meta(
             {
                 "root": root_circle["id"],
                 root_circle["id"]: {},  # circle address tree
@@ -169,6 +168,16 @@ def get_circle_meta() -> "CircleMeta":
     except Exception as e:
         raise api_errors.InternalError(message=str(e), error=e)
 
+def update_circle_meta(update: dict) -> None:
+    """Update the circle meta record in the settings collection."""
+    storage = get_collection(COLLECTION)
+    try:
+        storage.update_matching(
+            {"@meta": True},
+            update
+        )
+    except Exception as e:
+        raise api_errors.InternalError(message=str(e), error=e)
 
 def get_root_circle() -> "CircleRecord":
     """Get the root circle."""
