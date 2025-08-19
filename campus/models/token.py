@@ -11,6 +11,7 @@ Tokens are tagged to:
 from typing import TypedDict
 
 from campus.common import devops
+from campus.common.errors import api_errors
 from campus.common.utils import secret, uid, utc_time
 from campus.common.schema import CampusID, UserID
 from campus.models.base import BaseRecord
@@ -88,6 +89,17 @@ class Tokens:
         token["access_token"] = secret.generate_access_code()
         token["scopes"] = " ".join(token_data.get("scopes", []))
         self.storage.insert_one(token)
+        return token
+
+    def of(self, access_token: str) -> dict:
+        """Retrieve a token by its access token."""
+        toks = self.storage.get_matching({"access_token": access_token})
+        if not toks:
+            raise api_errors.NotFoundError(
+                message="Token not found",
+                access_token=access_token
+            )
+        token = toks[0]
         return token
 
     def validate_scope(
