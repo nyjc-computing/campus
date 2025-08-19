@@ -24,6 +24,10 @@ def init_app(app: Flask | Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
 
+@bp.get('/')
+def list_circles() -> flask_validation.JsonResponse:
+    """List all circles (not yet implemented)."""
+    return {"message": "List circles not implemented"}, 501
 
 @bp.post('/')
 def new_circle(*_: str) -> flask_validation.JsonResponse:

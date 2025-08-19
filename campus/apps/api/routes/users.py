@@ -32,6 +32,10 @@ def get_authenticated_user():
     # TODO: Get user id from auth token
     return {"message": "not implemented"}, 501
 
+@bp.get('/')
+def list_users() -> flask_validation.JsonResponse:
+    """List all users (not yet implemented)."""
+    return {"message": "List users not implemented"}, 501
 
 @bp.post('/')
 def new_user() -> flask_validation.JsonResponse:
