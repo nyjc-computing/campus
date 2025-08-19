@@ -44,7 +44,7 @@ class HttpAuthenticationScheme(SecurityScheme):
         super().__init__(provider, **config)
         self.scheme = config["scheme"]
 
-    def get_auth(self, header: dict) -> HttpAuthProperty:
+    def get_auth(self, *, header: dict) -> HttpAuthProperty:
         """Validate the HTTP header for authentication.
 
         Raises an API error if the header is invalid or missing.
@@ -61,7 +61,9 @@ class HttpAuthenticationScheme(SecurityScheme):
         return auth
 
     @classmethod
-    def from_header(cls,
+    def from_header(
+            cls,
+            *,
             provider: str,
             header: dict
     ) -> "HttpAuthenticationScheme":
