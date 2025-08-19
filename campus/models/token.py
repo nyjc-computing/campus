@@ -8,9 +8,12 @@ Tokens are tagged to:
 - specific scopes
 """
 
+from typing import TypedDict
+
 from campus.common import devops
 from campus.common.utils import secret, uid, utc_time
 from campus.common.schema import CampusID, UserID
+from campus.models.base import BaseRecord
 from campus.storage import (
     errors as storage_errors,
     get_table
@@ -44,7 +47,6 @@ def init_db():
 
 class TokenRecord(BaseRecord):
     """Schema for a full token record."""
-    created_at: str
     expires_at: str
     client_id: CampusID
     user_id: UserID
