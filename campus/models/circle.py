@@ -93,9 +93,9 @@ def init_db():
     )
     if not admin_circles:
         admin_circle = Circle().new(
-                name="campus-admin",
-                description="Campus admin circle",
-                tag="admin",
+            name="campus-admin",
+            description="Campus admin circle",
+            tag="admin",
             parents={root_circle["id"]: 15}
         )
     else:
@@ -185,6 +185,7 @@ def get_circle_meta() -> dict:
         return circle_metas[0]
     except Exception as e:
         raise api_errors.InternalError(message=str(e), error=e)
+
 
 def update_circle_meta(update: dict) -> None:
     """Update the circle meta record in the settings collection."""

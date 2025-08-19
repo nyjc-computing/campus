@@ -161,7 +161,8 @@ class MongoDBCollection(CollectionInterface):
         try:
             mongo_doc = self.collection.find_one({MONGO_PK: doc_id})
         except Exception as e:
-            raise MongoCollectionError(f"Failed to retrieve document by id: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to retrieve document by id: {e}") from e
         if mongo_doc:
             return MongoRecord.from_mongo(mongo_doc).to_record()
         return {}
@@ -172,7 +173,8 @@ class MongoDBCollection(CollectionInterface):
         try:
             cursor = self.collection.find(query)
         except Exception as e:
-            raise MongoCollectionError(f"Failed to retrieve documents matching query: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to retrieve documents matching query: {e}") from e
         return [
             MongoRecord.from_mongo(mongo_doc).to_record()
             for mongo_doc in cursor
@@ -213,7 +215,8 @@ class MongoDBCollection(CollectionInterface):
                 }
             )
         except Exception as e:
-            raise MongoCollectionError(f"Failed to update document by id: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to update document by id: {e}") from e
         if result.matched_count == 0:
             raise NotFoundError(doc_id, self.name)
 
@@ -235,7 +238,8 @@ class MongoDBCollection(CollectionInterface):
                 }
             )
         except Exception as e:
-            raise MongoCollectionError(f"Failed to update documents matching query: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to update documents matching query: {e}") from e
         if result.matched_count == 0:
             raise NoChangesAppliedError("update", query, self.name)
 
@@ -244,7 +248,8 @@ class MongoDBCollection(CollectionInterface):
         try:
             result = self.collection.delete_one({MONGO_PK: doc_id})
         except Exception as e:
-            raise MongoCollectionError(f"Failed to delete document by id: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to delete document by id: {e}") from e
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
@@ -254,7 +259,8 @@ class MongoDBCollection(CollectionInterface):
         try:
             result = self.collection.delete_many(query)
         except Exception as e:
-            raise MongoCollectionError(f"Failed to delete documents matching query: {e}") from e
+            raise MongoCollectionError(
+                f"Failed to delete documents matching query: {e}") from e
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
@@ -305,4 +311,5 @@ def purge_collections() -> None:
         client.close()
 
     except Exception as e:
-        raise MongoCollectionError(f"Failed to purge MongoDB collections: {e}") from e
+        raise MongoCollectionError(
+            f"Failed to purge MongoDB collections: {e}") from e
