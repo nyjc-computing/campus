@@ -60,6 +60,9 @@ jobs:
           
       - name: Test imports
         run: |
+          echo "ENV=$ENV"
+          echo "CLIENT_ID=$CLIENT_ID"
+          echo "CLIENT_SECRET=$CLIENT_SECRET"
           echo "YAPPERDB_URI=$YAPPERDB_URI"
           # Test core package and all modules
           poetry run python -c "import campus; import campus.vault; import campus.apps; import campus.models; import campus.storage; print('✅ All modules import successfully')"
