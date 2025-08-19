@@ -52,11 +52,13 @@ def init_db():
     storage.init_collection()
 
     # Ensure meta record exists
-    meta_record = get_circle_meta()
-    if not meta_record:
-        # The meta document id is unused but required by the
-        # storage interface
+    try:
+        meta_record = get_circle_meta()
+    except api_errors.InternalError:
+        # Circle meta record not found in collection
         storage.insert_one({
+            # The meta document id is unused but required by the
+            # storage interface
             "id": uid.generate_category_uid("meta", length=8),
             "created_at": utc_time.now(),
             "@meta": True
@@ -78,27 +80,13 @@ def init_db():
             tag="admin",
             parents={root_circle["id"]: 15}
         )
-        # Create or update circle meta record using storage interface
-        storage.update_matching(
-            {"@meta": True},
+        # Update circle meta record using storage interface
+        update_circle_meta(
             {
                 "root": root_circle["id"],
                 root_circle["id"]: {},  # circle address tree
             }
         )
-
-
-class CircleMeta(TypedDict, total=False):
-    """Circle meta schema for the circles collection.
-
-    This is used to store the root circle and the address tree.
-    """
-    # Some keys are required but (intentionally) cannot be represented
-    # in TypedDict
-    # These are added here for documentation purposes
-    # @meta: bool  # always True
-    # <circle_id>: CircleTree  # circle address tree
-    root: CircleID
 
 
 class CircleNew(TypedDict, total=True):
@@ -151,6 +139,23 @@ class CircleMemberSet(CircleMemberRemove):
     access_value: AccessValue
 
 
+# Meta record classes and helper functions
+
+class CircleMeta(TypedDict, total=False):
+    """Circle meta schema for the circles collection.
+
+    A meta record is used to store metadata about the circle collection.
+    This record must be present before any circle operations are attempted.
+    This is used to store the root circle and the address tree.
+    """
+    root: CircleID
+    # Some keys are required but (intentionally) are unrepresentable
+    # in TypedDict
+    # These are added here for documentation purposes
+    # @meta: bool  # always True
+    # <circle_id>: CircleTree  # circle address tree
+
+
 def get_circle_meta() -> "CircleMeta":
     """Get the circle meta record from the settings collection."""
     storage = get_collection(COLLECTION)
@@ -164,6 +169,17 @@ def get_circle_meta() -> "CircleMeta":
         # Since some keys required in CircleMeta cannot be represented as
         # identifiers, we use the TypedDict constructor
         return TypedDict("CircleMeta", circle_meta[0])  # type: ignore
+    except Exception as e:
+        raise api_errors.InternalError(message=str(e), error=e)
+
+def update_circle_meta(update: dict) -> None:
+    """Update the circle meta record in the settings collection."""
+    storage = get_collection(COLLECTION)
+    try:
+        storage.update_matching(
+            {"@meta": True},
+            update
+        )
     except Exception as e:
         raise api_errors.InternalError(message=str(e), error=e)
 
