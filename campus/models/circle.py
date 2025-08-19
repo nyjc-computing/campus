@@ -169,19 +169,20 @@ class CircleMeta(TypedDict, total=False):
     # <circle_id>: CircleTree  # circle address tree
 
 
-def get_circle_meta() -> "CircleMeta":
+def get_circle_meta() -> dict:
     """Get the circle meta record from the settings collection."""
     storage = get_collection(COLLECTION)
     try:
-        circle_meta = storage.get_matching({"@meta": True})
-        if not circle_meta:
-            raise api_errors.InternalError(
+        circle_metas = storage.get_matching({"@meta": True})
+        if not circle_metas:
+            raise api_errors.NotFoundError(
                 message=f"Circle meta record not found in collection {COLLECTION}",
                 id=DOMAIN
             )
-        # Since some keys required in CircleMeta cannot be represented as
-        # identifiers, we use the TypedDict constructor
-        return TypedDict("CircleMeta", circle_meta[0])  # type: ignore
+        assert len(circle_metas) == 1, (
+            circle_metas, "Expected exactly one circle meta record"
+        )
+        return circle_metas[0]
     except Exception as e:
         raise api_errors.InternalError(message=str(e), error=e)
 
