@@ -84,6 +84,26 @@ class Tokens:
         """Delete a token from the database."""
         self.storage.delete_by_id(token_id)
 
+    def find(self, **match: str) -> list[dict]:
+        """Retrieve a list of matching tokens. 
+
+        This is intended for session retrieval by user and/or client, 
+        and not meant for authentication. 
+        For security reasons, the token id, access_token and expiry
+        are stripped.
+        """
+        assert "id" not in match, (
+            "find() by id is not allowed.\n" 
+            "use get() instead."
+        )
+        raise NotImplementedError
+        tokens = self.storage.get_matching(match)
+        for token in tokens:
+            del token["id"]
+            del token["access_token"]
+            del token["expires_at"]
+        return tokens
+
     def get(self, token_id: CampusID) -> dict:
         """Retrieve a token from the database by its ID."""
         return self.storage.get_by_id(token_id)
