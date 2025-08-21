@@ -6,18 +6,18 @@ Reference: https://developers.google.com/identity/protocols/oauth2/web-server
 
 Google OAuth 2.0 Authorization Flow Diagram:
 
-+--------+        (A)       +--------+        (B)        +---------+
-|  User  |----------------->| Google |------------------>| Campus  |
-|        |   Auth Request   |        | Redirect w/ Code  | Backend |
-+--------+                  +--------+                   +---------+
-                                |
-                                | (C)
-                                v
-                          +-----------+
-                          | Google    |
-                          | Token     |
-                          | Endpoint  |
-                          +-----------+
++--------+        (A)        +---------+ 
+|        |------------------>| Google  |
+|        |   Auth Request    |         | 
+|        |                   +---------+ 
+|  User  |        (B)        +---------+
+|        | +-----------------| Campus  |
+|        | +---------------->| Backend |     (C)       +-----------+
+|        | Redirect w/ Code  |         |---------------|  Google   |
+|        |                   |         |<--------------|  Token    |
+|        |                   |         | Token Request | Endpoint  |
+|        |<----------------- |         |               +-----------+
++--------+    Authorised     +---------+
 
 Legend:
 (A) User is redirected from Campus to Google for authentication and consent.
