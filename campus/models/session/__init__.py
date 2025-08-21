@@ -1,10 +1,11 @@
 """campus.models.session
 
-Session model for the Campus API.
+Login Session model for the Campus API.
 
-Sessions are short-lived processes, typically used for authentication state.
-Sessions are identified by a unique session ID, which is stored client-side
-    using cookies or local storage.
+Sessions are long-lived processes that store token records.
+While the access_token is stored client-side, the client_id, user_id, and
+scopes are stored server-side in a session.
+The access_token is used as the id key required by campus.storage
 Sessions must have an expiry datetime, for pruning.
 """
 
