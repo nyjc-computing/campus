@@ -31,8 +31,7 @@ def list_circles() -> flask_validation.JsonResponse:
 
 @bp.post('/')
 def new_circle(*_: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Create a new circle.
 
     Method:
@@ -92,8 +91,7 @@ def new_circle(*_: str) -> flask_validation.JsonResponse:
 
 @bp.delete('/<string:circle_id>')
 def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Delete a circle by its unique ID.
 
     Method:
@@ -133,8 +131,7 @@ def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
 
 @bp.get('/<string:circle_id>')
 def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Retrieve detailed information about a specific circle.
 
     Method:
@@ -187,8 +184,7 @@ def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
 
 @bp.patch('/<string:circle_id>')
 def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Update the name and/or description of an existing circle.
 
     Method:
@@ -241,8 +237,7 @@ def move_circle(circle_id: str) -> flask_validation.JsonResponse:
 
 @bp.get('/<string:circle_id>/members')
 def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Retrieve the member IDs of a circle along with their access values.
 
     Method:
@@ -285,8 +280,7 @@ def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
 
 @bp.post('/<string:circle_id>/members/add')
 def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Add a member to a circle with a specified access level.
 
     Method:
@@ -334,8 +328,7 @@ def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
 
 @bp.delete('/<string:circle_id>/members/remove')
 def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
-     """
-    Summary:
+    """Summary:
         Remove a member from a circle.
 
     Method:
@@ -386,8 +379,7 @@ def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
 
 @bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
 def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
-        """
-    Summary:
+    """Summary:
         Update the access level of a member within a circle.
 
     Method:

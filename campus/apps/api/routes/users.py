@@ -20,8 +20,7 @@ yapper = campus_yapper.create()
 
 
 def init_app(app: Flask | Blueprint) -> None:
-    """
-    Summary:
+    """Summary:
         Initialize and register all user-related routes with the given Flask app or blueprint.
 
     Method:
@@ -50,8 +49,7 @@ def init_app(app: Flask | Blueprint) -> None:
 # This view function is not registered with the blueprint
 # It will be registered with the app in the init_app function
 def get_authenticated_user():
-    """
-    Summary:
+    """Summary:
         Retrieve the currently authenticated user's summary.
 
     Method:
@@ -85,8 +83,7 @@ def list_users() -> flask_validation.JsonResponse:
 
 @bp.post('/')
 def new_user() -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Create a new user in the system.
 
     Method:
@@ -147,8 +144,7 @@ def new_user() -> flask_validation.JsonResponse:
 
 @bp.delete('/<string:user_id>')
 def delete_user(user_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Delete a user by their unique ID.
 
     Method:
@@ -188,9 +184,7 @@ def delete_user(user_id: str) -> flask_validation.JsonResponse:
 
 @bp.get('/<string:user_id>')
 def get_user(user_id: str) -> flask_validation.JsonResponse:
-    ) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Retrieve a single user's summary by their unique ID.
 
     Method:
@@ -246,8 +240,7 @@ def get_user(user_id: str) -> flask_validation.JsonResponse:
 
 @ bp.patch('/<string:user_id>')
 def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Update a single user's profile by their unique ID.
 
     Method:
@@ -300,8 +293,7 @@ def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
 
 @ bp.get('/<string:user_id>/profile')
 def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         Retrieve a single user's full profile by their unique ID.
 
     Method:

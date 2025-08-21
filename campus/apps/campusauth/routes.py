@@ -85,8 +85,7 @@ def init_app(app: Flask | Blueprint) -> None:
 # OAuth2 endpoints
 @bp.get('/oauth2/authorize')
 def oauth2_authorize() -> flask_validation.HtmlResponse:
-    """
-    Summary: 
+    """Summary: 
         OAuth2 authorization endpoint for user consent and code grant.
         1. Validates the authorization request
         2. Authenticates the user (through Google Workspace)
@@ -167,8 +166,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
 
 @bp.post('/oauth2/token')
 def oauth2_token() -> flask_validation.JsonResponse:
-    """
-    Summary:
+    """Summary:
         OAuth2 token endpoint for exchanging authorization code for access token.
 
     Method:
@@ -236,8 +234,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
 
 @bp.get('/login')
 def login() -> flask_validation.HtmlResponse:
-    """
-    Summary:
+    """Summary:
         Login endpoint for user authentication.
 
     Method:
@@ -272,8 +269,7 @@ def login() -> flask_validation.HtmlResponse:
 
 @bp.post('/logout')
 def logout() -> flask_validation.HtmlResponse:
-    """
-    Summary:
+    """Summary:
         Logout endpoint for user session termination.
 
     Method:
