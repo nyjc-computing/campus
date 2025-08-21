@@ -1,6 +1,36 @@
 """campus.apps.campusauth.routes
 
 Routes for Campus authentication - clients and users.
+
+Campus OAuth 2.0 Authorization Flow Diagram:
+
++--------+        (A)        +---------+
+|        | ----------------->|         |
+|        |   Auth Request    |         |
+|        |                   | Campus  |
+|        |        (B)        | Backend |
+|        | +---------------- +---------+
+|        | | Redirect after
+|        | |  session init   +---------+
+|        | +---------------->|         |
+                             | Google  |
+|        |        (C)        |         |
+|        | +---------------- +---------+
+|        | | Redirect w Code +---------+     (D)       +-----------+
+|        | +---------------->|         |---------------|  Google   |
+|  User  |                   |         |<--------------| Tokeninfo |
+|        |                   | Campus  |   Tokeninfo   | Endpoint  |
+|        |                   | Backend |               +-----------+
+|        |                   | (goog)  |
+|        |<----------------- |         |
++--------+    Authorised     +---------+
+
+Legend:
+(A) User sends auth request to Campus
+(B) User is redirected to Google for authentication and consent.
+(C) Google redirects the user back to Campus with an authorization code.
+(D) Campus backend exchanges the authorization code directly with Google's
+    token endpoint for user profile.
 """
 
 from typing import NotRequired, TypedDict, Unpack
@@ -63,6 +93,10 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
     3. Verifies scope of consent
     4. Issues authorization code
     5. Redirects user to the specified redirect URI
+
+    At this point, the client (and thus the request) does not have a valid
+    token yet, only an ongoing session, so there is no need to authenticate
+    the request.
     """
     req_json: AuthorizationCodeRequest = flask_validation.validate_request_and_extract_json(
         AuthorizationCodeRequest.__annotations__,
@@ -129,6 +163,14 @@ def oauth2_token() -> flask_validation.JsonResponse:
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
     # TODO: Issue token; get client_id from header, user_id from session
+    token = tokens.new(
+        {
+            "client_id": session["client_id"],
+            "user_id": session["user_id"],
+            "scopes": session.get("scopes", []),
+        },
+        expiry_seconds=DEFAULT_EXPIRY
+    )
     # OAuth2 flow complete, revoke session
     sessions.delete(session["id"])
     return {"message": "Not implemented"}, 501
