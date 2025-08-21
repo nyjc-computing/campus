@@ -137,18 +137,16 @@ def oauth2_token() -> flask_validation.JsonResponse:
 @bp.get('/login')
 def login() -> flask_validation.HtmlResponse:
     """Login endpoint."""
-    if "session_id" in flask_session:
-        # User already logged in, redirect to home or dashboard
-        return redirect(url_for('campus.home'))
-    # TODO: get user_id, client_id from auth header
-    session = sessions.new(
-        {
-            "user_id": flask_session["user_id"],
-            "client_id": flask_session["client_id"]
-        },
-        expiry_seconds=DEFAULT_EXPIRY
-    )
-    flask_session["session_id"] = session["id"]
+    if "session_id" not in flask_session:
+        # New login session
+        session = sessions.new(
+            {
+                "user_id": flask_session["user_id"],
+                "client_id": flask_session["client_id"]
+            },
+            expiry_seconds=DEFAULT_EXPIRY
+       )
+        flask_session["session_id"] = session["id"]
     return redirect(url_for('oauth.google.authorize'))
 
 
