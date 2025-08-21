@@ -128,8 +128,8 @@ class Tokens:
         """Retrieve and return a token by its access token."""
         toks = self.storage.get_matching({"access_token": access_token})
         if not toks:
-            raise api_errors.NotFoundError(
-                message="Token not found",
+            raise api_errors.UnauthorizedError(
+                message="Invalid token",
                 access_token=access_token
             )
         token = toks[0]

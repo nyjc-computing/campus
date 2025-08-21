@@ -50,12 +50,12 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
                 g.current_client = campus_client.vault.client.get(client_id)
         case "bearer":
             access_token = auth.value
+            # raises UnauthorizedError for invalid access_token
             token = tokens.validate_token(access_token)
             g.current_user = users.get(token["user_id"])
             g.current_client = campus_client.vault.client.get(
                 token["client_id"]
             )
-            # TODO: authenticate token
             return {"message": "Bearer auth not implemented"}, 501
 
 
