@@ -10,11 +10,11 @@ Google OAuth 2.0 Authorization Flow Diagram:
 |        |------------------>| Google  |
 |        |   Auth Request    |         | 
 |        |                   +---------+ 
-|  User  |        (B)        +---------+
-|        | +-----------------| Campus  |
-|        | +---------------->| Backend |     (C)       +-----------+
-|        | Redirect w/ Code  |         |---------------|  Google   |
-|        |                   |         |<--------------|  Token    |
+|        |        (B)        +---------+
+|        | +-----------------|         |
+|  User  | +---------------->|         |     (C)       +-----------+
+|        | Redirect w/ Code  | Campus  |---------------|  Google   |
+|        |                   | Backend |<--------------|  Token    |
 |        |                   |         | Token Request | Endpoint  |
 |        |<----------------- |         |               +-----------+
 +--------+    Authorised     +---------+
