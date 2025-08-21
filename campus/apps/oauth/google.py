@@ -3,6 +3,27 @@
 Routes for Google OAuth2.
 
 Reference: https://developers.google.com/identity/protocols/oauth2/web-server
+
+Google OAuth 2.0 Authorization Flow Diagram:
+
++--------+        (A)       +--------+        (B)        +---------+
+|  User  |----------------->| Google |------------------>| Campus  |
+|        |   Auth Request   |        | Redirect w/ Code  | Backend |
++--------+                  +--------+                   +---------+
+                                |
+                                | (C)
+                                v
+                          +-----------+
+                          | Google    |
+                          | Token     |
+                          | Endpoint  |
+                          +-----------+
+
+Legend:
+(A) User is redirected from Campus to Google for authentication and consent.
+(B) Google redirects the user back to Campus with an authorization code.
+(C) Campus backend exchanges the authorization code directly with Google's
+    token endpoint for access/refresh tokens.
 """
 
 from typing import NotRequired, Required, TypedDict
