@@ -15,8 +15,10 @@ from flask import g, request
 from campus.client import Campus
 from campus.common.webauth import http
 from campus.models.token import Tokens
+from campus.models.user import User
 
 tokens = Tokens()
+users = User()
 
 
 def authenticate_client() -> tuple[dict[str, str], int] | None:
@@ -49,6 +51,10 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
         case "bearer":
             access_token = auth.value
             token = tokens.validate_token(access_token)
+            g.current_user = users.get(token["user_id"])
+            g.current_client = campus_client.vault.client.get(
+                token["client_id"]
+            )
             # TODO: authenticate token
             return {"message": "Bearer auth not implemented"}, 501
 
