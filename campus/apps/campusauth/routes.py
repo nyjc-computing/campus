@@ -1,6 +1,36 @@
 """campus.apps.campusauth.routes
 
 Routes for Campus authentication - clients and users.
+
+Campus OAuth 2.0 Authorization Flow Diagram:
+
++--------+        (A)        +---------+
+|        | ----------------->|         |
+|        |   Auth Request    |         |
+|        |                   | Campus  |
+|        |        (B)        | Backend |
+|        | +---------------- +---------+
+|        | | Redirect after
+|        | |  session init   +---------+
+|        | +---------------->|         |
+                             | Google  |
+|        |        (C)        |         |
+|        | +---------------- +---------+
+|        | | Redirect w Code +---------+     (D)       +-----------+
+|        | +---------------->|         |---------------|  Google   |
+|  User  |                   |         |<--------------| Tokeninfo |
+|        |                   | Campus  |   Tokeninfo   | Endpoint  |
+|        |                   | Backend |               +-----------+
+|        |                   | (goog)  |
+|        |<----------------- |         |
++--------+    Authorised     +---------+
+
+Legend:
+(A) User sends auth request to Campus
+(B) User is redirected to Google for authentication and consent.
+(C) Google redirects the user back to Campus with an authorization code.
+(D) Campus backend exchanges the authorization code directly with Google's
+    token endpoint for user profile.
 """
 
 from typing import NotRequired, TypedDict, Unpack
@@ -91,7 +121,6 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
         302 Found: Redirect
         - Redirects to the specified redirect URI with the authorization code, as well as state if provided.
           e.g. /oauth2/authorize?code=abc123&state=xyz
-    
     """
     req_json: AuthorizationCodeRequest = flask_validation.validate_request_and_extract_json(
         AuthorizationCodeRequest.__annotations__,
@@ -118,7 +147,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
     )
     if missing_scopes:
         # TODO: redirect for additional scope authorization
-        return "Not implemented", 501
+        return "Additional scope authorization not implemented", 501
     # Issue authorization code
     authorization_code = secret.generate_authorization_code()
     # TODO: Handle update errors
@@ -174,7 +203,6 @@ def oauth2_token() -> flask_validation.JsonResponse:
         - Returned when grant_type is not "authorization_code"
         401 Not authenticated: None
         - Returned when the session ID is not in the Flask session
-        
     """
     req_json: TokenRequest = flask_validation.validate_request_and_extract_json(
         TokenRequest.__annotations__,
@@ -182,18 +210,27 @@ def oauth2_token() -> flask_validation.JsonResponse:
     )  # type: ignore
     # No valid session
     if "session_id" not in flask_session:
-        return {"error": "Not authenticated"}, 401
+        return {"error": "No OAuth session"}, 401
     session = sessions.get(flask_session["session_id"])
     if not session:
-        return {"error": "Not authenticated"}, 401
+        return {"error": "No OAuth session"}, 401
     if not req_json["grant_type"] == "authorization_code":
-        return {"error": "Invalid grant_type"}, 400
+        return {"error": "Invalid grant_type: expected 'authorization_code'"}, 400
     if not req_json["redirect_uri"] == session["redirect_uri"]:
-        return {"error": "Invalid redirect_uri"}, 400
+        return {"error": "redirect_uri mismatch"}, 400
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
-    # TODO: Issue token
-    # TODO: OAuth2 flow complete, revoke session
+    # TODO: Issue token; get client_id from header, user_id from session
+    token = tokens.new(
+        {
+            "client_id": session["client_id"],
+            "user_id": session["user_id"],
+            "scopes": session.get("scopes", []),
+        },
+        expiry_seconds=DEFAULT_EXPIRY
+    )
+    # OAuth2 flow complete, revoke session
+    sessions.delete(session["id"])
     return {"message": "Not implemented"}, 501
 
 

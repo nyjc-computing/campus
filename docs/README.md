@@ -1,32 +1,22 @@
+
 # Campus Documentation
 
 ## Getting Started
 
-- **[Contributing Guide](CONTRIBUTING.md)** - Development workflow, branch strategy, and onboarding for new developers
+- **[Contributing Guide](CONTRIBUTING.md)** — Development workflow, branch strategy, and onboarding for new developers
 
 ## Architecture and Design
 
-- [Packaging Architecture](packaging-architecture.md) - Overview of the namespace package structure and design decisions
-- [Subpackaging Implementation Plan](subpackaging-plan.md) - Roadmap for creating independently distributable packages
+- **[Packaging Guide](PACKAGING.md)** — Monorepo structure, packaging, and distribution
 
 ## Development
 
-- [Development Guidelines](development-guidelines.md) - Architectural patterns, design decisions, and best practices
-- [Git Dependencies Guide](git-dependencies-guide.md) - Using Campus packages as dependencies in external projects
-- [Development Setup](development-setup.md) - Getting started with Campus development *(coming soon)*
+- **[Development Guidelines](development-guidelines.md)** — Architectural patterns, design decisions, and best practices
 
-## Packages
+## API and Endpoints
 
-### Core Infrastructure
-- [campus-common](packages/common.md) - Shared utilities and foundational components *(coming soon)*
-- [campus-vault](packages/vault.md) - Secure secrets management service *(coming soon)*
-- [campus-storage](packages/storage.md) - Storage interfaces and backends *(coming soon)*
-- [campus-apps](packages/apps.md) - Web applications and API endpoints *(coming soon)*
+- **[API Gaps & Planned Endpoints](api-gaps-and-planned-endpoints.md)** — List of missing and planned API endpoints
 
-## API Reference
+## Other Documentation
 
-- [API Documentation](api/README.md) - Complete API reference *(coming soon)*
-
-## Deployment
-
-- [Deployment Guide](deployment.md) - Production deployment instructions *(coming soon)*
+- **[Campus README (root)](../README.md)** — Project overview and quickstart (root of repo)
