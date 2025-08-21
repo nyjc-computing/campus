@@ -96,10 +96,10 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
 
     Method:
         GET /oauth2/authorize
-        
+
     Path Parameters:
         None
-        
+
     Query parameters:
         - client_id: ID of OAuth client requesting authorization
         - response_type: str (required)
@@ -110,7 +110,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
             Space-separated list of scopes requested by the client.
         - state: str (optional)
             Opaque value used by the client to maintain state between request and callback.
-        
+
     Responses:
         501 Not Implemented: None
         - Returned when missing scopes as this is not implemented yet.
@@ -170,16 +170,16 @@ def oauth2_token() -> flask_validation.JsonResponse:
     """
     Summary:
         OAuth2 token endpoint for exchanging authorization code for access token.
-        
+
     Method:
         POST /oauth2/token
-        
+
     Path Parameters:
         None
-        
+
     Query Parameters:
         None
-        
+
     Request Body:
         grant_type: str (required)
             Must be "authorization_code".
@@ -191,7 +191,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
             OAuth client identifier.
         client_secret: str (required)
             Secret key for the OAuth client.
-    
+
     Responses:
         501 Not Implemented: None
         - Returned as token issuance is not implemented yet, as well as completing the OAuth2 flow and revoking the session.
@@ -239,21 +239,21 @@ def login() -> flask_validation.HtmlResponse:
     """
     Summary:
         Login endpoint for user authentication.
-        
+
     Method:
         GET /login
-        
+
     Path Parameters:
         None
-        
+
     Query Parameters:
         None
-        
+
     Responses:
         302 Found: Redirect
         - If the user is already logged in, redirects to the home or dashboard page, 
           otherwise creates a new session and redirects to OAuth authorization.
-        
+
     """
     if "session_id" in flask_session:
         # User already logged in, redirect to home or dashboard
@@ -275,10 +275,10 @@ def logout() -> flask_validation.HtmlResponse:
     """
     Summary:
         Logout endpoint for user session termination.
-        
+
     Method:
         POST /logout
-        
+
     Path Parameters:
         None
 
@@ -287,7 +287,7 @@ def logout() -> flask_validation.HtmlResponse:
 
     Request Body:
         None
-        
+
     Responses:
         501 Not Implemented: str
         - Returned as revoking the login is not implemented yet.

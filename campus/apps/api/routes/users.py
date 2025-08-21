@@ -76,10 +76,12 @@ def get_authenticated_user():
     # TODO: Get user id from auth token
     return {"message": "not implemented"}, 501
 
+
 @bp.get('/')
 def list_users() -> flask_validation.JsonResponse:
     """List all users (not yet implemented)."""
     return {"message": "List users not implemented"}, 501
+
 
 @bp.post('/')
 def new_user() -> flask_validation.JsonResponse:
@@ -230,19 +232,19 @@ def get_user(user_id: str) -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    summary = {}
-    record, _ = get_user_profile(user_id)
-    summary['profile'] = record
+    summary= {}
+    record, _= get_user_profile(user_id)
+    summary['profile']= record
     flask_validation.validate_json_response(
         summary,
         user.UserResource.__annotations__,
-        on_error=api_errors.raise_api_error
+        on_error = api_errors.raise_api_error
     )
     # future calls for other user info go here
     return summary, 200
 
 
-@bp.patch('/<string:user_id>')
+@ bp.patch('/<string:user_id>')
 def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
     """
     Summary:
@@ -287,16 +289,16 @@ def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload= flask_validation.validate_request_and_extract_json(
         user.UserUpdate.__annotations__,
-        on_error=api_errors.raise_api_error,
+        on_error = api_errors.raise_api_error,
     )
     users.update(user_id, **payload)
     yapper.emit('campus.users.update')
     return {}, 200
 
 
-@bp.get('/<string:user_id>/profile')
+@ bp.get('/<string:user_id>/profile')
 def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
     """
     Summary:
@@ -339,10 +341,10 @@ def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    resource = users.get(user_id)
+    resource= users.get(user_id)
     flask_validation.validate_json_response(
         user.UserResource.__annotations__,
         resource,
-        on_error=api_errors.raise_api_error,
+        on_error = api_errors.raise_api_error,
     )
     return dict(resource), 200
