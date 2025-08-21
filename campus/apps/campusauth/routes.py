@@ -89,7 +89,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
     )
     if missing_scopes:
         # TODO: redirect for additional scope authorization
-        return "Not implemented", 501
+        return "Additional scope authorization not implemented", 501
     # Issue authorization code
     authorization_code = secret.generate_authorization_code()
     # TODO: Handle update errors
@@ -109,21 +109,23 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
 
 @bp.post('/oauth2/token')
 def oauth2_token() -> flask_validation.JsonResponse:
-    """OAuth2 token endpoint for exchanging authorization code for access token."""
+    """OAuth2 token endpoint for exchanging authorization code for
+    access token.
+    """
     req_json: TokenRequest = flask_validation.validate_request_and_extract_json(
         TokenRequest.__annotations__,
         on_error=api_errors.raise_api_error
     )  # type: ignore
     # No valid session
     if "session_id" not in flask_session:
-        return {"error": "Not authenticated"}, 401
+        return {"error": "No OAuth session"}, 401
     session = sessions.get(flask_session["session_id"])
     if not session:
-        return {"error": "Not authenticated"}, 401
+        return {"error": "No OAuth session"}, 401
     if not req_json["grant_type"] == "authorization_code":
-        return {"error": "Invalid grant_type"}, 400
+        return {"error": "Invalid grant_type: expected 'authorization_code'"}, 400
     if not req_json["redirect_uri"] == session["redirect_uri"]:
-        return {"error": "Invalid redirect_uri"}, 400
+        return {"error": "redirect_uri mismatch"}, 400
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
     # TODO: Issue token; get client_id from header, user_id from session
