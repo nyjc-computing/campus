@@ -67,23 +67,6 @@ def get_authenticated_user():
         None
 
     Responses:
-        200 OK: dict
-            JSON object containing the authenticated user's summary.
-            Example:
-                {
-                    "id": str,
-                    "email": str,
-                    "name": str,
-                    "created_at": str,
-                    "activated_at": str | None
-                }
-
-        401 Unauthorized: dict
-            Returned if the user is not authenticated:
-            {
-                "error": str
-            }
-
         501 Not Implemented: dict
             Returned because this function is not yet implemented:
             {
