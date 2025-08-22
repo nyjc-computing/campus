@@ -190,7 +190,7 @@ class HttpClient:
                     pass
                 raise ValidationError(error_msg)
             elif not response.ok:
-                raise NetworkError(response.text)
+                raise NetworkError(f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
             try:
