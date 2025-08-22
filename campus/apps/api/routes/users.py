@@ -226,9 +226,9 @@ def get_user(user_id: str) -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    summary= {}
-    record, _= get_user_profile(user_id)
-    summary['profile']= record
+    summary = {}
+    record, _ = get_user_profile(user_id)
+    summary['profile'] = record
     flask_validation.validate_json_response(
         summary,
         user.UserResource.__annotations__,
