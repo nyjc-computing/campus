@@ -51,8 +51,7 @@ def init_db():
             agent_string TEXT,
             access_token TEXT,
             scopes TEXT,
-            UNIQUE(agent_id),
-            UNIQUE
+            UNIQUE(client_id, user_id)
         )
     """
     storage.init_table(schema)
