@@ -14,7 +14,6 @@ from flask import Flask
 from campus.client import Campus
 
 from . import api, campusauth, oauth
-from .campusauth import ctx
 
 
 def create_app_from_modules(*modules) -> Flask:
@@ -47,5 +46,4 @@ __all__ = [
     "oauth",
     "create_app_from_modules",
     "create_app",
-    "ctx",
 ]
