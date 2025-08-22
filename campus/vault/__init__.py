@@ -75,7 +75,7 @@ import os
 
 from flask import Blueprint, Flask
 
-from campus.common import devops
+from campus.common import devops, errors
 
 from . import access, db, client
 from .model import Vault, VaultKeyError
@@ -166,7 +166,7 @@ class AuthenticatedVault:
             from .auth import check_vault_access
             check_vault_access(self.client_id, self.label, access.READ)
             return True
-        except VaultAccessDeniedError:
+        except errors.api_errors.ForbiddenError:
             return False
 
 
