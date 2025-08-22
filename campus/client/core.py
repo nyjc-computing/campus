@@ -29,3 +29,11 @@ class Campus:
         self.users = UsersClient()
         self.circles = CirclesClient()
         self.admin = AdminClient()
+
+    def debug(self) -> None:
+        """Print debug info."""
+        print("== DEBUG ==")
+        print("vault base_url:", self.vault.base_url)
+        print("users base_url:", self.users.base_url)
+        print("circles base_url:", self.circles.base_url)
+        print("admin base_url:", self.admin._client.base_url)
