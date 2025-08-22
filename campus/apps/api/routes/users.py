@@ -282,7 +282,7 @@ def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    payload= flask_validation.validate_request_and_extract_json(
+    payload = flask_validation.validate_request_and_extract_json(
         user.UserUpdate.__annotations__,
         on_error = api_errors.raise_api_error,
     )
