@@ -85,18 +85,41 @@ def init_app(app: Flask | Blueprint) -> None:
 # OAuth2 endpoints
 @bp.get('/oauth2/authorize')
 def oauth2_authorize() -> flask_validation.HtmlResponse:
-    """OAuth2 authorization endpoint for user consent and code grant.
+    """Summary: 
+        OAuth2 authorization endpoint for user consent and code grant.
+        1. Validates the authorization request
+        2. Authenticates the user (through Google Workspace)
+        3. Verifies scope of consent
+        4. Issues authorization code
+        5. Redirects user to the specified redirect URI
 
-    This endpoint:
-    1. Validates the authorization request
-    2. Authenticates the user (through Google Workspace)
-    3. Verifies scope of consent
-    4. Issues authorization code
-    5. Redirects user to the specified redirect URI
+    Method:
+        GET /oauth2/authorize
 
-    At this point, the client (and thus the request) does not have a valid
-    token yet, only an ongoing session, so there is no need to authenticate
-    the request.
+    Path Parameters:
+        None
+
+    Query parameters:
+        - client_id: ID of OAuth client requesting authorization
+        - response_type: str (required)
+            Must be "code" for authorization code flow.
+        - redirect_uri: str (required)
+            URI to redirect the user to after authentication
+        - scope: str (optional)
+            Space-separated list of scopes requested by the client.
+        - state: str (optional)
+            Opaque value used by the client to maintain state between request and callback.
+
+    Responses:
+        501 Not Implemented: None
+        - Returned when missing scopes as this is not implemented yet.
+        404 Session not found: None
+        - Returned when the user session is not found and user needs to log in.
+        401 Invalid client_id/user_id: None
+        - Returned when the client_id or user_id in the session does not match the request.
+        302 Found: Redirect
+        - Redirects to the specified redirect URI with the authorization code, as well as state if provided.
+          e.g. /oauth2/authorize?code=abc123&state=xyz
     """
     req_json: AuthorizationCodeRequest = flask_validation.validate_request_and_extract_json(
         AuthorizationCodeRequest.__annotations__,
@@ -143,8 +166,41 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
 
 @bp.post('/oauth2/token')
 def oauth2_token() -> flask_validation.JsonResponse:
-    """OAuth2 token endpoint for exchanging authorization code for
-    access token.
+    """Summary:
+        OAuth2 token endpoint for exchanging authorization code for access token.
+
+    Method:
+        POST /oauth2/token
+
+    Path Parameters:
+        None
+
+    Query Parameters:
+        None
+
+    Request Body:
+        grant_type: str (required)
+            Must be "authorization_code".
+        code: str (required)
+            The authorization code received from `/oauth2/authorize`.
+        redirect_uri: str (required)
+            Must match the redirect_uri used in authorization.
+        client_id: str (required)
+            OAuth client identifier.
+        client_secret: str (required)
+            Secret key for the OAuth client.
+
+    Responses:
+        501 Not Implemented: None
+        - Returned as token issuance is not implemented yet, as well as completing the OAuth2 flow and revoking the session.
+        400 Invalid authorization code: None
+        - Returned when the authorization code in the json does not match the one used in the session.
+        400 Invalid redirect_uri: None
+        - Returned when the redirect_uri does not match the one used in the authorization request.
+        400 Invalid grant_type: None
+        - Returned when grant_type is not "authorization_code"
+        401 Not authenticated: None
+        - Returned when the session ID is not in the Flask session
     """
     req_json: TokenRequest = flask_validation.validate_request_and_extract_json(
         TokenRequest.__annotations__,
@@ -178,22 +234,59 @@ def oauth2_token() -> flask_validation.JsonResponse:
 
 @bp.get('/login')
 def login() -> flask_validation.HtmlResponse:
-    """Login endpoint."""
-    if "session_id" not in flask_session:
-        # New login session
-        session = sessions.new(
-            {
-                "user_id": flask_session["user_id"],
-                "client_id": flask_session["client_id"]
-            },
-            expiry_seconds=DEFAULT_EXPIRY
-       )
-        flask_session["session_id"] = session["id"]
+    """Summary:
+        Login endpoint for user authentication.
+
+    Method:
+        GET /login
+
+    Path Parameters:
+        None
+
+    Query Parameters:
+        None
+
+    Responses:
+        302 Found: Redirect
+        - If the user is already logged in, redirects to the home or dashboard page, 
+          otherwise creates a new session and redirects to OAuth authorization.
+
+    """
+    if "session_id" in flask_session:
+        # User already logged in, redirect to home or dashboard
+        return redirect(url_for('campus.home'))
+    # TODO: get user_id, client_id from auth header
+    session = sessions.new(
+        {
+            "user_id": flask_session["user_id"],
+            "client_id": flask_session["client_id"]
+        },
+        expiry_seconds=DEFAULT_EXPIRY
+    )
+    flask_session["session_id"] = session["id"]
     return redirect(url_for('oauth.google.authorize'))
 
 
 @bp.post('/logout')
 def logout() -> flask_validation.HtmlResponse:
-    """Logout endpoint."""
+    """Summary:
+        Logout endpoint for user session termination.
+
+    Method:
+        POST /logout
+
+    Path Parameters:
+        None
+
+    Query Parameters:
+        None
+
+    Request Body:
+        None
+
+    Responses:
+        501 Not Implemented: str
+        - Returned as revoking the login is not implemented yet.
+    """
     # TODO: Revoke login token
     return "Not implemented", 501
