@@ -76,18 +76,13 @@ from flask import Blueprint, Flask
 from campus.common import devops, errors
 
 from . import access, db, client
-from .model import Vault, VaultKeyError
-from .auth import VaultAuthError, ClientAuthenticationError, VaultAccessDeniedError
+from .model import Vault
 
 __all__ = [
     "get_vault",
     "get_authenticated_vault",
     "Vault",
     "AuthenticatedVault",
-    "VaultKeyError",
-    "VaultAuthError",
-    "ClientAuthenticationError",
-    "VaultAccessDeniedError",
     "create_app",
     "init_app",
     "init_db",
