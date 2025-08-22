@@ -17,9 +17,10 @@ from campus.common.utils import secret
 from campus.client.errors import (
     AuthenticationError,
     AccessDeniedError,
+    ConflictError,
     NotFoundError,
     ValidationError,
-    NetworkError
+    NetworkError,
 )
 from campus.client import config
 
@@ -174,24 +175,20 @@ class HttpClient:
                 response = session.send(prepped, timeout=30)
 
             # Handle HTTP status codes
-            if response.status_code == 401:
-                raise AuthenticationError("Authentication failed")
-            elif response.status_code == 403:
-                raise AccessDeniedError("Access denied")
-            elif response.status_code == 404:
-                raise NotFoundError("Resource not found")
-            elif response.status_code == 400:
-                error_msg = "Validation error"
-                try:
-                    error_data = response.json()
-                    if "error" in error_data:
-                        error_msg = error_data["error"]
-                except:
-                    pass
-                raise ValidationError(error_msg)
-            elif not response.ok:
-                raise NetworkError(
-                    f"HTTP {response.status_code}: {response.text}")
+            match response.status_code:
+                case 400:
+                    raise ValidationError(response.json())
+                case 401:
+                    raise AuthenticationError(response.json())
+                case 403:
+                    raise AccessDeniedError(response.json())
+                case 404:
+                    raise NotFoundError(response.json())
+                case 409:
+                    raise ConflictError(response.json())
+                case _:
+                    if not response.ok:
+                        raise NetworkError(f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
             try:

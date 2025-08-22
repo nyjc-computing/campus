@@ -58,6 +58,10 @@ def generate_api_key(length: int = 32) -> str:
     """
     return secrets.token_urlsafe(length)
 
+def generate_access_code() -> str:
+    """Generate a secure random access code."""
+    return secrets.token_urlsafe(32)
+
 def generate_authorization_code() -> str:
     """Generate an OAuth2 authorization code"""
     return secrets.token_urlsafe(32)
