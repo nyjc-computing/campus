@@ -175,11 +175,11 @@ class HttpClient:
 
             # Handle HTTP status codes
             if response.status_code == 401:
-                raise AuthenticationError("Authentication failed")
+                raise AuthenticationError(response.json())
             elif response.status_code == 403:
-                raise AccessDeniedError("Access denied")
+                raise AccessDeniedError(response.json())
             elif response.status_code == 404:
-                raise NotFoundError("Resource not found")
+                raise NotFoundError(response.json())
             elif response.status_code == 400:
                 error_msg = "Validation error"
                 try:
@@ -190,8 +190,7 @@ class HttpClient:
                     pass
                 raise ValidationError(error_msg)
             elif not response.ok:
-                raise NetworkError(
-                    f"HTTP {response.status_code}: {response.text}")
+                raise NetworkError(response.text)
 
             # Parse JSON response
             try:
