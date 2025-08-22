@@ -189,6 +189,7 @@ def create_app() -> Flask:
     """
     app = Flask(__name__)
     init_app(app)
+    errors.init_app(app)
     return app
 
 
