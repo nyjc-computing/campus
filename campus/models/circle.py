@@ -271,7 +271,7 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="Member circle not found",
                 id=member_id
-            )
+            ) from e
         except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -286,7 +286,7 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="No changes applied when adding member",
                 id=circle_id
-            )
+            ) from e
         except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -310,7 +310,7 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from e
         except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -325,7 +325,7 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="No changes applied when removing member",
                 id=circle_id
-            )
+            ) from e
         except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -419,7 +419,7 @@ class Circle:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from e
         except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
@@ -433,7 +433,7 @@ class Circle:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from e
         except storage_errors.StorageError as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
