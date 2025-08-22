@@ -174,16 +174,18 @@ class HttpClient:
                 response = session.send(prepped, timeout=30)
 
             # Handle HTTP status codes
-            if response.status_code == 400:
-                raise ValidationError(response.json())
-            elif response.status_code == 401:
-                raise AuthenticationError(response.json())
-            elif response.status_code == 403:
-                raise AccessDeniedError(response.json())
-            elif response.status_code == 404:
-                raise NotFoundError(response.json())
-            elif not response.ok:
-                raise NetworkError(f"HTTP {response.status_code}: {response.text}")
+            match response.status_code:
+                case 400:
+                    raise ValidationError(response.json())
+                case 401:
+                    raise AuthenticationError(response.json())
+                case 403:
+                    raise AccessDeniedError(response.json())
+                case 404:
+                    raise NotFoundError(response.json())
+                case _:
+                    if not response.ok:
+                        raise NetworkError(f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
             try:
