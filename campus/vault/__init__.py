@@ -232,8 +232,6 @@ def init_db():
 
 def run_server():
     """Entry point for running vault as a standalone service"""
-    import os
-
     app = create_app()
 
     # Replit configuration
