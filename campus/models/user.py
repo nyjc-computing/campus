@@ -71,9 +71,9 @@ class User:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            ) from e
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error=e) from e
 
     def new(self, **fields: Unpack[UserNew]) -> UserResource:
         """Create a new user."""
@@ -91,9 +91,9 @@ class User:
                 message="User already exists",
                 user_id=user_id,
                 error=e
-            ) from e
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error=e) from e
         else:
             return record  # type: ignore
 
@@ -105,9 +105,9 @@ class User:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            ) from e
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error=e) from e
 
     def get(self, user_id: str) -> UserResource:
         """Get a user by id."""
@@ -117,9 +117,9 @@ class User:
             raise api_errors.NotFoundError(
                 message="User not found",
                 user_id=user_id
-            ) from e
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error=e) from e
         else:
             return user  # type: ignore
 
@@ -131,6 +131,6 @@ class User:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            ) from e
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error=e) from e
