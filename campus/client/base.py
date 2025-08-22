@@ -17,9 +17,10 @@ from campus.common.utils import secret
 from campus.client.errors import (
     AuthenticationError,
     AccessDeniedError,
+    ConflictError,
     NotFoundError,
     ValidationError,
-    NetworkError
+    NetworkError,
 )
 from campus.client import config
 
@@ -183,6 +184,8 @@ class HttpClient:
                     raise AccessDeniedError(response.json())
                 case 404:
                     raise NotFoundError(response.json())
+                case 409:
+                    raise ConflictError(response.json())
                 case _:
                     if not response.ok:
                         raise NetworkError(f"HTTP {response.status_code}: {response.text}")

@@ -19,6 +19,11 @@ class AccessDeniedError(CampusClientError):
     pass
 
 
+class ConflictError(CampusClientError):
+    """Raised when a conflict occurs."""
+    pass
+
+
 class NotFoundError(CampusClientError):
     """Raised when a requested resource is not found."""
     pass
