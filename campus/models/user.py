@@ -71,7 +71,7 @@ class User:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            )
+            ) from e
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
