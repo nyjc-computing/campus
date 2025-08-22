@@ -71,8 +71,6 @@ USAGE EXAMPLE:
     # DELETE /vault/api-secrets/my_key
 """
 
-import os
-
 from flask import Blueprint, Flask
 
 from campus.common import devops, errors
@@ -195,7 +193,6 @@ def create_app() -> Flask:
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
-    from flask import jsonify
     from .routes import init_vault_routes, init_access_routes, init_client_routes
 
     # Health check route for deployments
