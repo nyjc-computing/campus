@@ -23,7 +23,7 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 message="Unauthorized",
                 status=status,
                 **body
-           )
+            )
         case 403:
             raise ForbiddenError(
                 message="Forbidden",
