@@ -29,6 +29,7 @@ def create_app() -> Flask:
     from campus.common import errors
     app = Flask(__name__)
     init_app(app)
+    # TODO: review error handler registration to handle HTML and API errors
     errors.init_app(app)
     return app
 
