@@ -183,7 +183,7 @@ class EmailOTPAuth:
             else:
                 return plain_otp
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def verify(self, **data: Unpack[OTPVerify]) -> None:
         """Verify if the provided OTP matches the one stored for the email.
@@ -223,7 +223,7 @@ class EmailOTPAuth:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def revoke(self, email: str) -> None:
         """Delete all OTPs for the given email (typically after successful
@@ -248,4 +248,4 @@ class EmailOTPAuth:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e

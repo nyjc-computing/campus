@@ -62,7 +62,7 @@ class Session:
                 session_id=session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def get(self, session_id: CampusID) -> dict:
         """Retrieve an OAuth session by its ID."""
@@ -74,7 +74,7 @@ class Session:
                 session_id=session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return record
 
@@ -94,7 +94,7 @@ class Session:
         try:
             self.storage.insert_one(session_data)
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return session_data
 
@@ -108,6 +108,6 @@ class Session:
                 session_id=session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return self.get(session_id)
