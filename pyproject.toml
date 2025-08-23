@@ -14,13 +14,13 @@ packages = [{include = "campus"}]
 python = ">=3.11.0,<3.12"
 
 # Client library dependencies (minimal for HTTP requests)
-requests = "^2.32.4"
-
-# Deployment orchestration dependencies (all services) - required for deployment
-flask = "^3.0.0"
 bcrypt = "^4.2.1"
+flask = "^3.0.0"
+requests = "^2.32.4"
 psycopg2-binary = "^2.9.0"
 pymongo = {extras = ["srv"], version = "^4.13.2"}
+
+# Deployment orchestration dependencies (all services) - required for deployment
 gunicorn = "^21.2.0"
 werkzeug = "^3.0.0"
 
@@ -29,9 +29,9 @@ campus-yapper = {git = "https://github.com/nyjc-computing/yapper-python.git", br
 
 [tool.poetry.extras]
 # Optional dependency groups for deployment modes
-vault = ["flask", "bcrypt", "psycopg2-binary", "gunicorn", "werkzeug"]
-apps = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
-full = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
+vault = []
+apps = ["pymongo"]
+full = ["pymongo"]
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
