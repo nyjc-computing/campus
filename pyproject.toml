@@ -29,9 +29,9 @@ campus-yapper = {git = "https://github.com/nyjc-computing/yapper-python.git", br
 
 [tool.poetry.extras]
 # Optional dependency groups for deployment modes
-vault = ["flask", "bcrypt", "psycopg2-binary", "gunicorn", "werkzeug"]
-apps = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
-full = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
+vault = []
+apps = ["pymongo"]
+full = ["pymongo"]
 
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
