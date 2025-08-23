@@ -112,6 +112,11 @@ class InternalError(APIError):
     ) -> None:
         super().__init__(message, error_code, **details)
 
+    @classmethod
+    def from_exception(cls, exception: Exception) -> 'InternalError':
+        """Convenience factory method"""
+        return cls(message=str(exception), error_type=type(exception).__name__)
+
 
 class InvalidRequestError(APIError):
     """Invalid request error.

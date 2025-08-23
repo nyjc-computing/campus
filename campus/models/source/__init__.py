@@ -100,7 +100,7 @@ class Source:
             self.storage.insert_one(dict(record))
             return source_id
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
 
     def delete(self, source_id: str) -> None:
         """Delete a source by id.
@@ -113,7 +113,7 @@ class Source:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
 
     def get(self, source_id: str) -> dict:
         """Get a source by id from the source collection."""
@@ -128,7 +128,7 @@ class Source:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
 
     def list(self) -> list[dict]:
         """List all sources in the sources collection."""
@@ -137,7 +137,7 @@ class Source:
             sources = self.storage.get_matching({"@meta": {"$ne": True}})
             return sources
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
 
     def update(self, source_id: str, **updates: Unpack[SourceUpdate]) -> None:
         """Update a source by id."""
@@ -146,7 +146,7 @@ class Source:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
 
 
 __all__ = [

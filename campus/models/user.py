@@ -73,7 +73,7 @@ class User:
                 user_id=user_id
             ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
 
     def new(self, **fields: Unpack[UserNew]) -> UserResource:
         """Create a new user."""
@@ -93,7 +93,7 @@ class User:
                 error=e
             ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return record  # type: ignore
 
@@ -107,7 +107,7 @@ class User:
                 user_id=user_id
             ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
 
     def get(self, user_id: str) -> UserResource:
         """Get a user by id."""
@@ -119,7 +119,7 @@ class User:
                 user_id=user_id
             ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return user  # type: ignore
 
@@ -133,4 +133,4 @@ class User:
                 user_id=user_id
             ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
+            raise api_errors.InternalError.from_exception(e) from e
