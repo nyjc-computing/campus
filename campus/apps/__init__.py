@@ -12,6 +12,7 @@ This module contains the main applications for Campus.
 
 from flask import Flask
 from campus.client import Campus
+from campus.common import errors
 
 from . import api, campusauth, oauth
 
@@ -37,7 +38,9 @@ def create_app_from_modules(*modules) -> Flask:
 
 def create_app() -> Flask:
     """Create the main Campus app with all modules"""
-    return create_app_from_modules(api, campusauth, oauth)
+    app = create_app_from_modules(api, campusauth, oauth)
+    errors.init_app(app)
+    return app
 
 
 __all__ = [
