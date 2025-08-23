@@ -184,7 +184,7 @@ def get_circle_meta() -> dict:
         )
         return circle_metas[0]
     except Exception as e:
-        raise api_errors.InternalError(message=str(e), error=e) from e
+        raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
 
 def update_circle_meta(update: dict) -> None:
@@ -196,7 +196,7 @@ def update_circle_meta(update: dict) -> None:
             update
         )
     except Exception as e:
-        raise api_errors.InternalError(message=str(e), error=e) from e
+        raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
 
 def get_root_circle() -> "CircleRecord":
@@ -253,7 +253,7 @@ class CircleMember:
                 id=circle_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def add(self, circle_id: CircleID, **fields: Unpack[CircleMemberAdd]) -> None:
         """Add a member to a circle."""
@@ -273,7 +273,7 @@ class CircleMember:
                 id=member_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
@@ -288,7 +288,7 @@ class CircleMember:
                 id=circle_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def remove(self, circle_id: CircleID, **fields: Unpack[CircleMemberRemove]) -> None:
         """Remove a member from a circle."""
@@ -312,7 +312,7 @@ class CircleMember:
                 id=circle_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
@@ -327,7 +327,7 @@ class CircleMember:
                 id=circle_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def set(self, circle_id: CircleID, **fields: Unpack[CircleMemberSet]) -> None:
         """Set the access of a member of a circle.
@@ -382,7 +382,7 @@ class Circle:
             resource["sources"] = {}
             return resource
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def delete(self, circle_id: str) -> None:
         """Delete a circle by id.
@@ -399,7 +399,7 @@ class Circle:
                 id=circle_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def get(self, circle_id: str) -> CircleResource:
         """Get a circle by id from the circle collection."""
@@ -421,7 +421,7 @@ class Circle:
                 id=circle_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> None:
         """Update a circle by id."""
@@ -435,7 +435,7 @@ class Circle:
                 id=circle_id
             ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e) from e
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
 
 class CircleAddressTree(Mapping[CircleID, "CircleAddressTree"]):

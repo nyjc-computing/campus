@@ -65,7 +65,7 @@ class ClientCredentials:
                 client_id=client_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def get(self, client_id: CampusID) -> dict | None:
         """Retrieve a client credential by its ID."""
@@ -122,7 +122,7 @@ class ClientCredentials:
         except Exception as e:
             if isinstance(e, AssertionError):
                 raise  # Re-raise assertion errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
 
 class UserCredentials:
@@ -152,7 +152,7 @@ class UserCredentials:
                 user_id=user_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
 
     def get(self, user_id: CampusID) -> UserCredentialsSchema:
         """Retrieve user credentials by user ID."""
@@ -212,4 +212,4 @@ class UserCredentials:
                     ) from e
                 # Other exceptions are handled below
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error_type=type(e).__name__) from e
