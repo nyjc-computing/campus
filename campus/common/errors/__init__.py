@@ -32,7 +32,7 @@ def handle_api_error(err: APIError) -> tuple[JsonDict, int]:
     """
     module = get_caller()
     logging.getLogger("campus.common.errors").error(
-        "APIError handled in %s: %s\n%s", module, err, traceback.format_exc()
+        "APIError in %s: %s\n%s", module, err, traceback.format_exc()
     )
     return err.to_dict(), err.status_code
 
@@ -47,7 +47,7 @@ def handle_werkzeug_error(err: HTTPException) -> tuple[JsonDict, int]:
     """
     module = get_caller()
     logging.getLogger("campus.common.errors").error(
-        "Werkzeug HTTPException handled in %s: %s\n%s", module, err, traceback.format_exc()
+        "Werkzeug HTTPException in %s: %s\n%s", module, err, traceback.format_exc()
     )
     match err:
         case InternalServerError():
