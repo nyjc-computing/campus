@@ -44,7 +44,7 @@ resources.
 
 - For ease of lookup generalisation, all models must use a consistent ID
   pattern.
-- The design of the ID patter should not depend on features of a specific
+- The design of the ID pattern should not depend on features of a specific
   database or database type.
 
 ### Mirror Campus API operations
@@ -98,11 +98,13 @@ resources.
 from . import (
     circle,
     emailotp,
-    user
+    user,
+    event
 )
 
 __all__ = [
     "circle",
     "emailotp",
-    "user"
+    "user",
+    "event"
 ]
