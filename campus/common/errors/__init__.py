@@ -3,6 +3,10 @@
 API error handling for Campus.
 """
 
+
+import logging
+import traceback
+
 from werkzeug.exceptions import HTTPException, InternalServerError
 
 from .base import APIError, JsonDict
@@ -15,6 +19,9 @@ def handle_api_error(err: APIError) -> tuple[JsonDict, int]:
     This function is used to handle API errors and return
     standardised JSON responses.
     """
+    logging.getLogger("campus.api").error(
+        "APIError handled: %s\n%s", err, traceback.format_exc()
+    )
     return err.to_dict(), err.status_code
 
 
@@ -26,6 +33,9 @@ def handle_werkzeug_error(err: HTTPException) -> tuple[JsonDict, int]:
 
     Reference: https://flask.palletsprojects.com/en/stable/errorhandling/
     """
+    logging.getLogger("campus.api").error(
+        "Werkzeug HTTPException handled: %s\n%s", err, traceback.format_exc()
+    )
     match err:
         case InternalServerError():
             return api_errors.InvalidRequestError().to_dict(), 500
