@@ -27,7 +27,8 @@ def init_app(app: Flask | Blueprint) -> None:
     app.register_blueprint(bp)
 
 # NOTE: AS THE MODEL ONLY DEALS IN DATETIMES, ALL STR <-> DATETIME CONVERSION IS HANDLED HERE!
-# TODO: Is this an antipattern?
+# TODO: This is probably an antipattern. The best solution would be for validate_request_and_extract_json and validate_json_response
+#       to do the type conversion, as it already has the templates anyway.
 
 DATETIME_PARAMS = ["event_time"]
 DATETIME_RETURNS = ["event_time", "created_at"]
