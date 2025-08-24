@@ -10,7 +10,9 @@ import campus_yapper
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
 from campus.common.errors import api_errors
-# from campus.models import event  # Event model to be implemented
+from campus.models import event  # Event model to be implemented
+
+# NOTE: AS THE MODEL ONLY DEALS IN DATETIMES, ALL STR <-> DATETIME CONVERSION IS HANDLED HERE!
 
 bp = Blueprint('events', __name__, url_prefix='/events')
 bp.before_request(authenticate_client)

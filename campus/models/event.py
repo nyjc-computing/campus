@@ -28,7 +28,7 @@ Database schema:
 id: TEXT - EventID, is the primary key
 name: TEXT - name of the event
 venue: TEXT - venue of the event
-time: TIMESTAMPTZ - rfc3339 time
+event_time: TIMESTAMPTZ - time that event starts.
 length: INTEGER - length of event in seconds
 
 created_at: TIMESTAMPTZ - from BaseRecord
@@ -52,7 +52,7 @@ def init_db():
             id TEXT PRIMARY KEY NOT NULL,
             name TEXT NOT NULL,
             venue TEXT NOT NULL,
-            time TIMESTAMPTZ NOT NULL,
+            event_time TIMESTAMPTZ NOT NULL,
             length INTEGER NOT NULL,
             created_at TIMESTAMPTZ NOT NULL
         )
@@ -64,20 +64,19 @@ class EventRecord(BaseRecord, total = True):
     id: EventID
     name: str
     venue: str
-    time: utc_time.datetime
+    event_time: utc_time.datetime
     length: int # time in seconds
     # Also has created_at from BaseRecord.
 
 ### Request body schemas
 
-# In requests that modify events (new, update), allow str | utc_time.datetime for time.
-# Everywhere else, it is ONLY utc_time.datetime.
+# NOTE: THIS MODEL DEALS ONLY WITH DATETIMES. THE FLASK FILE WILL DEAL WITH CONVERSIONS FROM STRING.
 
 class RequestEventInfo(TypedDict):
     """Request body schema for a request with event info as parameters."""
     name: str
     venue: str
-    time: str | utc_time.datetime # rfc3339 time if str
+    event_time: utc_time.datetime # rfc3339 time if str
     length: int # time in seconds
 
 class EventNew(RequestEventInfo, total=True): 
@@ -90,13 +89,6 @@ class EventUpdate(RequestEventInfo, total=False):
     pass
 
 # events.delete and events.get do not need a request body schema as it takes no params.
-
-def coerce_time_datetime(time: str | utc_time.datetime) -> utc_time.datetime:
-    """Coerces time from str | utc_time.datetime to utc_time.datetime"""
-    if isinstance(time, utc_time.datetime):
-        return time
-    else:
-        return utc_time.from_rfc3339(time)
 
 ### Response body schemas
 
@@ -123,7 +115,7 @@ class Event:
             name=fields["name"],
             venue=fields["venue"],
             length=fields["length"],
-            time=coerce_time_datetime(fields["time"])
+            event_time=fields["event_time"]
         )
 
         try:
@@ -165,9 +157,6 @@ class Event:
     def update(self, event_id: EventID, **updates: Unpack[EventUpdate]) -> None:
         """Update an event by id."""
         # Check if user exists first
-
-        if "time" in updates:
-            updates["time"] = coerce_time_datetime(updates["time"])
 
         self._try_get(event_id) # Make sure it exists.
         try:
