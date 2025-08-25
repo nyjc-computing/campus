@@ -21,6 +21,7 @@ from campus.client.errors import (
     NotFoundError,
     ValidationError,
     NetworkError,
+    MalformedResponseError,
 )
 from campus.client import config
 
@@ -160,21 +161,19 @@ class HttpClient:
         url = urljoin(self.base_url, path.lstrip('/'))
         headers = self._get_headers()
 
-        # Instead of requests.request(...), create a Request object
-        # for now for easier introspection during debugging
-        req = requests.Request(
-            method=method,
-            url=url,
-            headers=headers,
-            json=data,
-            params=params
-        )
-        prepped = req.prepare()
         try:
             with requests.Session() as session:
-                response = session.send(prepped, timeout=30)
-
-            # Handle HTTP status codes
+                response = session.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    params=params,
+                    timeout=30
+                )
+        except requests.RequestException as e:
+            raise NetworkError(f"Network request failed: {e}") from e
+        else:
             match response.status_code:
                 case 400:
                     raise ValidationError(response.json())
@@ -191,14 +190,15 @@ class HttpClient:
                         raise NetworkError(f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
+            if not response.content or response.content.strip() == b'':
+                # Genuine empty response (no content)
+                return {}
             try:
                 return response.json()
-            except json.JSONDecodeError:
-                # Some endpoints might return empty responses
-                return {}
+            except json.JSONDecodeError as e:
+                # Response is not valid JSON
+                raise MalformedResponseError("Invalid JSON response") from e
 
-        except requests.RequestException as e:
-            raise NetworkError(f"Network request failed: {e}")
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a GET request.

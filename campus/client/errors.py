@@ -37,3 +37,8 @@ class ValidationError(CampusClientError):
 class NetworkError(CampusClientError):
     """Raised when network communication fails."""
     pass
+
+
+class MalformedResponseError(CampusClientError):
+    """Raised when the API response is malformed."""
+    pass
