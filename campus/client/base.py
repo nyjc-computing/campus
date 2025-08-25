@@ -170,8 +170,9 @@ class HttpClient:
                     params=params,
                     timeout=30
                 )
-
-            # Handle HTTP status codes
+        except requests.RequestException as e:
+            raise NetworkError(f"Network request failed: {e}")
+        else:
             match response.status_code:
                 case 400:
                     raise ValidationError(response.json())
@@ -194,8 +195,6 @@ class HttpClient:
                 # Some endpoints might return empty responses
                 return {}
 
-        except requests.RequestException as e:
-            raise NetworkError(f"Network request failed: {e}")
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a GET request.
