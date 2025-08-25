@@ -49,7 +49,7 @@ class UserUpdate(TypedDict, total=False):
     # Currently nothing for the user to update yet
 
 
-class UserResource(UserNew, BaseRecordDict, TypedDict, total=True):
+class UserResourceDict(UserNew, BaseRecordDict, TypedDict, total=True):
     """Response body schema representing the result of a users.get operation."""
     activated_at: NotRequired[utc_time.datetime]
 
@@ -75,7 +75,7 @@ class User:
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
 
-    def new(self, **fields: Unpack[UserNew]) -> UserResource:
+    def new(self, **fields: Unpack[UserNew]) -> UserResourceDict:
         """Create a new user."""
         user_id = uid.generate_user_uid(fields["email"])
         record = dict(
@@ -109,7 +109,7 @@ class User:
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
 
-    def get(self, user_id: str) -> UserResource:
+    def get(self, user_id: str) -> UserResourceDict:
         """Get a user by id."""
         try:
             user = self.storage.get_by_id(user_id)

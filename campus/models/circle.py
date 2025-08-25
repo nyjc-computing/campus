@@ -122,7 +122,7 @@ class CircleUpdate(TypedDict, total=False):
     # tag cannot be updated once created
 
 
-class CircleRecord(BaseRecordDict):
+class CircleRecordDict(BaseRecordDict):
     """The circle record stored in the circle collection."""
     name: str
     description: NotRequired[str]
@@ -130,7 +130,7 @@ class CircleRecord(BaseRecordDict):
     members: dict[CircleID, AccessValue]
 
 
-class CircleResource(CircleRecord, total=False):
+class CircleResource(CircleRecordDict, total=False):
     """Response body schema representing the result of a circles.get operation."""
     # TODO: store ancestry tree
     # ancestry: CircleTree
@@ -199,7 +199,7 @@ def update_circle_meta(update: dict) -> None:
         raise api_errors.InternalError.from_exception(e) from e
 
 
-def get_root_circle() -> "CircleRecord":
+def get_root_circle() -> "CircleRecordDict":
     """Get the root circle."""
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
@@ -359,7 +359,7 @@ class Circle:
                 id=fields["tag"]
             )
         circle_id = CampusID(uid.generate_category_uid("circle", length=8))
-        record = CircleRecord(
+        record = CircleRecordDict(
             id=circle_id,
             created_at=utc_time.now(),
             name=fields["name"],

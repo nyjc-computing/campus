@@ -134,7 +134,7 @@ def new_user() -> flask_validation.JsonResponse:
     )
     resource = users.new(**payload)
     flask_validation.validate_json_response(
-        user.UserResource.__annotations__,
+        user.UserResourceDict.__annotations__,
         resource,
         on_error=api_errors.raise_api_error,
     )
@@ -231,7 +231,7 @@ def get_user(user_id: str) -> flask_validation.JsonResponse:
     summary['profile'] = record
     flask_validation.validate_json_response(
         summary,
-        user.UserResource.__annotations__,
+        user.UserResourceDict.__annotations__,
         on_error = api_errors.raise_api_error
     )
     # future calls for other user info go here
@@ -335,7 +335,7 @@ def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
     """
     resource= users.get(user_id)
     flask_validation.validate_json_response(
-        user.UserResource.__annotations__,
+        user.UserResourceDict.__annotations__,
         resource,
         on_error = api_errors.raise_api_error,
     )
