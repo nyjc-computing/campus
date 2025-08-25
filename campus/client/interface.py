@@ -9,10 +9,10 @@ This interface is designed to:
 - so aa to enable WSGI hooks or unit testing with a local WSGI app.
 """
 
-from collections.abc import Mapping, Protocol, runtime_checkable
-from typing import Any, Optional
+from collections.abc import Mapping
+from typing import Any, Protocol, runtime_checkable
 
-Headers = Mapping[str, str]
+Header = Mapping[str, str]
 
 
 @runtime_checkable
