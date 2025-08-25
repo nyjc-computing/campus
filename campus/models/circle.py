@@ -14,8 +14,8 @@ Main operations:
 """
 
 from collections.abc import Iterator, Mapping
-from dataclasses import asdict, dataclass, field
-from typing import NotRequired, TypedDict, Unpack
+from dataclasses import dataclass, field
+from typing import Any, NotRequired, TypedDict, Unpack
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
@@ -355,6 +355,21 @@ class Circle:
     def __init__(self):
         """Initialize the Circle model with a storage interface."""
         self.storage = get_collection(COLLECTION)
+
+    def list(self, **filters: Any) -> list[CircleRecord]:
+        """List all circles in the circle collection.
+
+        Keyword arguments are used to filter the results.
+
+        Args:
+            **filters: Keyword arguments to filter the circles.
+        """
+        try:
+            records = self.storage.get_matching(filters)
+        except storage_errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        else:
+            return [CircleRecord(**record) for record in records]
 
     def new(self, **fields: Unpack[CircleNew]) -> CircleResource:
         """This creates a new circle and adds it to the circle collection.
