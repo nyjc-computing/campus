@@ -14,13 +14,14 @@ Main operations:
 """
 
 from collections.abc import Iterator, Mapping
+from dataclasses import asdict, dataclass, field
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.models.base import BaseRecordDict
+from campus.models.base import BaseRecord, BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_collection
@@ -137,6 +138,15 @@ class CircleResource(CircleRecordDict, total=False):
     sources: dict  # SourceID, SourceHeader
 
 
+@dataclass(eq=False, kw_only=True)
+class CircleRecord(BaseRecord):
+    """Dataclass representation of a circle record."""
+    name: str
+    description: str = ""
+    tag: CircleTag
+    members: dict[CircleID, AccessValue] = field(default_factory=dict)
+
+
 class CircleMemberRemove(TypedDict):
     """Request body schema for a circles.members.remove operation"""
     member_id: CircleID
@@ -219,7 +229,7 @@ def get_tree_root() -> "CircleTree":
             id=DOMAIN
         )
     tree_root = circle_meta[circle_meta["root"]]
-    return TypedDict("CircleTree", tree_root)  # type: ignore
+    return tree_root
 
 
 def get_address_tree() -> "CircleAddressTree":
