@@ -20,7 +20,7 @@ from campus.common.errors import api_errors
 from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_collection
@@ -122,7 +122,7 @@ class CircleUpdate(TypedDict, total=False):
     # tag cannot be updated once created
 
 
-class CircleRecord(BaseRecord):
+class CircleRecord(BaseRecordDict):
     """The circle record stored in the circle collection."""
     name: str
     description: NotRequired[str]

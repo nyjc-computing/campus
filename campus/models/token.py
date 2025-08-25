@@ -23,7 +23,7 @@ from campus.common import devops
 from campus.common.errors import api_errors
 from campus.common.utils import secret, uid, utc_time
 from campus.common.schema import CampusID, UserID
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_table
@@ -57,7 +57,7 @@ def init_db():
     storage.init_table(schema)
 
 
-class TokenRecord(BaseRecord):
+class TokenRecord(BaseRecordDict):
     """Schema for a full token record."""
     expires_at: str
     client_id: CampusID

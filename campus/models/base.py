@@ -9,7 +9,7 @@ from campus.common.schema import CampusID, UserID
 from campus.common.utils import utc_time
 
 
-class BaseRecord(TypedDict):
+class BaseRecordDict(TypedDict):
     """Base class for all records in the Campus system.
 
     Records are Mapping objects that represent a single record in the database.

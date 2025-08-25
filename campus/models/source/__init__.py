@@ -13,7 +13,7 @@ Main operations:
 
 from typing import NotRequired, TypedDict, Unpack
 
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
@@ -35,7 +35,7 @@ def init_db():
     pass
 
 
-class SourceRecord(BaseRecord, total=False):
+class SourceRecord(BaseRecordDict, total=False):
     """Schema for a source record in the sources collection."""
     type: str  # Source type (integration.type)
     external_id: str  # Unique ID used by the external platform

@@ -17,7 +17,7 @@ from campus.common.utils import (
     utc_time,
 )
 import campus.common.validation.record as record_validation
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_collection
@@ -26,7 +26,7 @@ from campus.storage import (
 COLLECTION = "sessions"
 
 
-class SessionRecord(BaseRecord):
+class SessionRecord(BaseRecordDict):
     """Schema for a full session record."""
     expires_at: str
     scopes: NotRequired[list[str]]
