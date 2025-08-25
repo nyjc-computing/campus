@@ -26,8 +26,13 @@ def init_app(app: Flask | Blueprint) -> None:
 
 @bp.get('/')
 def list_circles() -> flask_validation.JsonResponse:
-    """List all circles (not yet implemented)."""
-    return {"message": "List circles not implemented"}, 501
+    """List all circles matching filter requirements."""
+    filters = flask_validation.validate_request_and_extract_json(
+        circle.CircleRecordDict.__annotations__,
+        on_error=api_errors.raise_api_error,
+    ) or {}
+    result = circles.list(**filters)
+    return {"data": [circle.to_dict() for circle in result]}, 200
 
 @bp.post('/')
 def new_circle(*_: str) -> flask_validation.JsonResponse:
