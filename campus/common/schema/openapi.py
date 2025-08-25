@@ -10,7 +10,7 @@ compatibility with schema validation.
 See: https://swagger.io/specification/v3/#data-types
 """
 
-from typing import Any
+from typing import Any, Self, Type
 
 from campus.common.utils import utc_time
 
@@ -86,6 +86,16 @@ class DateTime(String):
 
     def __str__(self) -> str:
         return str(self)
+
+    @classmethod
+    def from_datetime(cls: Type[Self], dt: utc_time.datetime) -> Self:
+        """Create a DateTime string from a UTC datetime object."""
+        return cls(utc_time.to_rfc3339(dt))
+    
+    @classmethod
+    def utcnow(cls: Type[Self]) -> Self:
+        """Get the current UTC time as a DateTime string."""
+        return cls(utc_time.to_rfc3339(utc_time.now()))
 
     def to_datetime(self) -> utc_time.datetime:
         """Convert the DateTime string to a UTC datetime object."""
