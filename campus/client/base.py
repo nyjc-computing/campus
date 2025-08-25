@@ -160,19 +160,16 @@ class HttpClient:
         url = urljoin(self.base_url, path.lstrip('/'))
         headers = self._get_headers()
 
-        # Instead of requests.request(...), create a Request object
-        # for now for easier introspection during debugging
-        req = requests.Request(
-            method=method,
-            url=url,
-            headers=headers,
-            json=data,
-            params=params
-        )
-        prepped = req.prepare()
         try:
             with requests.Session() as session:
-                response = session.send(prepped, timeout=30)
+                response = session.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    params=params,
+                    timeout=30
+                )
 
             # Handle HTTP status codes
             match response.status_code:
