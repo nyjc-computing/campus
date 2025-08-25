@@ -4,7 +4,7 @@ Base types and classes for all Campus models.
 """
 
 from dataclasses import asdict, dataclass, field
-from typing import Self, Type, TypedDict
+from typing import Any, Self, Type, TypedDict
 
 from campus.common.schema import CampusID, DateTime, UserID
 from campus.common.utils import utc_time
@@ -36,7 +36,7 @@ class BaseRecord:
         """Create a record from a dictionary."""
         return cls(**data)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert the record to a dictionary."""
         return asdict(self)
 
