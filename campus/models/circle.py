@@ -14,13 +14,14 @@ Main operations:
 """
 
 from collections.abc import Iterator, Mapping
-from typing import NotRequired, TypedDict, Unpack
+from dataclasses import dataclass, field
+from typing import Any, NotRequired, TypedDict, Unpack
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecord, BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_collection
@@ -122,7 +123,7 @@ class CircleUpdate(TypedDict, total=False):
     # tag cannot be updated once created
 
 
-class CircleRecord(BaseRecord):
+class CircleRecordDict(BaseRecordDict):
     """The circle record stored in the circle collection."""
     name: str
     description: NotRequired[str]
@@ -130,11 +131,20 @@ class CircleRecord(BaseRecord):
     members: dict[CircleID, AccessValue]
 
 
-class CircleResource(CircleRecord, total=False):
+class CircleResource(CircleRecordDict, total=False):
     """Response body schema representing the result of a circles.get operation."""
     # TODO: store ancestry tree
     # ancestry: CircleTree
     sources: dict  # SourceID, SourceHeader
+
+
+@dataclass(eq=False, kw_only=True)
+class CircleRecord(BaseRecord):
+    """Dataclass representation of a circle record."""
+    name: str
+    description: str = ""
+    tag: CircleTag
+    members: dict[CircleID, AccessValue] = field(default_factory=dict)
 
 
 class CircleMemberRemove(TypedDict):
@@ -199,7 +209,7 @@ def update_circle_meta(update: dict) -> None:
         raise api_errors.InternalError.from_exception(e) from e
 
 
-def get_root_circle() -> "CircleRecord":
+def get_root_circle() -> "CircleRecordDict":
     """Get the root circle."""
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
@@ -219,7 +229,7 @@ def get_tree_root() -> "CircleTree":
             id=DOMAIN
         )
     tree_root = circle_meta[circle_meta["root"]]
-    return TypedDict("CircleTree", tree_root)  # type: ignore
+    return tree_root
 
 
 def get_address_tree() -> "CircleAddressTree":
@@ -346,6 +356,21 @@ class Circle:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_collection(COLLECTION)
 
+    def list(self, **filters: Any) -> list[CircleRecord]:
+        """List all circles in the circle collection.
+
+        Keyword arguments are used to filter the results.
+
+        Args:
+            **filters: Keyword arguments to filter the circles.
+        """
+        try:
+            records = self.storage.get_matching(filters)
+        except storage_errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        else:
+            return [CircleRecord(**record) for record in records]
+
     def new(self, **fields: Unpack[CircleNew]) -> CircleResource:
         """This creates a new circle and adds it to the circle collection.
 
@@ -359,7 +384,7 @@ class Circle:
                 id=fields["tag"]
             )
         circle_id = CampusID(uid.generate_category_uid("circle", length=8))
-        record = CircleRecord(
+        record = CircleRecordDict(
             id=circle_id,
             created_at=utc_time.now(),
             name=fields["name"],

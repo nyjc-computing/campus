@@ -14,7 +14,7 @@ import bcrypt
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_table,
@@ -110,7 +110,7 @@ class OTPVerify(OTPRequest, total=True):
     otp: str
 
 
-class OTPRecord(OTPRequest, BaseRecord, total=True):
+class OTPRecord(OTPRequest, BaseRecordDict, total=True):
     """Schema for a complete OTP record.
     Currently unused in the API, provided for documentation purpose.
     """
