@@ -174,17 +174,17 @@ def get_circle_meta() -> dict:
     storage = get_collection(COLLECTION)
     try:
         circle_metas = storage.get_matching({"@meta": True})
-        if not circle_metas:
-            raise api_errors.NotFoundError(
-                message=f"Circle meta record not found in collection {COLLECTION}",
-                id=DOMAIN
-            )
-        assert len(circle_metas) == 1, (
-            circle_metas, "Expected exactly one circle meta record"
-        )
-        return circle_metas[0]
     except Exception as e:
         raise api_errors.InternalError.from_exception(e) from e
+    if not circle_metas:
+        raise api_errors.NotFoundError(
+            message=f"Circle meta record not found in collection {COLLECTION}",
+            id=DOMAIN
+        )
+    assert len(circle_metas) == 1, (
+        circle_metas, "Expected exactly one circle meta record"
+    )
+    return circle_metas[0]
 
 
 def update_circle_meta(update: dict) -> None:
