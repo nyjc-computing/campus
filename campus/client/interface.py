@@ -9,12 +9,13 @@ This interface is designed to:
 - so aa to enable WSGI hooks or unit testing with a local WSGI app.
 """
 
-from collections.abc import Mapping, Protocol
+from collections.abc import Mapping, Protocol, runtime_checkable
 from typing import Any, Optional
 
 Headers = Mapping[str, str]
 
 
+@runtime_checkable
 class HttpResponse(Protocol):
 
     @property
@@ -29,6 +30,7 @@ class HttpResponse(Protocol):
     def json(self) -> Any: ...
 
 
+@runtime_checkable
 class HttpClient(Protocol):
 
     def get(self, path: str, headers: Header | None = None) -> HttpResponse: ...
