@@ -21,6 +21,7 @@ from campus.client.errors import (
     NotFoundError,
     ValidationError,
     NetworkError,
+    MalformedResponseError,
 )
 from campus.client import config
 
@@ -189,11 +190,14 @@ class HttpClient:
                         raise NetworkError(f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
+            if not response.content or response.content.strip() == b'':
+                # Genuine empty response (no content)
+                return {}
             try:
                 return response.json()
             except json.JSONDecodeError:
-                # Some endpoints might return empty responses
-                return {}
+                # Response is not valid JSON
+                raise MalformedResponseError("Invalid JSON response")
 
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
