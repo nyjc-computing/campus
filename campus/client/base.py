@@ -172,7 +172,7 @@ class HttpClient:
                     timeout=30
                 )
         except requests.RequestException as e:
-            raise NetworkError(f"Network request failed: {e}")
+            raise NetworkError(f"Network request failed: {e}") from e
         else:
             match response.status_code:
                 case 400:
@@ -195,9 +195,9 @@ class HttpClient:
                 return {}
             try:
                 return response.json()
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
                 # Response is not valid JSON
-                raise MalformedResponseError("Invalid JSON response")
+                raise MalformedResponseError("Invalid JSON response") from e
 
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
