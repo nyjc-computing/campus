@@ -233,6 +233,18 @@ class CirclesClient(HttpClient):
         """
         return Circle(self, circle_id)
 
+    def list(self, **filters: Any) -> list[dict[str, Any]]:
+        """Return a list of matching circles.
+
+        Args:
+            **filters: Optional filters to apply (e.g., name, tag)
+
+        Returns:
+            list[dict[str, Any]]: A list of matching circle data
+        """
+        response = self.get("/circles", params=filters)
+        return response.get("data", [])
+
     def new(self, *, name: str, description: str = "", **kwargs) -> Dict[str, Any]:
         """Create a new circle.
 
@@ -261,16 +273,4 @@ class CirclesClient(HttpClient):
             Dict[str, Any]: The updated circle data
         """
         response = self.patch(f"/circles/{circle_id}", kwargs)
-        return response.get("circle", response)
-
-    def get_circle(self, circle_id: str) -> Dict[str, Any]:
-        """Get a circle by ID.
-
-        Args:
-            circle_id: The circle ID
-
-        Returns:
-            Dict[str, Any]: The circle data
-        """
-        response = self.get(f"/circles/{circle_id}")
         return response.get("circle", response)
