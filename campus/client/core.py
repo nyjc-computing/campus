@@ -24,22 +24,34 @@ class Campus:
     See the API Reference for usage examples.
     """
 
-    def __init__(self, client_factory: ClientFactory):
+    def __init__(
+            self,
+            client_factory: ClientFactory,
+            **client_factories: ClientFactory
+    ):
         """Initialize unified Campus client with all service clients.
 
         Credentials are automatically loaded from CLIENT_ID and CLIENT_SECRET
         environment variables. All service clients will be properly authenticated
         if these environment variables are set.
         """
-        self.vault = VaultResource(client_factory)
-        self.users = UsersResource(client_factory)
-        self.circles = CirclesResource(client_factory)
-        self.admin = AdminResource(client_factory)
+        self.vault = VaultResource(
+            client_factories.get("vault", client_factory)(), "vault"
+        )
+        self.users = UsersResource(
+            client_factories.get("users", client_factory)(), "users"
+        )
+        self.circles = CirclesResource(
+            client_factories.get("circles", client_factory)(), "circles"
+        )
+        self.admin = AdminResource(
+            client_factories.get("admin", client_factory)(), "admin"
+        )
         logging.debug(
             'Campus client instantiated in %s environment',
             os.getenv("ENV", "MISSING")
         )
-        logging.debug('Vault client base_url: %s', self.vault.base_url)
-        logging.debug('Users client base_url: %s', self.users.base_url)
-        logging.debug('Circles client base_url: %s', self.circles.base_url)
-        logging.debug('Admin client base_url: %s', self.admin._client.base_url)
+        logging.debug('Vault base_url: %s', self.vault.client.base_url)
+        logging.debug('Users base_url: %s', self.users.client.base_url)
+        logging.debug('Circles base_url: %s', self.circles.client.base_url)
+        logging.debug('Admin base_url: %s', self.admin.client.base_url)

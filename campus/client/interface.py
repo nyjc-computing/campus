@@ -51,6 +51,7 @@ class JsonClient(Protocol):
     """This class describes the public interface required from Client classes,
     which are used to send JSON requests.
     """
+    base_url: str
 
     def get(self: Self, path: str, params: JsonDict | None = None) -> JsonResponse:
         """Sends a GET request."""
