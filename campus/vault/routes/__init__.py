@@ -13,7 +13,7 @@ authentication decorators.
 
 from .vault import init_app as init_vault_routes
 from .access import init_app as init_access_routes  
-from .client import init_app as init_client_routes
+from .clients import init_app as init_client_routes
 
 __all__ = [
     "init_vault_routes",

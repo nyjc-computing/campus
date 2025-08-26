@@ -18,7 +18,7 @@ bp = Blueprint('access', __name__, url_prefix='/access')
 @bp.route("/<label>", methods=["POST"])
 @require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
-def grant_vault_access(client_id, label):
+def grant_vault_access(label):
     """Grant access to a vault for a client
 
     POST /access/{vault_label}
@@ -85,7 +85,7 @@ def grant_vault_access(client_id, label):
 @bp.route("/<label>", methods=["DELETE"])
 @require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
-def revoke_vault_access(client_id, label):
+def revoke_vault_access(label):
     """Revoke access to a vault for a client
 
     DELETE /access/{vault_label}?client_id={client_id}
@@ -115,7 +115,7 @@ def revoke_vault_access(client_id, label):
 @bp.route("/<label>", methods=["GET"])
 @require_client_authentication()
 @require_vault_permission(access.READ)
-def get_vault_access(client_id, label):
+def get_vault_access(label):
     """Check if a client has access to a vault
 
     GET /access/{vault_label}?client_id={client_id}

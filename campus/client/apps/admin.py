@@ -3,23 +3,20 @@
 Admin management client for Campus API /admin endpoints.
 """
 
-from typing import Dict, Any
-from campus.client.base import HttpClient
-from campus.client import config
+from campus.client.base import JsonResponse, Resource
 
-class AdminClient:
-    """Client for Campus /admin endpoints."""
-    def __init__(self, base_url: str | None = None):
-        self._client = HttpClient(base_url or config.get_apps_base_url())
 
-    def status(self) -> Dict[str, Any]:
+class AdminResource(Resource):
+    """Resource for Campus /admin endpoint."""
+
+    def status(self) -> JsonResponse:
         """GET /admin/status - Get admin status info."""
-        return self._client.get("/admin/status")
+        return self.client.get(self.make_path("status"))
 
-    def init_db(self) -> Dict[str, Any]:
+    def init_db(self) -> JsonResponse:
         """POST /admin/init-db - Initialise the database."""
-        return self._client.post("/admin/init-db", data={})
+        return self.client.post(self.make_path("init-db"), json={})
 
-    def purge_db(self) -> Dict[str, Any]:
+    def purge_db(self) -> JsonResponse:
         """POST /admin/purge-db - Purge the database."""
-        return self._client.post("/admin/purge-db", data={})
+        return self.client.post(self.make_path("purge-db"), json={})
