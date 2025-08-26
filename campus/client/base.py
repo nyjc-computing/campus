@@ -7,8 +7,8 @@ that are shared across all service clients using composition pattern.
 """
 
 import os
-import json
-from typing import Optional, Dict, Any
+
+from typing import Any, Literal, Optional, TypedDict
 from urllib.parse import urljoin
 
 import requests
@@ -17,44 +17,114 @@ from campus.common.utils import secret
 from campus.client import config
 from campus.client.errors import (
     AuthenticationError,
-    AccessDeniedError,
-    ConflictError,
-    NotFoundError,
-    ValidationError,
     NetworkError,
-    MalformedResponseError,
 )
-from campus.client.interface import BaseClient, BaseResponse
+from campus.client.interface import JsonClient, JsonResponse
 
 
-class HttpClient:
-    """HTTP client for Campus service communication.
+ClientHeader = dict[str, str]
 
-    Provides common functionality including authentication, HTTP request
-    handling, and error management. Used via composition by service-specific
-    clients.
+
+class BasicCredentials(TypedDict):
+    """Client credentials for authentication."""
+    client_id: str
+    client_secret: str
+
+
+class BearerCredentials(TypedDict):
+    """Client credentials for authentication."""
+    access_token: str
+
+
+def check_env_var(var_name: str) -> str:
+    """Check if an environment variable is set and return its value.
+
+    Args:
+        var_name: The name of the environment variable to check.
+
+    Raises:
+        AuthenticationError: If the environment variable is not set.
     """
+    value = os.getenv(var_name)
+    if not value:
+        raise AuthenticationError(f"Missing {var_name} environment variable")
+    return value
+
+
+class RequestsResponse(JsonResponse):
+    """Response wrapper for requests package, to conform to JsonResponse
+    interface.
+    """
+
+    def __init__(self, response: requests.Response):
+        self._response = response
+
+    @property
+    def status(self) -> int:  # pylint: disable=missing-function-docstring
+        return self._response.status_code
+
+    @property
+    def headers(self) -> dict[str, str]:  # pylint: disable=missing-function-docstring
+        # Convert to plain dict[str, str]
+        return {k: v for k, v in self._response.headers.items()}
+
+    @property
+    def text(self) -> str:  # pylint: disable=missing-function-docstring
+        return self._response.text
+
+    def json(self):  # pylint: disable=missing-function-docstring
+        return self._response.json()
+
+
+class RequestsClient(JsonClient):
+    """
+    HTTP client for Campus service communication using the requests package.
+
+    This implementation uses a persistent requests.Session for all HTTP requests,
+    setting authentication and content headers once per credential change. It provides
+    methods for sending HTTP requests and handling authentication automatically.
+    """
+    auth_scheme: Literal["basic", "bearer"]
+    credentials: BasicCredentials | BearerCredentials
+    headers: ClientHeader
 
     def __init__(
             self,
             base_url: Optional[str] = None,
             *,
-            auth_scheme: str = "basic"
+            auth_scheme: Literal["basic", "bearer"] = "basic"
     ):
-        """Initialize base client.
+        """
+        Initialize the RequestsClient.
 
         Args:
-            base_url: Override default base URL for the service
-            auth_scheme: 'basic' or 'bearer' (default: 'basic')
+            base_url: Override default base URL for the service.
+            auth_scheme: 'basic' or 'bearer' (default: 'basic').
+
+        This sets up a persistent requests.Session and loads credentials from the environment.
+        Headers are set once and reused for all requests until credentials change.
         """
         self.base_url = base_url or self._get_default_base_url()
-        self._client_id: Optional[str] = None
-        self._client_secret: Optional[str] = None
-        self._access_token: Optional[str] = None
         self.auth_scheme = auth_scheme
+        self.headers = ClientHeader({
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        })
 
         # Try to load credentials from environment
         self._load_credentials_from_env()
+        # Prepare a persistent session and set default headers
+        self._session = requests.Session()
+        self._update_session_headers()
+
+    def _update_session_headers(self):
+        """
+        Update the session's default headers based on the current credentials and auth scheme.
+        This is called after initialization and whenever credentials are changed.
+        """
+        self._update_credential_headers()
+        self._session.headers.clear()
+        self._session.headers.update(self.headers)
 
     def _get_default_base_url(self) -> str:
         """Get the default base URL for this service.
@@ -70,215 +140,143 @@ class HttpClient:
         return config.get_vault_base_url()
 
     def _load_credentials_from_env(self) -> None:
-        """Load client credentials from environment variables.
-
-        Attempts to load CLIENT_ID and CLIENT_SECRET from environment variables.
         """
-        self._client_id = os.getenv("CLIENT_ID")
-        self._client_secret = os.getenv("CLIENT_SECRET")
+        Load client credentials from environment variables.
 
-    def set_credentials(self, client_id: str, client_secret: str) -> None:
-        """Set client credentials explicitly.
+        Attempts to load ACCESS_TOKEN (for bearer auth) or CLIENT_ID and
+        CLIENT_SECRET (for basic auth) from environment variables, depending on
+        the configured authentication scheme.
+
+        Raises:
+            AuthenticationError: If required environment variables are absent.
+        """
+        match self.auth_scheme:
+            case "basic":
+                self.set_credentials(
+                    client_id=check_env_var("CLIENT_ID"),
+                    client_secret=check_env_var("CLIENT_SECRET")
+                )
+            case "bearer":
+                self.set_credentials(
+                    access_token=check_env_var("ACCESS_TOKEN")
+                )
+
+    def set_credentials(
+        self,
+        *,
+        access_token: str | None = None,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+    ) -> None:
+        """
+        Set client credentials explicitly and update session headers.
 
         Args:
-            client_id: The client ID for authentication
-            client_secret: The client secret for authentication
-        """
-        self._client_id = client_id
-        self._client_secret = client_secret
-        self._access_token = None  # Clear any cached token
+            access_token: The access token for Bearer authentication.
+            client_id: The client ID for authentication.
+            client_secret: The client secret for authentication.
 
-    def _ensure_authenticated(self) -> None:
+        Raises:
+            ValueError: If invalid credentials are provided.
+        """
+        if self.auth_scheme == "bearer":
+            if access_token is None:
+                raise ValueError(
+                    "Access token is required for Bearer authentication"
+                )
+            self.credentials = BearerCredentials(
+                access_token=access_token
+            )
+        elif self.auth_scheme == "basic":
+            if client_id is None or client_secret is None:
+                raise ValueError(
+                    "Both client_id and client_secret are required for "
+                    "Basic authentication"
+                )
+            self.credentials = BasicCredentials(
+                client_id=client_id,
+                client_secret=client_secret
+            )
+        self._update_session_headers()
+
+    def _check_credentials(self) -> None:
         """Ensure the client is authenticated.
 
         Raises:
             AuthenticationError: If no credentials are available
         """
-        if not self._client_id or not self._client_secret:
-            raise AuthenticationError(
-                "No credentials available. Set CLIENT_ID and CLIENT_SECRET "
-                "environment variables or call set_credentials()"
-            )
-
-        # In a real implementation, this would obtain an access token
-        # For now, we'll simulate having authentication
-        if not self._access_token:
-            self._access_token = f"token_for_{self._client_id}"
-
-    def _get_headers(self) -> Dict[str, str]:
-        """Get headers for API requests.
-
-        Returns:
-            Dict[str, str]: Headers including authorization and content type
-        """
-        self._ensure_authenticated()
-        if self.auth_scheme == "basic":
-            if not self._client_id or not self._client_secret:
-                raise AuthenticationError(
-                    "Client ID and secret must be set for Basic auth"
-                )
-            return {
-                "Authorization": secret.encode_http_basic_auth(
-                    self._client_id,
-                    self._client_secret
-                ),
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-        elif self.auth_scheme == "bearer":
-            return {
-                "Authorization": f"Bearer {self._access_token}",
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
+        if self.auth_scheme == "bearer" and self.credentials.get("access_token"):
+            pass
+        elif (
+                self.auth_scheme == "basic" and
+                self.credentials.get("client_id")
+                and self.credentials.get("client_secret")
+        ):
+            pass
         else:
-            raise ValueError("Unknown authentication scheme")
+            raise AuthenticationError("Client has no credentials.")
+
+    def _update_credential_headers(self) -> None:
+        """Update headers with credentials for API requests."""
+        self._check_credentials()
+        match self.auth_scheme:
+            case "basic":
+                creds = BasicCredentials(self.credentials)  # type: ignore
+                auth_str = secret.encode_http_basic_auth(
+                    creds["client_id"],
+                    creds["client_secret"]
+                )
+            case "bearer":
+                creds = BearerCredentials(self.credentials)  # type: ignore
+                auth_str = f"Bearer {creds['access_token']}"
+            case _:
+                raise ValueError("Unknown authentication scheme")
+        self.headers["Authorization"] = auth_str
 
     def _make_request(
-        self,
-        method: str,
-        path: str,
-        data: Optional[Dict[str, Any]] = None,
-        params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Make an HTTP request to the service.
+            self,
+            method: str,
+            path: str,
+            json: Any = None,
+    ) -> RequestsResponse:
+        """
+        Make an HTTP request using the persistent session.
 
         Args:
-            method: HTTP method (GET, POST, PUT, DELETE)
-            path: API path (will be joined with base_url)
-            data: Request body data (for POST/PUT)
-            params: Query parameters
+            method: HTTP method (GET, POST, PUT, PATCH, DELETE).
+            path: API path (will be joined with base_url).
+            json: Optional JSON body for the request.
 
         Returns:
-            Parsed JSON response
+            RequestsResponse: A response wrapper object.
 
         Raises:
-            AuthenticationError: If authentication fails
-            AccessDeniedError: If access is denied
-            NotFoundError: If resource is not found
-            ValidationError: If request validation fails
-            NetworkError: If network request fails
+            NetworkError: If the network request fails.
         """
         url = urljoin(self.base_url, path.lstrip('/'))
-        headers = self._get_headers()
-
         try:
-            with requests.Session() as session:
-                response = session.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    json=data,
-                    params=params,
-                    timeout=30
-                )
+            response = self._session.request(
+                method=method,
+                url=url,
+                json=json,
+                timeout=30
+            )
         except requests.RequestException as e:
             raise NetworkError(f"Network request failed: {e}") from e
         else:
-            match response.status_code:
-                case 400:
-                    raise ValidationError(response.json())
-                case 401:
-                    raise AuthenticationError(response.json())
-                case 403:
-                    raise AccessDeniedError(response.json())
-                case 404:
-                    raise NotFoundError(response.json())
-                case 409:
-                    raise ConflictError(response.json())
-                case _:
-                    if not response.ok:
-                        raise NetworkError(f"HTTP {response.status_code}: {response.text}")
+            return RequestsResponse(response)
 
-            # Parse JSON response
-            if not response.content or response.content.strip() == b'':
-                # Genuine empty response (no content)
-                return {}
-            try:
-                return response.json()
-            except json.JSONDecodeError as e:
-                # Response is not valid JSON
-                raise MalformedResponseError("Invalid JSON response") from e
+    def get(self, path: str) -> JsonResponse:
+        return self._make_request("GET", path)
 
+    def post(self, path: str, json: Any = None) -> JsonResponse:
+        return self._make_request("POST", path, json=json)
 
-    def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Make a GET request.
+    def put(self, path: str, json: Any = None) -> JsonResponse:
+        return self._make_request("PUT", path, json=json)
 
-        Args:
-            path: API path to request
-            params: Optional query parameters
+    def patch(self, path: str, json: Any = None) -> JsonResponse:
+        return self._make_request("PATCH", path, json=json)
 
-        Returns:
-            Dict[str, Any]: Parsed JSON response
-        """
-        return self._make_request("GET", path, params=params)
-
-    def post(
-            self,
-            path: str,
-            data: Dict[str, Any],
-            params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Make a POST request.
-
-        Args:
-            path: API path to request
-            data: Request body data
-            params: Optional query parameters
-
-        Returns:
-            Dict[str, Any]: Parsed JSON response
-        """
-        return self._make_request("POST", path, data=data, params=params)
-
-    def put(
-            self,
-            path: str,
-            data: Dict[str, Any],
-            params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Make a PUT request.
-
-        Args:
-            path: API path to request
-            data: Request body data
-            params: Optional query parameters
-
-        Returns:
-            Dict[str, Any]: Parsed JSON response
-        """
-        return self._make_request("PUT", path, data=data, params=params)
-
-    def patch(
-            self,
-            path: str,
-            data: Dict[str, Any],
-            params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Make a PATCH request.
-
-        Args:
-            path: API path to request
-            data: Request body data
-            params: Optional query parameters
-
-        Returns:
-            Dict[str, Any]: Parsed JSON response
-        """
-        return self._make_request("PATCH", path, data=data, params=params)
-
-    def delete(
-            self,
-            path: str,
-            params: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, Any]:
-        """Make a DELETE request.
-
-        Args:
-            path: API path to request
-            params: Optional query parameters
-
-        Returns:
-            Dict[str, Any]: Parsed JSON response
-        """
-        return self._make_request("DELETE", path, params=params)
+    def delete(self, path: str, json: Any = None) -> JsonResponse:
+        return self._make_request("DELETE", path, json=json)
