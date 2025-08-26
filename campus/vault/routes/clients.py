@@ -6,9 +6,13 @@ These routes handle creating, listing, retrieving, and deleting vault clients.
 Admin operations require ALL permissions, read operations require READ permissions.
 """
 
-from flask import Blueprint, Flask, jsonify, request
+from typing import TypedDict
 
+from flask import Blueprint, Flask
 import campus_yapper
+
+import campus.common.validation.flask as flask_validation
+from campus.common.errors import api_errors
 
 from .. import client
 from ..auth import require_client_authentication
@@ -18,10 +22,27 @@ bp = Blueprint('clients', __name__, url_prefix='/clients')
 yapper = campus_yapper.create()
 
 
-@bp.route("", methods=["POST"])
+def init_app(app: Flask | Blueprint) -> None:
+    """Initialize the client routes with the given Flask app or blueprint."""
+    app.register_blueprint(bp)
+
+
+class VaultClientNew(TypedDict):
+    """Request schema for creating a new vault client."""
+    name: str
+    description: str
+
+
+class AuthenticateClient(TypedDict):
+    """Request schema for authenticating a vault client."""
+    client_id: str
+    client_secret: str
+
+
+@bp.post("/")
 @require_client_authentication()
-def create_vault_client(client_id):
-    """Create a new vault client
+def create_vault_client() -> flask_validation.JsonResponse:
+    """Create a new vault client.
 
     POST /client
     Body: {
@@ -40,34 +61,18 @@ def create_vault_client(client_id):
         "client_secret": "secret_xyz789"
     }
     """
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Missing request body"}), 400
-
-        required_fields = ["name", "description"]
-        missing_fields = [
-            field for field in required_fields if field not in data
-        ]
-        if missing_fields:
-            return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
-        # Create the client
-        client_resource, client_secret = client.create_client(
-            name=data["name"],
-            description=data["description"]
-        )
-        return jsonify({
-            "status": "success",
-            "client": client_resource,
-            "client_secret": client_secret
-        }), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    payload = flask_validation.validate_request_and_extract_json(
+        VaultClientNew.__annotations__,
+        on_error=api_errors.raise_api_error
+    )
+    # Create the client
+    client_resource = client.create_client(**payload)
+    return client_resource, 201
 
 
-@bp.route("", methods=["GET"])
+@bp.get("/")
 @require_client_authentication()
-def list_vault_clients(client_id):
+def list_vault_clients() -> flask_validation.JsonResponse:
     """List all vault clients
 
     GET /client
@@ -82,17 +87,13 @@ def list_vault_clients(client_id):
         ]
     }
     """
-    try:
-        clients = client.list_clients()
-        return jsonify({"clients": clients})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    clients = client.list_clients()
+    return {"clients": clients}, 200
 
 
 # Authenticate a vault client by client_id and client_secret
 @bp.route("/authenticate", methods=["POST"])
-def authenticate_vault_client():
+def authenticate_vault_client() -> flask_validation.JsonResponse:
     """Authenticate a vault client by client_id and client_secret.
 
     POST /client/authenticate
@@ -100,26 +101,17 @@ def authenticate_vault_client():
 
     Returns: {"status": "success", "client_id": ...} or error JSON
     """
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Missing request body"}), 400
-        client_id = data.get("client_id")
-        client_secret = data.get("client_secret")
-        if not client_id or not client_secret:
-            return jsonify({"error": "Missing client_id or client_secret"}), 400
-        try:
-            client.authenticate_client(client_id, client_secret)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 403
-        return jsonify({"status": "success", "client_id": client_id})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    payload = flask_validation.validate_request_and_extract_json(
+        AuthenticateClient.__annotations__,
+        on_error=api_errors.raise_api_error
+    )
+    client.authenticate_client(**payload)
+    return {"status": "success", "client_id": payload["client_id"]}, 200
 
 
-@bp.route("/<target_client_id>", methods=["GET"])
+@bp.route("/<client_id>", methods=["GET"])
 @require_client_authentication()
-def get_vault_client(client_id, target_client_id):
+def get_vault_client(client_id) -> flask_validation.JsonResponse:
     """Get details of a specific vault client
 
     GET /client/{client_id}
@@ -132,16 +124,13 @@ def get_vault_client(client_id, target_client_id):
         }
     }
     """
-    try:
-        client_resource = client.get_client(target_client_id)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    return jsonify({"client": client_resource})
+    client_resource = client.get_client(client_id)
+    return client_resource, 200
 
 
-@bp.route("/<target_client_id>", methods=["DELETE"])
+@bp.route("/<client_id>", methods=["DELETE"])
 @require_client_authentication()
-def delete_vault_client(client_id, target_client_id):
+def delete_vault_client(client_id) -> flask_validation.JsonResponse:
     """Delete a vault client
 
     DELETE /client/{client_id}
@@ -151,18 +140,6 @@ def delete_vault_client(client_id, target_client_id):
         "action": "deleted"
     }
     """
-    try:
-        client.delete_client(target_client_id)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    else:
-        yapper.emit('campus.clients.delete')
-    return jsonify({
-        "status": "success",
-        "client_id": target_client_id,
-        "action": "deleted"
-    })
-
-def init_app(app: Flask | Blueprint) -> None:
-    """Initialize the client routes with the given Flask app or blueprint."""
-    app.register_blueprint(bp)
+    client.delete_client(client_id)
+    yapper.emit('campus.clients.delete')
+    return {"client_id": client_id, "action": "deleted"}, 200
