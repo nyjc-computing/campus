@@ -11,7 +11,7 @@ This interface is designed to:
 """
 
 from collections.abc import Mapping
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 Header = Mapping[str, str]
 JsonDict = dict[str, Any]
@@ -52,22 +52,22 @@ class JsonClient(Protocol):
     which are used to send JSON requests.
     """
 
-    def get(self, path: str, params: JsonDict | None = None) -> JsonResponse:
+    def get(self: Self, path: str, params: JsonDict | None = None) -> JsonResponse:
         """Sends a GET request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def post(self, path: str, json: JsonDict | None = None) -> JsonResponse:
+    def post(self: Self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a POST request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def put(self, path: str, json: JsonDict | None = None) -> JsonResponse:
+    def put(self: Self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a PUT request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def delete(self, path: str, json: JsonDict | None = None) -> JsonResponse:
+    def delete(self: Self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a DELETE request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def patch(self, path: str, json: Any = None) -> JsonResponse:
+    def patch(self: Self, path: str, json: Any = None) -> JsonResponse:
         """Sends a PATCH request."""
         ...  # pylint: disable=unnecessary-ellipsis

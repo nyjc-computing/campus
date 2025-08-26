@@ -8,7 +8,7 @@ that are shared across all service clients using composition pattern.
 
 import os
 
-from typing import Any, Callable, Literal, Optional, TypedDict
+from typing import Any, Callable, Literal, Optional, Self, TypedDict
 from urllib.parse import urljoin
 
 import requests
@@ -269,19 +269,19 @@ class RequestsClient(JsonClient):
         else:
             return RequestsResponse(response)
 
-    def get(self, path: str, params: JsonDict | None = None) -> JsonResponse:
+    def get(self: Self, path: str, params: JsonDict | None = None) -> JsonResponse:
         return self._make_request("GET", path, params=params)
 
-    def post(self, path: str, json: JsonDict | None = None) -> JsonResponse:
+    def post(self: Self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("POST", path, json=json)
 
-    def put(self, path: str, json: JsonDict | None = None) -> JsonResponse:
+    def put(self: Self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("PUT", path, json=json)
 
-    def patch(self, path: str, json: JsonDict | None = None) -> JsonResponse:
+    def patch(self: Self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("PATCH", path, json=json)
 
-    def delete(self, path: str, json: JsonDict | None = None) -> JsonResponse:
+    def delete(self: Self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("DELETE", path, json=json)
 
 
