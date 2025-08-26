@@ -5,7 +5,8 @@ Interface descriptions for the Campus client interface.
 This interface is designed to:
 - wrap `flask.testing.FlaskClient`
 - wrap most common client interfaces e.g. `requests`
-- provide a common Response interface that wraps `werkzeug.test.TestResponse, `requests.Response`, etc
+- provide a common Response interface that wraps `werkzeug.test.TestResponse,
+  `requests.Response`, etc
 - so aa to enable WSGI hooks or unit testing with a local WSGI app.
 """
 
@@ -13,6 +14,7 @@ from collections.abc import Mapping
 from typing import Any, Protocol, runtime_checkable
 
 Header = Mapping[str, str]
+JsonDict = dict[str, Any]
 
 
 @runtime_checkable
@@ -20,6 +22,9 @@ class JsonResponse(Protocol):
     """This class describes the public interface required from Response
     wrappers for JSON responses.
     """
+
+    def __init__(self, response: Any):
+        self._response = response  # type: ignore
 
     @property
     def status(self) -> int:
@@ -47,19 +52,19 @@ class JsonClient(Protocol):
     which are used to send JSON requests.
     """
 
-    def get(self, path: str) -> JsonResponse:
+    def get(self, path: str, params: JsonDict | None = None) -> JsonResponse:
         """Sends a GET request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def post(self, path: str, json: Any = None) -> JsonResponse:
+    def post(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a POST request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def put(self, path: str, json: Any = None) -> JsonResponse:
+    def put(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a PUT request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def delete(self, path: str, json: Any = None) -> JsonResponse:
+    def delete(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a DELETE request."""
         ...  # pylint: disable=unnecessary-ellipsis
 

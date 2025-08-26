@@ -8,7 +8,7 @@ that are shared across all service clients using composition pattern.
 
 import os
 
-from typing import Any, Literal, Optional, TypedDict
+from typing import Any, Callable, Literal, Optional, TypedDict
 from urllib.parse import urljoin
 
 import requests
@@ -19,9 +19,10 @@ from campus.client.errors import (
     AuthenticationError,
     NetworkError,
 )
-from campus.client.interface import JsonClient, JsonResponse
+from campus.client.interface import JsonClient, JsonDict, JsonResponse
 
 
+ClientFactory = Callable[[], JsonClient]
 ClientHeader = dict[str, str]
 
 
@@ -266,17 +267,17 @@ class RequestsClient(JsonClient):
         else:
             return RequestsResponse(response)
 
-    def get(self, path: str) -> JsonResponse:
-        return self._make_request("GET", path)
+    def get(self, path: str, params: JsonDict | None = None) -> JsonResponse:
+        return self._make_request("GET", path, json=params)
 
-    def post(self, path: str, json: Any = None) -> JsonResponse:
+    def post(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("POST", path, json=json)
 
-    def put(self, path: str, json: Any = None) -> JsonResponse:
+    def put(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("PUT", path, json=json)
 
-    def patch(self, path: str, json: Any = None) -> JsonResponse:
+    def patch(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("PATCH", path, json=json)
 
-    def delete(self, path: str, json: Any = None) -> JsonResponse:
+    def delete(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("DELETE", path, json=json)
