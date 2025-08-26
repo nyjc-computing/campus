@@ -305,7 +305,7 @@ class Resource:
 
     def __repr__(self) -> str:
         return f"Resource(client={self.client}, path={self.path})"
-    
+
     def __str__(self) -> str:
         return self.path
 
