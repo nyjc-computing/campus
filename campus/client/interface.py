@@ -52,22 +52,22 @@ class JsonClient(Protocol):
     which are used to send JSON requests.
     """
 
-    def get(self, path: str = "", params: JsonDict | None = None) -> JsonResponse:
+    def get(self, path: str, params: JsonDict | None = None) -> JsonResponse:
         """Sends a GET request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def post(self, path: str = "", json: JsonDict | None = None) -> JsonResponse:
+    def post(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a POST request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def put(self, path: str = "", json: JsonDict | None = None) -> JsonResponse:
+    def put(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a PUT request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def delete(self, path: str = "", json: JsonDict | None = None) -> JsonResponse:
+    def delete(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         """Sends a DELETE request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
-    def patch(self, path: str = "", json: Any = None) -> JsonResponse:
+    def patch(self, path: str, json: Any = None) -> JsonResponse:
         """Sends a PATCH request."""
         ...  # pylint: disable=unnecessary-ellipsis
