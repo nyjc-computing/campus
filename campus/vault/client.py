@@ -20,7 +20,7 @@ when needed.
 """
 
 
-from typing import TypedDict, NotRequired, Unpack
+from typing import Any, TypedDict, NotRequired, Unpack
 from campus.common.utils import secret, uid, utc_time
 from campus.common import devops
 from campus.common.errors import api_errors
@@ -97,7 +97,7 @@ def init_db():
             cursor.execute(client_schema)
 
 
-def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
+def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
     """Create a new vault client with authentication credentials.
 
     Args:
@@ -118,6 +118,7 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
     record = {
         "id": client_id,
         "created_at": utc_time.now(),
+        "secret": client_secret,
         "secret_hash": secret_hash,
         **fields,
     }
@@ -136,15 +137,17 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
                 fetch_all=False
             )
     except psycopg2.IntegrityError:
-        raise api_errors.ConflictError(message="Client name already exists.")
+        raise api_errors.ConflictError(
+            message="Client name already exists."
+        ) from None
 
     # Return client resource without secret_hash
-    client_resource: ClientResource = {
-        k: v for k, v in record.items() if k != "secret_hash"}  # type: ignore
-    return client_resource, client_secret
+    client_resource = {
+        k: v for k, v in record.items() if k != "secret_hash"}
+    return client_resource
 
 
-def get_client(client_id: str) -> ClientResource:
+def get_client(client_id: str) -> dict[str, Any]:
     """Retrieve a vault client by its ID.
 
     Args:
@@ -163,10 +166,10 @@ def get_client(client_id: str) -> ClientResource:
             (client_id,),
             fetch_one=True
         )
-        if not client_record:
-            raise api_errors.NotFoundError(
-                message=f"Vault client '{client_id}' not found", client_id=client_id)
-        return client_record
+    if not client_record:
+        raise api_errors.NotFoundError(
+            message=f"Vault client '{client_id}' not found", client_id=client_id)
+    return client_record
 
 
 def list_clients() -> list[ClientResource]:
@@ -308,4 +311,6 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
                 fetch_all=False
             )
     except psycopg2.IntegrityError:
-        raise api_errors.ConflictError(message="Client name already exists.")
+        raise api_errors.ConflictError(
+            message="Client name already exists."
+        ) from None
