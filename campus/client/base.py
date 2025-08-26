@@ -14,6 +14,7 @@ from urllib.parse import urljoin
 import requests
 
 from campus.common.utils import secret
+from campus.client import config
 from campus.client.errors import (
     AuthenticationError,
     AccessDeniedError,
@@ -23,7 +24,7 @@ from campus.client.errors import (
     NetworkError,
     MalformedResponseError,
 )
-from campus.client import config
+from campus.client.interface import BaseClient, BaseResponse
 
 
 class HttpClient:

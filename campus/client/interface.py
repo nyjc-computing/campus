@@ -16,7 +16,7 @@ Header = Mapping[str, str]
 
 
 @runtime_checkable
-class HttpResponse(Protocol):
+class BaseResponse(Protocol):
     """This class describes the public interface required from Response
     wrappers.
     """
@@ -42,12 +42,12 @@ class HttpResponse(Protocol):
 
 
 @runtime_checkable
-class HttpClient(Protocol):
+class BaseClient(Protocol):
     """This class describes the public interface required from Client classes,
     which are used to send requests.
     """
 
-    def get(self, path: str, headers: Header | None = None) -> HttpResponse:
+    def get(self, path: str, headers: Header | None = None) -> BaseResponse:
         """Sends a GET request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
@@ -56,7 +56,7 @@ class HttpClient(Protocol):
             path: str,
             json: Any = None,
             headers: Header | None = None
-    ) -> HttpResponse:
+    ) -> BaseResponse:
         """Sends a POST request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
@@ -65,7 +65,7 @@ class HttpClient(Protocol):
             path: str,
             json: Any = None,
             headers: Header | None = None
-    ) -> HttpResponse:
+    ) -> BaseResponse:
         """Sends a PUT request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
@@ -73,7 +73,7 @@ class HttpClient(Protocol):
             self,
             path: str,
             headers: Header | None = None
-    ) -> HttpResponse:
+    ) -> BaseResponse:
         """Sends a DELETE request."""
         ...  # pylint: disable=unnecessary-ellipsis
 
@@ -82,6 +82,6 @@ class HttpClient(Protocol):
             path: str,
             json: Any = None,
             headers: Header | None = None
-    ) -> HttpResponse:
+    ) -> BaseResponse:
         """Sends a PATCH request."""
         ...  # pylint: disable=unnecessary-ellipsis
