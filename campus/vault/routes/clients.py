@@ -1,4 +1,4 @@
-"""campus.vault.routes.client
+"""campus.vault.routes.clients
 
 Flask routes for vault client management.
 
