@@ -5,12 +5,14 @@ This script invokes all Campus client methods, one per line, in a coherent seque
 Uses actual campus.apps and campus.vault create_app() factories instead of mocks.
 """
 
-import campus.vault
-import campus.apps.api
-from tests.test_client import create_test_client_factory, FlaskTestClient, FlaskTestResponse
-from campus.client.core import Campus
 import os
 import sys
+
+import campus.apps.api
+from campus.client.core import Campus
+import campus.vault
+from tests.test_client import create_test_client_factory, FlaskTestClient, FlaskTestResponse
+
 sys.path.insert(0, '/workspaces/campus')
 
 # Set required environment variables for testing
@@ -106,7 +108,9 @@ def execute_method_chain():
     combined_client = setup_real_apps()
 
     # Create client factory
-    def client_factory(): return combined_client
+    def client_factory():
+        return combined_client
+
     campus = Campus(client_factory)
 
     print("\n🚀 Executing all Campus client methods with real Flask apps...")
