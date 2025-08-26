@@ -17,22 +17,45 @@ Header = Mapping[str, str]
 
 @runtime_checkable
 class HttpResponse(Protocol):
+    """This class describes the public interface required from Response
+    wrappers.
+    """
 
     @property
-    def status(self) -> int: ...
+    def status(self) -> int:
+        """HTTP status code of the response."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
     @property
-    def headers(self) -> Mapping[str, str]: ...
+    def headers(self) -> dict[str, str]:
+        """Returns headers of the response as a dict."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
     @property
-    def text(self) -> str: ...
+    def text(self) -> str:
+        """Returns the response body as a string."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
-    def json(self) -> Any: ...
+    def json(self) -> Any:
+        """Returns the response body as JSON."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
 
 @runtime_checkable
 class HttpClient(Protocol):
+    """This class describes the public interface required from Client classes,
+    which are used to send requests.
+    """
 
-    def get(self, path: str, headers: Header | None = None) -> HttpResponse: ...
+    def get(self, path: str, headers: Header | None = None) -> HttpResponse:
+        """Sends a GET request."""
+        ...  # pylint: disable=unnecessary-ellipsis
 
-    def post(self, path: str, json: Any = None, headers: Header | None = None) -> HttpResponse: ...
+    def post(
+            self,
+            path: str,
+            json: Any = None,
+            headers: Header | None = None
+    ) -> HttpResponse:
+        """Sends a POST request."""
+        ...  # pylint: disable=unnecessary-ellipsis
