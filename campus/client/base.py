@@ -283,3 +283,22 @@ class RequestsClient(JsonClient):
 
     def delete(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("DELETE", path, json=json)
+
+
+class Resource:
+    """Resource class that represents API resources"""
+    client: JsonClient
+    path: str
+
+    def __init__(
+            self,
+            client_or_parent: "JsonClient | Resource",
+            *parts: str
+    ):
+        match client_or_parent:
+            case Resource():
+                self.client = client_or_parent.client
+                self.path = f"{client_or_parent.path}/{'/'.join(parts)}"
+            case JsonClient():
+                self.client = client_or_parent
+                self.path = '/'.join(parts)
