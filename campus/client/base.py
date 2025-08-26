@@ -303,6 +303,12 @@ class Resource:
                 self.client = client_or_parent
                 self.path = '/'.join(parts)
 
+    def __repr__(self) -> str:
+        return f"Resource(client={self.client}, path={self.path})"
+    
+    def __str__(self) -> str:
+        return self.path
+
     def make_path(self, path: str) -> str:
         """Create a full path for a sub-resource or action."""
         return f"{self.path}/{path.lstrip('/')}"
