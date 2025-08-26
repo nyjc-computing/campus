@@ -238,6 +238,7 @@ class RequestsClient(JsonClient):
             self,
             method: str,
             path: str,
+            params: Any = None,
             json: Any = None,
     ) -> RequestsResponse:
         """
@@ -259,6 +260,7 @@ class RequestsClient(JsonClient):
             response = self._session.request(
                 method=method,
                 url=url,
+                params=params,
                 json=json,
                 timeout=30
             )
@@ -268,7 +270,7 @@ class RequestsClient(JsonClient):
             return RequestsResponse(response)
 
     def get(self, path: str, params: JsonDict | None = None) -> JsonResponse:
-        return self._make_request("GET", path, json=params)
+        return self._make_request("GET", path, params=params)
 
     def post(self, path: str, json: JsonDict | None = None) -> JsonResponse:
         return self._make_request("POST", path, json=json)
