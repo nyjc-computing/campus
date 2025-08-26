@@ -59,3 +59,29 @@ class HttpClient(Protocol):
     ) -> HttpResponse:
         """Sends a POST request."""
         ...  # pylint: disable=unnecessary-ellipsis
+
+    def put(
+            self,
+            path: str,
+            json: Any = None,
+            headers: Header | None = None
+    ) -> HttpResponse:
+        """Sends a PUT request."""
+        ...  # pylint: disable=unnecessary-ellipsis
+
+    def delete(
+            self,
+            path: str,
+            headers: Header | None = None
+    ) -> HttpResponse:
+        """Sends a DELETE request."""
+        ...  # pylint: disable=unnecessary-ellipsis
+
+    def patch(
+            self,
+            path: str,
+            json: Any = None,
+            headers: Header | None = None
+    ) -> HttpResponse:
+        """Sends a PATCH request."""
+        ...  # pylint: disable=unnecessary-ellipsis
