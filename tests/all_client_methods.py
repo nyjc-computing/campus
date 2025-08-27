@@ -6,6 +6,7 @@ Uses actual campus.apps and campus.vault create_app() factories instead of mocks
 """
 
 import os
+import unittest
 
 from campus.client import Campus
 import campus.apps
@@ -42,125 +43,116 @@ def create_campus_test_api() -> Campus:
             campus.apps.create_app()
         )
     )
-
     campus_client = Campus({
         "campus.apps": apps_client_factory(),
         "campus.vault": vault_client_factory(),
     })
-
     return campus_client
 
 
-def test_all_methods():
-    """Execute all Campus client methods on the test client."""
+class TestCampusClientMethods(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.campus = create_campus_test_api()
 
-    campus = create_campus_test_api()
-    # TODO: use fuzzing to test methods
+    def test_01_admin_status(self):
+        self.campus.admin.status()
 
-    print("\n🚀 Executing all Campus client methods with real Flask apps...")
-    print("=" * 60)
+    def test_02_admin_init_db(self):
+        self.campus.admin.init_db()
 
-    # Method chain - each method on its own line as requested
-    print("1.  campus.admin.status()")
-    campus.admin.status()
+    def test_03_vault_clients_new(self):
+        self.campus.vault.clients.new("Test App", "Test Description")
 
-    print("2.  campus.admin.init_db()")
-    campus.admin.init_db()
+    def test_04_vault_clients_list(self):
+        self.campus.vault.clients.list()
 
-    print("3.  campus.vault.clients.new('Test App', 'Test Description')")
-    campus.vault.clients.new("Test App", "Test Description")
+    def test_05_vault_clients_authenticate(self):
+        self.campus.vault.clients.authenticate("test_client", "test_secret")
 
-    print("4.  campus.vault.clients.list()")
-    campus.vault.clients.list()
+    def test_06_vault_clients_get(self):
+        self.campus.vault.clients.get("test_client")
 
-    print("5.  campus.vault.clients.authenticate('test_client', 'test_secret')")
-    campus.vault.clients.authenticate("test_client", "test_secret")
+    def test_07_vault_access_grant(self):
+        self.campus.vault.access.grant(
+            client_id="test_client", label="apps", permissions=15)
 
-    print("6.  campus.vault.clients.get('test_client')")
-    campus.vault.clients.get("test_client")
+    def test_08_vault_access_check(self):
+        self.campus.vault.access.check(client_id="test_client", label="apps")
 
-    print("7.  campus.vault.access.grant(client_id='test_client', label='apps', permissions=15)")
-    campus.vault.access.grant(client_id="test_client",
-                              label="apps", permissions=15)
+    def test_09_users_new(self):
+        self.campus.users.new(email="alice@example.com", name="Alice")
 
-    print("8.  campus.vault.access.check(client_id='test_client', label='apps')")
-    campus.vault.access.check(client_id="test_client", label="apps")
+    def test_10_users_get(self):
+        self.campus.users["user_1"].get()
 
-    print("9.  campus.users.new(email='alice@example.com', name='Alice')")
-    campus.users.new(email="alice@example.com", name="Alice")
+    def test_11_users_profile(self):
+        self.campus.users["user_1"].profile()
 
-    print("10. campus.users['user_1'].get()")
-    campus.users["user_1"].get()
+    def test_12_users_update(self):
+        self.campus.users["user_1"].update(name="Alice Updated")
 
-    print("11. campus.users['user_1'].profile()")
-    campus.users["user_1"].profile()
+    def test_13_circles_new(self):
+        self.campus.circles.new(
+            name="Dev Team", description="Development team")
 
-    print("12. campus.users['user_1'].update(name='Alice Updated')")
-    campus.users["user_1"].update(name="Alice Updated")
+    def test_14_circles_list(self):
+        self.campus.circles.list()
 
-    print("13. campus.circles.new(name='Dev Team', description='Development team')")
-    campus.circles.new(name="Dev Team", description="Development team")
+    def test_15_circles_get(self):
+        self.campus.circles["circle_1"].get()
 
-    print("14. campus.circles.list()")
-    campus.circles.list()
+    def test_16_circles_update(self):
+        self.campus.circles["circle_1"].update(
+            description="Updated description")
 
-    print("15. campus.circles['circle_1'].get()")
-    campus.circles["circle_1"].get()
+    def test_17_circles_members_list(self):
+        self.campus.circles["circle_1"].members.list()
 
-    print(
-        "16. campus.circles['circle_1'].update(description='Updated description')")
-    campus.circles["circle_1"].update(description="Updated description")
+    def test_18_circles_members_add(self):
+        self.campus.circles["circle_1"].members.add(
+            member_id="user_1", access_value="admin")
 
-    print("17. campus.circles['circle_1'].members.list()")
-    campus.circles["circle_1"].members.list()
+    def test_19_circles_members_set(self):
+        self.campus.circles["circle_1"].members.set(
+            "user_1", access_value="read")
 
-    print(
-        "18. campus.circles['circle_1'].members.add(member_id='user_1', access_value='admin')")
-    campus.circles["circle_1"].members.add(
-        member_id="user_1", access_value="admin")
+    def test_20_circles_members_remove(self):
+        self.campus.circles["circle_1"].members.remove("user_1")
 
-    print(
-        "19. campus.circles['circle_1'].members.set('user_1', access_value='read')")
-    campus.circles["circle_1"].members.set("user_1", access_value="read")
+    def test_21_circles_move(self):
+        self.campus.circles["circle_1"].move(parent_circle_id="parent")
 
-    print("20. campus.circles['circle_1'].members.remove('user_1')")
-    campus.circles["circle_1"].members.remove("user_1")
+    def test_22_vault_list(self):
+        self.campus.vault.list()
 
-    print("21. campus.circles['circle_1'].move(parent_circle_id='parent')")
-    campus.circles["circle_1"].move(parent_circle_id="parent")
+    def test_23_vault_apps_list(self):
+        self.campus.vault["apps"].list()
 
-    print("22. campus.vault.list()")
-    campus.vault.list()
+    def test_24_vault_apps_api_key_set(self):
+        self.campus.vault["apps"]["api_key"].set(value="secret-value")
 
-    print("23. campus.vault['apps'].list()")
-    campus.vault["apps"].list()
+    def test_25_vault_apps_api_key_get(self):
+        self.campus.vault["apps"]["api_key"].get()
 
-    print("24. campus.vault['apps']['api_key'].set(value='secret-value')")
-    campus.vault["apps"]["api_key"].set(value="secret-value")
+    def test_26_vault_apps_api_key_delete(self):
+        self.campus.vault["apps"]["api_key"].delete()
 
-    print("25. campus.vault['apps']['api_key'].get()")
-    campus.vault["apps"]["api_key"].get()
+    def test_27_circles_delete(self):
+        self.campus.circles["circle_1"].delete()
 
-    print("26. campus.vault['apps']['api_key'].delete()")
-    campus.vault["apps"]["api_key"].delete()
+    def test_28_users_delete(self):
+        self.campus.users["user_1"].delete()
 
-    print("27. campus.circles['circle_1'].delete()")
-    campus.circles["circle_1"].delete()
+    def test_29_vault_access_revoke(self):
+        self.campus.vault.access.revoke(client_id="test_client", label="apps")
 
-    print("28. campus.users['user_1'].delete()")
-    campus.users["user_1"].delete()
+    def test_30_vault_clients_delete(self):
+        self.campus.vault.clients.delete("test_client")
 
-    print("29. campus.vault.access.revoke(client_id='test_client', label='apps')")
-    campus.vault.access.revoke(client_id="test_client", label="apps")
-
-    print("30. campus.vault.clients.delete('test_client')")
-    campus.vault.clients.delete("test_client")
-
-    print("31. campus.admin.purge_db()")
-    campus.admin.purge_db()
-
-    print("\n✅ All 31 Campus client methods executed successfully!")
+    def test_31_admin_purge_db(self):
+        self.campus.admin.purge_db()
 
 
 if __name__ == "__main__":
-    test_all_methods()
+    unittest.main()
