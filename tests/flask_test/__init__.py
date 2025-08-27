@@ -12,6 +12,7 @@ from flask import Flask
 from werkzeug.test import TestResponse
 
 from campus.client.interface import JsonClient, JsonResponse, JsonDict
+from campus.client.wrapper import ClientFactory
 
 from .interface import FlaskClientInterface
 
@@ -27,16 +28,18 @@ def configure_test_app(app: Flask) -> Flask:
     return app
 
 
-def create_test_client(app: Flask) -> "FlaskTestClient":
-    """Create a wrapped test client from a Flask app.
+def client_factory(app: Flask) -> ClientFactory:
+    """Create a client factory for the given Flask app.
 
     Args:
         app: Flask application instance
 
     Returns:
-        FlaskTestClient instance
+        ClientFactory: A factory for creating test clients
     """
-    return FlaskTestClient(app.test_client())
+    def wrapped_client_factory() -> "FlaskTestClient":
+        return FlaskTestClient(app.test_client())
+    return wrapped_client_factory
 
 
 class FlaskTestResponse(JsonResponse):
@@ -143,3 +146,11 @@ class FlaskTestClient(JsonClient):
 
     def delete(self: Self, path: str, json: JsonDict | None = None) -> FlaskTestResponse:
         return self._make_request("DELETE", path, json=json)
+
+
+__all__ = [
+    "FlaskTestClient",
+    "FlaskTestResponse",
+    "client_factory",
+    "configure_test_app",
+]
