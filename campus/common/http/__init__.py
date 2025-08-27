@@ -27,15 +27,17 @@ def _hash_args_kwargs(*args, **kwargs) -> tuple:
     return key
 
 
-def get_client(*args, **kwargs) -> JsonClient:
+def get_client(*args, cache: bool = True, **kwargs) -> JsonClient:
     """Returns a JSON client for making requests.
 
     Caches instantiated clients to reuse sessions.
     """
-    return __client_cache.get(
-        _hash_args_kwargs(*args, **kwargs),
-        client_factory(*args, **kwargs)
-    )
+    key = _hash_args_kwargs(*args, **kwargs)
+    if not cache:
+        return client_factory(*args, **kwargs)
+    if key not in __client_cache:
+        __client_cache[key] = client_factory(*args, **kwargs)
+    return __client_cache[key]
 
 
 __all__ = [
