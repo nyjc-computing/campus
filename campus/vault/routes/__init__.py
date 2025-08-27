@@ -11,19 +11,11 @@ Each module defines a Flask blueprint with appropriate URL prefixes and
 authentication decorators.
 """
 
-from .vault import init_app as init_vault_routes
-from .access import init_app as init_access_routes  
-from .clients import init_app as init_client_routes
+from . import vault, access, clients
+
 
 __all__ = [
-    "init_vault_routes",
-    "init_access_routes", 
-    "init_client_routes"
+    "vault",
+    "access",
+    "clients"
 ]
-
-
-def init_all_routes(app):
-    """Initialize all vault-related routes with the given Flask app."""
-    init_vault_routes(app)
-    init_access_routes(app)
-    init_client_routes(app)
