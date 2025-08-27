@@ -107,9 +107,3 @@ def get_service_base_url(service_name: str) -> str:
         return get_vault_base_url()
     else:
         raise ValueError(f"Unknown service: {service_name}")
-
-
-# Legacy constants for backward compatibility
-# These are now environment-aware
-APPS_BASE_URL = get_apps_base_url()
-VAULT_BASE_URL = get_vault_base_url()
