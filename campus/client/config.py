@@ -7,7 +7,13 @@ using the common.devops environment enums for consistency.
 """
 
 from typing import Set
+
+from flask import Flask
+
 from campus.common import devops
+
+
+Url = str
 
 # Service mappings - which services use which deployment
 APPS_SERVICES: Set[str] = {
@@ -23,8 +29,37 @@ VAULT_SERVICES: Set[str] = {
     "vault_client"
 }
 
+BASE_URLS = {
+    "campus.vault": {
+        devops.PRODUCTION: "https://vault.campus.nyjc.app/api/v1/",
+        devops.STAGING: "https://vault.campus.nyjc.dev/api/v1/",
+        devops.TESTING: "https://campusvault-development.up.railway.app/api/v1/",
+        devops.DEVELOPMENT: "https://campusvault-development.up.railway.app/api/v1/",
+    },
+    "campus.apps": {
+        devops.PRODUCTION: "https://api.campus.nyjc.app/api/v1/",
+        devops.STAGING: "https://api.campus.nyjc.dev/api/v1/",
+        devops.TESTING: "https://campusapps-development.up.railway.app/api/v1/",
+        devops.DEVELOPMENT: "https://campusapps-development.up.railway.app/api/v1/",
+    }
+}
 
-def get_apps_base_url() -> str:
+
+def get_app_base_url(app: Flask) -> Url:
+    """Get the base URL for apps services based on environment.
+
+    Returns:
+        str: Base URL for apps deployment
+    """
+    if app.name not in BASE_URLS:
+        raise ValueError(f"No base URL registered for app: {app.name}")
+    app_envs = BASE_URLS[app.name]
+    if devops.ENV not in app_envs:
+        raise ValueError(f"No base URL registered for app: {app.name} in environment: {devops.ENV}")
+    return app_envs[devops.ENV]
+
+
+def get_apps_base_url() -> Url:
     """Get the base URL for apps services based on environment.
 
     Returns:
