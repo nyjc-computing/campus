@@ -26,6 +26,7 @@ def create_app() -> Flask:
     
     This is called if campusauth is run as a standalone app.
     """
+    # pylint: disable=import-outside-toplevel
     from campus.common import errors
     app = Flask(__name__)
     init_app(app)
@@ -36,6 +37,7 @@ def create_app() -> Flask:
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the campusauth blueprint with the given Flask app."""
+    # pylint: disable=import-outside-toplevel
     from . import routes
     routes.init_app(app)
 
