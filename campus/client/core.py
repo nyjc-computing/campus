@@ -5,23 +5,13 @@ Unified Campus client interface providing consistent access to all services.
 
 import logging
 import os
-from typing import TypedDict, Unpack
 
 from campus import config
 from campus.client.apps import AdminResource, CirclesResource, UsersResource
-from campus.client.wrapper import ClientFactory
 from campus.client.vault.vault import VaultResource
 from campus.common.http import get_client
 
 logger = logging.getLogger(__name__)
-
-
-class CampusInit(TypedDict):
-    """Keyword arguments for Campus.__init__()"""
-    vault: ClientFactory
-    users: ClientFactory
-    circles: ClientFactory
-    admin: ClientFactory
 
 
 class Campus:
@@ -37,7 +27,7 @@ class Campus:
     circles: CirclesResource
     admin: AdminResource
 
-    def __init__(self, **client_factories: Unpack[CampusInit]):
+    def __init__(self):
         """Initialize unified Campus client with all service clients.
 
         Credentials are automatically loaded from CLIENT_ID and CLIENT_SECRET
