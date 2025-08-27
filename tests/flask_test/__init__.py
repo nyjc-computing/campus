@@ -11,7 +11,7 @@ from typing import Any, Iterable, Literal, Mapping, Self
 from flask import Flask
 from werkzeug.test import TestResponse
 
-from campus.client.wrapper import ClientFactory
+from campus import config
 from campus.common import devops
 from campus.common.http import JsonClient, JsonDict, JsonResponse
 from campus.common.utils import secret
@@ -30,7 +30,7 @@ def configure_test_app(app: Flask) -> Flask:
     return app
 
 
-def client_factory(app: Flask) -> ClientFactory:
+def create_test_client(app: Flask) -> "FlaskTestClient":
     """Create a client factory for the given Flask app.
 
     Args:
@@ -39,9 +39,10 @@ def client_factory(app: Flask) -> ClientFactory:
     Returns:
         ClientFactory: A factory for creating test clients
     """
-    def wrapped_client_factory() -> "FlaskTestClient":
-        return FlaskTestClient(flask_client=app.test_client())
-    return wrapped_client_factory
+    return FlaskTestClient(
+        base_url=config.get_app_base_url(app.name),
+        flask_client=app.test_client()
+    )
 
 
 class FlaskTestResponse(JsonResponse):
@@ -168,6 +169,6 @@ class FlaskTestClient(JsonClient):
 __all__ = [
     "FlaskTestClient",
     "FlaskTestResponse",
-    "client_factory",
+    "create_test_client",
     "configure_test_app",
 ]
