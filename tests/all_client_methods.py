@@ -8,10 +8,10 @@ Uses actual campus.apps and campus.vault create_app() factories instead of mocks
 import os
 import sys
 
-import campus.apps.api
-from campus.client.core import Campus
+from campus.client import Campus
+import campus.apps
 import campus.vault
-from tests.test_client import create_test_client_factory, FlaskTestClient, FlaskTestResponse
+from tests import flask_test
 
 sys.path.insert(0, '/workspaces/campus')
 
@@ -22,96 +22,42 @@ os.environ['CLIENT_SECRET'] = 'test_client_secret'
 os.environ['VAULTDB_URI'] = 'sqlite:///:memory:'
 
 
-class CombinedFlaskTestClient:
-    """Test client that routes requests to appropriate Flask apps."""
+def create_campus_test_api() -> Campus:
+    """Create a Campus API client for testing.
 
-    def __init__(self, api_client, vault_client):
-        self.api_client = api_client
-        self.vault_client = vault_client
-        self.base_url = ""
+    This client uses instantiated Flask apps and their test clients
+    to test API functionality.
+    """
 
-    def _route_request(self, method, path, **kwargs):
-        """Route requests to the appropriate test client."""
-        if path.startswith('/vault') or path.startswith('/access') or path.startswith('/clients'):
-            client = self.vault_client
-        else:
-            client = self.api_client
-
-        if not path.startswith('/'):
-            path = '/' + path
-
-        # Handle query parameters for GET requests
-        params = kwargs.pop('params', None)
-        if params and method.upper() == 'GET':
-            from urllib.parse import urlencode
-            query_string = urlencode(params)
-            if '?' in path:
-                path = f"{path}&{query_string}"
-            else:
-                path = f"{path}?{query_string}"
-
-        # Make the request
-        response = getattr(client, method.lower())(path, **kwargs)
-        return FlaskTestResponse(response)
-
-    def get(self, path, **kwargs):
-        return self._route_request('GET', path, **kwargs)
-
-    def post(self, path, **kwargs):
-        return self._route_request('POST', path, **kwargs)
-
-    def put(self, path, **kwargs):
-        return self._route_request('PUT', path, **kwargs)
-
-    def patch(self, path, **kwargs):
-        return self._route_request('PATCH', path, **kwargs)
-
-    def delete(self, path, **kwargs):
-        return self._route_request('DELETE', path, **kwargs)
-
-
-def setup_real_apps():
-    """Setup real Flask apps and initialize databases."""
-    print("🔧 Setting up real Flask applications...")
-
-    # Create apps using real factories
-    api_app = campus.apps.api.create_app()
-    vault_app = campus.vault.create_app()
-
-    # Initialize databases
-    try:
-        campus.vault.init_db()
-        print("✓ Vault database initialized")
-    except Exception as e:
-        print(f"! Vault DB init: {e}")
-
-    try:
-        from campus.apps.api.routes import admin
-        admin.init_db()
-        print("✓ API database initialized")
-    except Exception as e:
-        print(f"! API DB init: {e}")
-
-    # Create combined test client
-    combined_client = CombinedFlaskTestClient(
-        api_app.test_client(),
-        vault_app.test_client()
+    # Vault needs to be instantiated first, as Apps depends on it
+    campus.vault.init_db()
+    vault_client_factory = flask_test.create_client_factory(
+        flask_test.configure_test_app(
+            campus.vault.create_app()
+        )
     )
 
-    return combined_client
+    # TODO: Design elegant way to init_db() all app models
+    # campus.apps.init_db()
+    apps_client_factory = flask_test.create_client_factory(
+        flask_test.configure_test_app(
+            campus.apps.create_app()
+        )
+    )
+
+    campus_client = Campus({
+        "campus.apps": apps_client_factory(),
+        "campus.vault": vault_client_factory(),
+    })
+
+    return campus_client
 
 
-def execute_method_chain():
-    """Execute all Campus client methods in a logical chain using real apps."""
+def test_all_methods():
+    """Execute all Campus client methods on the test client."""
 
-    # Setup real Flask apps
-    combined_client = setup_real_apps()
-
-    # Create client factory
-    def client_factory():
-        return combined_client
-
-    campus = Campus(client_factory)
+    campus = create_campus_test_api()
+    # TODO: use fuzzing to test methods
 
     print("\n🚀 Executing all Campus client methods with real Flask apps...")
     print("=" * 60)
@@ -216,9 +162,7 @@ def execute_method_chain():
     campus.admin.purge_db()
 
     print("\n✅ All 31 Campus client methods executed successfully!")
-    print("🎯 Each method was invoked on its own line using real Flask apps")
-    print("📦 Used campus.apps.api.create_app() and campus.vault.create_app()")
 
 
 if __name__ == "__main__":
-    execute_method_chain()
+    test_all_methods()
