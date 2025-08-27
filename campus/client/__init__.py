@@ -16,10 +16,10 @@ from campus.client.wrapper import ClientFactory, RequestsClient
 
 
 def client_factory(app_name: str) -> ClientFactory:
-    """Create a client factory for the given Flask app.
+    """Create a client factory for the given app.
 
     Args:
-        app: Flask application instance
+        app_name: Application name (e.g. campus.apps)
 
     Returns:
         ClientFactory: A factory for creating test clients
