@@ -13,7 +13,6 @@ from campus.client import ClientFactory
 from campus.client.vault import get_vault
 
 from .backend.mongodb import MongoDBCollection
-
 from .interface import CollectionInterface
 
 

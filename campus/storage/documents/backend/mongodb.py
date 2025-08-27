@@ -30,7 +30,7 @@ from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
 from campus.common import devops
-from campus.client.vault import VaultResource
+from campus.client.vault import get_vault
 from campus.storage.documents.interface import CollectionInterface, PK
 from campus.storage.errors import (
     ConflictError,
@@ -50,8 +50,9 @@ class MongoCollectionError(StorageError):
     ...
 
 
-def _get_mongodb_uri(vault: VaultResource) -> str:
+def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
+    vault = get_vault()
     try:
         return vault["storage"]["MONGODB_URI"].get().json()
     except Exception as e:
@@ -61,8 +62,9 @@ def _get_mongodb_uri(vault: VaultResource) -> str:
         ) from e
 
 
-def _get_mongodb_name(vault: VaultResource) -> str:
+def _get_mongodb_name() -> str:
     """Get the MongoDB database name from the vault using the core client API."""
+    vault = get_vault()
     try:
         return vault["storage"]["MONGODB_NAME"].get().json()
     except Exception as e:
@@ -124,7 +126,7 @@ class MongoDBCollection(CollectionInterface):
         user = collection.get_by_id("123")
     """
 
-    def __init__(self, name: str, vault: VaultResource):
+    def __init__(self, name: str):
         """Initialize the MongoDB collection with a name.
 
         Connection is established lazily on first database operation.
@@ -133,7 +135,6 @@ class MongoDBCollection(CollectionInterface):
         self._client = None
         self._db = None
         self._collection = None
-        self._vault = vault
 
     def _ensure_connection(self):
         """Ensure MongoDB connection is established.
@@ -145,8 +146,8 @@ class MongoDBCollection(CollectionInterface):
             pymongo.errors.ConnectionFailure: If MongoDB connection fails
         """
         if self._collection is None:
-            mongodb_uri = _get_mongodb_uri(self._vault)
-            mongodb_name = _get_mongodb_name(self._vault)
+            mongodb_uri = _get_mongodb_uri()
+            mongodb_name = _get_mongodb_name()
             self._client = MongoClient(mongodb_uri)
             self._db = self._client[mongodb_name]
             self._collection: Collection = self._db[self.name]
@@ -289,7 +290,7 @@ class MongoDBCollection(CollectionInterface):
 
 
 @devops.block_env(devops.PRODUCTION)
-def purge_collections(vault: VaultResource) -> None:
+def purge_collections() -> None:
     """Purge all collections by dropping the entire database.
 
     This function is intended for development/testing environments only.
@@ -299,8 +300,8 @@ def purge_collections(vault: VaultResource) -> None:
         MongoCollectionError: If database connection or purge operations fail
     """
     try:
-        uri = _get_mongodb_uri(vault)
-        db_name = _get_mongodb_name(vault)
+        uri = _get_mongodb_uri()
+        db_name = _get_mongodb_name()
 
         client = MongoClient(uri)
         db = client[db_name]

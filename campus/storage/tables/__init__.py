@@ -10,7 +10,6 @@ or SQLite.
 from campus.common import devops
 
 from .backend.postgres import PostgreSQLTable
-
 from .interface import TableInterface
 
 def get_db(name: str):

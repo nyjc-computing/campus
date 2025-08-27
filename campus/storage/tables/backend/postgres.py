@@ -26,20 +26,17 @@ table.delete_by_id("123")
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from campus.client import Campus
+from campus.client.vault import get_vault
 from campus.common import devops
 from campus.storage.tables.interface import TableInterface, PK
 from campus.storage import errors
 
 
-# Singleton Campus client for this backend
-_campus_client = Campus()
-
-
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
+    vault = get_vault()
     try:
-        return _campus_client.vault["storage"]["POSTGRESDB_URI"].get()
+        return vault["storage"]["POSTGRESDB_URI"].get().json()
     except Exception as e:
         raise RuntimeError(
             f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "
