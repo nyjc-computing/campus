@@ -3,8 +3,8 @@
 Vault client management for creating and managing vault authentication clients.
 """
 
-from campus.client.wrapper import Resource
-from campus.client.interface import JsonResponse
+from campus.client.interface import Resource
+from campus.common.http import JsonResponse
 
 
 class VaultClientResource(Resource):
