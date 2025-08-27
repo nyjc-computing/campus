@@ -53,7 +53,8 @@ def get_app_base_url(app_name: str) -> Url:
         raise ValueError(f"No base URL registered for app: {app_name}")
     app_envs = BASE_URLS[app_name]
     if devops.ENV not in app_envs:
-        raise ValueError(f"No base URL registered for app: {app_name} in environment: {devops.ENV}")
+        raise ValueError(
+            f"No base URL registered for app: {app_name} in environment: {devops.ENV}")
     return app_envs[devops.ENV]
 
 
