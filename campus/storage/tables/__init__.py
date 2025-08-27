@@ -12,7 +12,7 @@ from campus.common import devops
 from .backend.postgres import PostgreSQLTable
 from .interface import TableInterface
 
-def get_db(name: str):
+def get_db(name: str) -> TableInterface:
     """Get a table by name, using appropriate backend for environment."""
     if devops.ENV in (devops.STAGING, devops.PRODUCTION):
         return PostgreSQLTable(name)

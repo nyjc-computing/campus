@@ -9,16 +9,13 @@ This interface is usually provided by document-oriented databases like MongoDB
 or CouchDB.
 """
 
-from campus.client import ClientFactory
-from campus.client.vault import get_vault
-
 from .backend.mongodb import MongoDBCollection
 from .interface import CollectionInterface
 
 
-def get_db(name: str, client_factory: ClientFactory) -> CollectionInterface:
+def get_db(name: str) -> CollectionInterface:
     """Get a collection by name."""
-    return MongoDBCollection(name, get_vault(client_factory))
+    return MongoDBCollection(name)
 
 
 __all__ = [

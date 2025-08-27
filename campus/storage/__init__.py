@@ -10,7 +10,6 @@ Two kinds of storage interface are provided:
 from campus.common import devops
 
 from . import documents, tables
-
 from .documents import CollectionInterface
 from .tables import TableInterface
 from .errors import (
@@ -21,12 +20,12 @@ from .errors import (
 )
 
 
-def get_table(name: str):
+def get_table(name: str) -> TableInterface:
     """Get a table by name."""
     return tables.get_db(name)
 
 
-def get_collection(name: str):
+def get_collection(name: str) -> CollectionInterface:
     """Get a collection by name."""
     return documents.get_db(name)
 
