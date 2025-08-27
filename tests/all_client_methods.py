@@ -6,14 +6,12 @@ Uses actual campus.apps and campus.vault create_app() factories instead of mocks
 """
 
 import os
-import sys
 
 from campus.client import Campus
 import campus.apps
 import campus.vault
 from tests import flask_test
 
-sys.path.insert(0, '/workspaces/campus')
 
 # Set required environment variables for testing
 os.environ['ENV'] = 'testing'
