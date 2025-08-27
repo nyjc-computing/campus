@@ -6,13 +6,15 @@ the JsonClient and JsonResponse protocols for testing purposes.
 Example usage: see test_client_example_usage.py
 """
 
-from typing import Any, Literal, Self
+from typing import Any, Iterable, Literal, Mapping, Self
 
 from flask import Flask
 from werkzeug.test import TestResponse
 
-from campus.client.interface import JsonClient, JsonResponse, JsonDict
 from campus.client.wrapper import ClientFactory
+from campus.common import devops
+from campus.common.http import JsonClient, JsonDict, JsonResponse
+from campus.common.utils import secret
 
 from .interface import FlaskClientInterface
 
@@ -38,7 +40,7 @@ def client_factory(app: Flask) -> ClientFactory:
         ClientFactory: A factory for creating test clients
     """
     def wrapped_client_factory() -> "FlaskTestClient":
-        return FlaskTestClient(app.test_client())
+        return FlaskTestClient(flask_client=app.test_client())
     return wrapped_client_factory
 
 
@@ -79,20 +81,35 @@ class FlaskTestClient(JsonClient):
     the same interface as the production RequestsClient, enabling testing
     without making actual HTTP requests.
     """
-    # The test client routes requests directly to the attached application
-    # and does not involve the network stack.
-    # The placeholder base_url keeps the interface compatible with JsonClient
-    # but is not actually used.
-    base_url = "campus.localhost"
     # pylint: disable=missing-function-docstring
 
-    def __init__(self, flask_client: FlaskClientInterface):
-        """
-        Initialize the FlaskTestClient.
-
-        Args:
-            flask_client: Flask test client instance
-        """
+    def __init__(
+            self,
+            # The placeholder base_url is not actually used.
+            base_url: str = "campus.localhost",
+            *,
+            flask_client: FlaskClientInterface,
+            auth: Iterable[str] | str | None = None,
+            headers: Mapping[str, str] | None = None,
+            **kwargs: Any
+    ):
+        """Initialize the FlaskTestClient."""
+        self.base_url = base_url
+        self.headers = {}
+        auth = auth or devops.load_credentials_from_env()
+        match auth:
+            case (client_id, client_secret):
+                self.headers['Authorization'] = secret.encode_http_basic_auth(
+                    client_id,
+                    client_secret
+                )
+            case str():
+                self.headers['Authorization'] = f"Bearer {auth}"
+            case _:
+                raise ValueError(f"Unknown auth {auth!r}")
+        self.headers["Content-Type"] = "application/json"
+        self.headers["Accept"] = "application/json"
+        self.headers.update(headers or {})
         self._flask_client = flask_client
 
     def _make_request(

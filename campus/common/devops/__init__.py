@@ -76,3 +76,23 @@ def require_env(*envs: str):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def load_credentials_from_env() -> tuple[str, str] | str:
+    """
+    Load client credentials from environment variables.
+
+    Attempts to load ACCESS_TOKEN (for bearer auth) or CLIENT_ID and
+    CLIENT_SECRET (for basic auth) from environment variables.
+
+    Raises:
+        AuthenticationError: If required environment variables are absent.
+    """
+    if (value := os.getenv("ACCESS_TOKEN")):
+        return value
+    id_, secret = os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET")
+    if id_ and secret:
+        return id_, secret
+    raise EnvironmentError(
+        f"Missing credentials {'CLIENT_ID' if not id_ else 'CLIENT_SECRET'}"
+    )

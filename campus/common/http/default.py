@@ -3,69 +3,19 @@
 Default implementation for JsonClient and JsonResponse, using `requests`.
 """
 
-import os
-
-from typing import Any, Callable, Iterable, Mapping, Optional, Self, TypedDict
+from typing import Any, Callable, Iterable, Mapping, Self, TypedDict
 from urllib.parse import urljoin
 
 import requests
 
+from campus.common import devops
 from campus.common.utils import secret
-from campus.client.errors import (
-    AuthenticationError,
-    NetworkError,
-)
+from campus.client.errors import NetworkError
 from .interface import JsonClient, JsonDict, JsonResponse
 
 
 ClientFactory = Callable[[], JsonClient]
 ClientHeader = dict[str, str]
-
-
-class BasicCredentials(TypedDict):
-    """Client credentials for authentication."""
-    client_id: str
-    client_secret: str
-
-
-class BearerCredentials(TypedDict):
-    """Client credentials for authentication."""
-    access_token: str
-
-
-def _load_credentials_from_env() -> tuple[str, str] | str:
-    """
-    Load client credentials from environment variables.
-
-    Attempts to load ACCESS_TOKEN (for bearer auth) or CLIENT_ID and
-    CLIENT_SECRET (for basic auth) from environment variables.
-
-    Raises:
-        AuthenticationError: If required environment variables are absent.
-    """
-    if (value := os.getenv("ACCESS_TOKEN")):
-        return value
-    id_, secret = os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET")
-    if id_ and secret:
-        return id_, secret
-    raise AuthenticationError(
-        f"Missing credentials {'CLIENT_ID' if not id_ else 'CLIENT_SECRET'}"
-    )
-
-
-def check_env_var(var_name: str) -> str:
-    """Check if an environment variable is set and return its value.
-
-    Args:
-        var_name: The name of the environment variable to check.
-
-    Raises:
-        AuthenticationError: If the environment variable is not set.
-    """
-    value = os.getenv(var_name)
-    if not value:
-        raise AuthenticationError(f"Missing {var_name} environment variable")
-    return value
 
 
 class DefaultResponse(JsonResponse):
@@ -101,14 +51,14 @@ class DefaultClient(JsonClient):
     provides methods for sending HTTP requests and handling authentication
     automatically.
     """
-    credentials: BasicCredentials | BearerCredentials
 
     def __init__(
             self,
-            base_url: Optional[str] = None,
+            base_url: str | None = None,
             *,
             auth: Iterable[str] | str | None = None,
             headers: Mapping[str, str] | None = None,
+            **kwargs: Any
     ):
         """
         Initialize the RequestsClient.
@@ -128,7 +78,7 @@ class DefaultClient(JsonClient):
         # Prepare a persistent session and set default headers
         self._session = requests.Session()
         # Load credentials from environment if not provided
-        auth = auth or _load_credentials_from_env()
+        auth = auth or devops.load_credentials_from_env()
         match auth:
             case (client_id, client_secret):
                 self.headers['Authorization'] = secret.encode_http_basic_auth(

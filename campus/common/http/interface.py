@@ -11,7 +11,7 @@ This interface is designed to:
 """
 
 from collections.abc import Mapping
-from typing import Any, Protocol, Self, runtime_checkable
+from typing import Any, Iterable, Protocol, Self, runtime_checkable
 
 Header = Mapping[str, str]
 JsonDict = dict[str, Any]
@@ -54,6 +54,18 @@ class JsonClient(Protocol):
     """
     base_url: str | None
     # pylint: disable=unnecessary-ellipsis
+
+    def __init__(
+            self,
+            base_url: str | None = None,
+            *,
+            auth: Iterable[str] | str | None = None,
+            headers: Mapping[str, str] | None = None,
+            **kwargs: Any
+    ):
+        raise NotImplementedError(
+            "Subclasses must override __init__()"
+        )
 
     def get(self: Self, path: str, params: JsonDict | None = None) -> JsonResponse:
         """Sends a GET request."""

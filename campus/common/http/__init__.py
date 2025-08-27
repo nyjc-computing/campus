@@ -11,7 +11,7 @@ This module provides abstractions for making HTTP requests and handling
 responses.
 """
 
-from .interface import JsonClient, JsonResponse
+from .interface import JsonClient, JsonDict, JsonResponse
 from .default import DefaultResponse, DefaultClient
 
 # Cache instantiated clients to reuse sessions
@@ -42,6 +42,7 @@ __all__ = [
     "DefaultClient",
     "DefaultResponse",
     "JsonClient",
+    "JsonDict",
     "JsonResponse",
-    "get_client"
+    "get_client",
 ]
