@@ -18,7 +18,8 @@ from tests import flask_test
 os.environ['ENV'] = 'testing'
 os.environ['CLIENT_ID'] = 'test_client_id'
 os.environ['CLIENT_SECRET'] = 'test_client_secret'
-os.environ['VAULTDB_URI'] = 'sqlite:///:memory:'
+# TODO: run local psycopg2 with temp db
+os.environ['VAULTDB_URI'] = ':memory:'
 
 
 def create_campus_test_api() -> Campus:
