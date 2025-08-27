@@ -9,7 +9,7 @@ import os
 from campus.client.apps.admin import AdminResource
 from campus.client.apps.circles import CirclesResource
 from campus.client.apps.users import UsersResource
-from campus.client.base import ClientFactory
+from campus.client.wrapper import ClientFactory
 from campus.client.vault.vault import VaultResource
 
 logger = logging.getLogger(__name__)

@@ -3,7 +3,7 @@
 User management client for creating and managing user accounts.
 """
 
-from campus.client.base import Resource
+from campus.client.wrapper import Resource
 from campus.client.interface import JsonResponse
 
 

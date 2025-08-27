@@ -4,7 +4,7 @@ Circle management client for creating and managing circles.
 """
 
 from typing import Any
-from campus.client.base import JsonResponse, Resource
+from campus.client.wrapper import JsonResponse, Resource
 
 
 class CircleMembers(Resource):

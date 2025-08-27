@@ -1,9 +1,9 @@
-"""campus.client.base
+"""campus.client.wrapper
 
 HTTP client functionality for Campus services.
 
-Provides common authentication, HTTP handling, and utility methods
-that are shared across all service clients using composition pattern.
+Provides wrapper classes for the requests module, to conform to JsonClient
+and JsonResponse interfaces.
 """
 
 import os
@@ -56,24 +56,25 @@ class RequestsResponse(JsonResponse):
     """Response wrapper for requests package, to conform to JsonResponse
     interface.
     """
+    # pylint: disable=missing-function-docstring
 
     def __init__(self, response: requests.Response):
         self._response = response
 
     @property
-    def status(self) -> int:  # pylint: disable=missing-function-docstring
+    def status(self) -> int:
         return self._response.status_code
 
     @property
-    def headers(self) -> dict[str, str]:  # pylint: disable=missing-function-docstring
+    def headers(self) -> dict[str, str]:
         # Convert to plain dict[str, str]
         return {k: v for k, v in self._response.headers.items()}
 
     @property
-    def text(self) -> str:  # pylint: disable=missing-function-docstring
+    def text(self) -> str:
         return self._response.text
 
-    def json(self):  # pylint: disable=missing-function-docstring
+    def json(self):
         return self._response.json()
 
 

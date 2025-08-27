@@ -3,7 +3,7 @@
 Main vault client interface for secrets management and access control.
 """
 
-from campus.client.base import Resource
+from campus.client.wrapper import Resource
 from campus.client.interface import JsonResponse
 
 from campus.client.vault.access import VaultAccessResource

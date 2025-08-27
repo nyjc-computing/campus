@@ -3,7 +3,7 @@
 Vault access management client for managing permissions and client access.
 """
 
-from campus.client.base import JsonResponse, Resource
+from campus.client.wrapper import JsonResponse, Resource
 
 
 class VaultAccessResource(Resource):

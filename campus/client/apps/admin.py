@@ -3,7 +3,7 @@
 Admin management client for Campus API /admin endpoints.
 """
 
-from campus.client.base import JsonResponse, Resource
+from campus.client.wrapper import JsonResponse, Resource
 
 
 class AdminResource(Resource):
