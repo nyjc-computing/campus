@@ -19,6 +19,7 @@ dependencies. Performance optimizations (such as API keys) can be addressed
 when needed.
 """
 
+import psycopg2
 
 from typing import Any, TypedDict, NotRequired, Unpack
 from campus.common.utils import secret, uid, utc_time
@@ -26,7 +27,6 @@ from campus.common import devops
 from campus.common.errors import api_errors
 from . import db
 from .model import Vault
-import psycopg2
 
 CLIENT_TABLE = "vault_clients"
 
