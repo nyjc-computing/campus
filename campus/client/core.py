@@ -5,11 +5,14 @@ Unified Campus client interface providing consistent access to all services.
 
 import logging
 import os
+from typing import Mapping
 
 from campus import config
 from campus.client.apps import AdminResource, CirclesResource, UsersResource
-from campus.client.vault.vault import VaultResource
-from campus.common.http import get_client
+from campus.client.vault import VaultResource
+from campus.common.http import JsonClient, get_client
+
+AppName = str  # e.g. "campus.apps", "campus.vault"
 
 logger = logging.getLogger(__name__)
 
@@ -27,22 +30,40 @@ class Campus:
     circles: CirclesResource
     admin: AdminResource
 
-    def __init__(self):
+    def __init__(self, override: Mapping[AppName, JsonClient] | None = None):
         """Initialize unified Campus client with all service clients.
 
         Credentials are automatically loaded from CLIENT_ID and CLIENT_SECRET
-        environment variables. All service clients will be properly authenticated
-        if these environment variables are set.
+        environment variables. All service clients will be properly
+        authenticated if these environment variables are set.
+
+        Args:
+            override: Optional mapping of app names to JSON clients.
         """
-        apps_base_url = config.get_app_base_url("campus.apps")
-        vault_base_url = config.get_app_base_url("campus.vault")
-        # Not using item iteration because pylint can't detect value types
-        # from an unpacked TypedDict and considers values as `object` instead
-        # pylint: disable=consider-using-dict-items
-        self.admin = AdminResource(get_client(base_url=apps_base_url))
-        self.circles = CirclesResource(get_client(base_url=apps_base_url))
-        self.users = UsersResource(get_client(base_url=apps_base_url))
-        self.vault = VaultResource(get_client(base_url=vault_base_url))
+        app_names = (
+            "campus.apps",
+            "campus.vault"
+        )
+        # if-for structure for easier reading & cleaner "happy path"
+        # see https://matklad.github.io/2023/11/15/push-ifs-up-and-fors-down.html
+        if override is None:
+            clients = {
+                app_name: get_client(
+                    base_url=config.get_app_base_url(app_name))
+                for app_name in app_names
+            }
+        else:
+            clients = {
+                app_name: (
+                    override.get(app_name)
+                    or get_client(base_url=config.get_app_base_url(app_name))
+                )
+                for app_name in app_names
+            }
+        self.vault = VaultResource(clients["campus.vault"])
+        self.admin = AdminResource(clients["campus.apps"])
+        self.circles = CirclesResource(clients["campus.apps"])
+        self.users = UsersResource(clients["campus.apps"])
         logging.debug(
             'Campus client instantiated in %s environment',
             os.getenv("ENV", "MISSING")
