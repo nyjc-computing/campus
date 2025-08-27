@@ -33,10 +33,12 @@ def create_app() -> Flask:
     errors.init_app(app)
     return app
 
+
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the campusauth blueprint with the given Flask app."""
     from . import routes
     routes.init_app(app)
+
 
 @devops.block_env(devops.PRODUCTION)
 def init_db() -> None:
