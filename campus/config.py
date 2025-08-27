@@ -1,6 +1,6 @@
 """campus.client.config
 
-Configuration for Campus client base URLs and service mappings.
+Configuration for Campus base URLs and service mappings.
 
 This module provides environment-aware configuration for client base URLs
 using the common.devops environment enums for consistency.

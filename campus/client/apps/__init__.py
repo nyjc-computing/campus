@@ -3,8 +3,13 @@
 Provides clean module interfaces for Campus Apps service resources.
 """
 
-from campus.client.apps import users
-from campus.client.apps import circles
-from campus.client.apps import admin
+from campus.client.apps.admin import AdminResource
+from campus.client.apps.circles import CirclesResource
+from campus.client.apps.users import UsersResource
 
-__all__ = ['users', 'circles', 'admin']
+
+__all__ = [
+    'AdminResource',
+    'CirclesResource',
+    'UsersResource',
+]

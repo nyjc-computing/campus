@@ -3,16 +3,22 @@
 Provides clean module interfaces for Campus Vault service resources.
 """
 
-from campus.client.vault import vault
-from campus.client.vault import access
-from campus.client.vault import client
+from campus.config import get_app_base_url
 from campus.client.vault.vault import VaultResource
-from campus.client.wrapper import ClientFactory
+from campus.client.vault.access import VaultAccessResource
+from campus.client.vault.client import VaultClientResource
+from campus.common.http import get_client
 
 
-def get_vault(client_factory: ClientFactory) -> VaultResource:
+def get_vault() -> VaultResource:
     """Get the Vault service client."""
-    return VaultResource(client_factory(), "vault")
+    vault_base_url = get_app_base_url("campus.vault")
+    return VaultResource(get_client(base_url=vault_base_url))
 
 
-__all__ = ['vault', 'access', 'client', 'VaultResource', 'get_vault']
+__all__ = [
+    'VaultAccessResource',
+    'VaultClientResource',
+    'VaultResource',
+    'get_vault',
+]

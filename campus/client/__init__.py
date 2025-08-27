@@ -5,7 +5,7 @@ Campus Client Package
 Provides unified Campus client interface.
 """
 
-from campus.client.config import get_app_base_url
+from campus import config
 from campus.client.core import Campus
 from campus.client.errors import (
     CampusClientError,
@@ -26,7 +26,7 @@ def client_factory(app_name: str) -> ClientFactory:
     """
 
     def wrapped_client_factory() -> RequestsClient:
-        return RequestsClient(get_app_base_url(app_name))
+        return RequestsClient(config.get_app_base_url(app_name))
     return wrapped_client_factory
 
 
