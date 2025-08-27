@@ -132,6 +132,7 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def init_db():
     """Initialize the tables needed by the model.
 
@@ -152,7 +153,6 @@ def init_db():
                 )
             """
             cursor.execute(vault_schema)
-
     access.init_db()
     client.init_db()
 
