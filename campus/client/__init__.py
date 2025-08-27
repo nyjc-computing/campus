@@ -32,6 +32,8 @@ def client_factory(app_name: str) -> ClientFactory:
 
 __all__ = [
     'Campus',
+    "ClientFactory",
+    "client_factory",
     'CampusClientError',
     'AuthenticationError',
     'NetworkError',
