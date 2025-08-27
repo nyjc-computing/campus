@@ -5,8 +5,6 @@ Campus Client Package
 Provides unified Campus client interface.
 """
 
-from flask import Flask
-
 from campus.client.config import get_app_base_url
 from campus.client.core import Campus
 from campus.client.errors import (
@@ -17,7 +15,7 @@ from campus.client.errors import (
 from campus.client.wrapper import ClientFactory, RequestsClient
 
 
-def client_factory(app: Flask) -> ClientFactory:
+def client_factory(app_name: str) -> ClientFactory:
     """Create a client factory for the given Flask app.
 
     Args:
@@ -28,7 +26,7 @@ def client_factory(app: Flask) -> ClientFactory:
     """
 
     def wrapped_client_factory() -> RequestsClient:
-        return RequestsClient(get_app_base_url(app))
+        return RequestsClient(get_app_base_url(app_name))
     return wrapped_client_factory
 
 

@@ -8,8 +8,6 @@ using the common.devops environment enums for consistency.
 
 from typing import Set
 
-from flask import Flask
-
 from campus.common import devops
 
 
@@ -45,17 +43,17 @@ BASE_URLS = {
 }
 
 
-def get_app_base_url(app: Flask) -> Url:
+def get_app_base_url(app_name: str) -> Url:
     """Get the base URL for apps services based on environment.
 
     Returns:
         str: Base URL for apps deployment
     """
-    if app.name not in BASE_URLS:
-        raise ValueError(f"No base URL registered for app: {app.name}")
-    app_envs = BASE_URLS[app.name]
+    if app_name not in BASE_URLS:
+        raise ValueError(f"No base URL registered for app: {app_name}")
+    app_envs = BASE_URLS[app_name]
     if devops.ENV not in app_envs:
-        raise ValueError(f"No base URL registered for app: {app.name} in environment: {devops.ENV}")
+        raise ValueError(f"No base URL registered for app: {app_name} in environment: {devops.ENV}")
     return app_envs[devops.ENV]
 
 
