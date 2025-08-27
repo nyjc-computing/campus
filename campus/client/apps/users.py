@@ -3,9 +3,8 @@
 User management client for creating and managing user accounts.
 """
 
-from campus.client.wrapper import Resource
-from campus.client.interface import JsonResponse
-from campus.common.http import JsonClient
+from campus.client.interface import Resource
+from campus.common.http import JsonClient, JsonResponse
 
 
 class UserResource(Resource):

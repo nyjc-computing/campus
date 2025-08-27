@@ -5,8 +5,8 @@ Circle management client for creating and managing circles.
 
 from typing import Any
 
-from campus.client.wrapper import JsonResponse, Resource
-from campus.common.http import JsonClient
+from campus.client.interface import Resource
+from campus.common.http import JsonClient, JsonResponse
 
 
 class CircleMembers(Resource):
