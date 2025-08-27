@@ -4,7 +4,9 @@ Circle management client for creating and managing circles.
 """
 
 from typing import Any
+
 from campus.client.wrapper import JsonResponse, Resource
+from campus.common.http import JsonClient
 
 
 class CircleMembers(Resource):
@@ -111,6 +113,9 @@ class CircleResource(Resource):
 
 class CirclesResource(Resource):
     """Resource for Campus /circles endpoint."""
+
+    def __init__(self, client: JsonClient):
+        super().__init__(client, "circles")
 
     def __getitem__(self, circle_id: str) -> CircleResource:
         """Get a circle by ID.

@@ -7,11 +7,11 @@ import logging
 import os
 from typing import TypedDict, Unpack
 
-from campus.client.apps.admin import AdminResource
-from campus.client.apps.circles import CirclesResource
-from campus.client.apps.users import UsersResource
+from campus.client.apps import AdminResource, CirclesResource, UsersResource
 from campus.client.wrapper import ClientFactory
 from campus.client.vault.vault import VaultResource
+from campus.common.http import get_client
+from campus.client.config import get_app_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -44,13 +44,15 @@ class Campus:
         environment variables. All service clients will be properly authenticated
         if these environment variables are set.
         """
+        apps_base_url = get_app_base_url("campus.apps")
+        vault_base_url = get_app_base_url("campus.vault")
         # Not using item iteration because pylint can't detect value types
         # from an unpacked TypedDict and considers values as `object` instead
         # pylint: disable=consider-using-dict-items
-        for resource in client_factories:
-            setattr(self,
-                    resource,
-                    VaultResource(client_factories[resource](), resource))
+        self.admin = AdminResource(get_client(base_url=apps_base_url))
+        self.circles = CirclesResource(get_client(base_url=apps_base_url))
+        self.users = UsersResource(get_client(base_url=apps_base_url))
+        self.vault = VaultResource(get_client(base_url=vault_base_url))
         logging.debug(
             'Campus client instantiated in %s environment',
             os.getenv("ENV", "MISSING")

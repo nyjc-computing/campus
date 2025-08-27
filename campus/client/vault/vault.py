@@ -5,9 +5,9 @@ Main vault client interface for secrets management and access control.
 
 from campus.client.wrapper import Resource
 from campus.client.interface import JsonResponse
-
 from campus.client.vault.access import VaultAccessResource
 from campus.client.vault.client import VaultClientResource
+from campus.common.http import JsonClient
 
 
 class VaultKeyResource(Resource):
@@ -56,6 +56,9 @@ class Vault(Resource):
 
 class VaultResource(Resource):
     """Resource for Campus /vault endpoint."""
+
+    def __init__(self, client: JsonClient):
+        super().__init__(client, "vault")
 
     def __getitem__(self, label: str) -> Vault:
         """Get a vault collection by label.

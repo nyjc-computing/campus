@@ -4,10 +4,14 @@ Admin management client for Campus API /admin endpoints.
 """
 
 from campus.client.wrapper import JsonResponse, Resource
+from campus.common.http.interface import JsonClient
 
 
 class AdminResource(Resource):
     """Resource for Campus /admin endpoint."""
+
+    def __init__(self, client: JsonClient):
+        super().__init__(client, "admin")
 
     def status(self) -> JsonResponse:
         """GET /admin/status - Get admin status info."""

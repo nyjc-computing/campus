@@ -5,6 +5,7 @@ User management client for creating and managing user accounts.
 
 from campus.client.wrapper import Resource
 from campus.client.interface import JsonResponse
+from campus.common.http import JsonClient
 
 
 class UserResource(Resource):
@@ -41,6 +42,9 @@ class UserResource(Resource):
 
 class UsersResource(Resource):
     """Resource for Campus /user endpoint."""
+
+    def __init__(self, client: JsonClient):
+        super().__init__(client, "users")
 
     def __getitem__(self, user_id: str) -> UserResource:
         """Get a user by ID."""
