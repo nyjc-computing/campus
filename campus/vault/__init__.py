@@ -80,9 +80,7 @@ from .model import Vault
 
 __all__ = [
     "get_vault",
-    "get_authenticated_vault",
     "Vault",
-    "AuthenticatedVault",
     "create_app",
     "init_app",
     "init_db",
@@ -104,75 +102,6 @@ def get_vault(label: str) -> Vault:
     Authentication and permission checking should be handled at the application layer.
     """
     return Vault(label)
-
-
-class AuthenticatedVault:
-    """Backward-compatible vault wrapper that includes authentication.
-
-    This class provides the same interface as the old Vault class for
-    backward compatibility, while using the new separated architecture.
-    """
-
-    def __init__(self, label: str):
-        self.label = label
-        self.vault = Vault(label)
-
-        # Authenticate client using the new auth system
-        from .auth import authenticate_client
-        self.client_id = authenticate_client()
-
-    def __repr__(self) -> str:
-        return f"AuthenticatedVault(label={self.label!r})"
-
-    def get(self, key: str) -> str:
-        """Get a secret from the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-        check_vault_access(self.client_id, self.label, access.READ)
-        return self.vault.get(key)
-
-    def has(self, key: str) -> bool:
-        """Check if a secret exists in the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-        check_vault_access(self.client_id, self.label, access.READ)
-        return self.vault.has(key)
-
-    def set(self, key: str, value: str) -> None:
-        """Set a secret in the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-
-        # Check if key exists to determine required permission
-        key_exists = self.vault.has(key) if self._can_read() else False
-        required_permission = access.UPDATE if key_exists else access.CREATE
-        check_vault_access(self.client_id, self.label, required_permission)
-
-        self.vault.set(key, value)
-
-    def delete(self, key: str) -> None:
-        """Delete a secret from the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-        check_vault_access(self.client_id, self.label, access.DELETE)
-        self.vault.delete(key)
-
-    def _can_read(self) -> bool:
-        """Check if client can read from this vault (for internal use)."""
-        try:
-            from .auth import check_vault_access
-            check_vault_access(self.client_id, self.label, access.READ)
-            return True
-        except errors.api_errors.ForbiddenError:
-            return False
-
-
-def get_authenticated_vault(label: str) -> AuthenticatedVault:
-    """Get an authenticated vault instance with the old interface.
-
-    This function provides backward compatibility for code that expects
-    the old Vault behavior with built-in authentication and permission checking.
-
-    For new code, prefer using the routes for HTTP access or the model.Vault
-    class directly with explicit authentication handling.
-    """
-    return AuthenticatedVault(label)
 
 
 def create_app() -> Flask:
@@ -206,8 +135,8 @@ def init_app(app: Flask | Blueprint) -> None:
 def init_db():
     """Initialize the tables needed by the model.
 
-    This function is intended to be called only in a test environment or
-    staging.
+    This function is intended to be called only in a test or staging
+    environment.
     """
     # Initialize vault table
     with db.get_connection_context() as conn:
@@ -224,10 +153,7 @@ def init_db():
             """
             cursor.execute(vault_schema)
 
-    # Initialize access control table
     access.init_db()
-
-    # Initialize vault client table
     client.init_db()
 
 
