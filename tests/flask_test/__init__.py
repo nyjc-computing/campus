@@ -6,12 +6,11 @@ the JsonClient and JsonResponse protocols for testing purposes.
 Example usage: see test_client_example_usage.py
 """
 
-from typing import Any, Iterable, Literal, Mapping, Self
+from typing import Any, Callable, Iterable, Literal, Mapping, Self
 
 from flask import Flask
 from werkzeug.test import TestResponse
 
-from campus import config
 from campus.common import devops
 from campus.common.http import JsonClient, JsonDict, JsonResponse
 from campus.common.utils import secret
@@ -30,8 +29,10 @@ def configure_test_app(app: Flask) -> Flask:
     return app
 
 
-def create_test_client(app: Flask) -> "FlaskTestClient":
+def create_client_factory(app: Flask) -> Callable[[], "FlaskTestClient"]:
     """Create a client factory for the given Flask app.
+
+    This function is meant to hook into campus.common.http.client_factory
 
     Args:
         app: Flask application instance
@@ -39,10 +40,13 @@ def create_test_client(app: Flask) -> "FlaskTestClient":
     Returns:
         ClientFactory: A factory for creating test clients
     """
-    return FlaskTestClient(
-        base_url=config.get_app_base_url(app.name),
-        flask_client=app.test_client()
-    )
+    def get_client(*args, **kwargs) -> "FlaskTestClient":
+        return FlaskTestClient(
+            *args,
+            **kwargs,
+            flask_client=app.test_client()
+        )
+    return get_client
 
 
 class FlaskTestResponse(JsonResponse):
@@ -169,6 +173,6 @@ class FlaskTestClient(JsonClient):
 __all__ = [
     "FlaskTestClient",
     "FlaskTestResponse",
-    "create_test_client",
+    "create_client_factory",
     "configure_test_app",
 ]
