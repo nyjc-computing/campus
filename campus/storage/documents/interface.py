@@ -13,6 +13,8 @@ from abc import ABC, abstractmethod
 PK = "id"
 
 
+# pylint: disable=unnecessary-ellipsis
+
 class CollectionInterface(ABC):
     """Interface for collection storage operations."""
 
