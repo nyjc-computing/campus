@@ -26,7 +26,8 @@ def cursor_to_dict(cursor: psycopg2.extras.RealDictCursor) -> PostgreSQLResult:
     try:
         rows = cursor.fetchall()
         return {
-            "fetchall": [dict(row) for row in rows],  # Convert RealDictRow to dict
+            # Convert RealDictRow to dict
+            "fetchall": [dict(row) for row in rows],
             "lastrowid": None,  # PostgreSQL doesn't have lastrowid like SQLite
             "rowcount": cursor.rowcount,
         }

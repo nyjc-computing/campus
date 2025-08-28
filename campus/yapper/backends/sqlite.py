@@ -23,6 +23,7 @@ def dict_factory(cursor: sqlite3.Cursor, row: sqlite3.Row) -> dict[str, Any]:
     """Convert SQLite rows to dictionaries."""
     return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
 
+
 def cursor_to_dict(cursor: sqlite3.Cursor) -> SQLiteResult:
     """Extract query results and commonly used attributes from cursor."""
     # Test implementation does not expect large result set, fetchall() considered safe.
@@ -57,7 +58,7 @@ class SQLiteYapper(YapperInterface):
             cursor = conn.cursor()
             cursor.execute(query, params)
             return cursor_to_dict(cursor)
-    
+
     def _executemany(self, query: str, params: list[tuple]) -> SQLiteResult:
         """Execute a SQL query with multiple parameters."""
         with self._get_conn() as conn:
@@ -125,7 +126,7 @@ class SQLiteYapper(YapperInterface):
               VALUES (?, ?)""",
             (self.client_id, label)
         )
-    
+
     def unsubscribe(self, label: EventLabel) -> None:
         """Unsubscribe from an event label.
 
@@ -152,7 +153,7 @@ class SQLiteYapper(YapperInterface):
             "DELETE FROM unread WHERE client_id = ?",
             (self.client_id,)
         )
-    
+
     def listen(self) -> list[Event]:
         """Listen for events from the message broker."""
         # HACK: There is a tiny window between the two queries where
@@ -175,7 +176,7 @@ class SQLiteYapper(YapperInterface):
             Event(row["label"], row["data"])
             for row in events
         ]
-    
+
     def _sweep(self) -> None:
         """Clear old events without subscriptions."""
         self._execute(
@@ -187,7 +188,7 @@ class SQLiteYapper(YapperInterface):
         """Start the Yapper instance."""
         self._init_db()
         super().start()
-    
+
     def stop(self) -> None:
         """Stop the Yapper instance."""
         self.listen()  # also clears unread
