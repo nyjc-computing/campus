@@ -1,4 +1,4 @@
-"""client.config
+"""campus.client.config
 
 Configuration for Campus client base URLs and service mappings.
 
@@ -32,11 +32,11 @@ def get_apps_base_url() -> str:
     """
     match devops.ENV:
         case devops.PRODUCTION:
-            return "https://api.campus.nyjc.app"
+            return "https://api.campus.nyjc.app/api/v1/"
         case devops.STAGING:
-            return "https://api.campus.nyjc.dev"
+            return "https://api.campus.nyjc.dev/api/v1/"
         case devops.TESTING | devops.DEVELOPMENT:
-            return "https://campusapps-development.up.railway.app/"
+            return "https://campusapps-development.up.railway.app/api/v1/"
     raise ValueError(f"Unknown environment: {devops.ENV}")
 
 

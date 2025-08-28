@@ -1,4 +1,4 @@
-"""client.base
+"""campus.client.base
 
 HTTP client functionality for Campus services.
 
@@ -13,12 +13,15 @@ from urllib.parse import urljoin
 
 import requests
 
+from campus.common.utils import secret
 from campus.client.errors import (
     AuthenticationError,
     AccessDeniedError,
+    ConflictError,
     NotFoundError,
     ValidationError,
-    NetworkError
+    NetworkError,
+    MalformedResponseError,
 )
 from campus.client import config
 
@@ -31,16 +34,23 @@ class HttpClient:
     clients.
     """
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(
+            self,
+            base_url: Optional[str] = None,
+            *,
+            auth_scheme: str = "basic"
+    ):
         """Initialize base client.
 
         Args:
             base_url: Override default base URL for the service
+            auth_scheme: 'basic' or 'bearer' (default: 'basic')
         """
         self.base_url = base_url or self._get_default_base_url()
         self._client_id: Optional[str] = None
         self._client_secret: Optional[str] = None
         self._access_token: Optional[str] = None
+        self.auth_scheme = auth_scheme
 
         # Try to load credentials from environment
         self._load_credentials_from_env()
@@ -101,11 +111,27 @@ class HttpClient:
             Dict[str, str]: Headers including authorization and content type
         """
         self._ensure_authenticated()
-        return {
-            "Authorization": f"Bearer {self._access_token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        if self.auth_scheme == "basic":
+            if not self._client_id or not self._client_secret:
+                raise AuthenticationError(
+                    "Client ID and secret must be set for Basic auth"
+                )
+            return {
+                "Authorization": secret.encode_http_basic_auth(
+                    self._client_id,
+                    self._client_secret
+                ),
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        elif self.auth_scheme == "bearer":
+            return {
+                "Authorization": f"Bearer {self._access_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+        else:
+            raise ValueError("Unknown authentication scheme")
 
     def _make_request(
         self,
@@ -136,44 +162,43 @@ class HttpClient:
         headers = self._get_headers()
 
         try:
-            response = requests.request(
-                method=method,
-                url=url,
-                headers=headers,
-                json=data,
-                params=params,
-                timeout=30
-            )
-
-            # Handle HTTP status codes
-            if response.status_code == 401:
-                raise AuthenticationError("Authentication failed")
-            elif response.status_code == 403:
-                raise AccessDeniedError("Access denied")
-            elif response.status_code == 404:
-                raise NotFoundError("Resource not found")
-            elif response.status_code == 400:
-                error_msg = "Validation error"
-                try:
-                    error_data = response.json()
-                    if "error" in error_data:
-                        error_msg = error_data["error"]
-                except:
-                    pass
-                raise ValidationError(error_msg)
-            elif not response.ok:
-                raise NetworkError(
-                    f"HTTP {response.status_code}: {response.text}")
+            with requests.Session() as session:
+                response = session.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=data,
+                    params=params,
+                    timeout=30
+                )
+        except requests.RequestException as e:
+            raise NetworkError(f"Network request failed: {e}") from e
+        else:
+            match response.status_code:
+                case 400:
+                    raise ValidationError(response.json())
+                case 401:
+                    raise AuthenticationError(response.json())
+                case 403:
+                    raise AccessDeniedError(response.json())
+                case 404:
+                    raise NotFoundError(response.json())
+                case 409:
+                    raise ConflictError(response.json())
+                case _:
+                    if not response.ok:
+                        raise NetworkError(f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
+            if not response.content or response.content.strip() == b'':
+                # Genuine empty response (no content)
+                return {}
             try:
                 return response.json()
-            except json.JSONDecodeError:
-                # Some endpoints might return empty responses
-                return {}
+            except json.JSONDecodeError as e:
+                # Response is not valid JSON
+                raise MalformedResponseError("Invalid JSON response") from e
 
-        except requests.RequestException as e:
-            raise NetworkError(f"Network request failed: {e}")
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a GET request.

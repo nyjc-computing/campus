@@ -1,4 +1,4 @@
-"""common.utils.uid
+"""campus.common.utils.uid
 
 Utility functions for generating unique identifiers (UIDs).
 """

@@ -2,11 +2,13 @@ name: Integration Tests
 
 on:
   pull_request:
-    branches: [main, staging]
+    branches: [main, staging, weekly]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      ENV: testing
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python

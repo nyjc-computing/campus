@@ -209,6 +209,67 @@ circle_resource.delete()
 
 ---
 
+
+## Admin Resource
+
+The Admin resource provides access to administrative endpoints for database management and status checks.
+
+### Access Pattern
+
+```python
+from campus.client import Campus
+campus = Campus()
+
+# All admin operations are accessed through campus.admin
+admin_client = campus.admin
+```
+
+### Methods
+
+#### `campus.admin.status() -> Dict[str, Any]`
+
+Get admin status info.
+
+**Returns:** Dictionary containing status information
+
+**Example:**
+```python
+status = campus.admin.status()
+print(status)
+```
+
+#### `campus.admin.init_db() -> Dict[str, Any]`
+
+Initialise the database.
+
+**Returns:** Dictionary containing the result of the operation
+
+**Example:**
+```python
+result = campus.admin.init_db()
+print(result)
+```
+
+#### `campus.admin.purge_db() -> Dict[str, Any]`
+
+Purge the database.
+
+**Returns:** Dictionary containing the result of the operation
+
+**Example:**
+```python
+result = campus.admin.purge_db()
+print(result)
+```
+
+### Endpoints
+
+- `GET /admin/status` → `campus.admin.status()`
+- `POST /admin/init-db` → `campus.admin.init_db()`
+- `POST /admin/purge-db` → `campus.admin.purge_db()`
+
+All methods return a dictionary with the API response.
+
 ## Vault Resource
 
 The Vault resource provides secure storage and retrieval of secrets and configuration data through the unified Campus interface.

@@ -1,4 +1,4 @@
-"""common.errors.api_errors
+"""campus.common.errors.api_errors
 
 API error definitions for Campus.
 These errors represent all possible API errors that would be raised.
@@ -23,10 +23,16 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 message="Unauthorized",
                 status=status,
                 **body
-           )
+            )
         case 403:
             raise ForbiddenError(
                 message="Forbidden",
+                status=status,
+                **body
+            )
+        case 404:
+            raise NotFoundError(
+                message="Not found",
                 status=status,
                 **body
             )
@@ -53,52 +59,20 @@ def raise_api_error(status: int, **body) -> NoReturn:
     )
 
 
-class InternalError(APIError):
-    """Internal server error.
+class ConflictError(APIError):
+    """Conflict error.
 
-    Error indicates that the server encountered an unexpected condition
-    that prevented it from fulfilling the request.
+    Error indicates that the request conflicts with the current state of the
+    server.
+    E.g. trying to create a resource that already exists, delete a resource
+      that does not exist, etc.
     """
-    status_code: int = 500
+    status_code: int = 409
 
     def __init__(
             self,
-            message: str = "Internal server error",
-            error_code: str = ErrorConstant.SERVER_ERROR,
-            **details
-    ) -> None:
-        super().__init__(message, error_code, **details)
-
-
-class InvalidRequestError(APIError):
-    """Invalid request error.
-
-    Error indicates that the request does not follow the requirements.
-    E.g. missing fields, invalid data types, etc.
-    """
-    status_code: int = 400
-
-    def __init__(
-            self,
-            message: str = "Invalid request",
-            error_code: str = ErrorConstant.INVALID_REQUEST,
-            **details
-    ) -> None:
-        super().__init__(message, error_code, **details)
-
-
-class UnauthorizedError(APIError):
-    """Unauthorized error.
-
-    Error indicates that the request is not authenticated.
-    E.g. missing authentication token, invalid token, etc.
-    """
-    status_code: int = 401
-
-    def __init__(
-            self,
-            message: str = "Unauthorized",
-            error_code: str = ErrorConstant.UNAUTHORIZED,
+            message: str = "Conflict",
+            error_code: str = ErrorConstant.CONFLICT,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)
@@ -122,20 +96,74 @@ class ForbiddenError(APIError):
         super().__init__(message, error_code, **details)
 
 
-class ConflictError(APIError):
-    """Conflict error.
+class InternalError(APIError):
+    """Internal server error.
 
-    Error indicates that the request conflicts with the current state of the
-    server.
-    E.g. trying to create a resource that already exists, delete a resource
-      that does not exist, etc.
+    Error indicates that the server encountered an unexpected condition
+    that prevented it from fulfilling the request.
     """
-    status_code: int = 409
+    status_code: int = 500
 
     def __init__(
             self,
-            message: str = "Conflict",
-            error_code: str = ErrorConstant.CONFLICT,
+            message: str = "Internal server error",
+            error_code: str = ErrorConstant.SERVER_ERROR,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+    @classmethod
+    def from_exception(cls, exception: Exception) -> 'InternalError':
+        """Convenience factory method"""
+        return cls(message=str(exception), error_type=type(exception).__name__)
+
+
+class InvalidRequestError(APIError):
+    """Invalid request error.
+
+    Error indicates that the request does not follow the requirements.
+    E.g. missing fields, invalid data types, etc.
+    """
+    status_code: int = 400
+
+    def __init__(
+            self,
+            message: str = "Invalid request",
+            error_code: str = ErrorConstant.INVALID_REQUEST,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
+class NotFoundError(APIError):
+    """Not Found error.
+
+    Error indicates that the requested resource does not exist.
+    E.g. trying to access a user, circle, or document that is missing.
+    """
+    status_code: int = 404
+
+    def __init__(
+            self,
+            message: str = "Not found",
+            error_code: str = ErrorConstant.NOT_FOUND,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
+class UnauthorizedError(APIError):
+    """Unauthorized error.
+
+    Error indicates that the request is not authenticated.
+    E.g. missing authentication token, invalid token, etc.
+    """
+    status_code: int = 401
+
+    def __init__(
+            self,
+            message: str = "Unauthorized",
+            error_code: str = ErrorConstant.UNAUTHORIZED,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)

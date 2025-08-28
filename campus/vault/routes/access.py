@@ -1,4 +1,4 @@
-"""vault.routes.access
+"""campus.vault.routes.access
 
 Flask routes for vault access control management.
 

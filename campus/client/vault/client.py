@@ -1,4 +1,4 @@
-"""client.vault.client
+"""campus.client.vault.client
 
 Vault client management for creating and managing vault authentication clients.
 """

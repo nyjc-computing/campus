@@ -1,4 +1,4 @@
-"""apps/campusauth/models
+"""campus.apps.campusauth.models
 
 Authentication and authorisation implementation for the Campus API.
 
@@ -10,11 +10,15 @@ This module handles:
 from functools import wraps
 from typing import Callable
 
-from flask import request
+from flask import g, request
 
-from campus.apps.campusauth.context import ctx
 from campus.client import Campus
 from campus.common.webauth import http
+from campus.models.token import Tokens
+from campus.models.user import User
+
+tokens = Tokens()
+users = User()
 
 
 def authenticate_client() -> tuple[dict[str, str], int] | None:
@@ -28,21 +32,30 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
 
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
+    req_header = dict(request.headers)
     auth = (
         http.HttpAuthenticationScheme
-        .from_header("campus", request.headers)
-        .get_auth(request.headers)
+        .from_header(provider="campus", header=req_header)
+        .get_auth(header=req_header)
     )
+    campus_client = Campus()
     match auth.scheme:
         case "basic":
             client_id, client_secret = auth.credentials()
-            campus_client = Campus()
-            try:
-                campus_client.vault.client.authenticate(client_id, client_secret)
-                ctx.client = campus_client.vault.client.get(client_id)
-            except Exception:
+            if not campus_client.vault.client.authenticate(
+                client_id, client_secret
+            ):
                 return {"message": "Invalid client credentials"}, 403
+            else:
+                g.current_client = campus_client.vault.client.get(client_id)
         case "bearer":
+            access_token = auth.value
+            # raises UnauthorizedError for invalid access_token
+            token = tokens.validate_token(access_token)
+            g.current_user = users.get(token["user_id"])
+            g.current_client = campus_client.vault.client.get(
+                token["client_id"]
+            )
             return {"message": "Bearer auth not implemented"}, 501
 
 

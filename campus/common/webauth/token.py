@@ -1,4 +1,4 @@
-"""common.webauth.token
+"""campus.common.webauth.token
 
 Token management schemas and models
 """

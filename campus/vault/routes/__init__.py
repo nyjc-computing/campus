@@ -1,4 +1,4 @@
-"""vault.routes
+"""campus.vault.routes
 
 Flask blueprint modules for the vault service.
 

@@ -1,4 +1,4 @@
-"""common.schema.base
+"""campus.common.schema.base
 
 Base schema definitions, enums, and constants for Campus.
 """

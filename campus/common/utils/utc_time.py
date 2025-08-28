@@ -1,4 +1,4 @@
-"""common.utils.utc_time.py
+"""campus.common.utils.utc_time.py
 
 This module provides time-related utilities for the authentication service, and
 is meant to replace all usage of the Python `time` module in those modules.

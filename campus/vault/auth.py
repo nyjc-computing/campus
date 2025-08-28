@@ -1,4 +1,4 @@
-"""vault.auth
+"""campus.vault.auth
 
 Authentication and authorization utilities for vault routes.
 
@@ -12,29 +12,9 @@ from typing import Tuple
 
 from flask import request, jsonify
 
+from campus.common.errors import api_errors
+
 from . import access, client
-
-
-class VaultAuthError(Exception):
-    """Base exception for vault authentication errors."""
-    pass
-
-
-class ClientAuthenticationError(VaultAuthError):
-    """Exception for client authentication failures."""
-    pass
-
-
-class VaultAccessDeniedError(VaultAuthError):
-    """Exception for vault access permission failures."""
-
-    def __init__(self, client_id: str, label: str, permission: str):
-        super().__init__(
-            f"Client '{client_id}' does not have {permission} permission for vault '{label}'"
-        )
-        self.client_id = client_id
-        self.label = label
-        self.permission = permission
 
 
 def get_client_credentials() -> Tuple[str, str]:
@@ -65,11 +45,11 @@ def get_client_credentials() -> Tuple[str, str]:
     client_secret = os.environ.get("CLIENT_SECRET")
 
     if not client_id:
-        raise ClientAuthenticationError(
-            "CLIENT_ID missing from Authorization header or environment")
+        raise api_errors.UnauthorizedError(
+            message="CLIENT_ID missing from Authorization header or environment")
     if not client_secret:
-        raise ClientAuthenticationError(
-            "CLIENT_SECRET missing from Authorization header or environment")
+        raise api_errors.UnauthorizedError(
+            message="CLIENT_SECRET missing from Authorization header or environment")
 
     return client_id, client_secret
 
@@ -83,16 +63,14 @@ def authenticate_client() -> str:
     Raises:
         ClientAuthenticationError: If authentication fails
     """
+    client_id, client_secret = get_client_credentials()
+    # Authenticate using vault's client system
     try:
-        client_id, client_secret = get_client_credentials()
-
-        # Authenticate using vault's client system
         client.authenticate_client(client_id, client_secret)
-        return client_id
-
-    except client.ClientAuthenticationError as e:
-        raise ClientAuthenticationError(
-            f"Client authentication failed: {e}") from e
+    except api_errors.APIError as e:
+        # propagate API errors (e.g., Unauthorized, NotFound)
+        raise
+    return client_id
 
 
 def check_vault_access(client_id: str, vault_label: str, required_permission: int) -> None:
@@ -116,10 +94,10 @@ def check_vault_access(client_id: str, vault_label: str, required_permission: in
             permission_names.append("UPDATE")
         if required_permission & access.DELETE:
             permission_names.append("DELETE")
-
         permission_str = "|".join(
             permission_names) if permission_names else str(required_permission)
-        raise VaultAccessDeniedError(client_id, vault_label, permission_str)
+        raise api_errors.ForbiddenError(
+            message=f"Client '{client_id}' does not have {permission_str} permission for vault '{vault_label}'", client_id=client_id, label=vault_label, permission=permission_str)
 
 
 def require_client_authentication():
@@ -155,10 +133,15 @@ def require_client_authentication():
                 kwargs['client_id'] = client_id
                 return f(*args, **kwargs)
 
-            except ClientAuthenticationError as e:
-                return jsonify({"error": f"Authentication failed: {e}"}), 401
+            except api_errors.APIError as e:
+                response = jsonify(e.to_dict())
+                response.status_code = getattr(e, 'status_code', 500)
+                return response
             except Exception as e:
-                return jsonify({"error": f"Internal error: {e}"}), 500
+                response = jsonify(
+                    {"message": f"Internal error: {e}", "error_code": "SERVER_ERROR", "details": {}})
+                response.status_code = 500
+                return response
 
         return decorated_function
     return decorator
@@ -233,16 +216,22 @@ def require_vault_permission(*required_permissions: int):
                             "|".join(names) if names else str(permission))
 
                     permission_str = " OR ".join(permission_names)
-                    raise VaultAccessDeniedError(
-                        client_id, vault_label, permission_str)
+                    raise api_errors.ForbiddenError(
+                        message=f"Client '{client_id}' does not have {permission_str} permission for vault '{vault_label}'",
+                        client_id=client_id, label=vault_label, permission=permission_str)
 
                 # Call the route function
                 return f(*args, **kwargs)
 
-            except VaultAccessDeniedError as e:
-                return jsonify({"error": f"Access denied: {e}"}), 403
+            except api_errors.ForbiddenError as e:
+                response = jsonify(e.to_dict())
+                response.status_code = getattr(e, 'status_code', 403)
+                return response
             except Exception as e:
-                return jsonify({"error": f"Internal error: {e}"}), 500
+                response = jsonify(
+                    {"message": f"Internal error: {e}", "error_code": "SERVER_ERROR", "details": {}})
+                response.status_code = 500
+                return response
 
         return decorated_function
     return decorator

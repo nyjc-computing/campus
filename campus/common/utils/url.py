@@ -1,4 +1,4 @@
-"""common.utils.url
+"""campus.common.utils.url
 
 This module provides utility functions for URL manipulation and validation.
 """

@@ -1,4 +1,4 @@
-"""client.errors
+"""campus.client.errors
 
 Common error types used across all campus client modules.
 """
@@ -19,6 +19,11 @@ class AccessDeniedError(CampusClientError):
     pass
 
 
+class ConflictError(CampusClientError):
+    """Raised when a conflict occurs."""
+    pass
+
+
 class NotFoundError(CampusClientError):
     """Raised when a requested resource is not found."""
     pass
@@ -31,4 +36,9 @@ class ValidationError(CampusClientError):
 
 class NetworkError(CampusClientError):
     """Raised when network communication fails."""
+    pass
+
+
+class MalformedResponseError(CampusClientError):
+    """Raised when the API response is malformed."""
     pass

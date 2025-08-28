@@ -1,4 +1,4 @@
-"""services.email.smtp
+"""campus.services.email.smtp
 
 SMTP email sending service.
 """

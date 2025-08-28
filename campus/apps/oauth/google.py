@@ -1,8 +1,36 @@
-"""apps.oauth.google
+"""campus.apps.oauth.google
 
 Routes for Google OAuth2.
 
 Reference: https://developers.google.com/identity/protocols/oauth2/web-server
+
+Google OAuth 2.0 Authorization Flow Diagram:
+
++--------+        (A)        +---------+ 
+|        |------------------>| Google  |
+|        |   Auth Request    |         | 
+|        |                   +---------+ 
+|        |        (B)        +---------+
+|        | +-----------------|         |
+|  User  | +---------------->|         |     (C)       +-----------+
+|        | Redirect w/ Code  | Campus  |---------------|  Google   |
+|        |                   | Backend |<--------------|  Token    |
+|        |        (D)        |         | Token Request | Endpoint  |
+|        |<----------------- |         |               +-----------+
++--------+ Redirect to sess  +---------+
+                target
+
+Legend:
+(A) User is redirected from Campus to Google for authentication and consent.
+    - a server-side session is initialised
+    - the session_id is stored client-side
+(B) Google redirects the user back to Campus with an authorization code.
+(C) Campus backend exchanges the authorization code directly with Google's
+    token endpoint for user profile.
+(D) Campus redirects user to session target.
+
+Apps and view functions sending the user to this endpoint must first establish
+a server-side session with a target.
 """
 
 from typing import NotRequired, Required, TypedDict
@@ -12,6 +40,7 @@ from werkzeug.wrappers import Response
 
 from campus.common.errors import api_errors
 from campus.models.credentials import UserCredentials
+from campus.models.session import Session
 from campus.common.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
@@ -26,6 +55,7 @@ PROVIDER = 'google'
 google_user_credentials = UserCredentials(PROVIDER)
 
 campus_client = Campus()
+sessions = Session()
 vault = campus_client.vault[PROVIDER]
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = integration.get_config(PROVIDER)

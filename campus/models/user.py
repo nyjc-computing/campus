@@ -1,16 +1,17 @@
-"""apps.common.models.user
+"""campus.models.user
 
 This module provides classes for managing Campus users.
 """
-import os
-
 from typing import NotRequired, TypedDict, Unpack
 
-from campus.models.base import BaseRecord
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.storage import get_table
+from campus.models.base import BaseRecordDict
+from campus.storage import (
+    errors as storage_errors,
+    get_table
+)
 
 TABLE = "users"
 
@@ -48,7 +49,7 @@ class UserUpdate(TypedDict, total=False):
     # Currently nothing for the user to update yet
 
 
-class UserResource(UserNew, BaseRecord, TypedDict, total=True):
+class UserResourceDict(UserNew, BaseRecordDict, TypedDict, total=True):
     """Response body schema representing the result of a users.get operation."""
     activated_at: NotRequired[utc_time.datetime]
 
@@ -64,18 +65,17 @@ class User:
         """Actions to perform upon first sign-in."""
         user_id = uid.generate_user_uid(email)
         try:
-            self.storage.update_by_id(user_id, {'activated_at': utc_time.now()})
-        except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
-        # Check if user was actually found and updated
-        user = self.storage.get_by_id(user_id)
-        if not user:
+            self.storage.update_by_id(
+                user_id, {'activated_at': utc_time.now()})
+        except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            )
+            ) from None
+        except Exception as e:
+            raise api_errors.InternalError.from_exception(e) from e
 
-    def new(self, **fields: Unpack[UserNew]) -> UserResource:
+    def new(self, **fields: Unpack[UserNew]) -> UserResourceDict:
         """Create a new user."""
         user_id = uid.generate_user_uid(fields["email"])
         record = dict(
@@ -86,49 +86,51 @@ class User:
         )
         try:
             self.storage.insert_one(record)
-            return record  # type: ignore
+        except storage_errors.ConflictError as e:
+            raise api_errors.ConflictError(
+                message="User already exists",
+                user_id=user_id,
+                error=e
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
+        else:
+            return record  # type: ignore
 
     def delete(self, user_id: str) -> None:
         """Delete a user by id."""
-        # Check if user exists first
-        user = self.storage.get_by_id(user_id)
-        if not user:
+        try:
+            self.storage.delete_by_id(user_id)
+        except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            )
-        try:
-            self.storage.delete_by_id(user_id)
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
-    def get(self, user_id: str) -> UserResource:
+    def get(self, user_id: str) -> UserResourceDict:
         """Get a user by id."""
         try:
             user = self.storage.get_by_id(user_id)
-            if not user:
-                raise api_errors.ConflictError(
-                    message="User not found",
-                    user_id=user_id
-                )
-            return user  # type: ignore
-        except api_errors.ConflictError:
-            raise
+        except storage_errors.NotFoundError as e:
+            raise api_errors.NotFoundError(
+                message="User not found",
+                user_id=user_id
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
+        else:
+            return user  # type: ignore
 
     def update(self, user_id: str, **updates: Unpack[UserUpdate]) -> None:
         """Update a user by id."""
-        # Check if user exists first
-        user = self.storage.get_by_id(user_id)
-        if not user:
+        try:
+            self.storage.update_by_id(user_id, dict(updates))
+        except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",
                 user_id=user_id
-            )
-        try:
-            self.storage.update_by_id(user_id, dict(updates))
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e

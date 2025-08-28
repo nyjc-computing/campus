@@ -1,4 +1,4 @@
-"""client
+"""campus.client
 
 Campus Client Package
 

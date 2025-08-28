@@ -1,4 +1,4 @@
-"""common.errors.base
+"""campus.common.errors.base
 
 Base error definitions, enums, and constants for Campus.
 These errors are used to catch common API errors and return
@@ -15,10 +15,11 @@ JsonDict = dict[str, JsonValues]
 class ErrorConstant(str):
     """Error enums"""
     CONFLICT = "CONFLICT"
-    UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
     INVALID_REQUEST = "INVALID_REQUEST"
+    NOT_FOUND = "NOT_FOUND"
     SERVER_ERROR = "SERVER_ERROR"
+    UNAUTHORIZED = "UNAUTHORIZED"
 
 
 class APIError(Exception):

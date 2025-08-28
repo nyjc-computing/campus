@@ -1,4 +1,4 @@
-"""vault.routes.vault
+"""campus.vault.routes.vault
 
 Flask routes for the vault web API service.
 

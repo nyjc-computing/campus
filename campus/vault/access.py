@@ -1,4 +1,4 @@
-"""vault.access
+"""campus.vault.access
 
 Access control module for the vault service.
 
@@ -27,8 +27,11 @@ To check if a permission is granted, we use the bitwise AND operator (&):
 This allows efficient storage and checking of multiple permissions in one integer.
 """
 
+import psycopg2
+
 from campus.common.utils import uid, utc_time
 from campus.common import devops
+from campus.common.errors import api_errors
 
 from . import db
 
@@ -77,37 +80,40 @@ def grant_access(client_id: str, label: str, access: int) -> None:
         grant_access("client-456", "api-keys", READ | CREATE)  # Read + create
         grant_access("admin-789", "api-keys", ALL)  # Full access
     """
-    with db.get_connection_context() as conn:
-        # Check if access already exists
-        existing_access = db.execute_query(
-            conn,
-            "SELECT * FROM vault_access WHERE client_id = %s AND label = %s",
-            (client_id, label),
-            fetch_one=True
-        )
-
-        if existing_access:
-            # Update existing access permissions
-            db.execute_query(
+    try:
+        with db.get_connection_context() as conn:
+            # Check if access already exists
+            existing_access = db.execute_query(
                 conn,
-                "UPDATE vault_access SET access = %s WHERE id = %s",
-                (access, existing_access["id"]),
-                fetch_one=False,
-                fetch_all=False
+                "SELECT * FROM vault_access WHERE client_id = %s AND label = %s",
+                (client_id, label),
+                fetch_one=True
             )
-        else:
-            # Create new access record
-            access_id = uid.generate_category_uid(TABLE, length=16)
-            db.execute_query(
-                conn,
-                (
-                    "INSERT INTO vault_access (id, created_at, client_id, label, access)"
-                    "VALUES (%s, %s, %s, %s, %s)"
-                ),
-                (access_id, utc_time.now(), client_id, label, access),
-                fetch_one=False,
-                fetch_all=False
-            )
+            if existing_access:
+                # Update existing access permissions
+                db.execute_query(
+                    conn,
+                    "UPDATE vault_access SET access = %s WHERE id = %s",
+                    (access, existing_access["id"]),
+                    fetch_one=False,
+                    fetch_all=False
+                )
+            else:
+                # Create new access record
+                access_id = uid.generate_category_uid(TABLE, length=16)
+                db.execute_query(
+                    conn,
+                    (
+                        "INSERT INTO vault_access (id, created_at, client_id, label, access)"
+                        "VALUES (%s, %s, %s, %s, %s)"
+                    ),
+                    (access_id, utc_time.now(), client_id, label, access),
+                    fetch_one=False,
+                    fetch_all=False
+                )
+    except psycopg2.IntegrityError:
+        raise api_errors.ConflictError(
+            message="Access for this client and label already exists.")
 
 
 def revoke_access(client_id: str, label: str) -> None:
@@ -156,10 +162,8 @@ def has_access(client_id: str, label: str, required_access: int) -> bool:
             (client_id, label),
             fetch_one=True
         )
-
         if not access_record:
             return False
-
         granted_access = access_record["access"]
         return (granted_access & required_access) == required_access
 

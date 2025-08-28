@@ -1,4 +1,4 @@
-"""apps.oauth
+"""campus.apps.oauth
 
 OAuth2 routes for integrations.
 """

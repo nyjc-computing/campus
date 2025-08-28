@@ -1,4 +1,4 @@
-"""vault
+"""campus.vault
 
 Vault service for managing secrets and sensitive system data in Campus.
 
@@ -71,25 +71,18 @@ USAGE EXAMPLE:
     # DELETE /vault/api-secrets/my_key
 """
 
-import os
-
 from flask import Blueprint, Flask
 
-from campus.common import devops
+from campus.common import devops, errors
 
 from . import access, db, client
-from .model import Vault, VaultKeyError
-from .auth import VaultAuthError, ClientAuthenticationError, VaultAccessDeniedError
+from .model import Vault
 
 __all__ = [
     "get_vault",
     "get_authenticated_vault",
     "Vault",
     "AuthenticatedVault",
-    "VaultKeyError",
-    "VaultAuthError",
-    "ClientAuthenticationError",
-    "VaultAccessDeniedError",
     "create_app",
     "init_app",
     "init_db",
@@ -166,7 +159,7 @@ class AuthenticatedVault:
             from .auth import check_vault_access
             check_vault_access(self.client_id, self.label, access.READ)
             return True
-        except VaultAccessDeniedError:
+        except errors.api_errors.ForbiddenError:
             return False
 
 
@@ -189,12 +182,12 @@ def create_app() -> Flask:
     """
     app = Flask(__name__)
     init_app(app)
+    errors.init_app(app)
     return app
 
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
-    from flask import jsonify
     from .routes import init_vault_routes, init_access_routes, init_client_routes
 
     # Health check route for deployments
@@ -239,8 +232,6 @@ def init_db():
 
 def run_server():
     """Entry point for running vault as a standalone service"""
-    import os
-
     app = create_app()
 
     # Replit configuration

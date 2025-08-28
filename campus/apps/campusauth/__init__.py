@@ -1,4 +1,4 @@
-"""apps/campusauth
+"""campus.apps.campusauth
 
 Web endpoints for Campus authentication.
 """
@@ -11,7 +11,6 @@ from .authentication import (
     authenticate_client,
     client_auth_required
 )
-from .context import ctx
 
 __all__ = [
     'create_app',
@@ -19,7 +18,6 @@ __all__ = [
     'init_db',
     'authenticate_client',
     'client_auth_required',
-    "ctx"
 ]
 
 
@@ -31,6 +29,7 @@ def create_app() -> Flask:
     from campus.common import errors
     app = Flask(__name__)
     init_app(app)
+    # TODO: review error handler registration to handle HTML and API errors
     errors.init_app(app)
     return app
 

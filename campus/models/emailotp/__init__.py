@@ -1,4 +1,4 @@
-"""apps.common.models.otp
+"""campus.models.emailotp
 
 This module provides classes and utilities for handling one-time
 passwords (OTPs) used in email authentication. It includes functionality
@@ -12,10 +12,13 @@ from typing import TypedDict, Unpack
 import bcrypt
 
 from campus.common.errors import api_errors
-from campus.models.base import BaseRecord
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.storage import get_table
+from campus.models.base import BaseRecordDict
+from campus.storage import (
+    errors as storage_errors,
+    get_table,
+)
 
 TABLE = "emailotp"
 
@@ -107,7 +110,7 @@ class OTPVerify(OTPRequest, total=True):
     otp: str
 
 
-class OTPRecord(OTPRequest, BaseRecord, total=True):
+class OTPRecord(OTPRequest, BaseRecordDict, total=True):
     """Schema for a complete OTP record.
     Currently unused in the API, provided for documentation purpose.
     """
@@ -151,10 +154,16 @@ class EmailOTPAuth:
 
         try:
             # Delete any existing OTP for this email (find by email field)
-            existing_otps = self.storage.get_matching({"email": email})
+            try:
+                existing_otps = self.storage.get_matching({"email": email})
+            except storage_errors.NotFoundError:
+                existing_otps = []
             for otp_record in existing_otps:
-                self.storage.delete_by_id(otp_record["id"])
-            
+                try:
+                    self.storage.delete_by_id(otp_record["id"])
+                except storage_errors.NotFoundError:
+                    continue
+
             # Insert new OTP
             otp_id = uid.generate_category_uid(TABLE, length=16)
             otp_code = OTPRecord(
@@ -164,10 +173,17 @@ class EmailOTPAuth:
                 created_at=created_at,
                 expires_at=expires_at,
             )
-            self.storage.insert_one(dict(otp_code))
-            return plain_otp
+            try:
+                self.storage.insert_one(dict(otp_code))
+            except storage_errors.ConflictError as e:
+                raise api_errors.ConflictError(
+                    message="OTP conflict during insert",
+                    email=email
+                ) from e
+            else:
+                return plain_otp
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def verify(self, **data: Unpack[OTPVerify]) -> None:
         """Verify if the provided OTP matches the one stored for the email.
@@ -181,13 +197,13 @@ class EmailOTPAuth:
         """
         try:
             # Get the latest OTP for this email
-            otp_records = self.storage.get_matching({"email": data['email']})
-            if not otp_records:
+            try:
+                otp_records = self.storage.get_matching(
+                    {"email": data['email']})
+            except storage_errors.NotFoundError:
                 raise api_errors.ConflictError("OTP not found")
-            
             # Get the most recent OTP record (assuming they're ordered by creation time)
             record = otp_records[0]
-            
             hashed_otp = _hashedOTP(record['otp_hash'])
             expires_at = record['expires_at']
 
@@ -207,7 +223,7 @@ class EmailOTPAuth:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def revoke(self, email: str) -> None:
         """Delete all OTPs for the given email (typically after successful
@@ -218,14 +234,18 @@ class EmailOTPAuth:
         """
         try:
             # Find all OTPs for this email
-            otp_records = self.storage.get_matching({"email": email})
-            if not otp_records:
+            try:
+                otp_records = self.storage.get_matching({"email": email})
+            except storage_errors.NotFoundError:
                 raise api_errors.ConflictError("OTP not found")
-            
+
             # Delete all OTP records for this email
             for record in otp_records:
-                self.storage.delete_by_id(record["id"])
+                try:
+                    self.storage.delete_by_id(record["id"])
+                except storage_errors.NotFoundError:
+                    continue
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e

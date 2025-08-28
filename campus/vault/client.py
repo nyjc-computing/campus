@@ -1,4 +1,4 @@
-"""vault.client
+"""campus.vault.client
 
 Client authentication module for the vault service.
 
@@ -19,12 +19,14 @@ dependencies. Performance optimizations (such as API keys) can be addressed
 when needed.
 """
 
-from typing import TypedDict, NotRequired, Unpack
 
+from typing import TypedDict, NotRequired, Unpack
 from campus.common.utils import secret, uid, utc_time
 from campus.common import devops
+from campus.common.errors import api_errors
 from . import db
 from .model import Vault
+import psycopg2
 
 CLIENT_TABLE = "vault_clients"
 
@@ -69,14 +71,6 @@ class ClientResourceWithSecret(TypedDict, total=True):
 class VaultClientSecretResponse(TypedDict, total=True):
     """Response body schema for client secret operations."""
     secret: str
-
-
-class ClientAuthenticationError(Exception):
-    """Custom error for client authentication failures."""
-
-    def __init__(self, message: str, client_id: str | None = None):
-        super().__init__(message)
-        self.client_id = client_id
 
 
 @devops.block_env(devops.PRODUCTION)
@@ -128,18 +122,21 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
         **fields,
     }
 
-    with db.get_connection_context() as conn:
-        db.execute_query(
-            conn,
-            f"""
-            INSERT INTO {CLIENT_TABLE} (id, secret_hash, name, description, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (record["id"], record["secret_hash"], record["name"],
-             record["description"], record["created_at"]),
-            fetch_one=False,
-            fetch_all=False
-        )
+    try:
+        with db.get_connection_context() as conn:
+            db.execute_query(
+                conn,
+                f"""
+                INSERT INTO {CLIENT_TABLE} (id, secret_hash, name, description, created_at)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (record["id"], record["secret_hash"], record["name"],
+                 record["description"], record["created_at"]),
+                fetch_one=False,
+                fetch_all=False
+            )
+    except psycopg2.IntegrityError:
+        raise api_errors.ConflictError(message="Client name already exists.")
 
     # Return client resource without secret_hash
     client_resource: ClientResource = {
@@ -166,13 +163,9 @@ def get_client(client_id: str) -> ClientResource:
             (client_id,),
             fetch_one=True
         )
-
         if not client_record:
-            raise ClientAuthenticationError(
-                f"Vault client '{client_id}' not found",
-                client_id=client_id
-            )
-
+            raise api_errors.NotFoundError(
+                message=f"Vault client '{client_id}' not found", client_id=client_id)
         return client_record
 
 
@@ -203,8 +196,7 @@ def delete_client(client_id: str) -> None:
         VaultClientAuthenticationError: If client not found
     """
     # Check if client exists first
-    get_client(client_id)  # This will raise if not found
-
+    get_client(client_id)  # This will raise NotFoundError if not found
     with db.get_connection_context() as conn:
         db.execute_query(
             conn,
@@ -228,7 +220,7 @@ def replace_client_secret(client_id: str) -> str:
         VaultClientAuthenticationError: If client not found
     """
     # Check if client exists first
-    get_client(client_id)  # This will raise if not found
+    get_client(client_id)  # This will raise NotFoundError if not found
 
     new_secret = secret.generate_client_secret()
     secret_hash = secret.hash_client_secret(
@@ -263,26 +255,17 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
             (client_id,),
             fetch_one=True
         )
-
         if not client_record:
-            raise ClientAuthenticationError(
-                f"Vault client '{client_id}' not found",
-                client_id=client_id
-            )
-
+            raise api_errors.NotFoundError(
+                message=f"Vault client '{client_id}' not found", client_id=client_id)
         if not client_record["secret_hash"]:
-            raise ClientAuthenticationError(
-                f"Vault client '{client_id}' has no secret configured",
-                client_id=client_id
-            )
-
+            raise api_errors.InternalError(
+                message=f"Vault client '{client_id}' has no secret configured", client_id=client_id)
         expected_hash = secret.hash_client_secret(
             client_secret, _get_secret_key())
         if client_record["secret_hash"] != expected_hash:
-            raise ClientAuthenticationError(
-                f"Invalid secret for vault client '{client_id}'",
-                client_id=client_id
-            )
+            raise api_errors.UnauthorizedError(
+                message=f"Invalid secret for vault client '{client_id}'", client_id=client_id)
 
 
 def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
@@ -299,7 +282,7 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
         return
 
     # Check if client exists first
-    get_client(client_id)  # This will raise if not found
+    get_client(client_id)  # This will raise NotFoundError if not found
 
     # Build dynamic update query
     set_clauses = []
@@ -315,11 +298,14 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
 
     values.append(client_id)
 
-    with db.get_connection_context() as conn:
-        db.execute_query(
-            conn,
-            f"UPDATE {CLIENT_TABLE} SET {', '.join(set_clauses)} WHERE id = %s",
-            tuple(values),
-            fetch_one=False,
-            fetch_all=False
-        )
+    try:
+        with db.get_connection_context() as conn:
+            db.execute_query(
+                conn,
+                f"UPDATE {CLIENT_TABLE} SET {', '.join(set_clauses)} WHERE id = %s",
+                tuple(values),
+                fetch_one=False,
+                fetch_all=False
+            )
+    except psycopg2.IntegrityError:
+        raise api_errors.ConflictError(message="Client name already exists.")

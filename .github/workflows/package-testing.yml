@@ -29,6 +29,11 @@ jobs:
   # Test package build and installation with different feature sets
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      ENV: testing
+      CLIENT_ID: test-client-id
+      CLIENT_SECRET: test-client-secret
+      YAPPERDB_URI: ${{ secrets.YAPPERDB_URI }}
     # No extras matrix needed
     
     steps:
@@ -55,6 +60,10 @@ jobs:
           
       - name: Test imports
         run: |
+          echo "ENV=$ENV"
+          echo "CLIENT_ID=$CLIENT_ID"
+          echo "CLIENT_SECRET=$CLIENT_SECRET"
+          echo "YAPPERDB_URI=$YAPPERDB_URI"
           # Test core package and all modules
           poetry run python -c "import campus; import campus.vault; import campus.apps; import campus.models; import campus.storage; print('✅ All modules import successfully')"
           
