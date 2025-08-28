@@ -5,7 +5,7 @@ API routes for the circles resource.
 
 from flask import Blueprint, Flask
 
-import campus_yapper
+import campus.yapper
 
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
@@ -17,7 +17,7 @@ bp.before_request(authenticate_client)
 
 circles = circle.Circle()
 # users = user.User()
-yapper = campus_yapper.create()
+yapper = campus.yapper.create()
 
 
 def init_app(app: Flask | Blueprint) -> None:
