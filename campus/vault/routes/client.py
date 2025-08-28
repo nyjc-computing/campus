@@ -8,14 +8,14 @@ Admin operations require ALL permissions, read operations require READ permissio
 
 from flask import Blueprint, Flask, jsonify, request
 
-import campus_yapper
+import campus.yapper
 
 from .. import client
 from ..auth import require_client_authentication
 
 # Create blueprint for client management routes
 bp = Blueprint('client', __name__, url_prefix='/client')
-yapper = campus_yapper.create()
+yapper = campus.yapper.create()
 
 
 @bp.route("", methods=["POST"])
