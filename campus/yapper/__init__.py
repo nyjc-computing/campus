@@ -1,6 +1,6 @@
-"""yapper_python
+"""campus.yapper
 
-A message broker client for Python.
+A message broker client for Campus, in Python.
 
 This package provides the Yapper class for sending and receiving events.
 """
@@ -9,6 +9,7 @@ This package provides the Yapper class for sending and receiving events.
 # information.
 
 import os
+
 from .base import Event, EventHandler, YapperInterface
 from .backends.sqlite import SQLiteYapper
 from .backends.postgres import PostgreSQLYapper

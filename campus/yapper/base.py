@@ -1,7 +1,8 @@
-"""yapper_python/base.py
+"""campus.yapper.base
 
-Base classes and interfaces for yapper-python.
+Base classes and interfaces for campus.yapper.
 """
+
 from abc import ABC, abstractmethod
 from typing import Callable, Protocol
 
