@@ -8,7 +8,7 @@ Main vault client interface for secrets management and access control.
 from typing import List
 from campus.client.base import HttpClient
 from campus.client.errors import NotFoundError
-from campus.client import config
+from campus import config
 
 from campus.client.vault.access import VaultAccessClient
 from campus.client.vault.client import VaultClientManagement
@@ -133,18 +133,9 @@ class VaultClient(HttpClient):
         Args:
             base_url: Optional base URL override for the vault service
         """
-        super().__init__(base_url)
-        # Import here to avoid circular imports
+        super().__init__(base_url or config.get_base_url("campus.vault"))
         self._access = VaultAccessClient(self)
         self._client_mgmt = VaultClientManagement(self)
-
-    def _get_default_base_url(self) -> str:
-        """Get the default base URL for the vault service.
-
-        Returns:
-            str: Base URL for the vault deployment
-        """
-        return config.get_service_base_url("vault")
 
     def __getitem__(self, label: str) -> VaultCollection:
         """Get a vault collection by label.
