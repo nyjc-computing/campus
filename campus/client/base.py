@@ -23,7 +23,6 @@ from campus.client.errors import (
     NetworkError,
     MalformedResponseError,
 )
-from campus.client import config
 
 
 class HttpClient:
@@ -36,7 +35,7 @@ class HttpClient:
 
     def __init__(
             self,
-            base_url: Optional[str] = None,
+            base_url: str,
             *,
             auth_scheme: str = "basic"
     ):
@@ -46,7 +45,7 @@ class HttpClient:
             base_url: Override default base URL for the service
             auth_scheme: 'basic' or 'bearer' (default: 'basic')
         """
-        self.base_url = base_url or self._get_default_base_url()
+        self.base_url = base_url
         self._client_id: Optional[str] = None
         self._client_secret: Optional[str] = None
         self._access_token: Optional[str] = None
@@ -54,19 +53,6 @@ class HttpClient:
 
         # Try to load credentials from environment
         self._load_credentials_from_env()
-
-    def _get_default_base_url(self) -> str:
-        """Get the default base URL for this service.
-
-        Subclasses should override this to specify their service name,
-        or clients can pass base_url explicitly to the constructor.
-
-        Returns:
-            str: The default base URL for the service
-        """
-        # Default to vault URL for backward compatibility
-        # Subclasses should override this method
-        return config.get_vault_base_url()
 
     def _load_credentials_from_env(self) -> None:
         """Load client credentials from environment variables.

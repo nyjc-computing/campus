@@ -5,7 +5,7 @@ User management client for creating and managing user accounts.
 
 from typing import Dict, Any, Optional
 from campus.client.base import HttpClient
-from campus.client import config
+from campus import config
 
 
 class User:
@@ -104,13 +104,16 @@ class UsersClient(HttpClient):
     as well as managing user authentication and profile information.
     """
 
+    def __init__(self, base_url: str | None = None):
+        super().__init__(base_url or config.get_base_url("campus.apps"))
+
     def _get_default_base_url(self) -> str:
         """Get the default base URL for the users service.
 
         Returns:
             str: Base URL for the apps deployment
         """
-        return config.get_service_base_url("users")
+        return config.get_base_url("campus.apps")
 
     def __getitem__(self, user_id: str) -> User:
         """Get a user by ID."""
