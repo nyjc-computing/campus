@@ -33,6 +33,7 @@ def configure_for_deployment(app) -> None:
 
     - adds health check route
     """
+    # TODO: configure based on ENV
     # Health check route for deployments
     # Many services expect a 200 response from the root URL to verify the
     # service is running

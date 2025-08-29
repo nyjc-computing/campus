@@ -22,6 +22,6 @@ deploy.configure_for_deployment(app)
 
 
 if __name__ == "__main__":
-    # Fallback for direct execution (though main.py is preferred for development)
+    # Fallback for direct execution (main.py is preferred for development)
     print("⚠️ Running WSGI module directly. For development, use: python main.py")
     app.run(host="0.0.0.0", port=5000, debug=False)
