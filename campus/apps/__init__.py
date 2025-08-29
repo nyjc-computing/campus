@@ -11,7 +11,7 @@ This module contains the main applications for Campus.
 """
 
 from flask import Flask
-from campus.client import Campus
+from campus.client import VaultClient
 from campus.common import errors
 
 from . import api, campusauth, oauth
@@ -25,8 +25,8 @@ def create_app_from_modules(*modules) -> Flask:
     app = Flask(__name__)
     for module in modules:
         module.init_app(app)
-    campus_client = Campus()
-    app.secret_key = campus_client.vault["campus"]["SECRET_KEY"].get()
+    vault = VaultClient()
+    app.secret_key = vault["campus"]["SECRET_KEY"].get()
 
     # Health check route for deployments
     @app.route('/')

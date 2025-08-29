@@ -127,7 +127,7 @@ class VaultCollection:
 class VaultClient(HttpClient):
     """Client for vault operations following HTTP API conventions."""
 
-    def __init__(self, base_url=None):
+    def __init__(self, base_url: str | None = None):
         """Initialize vault client.
 
         Args:
