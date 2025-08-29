@@ -182,6 +182,10 @@ def init_app(app: Flask | Blueprint) -> None:
     routes.client.init_app(bp)
     routes.vault.init_app(bp)
     app.register_blueprint(bp)
+    # Use Vault to retrieve secret key since campus.vault deployment
+    # has VAULTDB_URI env var
+    if isinstance(app, Flask):
+        app.secret_key = get_vault("vault").get("SECRET_KEY")
 
 
 @devops.block_env(devops.PRODUCTION)
