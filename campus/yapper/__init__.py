@@ -13,6 +13,7 @@ import os
 from .base import Event, EventHandler, YapperInterface
 from .backends.sqlite import SQLiteYapper
 from .backends.postgres import PostgreSQLYapper
+from campus.vault import get_vault
 
 
 def create(**kwargs) -> YapperInterface:
@@ -56,7 +57,8 @@ def create(**kwargs) -> YapperInterface:
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
-            yapperdb_uri = os.getenv("YAPPERDB_URI")
+            vault = get_vault("yapper")
+            yapperdb_uri = vault.get("YAPPERDB_URI")
             if not yapperdb_uri:
                 raise ValueError(
                     f"YAPPERDB_URI environment variable is required for {env} environment. "
