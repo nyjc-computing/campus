@@ -28,7 +28,7 @@ class AppModule(Protocol):
         ...
 
 
-def configure_for_deployment(app):
+def configure_for_deployment(app) -> None:
     """Configure the Flask app for deployment.
 
     - adds health check route
@@ -39,6 +39,7 @@ def configure_for_deployment(app):
     @app.route('/')
     def health_check():
         return {'status': 'healthy', 'service': 'campus-apps'}, 200
+    return
 
 
 def create_app(*appmodules: AppModule) -> Flask:
