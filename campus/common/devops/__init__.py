@@ -8,6 +8,9 @@ from functools import wraps
 from typing import Literal
 from warnings import warn
 
+# Namespace exports
+from . import deploy
+
 # typing stub
 Env = Literal["development", "testing", "staging", "production"]
 
@@ -76,3 +79,8 @@ def require_env(*envs: str):
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+__all__ = [
+    "deploy",
+]
