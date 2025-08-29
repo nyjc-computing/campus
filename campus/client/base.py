@@ -198,7 +198,6 @@ class HttpClient:
                         "body_preview": response.text[:200]
                     }
 
-            breakpoint()
             match response.status_code:
                 case 400:
                     raise ValidationError(safe_json_parse(response))
