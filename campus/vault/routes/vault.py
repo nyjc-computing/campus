@@ -8,20 +8,15 @@ This follows the principle of handling cross-cutting concerns at the appropriate
 
 from flask import Blueprint, Flask, jsonify, request
 
-from .. import access
-from ..auth import (
-    check_vault_access,
-    require_client_authentication,
-    require_vault_permission
-)
-from ..model import Vault, VaultKeyError
+from campus.vault import access, auth
+from campus.vault.model import Vault
 
 # Create blueprint for vault routes
 bp = Blueprint('vault', __name__, url_prefix='/vault')
 
 
 @bp.route("/list")
-@require_client_authentication()
+@auth.require_client_authentication()
 def list_vaults(client_id, **kwargs):
     """List available vault labels"""
     # TODO: In a more sophisticated implementation, this would return
@@ -30,8 +25,8 @@ def list_vaults(client_id, **kwargs):
 
 
 @bp.route("/<label>/list")
-@require_client_authentication()
-@require_vault_permission(access.READ)
+@auth.require_client_authentication()
+@auth.require_vault_permission(access.READ)
 def list_keys(client_id, label):
     """List all keys in a vault"""
     vault = Vault(label)
@@ -40,8 +35,8 @@ def list_keys(client_id, label):
 
 
 @bp.route("/<label>/<key>")
-@require_client_authentication()
-@require_vault_permission(access.READ)
+@auth.require_client_authentication()
+@auth.require_vault_permission(access.READ)
 def get_secret(client_id, label, key):
     """Get a secret from a vault"""
     vault = Vault(label)
@@ -50,9 +45,8 @@ def get_secret(client_id, label, key):
 
 
 @bp.route("/<label>/<key>", methods=["POST"])
-@require_client_authentication()
-# Client needs CREATE OR UPDATE
-@require_vault_permission(access.CREATE, access.UPDATE)
+@auth.require_client_authentication()
+@auth.require_vault_permission(access.CREATE, access.UPDATE)
 def set_secret(client_id, label, key):
     """Set a secret in a vault
 
@@ -88,8 +82,8 @@ def set_secret(client_id, label, key):
 
 
 @bp.route("/<label>/<key>", methods=["DELETE"])
-@require_client_authentication()
-@require_vault_permission(access.DELETE)
+@auth.require_client_authentication()
+@auth.require_vault_permission(access.DELETE)
 def delete_secret(client_id, label, key):
     """Delete a secret from a vault"""
     vault = Vault(label)
