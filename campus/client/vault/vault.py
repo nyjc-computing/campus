@@ -41,15 +41,10 @@ class VaultKey:
         Raises:
             NotFoundError: If the key doesn't exist
         """
-        try:
-            response = self._client.get(
-                f"/vault/{self._label}/{self._key}"
-            )
-            return response["value"]
-        except NotFoundError as exc:
-            raise NotFoundError(
-                f"Secret '{self._key}' not found in vault '{self._label}'"
-            ) from exc
+        response = self._client.get(
+            f"/vault/{self._label}/{self._key}"
+        )
+        return response["value"]
 
     def set(self, *, value: str) -> str:
         """Set the secret value.

@@ -176,10 +176,12 @@ def get_authenticated_vault(label: str) -> AuthenticatedVault:
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
+    bp = Blueprint('v1', __name__, url_prefix='/api/v1')
     from . import routes
-    routes.access.init_app(app)
-    routes.client.init_app(app)
-    routes.vault.init_app(app)
+    routes.access.init_app(bp)
+    routes.client.init_app(bp)
+    routes.vault.init_app(bp)
+    app.register_blueprint(bp)
 
 
 @devops.block_env(devops.PRODUCTION)
