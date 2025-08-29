@@ -18,3 +18,4 @@ if not os.path.exists("scripts/campus-client.py"):
 from campus.client import Campus
 
 campus = Campus()
+campus.circles.list()
