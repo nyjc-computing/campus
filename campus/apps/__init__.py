@@ -12,20 +12,7 @@ This module contains the main applications for Campus.
 
 from flask import Blueprint, Flask
 
-from campus.common import errors
-
 from . import api, campusauth, oauth
-
-
-def create_app() -> Flask:
-    """Create the main Campus app with all modules"""
-    from campus.client import VaultClient
-    vault = VaultClient()
-    app = Flask(__name__)
-    app.secret_key = vault["campus"]["SECRET_KEY"].get()
-    init_app(app)
-    errors.init_app(app)
-    return app
 
 
 def init_app(app: Blueprint | Flask) -> None:
@@ -39,6 +26,5 @@ __all__ = [
     "api",
     "campusauth",
     "oauth",
-    "create_app",
     "init_app",
 ]

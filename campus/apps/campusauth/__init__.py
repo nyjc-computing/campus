@@ -13,7 +13,6 @@ from .authentication import (
 )
 
 __all__ = [
-    'create_app',
     'init_app',
     'init_db',
     'authenticate_client',
@@ -21,22 +20,11 @@ __all__ = [
 ]
 
 
-def create_app() -> Flask:
-    """Factory function to create the campusauth app.
-    
-    This is called if campusauth is run as a standalone app.
-    """
-    from campus.common import errors
-    app = Flask(__name__)
-    init_app(app)
-    # TODO: review error handler registration to handle HTML and API errors
-    errors.init_app(app)
-    return app
-
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the campusauth blueprint with the given Flask app."""
     from . import routes
     routes.init_app(app)
+
 
 @devops.block_env(devops.PRODUCTION)
 def init_db() -> None:

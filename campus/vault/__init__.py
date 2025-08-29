@@ -83,7 +83,6 @@ __all__ = [
     "get_authenticated_vault",
     "Vault",
     "AuthenticatedVault",
-    "create_app",
     "init_app",
     "init_db",
     "access",
@@ -173,17 +172,6 @@ def get_authenticated_vault(label: str) -> AuthenticatedVault:
     class directly with explicit authentication handling.
     """
     return AuthenticatedVault(label)
-
-
-def create_app() -> Flask:
-    """Factory function to create the vault app.
-
-    This is called if vault is run as a standalone app.
-    """
-    app = Flask(__name__)
-    init_app(app)
-    errors.init_app(app)
-    return app
 
 
 def init_app(app: Flask | Blueprint) -> None:
