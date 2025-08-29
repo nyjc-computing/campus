@@ -16,6 +16,12 @@ Usage:
 """
 
 import os
+import logging
+
+from campus.common import devops
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def get_deployment_mode():
@@ -23,37 +29,37 @@ def get_deployment_mode():
     if "DEPLOY" not in os.environ:
         raise EnvironmentError(
             "Deployment mode not set. "
-            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
+            "Set environment variable: export DEPLOY=<mode>"
         )
     mode = os.environ["DEPLOY"]
-
-    if mode not in ["vault", "apps"]:
+    if mode not in devops.deploy.MODES:
         raise ValueError(
             f"Invalid deployment mode '{mode}'. "
-            "Valid modes are: vault, apps. "
-            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
+            f"Valid modes are: {', '.join(devops.deploy.MODES)}."
         )
-
     return mode
 
 
-def create_app():
+def create_app() -> devops.deploy.Flask:
     """Create the appropriate Campus app based on deployment mode"""
     mode = get_deployment_mode()
 
     match mode:
         case "vault":
-            print("🔐 Creating Campus Vault Service")
-            from campus.vault import create_app
-            return create_app()
+            import campus.vault
+            logger.info("🔐 Creating Campus Vault Service")
+            app = devops.deploy.create_app(campus.vault)
         case "apps":
-            print("🚀 Creating Campus Apps Service")
-            from campus.apps import create_app
-            return create_app()
-    raise ValueError(
-        f"Unsupported deployment mode '{mode}'. "
-        "Valid modes are: vault, apps"
-    )
+            import campus.apps
+            logger.info("🚀 Creating Campus Apps Service")
+            app = devops.deploy.create_app(campus.apps)
+        case _:
+            raise ValueError(
+                f"Unsupported deployment mode '{mode}'. "
+                f"Valid modes are: {', '.join(devops.deploy.MODES)}"
+            )
+    devops.deploy.configure_for_deployment(app)
+    return app
 
 
 def main():

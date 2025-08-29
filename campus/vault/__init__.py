@@ -83,7 +83,6 @@ __all__ = [
     "get_authenticated_vault",
     "Vault",
     "AuthenticatedVault",
-    "create_app",
     "init_app",
     "init_db",
     "access",
@@ -175,30 +174,12 @@ def get_authenticated_vault(label: str) -> AuthenticatedVault:
     return AuthenticatedVault(label)
 
 
-def create_app() -> Flask:
-    """Factory function to create the vault app.
-
-    This is called if vault is run as a standalone app.
-    """
-    app = Flask(__name__)
-    init_app(app)
-    errors.init_app(app)
-    return app
-
-
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
-    from .routes import init_vault_routes, init_access_routes, init_client_routes
-
-    # Health check route for deployments
-    @app.route('/')
-    def health_check():
-        return {'status': 'healthy', 'service': 'campus-vault'}, 200
-
-    # Register all vault-related blueprints
-    init_vault_routes(app)   # /vault/* - secret management
-    init_access_routes(app)  # /access/* - access control
-    init_client_routes(app)  # /client/* - client management
+    from . import routes
+    routes.access.init_app(app)
+    routes.client.init_app(app)
+    routes.vault.init_app(app)
 
 
 @devops.block_env(devops.PRODUCTION)
@@ -228,19 +209,3 @@ def init_db():
 
     # Initialize vault client table
     client.init_db()
-
-
-def run_server():
-    """Entry point for running vault as a standalone service"""
-    app = create_app()
-
-    # Replit configuration
-    host = "0.0.0.0"
-    port = 5000
-
-    print(f"🔐 Starting Campus Vault Service on {host}:{port}")
-    app.run(host=host, port=port, debug=False)
-
-
-if __name__ == '__main__':
-    run_server()

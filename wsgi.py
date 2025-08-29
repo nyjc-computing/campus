@@ -12,25 +12,16 @@ Usage with Gunicorn:
 The deployment mode is determined by the DEPLOY environment variable.
 """
 
-from main import create_app
-
-
-def configure_for_deployment(app):
-    """Configure the Flask app for deployment."""
-    # Health check route for deployments
-    # Many services expect a 200 response from the root URL to verify the
-    # service is running
-    @app.route('/')
-    def health_check():
-        return {'status': 'healthy', 'service': 'campus-apps'}, 200
+import main
+from campus.common.devops import deploy
 
 
 # WSGI application instance for production deployment
-app = create_app()
-configure_for_deployment(app)
+app = main.create_app()
+deploy.configure_for_deployment(app)
 
 
 if __name__ == "__main__":
     # Fallback for direct execution (though main.py is preferred for development)
-    print("⚠️  Running WSGI module directly. For development, use: python main.py")
+    print("⚠️ Running WSGI module directly. For development, use: python main.py")
     app.run(host="0.0.0.0", port=5000, debug=False)
