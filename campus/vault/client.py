@@ -246,7 +246,8 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
         client_secret: The client secret
 
     Raises:
-        VaultClientAuthenticationError: If authentication fails
+        NotFoundError: If client not found
+        UnauthorizedError: If client secret is invalid
     """
     with db.get_connection_context() as conn:
         client_record = db.execute_query(
