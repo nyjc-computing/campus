@@ -10,9 +10,9 @@ import requests
 
 from campus.common import devops
 from campus.common.utils import secret
-from campus.client.errors import NetworkError
-from .interface import JsonClient, JsonDict, JsonResponse
 
+from .errors import NetworkError
+from .interface import JsonClient, JsonDict, JsonResponse
 
 ClientFactory = Callable[[], JsonClient]
 ClientHeader = dict[str, str]
