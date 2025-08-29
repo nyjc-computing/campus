@@ -17,43 +17,45 @@ Usage:
 
 import os
 
+from campus.common import devops
+
 
 def get_deployment_mode():
     """Get deployment mode from DEPLOY environment variable"""
     if "DEPLOY" not in os.environ:
         raise EnvironmentError(
             "Deployment mode not set. "
-            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
+            "Set environment variable: export DEPLOY=<mode>"
         )
     mode = os.environ["DEPLOY"]
-
-    if mode not in ["vault", "apps"]:
+    if mode not in devops.deploy.MODES:
         raise ValueError(
             f"Invalid deployment mode '{mode}'. "
-            "Valid modes are: vault, apps. "
-            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
+            f"Valid modes are: {', '.join(devops.deploy.MODES)}."
         )
-
     return mode
 
 
-def create_app():
+def create_app() -> devops.deploy.Flask:
     """Create the appropriate Campus app based on deployment mode"""
     mode = get_deployment_mode()
 
     match mode:
         case "vault":
+            import campus.vault
             print("🔐 Creating Campus Vault Service")
-            from campus.vault import create_app
-            return create_app()
+            app = devops.deploy.create_app(campus.vault)
         case "apps":
+            import campus.apps
             print("🚀 Creating Campus Apps Service")
-            from campus.apps import create_app
-            return create_app()
-    raise ValueError(
-        f"Unsupported deployment mode '{mode}'. "
-        "Valid modes are: vault, apps"
-    )
+            app = devops.deploy.create_app(campus.apps)
+        case _:
+            raise ValueError(
+                f"Unsupported deployment mode '{mode}'. "
+                f"Valid modes are: {', '.join(devops.deploy.MODES)}"
+            )
+    devops.deploy.configure_for_deployment(app)
+    return app
 
 
 def main():
