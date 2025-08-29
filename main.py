@@ -16,8 +16,12 @@ Usage:
 """
 
 import os
+import logging
 
 from campus.common import devops
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def get_deployment_mode():
@@ -43,11 +47,11 @@ def create_app() -> devops.deploy.Flask:
     match mode:
         case "vault":
             import campus.vault
-            print("🔐 Creating Campus Vault Service")
+            logger.info("🔐 Creating Campus Vault Service")
             app = devops.deploy.create_app(campus.vault)
         case "apps":
             import campus.apps
-            print("🚀 Creating Campus Apps Service")
+            logger.info("🚀 Creating Campus Apps Service")
             app = devops.deploy.create_app(campus.apps)
         case _:
             raise ValueError(
