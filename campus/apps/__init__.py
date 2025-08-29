@@ -11,42 +11,35 @@ This module contains the main applications for Campus.
 """
 
 from flask import Flask
-from campus.client import VaultClient
+
 from campus.common import errors
 
 from . import api, campusauth, oauth
 
 
-def create_app_from_modules(*modules) -> Flask:
-    """Factory function to create the Flask app.
-
-    This is called if api is run as a standalone app.
-    """
-    app = Flask(__name__)
-    for module in modules:
-        module.init_app(app)
-    vault = VaultClient()
-    app.secret_key = vault["campus"]["SECRET_KEY"].get()
-
-    # Health check route for deployments
-    @app.route('/')
-    def health_check():
-        return {'status': 'healthy', 'service': 'campus-apps'}, 200
-
-    return app
-
-
 def create_app() -> Flask:
     """Create the main Campus app with all modules"""
-    app = create_app_from_modules(api, campusauth, oauth)
+    from campus.client import VaultClient
+    vault = VaultClient()
+    app = Flask(__name__)
+    app.secret_key = vault["campus"]["SECRET_KEY"].get()
+    init_app(app)
     errors.init_app(app)
     return app
+
+
+def init_app(app: Flask) -> None:
+    """Initialize the Campus app with all modules."""
+    api.init_app(app)
+    campusauth.init_app(app)
+    oauth.init_app(app)
+    errors.init_app(app)
 
 
 __all__ = [
     "api",
     "campusauth",
     "oauth",
-    "create_app_from_modules",
     "create_app",
+    "init_app",
 ]
