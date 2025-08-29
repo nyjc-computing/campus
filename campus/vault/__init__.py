@@ -209,19 +209,3 @@ def init_db():
 
     # Initialize vault client table
     client.init_db()
-
-
-def run_server():
-    """Entry point for running vault as a standalone service"""
-    app = create_app()
-
-    # Replit configuration
-    host = "0.0.0.0"
-    port = 5000
-
-    print(f"🔐 Starting Campus Vault Service on {host}:{port}")
-    app.run(host=host, port=port, debug=False)
-
-
-if __name__ == '__main__':
-    run_server()
