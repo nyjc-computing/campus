@@ -10,7 +10,7 @@ This module contains the main applications for Campus.
 - oauth: Campus OAuth2 implementation.
 """
 
-from flask import Flask
+from flask import Blueprint, Flask
 
 from campus.common import errors
 
@@ -28,7 +28,7 @@ def create_app() -> Flask:
     return app
 
 
-def init_app(app: Flask) -> None:
+def init_app(app: Blueprint | Flask) -> None:
     """Initialize the Campus app with all modules."""
     api.init_app(app)
     campusauth.init_app(app)

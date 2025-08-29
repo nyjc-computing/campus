@@ -188,17 +188,10 @@ def create_app() -> Flask:
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
-    from .routes import init_vault_routes, init_access_routes, init_client_routes
-
-    # Health check route for deployments
-    @app.route('/')
-    def health_check():
-        return {'status': 'healthy', 'service': 'campus-vault'}, 200
-
-    # Register all vault-related blueprints
-    init_vault_routes(app)   # /vault/* - secret management
-    init_access_routes(app)  # /access/* - access control
-    init_client_routes(app)  # /client/* - client management
+    from . import routes
+    routes.access.init_app(app)
+    routes.client.init_app(app)
+    routes.vault.init_app(app)
 
 
 @devops.block_env(devops.PRODUCTION)
