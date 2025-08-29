@@ -15,7 +15,7 @@ BASE_URLS = {
     "campus.vault": {
         devops.PRODUCTION: "https://vault.campus.nyjc.app/api/v1/",
         devops.STAGING: "https://vault.campus.nyjc.dev/api/v1/",
-        devops.TESTING: "vault.campus.testing/",
+        devops.TESTING: "https://campusvault-development.up.railway.app/api/v1/",
         devops.DEVELOPMENT: "https://campusvault-development.up.railway.app/api/v1/",
     },
     "campus.apps": {
