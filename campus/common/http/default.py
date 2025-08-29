@@ -3,7 +3,7 @@
 Default implementation for JsonClient and JsonResponse, using `requests`.
 """
 
-from typing import Any, Callable, Iterable, Mapping, Self, TypedDict
+from typing import Any, Callable, Iterable, Mapping, Self
 from urllib.parse import urljoin
 
 import requests
@@ -132,7 +132,7 @@ class DefaultClient(JsonClient):
                 timeout=30
             )
         except requests.RequestException as e:
-            raise NetworkError(f"Network request failed: {e}") from e
+            raise NetworkError(f"Network request failed: {e}") from None
         else:
             return DefaultResponse(response)
 
