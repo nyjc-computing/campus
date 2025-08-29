@@ -33,7 +33,6 @@ def init_app(app: Blueprint | Flask) -> None:
     api.init_app(app)
     campusauth.init_app(app)
     oauth.init_app(app)
-    errors.init_app(app)
 
 
 __all__ = [
