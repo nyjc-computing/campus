@@ -17,7 +17,10 @@ MODES = ("apps", "vault")
 # pylint disable=unnecessary-ellipsis
 
 class AppModule(Protocol):
-    """Interface for app modules."""
+    """Interface for app modules.
+
+    App modules must implement the `init_app` function.
+    """
 
     @staticmethod
     def init_app(app: Flask | Blueprint) -> None:
