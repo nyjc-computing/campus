@@ -8,6 +8,7 @@ that are shared across all service clients using composition pattern.
 
 import os
 import json
+import logging
 from typing import Optional, Dict, Any
 from urllib.parse import urljoin
 
@@ -23,6 +24,9 @@ from campus.client.errors import (
     NetworkError,
     MalformedResponseError,
 )
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 
 class HttpClient:
@@ -160,20 +164,51 @@ class HttpClient:
         except requests.RequestException as e:
             raise NetworkError(f"Network request failed: {e}") from e
         else:
+            # Log response details for debugging
+            logger.debug(
+                f"Response received: {method} {url} -> "
+                f"Status: {response.status_code}, "
+                f"Content-Type: {response.headers.get('content-type', 'unknown')}"
+            )
+
+            # Helper function to safely parse JSON responses
+            def safe_json_parse(response):
+                try:
+                    return response.json()
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.error(
+                        f"Failed to parse JSON response: Status {response.status_code}, "
+                        f"Content-Type: {response.headers.get('content-type', 'unknown')}, "
+                        f"Body: {response.text[:500]}"
+                    )
+                    # Return a generic error message with the response details
+                    return {
+                        "error": "Invalid JSON response",
+                        "status_code": response.status_code,
+                        "content_type": response.headers.get('content-type', 'unknown'),
+                        "body_preview": response.text[:200]
+                    }
+
             match response.status_code:
                 case 400:
-                    raise ValidationError(response.json())
+                    raise ValidationError(safe_json_parse(response))
                 case 401:
-                    raise AuthenticationError(response.json())
+                    raise AuthenticationError(safe_json_parse(response))
                 case 403:
-                    raise AccessDeniedError(response.json())
+                    raise AccessDeniedError(safe_json_parse(response))
                 case 404:
-                    raise NotFoundError(response.json())
+                    raise NotFoundError(safe_json_parse(response))
                 case 409:
-                    raise ConflictError(response.json())
+                    raise ConflictError(safe_json_parse(response))
                 case _:
                     if not response.ok:
-                        raise NetworkError(f"HTTP {response.status_code}: {response.text}")
+                        logger.error(
+                            f"HTTP error {response.status_code}: "
+                            f"Content-Type: {response.headers.get('content-type', 'unknown')}, "
+                            f"Body: {response.text[:500]}"
+                        )
+                        raise NetworkError(
+                            f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
             if not response.content or response.content.strip() == b'':
@@ -184,7 +219,6 @@ class HttpClient:
             except json.JSONDecodeError as e:
                 # Response is not valid JSON
                 raise MalformedResponseError("Invalid JSON response") from e
-
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a GET request.
