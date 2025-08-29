@@ -55,7 +55,7 @@ def create(**kwargs) -> YapperInterface:
         #     return yapper
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
-        case  "development" | "testing" | "staging" | "production":
+        case "development" | "testing" | "staging" | "production":
             yapperdb_uri = os.getenv("YAPPERDB_URI")
             if not yapperdb_uri:
                 raise ValueError(
