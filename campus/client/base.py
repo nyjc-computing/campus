@@ -58,6 +58,14 @@ class HttpClient:
         # Try to load credentials from environment
         self._load_credentials_from_env()
 
+        # Prepare a persistent session and initialize headers
+        self.session = requests.Session()
+        try:
+            self.session.headers.update(self._get_headers())
+        except AuthenticationError:
+            # Headers may not be available if credentials are not set yet
+            pass
+
     def _load_credentials_from_env(self) -> None:
         """Load client credentials from environment variables.
 
@@ -76,6 +84,8 @@ class HttpClient:
         self._client_id = client_id
         self._client_secret = client_secret
         self._access_token = None  # Clear any cached token
+        # Update session headers with new credentials
+        self.session.headers.update(self._get_headers())
 
     def _ensure_authenticated(self) -> None:
         """Ensure the client is authenticated.
@@ -149,18 +159,17 @@ class HttpClient:
             NetworkError: If network request fails
         """
         url = urljoin(self.base_url, path.lstrip('/'))
-        headers = self._get_headers()
+        # Always update session headers before request in case credentials changed
+        self.session.headers.update(self._get_headers())
 
         try:
-            with requests.Session() as session:
-                response = session.request(
-                    method=method,
-                    url=url,
-                    headers=headers,
-                    json=data,
-                    params=params,
-                    timeout=30
-                )
+            response = self.session.request(
+                method=method,
+                url=url,
+                json=data,
+                params=params,
+                timeout=30
+            )
         except requests.RequestException as e:
             raise NetworkError(f"Network request failed: {e}") from e
         else:
@@ -189,6 +198,7 @@ class HttpClient:
                         "body_preview": response.text[:200]
                     }
 
+            breakpoint()
             match response.status_code:
                 case 400:
                     raise ValidationError(safe_json_parse(response))
