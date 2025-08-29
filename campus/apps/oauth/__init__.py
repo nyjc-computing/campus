@@ -5,28 +5,10 @@ OAuth2 routes for integrations.
 
 from flask import Blueprint, Flask
 
-from campus.common import errors
 from campus.common import devops
 
 from . import google
 
-__all__ = [
-    'create_app',
-    'init_app',
-    'init_db',
-]
-
-
-def create_app() -> Flask:
-    """Factory function to create the oauth app.
-    
-    This is called if oauth is run as a standalone app, without the /oauth
-    url prefix.
-    """
-    app = Flask(__name__)
-    init_app(app)
-    errors.init_app(app)
-    return app
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -44,4 +26,10 @@ def init_db() -> None:
     This convenience function makes it easier to initialise tables for all
     models.
     """
+
+
+__all__ = [
+    'init_app',
+    'init_db',
+]
     

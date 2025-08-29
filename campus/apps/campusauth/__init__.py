@@ -13,26 +13,11 @@ from .authentication import (
 )
 
 __all__ = [
-    'create_app',
     'init_app',
     'init_db',
     'authenticate_client',
     'client_auth_required',
 ]
-
-
-def create_app() -> Flask:
-    """Factory function to create the campusauth app.
-    
-    This is called if campusauth is run as a standalone app.
-    """
-    # pylint: disable=import-outside-toplevel
-    from campus.common import errors
-    app = Flask(__name__)
-    init_app(app)
-    # TODO: review error handler registration to handle HTML and API errors
-    errors.init_app(app)
-    return app
 
 
 def init_app(app: Flask | Blueprint) -> None:

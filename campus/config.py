@@ -27,7 +27,7 @@ BASE_URLS = {
 }
 
 
-def get_app_base_url(app_name: str) -> Url:
+def get_base_url(app_name: str) -> Url:
     """Get the base URL for apps services based on environment.
 
     Returns:

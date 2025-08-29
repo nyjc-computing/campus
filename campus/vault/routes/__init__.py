@@ -17,5 +17,5 @@ from . import vault, access, clients
 __all__ = [
     "vault",
     "access",
-    "clients"
+    "clients",
 ]

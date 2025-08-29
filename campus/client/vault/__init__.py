@@ -12,7 +12,7 @@ from campus.common.http import get_client
 
 def get_vault() -> VaultResource:
     """Get the Vault service client."""
-    vault_base_url = config.get_app_base_url("campus.vault")
+    vault_base_url = config.get_base_url("campus.vault")
     return VaultResource(get_client(base_url=vault_base_url))
 
 

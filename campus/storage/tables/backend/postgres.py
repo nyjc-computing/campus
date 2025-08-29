@@ -3,8 +3,8 @@
 This module provides the PostgreSQL backend for the Tables storage interface.
 
 Vault Integration:
-The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the 'storage' 
-vault. The storage system depends on the vault service for database credentials.
+The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the
+'storage' vault. The storage system depends on the vault service for database credentials.
 
 Implementation:
 Uses direct column mapping where record keys correspond to table column names.

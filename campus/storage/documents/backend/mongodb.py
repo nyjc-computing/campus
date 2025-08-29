@@ -29,6 +29,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
+from campus.client import VaultClient
 from campus.common import devops
 from campus.client.vault import get_vault
 from campus.storage.documents.interface import CollectionInterface, PK
@@ -40,6 +41,8 @@ from campus.storage.errors import (
 )
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
+
+vault = VaultClient()["storage"]
 
 
 # pylint: disable=unnecessary-ellipsis

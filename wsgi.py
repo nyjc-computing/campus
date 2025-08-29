@@ -12,12 +12,16 @@ Usage with Gunicorn:
 The deployment mode is determined by the DEPLOY environment variable.
 """
 
-from main import create_app
+import main
+from campus.common.devops import deploy
+
 
 # WSGI application instance for production deployment
-app = create_app()
+app = main.create_app()
+deploy.configure_for_deployment(app)
+
 
 if __name__ == "__main__":
     # Fallback for direct execution (though main.py is preferred for development)
-    print("⚠️  Running WSGI module directly. For development, use: python main.py")
+    print("⚠️ Running WSGI module directly. For development, use: python main.py")
     app.run(host="0.0.0.0", port=5000, debug=False)
