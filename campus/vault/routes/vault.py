@@ -15,7 +15,7 @@ from campus.vault.model import Vault
 bp = Blueprint('vault', __name__, url_prefix='/vault')
 
 
-@bp.route("/list")
+@bp.route("/")
 @auth.require_client_authentication()
 def list_vaults(client_id, **kwargs):
     """List available vault labels"""
@@ -24,7 +24,7 @@ def list_vaults(client_id, **kwargs):
     return jsonify({"vaults": ["campus", "storage", "oauth"]})
 
 
-@bp.route("/<label>/list")
+@bp.route("/<label>/")
 @auth.require_client_authentication()
 @auth.require_vault_permission(access.READ)
 def list_keys(client_id, label):
