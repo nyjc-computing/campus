@@ -16,7 +16,7 @@ class TestYapper(unittest.TestCase):
         self.assertIsNotNone(os.environ["CLIENT_SECRET"])
         self.assertIsNotNone(os.environ["CLIENT_ID"])
         
-        give_vault_access()
+        give_vault_access("yapper", all=True)
     
     def test_yapper_vars(self):
         init_yapper()
