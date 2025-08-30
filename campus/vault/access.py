@@ -27,8 +27,6 @@ To check if a permission is granted, we use the bitwise AND operator (&):
 This allows efficient storage and checking of multiple permissions in one integer.
 """
 
-import psycopg2
-
 from campus.common.utils import uid, utc_time
 from campus.common import devops
 from campus.common.errors import api_errors
@@ -111,7 +109,7 @@ def grant_access(client_id: str, label: str, access: int) -> None:
                     fetch_one=False,
                     fetch_all=False
                 )
-    except psycopg2.IntegrityError:
+    except db.psycopg2.IntegrityError:
         raise api_errors.ConflictError(
             message="Access for this client and label already exists.")
 

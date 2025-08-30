@@ -7,7 +7,7 @@ Circle management client for creating and managing circles.
 
 from typing import Dict, Any
 from campus.client.base import HttpClient
-from campus.client import config
+from campus import config
 
 
 class CircleMembers:
@@ -214,13 +214,8 @@ class CirclesClient(HttpClient):
     following the actual server API implementation.
     """
 
-    def _get_default_base_url(self) -> str:
-        """Get the default base URL for the circles service.
-
-        Returns:
-            str: Base URL for the apps deployment
-        """
-        return config.get_service_base_url("circles")
+    def __init__(self, base_url: str | None = None):
+        super().__init__(base_url or config.get_base_url("campus.apps"))
 
     def __getitem__(self, circle_id: str) -> Circle:
         """Get a circle by ID.

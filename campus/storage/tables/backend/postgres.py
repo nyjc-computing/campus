@@ -3,8 +3,8 @@
 This module provides the PostgreSQL backend for the Tables storage interface.
 
 Vault Integration:
-The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the 'storage' 
-vault. The storage system depends on the vault service for database credentials.
+The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the
+'storage' vault. The storage system depends on the vault service for database credentials.
 
 Implementation:
 Uses direct column mapping where record keys correspond to table column names.
@@ -26,20 +26,18 @@ table.delete_by_id("123")
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from campus.client import Campus
+from campus.client import VaultClient
 from campus.common import devops
 from campus.storage.tables.interface import TableInterface, PK
 from campus.storage import errors
 
-
-# Singleton Campus client for this backend
-_campus_client = Campus()
+vault = VaultClient()["storage"]
 
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
     try:
-        return _campus_client.vault["storage"]["POSTGRESDB_URI"].get()
+        return vault["POSTGRESDB_URI"].get()
     except Exception as e:
         raise RuntimeError(
             f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "

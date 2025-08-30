@@ -5,8 +5,8 @@ Campus Client Package
 Provides unified Campus client interface.
 """
 
-from campus.client.core import Campus
-from campus.client.errors import (
+from .core import Campus
+from .errors import (
     CampusClientError,
     AuthenticationError,
     AccessDeniedError,
@@ -14,6 +14,11 @@ from campus.client.errors import (
     ValidationError,
     NetworkError
 )
+# Namespace imports
+from .apps.admin import AdminClient
+from .apps.circles import CirclesClient
+from .apps.users import UsersClient
+from .vault.vault import VaultClient
 
 __all__ = [
     'Campus',
@@ -23,4 +28,8 @@ __all__ = [
     'NotFoundError',
     'ValidationError',
     'NetworkError',
+    'AdminClient',
+    'CirclesClient',
+    'UsersClient',
+    'VaultClient',
 ]
