@@ -19,14 +19,13 @@ dependencies. Performance optimizations (such as API keys) can be addressed
 when needed.
 """
 
-
 from typing import TypedDict, NotRequired, Unpack
+
 from campus.common.utils import secret, uid, utc_time
 from campus.common import devops
 from campus.common.errors import api_errors
-from . import db
-from .model import Vault
-import psycopg2
+
+from . import db, model
 
 CLIENT_TABLE = "vault_clients"
 
@@ -40,7 +39,7 @@ def _get_secret_key() -> str:
     Raises:
         VaultKeyError: If SECRET_KEY is not found in the campus vault
     """
-    campus_vault = Vault("campus")
+    campus_vault = model.Vault("campus")
     return campus_vault.get("SECRET_KEY")
 
 
@@ -135,7 +134,7 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
                 fetch_one=False,
                 fetch_all=False
             )
-    except psycopg2.IntegrityError:
+    except db.psycopg2.IntegrityError:
         raise api_errors.ConflictError(message="Client name already exists.")
 
     # Return client resource without secret_hash
@@ -308,5 +307,5 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
                 fetch_one=False,
                 fetch_all=False
             )
-    except psycopg2.IntegrityError:
+    except db.psycopg2.IntegrityError:
         raise api_errors.ConflictError(message="Client name already exists.")
