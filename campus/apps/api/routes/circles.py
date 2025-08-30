@@ -5,7 +5,7 @@ API routes for the circles resource.
 
 from flask import Blueprint, Flask
 
-import campus_yapper
+import campus.yapper
 
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
@@ -17,7 +17,7 @@ bp.before_request(authenticate_client)
 
 circles = circle.Circle()
 # users = user.User()
-yapper = campus_yapper.create()
+yapper = campus.yapper.create()
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -26,8 +26,13 @@ def init_app(app: Flask | Blueprint) -> None:
 
 @bp.get('/')
 def list_circles() -> flask_validation.JsonResponse:
-    """List all circles (not yet implemented)."""
-    return {"message": "List circles not implemented"}, 501
+    """List all circles matching filter requirements."""
+    filters = flask_validation.validate_request_and_extract_json(
+        circle.CircleRecordDict.__annotations__,
+        on_error=api_errors.raise_api_error,
+    ) or {}
+    result = circles.list(**filters)
+    return {"data": [circle.to_dict() for circle in result]}, 200
 
 @bp.post('/')
 def new_circle(*_: str) -> flask_validation.JsonResponse:

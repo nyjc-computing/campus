@@ -14,7 +14,7 @@ import bcrypt
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_table,
@@ -110,7 +110,7 @@ class OTPVerify(OTPRequest, total=True):
     otp: str
 
 
-class OTPRecord(OTPRequest, BaseRecord, total=True):
+class OTPRecord(OTPRequest, BaseRecordDict, total=True):
     """Schema for a complete OTP record.
     Currently unused in the API, provided for documentation purpose.
     """
@@ -183,7 +183,7 @@ class EmailOTPAuth:
             else:
                 return plain_otp
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def verify(self, **data: Unpack[OTPVerify]) -> None:
         """Verify if the provided OTP matches the one stored for the email.
@@ -223,7 +223,7 @@ class EmailOTPAuth:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def revoke(self, email: str) -> None:
         """Delete all OTPs for the given email (typically after successful
@@ -248,4 +248,4 @@ class EmailOTPAuth:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e

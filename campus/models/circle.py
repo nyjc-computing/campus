@@ -14,13 +14,14 @@ Main operations:
 """
 
 from collections.abc import Iterator, Mapping
-from typing import NotRequired, TypedDict, Unpack
+from dataclasses import dataclass, field
+from typing import Any, NotRequired, TypedDict, Unpack
 
 from campus.common.errors import api_errors
 from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time
 from campus.common import devops
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecord, BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_collection
@@ -122,7 +123,7 @@ class CircleUpdate(TypedDict, total=False):
     # tag cannot be updated once created
 
 
-class CircleRecord(BaseRecord):
+class CircleRecordDict(BaseRecordDict):
     """The circle record stored in the circle collection."""
     name: str
     description: NotRequired[str]
@@ -130,11 +131,20 @@ class CircleRecord(BaseRecord):
     members: dict[CircleID, AccessValue]
 
 
-class CircleResource(CircleRecord, total=False):
+class CircleResource(CircleRecordDict, total=False):
     """Response body schema representing the result of a circles.get operation."""
     # TODO: store ancestry tree
     # ancestry: CircleTree
     sources: dict  # SourceID, SourceHeader
+
+
+@dataclass(eq=False, kw_only=True)
+class CircleRecord(BaseRecord):
+    """Dataclass representation of a circle record."""
+    name: str
+    description: str = ""
+    tag: CircleTag
+    members: dict[CircleID, AccessValue] = field(default_factory=dict)
 
 
 class CircleMemberRemove(TypedDict):
@@ -174,17 +184,17 @@ def get_circle_meta() -> dict:
     storage = get_collection(COLLECTION)
     try:
         circle_metas = storage.get_matching({"@meta": True})
-        if not circle_metas:
-            raise api_errors.NotFoundError(
-                message=f"Circle meta record not found in collection {COLLECTION}",
-                id=DOMAIN
-            )
-        assert len(circle_metas) == 1, (
-            circle_metas, "Expected exactly one circle meta record"
-        )
-        return circle_metas[0]
     except Exception as e:
-        raise api_errors.InternalError(message=str(e), error=e)
+        raise api_errors.InternalError.from_exception(e) from e
+    if not circle_metas:
+        raise api_errors.NotFoundError(
+            message=f"Circle meta record not found in collection {COLLECTION}",
+            id=DOMAIN
+        )
+    assert len(circle_metas) == 1, (
+        circle_metas, "Expected exactly one circle meta record"
+    )
+    return circle_metas[0]
 
 
 def update_circle_meta(update: dict) -> None:
@@ -196,10 +206,10 @@ def update_circle_meta(update: dict) -> None:
             update
         )
     except Exception as e:
-        raise api_errors.InternalError(message=str(e), error=e)
+        raise api_errors.InternalError.from_exception(e) from e
 
 
-def get_root_circle() -> "CircleRecord":
+def get_root_circle() -> "CircleRecordDict":
     """Get the root circle."""
     circle_meta = get_circle_meta()
     if "root" not in circle_meta:
@@ -219,7 +229,7 @@ def get_tree_root() -> "CircleTree":
             id=DOMAIN
         )
     tree_root = circle_meta[circle_meta["root"]]
-    return TypedDict("CircleTree", tree_root)  # type: ignore
+    return tree_root
 
 
 def get_address_tree() -> "CircleAddressTree":
@@ -251,9 +261,9 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def add(self, circle_id: CircleID, **fields: Unpack[CircleMemberAdd]) -> None:
         """Add a member to a circle."""
@@ -271,9 +281,9 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="Member circle not found",
                 id=member_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
@@ -286,9 +296,9 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="No changes applied when adding member",
                 id=circle_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def remove(self, circle_id: CircleID, **fields: Unpack[CircleMemberRemove]) -> None:
         """Remove a member from a circle."""
@@ -310,9 +320,9 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         # Use direct MongoDB access for nested field updates
         storage = get_collection(COLLECTION)
@@ -325,9 +335,9 @@ class CircleMember:
             raise api_errors.ConflictError(
                 message="No changes applied when removing member",
                 id=circle_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def set(self, circle_id: CircleID, **fields: Unpack[CircleMemberSet]) -> None:
         """Set the access of a member of a circle.
@@ -346,6 +356,21 @@ class Circle:
         """Initialize the Circle model with a storage interface."""
         self.storage = get_collection(COLLECTION)
 
+    def list(self, **filters: Any) -> list[CircleRecord]:
+        """List all circles in the circle collection.
+
+        Keyword arguments are used to filter the results.
+
+        Args:
+            **filters: Keyword arguments to filter the circles.
+        """
+        try:
+            records = self.storage.get_matching(filters)
+        except storage_errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        else:
+            return [CircleRecord(**record) for record in records]
+
     def new(self, **fields: Unpack[CircleNew]) -> CircleResource:
         """This creates a new circle and adds it to the circle collection.
 
@@ -359,7 +384,7 @@ class Circle:
                 id=fields["tag"]
             )
         circle_id = CampusID(uid.generate_category_uid("circle", length=8))
-        record = CircleRecord(
+        record = CircleRecordDict(
             id=circle_id,
             created_at=utc_time.now(),
             name=fields["name"],
@@ -382,7 +407,7 @@ class Circle:
             resource["sources"] = {}
             return resource
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def delete(self, circle_id: str) -> None:
         """Delete a circle by id.
@@ -397,9 +422,9 @@ class Circle:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def get(self, circle_id: str) -> CircleResource:
         """Get a circle by id from the circle collection."""
@@ -419,9 +444,9 @@ class Circle:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def update(self, circle_id: str, **updates: Unpack[CircleUpdate]) -> None:
         """Update a circle by id."""
@@ -433,9 +458,9 @@ class Circle:
             raise api_errors.ConflictError(
                 message="Circle not found",
                 id=circle_id
-            )
+            ) from None
         except storage_errors.StorageError as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
 
 class CircleAddressTree(Mapping[CircleID, "CircleAddressTree"]):

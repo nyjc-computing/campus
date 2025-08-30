@@ -23,7 +23,7 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 message="Unauthorized",
                 status=status,
                 **body
-           )
+            )
         case 403:
             raise ForbiddenError(
                 message="Forbidden",
@@ -111,6 +111,11 @@ class InternalError(APIError):
             **details
     ) -> None:
         super().__init__(message, error_code, **details)
+
+    @classmethod
+    def from_exception(cls, exception: Exception) -> 'InternalError':
+        """Convenience factory method"""
+        return cls(message=str(exception), error_type=type(exception).__name__)
 
 
 class InvalidRequestError(APIError):

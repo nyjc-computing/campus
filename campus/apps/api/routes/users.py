@@ -5,7 +5,7 @@ API routes for the users resource.
 
 from flask import Blueprint, Flask
 
-import campus_yapper
+import campus.yapper
 
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
@@ -16,7 +16,7 @@ bp = Blueprint('users', __name__, url_prefix='/users')
 bp.before_request(authenticate_client)
 
 users = user.User()
-yapper = campus_yapper.create()
+yapper = campus.yapper.create()
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -134,7 +134,7 @@ def new_user() -> flask_validation.JsonResponse:
     )
     resource = users.new(**payload)
     flask_validation.validate_json_response(
-        user.UserResource.__annotations__,
+        user.UserResourceDict.__annotations__,
         resource,
         on_error=api_errors.raise_api_error,
     )
@@ -231,7 +231,7 @@ def get_user(user_id: str) -> flask_validation.JsonResponse:
     summary['profile'] = record
     flask_validation.validate_json_response(
         summary,
-        user.UserResource.__annotations__,
+        user.UserResourceDict.__annotations__,
         on_error = api_errors.raise_api_error
     )
     # future calls for other user info go here
@@ -335,7 +335,7 @@ def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
     """
     resource= users.get(user_id)
     flask_validation.validate_json_response(
-        user.UserResource.__annotations__,
+        user.UserResourceDict.__annotations__,
         resource,
         on_error = api_errors.raise_api_error,
     )

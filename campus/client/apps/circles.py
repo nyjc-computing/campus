@@ -7,7 +7,7 @@ Circle management client for creating and managing circles.
 
 from typing import Dict, Any
 from campus.client.base import HttpClient
-from campus.client import config
+from campus import config
 
 
 class CircleMembers:
@@ -214,13 +214,8 @@ class CirclesClient(HttpClient):
     following the actual server API implementation.
     """
 
-    def _get_default_base_url(self) -> str:
-        """Get the default base URL for the circles service.
-
-        Returns:
-            str: Base URL for the apps deployment
-        """
-        return config.get_service_base_url("circles")
+    def __init__(self, base_url: str | None = None):
+        super().__init__(base_url or config.get_base_url("campus.apps"))
 
     def __getitem__(self, circle_id: str) -> Circle:
         """Get a circle by ID.
@@ -232,6 +227,18 @@ class CirclesClient(HttpClient):
             Circle instance
         """
         return Circle(self, circle_id)
+
+    def list(self, **filters: Any) -> list[dict[str, Any]]:
+        """Return a list of matching circles.
+
+        Args:
+            **filters: Optional filters to apply (e.g., name, tag)
+
+        Returns:
+            list[dict[str, Any]]: A list of matching circle data
+        """
+        response = self.get("/circles", params=filters)
+        return response.get("data", [])
 
     def new(self, *, name: str, description: str = "", **kwargs) -> Dict[str, Any]:
         """Create a new circle.
@@ -261,16 +268,4 @@ class CirclesClient(HttpClient):
             Dict[str, Any]: The updated circle data
         """
         response = self.patch(f"/circles/{circle_id}", kwargs)
-        return response.get("circle", response)
-
-    def get_circle(self, circle_id: str) -> Dict[str, Any]:
-        """Get a circle by ID.
-
-        Args:
-            circle_id: The circle ID
-
-        Returns:
-            Dict[str, Any]: The circle data
-        """
-        response = self.get(f"/circles/{circle_id}")
         return response.get("circle", response)

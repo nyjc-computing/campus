@@ -8,6 +8,7 @@ that are shared across all service clients using composition pattern.
 
 import os
 import json
+import logging
 from typing import Optional, Dict, Any
 from urllib.parse import urljoin
 
@@ -21,8 +22,11 @@ from campus.client.errors import (
     NotFoundError,
     ValidationError,
     NetworkError,
+    MalformedResponseError,
 )
-from campus.client import config
+
+# Set up logger for this module
+logger = logging.getLogger(__name__)
 
 
 class HttpClient:
@@ -35,7 +39,7 @@ class HttpClient:
 
     def __init__(
             self,
-            base_url: Optional[str] = None,
+            base_url: str,
             *,
             auth_scheme: str = "basic"
     ):
@@ -45,7 +49,7 @@ class HttpClient:
             base_url: Override default base URL for the service
             auth_scheme: 'basic' or 'bearer' (default: 'basic')
         """
-        self.base_url = base_url or self._get_default_base_url()
+        self.base_url = base_url
         self._client_id: Optional[str] = None
         self._client_secret: Optional[str] = None
         self._access_token: Optional[str] = None
@@ -54,18 +58,13 @@ class HttpClient:
         # Try to load credentials from environment
         self._load_credentials_from_env()
 
-    def _get_default_base_url(self) -> str:
-        """Get the default base URL for this service.
-
-        Subclasses should override this to specify their service name,
-        or clients can pass base_url explicitly to the constructor.
-
-        Returns:
-            str: The default base URL for the service
-        """
-        # Default to vault URL for backward compatibility
-        # Subclasses should override this method
-        return config.get_vault_base_url()
+        # Prepare a persistent session and initialize headers
+        self.session = requests.Session()
+        try:
+            self.session.headers.update(self._get_headers())
+        except AuthenticationError:
+            # Headers may not be available if credentials are not set yet
+            pass
 
     def _load_credentials_from_env(self) -> None:
         """Load client credentials from environment variables.
@@ -85,6 +84,8 @@ class HttpClient:
         self._client_id = client_id
         self._client_secret = client_secret
         self._access_token = None  # Clear any cached token
+        # Update session headers with new credentials
+        self.session.headers.update(self._get_headers())
 
     def _ensure_authenticated(self) -> None:
         """Ensure the client is authenticated.
@@ -158,47 +159,75 @@ class HttpClient:
             NetworkError: If network request fails
         """
         url = urljoin(self.base_url, path.lstrip('/'))
-        headers = self._get_headers()
+        # Always update session headers before request in case credentials changed
+        self.session.headers.update(self._get_headers())
 
-        # Instead of requests.request(...), create a Request object
-        # for now for easier introspection during debugging
-        req = requests.Request(
-            method=method,
-            url=url,
-            headers=headers,
-            json=data,
-            params=params
-        )
-        prepped = req.prepare()
         try:
-            with requests.Session() as session:
-                response = session.send(prepped, timeout=30)
+            response = self.session.request(
+                method=method,
+                url=url,
+                json=data,
+                params=params,
+                timeout=30
+            )
+        except requests.RequestException as e:
+            raise NetworkError(f"Network request failed: {e}") from e
+        else:
+            # Log response details for debugging
+            logger.debug(
+                f"Response received: {method} {url} -> "
+                f"Status: {response.status_code}, "
+                f"Content-Type: {response.headers.get('content-type', 'unknown')}"
+            )
 
-            # Handle HTTP status codes
+            # Helper function to safely parse JSON responses
+            def safe_json_parse(response):
+                try:
+                    return response.json()
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.error(
+                        f"Failed to parse JSON response: Status {response.status_code}, "
+                        f"Content-Type: {response.headers.get('content-type', 'unknown')}, "
+                        f"Body: {response.text[:500]}"
+                    )
+                    # Return a generic error message with the response details
+                    return {
+                        "error": "Invalid JSON response",
+                        "status_code": response.status_code,
+                        "content_type": response.headers.get('content-type', 'unknown'),
+                        "body_preview": response.text[:200]
+                    }
+
             match response.status_code:
                 case 400:
-                    raise ValidationError(response.json())
+                    raise ValidationError(safe_json_parse(response))
                 case 401:
-                    raise AuthenticationError(response.json())
+                    raise AuthenticationError(safe_json_parse(response))
                 case 403:
-                    raise AccessDeniedError(response.json())
+                    raise AccessDeniedError(safe_json_parse(response))
                 case 404:
-                    raise NotFoundError(response.json())
+                    raise NotFoundError(safe_json_parse(response))
                 case 409:
-                    raise ConflictError(response.json())
+                    raise ConflictError(safe_json_parse(response))
                 case _:
                     if not response.ok:
-                        raise NetworkError(f"HTTP {response.status_code}: {response.text}")
+                        logger.error(
+                            f"HTTP error {response.status_code}: "
+                            f"Content-Type: {response.headers.get('content-type', 'unknown')}, "
+                            f"Body: {response.text[:500]}"
+                        )
+                        raise NetworkError(
+                            f"HTTP {response.status_code}: {response.text}")
 
             # Parse JSON response
+            if not response.content or response.content.strip() == b'':
+                # Genuine empty response (no content)
+                return {}
             try:
                 return response.json()
-            except json.JSONDecodeError:
-                # Some endpoints might return empty responses
-                return {}
-
-        except requests.RequestException as e:
-            raise NetworkError(f"Network request failed: {e}")
+            except json.JSONDecodeError as e:
+                # Response is not valid JSON
+                raise MalformedResponseError("Invalid JSON response") from e
 
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Make a GET request.

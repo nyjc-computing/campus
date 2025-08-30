@@ -17,7 +17,7 @@ from campus.common.utils import (
     utc_time,
 )
 import campus.common.validation.record as record_validation
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
     get_collection
@@ -26,7 +26,7 @@ from campus.storage import (
 COLLECTION = "sessions"
 
 
-class SessionRecord(BaseRecord):
+class SessionRecord(BaseRecordDict):
     """Schema for a full session record."""
     expires_at: str
     scopes: NotRequired[list[str]]
@@ -62,7 +62,7 @@ class Session:
                 session_id=session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def get(self, session_id: CampusID) -> dict:
         """Retrieve an OAuth session by its ID."""
@@ -74,7 +74,7 @@ class Session:
                 session_id=session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return record
 
@@ -94,7 +94,7 @@ class Session:
         try:
             self.storage.insert_one(session_data)
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return session_data
 
@@ -108,6 +108,6 @@ class Session:
                 session_id=session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return self.get(session_id)
