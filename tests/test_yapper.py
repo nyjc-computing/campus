@@ -4,6 +4,7 @@ import os
 from tests.fixtures.setup import set_test_env_vars
 from tests.fixtures.vault import init_vault, give_vault_access
 from tests.fixtures.yapper import init_yapper
+import campus.yapper
 
 class TestYapper(unittest.TestCase):
     
@@ -21,6 +22,9 @@ class TestYapper(unittest.TestCase):
     def test_yapper_vars(self):
         init_yapper()
         self.assertIsNotNone(os.environ["YAPPERDB_URI"])
+
+    def test_yapper_init(self):
+        campus.yapper.create()
 
 if __name__ == "__main__":
     unittest.main()
