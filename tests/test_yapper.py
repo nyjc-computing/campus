@@ -24,7 +24,8 @@ class TestYapper(unittest.TestCase):
         self.assertIsNotNone(os.environ["YAPPERDB_URI"])
 
     def test_yapper_init(self):
-        campus.yapper.create()
+        self.yapperInterface = campus.yapper.create()
+        self.assertIsNotNone(self.yapperInterface)
 
 if __name__ == "__main__":
     unittest.main()
