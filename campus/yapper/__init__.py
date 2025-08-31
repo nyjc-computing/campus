@@ -19,6 +19,8 @@ from campus.vault import get_vault
 def create(**kwargs) -> YapperInterface:
     """Factory function to get a Yapper client instance.
 
+    # TODO: Update docstring (https://github.com/nyjc-computing/campus/issues/177)
+
     Environment variables:
         CLIENT_ID: Unique identifier for the client (required)
         CLIENT_SECRET: Client secret for authentication (required)
