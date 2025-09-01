@@ -1,190 +1,92 @@
-"""client.apps.circles
+"""campus.client.apps.circles
 
 Circle management client for creating and managing circles.
 """
 
-# pylint: disable=attribute-defined-outside-init
+from typing import Any
 
-from typing import Dict, Any
-from campus.client.base import HttpClient
-from campus import config
+from campus.client.interface import Resource
+from campus.common.http import JsonClient, JsonResponse
 
 
-class CircleMembers:
+class CircleMembers(Resource):
     """Represents circle members sub-resource.
 
     Provides methods for managing circle membership following the server API.
     """
 
-    def __init__(self, circles_client: HttpClient, circle_id: str):
-        """Initialize circle members sub-resource.
+    def list(self) -> JsonResponse:
+        """Get circle members and their access values."""
+        response = self.client.get(self.path)
+        return response
 
-        Args:
-            circles_client: The circles client instance
-            circle_id: The circle ID
-        """
-        self._client = circles_client
-        self._circle_id = circle_id
-
-    def list(self) -> Dict[str, Any]:
-        """Get circle members and their access values.
-
-        Server: GET /circles/{circle_id}/members
-
-        Returns:
-            Dict containing members data with access values
-        """
-        return self._client.get(f"/circles/{self._circle_id}/members")
-
-    def add(self, *, user_id: str, **kwargs) -> None:
+    def add(self, *, member_id: str, **kwargs) -> JsonResponse:
         """Add a member to the circle.
 
-        Server: POST /circles/{circle_id}/members/add
-
         Args:
-            user_id: User ID to add
+            member_id: User ID to add
             **kwargs: Additional parameters (e.g., role, access)
         """
-        data = {"user_id": user_id, **kwargs}
-        self._client.post(f"/circles/{self._circle_id}/members/add", data)
+        data = {"member_id": member_id, **kwargs}
+        response = self.client.post(self.make_path("add"), json=data)
+        return response
 
-    def remove(self, user_id: str) -> None:
+    def remove(self, member_id: str) -> JsonResponse:
         """Remove a member from the circle.
 
-        Server: DELETE /circles/{circle_id}/members/remove
+        Args:
+            member_id: User ID to remove
+        """
+        data = {"member_id": member_id}
+        response = self.client.delete(self.make_path("remove"), json=data)
+        return response
+
+    def set(self, member_id: str, access_value: int) -> JsonResponse:
+        """Set circle member access.
 
         Args:
-            user_id: User ID to remove
+            member_id: User ID to remove
+            access_value: Access value to set
         """
-        data = {"user_id": user_id}
-        self._client.delete(f"/circles/{self._circle_id}/members/remove", data)
-
-    def users(self) -> Dict[str, Any]:
-        """Get users in the circle.
-
-        Server: GET /circles/{circle_id}/users
-        Status: Returns 501 (not implemented yet)
-
-        Returns:
-            Dict containing users data
-        """
-        return self._client.get(f"/circles/{self._circle_id}/users")
-
-    def __getitem__(self, member_circle_id: str) -> 'CircleMember':
-        """Get a specific member for updates.
-
-        Args:
-            member_circle_id: The member circle ID
-
-        Returns:
-            CircleMember instance for patch operations
-        """
-        return CircleMember(self._client, self._circle_id, member_circle_id)
+        data = {"member_id": member_id, "access_value": access_value}
+        response = self.client.put(self.make_path("set"), json=data)
+        return response
 
 
-class CircleMember:
-    """Represents a specific circle member for patch operations."""
-
-    def __init__(self, circles_client: HttpClient, circle_id: str, member_circle_id: str):
-        """Initialize circle member resource.
-
-        Args:
-            circles_client: The circles client instance
-            circle_id: The circle ID
-            member_circle_id: The member circle ID
-        """
-        self._client = circles_client
-        self._circle_id = circle_id
-        self._member_circle_id = member_circle_id
-
-    def update(self, **kwargs) -> None:
-        """Update a member's access in the circle.
-
-        Server: PATCH /circles/{circle_id}/members/{member_circle_id}
-
-        Args:
-            **kwargs: Fields to update (e.g., access)
-        """
-        self._client.patch(
-            f"/circles/{self._circle_id}/members/{self._member_circle_id}", kwargs)
-
-
-class Circle:
-    """Represents a circle resource.
+class CircleResource(Resource):
+    """Represents a single circle resource.
 
     Provides an interface for interacting with individual circle resources.
     Does not encapsulate data, only provides methods for operations.
     """
 
-    def __init__(self, circles_client: HttpClient, circle_id: str):
+    def __init__(self, parent: "CirclesResource", circle_id: str):
         """Initialize circle resource.
 
         Args:
             circles_client: The circles client instance
             circle_id: The circle ID
         """
-        self._client = circles_client
-        self._circle_id = circle_id
-
-    @property
-    def id(self) -> str:
-        """Get the circle ID.
-
-        Returns:
-            str: The unique identifier for this circle
-        """
-        return self._circle_id
-
-    def get(self) -> Dict[str, Any]:
-        """Get circle details.
-
-        Server: GET /circles/{circle_id}
-
-        Returns:
-            Dict[str, Any]: The complete circle data from the API
-        """
-        return self._client.get(f"/circles/{self._circle_id}")
-
-    @property
-    def data(self) -> Dict[str, Any]:
-        """Get circle data (convenience property).
-
-        Returns:
-            Dict[str, Any]: The complete circle data from the API
-        """
-        return self.get()
-
-    def update(self, **kwargs) -> None:
-        """Update the circle.
-
-        Server: PATCH /circles/{circle_id}
-
-        Args:
-            **kwargs: Fields to update (name, description, etc.)
-        """
-        self._client.patch(f"/circles/{self._circle_id}", kwargs)
-
-    def delete(self) -> None:
-        """Delete the circle.
-
-        Server: DELETE /circles/{circle_id}
-        """
-        self._client.delete(f"/circles/{self._circle_id}")
+        super().__init__(parent, circle_id)
+        self.circle_id = circle_id
 
     @property
     def members(self) -> CircleMembers:
-        """Get the members sub-resource.
+        """Get the members sub-resource."""
+        return CircleMembers(self, "members")
 
-        Returns:
-            CircleMembers: Sub-resource for member management
-        """
-        return CircleMembers(self._client, self._circle_id)
+    def delete(self) -> JsonResponse:
+        """Delete the circle."""
+        response = self.client.delete(self.path)
+        return response
 
-    def move(self, *, parent_circle_id: str) -> None:
+    def get(self) -> JsonResponse:
+        """Get circle details."""
+        response = self.client.get(self.path)
+        return response
+
+    def move(self, *, parent_circle_id: str) -> JsonResponse:
         """Move the circle to a new parent.
-
-        Server: POST /circles/{circle_id}/move
-        Status: Not implemented (returns 501)
 
         Args:
             parent_circle_id: ID of the new parent circle
@@ -192,80 +94,54 @@ class Circle:
         Raises:
             ValueError: If parent_circle_id is the same as the current circle ID
         """
-        if parent_circle_id == self._circle_id:
+        if parent_circle_id == self.circle_id:
             raise ValueError(
                 "The parent_circle_id cannot be the same as the current circle ID.")
         data = {"parent_circle_id": parent_circle_id}
-        self._client.post(f"/circles/{self._circle_id}/move", data)
+        response = self.client.post(self.make_path("move"), json=data)
+        return response
 
-    def __str__(self) -> str:
-        """String representation of the circle."""
-        return f"Circle(id={self._circle_id})"
+    def update(self, **kwargs) -> JsonResponse:
+        """Update the circle.
 
-    def __repr__(self) -> str:
-        """Detailed string representation of the circle."""
-        return f"Circle(id={self._circle_id})"
+        Args:
+            **kwargs: Fields to update (name, description, etc.)
+        """
+        response = self.client.patch(self.path, json=kwargs)
+        return response
 
 
-class CirclesClient(HttpClient):
-    """Client for circle operations following HTTP API conventions.
+class CirclesResource(Resource):
+    """Resource for Campus /circles endpoint."""
 
-    Provides methods for creating, retrieving, updating, and deleting circles,
-    following the actual server API implementation.
-    """
+    def __init__(self, client: JsonClient):
+        super().__init__(client, "circles")
 
-    def __init__(self, base_url: str | None = None):
-        super().__init__(base_url or config.get_base_url("campus.apps"))
-
-    def __getitem__(self, circle_id: str) -> Circle:
+    def __getitem__(self, circle_id: str) -> CircleResource:
         """Get a circle by ID.
 
         Args:
             circle_id: The circle ID
-
-        Returns:
-            Circle instance
         """
-        return Circle(self, circle_id)
+        return CircleResource(self, circle_id)
 
-    def list(self, **filters: Any) -> list[dict[str, Any]]:
+    def list(self, **filters: Any) -> JsonResponse:
         """Return a list of matching circles.
 
         Args:
             **filters: Optional filters to apply (e.g., name, tag)
-
-        Returns:
-            list[dict[str, Any]]: A list of matching circle data
         """
-        response = self.get("/circles", params=filters)
-        return response.get("data", [])
+        response = self.client.get(self.path, params=filters)
+        return response
 
-    def new(self, *, name: str, description: str = "", **kwargs) -> Dict[str, Any]:
+    def new(self, *, name: str, description: str = "", **kwargs) -> JsonResponse:
         """Create a new circle.
-
-        Server: POST /circles
 
         Args:
             name: Circle name
             description: Circle description
             **kwargs: Additional circle fields
-
-        Returns:
-            Dict[str, Any]: The created circle data
         """
         data = {"name": name, "description": description, **kwargs}
-        response = self.post("/circles", data)
-        return response.get("circle", response)
-
-    def update(self, *, circle_id: str, **kwargs) -> Dict[str, Any]:
-        """Update a circle.
-
-        Args:
-            circle_id: The circle ID to update
-            **kwargs: Fields to update (name, description, etc.)
-
-        Returns:
-            Dict[str, Any]: The updated circle data
-        """
-        response = self.patch(f"/circles/{circle_id}", kwargs)
-        return response.get("circle", response)
+        response = self.client.post(self.path, json=data)
+        return response
