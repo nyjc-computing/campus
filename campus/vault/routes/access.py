@@ -20,6 +20,11 @@ from ..auth import require_client_authentication, require_vault_permission
 bp = Blueprint('access', __name__, url_prefix='/access')
 
 
+def init_app(app: Flask | Blueprint) -> None:
+    """Initialize the access routes with the given Flask app or blueprint."""
+    app.register_blueprint(bp)
+
+
 class GetVaultAccess(TypedDict):
     """Schema for a request to get access."""
     client_id: str
