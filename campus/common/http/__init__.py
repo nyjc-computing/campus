@@ -19,7 +19,7 @@ from .errors import (
     AccessDeniedError,
     ConflictError,
     NotFoundError,
-    ValidationError,
+    InvalidRequestError,
     NetworkError,
     MalformedResponseError,
 )
@@ -61,7 +61,7 @@ __all__ = [
     "AccessDeniedError",
     "ConflictError",
     "NotFoundError",
-    "ValidationError",
+    "InvalidRequestError",
     "NetworkError",
     "MalformedResponseError",
 ]
