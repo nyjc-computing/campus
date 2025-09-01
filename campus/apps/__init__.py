@@ -20,6 +20,12 @@ def init_app(app: Blueprint | Flask) -> None:
     api.init_app(app)
     campusauth.init_app(app)
     oauth.init_app(app)
+    # Use vault client to retrieve secret key since campus.apps deployment
+    # does not have VAULTDB_URI env var
+    if isinstance(app, Flask):
+        from campus.client import VaultClient
+        vault = VaultClient()
+        app.secret_key = vault["campus"]["SECRET_KEY"].get()
 
 
 __all__ = [

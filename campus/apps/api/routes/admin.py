@@ -10,6 +10,10 @@ from campus.common import devops
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 
+# This file uses local imports to avoid exposing sensitive imports
+# and polluting global space
+# pylint: disable=import-outside-toplevel
+
 @bp.route("/status", methods=["GET"])
 def status():
     """Return admin status info."""
@@ -33,7 +37,6 @@ def init_db():
 @devops.block_env(devops.PRODUCTION)
 def purge_db():
     """Purge the database."""
-    # pylint: disable=import-outside-toplevel
     from campus.storage import purge_all
     purge_all()
     return {"status": "ok", "message": f"{devops.ENV}: Database purged."}

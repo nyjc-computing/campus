@@ -41,7 +41,11 @@ def get_deployment_mode():
 
 
 def create_app() -> devops.deploy.Flask:
-    """Create the appropriate Campus app based on deployment mode"""
+    """Create the appropriate Campus app based on deployment mode.
+
+    This factory only initialises the apropriate app.
+    It does not configure for deployment or testing.
+    """
     mode = get_deployment_mode()
 
     match mode:
@@ -58,7 +62,6 @@ def create_app() -> devops.deploy.Flask:
                 f"Unsupported deployment mode '{mode}'. "
                 f"Valid modes are: {', '.join(devops.deploy.MODES)}"
             )
-    devops.deploy.configure_for_deployment(app)
     return app
 
 

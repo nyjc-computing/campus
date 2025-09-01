@@ -8,15 +8,13 @@ This package provides the Yapper class for sending and receiving events.
 # See https://docs.python.org/3/tutorial/modules.html#packages for more
 # information.
 
-import os
-
 from .base import Event, EventHandler, YapperInterface
-from .backends.sqlite import SQLiteYapper
-from .backends.postgres import PostgreSQLYapper
 
 
 def create(**kwargs) -> YapperInterface:
     """Factory function to get a Yapper client instance.
+
+    # TODO: Update docstring (https://github.com/nyjc-computing/campus/issues/177)
 
     Environment variables:
         CLIENT_ID: Unique identifier for the client (required)
@@ -38,6 +36,14 @@ def create(**kwargs) -> YapperInterface:
         ValueError: If CLIENT_ID or CLIENT_SECRET environment variables are not set,
                    or if YAPPERDB_URI is not set for PostgreSQL environments
     """
+    # Lazy-import locally to avoid polluting global namespace
+    import os
+
+    from campus.client.vault.vault import VaultClient
+
+    from .backends.sqlite import SQLiteYapper
+    from .backends.postgres import PostgreSQLYapper
+
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
     env = os.getenv("ENV", "development").lower()
@@ -56,13 +62,14 @@ def create(**kwargs) -> YapperInterface:
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
-            yapperdb_uri = os.getenv("YAPPERDB_URI")
+            vault = VaultClient()
+            yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()
             if not yapperdb_uri:
                 raise ValueError(
                     f"YAPPERDB_URI environment variable is required for {env} environment. "
                     "Please provide a PostgreSQL connection URI via YAPPERDB_URI."
                 )
-            yapper = PostgreSQLYapper(client_id, db_uri=yapperdb_uri, **kwargs)
+            yapper = PostgreSQLYapper(db_uri=yapperdb_uri, **kwargs)
             yapper._init_db()
             return yapper
 

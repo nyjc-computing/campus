@@ -28,22 +28,19 @@ class AppModule(Protocol):
         ...
 
 
-def configure_for_deployment(app):
+def configure_for_deployment(app) -> None:
     """Configure the Flask app for deployment.
 
     - adds health check route
-    - sets secret key from vault
     """
+    # TODO: configure based on ENV
     # Health check route for deployments
     # Many services expect a 200 response from the root URL to verify the
     # service is running
     @app.route('/')
     def health_check():
         return {'status': 'healthy', 'service': 'campus-apps'}, 200
-
-    from campus.client import VaultClient
-    vault = VaultClient()
-    app.secret_key = vault["campus"]["SECRET_KEY"].get()
+    return
 
 
 def create_app(*appmodules: AppModule) -> Flask:

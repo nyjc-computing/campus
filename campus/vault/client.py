@@ -42,7 +42,7 @@ def _get_secret_key() -> str:
     Raises:
         VaultKeyError: If SECRET_KEY is not found in the campus vault
     """
-    campus_vault = Vault("campus")
+    campus_vault = model.Vault("campus")
     return campus_vault.get("SECRET_KEY")
 
 
