@@ -118,14 +118,14 @@ def require_client_authentication(f):
 
     Usage:
         # Service-level operations (client management, vault listing)
-        @require_client_authentication()
-        def create_client(client_id):
+        @require_client_authentication
+        def create_client():
             # Route implementation
 
         # Combined with vault permission checking (place this decorator on top)
-        @require_client_authentication()
+        @require_client_authentication
         @require_vault_permission(access.READ)
-        def get_secret(client_id, label, key):
+        def get_secret(label, key):
             # Route implementation
     """
     @wraps(f)
