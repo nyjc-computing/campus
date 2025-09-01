@@ -126,7 +126,9 @@ def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
                 fetch_all=False
             )
     except db.psycopg2.IntegrityError:
-        raise api_errors.ConflictError(message="Client name already exists.")
+        raise api_errors.ConflictError(
+            message="Client name already exists."
+        ) from None
 
     # Return client resource without secret_hash
     client_resource = {
