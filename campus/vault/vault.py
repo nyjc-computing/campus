@@ -38,6 +38,21 @@ def init_db():
             cursor.execute(vault_schema)
 
 
+def get_vault(label: str) -> "Vault":
+    """Get a Vault instance by label.
+
+    This is a convenience function for programmatic access to vaults.
+    For HTTP API access, use the routes which handle authentication.
+
+    Note: When using this function programmatically, CLIENT_ID and CLIENT_SECRET
+    environment variables must be set for the vault operations to work.
+
+    For the new architecture, this returns a Vault model instance.
+    Authentication and permission checking should be handled at the application layer.
+    """
+    return Vault(label)
+
+
 class Vault:
     """Vault data model for managing secrets in the Campus system.
 

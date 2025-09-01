@@ -75,7 +75,8 @@ from flask import Blueprint, Flask
 
 from campus.common import devops, errors
 
-from . import access, client, db, vault
+from . import access, client, vault
+from .vault import get_vault
 
 __all__ = [
     "get_vault",
@@ -89,21 +90,6 @@ __all__ = [
 
 # This file uses local imports to avoid polluting global space
 # pylint: disable=import-outside-toplevel
-
-def get_vault(label: str) -> vault.Vault:
-    """Get a Vault instance by label.
-
-    This is a convenience function for programmatic access to vaults.
-    For HTTP API access, use the routes which handle authentication.
-
-    Note: When using this function programmatically, CLIENT_ID and CLIENT_SECRET
-    environment variables must be set for the vault operations to work.
-
-    For the new architecture, this returns a Vault model instance.
-    Authentication and permission checking should be handled at the application layer.
-    """
-    return vault.Vault(label)
-
 
 def create_app() -> Flask:
     """Factory function to create the vault app.
