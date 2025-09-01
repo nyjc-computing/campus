@@ -15,6 +15,36 @@
 - Located in tests/integration/<package>/
 - Test real implementations with actual dependencies
 
+## Directory Structure
+
+```
+tests/
+  unit/                 # Unit tests (no external dependencies)
+    apps/
+      test_client.py    # Client interface tests
+      test_models.py    # Model logic tests  
+      test_routes.py    # Route logic tests
+    vault/
+      test_client.py    # Client interface tests
+      test_models.py    # Model logic tests
+      test_routes.py    # Route logic tests
+    yapper/
+      test_models.py    # Model logic tests
+    common/             # Tests for campus.common
+      test_introspect.py
+      test_validation.py
+    client/             # Tests for campus.client
+      test_base.py      # HttpClient base functionality
+  integration/          # Integration tests (require environment setup)
+    apps/
+      test_models_users.py
+      test_models_circles.py
+    vault/
+      test_vault_integration.py
+    yapper/
+      test_yapper.py
+```
+
 ## Usage Examples
 
 ### Running All Unit Tests
@@ -33,6 +63,12 @@ poetry run python -m unittest discover tests/unit/vault -v
 
 # Test only campus.yapper unit tests
 poetry run python -m unittest discover tests/unit/yapper -v
+
+# Test only campus.common unit tests
+poetry run python -m unittest discover tests/unit/common -v
+
+# Test only campus.client unit tests
+poetry run python -m unittest discover tests/unit/client -v
 ```
 
 ### Running Integration Tests
