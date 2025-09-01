@@ -9,6 +9,8 @@ import campus.vault
 from campus.common import devops
 
 
+
+
 class TestVaultIntegration(unittest.TestCase):
     """Integration tests for the vault service."""
 

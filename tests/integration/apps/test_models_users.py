@@ -3,6 +3,8 @@ from campus.apps.api.routes import admin
 from campus.models import user
 
 
+
+
 class TestUsers(unittest.TestCase):
 
     def setUp(self):

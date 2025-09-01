@@ -28,6 +28,8 @@ from unittest.mock import Mock, patch
 from campus.client.apps import AdminClient, CirclesClient, UsersClient
 
 
+
+
 class TestAdminClient(unittest.TestCase):
     """Test cases for AdminClient class."""
 

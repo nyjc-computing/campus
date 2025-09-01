@@ -3,6 +3,8 @@ from campus.apps.api.routes import admin
 from campus.models import circle
 
 
+
+
 class TestCircles(unittest.TestCase):
 
     def setUp(self):

@@ -6,6 +6,7 @@ from tests.fixtures.vault import init_vault, give_vault_access
 from tests.fixtures.yapper import init_yapper
 import campus.yapper
 
+
 class TestYapper(unittest.TestCase):
     
     def test_setup_vars(self):
