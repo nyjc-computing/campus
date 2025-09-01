@@ -12,11 +12,10 @@ to the vault database, maintaining compatibility with the main client schema
 where possible.
 
 SECRET_KEY USAGE:
-This module retrieves the SECRET_KEY from the vault itself (from the 'campus' 
+This module retrieves the SECRET_KEY from the vault itself (from the 'vault' 
 vault label) on demand. While this creates additional database load, it provides
-consistency with the vault-first architecture and eliminates environment variable
-dependencies. Performance optimizations (such as API keys) can be addressed
-when needed.
+consistency with the vault-first architecture and eliminates environment
+variable dependencies. Performance optimizations (such as API keys) can be addressed when needed.
 """
 
 from typing import Any, TypedDict, NotRequired, Unpack
