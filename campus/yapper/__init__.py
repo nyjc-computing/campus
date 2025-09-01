@@ -8,12 +8,7 @@ This package provides the Yapper class for sending and receiving events.
 # See https://docs.python.org/3/tutorial/modules.html#packages for more
 # information.
 
-import os
-
 from .base import Event, EventHandler, YapperInterface
-from .backends.sqlite import SQLiteYapper
-from .backends.postgres import PostgreSQLYapper
-from campus.vault import get_vault
 
 
 def create(**kwargs) -> YapperInterface:
@@ -42,8 +37,12 @@ def create(**kwargs) -> YapperInterface:
                    or if YAPPERDB_URI is not set for PostgreSQL environments
     """
     # Lazy-import locally to avoid polluting global namespace
+    import os
+
     from campus.client.vault.vault import VaultClient
 
+    from .backends.sqlite import SQLiteYapper
+    from .backends.postgres import PostgreSQLYapper
 
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
