@@ -138,19 +138,6 @@ def init_db():
     This function is intended to be called only in a test or staging
     environment.
     """
-    # Initialize vault table
-    with db.get_connection_context() as conn:
-        with conn.cursor() as cursor:
-            vault_schema = """
-                CREATE TABLE IF NOT EXISTS vault (
-                    id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL,
-                    label TEXT NOT NULL,
-                    key TEXT NOT NULL,
-                    value TEXT NOT NULL,
-                    UNIQUE(label, key)
-                )
-            """
-            cursor.execute(vault_schema)
-    access.init_db()
+    vault.init_db()
     client.init_db()
+    access.init_db()

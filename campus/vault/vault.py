@@ -7,12 +7,35 @@ without authentication or permission checking. Those concerns are handled at
 the route level for better separation of responsibilities.
 """
 
+from campus.common import devops
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 
 from . import db
 
 TABLE = "vault"
+
+
+@devops.block_env(devops.PRODUCTION)
+def init_db():
+    """Initialize the vault table containing keys and secrets.
+
+    This function is intended to be called only in a test or staging
+    environment.
+    """
+    with db.get_connection_context() as conn:
+        with conn.cursor() as cursor:
+            vault_schema = """
+                CREATE TABLE IF NOT EXISTS vault (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    UNIQUE(label, key)
+                )
+            """
+            cursor.execute(vault_schema)
 
 
 class Vault:
