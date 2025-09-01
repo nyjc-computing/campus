@@ -66,9 +66,8 @@ class VaultClientSecretResponse(TypedDict, total=True):
 def init_db():
     """Initialize the vault client table.
 
-    This function is intended to be called only in a test environment or
-    staging. The vault client table is separate from the main clients table
-    to avoid circular dependencies.
+    This function is intended to be called only in a test or staging
+    environment.
     """
     with db.get_connection_context() as conn:
         with conn.cursor() as cursor:
