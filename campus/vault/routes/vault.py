@@ -8,8 +8,7 @@ This follows the principle of handling cross-cutting concerns at the appropriate
 
 from flask import Blueprint, Flask, jsonify, request
 
-from campus.vault import access, auth
-from campus.vault.model import Vault
+import campus.common.validation.flask as flask_validation
 
 # Create blueprint for vault routes
 bp = Blueprint('vault', __name__, url_prefix='/vault')
@@ -17,7 +16,7 @@ bp = Blueprint('vault', __name__, url_prefix='/vault')
 
 @bp.get("/")
 @auth.require_client_authentication()
-def list_vaults(client_id, **kwargs):
+def list_vaults() -> flask_validation.JsonResponse:
     """List available vault labels"""
     # TODO: In a more sophisticated implementation, this would return
     # only the vaults that the authenticated client has access to
@@ -27,7 +26,7 @@ def list_vaults(client_id, **kwargs):
 @bp.get("/<label>/")
 @auth.require_client_authentication()
 @auth.require_vault_permission(access.READ)
-def list_keys(client_id, label):
+def list_keys(label) -> flask_validation.JsonResponse:
     """List all keys in a vault"""
     vault = Vault(label)
     keys = vault.list_keys()
@@ -37,7 +36,7 @@ def list_keys(client_id, label):
 @bp.get("/<label>/<key>")
 @auth.require_client_authentication()
 @auth.require_vault_permission(access.READ)
-def get_secret(client_id, label, key):
+def get_secret(label, key) -> flask_validation.JsonResponse:
     """Get a secret from a vault"""
     vault = Vault(label)
     value = vault.get(key)
@@ -45,6 +44,7 @@ def get_secret(client_id, label, key):
 
 
 @bp.post("/<label>/<key>")
+def set_secret(label, key) -> flask_validation.JsonResponse:
     """Set a secret in a vault
 
     Requires CREATE permission for new keys, UPDATE permission for existing keys.
@@ -81,7 +81,7 @@ def get_secret(client_id, label, key):
 @bp.delete("/<label>/<key>")
 @auth.require_client_authentication()
 @auth.require_vault_permission(access.DELETE)
-def delete_secret(client_id, label, key):
+def delete_secret(label, key) -> flask_validation.JsonResponse:
     """Delete a secret from a vault"""
     vault = Vault(label)
     deleted = vault.delete(key)

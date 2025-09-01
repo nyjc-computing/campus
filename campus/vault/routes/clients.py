@@ -8,6 +8,7 @@ Admin operations require ALL permissions, read operations require READ permissio
 
 from flask import Blueprint, Flask, jsonify, request
 
+import campus.common.validation.flask as flask_validation
 import campus.yapper
 
 from .. import client
@@ -20,7 +21,7 @@ yapper = campus.yapper.create()
 
 @bp.post("/")
 @require_client_authentication()
-def create_vault_client(client_id):
+def create_vault_client() -> flask_validation.JsonResponse:
     """Create a new vault client
 
     POST /client
@@ -42,7 +43,7 @@ def create_vault_client(client_id):
     """
 @bp.get("/")
 @require_client_authentication()
-def list_vault_clients(client_id):
+def list_vault_clients() -> flask_validation.JsonResponse:
     """List all vault clients
 
     GET /client
@@ -67,7 +68,7 @@ def list_vault_clients(client_id):
 
 # Authenticate a vault client by client_id and client_secret
 @bp.post("/authenticate")
-def authenticate_vault_client():
+def authenticate_vault_client() -> flask_validation.JsonResponse:
     """Authenticate a vault client by client_id and client_secret.
 
     POST /client/authenticate
@@ -94,7 +95,7 @@ def authenticate_vault_client():
 
 @bp.get("/<client_id>")
 @require_client_authentication()
-def get_vault_client(client_id, target_client_id):
+def get_vault_client(client_id) -> flask_validation.JsonResponse:
     """Get details of a specific vault client
 
     GET /client/{client_id}
@@ -116,7 +117,7 @@ def get_vault_client(client_id, target_client_id):
 
 @bp.delete("/<client_id>")
 @require_client_authentication()
-def delete_vault_client(client_id, target_client_id):
+def delete_vault_client(client_id) -> flask_validation.JsonResponse:
     """Delete a vault client
 
     DELETE /client/{client_id}

@@ -6,7 +6,7 @@ These routes handle granting, revoking, and checking access permissions for vaul
 Admin operations require ALL permissions, access checking requires READ permissions.
 """
 
-from flask import Blueprint, Flask, jsonify, request
+import campus.common.validation.flask as flask_validation
 
 from .. import access
 from ..auth import require_client_authentication, require_vault_permission
