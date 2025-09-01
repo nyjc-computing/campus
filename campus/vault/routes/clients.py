@@ -14,7 +14,7 @@ from .. import client
 from ..auth import require_client_authentication
 
 # Create blueprint for client management routes
-bp = Blueprint('client', __name__, url_prefix='/client')
+bp = Blueprint('clients', __name__, url_prefix='/clients')
 yapper = campus.yapper.create()
 
 
