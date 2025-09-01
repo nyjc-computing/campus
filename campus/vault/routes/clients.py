@@ -19,7 +19,17 @@ from ..auth import require_client_authentication
 
 # Create blueprint for client management routes
 bp = Blueprint('clients', __name__, url_prefix='/clients')
-yapper = campus.yapper.create()
+
+# Lazy-loaded yapper instance to avoid circular dependencies
+_yapper_instance = None
+
+
+def get_yapper():
+    """Get yapper instance, creating it lazily to avoid circular dependencies."""
+    global _yapper_instance
+    if _yapper_instance is None:
+        _yapper_instance = campus.yapper.create()
+    return _yapper_instance
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -143,5 +153,5 @@ def delete_vault_client(client_id) -> flask_validation.JsonResponse:
     }
     """
     client.delete_client(client_id)
-    yapper.emit('campus.clients.delete')
+    get_yapper().emit('campus.clients.delete')
     return {"client_id": client_id, "action": "deleted"}, 200
