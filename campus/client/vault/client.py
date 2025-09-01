@@ -107,6 +107,4 @@ class VaultClientManagement:
         return self._client.delete(f"/client/{client_id}")
 
 
-# For module replacement pattern, we'll export the class
-# The actual module replacement happens in vault.py
 __all__ = ['VaultClientManagement']

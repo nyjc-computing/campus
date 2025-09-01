@@ -83,6 +83,4 @@ class VaultAccessClient:
         return self._client.get(f"/access/{label}", params={"client_id": client_id})
 
 
-# For module replacement pattern, we'll export the class
-# The actual module replacement happens in vault.py
 __all__ = ['VaultAccessClient']
