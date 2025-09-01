@@ -65,11 +65,7 @@ def authenticate_client() -> str:
     """
     client_id, client_secret = get_client_credentials()
     # Authenticate using vault's client system
-    try:
-        client.authenticate_client(client_id, client_secret)
-    except api_errors.APIError as e:
-        # propagate API errors (e.g., Unauthorized, NotFound)
-        raise
+    client.authenticate_client(client_id, client_secret)
     return client_id
 
 

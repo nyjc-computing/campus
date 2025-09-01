@@ -45,6 +45,7 @@ DELETE = 8  # 1000 in binary - Can delete secrets
 ALL = READ | CREATE | UPDATE | DELETE
 
 __all__ = [
+    "convert_perms_to_access",
     "grant_access",
     "revoke_access",
     "has_access",
@@ -55,6 +56,72 @@ __all__ = [
     "DELETE",
     "ALL",
 ]
+
+
+@devops.block_env(devops.PRODUCTION)
+def init_db():
+    """Initialize the access control table.
+
+    This function is intended to be called only in a test or staging
+    environment.
+    """
+    with db.get_connection_context() as conn:
+        with conn.cursor() as cursor:
+            # Create vault_access table
+            access_schema = """
+                CREATE TABLE IF NOT EXISTS vault_access (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    client_id TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    access INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(client_id, label)
+                )
+            """
+            cursor.execute(access_schema)
+
+
+def convert_perms_to_access(permissions: int | list[str]) -> int:
+    """Convert permissions given as an integer or list of strings
+    to an access value integer.
+    """
+    match permissions:
+        case list():
+            # Convert permission names to bitflags
+            permission_map = {
+                "READ": READ,
+                "CREATE": CREATE,
+                "UPDATE": UPDATE,
+                "DELETE": DELETE,
+                "ALL": ALL
+            }
+            access_flags = 0
+            invalid_perms = [
+                perm for perm in permissions
+                if perm not in permission_map
+            ]
+            if invalid_perms:
+                raise api_errors.InvalidRequestError(
+                    "Invalid permissions provided",
+                    invalid_perms=invalid_perms
+                )
+            access_flags = 0
+            for perm in permissions:
+                access_flags |= permission_map[perm]
+        case int():
+            if not READ <= permissions <= ALL:
+                raise api_errors.InvalidRequestError(
+                    "Invalid permissions range",
+                    accepted_range="1 - 15"
+                )
+            access_flags = permissions
+        case _:
+            raise api_errors.InvalidRequestError(
+                "Invalid permissions argument type",
+                given_type=type(permissions).__name__,
+                required_type="integer | array[string]"
+            )
+    return access_flags
 
 
 def grant_access(client_id: str, label: str, access: int) -> None:
@@ -164,26 +231,3 @@ def has_access(client_id: str, label: str, required_access: int) -> bool:
             return False
         granted_access = access_record["access"]
         return (granted_access & required_access) == required_access
-
-
-@devops.block_env(devops.PRODUCTION)
-def init_db():
-    """Initialize the access control table.
-
-    This function is intended to be called only in a test environment or
-    staging.
-    """
-    with db.get_connection_context() as conn:
-        with conn.cursor() as cursor:
-            # Create vault_access table
-            access_schema = """
-                CREATE TABLE IF NOT EXISTS vault_access (
-                    id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL,
-                    client_id TEXT NOT NULL,
-                    label TEXT NOT NULL,
-                    access INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(client_id, label)
-                )
-            """
-            cursor.execute(access_schema)
