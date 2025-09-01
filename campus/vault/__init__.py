@@ -104,11 +104,12 @@ def create_app() -> Flask:
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
-    # Register all vault-related blueprints
+    bp = Blueprint('vault_v1', __name__, url_prefix='/api/v1')
     from . import routes
-    routes.vaults.init_app(app)
-    routes.access.init_app(app)
-    routes.clients.init_app(app)
+    routes.vaults.init_app(bp)
+    routes.access.init_app(bp)
+    routes.clients.init_app(bp)
+    app.register_blueprint(bp)
 
 
 @devops.block_env(devops.PRODUCTION)
