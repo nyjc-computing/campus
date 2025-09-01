@@ -3,103 +3,37 @@
 Main vault client interface for secrets management and access control.
 """
 
-# pylint: disable=attribute-defined-outside-init
+from campus.client.interface import Resource
+from campus.common.http import JsonClient
 
-from typing import List
-
-from campus import config
-from campus.client.base import HttpClient
-from campus.client.errors import NotFoundError
-
-from .access import VaultAccessClient
-from .client import VaultClientManagement
+from .access import VaultAccessResource
+from .client import VaultClientResource
 
 
-class VaultKey:
-    """Represents a specific key in a vault collection.
+class VaultKeyResource(Resource):
+    """Represents a specific key in a vault collection."""
 
-    Provides access to individual secret operations.
-    """
+    def get(self) -> dict:
+        """Get the secret value."""
+        response = self.client.get(self.path)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def __init__(self, vault_client: HttpClient, label: str, key: str):
-        """Initialize vault key.
-
-        Args:
-            vault_client: The vault client instance
-            label: The vault label (e.g., "apps", "storage", "oauth")
-            key: The secret key name
-        """
-        self._client = vault_client
-        self._label = label
-        self._key = key
-
-    def get(self) -> str:
-        """Get the secret value.
-
-        Returns:
-            str: The secret value
-
-        Raises:
-            NotFoundError: If the key doesn't exist
-        """
-        response = self._client.get(
-            f"/vault/{self._label}/{self._key}"
-        )
-        return response["value"]
-
-    def set(self, *, value: str) -> str:
-        """Set the secret value.
-
-        Args:
-            value: The secret value to store
-
-        Returns:
-            str: The secret value that was stored
-        """
+    def set(self, *, value: str) -> dict:
+        """Set the secret value."""
         data = {"value": value}
-        response = self._client.post(f"/vault/{self._label}/{self._key}", data)
-        return response.get("value", value)
+        response = self.client.post(self.path, data)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def delete(self) -> bool:
-        """Delete the secret.
-
-        Returns:
-            bool: True if deleted successfully
-
-        Raises:
-            NotFoundError: If the key doesn't exist
-        """
-        try:
-            self._client.delete(f"/vault/{self._label}/{self._key}")
-            return True
-        except NotFoundError as exc:
-            raise NotFoundError(
-                f"Secret '{self._key}' not found in vault '{self._label}'"
-            ) from exc
-
-    def __str__(self) -> str:
-        """Get the secret value as string (convenience method)."""
-        return self.get()
+    def delete(self) -> dict:
+        """Delete the secret."""
+        response = self.client.delete(self.path)
+        return self._process_response(response)  # type: ignore[return-value]
 
 
-class VaultCollection:
-    """Represents a vault collection with HTTP-like methods.
+class Vault(Resource):
+    """Represents a single vault, a collection of vault keys."""
 
-    Provides an interface for managing secrets within a specific vault collection,
-    including operations for storing, retrieving, and deleting secret values.
-    """
-
-    def __init__(self, vault_client: HttpClient, label: str):
-        """Initialize vault collection.
-
-        Args:
-            vault_client: The vault client instance
-            label: The vault label (e.g., "apps", "storage", "oauth")
-        """
-        self._client = vault_client
-        self._label = label
-
-    def __getitem__(self, key: str) -> VaultKey:
+    def __getitem__(self, key: str) -> VaultKeyResource:
         """Get a specific key in this vault collection.
 
         Args:
@@ -108,65 +42,53 @@ class VaultCollection:
         Returns:
             VaultKey: Object for accessing the specific secret
         """
-        return VaultKey(self._client, self._label, key)
+        return VaultKeyResource(self, key)
 
-    def list(self) -> List[str]:
+    def list(self) -> dict:
         """List all keys in the vault.
 
         Returns:
             List of key names
         """
-        response = self._client.get(f"/vault/{self._label}/list")
-        return response.get("keys", [])
+        response = self.client.get(self.path)
+        return self._process_response(response)  # type: ignore[return-value]
 
 
-class VaultClient:
-    """Client for vault operations following HTTP API conventions."""
+class VaultResource(Resource):
+    """Resource for Campus /vault endpoint."""
 
-    def __init__(self, base_url: str | None = None):
-        """Initialize vault client.
+    def __init__(self, client: JsonClient, *, raw: bool = False):
+        super().__init__(client, "vault", raw=raw)
+        self._access_resource = None
+        self._clients_resource = None
 
-        Args:
-            base_url: Optional base URL override for the vault service
-        """
-        self._client = HttpClient(base_url or config.get_base_url("campus.vault"))
-        self._access = VaultAccessClient(self._client)
-        self._client_mgmt = VaultClientManagement(self._client)
-
-    def __getitem__(self, label: str) -> VaultCollection:
+    def __getitem__(self, label: str) -> Vault:
         """Get a vault collection by label.
 
         Args:
             label: The vault label (e.g., "apps", "storage", "oauth")
-
-        Returns:
-            VaultCollection instance for the specified vault
         """
-        return VaultCollection(self._client, label)
+        return Vault(self, label)
 
-    def list_vaults(self) -> List[str]:
+    def list(self) -> dict:
         """List available vault labels.
 
         Returns:
             List of available vault labels
         """
-        response = self._client.get("/vault/list")
-        return response.get("vaults", [])
+        response = self.client.get(self.path)
+        return self._process_response(response)  # type: ignore[return-value]
 
     @property
-    def access(self):
-        """Access to vault access management.
-
-        Returns:
-            VaultAccessClient: Client for managing vault access permissions
-        """
-        return self._access
+    def access(self) -> VaultAccessResource:
+        """Vault access resource."""
+        if self._access_resource is None:
+            self._access_resource = VaultAccessResource(self, "access")
+        return self._access_resource
 
     @property
-    def client(self):
-        """Access to vault client management.
-
-        Returns:
-            VaultClientManagement: Client for managing vault authentication clients
-        """
-        return self._client_mgmt
+    def clients(self) -> VaultClientResource:
+        """Vault clients resource."""
+        if self._clients_resource is None:
+            self._clients_resource = VaultClientResource(self, "clients")
+        return self._clients_resource

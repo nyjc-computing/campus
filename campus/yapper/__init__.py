@@ -39,7 +39,7 @@ def create(**kwargs) -> YapperInterface:
     # Lazy-import locally to avoid polluting global namespace
     import os
 
-    from campus.client.vault.vault import VaultClient
+    from campus.client.vault import get_vault
 
     from .backends.sqlite import SQLiteYapper
     from .backends.postgres import PostgreSQLYapper
@@ -62,8 +62,8 @@ def create(**kwargs) -> YapperInterface:
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
-            vault = VaultClient()
-            yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()
+            vault = get_vault()
+            yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()["value"]
             if not yapperdb_uri:
                 raise ValueError(
                     f"YAPPERDB_URI environment variable is required for {env} environment. "

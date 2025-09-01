@@ -1,4 +1,26 @@
+
 # Campus Test Directories
+
+## Critical Information
+
+- The test suite **only uses the standard library `unittest` module**—no other test dependencies are required or supported.
+- **All tests must be run using the Poetry environment.** Do not create or activate new virtual environments manually.
+- **Recommended:** Use `poetry run` before any test command, or activate the environment with `poetry shell` and then run your test commands directly.
+- **Tests should ideally be invoked through `tests/run_tests.py`** for consistent environment and options.
+
+### Poetry Usage Example
+
+To run tests using the Poetry environment, use:
+
+```bash
+poetry run python tests/run_tests.py unit
+```
+
+Or for a specific test file:
+
+```bash
+poetry run python -m unittest tests.unit.apps.test_client -v
+```
 
 ## Test Organization
 
@@ -47,38 +69,42 @@ tests/
 
 ## Usage Examples
 
+
 ### Running All Unit Tests
 ```bash
 # Run all unit tests (reliable, no external dependencies)
-poetry run python -m unittest discover tests/unit -v
+poetry run python tests/run_tests.py unit
 ```
+
 
 ### Running Package-Specific Unit Tests
 ```bash
 # Test only campus.apps unit tests
-poetry run python -m unittest discover tests/unit/apps -v
+poetry run python tests/run_tests.py unit --module apps
 
 # Test only campus.vault unit tests  
-poetry run python -m unittest discover tests/unit/vault -v
+poetry run python tests/run_tests.py unit --module vault
 
 # Test only campus.yapper unit tests
-poetry run python -m unittest discover tests/unit/yapper -v
+poetry run python tests/run_tests.py unit --module yapper
 
 # Test only campus.common unit tests
-poetry run python -m unittest discover tests/unit/common -v
+poetry run python tests/run_tests.py unit --module common
 
 # Test only campus.client unit tests
-poetry run python -m unittest discover tests/unit/client -v
+poetry run python tests/run_tests.py unit --module client
 ```
+
 
 ### Running Integration Tests
 ```bash
 # Run all integration tests (may require environment setup)
-poetry run python -m unittest discover tests/integration -v
+poetry run python tests/run_tests.py integration
 
 # Run integration tests for specific package
-poetry run python -m unittest discover tests/integration/apps -v
+poetry run python tests/run_tests.py integration --module apps
 ```
+
 
 ### Running Specific Test Files
 ```bash
@@ -92,30 +118,26 @@ poetry run python -m unittest tests.unit.apps.test_client.TestAdminClient -v
 poetry run python -m unittest tests.unit.apps.test_client.TestAdminClient.test_init_default_base_url -v
 ```
 
+
 ### Running All Tests
 ```bash
 # Run complete test suite (unit + integration)
-poetry run python -m unittest discover tests -v
+poetry run python tests/run_tests.py all
 ```
+
 
 ## Quick Start
 
 For development, typically run unit tests only as they are fast and reliable:
 ```bash
-# Using unittest discovery
-poetry run python -m unittest discover tests/unit
-
-# Using the convenience script
-python tests/run_tests.py unit
+# Using the convenience script (recommended)
+poetry run python tests/run_tests.py unit
 ```
 
 For CI/CD or comprehensive testing, run the full suite:
 ```bash
-# Using unittest discovery
-poetry run python -m unittest discover tests
-
-# Using the convenience script  
-python tests/run_tests.py all
+# Using the convenience script (recommended)
+poetry run python tests/run_tests.py all
 ```
 
 ## Test Scripts

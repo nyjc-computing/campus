@@ -12,7 +12,7 @@ from typing import Callable
 
 from flask import g, request
 
-from campus.client import VaultClient
+from campus.client.vault import get_vault
 from campus.common.errors import api_errors
 from campus.common.webauth import http
 from campus.models.token import Tokens
@@ -21,7 +21,7 @@ import campus.vault
 
 tokens = Tokens()
 users = User()
-vault = VaultClient()
+vault = get_vault()
 
 
 def authenticate_client() -> tuple[dict[str, str], int] | None:
@@ -45,10 +45,11 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
         case "basic":
             client_id, client_secret = auth.credentials()
             # Raises API errors if auth fails
-            if not vault.client.authenticate(client_id, client_secret):
+            auth_result = vault.clients.authenticate(client_id, client_secret)
+            if not auth_result["status"] == "success":
                 raise api_errors.UnauthorizedError(
                     "Invalid client credentials")
-            g.current_client = vault.client.get(client_id)
+            g.current_client = vault.clients.get(client_id)
         case "bearer":
             access_token = auth.value
             # raises UnauthorizedError for invalid access_token

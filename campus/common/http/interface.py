@@ -11,7 +11,16 @@ This interface is designed to:
 """
 
 from collections.abc import Mapping
-from typing import Any, Protocol, Self, runtime_checkable
+from typing import Any, Iterable, Protocol, Self, runtime_checkable
+
+from campus.common.http.errors import (
+    AccessDeniedError,
+    AuthenticationError,
+    ConflictError,
+    HttpClientError,
+    NotFoundError,
+    InvalidRequestError,
+)
 
 Header = Mapping[str, str]
 JsonDict = dict[str, Any]
@@ -28,7 +37,7 @@ class JsonResponse(Protocol):
         self._response = response  # type: ignore
 
     @property
-    def status(self) -> int:
+    def status_code(self) -> int:
         """HTTP status code of the response."""
         ...
 
@@ -42,6 +51,53 @@ class JsonResponse(Protocol):
         """Returns the response body as a string."""
         ...
 
+    def ok(self) -> bool:
+        """Returns True if the response status code is 2xx, False otherwise."""
+        return 200 <= self.status_code < 300
+
+    def client_error(self) -> bool:
+        """Returns True if the response status code is 4xx, False otherwise."""
+        return 400 <= self.status_code < 500
+
+    def server_error(self) -> bool:
+        """Returns True if the response status code is 5xx, False otherwise."""
+        return 500 <= self.status_code < 600
+
+    def raise_for_status(self) -> None:
+        """Raises an exception if the response status code indicates an error.
+
+        Raises:
+            AuthenticationError: If the status code is 401
+            AccessDeniedError: If the status code is 403
+            NotFoundError: If the status code is 404
+            ConflictError: If the status code is 409
+            InvalidRequestError: If the status code is 400 or 422
+            HttpClientError: For other 4xx or 5xx status codes
+        """
+        if not (self.client_error() or self.server_error()):
+            return
+
+        status = self.status_code
+        message = str(self._response)
+
+        match status:
+            case 400:
+                raise InvalidRequestError(f"{status} Bad Request: {message}")
+            case 401:
+                raise AuthenticationError(f"{status} Unauthorized: {message}")
+            case 403:
+                raise AccessDeniedError(f"{status} Forbidden: {message}")
+            case 404:
+                raise NotFoundError(f"{status} Not Found: {message}")
+            case 409:
+                raise ConflictError(f"{status} Conflict: {message}")
+            case 422:
+                raise InvalidRequestError(
+                    f"{status} Unprocessable Entity: {message}")
+            case _:
+                # Generic error for other 4xx/5xx codes
+                raise HttpClientError(f"{status} HTTP Error: {message}")
+
     def json(self) -> Any:
         """Returns the response body as JSON."""
         ...
@@ -54,6 +110,18 @@ class JsonClient(Protocol):
     """
     base_url: str | None
     # pylint: disable=unnecessary-ellipsis
+
+    def __init__(
+            self,
+            base_url: str | None = None,
+            *,
+            auth: Iterable[str] | str | None = None,
+            headers: Mapping[str, str] | None = None,
+            **kwargs: Any
+    ):
+        raise NotImplementedError(
+            "Subclasses must override __init__()"
+        )
 
     def get(self: Self, path: str, params: JsonDict | None = None) -> JsonResponse:
         """Sends a GET request."""

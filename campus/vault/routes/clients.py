@@ -93,6 +93,8 @@ def list_vault_clients() -> flask_validation.JsonResponse:
 
 # Authenticate a vault client by client_id and client_secret
 @bp.post("/authenticate")
+# Client authentication not required (since API clients would need to use this
+# route to authenticate)
 def authenticate_vault_client() -> flask_validation.JsonResponse:
     """Authenticate a vault client by client_id and client_secret.
 
