@@ -10,16 +10,20 @@ from flask import Blueprint, Flask, g, request
 
 import campus.common.validation.flask as flask_validation
 
-from .. import access
+from .. import access, model
 from ..auth import (
     check_vault_access,
     require_client_authentication,
     require_vault_permission
 )
-from ..model import Vault
 
 # Create blueprint for vault routes
 bp = Blueprint('vault', __name__, url_prefix='/vault')
+
+
+def init_app(app: Flask | Blueprint) -> None:
+    """Initialize the vault routes with the given Flask app or blueprint."""
+    app.register_blueprint(bp)
 
 
 @bp.get("/")
@@ -36,7 +40,7 @@ def list_vaults() -> flask_validation.JsonResponse:
 @require_vault_permission(access.READ)
 def list_keys(label) -> flask_validation.JsonResponse:
     """List all keys in a vault"""
-    vault = Vault(label)
+    vault = model.Vault(label)
     keys = vault.list_keys()
     return {"label": label, "keys": keys}, 200
 
@@ -46,7 +50,7 @@ def list_keys(label) -> flask_validation.JsonResponse:
 @require_vault_permission(access.READ)
 def get_secret(label, key) -> flask_validation.JsonResponse:
     """Get a secret from a vault"""
-    vault = Vault(label)
+    vault = model.Vault(label)
     value = vault.get(key)
     return {"key": key, "value": value}, 200
 
@@ -69,7 +73,7 @@ def set_secret(label, key) -> flask_validation.JsonResponse:
     if not isinstance(value, str):
         return {"error": "'value' must be a string"}, 400
 
-    vault = Vault(label)
+    vault = model.Vault(label)
 
     # Check if key exists to determine specific permission and validate
     key_exists = vault.has(key)
@@ -94,15 +98,10 @@ def set_secret(label, key) -> flask_validation.JsonResponse:
 @require_vault_permission(access.DELETE)
 def delete_secret(label, key) -> flask_validation.JsonResponse:
     """Delete a secret from a vault"""
-    vault = Vault(label)
+    vault = model.Vault(label)
     deleted = vault.delete(key)
 
     if deleted:
         return {"status": "success", "key": key, "action": "deleted"}, 200
     else:
         return {"error": f"Secret '{key}' not found in vault '{label}'"}, 404
-
-
-def init_app(app: Flask | Blueprint) -> None:
-    """Initialize the vault routes with the given Flask app or blueprint."""
-    app.register_blueprint(bp)
