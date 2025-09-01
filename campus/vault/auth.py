@@ -128,12 +128,12 @@ def require_client_authentication(f):
         def get_secret(label, key):
             # Route implementation
     """
+    # Errors are caught by error handler
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Errors are caught by error handler
         client_id = authenticate_client()
         g.current_client = client.get_client(client_id)
-
+        return f(*args, **kwargs)
     return decorated_function
 
 
