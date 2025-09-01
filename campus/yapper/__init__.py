@@ -13,10 +13,13 @@ import os
 from .base import Event, EventHandler, YapperInterface
 from .backends.sqlite import SQLiteYapper
 from .backends.postgres import PostgreSQLYapper
+from campus.vault import get_vault
 
 
 def create(**kwargs) -> YapperInterface:
     """Factory function to get a Yapper client instance.
+
+    # TODO: Update docstring (https://github.com/nyjc-computing/campus/issues/177)
 
     Environment variables:
         CLIENT_ID: Unique identifier for the client (required)
@@ -55,14 +58,15 @@ def create(**kwargs) -> YapperInterface:
         #     return yapper
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
-        case "development" | "testing" | "staging" | "production":
-            yapperdb_uri = os.getenv("YAPPERDB_URI")
+        case  "development" | "testing" | "staging" | "production":
+            vault = get_vault("yapper")
+            yapperdb_uri = vault.get("YAPPERDB_URI")
             if not yapperdb_uri:
                 raise ValueError(
                     f"YAPPERDB_URI environment variable is required for {env} environment. "
                     "Please provide a PostgreSQL connection URI via YAPPERDB_URI."
                 )
-            yapper = PostgreSQLYapper(client_id, db_uri=yapperdb_uri, **kwargs)
+            yapper = PostgreSQLYapper(db_uri=yapperdb_uri, **kwargs)
             yapper._init_db()
             return yapper
 

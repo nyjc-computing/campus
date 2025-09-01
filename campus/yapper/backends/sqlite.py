@@ -36,8 +36,8 @@ def cursor_to_dict(cursor: sqlite3.Cursor) -> SQLiteResult:
 
 class SQLiteYapper(YapperInterface):
 
-    def __init__(self, client_id: ClientId, *, db: str = ":memory:") -> None:
-        super().__init__(client_id)
+    def __init__(self, *, db: str = ":memory:") -> None:
+        super().__init__()
         self.db_uri = db
 
     @contextmanager
