@@ -37,7 +37,7 @@ def list_vaults() -> flask_validation.JsonResponse:
 @bp.get("/<label>/")
 @require_client_authentication()
 @require_vault_permission(access.READ)
-def list_keys(label) -> flask_validation.JsonResponse:
+def list_keys(label: str) -> flask_validation.JsonResponse:
     """List all keys in a vault"""
     vault = model.Vault(label)
     keys = vault.list_keys()
@@ -47,7 +47,7 @@ def list_keys(label) -> flask_validation.JsonResponse:
 @bp.get("/<label>/<key>")
 @require_client_authentication()
 @require_vault_permission(access.READ)
-def get_secret(label, key) -> flask_validation.JsonResponse:
+def get_secret(label: str, key: str) -> flask_validation.JsonResponse:
     """Get a secret from a vault"""
     vault = model.Vault(label)
     value = vault.get(key)
@@ -58,10 +58,11 @@ def get_secret(label, key) -> flask_validation.JsonResponse:
 @require_client_authentication()
 # Client needs CREATE OR UPDATE
 @require_vault_permission(access.CREATE, access.UPDATE)
-def set_secret(label, key) -> flask_validation.JsonResponse:
+def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
     """Set a secret in a vault
 
-    Requires CREATE permission for new keys, UPDATE permission for existing keys.
+    Requires CREATE permission for new keys, UPDATE permission for existing
+    keys.
     The decorator ensures the client has at least one of these permissions.
     """
     data = request.get_json()
