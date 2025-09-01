@@ -6,9 +6,18 @@ on:
   pull_request:
     branches: [main, staging, weekly]
 
+env:
+  # Test timeout configuration (in seconds)
+  UNIT_TEST_TIMEOUT: 60
+  INTEGRATION_TEST_TIMEOUT: 300
+  # Job timeout safety margins (in minutes) 
+  UNIT_JOB_TIMEOUT: 3
+  INTEGRATION_JOB_TIMEOUT: 8
+
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJson(env.UNIT_JOB_TIMEOUT) }}
     env:
       ENV: testing
     steps:
@@ -27,14 +36,15 @@ jobs:
       - name: Install Campus Suite (full deployment mode)
         run: poetry install --no-root --extras full
       - name: Run Unit Tests
-        run: poetry run python tests/run_tests.py unit -v
+        run: poetry run python tests/run_tests.py unit --timeout ${{ env.UNIT_TEST_TIMEOUT }} -v
       - name: Run Integration Tests (will run but not required for weekly)
         if: github.ref_name == 'weekly'
         continue-on-error: true
-        run: poetry run python tests/run_tests.py integration -v
+        run: poetry run python tests/run_tests.py integration --timeout ${{ env.INTEGRATION_TEST_TIMEOUT }} -v
 
   integration-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJson(env.INTEGRATION_JOB_TIMEOUT) }}
     # Only run integration tests as required for staging and main branches
     if: github.ref_name == 'staging' || github.ref_name == 'main'
     env:
@@ -55,4 +65,4 @@ jobs:
       - name: Install Campus Suite (full deployment mode)
         run: poetry install --no-root --extras full
       - name: Run Integration Tests (required for staging/main)
-        run: poetry run python tests/run_tests.py integration -v
+        run: poetry run python tests/run_tests.py integration --timeout ${{ env.INTEGRATION_TEST_TIMEOUT }} -v
