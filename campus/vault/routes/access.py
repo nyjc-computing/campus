@@ -15,7 +15,7 @@ from ..auth import require_client_authentication, require_vault_permission
 bp = Blueprint('access', __name__, url_prefix='/access')
 
 
-@bp.route("/<label>", methods=["POST"])
+@bp.post("/<label>")
 @require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def grant_vault_access(client_id, label):
@@ -82,7 +82,7 @@ def grant_vault_access(client_id, label):
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route("/<label>", methods=["DELETE"])
+@bp.delete("/<label>")
 @require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def revoke_vault_access(client_id, label):
@@ -112,7 +112,7 @@ def revoke_vault_access(client_id, label):
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route("/<label>", methods=["GET"])
+@bp.get("/<label>")
 @require_client_authentication()
 @require_vault_permission(access.READ)
 def get_vault_access(client_id, label):
