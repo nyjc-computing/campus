@@ -31,7 +31,12 @@ class Campus:
     circles: CirclesResource
     admin: AdminResource
 
-    def __init__(self, override: Mapping[AppName, JsonClient] | None = None):
+    def __init__(
+        self,
+        override: Mapping[AppName, JsonClient] | None = None,
+        *,
+        raw: bool = False
+    ):
         """Initialize unified Campus client with all service clients.
 
         Credentials are automatically loaded from CLIENT_ID and CLIENT_SECRET
@@ -40,6 +45,8 @@ class Campus:
 
         Args:
             override: Optional mapping of app names to JSON clients.
+            raw: If True, methods return JsonResponse objects.
+                 If False (default), methods call raise_for_status() and return JSON data.
         """
         app_names = (
             "campus.apps",
@@ -64,10 +71,10 @@ class Campus:
                 )
                 for app_name in app_names
             }
-        self.vault = VaultResource(clients["campus.vault"])
-        self.admin = AdminResource(clients["campus.apps"])
-        self.circles = CirclesResource(clients["campus.apps"])
-        self.users = UsersResource(clients["campus.apps"])
+        self.vault = VaultResource(clients["campus.vault"], raw=raw)
+        self.admin = AdminResource(clients["campus.apps"], raw=raw)
+        self.circles = CirclesResource(clients["campus.apps"], raw=raw)
+        self.users = UsersResource(clients["campus.apps"], raw=raw)
         logging.debug(
             'Campus client instantiated in %s environment',
             os.getenv("ENV", "MISSING")
