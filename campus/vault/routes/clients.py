@@ -50,7 +50,7 @@ class AuthenticateClient(TypedDict):
 
 
 @bp.post("/")
-@require_client_authentication()
+@require_client_authentication
 def create_vault_client() -> flask_validation.JsonResponse:
     """Create a new vault client.
 
@@ -81,7 +81,7 @@ def create_vault_client() -> flask_validation.JsonResponse:
 
 
 @bp.get("/")
-@require_client_authentication()
+@require_client_authentication
 def list_vault_clients() -> flask_validation.JsonResponse:
     """List all vault clients
 
@@ -122,7 +122,7 @@ def authenticate_vault_client() -> flask_validation.JsonResponse:
 
 
 @bp.get("/<client_id>")
-@require_client_authentication()
+@require_client_authentication
 def get_vault_client(client_id) -> flask_validation.JsonResponse:
     """Get details of a specific vault client
 
@@ -141,7 +141,7 @@ def get_vault_client(client_id) -> flask_validation.JsonResponse:
 
 
 @bp.delete("/<client_id>")
-@require_client_authentication()
+@require_client_authentication
 def delete_vault_client(client_id) -> flask_validation.JsonResponse:
     """Delete a vault client
 

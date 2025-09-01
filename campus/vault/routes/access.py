@@ -42,7 +42,7 @@ class RevokeVaultAccess(TypedDict):
 
 
 @bp.post("/<label>")
-@require_client_authentication()
+@require_client_authentication
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def grant_vault_access(label) -> flask_validation.JsonResponse:
     """Grant access to a vault for a client
@@ -74,7 +74,7 @@ def grant_vault_access(label) -> flask_validation.JsonResponse:
 
 
 @bp.delete("/<label>")
-@require_client_authentication()
+@require_client_authentication
 @require_vault_permission(access.ALL)  # Require admin-level permissions
 def revoke_vault_access(label: str) -> flask_validation.JsonResponse:
     """Revoke access to a vault for a client
@@ -102,7 +102,7 @@ def revoke_vault_access(label: str) -> flask_validation.JsonResponse:
 
 
 @bp.get("/<label>")
-@require_client_authentication()
+@require_client_authentication
 @require_vault_permission(access.READ)
 def get_vault_access(label) -> flask_validation.JsonResponse:
     """Check if a client has access to a vault

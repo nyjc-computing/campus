@@ -10,7 +10,7 @@ import os
 from functools import wraps
 from typing import Tuple
 
-from flask import request, jsonify
+from flask import request, jsonify, g
 
 from campus.common.errors import api_errors
 
@@ -96,12 +96,12 @@ def check_vault_access(client_id: str, vault_label: str, required_permission: in
             message=f"Client '{client_id}' does not have {permission_str} permission for vault '{vault_label}'", client_id=client_id, label=vault_label, permission=permission_str)
 
 
-def require_client_authentication():
+def require_client_authentication(f):
     """Decorator to require client authentication only.
 
     This decorator:
     1. Authenticates the client
-    2. Injects client_id into the route function
+    2. Injects client into the flask g context
 
     Can be used alone for service-level operations, or combined with 
     require_vault_permission for vault-specific operations.
@@ -118,29 +118,13 @@ def require_client_authentication():
         def get_secret(client_id, label, key):
             # Route implementation
     """
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            try:
-                # Authenticate client
-                client_id = authenticate_client()
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Errors are caught by error handler
+        client_id = authenticate_client()
+        g.current_client = client.get_client(client_id)
 
-                # Inject client_id into kwargs and call the route function
-                kwargs['client_id'] = client_id
-                return f(*args, **kwargs)
-
-            except api_errors.APIError as e:
-                response = jsonify(e.to_dict())
-                response.status_code = getattr(e, 'status_code', 500)
-                return response
-            except Exception as e:
-                response = jsonify(
-                    {"message": f"Internal error: {e}", "error_code": "SERVER_ERROR", "details": {}})
-                response.status_code = 500
-                return response
-
-        return decorated_function
-    return decorator
+    return decorated_function
 
 
 def require_vault_permission(*required_permissions: int):

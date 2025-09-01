@@ -35,7 +35,7 @@ class SetSecretValue(TypedDict):
 
 
 @bp.get("/")
-@require_client_authentication()
+@require_client_authentication
 def list_vaults() -> flask_validation.JsonResponse:
     """List available vault labels"""
     labels = vault.Vault.get_labels(g.current_client.id)
@@ -43,7 +43,7 @@ def list_vaults() -> flask_validation.JsonResponse:
 
 
 @bp.get("/<label>/")
-@require_client_authentication()
+@require_client_authentication
 @require_vault_permission(access.READ)
 def list_keys(label: str) -> flask_validation.JsonResponse:
     """List all keys in a vault"""
@@ -52,7 +52,7 @@ def list_keys(label: str) -> flask_validation.JsonResponse:
 
 
 @bp.get("/<label>/<key>")
-@require_client_authentication()
+@require_client_authentication
 @require_vault_permission(access.READ)
 def get_secret(label: str, key: str) -> flask_validation.JsonResponse:
     """Get a secret from a vault"""
@@ -61,7 +61,7 @@ def get_secret(label: str, key: str) -> flask_validation.JsonResponse:
 
 
 @bp.post("/<label>/<key>")
-@require_client_authentication()
+@require_client_authentication
 # Client needs CREATE OR UPDATE
 @require_vault_permission(access.CREATE, access.UPDATE)
 def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
@@ -93,7 +93,7 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
 
 
 @bp.delete("/<label>/<key>")
-@require_client_authentication()
+@require_client_authentication
 @require_vault_permission(access.DELETE)
 def delete_secret(label, key) -> flask_validation.JsonResponse:
     """Delete a secret from a vault"""
