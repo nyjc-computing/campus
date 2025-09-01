@@ -13,7 +13,7 @@ from flask import Blueprint, Flask, g
 from campus.common.errors import api_errors
 import campus.common.validation.flask as flask_validation
 
-from .. import access, model
+from .. import access, vault
 from ..auth import (
     check_vault_access,
     require_client_authentication,
@@ -38,7 +38,7 @@ class SetSecretValue(TypedDict):
 @require_client_authentication()
 def list_vaults() -> flask_validation.JsonResponse:
     """List available vault labels"""
-    labels = model.Vault.get_labels(g.current_client.id)
+    labels = vault.Vault.get_labels(g.current_client.id)
     return {"vaults": labels}, 200
 
 
@@ -47,7 +47,7 @@ def list_vaults() -> flask_validation.JsonResponse:
 @require_vault_permission(access.READ)
 def list_keys(label: str) -> flask_validation.JsonResponse:
     """List all keys in a vault"""
-    vault = model.Vault(label)
+    vault = vault.Vault(label)
     keys = vault.list_keys()
     return {"label": label, "keys": keys}, 200
 
@@ -57,7 +57,7 @@ def list_keys(label: str) -> flask_validation.JsonResponse:
 @require_vault_permission(access.READ)
 def get_secret(label: str, key: str) -> flask_validation.JsonResponse:
     """Get a secret from a vault"""
-    vault = model.Vault(label)
+    vault = vault.Vault(label)
     value = vault.get(key)
     return {"key": key, "value": value}, 200
 
@@ -78,7 +78,7 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error
     )
     value = payload["value"]
-    vault = model.Vault(label)
+    vault = vault.Vault(label)
 
     # Check if key exists to determine specific permission and validate
     required_permission = access.UPDATE if vault.has(key) else access.CREATE
@@ -102,7 +102,7 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
 @require_vault_permission(access.DELETE)
 def delete_secret(label, key) -> flask_validation.JsonResponse:
     """Delete a secret from a vault"""
-    vault = model.Vault(label)
+    vault = vault.Vault(label)
     deleted = vault.delete(key)
 
     if deleted:

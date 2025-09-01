@@ -24,7 +24,7 @@ from campus.common.utils import secret, uid, utc_time
 from campus.common import devops
 from campus.common.errors import api_errors
 
-from . import db, model
+from . import db, vault
 
 CLIENT_TABLE = "vault_clients"
 
@@ -38,7 +38,7 @@ def _get_secret_key() -> str:
     Raises:
         VaultKeyError: If SECRET_KEY is not found in the campus vault
     """
-    campus_vault = model.Vault("campus")
+    campus_vault = vault.Vault("campus")
     return campus_vault.get("SECRET_KEY")
 
 
