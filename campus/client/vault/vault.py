@@ -3,6 +3,8 @@
 Main vault client interface for secrets management and access control.
 """
 
+from typing import Any, Union
+
 from campus.client.interface import Resource
 from campus.common.http import JsonClient, JsonResponse
 
@@ -13,21 +15,21 @@ from .client import VaultClientResource
 class VaultKeyResource(Resource):
     """Represents a specific key in a vault collection."""
 
-    def get(self) -> JsonResponse:
+    def get(self) -> Union[JsonResponse, Any]:
         """Get the secret value."""
         response = self.client.get(self.path)
-        return response
+        return self._process_response(response)
 
-    def set(self, *, value: str) -> JsonResponse:
+    def set(self, *, value: str) -> Union[JsonResponse, Any]:
         """Set the secret value."""
         data = {"value": value}
         response = self.client.post(self.path, data)
-        return response
+        return self._process_response(response)
 
-    def delete(self) -> JsonResponse:
+    def delete(self) -> Union[JsonResponse, Any]:
         """Delete the secret."""
         response = self.client.delete(self.path)
-        return response
+        return self._process_response(response)
 
 
 class Vault(Resource):
@@ -44,21 +46,23 @@ class Vault(Resource):
         """
         return VaultKeyResource(self, key)
 
-    def list(self) -> JsonResponse:
+    def list(self) -> Union[JsonResponse, Any]:
         """List all keys in the vault.
 
         Returns:
             List of key names
         """
         response = self.client.get(self.path)
-        return response
+        return self._process_response(response)
 
 
 class VaultResource(Resource):
     """Resource for Campus /vault endpoint."""
 
-    def __init__(self, client: JsonClient):
-        super().__init__(client, "vault")
+    def __init__(self, client: JsonClient, *, raw: bool = False):
+        super().__init__(client, "vault", raw=raw)
+        self._access_resource = None
+        self._clients_resource = None
 
     def __getitem__(self, label: str) -> Vault:
         """Get a vault collection by label.
@@ -68,21 +72,25 @@ class VaultResource(Resource):
         """
         return Vault(self, label)
 
-    def list(self) -> JsonResponse:
+    def list(self) -> Union[JsonResponse, Any]:
         """List available vault labels.
 
         Returns:
             List of available vault labels
         """
         response = self.client.get(self.path)
-        return response
+        return self._process_response(response)
 
     @property
     def access(self) -> VaultAccessResource:
         """Vault access resource."""
-        return VaultAccessResource(self, "access")
+        if self._access_resource is None:
+            self._access_resource = VaultAccessResource(self, "access")
+        return self._access_resource
 
     @property
     def clients(self) -> VaultClientResource:
         """Vault clients resource."""
-        return VaultClientResource(self, "clients")
+        if self._clients_resource is None:
+            self._clients_resource = VaultClientResource(self, "clients")
+        return self._clients_resource

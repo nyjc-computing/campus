@@ -3,6 +3,8 @@
 User management client for creating and managing user accounts.
 """
 
+from typing import Any, Union
+
 from campus.client.interface import Resource
 from campus.common.http import JsonClient, JsonResponse
 
@@ -14,43 +16,43 @@ class UserResource(Resource):
     including properties for accessing user data and methods for operations.
     """
 
-    def delete(self) -> JsonResponse:
+    def delete(self) -> Union[JsonResponse, Any]:
         """Delete the user."""
         response = self.client.delete(self.path)
-        return response
+        return self._process_response(response)
 
-    def get(self) -> JsonResponse:
+    def get(self) -> Union[JsonResponse, Any]:
         """Get the user."""
         response = self.client.get(self.path)
-        return response
+        return self._process_response(response)
 
-    def update(self, **kwargs) -> JsonResponse:
+    def update(self, **kwargs) -> Union[JsonResponse, Any]:
         """Update the user.
 
         Args:
             **kwargs: Fields to update (email, name, etc.)
         """
         response = self.client.patch(self.path, json=kwargs)
-        return response
+        return self._process_response(response)
 
-    def profile(self) -> JsonResponse:
+    def profile(self) -> Union[JsonResponse, Any]:
         """Get the user's detailed profile."""
         response = self.client.get(self.make_path("profile"))
-        return response
+        return self._process_response(response)
 
 
 class UsersResource(Resource):
     """Resource for Campus /user endpoint."""
 
-    def __init__(self, client: JsonClient):
-        super().__init__(client, "users")
+    def __init__(self, client: JsonClient, *, raw: bool = False):
+        super().__init__(client, "users", raw=raw)
 
     def __getitem__(self, user_id: str) -> UserResource:
         """Get a user by ID."""
         return UserResource(self, user_id)
 
-    def new(self, *, email: str, name: str) -> JsonResponse:
+    def new(self, *, email: str, name: str) -> Union[JsonResponse, Any]:
         """Create a new user."""
         data = {"email": email, "name": name}
         response = self.client.post(self.path, json=data)
-        return response
+        return self._process_response(response)
