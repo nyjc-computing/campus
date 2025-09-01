@@ -41,6 +41,10 @@ def create(**kwargs) -> YapperInterface:
         ValueError: If CLIENT_ID or CLIENT_SECRET environment variables are not set,
                    or if YAPPERDB_URI is not set for PostgreSQL environments
     """
+    # Lazy-import locally to avoid polluting global namespace
+    from campus.client.vault.vault import VaultClient
+
+
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
     env = os.getenv("ENV", "development").lower()
@@ -59,8 +63,8 @@ def create(**kwargs) -> YapperInterface:
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
-            vault = get_vault("yapper")
-            yapperdb_uri = vault.get("YAPPERDB_URI")
+            vault = VaultClient()
+            yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()
             if not yapperdb_uri:
                 raise ValueError(
                     f"YAPPERDB_URI environment variable is required for {env} environment. "
