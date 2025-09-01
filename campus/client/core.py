@@ -10,7 +10,7 @@ from typing import Mapping
 from campus import config
 from campus.client.apps import AdminResource, CirclesResource, UsersResource
 from campus.client.vault import VaultResource
-from campus.common.http import JsonClient
+from campus.common.http import JsonClient, get_client
 
 AppName = str  # e.g. "campus.apps", "campus.vault"
 
@@ -41,9 +41,6 @@ class Campus:
         Args:
             override: Optional mapping of app names to JSON clients.
         """
-        # Import get_client locally to avoid circular import
-        from campus.common.http import get_client
-        
         app_names = (
             "campus.apps",
             "campus.vault"
