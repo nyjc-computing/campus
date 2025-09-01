@@ -52,7 +52,8 @@ class Vault:
                 (
                     "SELECT DISTINCT label FROM vault "
                     "INNER JOIN vault_access ON vault.label = vault_access.label "
-                    "WHERE client_id = %s"
+                    "WHERE client_id = %s "
+                    "ORDER BY label"
                 ),
                 (client_id,),
                 fetch_all=True
