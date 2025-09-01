@@ -45,6 +45,7 @@ DELETE = 8  # 1000 in binary - Can delete secrets
 ALL = READ | CREATE | UPDATE | DELETE
 
 __all__ = [
+    "convert_perms_to_access",
     "grant_access",
     "revoke_access",
     "has_access",
@@ -55,6 +56,49 @@ __all__ = [
     "DELETE",
     "ALL",
 ]
+
+
+def convert_perms_to_access(permissions: int | list[str]) -> int:
+    """Convert permissions given as an integer or list of strings
+    to an access value integer.
+    """
+    match permissions:
+        case list():
+            # Convert permission names to bitflags
+            permission_map = {
+                "READ": READ,
+                "CREATE": CREATE,
+                "UPDATE": UPDATE,
+                "DELETE": DELETE,
+                "ALL": ALL
+            }
+            access_flags = 0
+            invalid_perms = [
+                perm for perm in permissions
+                if perm not in permission_map
+            ]
+            if invalid_perms:
+                raise api_errors.InvalidRequestError(
+                    "Invalid permissions provided",
+                    invalid_perms=invalid_perms
+                )
+            access_flags = 0
+            for perm in permissions:
+                access_flags |= permission_map[perm]
+        case int():
+            if not READ <= permissions <= ALL:
+                raise api_errors.InvalidRequestError(
+                    "Invalid permissions range",
+                    accepted_range="1 - 15"
+                )
+            access_flags = permissions
+        case _:
+            raise api_errors.InvalidRequestError(
+                "Invalid permissions argument type",
+                given_type=type(permissions).__name__,
+                required_type="integer | array[string]"
+            )
+    return access_flags
 
 
 def grant_access(client_id: str, label: str, access: int) -> None:
