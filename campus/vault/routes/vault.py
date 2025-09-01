@@ -6,8 +6,11 @@ Routes handle authentication and authorization before delegating to the data mod
 This follows the principle of handling cross-cutting concerns at the appropriate layer.
 """
 
-from flask import Blueprint, Flask, g, request
+from typing import TypedDict
 
+from flask import Blueprint, Flask, g
+
+from campus.common.errors import api_errors
 import campus.common.validation.flask as flask_validation
 
 from .. import access, model
@@ -24,6 +27,11 @@ bp = Blueprint('vault', __name__, url_prefix='/vault')
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault routes with the given Flask app or blueprint."""
     app.register_blueprint(bp)
+
+
+class SetSecretValue(TypedDict):
+    """Schema for a request to set a secret value."""
+    value: str
 
 
 @bp.get("/")
@@ -65,19 +73,15 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
     keys.
     The decorator ensures the client has at least one of these permissions.
     """
-    data = request.get_json()
-    if not data or "value" not in data:
-        return {"error": "Missing 'value' in request body"}, 400
-
-    value = data.get("value")
-    if not isinstance(value, str):
-        return {"error": "'value' must be a string"}, 400
-
+    payload = flask_validation.validate_request_and_extract_json(
+        SetSecretValue.__annotations__,
+        on_error=api_errors.raise_api_error
+    )
+    value = payload["value"]
     vault = model.Vault(label)
 
     # Check if key exists to determine specific permission and validate
-    key_exists = vault.has(key)
-    required_permission = access.UPDATE if key_exists else access.CREATE
+    required_permission = access.UPDATE if vault.has(key) else access.CREATE
 
     # Verify client has the specific permission required for this operation
     check_vault_access(g.current_client.id, label, required_permission)
