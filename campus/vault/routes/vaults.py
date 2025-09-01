@@ -47,8 +47,7 @@ def list_vaults() -> flask_validation.JsonResponse:
 @require_vault_permission(access.READ)
 def list_keys(label: str) -> flask_validation.JsonResponse:
     """List all keys in a vault"""
-    vault = vault.Vault(label)
-    keys = vault.list_keys()
+    keys = vault.get_vault(label).list_keys()
     return {"label": label, "keys": keys}, 200
 
 
@@ -57,8 +56,7 @@ def list_keys(label: str) -> flask_validation.JsonResponse:
 @require_vault_permission(access.READ)
 def get_secret(label: str, key: str) -> flask_validation.JsonResponse:
     """Get a secret from a vault"""
-    vault = vault.Vault(label)
-    value = vault.get(key)
+    value = vault.Vault(label).get(key)
     return {"key": key, "value": value}, 200
 
 
@@ -78,16 +76,16 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error
     )
     value = payload["value"]
-    vault = vault.Vault(label)
+    _vault = vault.get_vault(label)
 
     # Check if key exists to determine specific permission and validate
-    required_permission = access.UPDATE if vault.has(key) else access.CREATE
+    required_permission = access.UPDATE if _vault.has(key) else access.CREATE
 
     # Verify client has the specific permission required for this operation
     check_vault_access(g.current_client.id, label, required_permission)
 
     # Perform the operation
-    is_new = vault.set(key, value)
+    is_new = _vault.set(key, value)
     action = "created" if is_new else "updated"
 
     return {
@@ -102,8 +100,8 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
 @require_vault_permission(access.DELETE)
 def delete_secret(label, key) -> flask_validation.JsonResponse:
     """Delete a secret from a vault"""
-    vault = vault.Vault(label)
-    deleted = vault.delete(key)
+    _vault = vault.get_vault(label)
+    deleted = _vault.delete(key)
 
     if deleted:
         return {"status": "success", "key": key, "action": "deleted"}, 200
