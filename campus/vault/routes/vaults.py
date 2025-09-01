@@ -80,14 +80,11 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
 
     # Check if key exists to determine specific permission and validate
     required_permission = access.UPDATE if _vault.has(key) else access.CREATE
-
     # Verify client has the specific permission required for this operation
     check_vault_access(g.current_client.id, label, required_permission)
-
     # Perform the operation
     is_new = _vault.set(key, value)
     action = "created" if is_new else "updated"
-
     return {
         "status": "success",
         "key": key,
@@ -102,7 +99,6 @@ def delete_secret(label, key) -> flask_validation.JsonResponse:
     """Delete a secret from a vault"""
     _vault = vault.get_vault(label)
     deleted = _vault.delete(key)
-
     if deleted:
         return {"status": "success", "key": key, "action": "deleted"}, 200
     else:
