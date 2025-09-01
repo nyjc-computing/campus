@@ -18,7 +18,7 @@ bp = Blueprint('clients', __name__, url_prefix='/clients')
 yapper = campus.yapper.create()
 
 
-@bp.route("", methods=["POST"])
+@bp.post("/")
 @require_client_authentication()
 def create_vault_client(client_id):
     """Create a new vault client
@@ -40,32 +40,7 @@ def create_vault_client(client_id):
         "client_secret": "secret_xyz789"
     }
     """
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Missing request body"}), 400
-
-        required_fields = ["name", "description"]
-        missing_fields = [
-            field for field in required_fields if field not in data
-        ]
-        if missing_fields:
-            return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
-        # Create the client
-        client_resource, client_secret = client.create_client(
-            name=data["name"],
-            description=data["description"]
-        )
-        return jsonify({
-            "status": "success",
-            "client": client_resource,
-            "client_secret": client_secret
-        }), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@bp.route("", methods=["GET"])
+@bp.get("/")
 @require_client_authentication()
 def list_vault_clients(client_id):
     """List all vault clients
@@ -91,7 +66,7 @@ def list_vault_clients(client_id):
 
 
 # Authenticate a vault client by client_id and client_secret
-@bp.route("/authenticate", methods=["POST"])
+@bp.post("/authenticate")
 def authenticate_vault_client():
     """Authenticate a vault client by client_id and client_secret.
 
@@ -117,7 +92,7 @@ def authenticate_vault_client():
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route("/<target_client_id>", methods=["GET"])
+@bp.get("/<client_id>")
 @require_client_authentication()
 def get_vault_client(client_id, target_client_id):
     """Get details of a specific vault client
@@ -139,7 +114,7 @@ def get_vault_client(client_id, target_client_id):
     return jsonify({"client": client_resource})
 
 
-@bp.route("/<target_client_id>", methods=["DELETE"])
+@bp.delete("/<client_id>")
 @require_client_authentication()
 def delete_vault_client(client_id, target_client_id):
     """Delete a vault client

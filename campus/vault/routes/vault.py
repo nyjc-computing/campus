@@ -15,7 +15,7 @@ from campus.vault.model import Vault
 bp = Blueprint('vault', __name__, url_prefix='/vault')
 
 
-@bp.route("/")
+@bp.get("/")
 @auth.require_client_authentication()
 def list_vaults(client_id, **kwargs):
     """List available vault labels"""
@@ -24,7 +24,7 @@ def list_vaults(client_id, **kwargs):
     return jsonify({"vaults": ["campus", "storage", "oauth"]})
 
 
-@bp.route("/<label>/")
+@bp.get("/<label>/")
 @auth.require_client_authentication()
 @auth.require_vault_permission(access.READ)
 def list_keys(client_id, label):
@@ -34,7 +34,7 @@ def list_keys(client_id, label):
     return jsonify({"label": label, "keys": keys})
 
 
-@bp.route("/<label>/<key>")
+@bp.get("/<label>/<key>")
 @auth.require_client_authentication()
 @auth.require_vault_permission(access.READ)
 def get_secret(client_id, label, key):
@@ -44,10 +44,7 @@ def get_secret(client_id, label, key):
     return jsonify({"key": key, "value": value})
 
 
-@bp.route("/<label>/<key>", methods=["POST"])
-@auth.require_client_authentication()
-@auth.require_vault_permission(access.CREATE, access.UPDATE)
-def set_secret(client_id, label, key):
+@bp.post("/<label>/<key>")
     """Set a secret in a vault
 
     Requires CREATE permission for new keys, UPDATE permission for existing keys.
@@ -81,7 +78,7 @@ def set_secret(client_id, label, key):
     })
 
 
-@bp.route("/<label>/<key>", methods=["DELETE"])
+@bp.delete("/<label>/<key>")
 @auth.require_client_authentication()
 @auth.require_vault_permission(access.DELETE)
 def delete_secret(client_id, label, key):
