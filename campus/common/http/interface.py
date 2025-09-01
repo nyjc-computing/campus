@@ -28,7 +28,7 @@ class JsonResponse(Protocol):
         self._response = response  # type: ignore
 
     @property
-    def status(self) -> int:
+    def status_code(self) -> int:
         """HTTP status code of the response."""
         ...
 

@@ -55,22 +55,22 @@ def example_usage():
     # Test users endpoint
     print("Testing users.new():")
     response = campus.users.new(email="test@example.com", name="Test User")
-    print(f"Status: {response.status}")
+    print(f"Status: {response.status_code}")
     print(f"Data: {response.json()}")
 
     print("\nTesting users[user_id].get():")
     response = campus.users["test123"].get()
-    print(f"Status: {response.status}")
+    print(f"Status: {response.status_code}")
     print(f"Data: {response.json()}")
 
     print("\nTesting users[user_id].profile():")
     response = campus.users["test123"].profile()
-    print(f"Status: {response.status}")
+    print(f"Status: {response.status_code}")
     print(f"Data: {response.json()}")
 
     print("\nTesting admin.status():")
     response = campus.admin.status()
-    print(f"Status: {response.status}")
+    print(f"Status: {response.status_code}")
     print(f"Data: {response.json()}")
 
 

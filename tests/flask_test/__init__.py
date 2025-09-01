@@ -58,7 +58,7 @@ class FlaskTestResponse(JsonResponse):
         self._response = response
 
     @property
-    def status(self) -> int:
+    def status_code(self) -> int:
         """HTTP status code of the response."""
         return self._response.status_code
 

@@ -26,7 +26,7 @@ class DefaultResponse(JsonResponse):
         self._response = response
 
     @property
-    def status(self) -> int:
+    def status_code(self) -> int:
         return self._response.status_code
 
     @property
