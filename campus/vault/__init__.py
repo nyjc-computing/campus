@@ -189,11 +189,12 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def init_db():
     """Initialize the tables needed by the model.
 
-    This function is intended to be called only in a test environment or
-    staging.
+    This function is intended to be called only in a test or
+    staging environment.
     """
     # Initialize vault table
     with db.get_connection_context() as conn:
