@@ -10,6 +10,10 @@ from campus.common import devops
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 
+# This file uses local imports to avoid exposing sensitive imports
+# and polluting global space
+# pylint: disable=import-outside-toplevel
+
 @bp.route("/status", methods=["GET"])
 def status():
     """Return admin status info."""
@@ -22,10 +26,8 @@ def status():
 def init_db():
     """Initialise the tables needed by api."""
     from campus import models, vault
-    models.circle.init_db()
-    models.emailotp.init_db()
-    models.user.init_db()
-    vault.client.init_db()
+    models.init_db()
+    vault.init_db()
     return {"status": "ok", "message": "Database initialised."}
 
 # Purge DB endpoint
@@ -36,7 +38,7 @@ def init_db():
 @devops.confirm_action_in_env(devops.STAGING)
 def purge_db():
     """Purge the database."""
-    from campus.storage import purge_all  # type: ignore[import-untyped]
+    from campus.storage import purge_all
     purge_all()
     return {"status": "ok", "message": f"{devops.ENV}: Database purged."}
 
