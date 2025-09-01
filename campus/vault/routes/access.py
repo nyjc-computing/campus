@@ -63,42 +63,20 @@ def grant_vault_access(label) -> flask_validation.JsonResponse:
     )
     target_client_id = payload["client_id"]
     permissions = payload["permissions"]
-
-    # Validate permissions - should be an integer or list of permission names
-    if isinstance(permissions, list):
-        # Convert permission names to bitflags
-        permission_map = {
-            "READ": access.READ,
-            "CREATE": access.CREATE,
-            "UPDATE": access.UPDATE,
-            "DELETE": access.DELETE,
-            "ALL": access.ALL
-        }
-        access_flags = 0
-        for perm in permissions:
-            if perm not in permission_map:
-                return {"error": f"Invalid permission: {perm}"}, 400
-            access_flags |= permission_map[perm]
-    elif isinstance(permissions, int):
-        access_flags = permissions
-    else:
-        return {
-            "error": "Permissions must be integer or list of permission names"
-        }, 400
-
-    access.grant_access(target_client_id, label, access_flags)
+    access_value = access.convert_perms_to_access(permissions)
+    access.grant_access(target_client_id, label, access_value)
 
     return {
         "client_id": target_client_id,
         "label": label,
-        "permissions": access_flags
+        "permissions": access_value
     }, 200
 
 
 @bp.delete("/<label>")
 @require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
-def revoke_vault_access(label) -> flask_validation.JsonResponse:
+def revoke_vault_access(label: str) -> flask_validation.JsonResponse:
     """Revoke access to a vault for a client
 
     DELETE /access/{vault_label}?client_id={client_id}

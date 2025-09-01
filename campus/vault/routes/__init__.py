@@ -11,11 +11,11 @@ Each module defines a Flask blueprint with appropriate URL prefixes and
 authentication decorators.
 """
 
-from . import vault, access, clients
+from . import access, clients, vaults
 
 
 __all__ = [
-    "vault",
     "access",
     "clients",
+    "vaults"
 ]

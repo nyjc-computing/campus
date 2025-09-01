@@ -201,6 +201,56 @@ poetry install --all-extras
 
 ## Testing and CI/CD
 
+### Test Organization and Structure
+
+**Test Separation**: Tests are organized by package and type for maintainability and reliability.
+
+**Directory Structure**:
+```
+tests/
+  unit/                 # Unit tests (no external dependencies)
+    apps/
+      test_client.py    # Client interface tests
+      test_models.py    # Model logic tests  
+      test_routes.py    # Route logic tests
+    vault/
+      test_client.py    # Client interface tests
+      test_models.py    # Model logic tests
+      test_routes.py    # Route logic tests
+    yapper/
+      test_models.py    # Model logic tests
+  integration/          # Integration tests (require environment setup)
+    apps/
+      test_models_users.py
+      test_models_circles.py
+    vault/
+      test_vault_integration.py
+    yapper/
+      test_yapper.py
+```
+
+**Test Commands**:
+```bash
+# Run only unit tests (reliable, no external deps)
+poetry run python -m unittest discover tests/unit
+
+# Run only integration tests (may need environment setup)
+poetry run python -m unittest discover tests/integration
+
+# Run specific package unit tests
+poetry run python -m unittest discover tests/unit/apps
+poetry run python -m unittest discover tests/unit/vault
+
+# Run all tests
+poetry run python -m unittest discover tests
+```
+
+**Testing Principles**:
+- **Unit tests**: Test internal logic only, mock external dependencies
+- **Integration tests**: Test full package functionality with real dependencies
+- **No package class mocking**: Test real implementations, may mock `campus.common`
+- **Environment independence**: Unit tests must not rely on environment variables
+
 ### Build Environment Isolation
 
 **Requirement**: All packages must build successfully without external dependencies.

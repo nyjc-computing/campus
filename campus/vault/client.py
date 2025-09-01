@@ -12,23 +12,19 @@ to the vault database, maintaining compatibility with the main client schema
 where possible.
 
 SECRET_KEY USAGE:
-This module retrieves the SECRET_KEY from the vault itself (from the 'campus' 
+This module retrieves the SECRET_KEY from the vault itself (from the 'vault' 
 vault label) on demand. While this creates additional database load, it provides
-consistency with the vault-first architecture and eliminates environment variable
-dependencies. Performance optimizations (such as API keys) can be addressed
-when needed.
+consistency with the vault-first architecture and eliminates environment
+variable dependencies. Performance optimizations (such as API keys) can be addressed when needed.
 """
 
 from typing import Any, TypedDict, NotRequired, Unpack
-
-import psycopg2
 
 from campus.common.utils import secret, uid, utc_time
 from campus.common import devops
 from campus.common.errors import api_errors
 
-from . import db
-from .model import Vault
+from . import db, vault
 
 CLIENT_TABLE = "vault_clients"
 
@@ -42,7 +38,7 @@ def _get_secret_key() -> str:
     Raises:
         VaultKeyError: If SECRET_KEY is not found in the campus vault
     """
-    campus_vault = model.Vault("campus")
+    campus_vault = vault.Vault("campus")
     return campus_vault.get("SECRET_KEY")
 
 
@@ -61,15 +57,6 @@ class ClientResource(TypedDict, total=True):
     secret_hash: NotRequired[str]
 
 
-class ClientResourceWithSecret(TypedDict, total=True):
-    """Response body schema for new client creation including the secret."""
-    id: str
-    name: str
-    description: str
-    created_at: str
-    secret: str
-
-
 class VaultClientSecretResponse(TypedDict, total=True):
     """Response body schema for client secret operations."""
     secret: str
@@ -79,9 +66,8 @@ class VaultClientSecretResponse(TypedDict, total=True):
 def init_db():
     """Initialize the vault client table.
 
-    This function is intended to be called only in a test environment or
-    staging. The vault client table is separate from the main clients table
-    to avoid circular dependencies.
+    This function is intended to be called only in a test or staging
+    environment.
     """
     with db.get_connection_context() as conn:
         with conn.cursor() as cursor:
@@ -138,7 +124,7 @@ def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
                 fetch_one=False,
                 fetch_all=False
             )
-    except psycopg2.IntegrityError:
+    except db.psycopg2.IntegrityError:
         raise api_errors.ConflictError(
             message="Client name already exists."
         ) from None
@@ -146,7 +132,10 @@ def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
     # Return client resource without secret_hash
     client_resource = {
         k: v for k, v in record.items() if k != "secret_hash"}
-    return client_resource
+    return {
+        "client": client_resource,
+        "secret": client_secret
+    }
 
 
 def get_client(client_id: str) -> dict[str, Any]:
@@ -282,7 +271,8 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
         **updates: Fields to update (name, description)
 
     Raises:
-        VaultClientAuthenticationError: If client not found
+        NotFoundError: If client not found
+        ConflictError: If updated name conflicts with existing client
     """
     if not updates:
         return
@@ -306,14 +296,23 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
 
     try:
         with db.get_connection_context() as conn:
-            db.execute_query(
+            updated_record = db.execute_query(
                 conn,
-                f"UPDATE {CLIENT_TABLE} SET {', '.join(set_clauses)} WHERE id = %s",
+                (
+                    f"UPDATE {CLIENT_TABLE} "
+                    f"SET {', '.join(set_clauses)} "
+                    "WHERE id = %s RETURNING *"
+                ),
                 tuple(values),
-                fetch_one=False,
+                fetch_one=True,
                 fetch_all=False
             )
-    except psycopg2.IntegrityError:
+    except db.psycopg2.IntegrityError:
         raise api_errors.ConflictError(
             message="Client name already exists."
         ) from None
+    else:
+        if updated_record is None:
+            raise api_errors.NotFoundError(
+                message="Client not found."
+            )

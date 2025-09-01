@@ -138,7 +138,9 @@ def _validate_key_names_types(
         if extra_keys:
             raise KeyError(f"Invalid keys: {', '.join(extra_keys)}")
     # all record keys are valid
-    for key in record_set:
+    # Only validate keys that exist in the schema
+    keys_to_validate = record_set if not ignore_extra else (record_set & (required_keys | optional_keys))
+    for key in keys_to_validate:
         requiredness, unwrapped_type = get_requiredness_type(valid_keys[key])
         KeyType = unwrapped_type if requiredness is not Requiredness.UNMARKED else valid_keys[key]
         if not isinstance(record[key], KeyType):
