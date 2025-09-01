@@ -276,7 +276,8 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
         **updates: Fields to update (name, description)
 
     Raises:
-        VaultClientAuthenticationError: If client not found
+        NotFoundError: If client not found
+        ConflictError: If updated name conflicts with existing client
     """
     if not updates:
         return
@@ -300,12 +301,24 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
 
     try:
         with db.get_connection_context() as conn:
-            db.execute_query(
+            updated_record = db.execute_query(
                 conn,
-                f"UPDATE {CLIENT_TABLE} SET {', '.join(set_clauses)} WHERE id = %s",
+                (
+                    f"UPDATE {CLIENT_TABLE} "
+                    f"SET {', '.join(set_clauses)} "
+                    "WHERE id = %s RETURNING *"
+                ),
                 tuple(values),
-                fetch_one=False,
+                fetch_one=True,
                 fetch_all=False
             )
     except db.psycopg2.IntegrityError:
-        raise api_errors.ConflictError(message="Client name already exists.")
+        raise api_errors.ConflictError(
+            message="Client name already exists."
+        ) from None
+    else:
+        if updated_record is None:
+            raise api_errors.NotFoundError(
+                message="Client not found."
+            )
+
