@@ -5,6 +5,7 @@
 
 - The test suite **only uses the standard library `unittest` module**—no other test dependencies are required or supported.
 - **All tests must be run using the Poetry environment.** Do not create or activate new virtual environments manually.
+- **Recommended:** Use `poetry run` before any test command, or activate the environment with `poetry shell` and then run your test commands directly.
 - **Tests should ideally be invoked through `tests/run_tests.py`** for consistent environment and options.
 
 ### Poetry Usage Example
