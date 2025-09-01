@@ -29,8 +29,8 @@ class NotFoundError(HttpClientError):
     pass
 
 
-class ValidationError(HttpClientError):
-    """Raised when input validation fails."""
+class InvalidRequestError(HttpClientError):
+    """Raised when request validation fails."""
     pass
 
 
