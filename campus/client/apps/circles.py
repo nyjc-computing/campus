@@ -3,10 +3,10 @@
 Circle management client for creating and managing circles.
 """
 
-from typing import Any, Union
+from typing import Any
 
 from campus.client.interface import Resource
-from campus.common.http import JsonClient, JsonResponse
+from campus.common.http import JsonClient
 
 
 class CircleMembers(Resource):
@@ -15,12 +15,12 @@ class CircleMembers(Resource):
     Provides methods for managing circle membership following the server API.
     """
 
-    def list(self) -> Union[JsonResponse, Any]:
+    def list(self) -> dict:
         """Get circle members and their access values."""
         response = self.client.get(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def add(self, *, member_id: str, **kwargs) -> Union[JsonResponse, Any]:
+    def add(self, *, member_id: str, **kwargs) -> dict:
         """Add a member to the circle.
 
         Args:
@@ -29,9 +29,9 @@ class CircleMembers(Resource):
         """
         data = {"member_id": member_id, **kwargs}
         response = self.client.post(self.make_path("add"), json=data)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def remove(self, member_id: str) -> Union[JsonResponse, Any]:
+    def remove(self, member_id: str) -> dict:
         """Remove a member from the circle.
 
         Args:
@@ -39,9 +39,9 @@ class CircleMembers(Resource):
         """
         data = {"member_id": member_id}
         response = self.client.delete(self.make_path("remove"), json=data)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def set(self, member_id: str, access_value: int) -> Union[JsonResponse, Any]:
+    def set(self, member_id: str, access_value: int) -> dict:
         """Set circle member access.
 
         Args:
@@ -50,7 +50,7 @@ class CircleMembers(Resource):
         """
         data = {"member_id": member_id, "access_value": access_value}
         response = self.client.put(self.make_path("set"), json=data)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
 
 class CircleResource(Resource):
@@ -75,17 +75,17 @@ class CircleResource(Resource):
         """Get the members sub-resource."""
         return CircleMembers(self, "members")
 
-    def delete(self) -> Union[JsonResponse, Any]:
+    def delete(self) -> dict:
         """Delete the circle."""
         response = self.client.delete(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def get(self) -> Union[JsonResponse, Any]:
+    def get(self) -> dict:
         """Get circle details."""
         response = self.client.get(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def move(self, *, parent_circle_id: str) -> Union[JsonResponse, Any]:
+    def move(self, *, parent_circle_id: str) -> dict:
         """Move the circle to a new parent.
 
         Args:
@@ -99,16 +99,16 @@ class CircleResource(Resource):
                 "The parent_circle_id cannot be the same as the current circle ID.")
         data = {"parent_circle_id": parent_circle_id}
         response = self.client.post(self.make_path("move"), json=data)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def update(self, **kwargs) -> Union[JsonResponse, Any]:
+    def update(self, **kwargs) -> dict:
         """Update the circle.
 
         Args:
             **kwargs: Fields to update (name, description, etc.)
         """
         response = self.client.patch(self.path, json=kwargs)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
 
 class CirclesResource(Resource):
@@ -125,16 +125,16 @@ class CirclesResource(Resource):
         """
         return CircleResource(self, circle_id)
 
-    def list(self, **filters: Any) -> Union[JsonResponse, Any]:
+    def list(self, **filters: Any) -> dict:
         """Return a list of matching circles.
 
         Args:
             **filters: Optional filters to apply (e.g., name, tag)
         """
         response = self.client.get(self.path, params=filters)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def new(self, *, name: str, description: str = "", **kwargs) -> Union[JsonResponse, Any]:
+    def new(self, *, name: str, description: str = "", **kwargs) -> dict:
         """Create a new circle.
 
         Args:
@@ -144,4 +144,4 @@ class CirclesResource(Resource):
         """
         data = {"name": name, "description": description, **kwargs}
         response = self.client.post(self.path, json=data)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]

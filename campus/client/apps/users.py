@@ -3,10 +3,8 @@
 User management client for creating and managing user accounts.
 """
 
-from typing import Any, Union
-
 from campus.client.interface import Resource
-from campus.common.http import JsonClient, JsonResponse
+from campus.common.http import JsonClient
 
 
 class UserResource(Resource):
@@ -16,29 +14,29 @@ class UserResource(Resource):
     including properties for accessing user data and methods for operations.
     """
 
-    def delete(self) -> Union[JsonResponse, Any]:
+    def delete(self) -> dict:
         """Delete the user."""
         response = self.client.delete(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def get(self) -> Union[JsonResponse, Any]:
+    def get(self) -> dict:
         """Get the user."""
         response = self.client.get(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def update(self, **kwargs) -> Union[JsonResponse, Any]:
+    def update(self, **kwargs) -> dict:
         """Update the user.
 
         Args:
             **kwargs: Fields to update (email, name, etc.)
         """
         response = self.client.patch(self.path, json=kwargs)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def profile(self) -> Union[JsonResponse, Any]:
+    def profile(self) -> dict:
         """Get the user's detailed profile."""
         response = self.client.get(self.make_path("profile"))
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
 
 class UsersResource(Resource):
@@ -51,8 +49,8 @@ class UsersResource(Resource):
         """Get a user by ID."""
         return UserResource(self, user_id)
 
-    def new(self, *, email: str, name: str) -> Union[JsonResponse, Any]:
+    def new(self, *, email: str, name: str) -> dict:
         """Create a new user."""
         data = {"email": email, "name": name}
         response = self.client.post(self.path, json=data)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]

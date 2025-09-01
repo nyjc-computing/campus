@@ -3,10 +3,8 @@
 Main vault client interface for secrets management and access control.
 """
 
-from typing import Any, Union
-
 from campus.client.interface import Resource
-from campus.common.http import JsonClient, JsonResponse
+from campus.common.http import JsonClient
 
 from .access import VaultAccessResource
 from .client import VaultClientResource
@@ -15,21 +13,21 @@ from .client import VaultClientResource
 class VaultKeyResource(Resource):
     """Represents a specific key in a vault collection."""
 
-    def get(self) -> Union[JsonResponse, Any]:
+    def get(self) -> dict:
         """Get the secret value."""
         response = self.client.get(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def set(self, *, value: str) -> Union[JsonResponse, Any]:
+    def set(self, *, value: str) -> dict:
         """Set the secret value."""
         data = {"value": value}
         response = self.client.post(self.path, data)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def delete(self) -> Union[JsonResponse, Any]:
+    def delete(self) -> dict:
         """Delete the secret."""
         response = self.client.delete(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
 
 class Vault(Resource):
@@ -46,14 +44,14 @@ class Vault(Resource):
         """
         return VaultKeyResource(self, key)
 
-    def list(self) -> Union[JsonResponse, Any]:
+    def list(self) -> dict:
         """List all keys in the vault.
 
         Returns:
             List of key names
         """
         response = self.client.get(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
 
 class VaultResource(Resource):
@@ -72,14 +70,14 @@ class VaultResource(Resource):
         """
         return Vault(self, label)
 
-    def list(self) -> Union[JsonResponse, Any]:
+    def list(self) -> dict:
         """List available vault labels.
 
         Returns:
             List of available vault labels
         """
         response = self.client.get(self.path)
-        return self._process_response(response)
+        return self._process_response(response)  # type: ignore[return-value]
 
     @property
     def access(self) -> VaultAccessResource:
