@@ -29,7 +29,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
-from campus.client import VaultClient
+from campus.client.vault import get_vault
 from campus.common import devops
 from campus.storage.documents.interface import CollectionInterface, PK
 from campus.storage.errors import (
@@ -41,7 +41,7 @@ from campus.storage.errors import (
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
-vault = VaultClient()["storage"]
+vault = get_vault()["storage"]
 
 
 class MongoCollectionError(StorageError):
@@ -52,22 +52,20 @@ class MongoCollectionError(StorageError):
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
     try:
-        return vault["MONGODB_URI"].get()
+        return vault["MONGODB_URI"].get().json().get("value")
     except Exception as e:
         raise MongoCollectionError(
-            f"Failed to retrieve MongoDB URI from vault secret 'MONGODB_URI' "
-            f"in 'storage' vault: {e}"
+            f"Failed to retrieve MONGODB_URI from 'storage' vault: {e}"
         ) from e
 
 
 def _get_mongodb_name() -> str:
     """Get the MongoDB database name from the vault using the core client API."""
     try:
-        return vault["MONGODB_NAME"].get()
+        return vault["MONGODB_NAME"].get().json().get("value")
     except Exception as e:
         raise MongoCollectionError(
-            f"Failed to retrieve MongoDB database name from vault secret 'MONGODB_NAME' "
-            f"in 'storage' vault: {e}"
+            f"Failed to retrieve MONGODB_NAME from 'storage' vault: {e}"
         ) from e
 
 
