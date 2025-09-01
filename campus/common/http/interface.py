@@ -42,6 +42,18 @@ class JsonResponse(Protocol):
         """Returns the response body as a string."""
         ...
 
+    def ok(self) -> bool:
+        """Returns True if the response status code is 2xx, False otherwise."""
+        return 200 <= self.status_code < 300
+    
+    def client_error(self) -> bool:
+        """Returns True if the response status code is 4xx, False otherwise."""
+        return 400 <= self.status_code < 500
+    
+    def server_error(self) -> bool:
+        """Returns True if the response status code is 5xx, False otherwise."""
+        return 500 <= self.status_code < 600
+
     def json(self) -> Any:
         """Returns the response body as JSON."""
         ...
