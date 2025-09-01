@@ -30,9 +30,8 @@ def init_app(app: Flask | Blueprint) -> None:
 @require_client_authentication()
 def list_vaults() -> flask_validation.JsonResponse:
     """List available vault labels"""
-    # TODO: In a more sophisticated implementation, this would return
-    # only the vaults that the authenticated client has access to
-    return {"vaults": ["campus", "storage", "oauth"]}, 200
+    labels = model.get_labels(g.current_client.id)
+    return {"vaults": labels}, 200
 
 
 @bp.get("/<label>/")
