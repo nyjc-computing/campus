@@ -12,6 +12,7 @@ Usage:
     python tests/run_tests.py integration -v      # integration tests with verbose output
     python tests/run_tests.py unit --timeout 30   # unit tests with 30s timeout
     python tests/run_tests.py unit --no-timeout   # unit tests without timeout (for debugging)
+    python tests/run_tests.py unit --silent       # unit tests with minimal output
 
 Supported modules: apps, vault, yapper, common, client
 
@@ -35,7 +36,8 @@ sys.path.insert(0, str(project_root))
 def run_unittest_discover(
         test_path: str,
         verbose: bool = False,
-        timeout: int | None = None
+        timeout: int | None = None,
+        silent: bool = False
 ) -> int:
     """Run unittest discover on the specified path.
 
@@ -43,6 +45,7 @@ def run_unittest_discover(
         test_path: Path to discover tests in (relative to project root)
         verbose: Whether to run with verbose output
         timeout: Maximum time in seconds to allow tests to run (None for no timeout)
+        silent: Whether to suppress output (only show errors and final result)
 
     Returns:
         Exit code:
@@ -55,22 +58,36 @@ def run_unittest_discover(
     if verbose:
         cmd.append("-v")
 
-    print(f"Running: {' '.join(cmd)}")
-    if timeout:
-        print(f"Timeout: {timeout} seconds")
-    print("=" * 60)
+    if not silent:
+        print(f"Running: {' '.join(cmd)}")
+        if timeout:
+            print(f"Timeout: {timeout} seconds")
+        print("=" * 60)
 
     try:
+        # In silent mode, capture output to reduce noise
+        capture_output = silent
         result = subprocess.run(cmd, cwd=project_root,
-                                check=False, timeout=timeout)
+                                check=False, timeout=timeout,
+                                capture_output=capture_output, text=True)
+
+        # In silent mode, only show output if there were failures
+        if silent and result.returncode != 0:
+            print("Tests failed. Output:")
+            if result.stdout:
+                print(result.stdout)
+            if result.stderr:
+                print(result.stderr)
+
         return result.returncode
     except subprocess.TimeoutExpired:
         print(f"\n❌ Tests timed out after {timeout} seconds")
-        print("This might indicate:")
-        print("  - Tests are running too slowly")
-        print("  - Tests are hanging or stuck")
-        print("  - Network/external dependencies are slow")
-        print("\nTip: Run without timeout (--no-timeout) to debug hanging tests")
+        if not silent:
+            print("This might indicate:")
+            print("  - Tests are running too slowly")
+            print("  - Tests are hanging or stuck")
+            print("  - Network/external dependencies are slow")
+            print("\nTip: Run without timeout (--no-timeout) to debug hanging tests")
         return 124  # Standard timeout exit code
     except FileNotFoundError:
         print("Error: poetry not found. Make sure poetry is installed and in PATH.")
@@ -93,6 +110,7 @@ Examples:
   python tests/run_tests.py integration --module vault -v  # Verbose integration tests for vault
   python tests/run_tests.py unit --timeout 30       # Unit tests with custom 30s timeout
   python tests/run_tests.py unit --no-timeout       # Unit tests without timeout (debugging)
+  python tests/run_tests.py unit --silent           # Unit tests with minimal output
 
 Supported modules: apps, vault, yapper, common, client
 
@@ -134,6 +152,12 @@ Exit codes:
         help="Disable timeout (useful for debugging hanging tests)"
     )
 
+    parser.add_argument(
+        "--silent", "-s",
+        action="store_true",
+        help="Silent mode (minimal output, only show errors and final result)"
+    )
+
     args = parser.parse_args()
 
     # Determine timeout value
@@ -158,21 +182,26 @@ Exit codes:
             print("Error: --module cannot be used with 'all' test type")
             return 1
         test_path = "tests"
-        print("Running all tests (unit + integration)")
+        if not args.silent:
+            print("Running all tests (unit + integration)")
     elif args.test_type == "unit":
         if args.module:
             test_path = f"tests/unit/{args.module}"
-            print(f"Running unit tests for {args.module} module")
+            if not args.silent:
+                print(f"Running unit tests for {args.module} module")
         else:
             test_path = "tests/unit"
-            print("Running all unit tests")
+            if not args.silent:
+                print("Running all unit tests")
     elif args.test_type == "integration":
         if args.module:
             test_path = f"tests/integration/{args.module}"
-            print(f"Running integration tests for {args.module} module")
+            if not args.silent:
+                print(f"Running integration tests for {args.module} module")
         else:
             test_path = "tests/integration"
-            print("Running all integration tests")
+            if not args.silent:
+                print("Running all integration tests")
 
     # Check if test path exists
     full_test_path = project_root / test_path
@@ -181,13 +210,21 @@ Exit codes:
         return 1
 
     # Run the tests
-    exit_code = run_unittest_discover(test_path, args.verbose, timeout)
+    exit_code = run_unittest_discover(
+        test_path, args.verbose, timeout, args.silent)
 
-    print("=" * 60)
+    if not args.silent:
+        print("=" * 60)
     if exit_code == 0:
-        print("✓ All tests passed!")
+        if args.silent:
+            print("✓")  # Minimal success indicator
+        else:
+            print("✓ All tests passed!")
     else:
-        print("✗ Some tests failed")
+        if args.silent:
+            print("✗")  # Minimal failure indicator
+        else:
+            print("✗ Some tests failed")
 
     return exit_code
 
