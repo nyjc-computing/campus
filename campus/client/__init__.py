@@ -15,10 +15,8 @@ from .errors import (
     NetworkError
 )
 # Namespace imports
-from .apps.admin import AdminClient
-from .apps.circles import CirclesClient
-from .apps.users import UsersClient
-from .vault.vault import VaultClient
+from .apps import AdminClient, CirclesClient, UsersClient
+from .vault import VaultClient
 
 __all__ = [
     'Campus',
