@@ -4,10 +4,11 @@ Provides clean module interfaces for Campus Vault service resources.
 """
 
 from campus import config
-from campus.client.vault.vault import VaultResource
-from campus.client.vault.access import VaultAccessResource
-from campus.client.vault.client import VaultClientResource
 from campus.common.http import get_client
+
+from .vault import VaultResource
+from .access import VaultAccessResource
+from .client import VaultClientResource
 
 
 def get_vault() -> VaultResource:

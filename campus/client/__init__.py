@@ -6,28 +6,15 @@ Provides unified Campus client interface.
 """
 
 from .core import Campus
-from .errors import (
-    CampusClientError,
-    AuthenticationError,
-    AccessDeniedError,
-    NotFoundError,
-    ValidationError,
-    NetworkError
-)
+
 # Namespace imports
-from .apps import AdminClient, CirclesClient, UsersClient
-from .vault import VaultClient
+from .apps import AdminResource, CirclesResource, UsersResource
+from .vault import VaultResource
 
 __all__ = [
     'Campus',
-    'CampusClientError',
-    'AuthenticationError',
-    'AccessDeniedError',
-    'NotFoundError',
-    'ValidationError',
-    'NetworkError',
-    'AdminClient',
-    'CirclesClient',
-    'UsersClient',
-    'VaultClient',
+    'AdminResource',
+    'CirclesResource',
+    'UsersResource',
+    'VaultResource',
 ]
