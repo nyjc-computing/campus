@@ -135,8 +135,8 @@ def init_app(app: Flask | Blueprint) -> None:
 def init_db():
     """Initialize the tables needed by the model.
 
-    This function is intended to be called only in a test or
-    staging environment.
+    This function is intended to be called only in a test or staging
+    environment.
     """
     # Initialize vault table
     with db.get_connection_context() as conn:
@@ -152,9 +152,5 @@ def init_db():
                 )
             """
             cursor.execute(vault_schema)
-
-    # Initialize access control table
     access.init_db()
-
-    # Initialize vault client table
     client.init_db()
