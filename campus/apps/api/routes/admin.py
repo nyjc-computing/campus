@@ -22,7 +22,6 @@ def status():
 
 @bp.route("/init-db", methods=["POST"])
 @devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
 def init_db():
     """Initialise the tables needed by api."""
     from campus import models, vault
@@ -35,7 +34,6 @@ def init_db():
 
 @bp.route("/purge-db", methods=["POST"])
 @devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
 def purge_db():
     """Purge the database."""
     from campus.storage import purge_all
