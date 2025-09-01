@@ -37,16 +37,13 @@ jobs:
         run: poetry install --no-root --extras full
       - name: Run Unit Tests
         run: poetry run python tests/run_tests.py unit --timeout ${{ env.UNIT_TEST_TIMEOUT }} -v
-      - name: Run Integration Tests (will run but not required for weekly)
-        if: github.ref_name == 'weekly'
-        continue-on-error: true
-        run: poetry run python tests/run_tests.py integration --timeout ${{ env.INTEGRATION_TEST_TIMEOUT }} -v
 
   integration-tests:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJson(env.INTEGRATION_JOB_TIMEOUT) }}
-    # Only run integration tests as required for staging and main branches
-    if: github.ref_name == 'staging' || github.ref_name == 'main'
+    # Run integration tests for all target branches
+    # Required to pass for staging/main, optional for weekly
+    continue-on-error: ${{ github.ref_name == 'weekly' || github.base_ref == 'weekly' }}
     env:
       ENV: testing
     steps:
@@ -64,5 +61,5 @@ jobs:
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite (full deployment mode)
         run: poetry install --no-root --extras full
-      - name: Run Integration Tests (required for staging/main)
+      - name: Run Integration Tests (required for staging/main, optional for weekly)
         run: poetry run python tests/run_tests.py integration --timeout ${{ env.INTEGRATION_TEST_TIMEOUT }} -v
