@@ -75,12 +75,10 @@ from flask import Blueprint, Flask
 
 from campus.common import devops, errors
 
-from . import access, db, client
-from .model import Vault
+from . import access, client, db, model
 
 __all__ = [
     "get_vault",
-    "Vault",
     "create_app",
     "init_app",
     "init_db",
@@ -89,7 +87,10 @@ __all__ = [
 ]
 
 
-def get_vault(label: str) -> Vault:
+# This file uses local imports to avoid polluting global space
+# pylint: disable=import-outside-toplevel
+
+def get_vault(label: str) -> model.Vault:
     """Get a Vault instance by label.
 
     This is a convenience function for programmatic access to vaults.
@@ -101,7 +102,7 @@ def get_vault(label: str) -> Vault:
     For the new architecture, this returns a Vault model instance.
     Authentication and permission checking should be handled at the application layer.
     """
-    return Vault(label)
+    return model.Vault(label)
 
 
 def create_app() -> Flask:
@@ -117,16 +118,16 @@ def create_app() -> Flask:
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
-    bp = Blueprint('v1', __name__, url_prefix='/api/v1')
+    # Health check route for deployments
+    @app.get('/')
+    def health_check():
+        return {'status': 'healthy', 'service': 'campus-vault'}, 200
+
+    # Register all vault-related blueprints
     from . import routes
-    routes.access.init_app(bp)
-    routes.client.init_app(bp)
-    routes.vault.init_app(bp)
-    app.register_blueprint(bp)
-    # Use Vault to retrieve secret key since campus.vault deployment
-    # has VAULTDB_URI env var
-    if isinstance(app, Flask):
-        app.secret_key = get_vault("vault").get("SECRET_KEY")
+    routes.vault.init_app(app)
+    routes.access.init_app(app)
+    routes.clients.init_app(app)
 
 
 @devops.block_env(devops.PRODUCTION)
