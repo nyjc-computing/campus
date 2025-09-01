@@ -188,16 +188,17 @@ def delete_client(client_id: str) -> None:
     Raises:
         VaultClientAuthenticationError: If client not found
     """
-    # Check if client exists first
-    get_client(client_id)  # This will raise NotFoundError if not found
     with db.get_connection_context() as conn:
-        db.execute_query(
+        result = db.execute_query(
             conn,
-            f"DELETE FROM {CLIENT_TABLE} WHERE id = %s",
+            f"DELETE FROM {CLIENT_TABLE} WHERE id = %s RETURNING *",
             (client_id,),
-            fetch_one=False,
+            fetch_one=True,
             fetch_all=False
         )
+    if not result:
+        raise api_errors.NotFoundError(
+            message=f"Vault client '{client_id}' not found", client_id=client_id)
 
 
 def replace_client_secret(client_id: str) -> str:
