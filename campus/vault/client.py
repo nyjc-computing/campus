@@ -162,10 +162,10 @@ def get_client(client_id: str) -> ClientResource:
             (client_id,),
             fetch_one=True
         )
-        if not client_record:
-            raise api_errors.NotFoundError(
-                message=f"Vault client '{client_id}' not found", client_id=client_id)
-        return client_record
+    if not client_record:
+        raise api_errors.NotFoundError(
+            message=f"Vault client '{client_id}' not found", client_id=client_id)
+    return client_record
 
 
 def list_clients() -> list[ClientResource]:
