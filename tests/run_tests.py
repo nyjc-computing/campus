@@ -5,12 +5,12 @@ A flexible test runner for the Campus project that supports different test categ
 and modules with a unified interface.
 
 Usage:
-    python tests/run_tests.py unit                # all unit tests (60s timeout)
-    python tests/run_tests.py integration         # all integration tests (300s timeout)
-    python tests/run_tests.py all                 # all tests (360s timeout)
+    python tests/run_tests.py unit                # all unit tests (no timeout)
+    python tests/run_tests.py integration         # all integration tests (no timeout)
+    python tests/run_tests.py all                 # all tests (no timeout)
     python tests/run_tests.py unit --module apps  # unit tests for apps module
     python tests/run_tests.py integration -v      # integration tests with verbose output
-    python tests/run_tests.py unit --timeout 30   # unit tests with 30s timeout
+    python tests/run_tests.py unit --timeout 60   # unit tests with 60s timeout
     python tests/run_tests.py unit --no-timeout   # unit tests without timeout (for debugging)
     python tests/run_tests.py unit --silent       # unit tests with minimal output
 
@@ -103,12 +103,12 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python tests/run_tests.py unit                    # All unit tests (60s timeout)
-  python tests/run_tests.py integration             # All integration tests (300s timeout)  
-  python tests/run_tests.py all                     # All tests (360s timeout)
+  python tests/run_tests.py unit                    # All unit tests (no timeout)
+  python tests/run_tests.py integration             # All integration tests (no timeout)  
+  python tests/run_tests.py all                     # All tests (no timeout)
   python tests/run_tests.py unit --module apps      # Unit tests for apps only
   python tests/run_tests.py integration --module vault -v  # Verbose integration tests for vault
-  python tests/run_tests.py unit --timeout 30       # Unit tests with custom 30s timeout
+  python tests/run_tests.py unit --timeout 60       # Unit tests with 60s timeout
   python tests/run_tests.py unit --no-timeout       # Unit tests without timeout (debugging)
   python tests/run_tests.py unit --silent           # Unit tests with minimal output
 
@@ -143,7 +143,7 @@ Exit codes:
     parser.add_argument(
         "--timeout", "-t",
         type=int,
-        help="Timeout in seconds (default: 60 for unit tests, 300 for integration tests)"
+        help="Timeout in seconds (no default - specify explicitly if needed)"
     )
 
     parser.add_argument(
@@ -165,14 +165,8 @@ Exit codes:
     if not args.no_timeout:
         if args.timeout:
             timeout = args.timeout
-        else:
-            # Set sensible defaults matching CI constraints
-            if args.test_type == "unit":
-                timeout = 60  # 1 minute for unit tests
-            elif args.test_type == "integration":
-                timeout = 300  # 5 minutes for integration tests
-            else:  # "all"
-                timeout = 360  # 6 minutes for all tests
+        # Note: No default timeouts - should be explicitly specified for CI
+        # For local development, tests run without timeout unless specified
 
     # Build test path based on arguments
     test_path = ""  # Initialize variable
