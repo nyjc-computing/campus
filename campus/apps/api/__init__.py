@@ -11,7 +11,7 @@ from campus.apps.api import routes
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
     # Organise API routes under api blueprint
-    bp = Blueprint('v1', __name__, url_prefix='/api/v1')
+    bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
     # Users need to be initialised first as other blueprints
     # rely on user table
     routes.circles.init_app(bp)
