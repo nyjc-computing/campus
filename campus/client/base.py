@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 import requests
 
 from campus.common.utils import secret
-from campus.client.errors import (
+from campus.common.http import (
     AuthenticationError,
     AccessDeniedError,
     ConflictError,
