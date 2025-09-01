@@ -58,15 +58,6 @@ class ClientResource(TypedDict, total=True):
     secret_hash: NotRequired[str]
 
 
-class ClientResourceWithSecret(TypedDict, total=True):
-    """Response body schema for new client creation including the secret."""
-    id: str
-    name: str
-    description: str
-    created_at: str
-    secret: str
-
-
 class VaultClientSecretResponse(TypedDict, total=True):
     """Response body schema for client secret operations."""
     secret: str
@@ -138,9 +129,12 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
         raise api_errors.ConflictError(message="Client name already exists.")
 
     # Return client resource without secret_hash
-    client_resource: ClientResource = {
-        k: v for k, v in record.items() if k != "secret_hash"}  # type: ignore
-    return client_resource, client_secret
+    client_resource = {
+        k: v for k, v in record.items() if k != "secret_hash"}
+    return {
+        "client": client_resource,
+        "secret": client_secret
+    }
 
 
 def get_client(client_id: str) -> ClientResource:
