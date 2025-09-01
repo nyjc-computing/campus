@@ -5,15 +5,21 @@ A flexible test runner for the Campus project that supports different test categ
 and modules with a unified interface.
 
 Usage:
-    python tests/run_tests.py unit                    # Run all unit tests (60s timeout)
-    python tests/run_tests.py integration             # Run all integration tests (300s timeout)
-    python tests/run_tests.py all                     # Run all tests (360s timeout)
-    python tests/run_tests.py unit --module apps      # Run unit tests for apps module
-    python tests/run_tests.py integration -v          # Run integration tests with verbose output
-    python tests/run_tests.py unit --timeout 30       # Run unit tests with 30s timeout
-    python tests/run_tests.py unit --no-timeout       # Run unit tests without timeout (for debugging)
+    python tests/run_tests.py unit                # all unit tests (60s timeout)
+    python tests/run_tests.py integration         # all integration tests (300s timeout)
+    python tests/run_tests.py all                 # all tests (360s timeout)
+    python tests/run_tests.py unit --module apps  # unit tests for apps module
+    python tests/run_tests.py integration -v      # integration tests with verbose output
+    python tests/run_tests.py unit --timeout 30   # unit tests with 30s timeout
+    python tests/run_tests.py unit --no-timeout   # unit tests without timeout (for debugging)
 
 Supported modules: apps, vault, yapper, common, client
+
+Exit Codes:
+    0   - All tests passed successfully
+    1   - General error (missing poetry, invalid arguments, test path not found)
+    2   - Test failures (some tests failed but completed)
+    124 - Timeout (tests exceeded time limit)
 """
 
 import argparse
@@ -39,7 +45,11 @@ def run_unittest_discover(
         timeout: Maximum time in seconds to allow tests to run (None for no timeout)
 
     Returns:
-        Exit code (0 for success, non-zero for failure)
+        Exit code:
+        - 0: All tests passed
+        - 1: Poetry not found or other system error
+        - 2: Some tests failed (returned by unittest)
+        - 124: Tests timed out
     """
     cmd = ["poetry", "run", "python", "-m", "unittest", "discover", test_path]
     if verbose:
@@ -85,6 +95,12 @@ Examples:
   python tests/run_tests.py unit --no-timeout       # Unit tests without timeout (debugging)
 
 Supported modules: apps, vault, yapper, common, client
+
+Exit codes:
+  0   - All tests passed successfully
+  1   - General error (missing poetry, invalid arguments, test path not found)
+  2   - Test failures (some tests failed but completed)
+  124 - Timeout (tests exceeded time limit)
         """
     )
 
