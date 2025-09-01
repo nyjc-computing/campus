@@ -15,6 +15,22 @@ from ..auth import require_client_authentication, require_vault_permission
 bp = Blueprint('access', __name__, url_prefix='/access')
 
 
+class GetVaultAccess(TypedDict):
+    """Schema for a request to get access."""
+    client_id: str
+
+
+class GrantVaultAccess(TypedDict):
+    """Schema for a request to grant access."""
+    client_id: str
+    permissions: list[str] | int
+
+
+class RevokeVaultAccess(TypedDict):
+    """Schema for a request to revoke access."""
+    client_id: str
+
+
 @bp.post("/<label>")
 @require_client_authentication()
 @require_vault_permission(access.ALL)  # Require admin-level permissions
