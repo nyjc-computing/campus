@@ -15,22 +15,6 @@ from . import db
 TABLE = "vault"
 
 
-def get_labels(client_id: str) -> list[str]:
-    """Get a list of all vault labels that the client has access to."""
-    with db.get_connection_context() as conn:
-        rows = db.execute_query(
-            conn,
-            (
-                "SELECT DISTINCT label FROM vault "
-                "INNER JOIN vault_access ON vault.label = vault_access.label "
-                "WHERE client_id = %s"
-            ),
-            (client_id,),
-            fetch_all=True
-        )
-        return [row["label"] for row in rows] if rows else []
-
-
 class Vault:
     """Vault data model for managing secrets in the Campus system.
 
@@ -58,6 +42,22 @@ class Vault:
 
     def __repr__(self) -> str:
         return f"Vault(label={self.label!r})"
+
+    @staticmethod
+    def get_labels(client_id: str) -> list[str]:
+        """Get a list of all vault labels that the client has access to."""
+        with db.get_connection_context() as conn:
+            rows = db.execute_query(
+                conn,
+                (
+                    "SELECT DISTINCT label FROM vault "
+                    "INNER JOIN vault_access ON vault.label = vault_access.label "
+                    "WHERE client_id = %s"
+                ),
+                (client_id,),
+                fetch_all=True
+            )
+            return [row["label"] for row in rows] if rows else []
 
     def get(self, key: str) -> str:
         """Get a secret from the vault.

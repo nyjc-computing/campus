@@ -38,7 +38,7 @@ class SetSecretValue(TypedDict):
 @require_client_authentication()
 def list_vaults() -> flask_validation.JsonResponse:
     """List available vault labels"""
-    labels = model.get_labels(g.current_client.id)
+    labels = model.Vault.get_labels(g.current_client.id)
     return {"vaults": labels}, 200
 
 
