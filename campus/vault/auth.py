@@ -20,7 +20,7 @@ from . import access, client
 def get_client_credentials() -> Tuple[str, str]:
     """Get client credentials from request headers or environment.
 
-    First checks for Authorization header with Bearer token format,
+    First checks for Authorization header with Basic or Bearer token format,
     then falls back to environment variables.
 
     Returns:
@@ -31,14 +31,24 @@ def get_client_credentials() -> Tuple[str, str]:
     """
     # Check for Authorization header first
     auth_header = request.headers.get('Authorization')
-    if auth_header and auth_header.startswith('Bearer '):
-        # Extract token from Bearer format
-        token = auth_header[7:]  # Remove 'Bearer ' prefix
-        # For now, expect format: client_id:client_secret (base64 encoded could be added later)
-        if ':' in token:
-            client_id, client_secret = token.split(':', 1)
-            if client_id and client_secret:
-                return client_id, client_secret
+    if auth_header:
+        if auth_header.startswith('Basic '):
+            # Handle Basic authentication
+            from campus.common.utils.secret import decode_http_basic_auth
+            try:
+                client_id, client_secret = decode_http_basic_auth(auth_header)
+                if client_id and client_secret:
+                    return client_id, client_secret
+            except ValueError:
+                pass  # Fall through to other auth methods
+        elif auth_header.startswith('Bearer '):
+            # Extract token from Bearer format
+            token = auth_header[7:]  # Remove 'Bearer ' prefix
+            # For now, expect format: client_id:client_secret (base64 encoded could be added later)
+            if ':' in token:
+                client_id, client_secret = token.split(':', 1)
+                if client_id and client_secret:
+                    return client_id, client_secret
 
     # Fall back to environment variables
     client_id = os.environ.get("CLIENT_ID")
