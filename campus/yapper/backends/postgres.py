@@ -44,11 +44,10 @@ class PostgreSQLYapper(YapperInterface):
 
     def __init__(
             self,
-            client_id: ClientId,
             *,
             db_uri: str
     ) -> None:
-        super().__init__(client_id)
+        super().__init__()
         self.db_uri = db_uri
 
     @contextmanager

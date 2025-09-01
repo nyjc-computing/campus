@@ -7,9 +7,11 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from campus.client import Campus
+from campus.client import VaultClient
 
 from .base import EmailSenderInterface
+
+vault = VaultClient()["smtp"]
 
 
 class SMTPEmailSender(EmailSenderInterface):
@@ -44,8 +46,6 @@ class SMTPEmailSender(EmailSenderInterface):
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-        campus_client = Campus()
-        vault = campus_client.vault["smtp"]
         username = vault["SMTP_USERNAME"].get()
         password = vault["SMTP_PASSWORD"].get()
         host = vault["SMTP_HOST"].get()

@@ -49,10 +49,8 @@ class YapperInterface(ABC):
 
     This interface defines the methods that the Yapper class must implement.
     """
-    client_id: ClientId
 
-    def __init__(self, client_id: ClientId, *args, **kwargs):
-        self.client_id = client_id
+    def __init__(self, *args, **kwargs):
         self._running = False
         self._handlers: dict[EventLabel, Callable[[Event], None]] = {}
 

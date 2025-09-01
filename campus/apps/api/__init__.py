@@ -6,23 +6,6 @@ Web API for Campus services.
 from flask import Blueprint, Flask
 
 from campus.apps.api import routes
-from campus.common import errors
-
-__all__ = [
-    'create_app',
-    'init_app',
-]
-
-
-def create_app() -> Flask:
-    """Factory function to create the api app.
-
-    This is called if api is run as a standalone app.
-    """
-    app = Flask(__name__)
-    init_app(app)
-    errors.init_app(app)
-    return app
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -36,3 +19,8 @@ def init_app(app: Flask | Blueprint) -> None:
     routes.users.init_app(bp)
     routes.admin.init_app(bp)
     app.register_blueprint(bp)
+
+
+__all__ = [
+    'init_app',
+]

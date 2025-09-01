@@ -5,12 +5,13 @@ Admin management client for Campus API /admin endpoints.
 
 from typing import Dict, Any
 from campus.client.base import HttpClient
-from campus.client import config
+from campus import config
+
 
 class AdminClient:
     """Client for Campus /admin endpoints."""
     def __init__(self, base_url: str | None = None):
-        self._client = HttpClient(base_url or config.get_apps_base_url())
+        self._client = HttpClient(base_url or config.get_base_url("campus.apps"))
 
     def status(self) -> Dict[str, Any]:
         """GET /admin/status - Get admin status info."""

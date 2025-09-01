@@ -38,25 +38,24 @@ from typing import NotRequired, Required, TypedDict
 from flask import Blueprint, Flask, redirect, request, url_for
 from werkzeug.wrappers import Response
 
+from campus.client import VaultClient
+from campus.common import integration
 from campus.common.errors import api_errors
-from campus.models.credentials import UserCredentials
-from campus.models.session import Session
+from campus.common.utils import url, utc_time
+from campus.common.validation import flask as flask_validation
 from campus.common.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
 from campus.common.webauth.token import CredentialToken
-from campus.common import integration
-from campus.client import Campus
-import campus.common.validation.flask as flask_validation
-from campus.common.utils import url, utc_time
+from campus.models.credentials import UserCredentials
+from campus.models.session import Session
 
 PROVIDER = 'google'
 
 google_user_credentials = UserCredentials(PROVIDER)
 
-campus_client = Campus()
 sessions = Session()
-vault = campus_client.vault[PROVIDER]
+vault = VaultClient()[PROVIDER]
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = integration.get_config(PROVIDER)
 oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
