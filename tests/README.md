@@ -102,18 +102,41 @@ poetry run python -m unittest discover tests -v
 
 For development, typically run unit tests only as they are fast and reliable:
 ```bash
+# Using unittest discovery
 poetry run python -m unittest discover tests/unit
+
+# Using the convenience script
+python tests/run_tests.py unit
 ```
 
 For CI/CD or comprehensive testing, run the full suite:
 ```bash
+# Using unittest discovery
 poetry run python -m unittest discover tests
+
+# Using the convenience script  
+python tests/run_tests.py all
 ```
 
 ## Test Scripts
 
 Use the convenience script for common test scenarios:
 ```bash
-# Run the test runner script
-./scripts/run_tests.sh
+# Run only unit tests
+python tests/run_tests.py unit
+
+# Run only integration tests  
+python tests/run_tests.py integration
+
+# Run all tests (unit + integration)
+python tests/run_tests.py all
+
+# Test specific modules
+python tests/run_tests.py unit --module apps
+python tests/run_tests.py unit --module vault
+python tests/run_tests.py unit --module common
+python tests/run_tests.py integration --module apps
+
+# Verbose output
+python tests/run_tests.py unit -v
 ```
