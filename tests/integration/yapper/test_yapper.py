@@ -1,15 +1,19 @@
 import unittest
 import os
 
-from tests.fixtures.setup import set_test_env_vars
+# Set up environment variables before importing campus modules
+from tests.fixtures import setup
+setup.set_test_env_vars()
+setup.set_vault_env_vars()
+
 from tests.fixtures.vault import init_vault, give_vault_access
 from tests.fixtures.yapper import init_yapper
 import campus.yapper
 
+
 class TestYapper(unittest.TestCase):
     
     def test_setup_vars(self):
-        set_test_env_vars()
         self.assertIsNotNone(os.environ["VAULTDB_URI"])
     
     def test_vault_vars_and_access(self):

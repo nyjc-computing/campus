@@ -1,6 +1,14 @@
 import unittest
+
+# Set up environment variables before importing campus modules
+from tests.fixtures import setup
+setup.set_test_env_vars()
+setup.set_vault_env_vars()
+
 from campus.apps.api.routes import admin
 from campus.models import user
+
+
 
 
 class TestUsers(unittest.TestCase):

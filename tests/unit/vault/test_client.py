@@ -27,6 +27,8 @@ from campus.client.vault.client import VaultClientManagement
 from campus.client.vault.vault import VaultCollection, VaultKey
 
 
+
+
 class TestVaultKey(unittest.TestCase):
     """Test cases for VaultKey class.
 
