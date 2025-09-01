@@ -107,34 +107,6 @@ class VaultClientManagement:
         return self._client.delete(f"/client/{client_id}")
 
 
-class VaultClientModule:
-    """Custom module wrapper for vault client management operations."""
-
-    def __init__(self, vault_client: HttpClient):
-        self._client_mgmt = VaultClientManagement(vault_client)
-
-    def new(self, name: str, description: str) -> Tuple[Dict[str, Any], str]:
-        """Create a new vault client."""
-        return self._client_mgmt.new(name, description)
-
-    def get(self, client_id: str) -> Dict[str, Any]:
-        """Get details of a specific vault client."""
-        return self._client_mgmt.get(client_id)
-
-    def list(self) -> List[Dict[str, Any]]:
-        """List all vault clients."""
-        return self._client_mgmt.list()
-
-    def delete(self, client_id: str) -> Dict[str, Any]:
-        """Delete a vault client."""
-        return self._client_mgmt.delete(client_id)
-
-    @property
-    def client(self) -> VaultClientManagement:
-        """Direct access to the client management instance."""
-        return self._client_mgmt
-
-
 # For module replacement pattern, we'll export the class
 # The actual module replacement happens in vault.py
-__all__ = ['VaultClientManagement', 'VaultClientModule']
+__all__ = ['VaultClientManagement']

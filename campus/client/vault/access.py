@@ -83,36 +83,6 @@ class VaultAccessClient:
         return self._client.get(f"/access/{label}", params={"client_id": client_id})
 
 
-class VaultAccessModule:
-    """Custom module wrapper for vault access operations."""
-
-    def __init__(self, vault_client: HttpClient):
-        self._access_client = VaultAccessClient(vault_client)
-
-    def grant(
-            self,
-            *,
-            client_id: str,
-            label: str,
-            permissions: Union[List[str], int]
-    ) -> Dict[str, Any]:
-        """Grant access to a vault for a client."""
-        return self._access_client.grant(client_id=client_id, label=label, permissions=permissions)
-
-    def revoke(self, *, client_id: str, label: str) -> Dict[str, Any]:
-        """Revoke access to a vault for a client."""
-        return self._access_client.revoke(client_id=client_id, label=label)
-
-    def check(self, *, client_id: str, label: str) -> Dict[str, Any]:
-        """Check if a client has access to a vault."""
-        return self._access_client.check(client_id=client_id, label=label)
-
-    @property
-    def client(self) -> VaultAccessClient:
-        """Direct access to the access client instance."""
-        return self._access_client
-
-
 # For module replacement pattern, we'll export the class
 # The actual module replacement happens in vault.py
-__all__ = ['VaultAccessClient', 'VaultAccessModule']
+__all__ = ['VaultAccessClient']
