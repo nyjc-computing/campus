@@ -6,12 +6,13 @@ Main vault client interface for secrets management and access control.
 # pylint: disable=attribute-defined-outside-init
 
 from typing import List
+
+from campus import config
 from campus.client.base import HttpClient
 from campus.client.errors import NotFoundError
-from campus import config
 
-from campus.client.vault.access import VaultAccessClient
-from campus.client.vault.client import VaultClientManagement
+from .access import VaultAccessClient
+from .client import VaultClientManagement
 
 
 class VaultKey:
