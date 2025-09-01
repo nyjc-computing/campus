@@ -120,7 +120,7 @@ class VaultCollection:
         return response.get("keys", [])
 
 
-class VaultClient(HttpClient):
+class VaultClient:
     """Client for vault operations following HTTP API conventions."""
 
     def __init__(self, base_url: str | None = None):
@@ -129,9 +129,9 @@ class VaultClient(HttpClient):
         Args:
             base_url: Optional base URL override for the vault service
         """
-        super().__init__(base_url or config.get_base_url("campus.vault"))
-        self._access = VaultAccessClient(self)
-        self._client_mgmt = VaultClientManagement(self)
+        self._client = HttpClient(base_url or config.get_base_url("campus.vault"))
+        self._access = VaultAccessClient(self._client)
+        self._client_mgmt = VaultClientManagement(self._client)
 
     def __getitem__(self, label: str) -> VaultCollection:
         """Get a vault collection by label.
@@ -142,7 +142,7 @@ class VaultClient(HttpClient):
         Returns:
             VaultCollection instance for the specified vault
         """
-        return VaultCollection(self, label)
+        return VaultCollection(self._client, label)
 
     def list_vaults(self) -> List[str]:
         """List available vault labels.
@@ -150,7 +150,7 @@ class VaultClient(HttpClient):
         Returns:
             List of available vault labels
         """
-        response = self.get("/vault/list")
+        response = self._client.get("/vault/list")
         return response.get("vaults", [])
 
     @property
