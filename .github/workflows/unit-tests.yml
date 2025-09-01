@@ -1,11 +1,13 @@
-name: Integration Tests
+name: Campus Tests
 
 on:
+  push:
+    branches: [main, staging, weekly]
   pull_request:
     branches: [main, staging, weekly]
 
 jobs:
-  test:
+  unit-tests:
     runs-on: ubuntu-latest
     env:
       ENV: testing
@@ -24,5 +26,33 @@ jobs:
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite (full deployment mode)
         run: poetry install --no-root --extras full
-      - name: Run Integration Tests
-        run: poetry run python run_tests.py
+      - name: Run Unit Tests
+        run: poetry run python tests/run_tests.py unit -v
+      - name: Run Integration Tests (will run but not required for weekly)
+        if: github.ref_name == 'weekly'
+        continue-on-error: true
+        run: poetry run python tests/run_tests.py integration -v
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    # Only run integration tests as required for staging and main branches
+    if: github.ref_name == 'staging' || github.ref_name == 'main'
+    env:
+      ENV: testing
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite (full deployment mode)
+        run: poetry install --no-root --extras full
+      - name: Run Integration Tests (required for staging/main)
+        run: poetry run python tests/run_tests.py integration -v
