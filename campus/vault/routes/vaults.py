@@ -38,7 +38,7 @@ class SetSecretValue(TypedDict):
 @require_client_authentication
 def list_vaults() -> flask_validation.JsonResponse:
     """List available vault labels"""
-    labels = vault.Vault.get_labels(g.current_client.id)
+    labels = vault.Vault.get_labels(g.current_client["id"])
     return {"vaults": labels}, 200
 
 
@@ -81,7 +81,7 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
     # Check if key exists to determine specific permission and validate
     required_permission = access.UPDATE if _vault.has(key) else access.CREATE
     # Verify client has the specific permission required for this operation
-    check_vault_access(g.current_client.id, label, required_permission)
+    check_vault_access(g.current_client["id"], label, required_permission)
     # Perform the operation
     is_new = _vault.set(key, value)
     action = "created" if is_new else "updated"
