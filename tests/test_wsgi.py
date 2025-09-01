@@ -1,13 +1,12 @@
 import wsgi
 import unittest
+import os
 
 class TestWSGI(unittest.TestCase):
     def test_wsgi_import(self):
-        try:
-            from wsgi import app
-            self.assertIsNotNone(app, "App should not be None")
-        except Exception as e:
-            self.fail(f"Instantiating WSGI app failed: {e}")
+        os.environ["DEPLOY"] = "apps"
+        from wsgi import app
+        self.assertIsNotNone(app, "App should not be None")
 
-if name == "__main__":
+if __name__ == "__main__":
     unittest.main()
