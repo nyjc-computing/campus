@@ -10,7 +10,9 @@ This interface is designed to:
 - so aa to enable WSGI hooks or unit testing with a local WSGI app.
 """
 
-from campus.common.http import JsonClient
+from typing import Any, Union
+
+from campus.common.http import JsonClient, JsonResponse
 
 
 class Resource:
@@ -21,22 +23,39 @@ class Resource:
     """
     client: JsonClient
     path: str
+    raw: bool
 
     def __init__(
             self,
             client_or_parent: "JsonClient | Resource",
-            *parts: str
+            *parts: str,
+            raw: bool | None = None
     ):
         match client_or_parent:
             case Resource():
                 self.client = client_or_parent.client
                 self.path = f"{client_or_parent.path}/{'/'.join(parts)}"
+                # Inherit raw setting from parent unless explicitly overridden
+                self.raw = raw if raw is not None else client_or_parent.raw
             case JsonClient():
                 self.client = client_or_parent
                 self.path = '/'.join(parts)
+                self.raw = raw if raw is not None else False
+
+    def _process_response(self, response: JsonResponse) -> Union[JsonResponse, Any]:
+        """Process response based on raw setting.
+
+        If raw=True, returns JsonResponse directly.
+        If raw=False, calls raise_for_status() then returns response.json().
+        """
+        if self.raw:
+            return response  # type: ignore
+
+        response.raise_for_status()
+        return response.json()
 
     def __repr__(self) -> str:
-        return f"Resource(client={self.client}, path={self.path})"
+        return f"Resource(client={self.client}, path={self.path}, raw={self.raw})"
 
     def __str__(self) -> str:
         return self.path
