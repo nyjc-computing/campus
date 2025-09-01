@@ -22,6 +22,7 @@ __all__ = [
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the campusauth blueprint with the given Flask app."""
+    # pylint: disable=import-outside-toplevel
     from . import routes
     routes.init_app(app)
 
