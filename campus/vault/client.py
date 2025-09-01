@@ -315,4 +315,3 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
             raise api_errors.NotFoundError(
                 message="Client not found."
             )
-
