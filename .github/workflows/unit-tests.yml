@@ -11,24 +11,15 @@ env:
   # Test timeout configuration (in seconds)
   UNIT_TEST_TIMEOUT: 60
   INTEGRATION_TEST_TIMEOUT: 300
-  # Job timeout safety margins (in minutes) 
-  UNIT_JOB_TIMEOUT: 3
-  INTEGRATION_JOB_TIMEOUT: 8
 
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJson(env.UNIT_JOB_TIMEOUT) }}
+    timeout-minutes: 3
     env:
       ENV: testing
     steps:
       - uses: actions/checkout@v4
-      - name: Debug workflow context
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Ref name: ${{ github.ref_name }}"
-          echo "Base ref: ${{ github.base_ref }}"
-          echo "Head ref: ${{ github.head_ref }}"
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -47,7 +38,7 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJson(env.INTEGRATION_JOB_TIMEOUT) }}
+    timeout-minutes: 8
     # Run integration tests for all target branches
     # Required to pass for staging/main, optional for weekly
     continue-on-error: ${{ github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
