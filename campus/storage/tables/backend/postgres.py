@@ -37,7 +37,7 @@ vault = get_vault()["storage"]
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
     try:
-        return vault["POSTGRESDB_URI"].get().json().get("value")
+        return vault["POSTGRESDB_URI"].get()["value"]
     except Exception as e:
         raise RuntimeError(
             f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "

@@ -52,7 +52,7 @@ class MongoCollectionError(StorageError):
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
     try:
-        return vault["MONGODB_URI"].get().json().get("value")
+        return vault["MONGODB_URI"].get()["value"]
     except Exception as e:
         raise MongoCollectionError(
             f"Failed to retrieve MONGODB_URI from 'storage' vault: {e}"
@@ -62,7 +62,7 @@ def _get_mongodb_uri() -> str:
 def _get_mongodb_name() -> str:
     """Get the MongoDB database name from the vault using the core client API."""
     try:
-        return vault["MONGODB_NAME"].get().json().get("value")
+        return vault["MONGODB_NAME"].get()["value"]
     except Exception as e:
         raise MongoCollectionError(
             f"Failed to retrieve MONGODB_NAME from 'storage' vault: {e}"

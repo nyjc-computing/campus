@@ -113,7 +113,7 @@ def authorize() -> Response:
     )
     # Store session with target URL
     session = oauth2.create_session(
-        client_id=vault["CLIENT_ID"].get().json().get("value"),
+        client_id=vault["CLIENT_ID"].get()["value"],
         scopes=oauth2.scopes,
         target=params.pop('target'),
     )
@@ -151,7 +151,7 @@ def callback() -> Response:
                 )
             token_response = session.exchange_code_for_token(
                 code=code,
-                client_secret=vault["CLIENT_SECRET"].get().json().get("value"),
+                client_secret=vault["CLIENT_SECRET"].get()["value"],
             )
         case _:
             api_errors.raise_api_error(400, **params)
@@ -208,8 +208,8 @@ def get_valid_token(user_id: str) -> CredentialToken:
         # token is refreshed in-place
         oauth2.refresh_token(
             token=token,
-            client_id=vault["CLIENT_ID"].get().json().get("value"),
-            client_secret=vault["CLIENT_SECRET"].get().json().get("value"),
+            client_id=vault["CLIENT_ID"].get()["value"],
+            client_secret=vault["CLIENT_SECRET"].get()["value"],
         )
         google_user_credentials.store(
             user_id=record["user_id"],
