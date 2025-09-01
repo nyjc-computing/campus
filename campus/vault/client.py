@@ -19,7 +19,7 @@ dependencies. Performance optimizations (such as API keys) can be addressed
 when needed.
 """
 
-from typing import TypedDict, NotRequired, Unpack
+from typing import Any, TypedDict, NotRequired, Unpack
 
 from campus.common.utils import secret, uid, utc_time
 from campus.common import devops
@@ -87,7 +87,7 @@ def init_db():
             cursor.execute(client_schema)
 
 
-def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
+def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
     """Create a new vault client with authentication credentials.
 
     Args:
@@ -137,7 +137,7 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
     }
 
 
-def get_client(client_id: str) -> ClientResource:
+def get_client(client_id: str) -> dict[str, Any]:
     """Retrieve a vault client by its ID.
 
     Args:
