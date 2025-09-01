@@ -58,6 +58,29 @@ __all__ = [
 ]
 
 
+@devops.block_env(devops.PRODUCTION)
+def init_db():
+    """Initialize the access control table.
+
+    This function is intended to be called only in a test or staging
+    environment.
+    """
+    with db.get_connection_context() as conn:
+        with conn.cursor() as cursor:
+            # Create vault_access table
+            access_schema = """
+                CREATE TABLE IF NOT EXISTS vault_access (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    client_id TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    access INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(client_id, label)
+                )
+            """
+            cursor.execute(access_schema)
+
+
 def convert_perms_to_access(permissions: int | list[str]) -> int:
     """Convert permissions given as an integer or list of strings
     to an access value integer.
@@ -208,26 +231,3 @@ def has_access(client_id: str, label: str, required_access: int) -> bool:
             return False
         granted_access = access_record["access"]
         return (granted_access & required_access) == required_access
-
-
-@devops.block_env(devops.PRODUCTION)
-def init_db():
-    """Initialize the access control table.
-
-    This function is intended to be called only in a test environment or
-    staging.
-    """
-    with db.get_connection_context() as conn:
-        with conn.cursor() as cursor:
-            # Create vault_access table
-            access_schema = """
-                CREATE TABLE IF NOT EXISTS vault_access (
-                    id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL,
-                    client_id TEXT NOT NULL,
-                    label TEXT NOT NULL,
-                    access INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(client_id, label)
-                )
-            """
-            cursor.execute(access_schema)
