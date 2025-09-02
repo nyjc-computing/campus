@@ -1,6 +1,6 @@
 # Campus Testing Strategies
 
-This document outlines the three primary testing strategies available in the Campus project. Each strategy serves different purposes and provides different levels of integration with real services.
+This document outlines the three primary testing strategies available in the Campus project. Each strategy provides different levels of integration and serves specific testing goals.
 
 ## Table of Contents
 
@@ -9,6 +9,7 @@ This document outlines the three primary testing strategies available in the Cam
 - [Strategy 2: Local Service Testing](#strategy-2-local-service-testing)
 - [Strategy 3: Flask Test Client Testing](#strategy-3-flask-test-client-testing)
 - [When to Use Each Strategy](#when-to-use-each-strategy)
+- [Test Suite Execution](#test-suite-execution)
 - [Quick Reference](#quick-reference)
 
 ## Overview
@@ -112,49 +113,43 @@ manager.close()  # Clean shutdown
 
 ## Strategy 3: Flask Test Client Testing
 
-NOTE: Not fully working yet, WIP
-
 **Purpose**: Test Campus clients with in-process Flask applications (no network calls).
 
 ### Environment
 - **Services**: Flask app instances (not running servers)
-- **Data**: Test data in-memory or test databases
+- **Data**: In-memory SQLite and Python dictionaries 
 - **Network**: No network - direct Flask test client calls
 - **Speed**: Fastest option
 
-### Usage
+### Setup
+
+Configure test storage before importing campus modules:
 
 ```python
-from tests import flask_test
-from tests.fixtures import services
+import os
+os.environ["STORAGE_MODE"] = "1"  # Enable test storage backends
 
-# Create Campus client with Flask test adapters
-with services.init() as manager:
-    client = flask_test.create_test_client_from_manager(manager)
-    
-    # All operations use Flask test client internally
-    vault = client.vault["test-vault"]  
-    vault.set("key", "value")  # No HTTP - direct Flask calls
-```
-
-### Direct Flask App Testing
-
-```python
-from tests.flask_test import FlaskTestClient
-from campus.common.devops import deploy
+from tests.flask_test import FlaskTestClient, configure_for_testing
+from campus.common.devops.deploy import create_app
 import campus.vault
 
-# Create Flask app manually
-vault_app = deploy.create_app(campus.vault)
+# Create and configure Flask app
+vault_app = create_app(campus.vault)
+configure_for_testing(vault_app)  # Sets up test storage + health endpoints
 
-# Wrap with our adapter
-test_client = FlaskTestClient(vault_app)
-
-# Use as JsonClient
-response = test_client.get('/api/v1/vault/')
-print(response.status_code)  # 401 (authentication required)
-print(response.json())       # Error details
+# Test with Flask test client
+with FlaskTestClient(vault_app) as client:
+    response = client.get('/test/health')
+    print(response.json())  # {'status': 'healthy', 'storage_mode': 'test'}
 ```
+
+### Storage Backends
+
+Test storage uses lightweight, in-memory backends:
+
+- **Tables**: SQLite in-memory database (`:memory:`)
+- **Documents**: Python dictionaries 
+- **Configuration**: `STORAGE_MODE=1` (any non-zero enables test mode)
 
 ### When to Use
 - ✅ Unit testing of client logic
@@ -164,6 +159,49 @@ print(response.json())       # Error details
 - ✅ CI/CD (fastest option)
 - ❌ Testing actual network behavior
 - ❌ Testing service deployment configurations
+
+## Test Suite Execution
+
+For running organized test suites, use the centralized test runner:
+
+```python
+# Run all unit tests
+python tests/run_tests.py unit
+
+# Run all integration tests  
+python tests/run_tests.py integration
+
+# Run all tests
+python tests/run_tests.py all
+
+# Run unit tests for specific module
+python tests/run_tests.py unit --module vault
+
+# Run with verbose output
+python tests/run_tests.py integration -v
+
+# Run with timeout
+python tests/run_tests.py unit --timeout 60
+```
+
+The test runner automatically discovers and executes tests in the appropriate directories:
+- `tests/unit/` - Fast, isolated component tests
+- `tests/integration/` - Multi-component interaction tests
+
+### Available Test Modules
+
+The test runner supports testing specific modules:
+- **apps** - Campus apps service (API, authentication, OAuth)
+- **vault** - Vault service (secrets management, access control)
+- **yapper** - Yapper service (data processing, message handling)
+- **common** - Common utilities (HTTP, validation, errors)
+- **client** - Campus client library (API wrappers, interfaces)
+
+Example:
+```bash
+python tests/run_tests.py unit --module vault    # Only vault unit tests
+python tests/run_tests.py integration --module apps  # Only apps integration tests
+```
 
 ## When to Use Each Strategy
 
@@ -184,8 +222,29 @@ print(response.json())       # Error details
 
 ## Quick Reference
 
-### Import Patterns
+### Configuration
 
+```python
+# Set testing environment
+import os
+os.environ['ENV'] = 'testing'      # Local services
+os.environ['ENV'] = 'development'  # Remote development server
+os.environ['STORAGE_MODE'] = '1'   # Enable test storage backends
+
+# Test configuration for Flask apps
+from tests.flask_test import configure_for_testing
+configure_for_testing(app)  # Sets DEBUG=True, TESTING=True, adds health routes
+```
+
+### Test Execution
+
+**For test suites**: Use the centralized test runner
+```bash
+python tests/run_tests.py unit
+python tests/run_tests.py integration
+```
+
+**For manual testing/debugging**: Run individual strategies
 ```python
 # Development Server
 from campus.client import Campus
@@ -203,23 +262,18 @@ with services.init() as manager:
     client = create_test_client_from_manager(manager)
 ```
 
-### Configuration
+### Best Practices
 
-```python
-# Set testing environment
-import os
-os.environ['ENV'] = 'testing'    # Local services
-os.environ['ENV'] = 'development'  # Remote development server
+1. **Use the test runner** for organized test execution (`python tests/run_tests.py`)
+2. **Use context managers** for automatic cleanup in manual testing
+3. **Start with Flask test client** for new features
+4. **Test error paths** with all strategies
+5. **Keep tests independent** - don't rely on test order
+6. **Use appropriate strategy** for the testing goal
 
-# Test configuration for Flask apps
-from tests.flask_test import configure_for_testing
-configure_for_testing(app)  # Sets DEBUG=True, TESTING=True, adds health routes
-```
+### Architecture Notes
 
-### Service Dependencies
-
-**Critical**: Services must be initialized in dependency order:
-
+**Service Dependencies**: Services must be initialized in dependency order:
 ```
 vault → yapper → apps
 ```
@@ -228,15 +282,7 @@ vault → yapper → apps
 - **Yapper**: Requires vault credentials for database access  
 - **Apps**: Imports yapper routes, needs yapper fully initialized
 
-**Note**: Current limitation - Apps service may fail during testing due to yapper → vault connection requirements during import. This is expected behavior and indicates architectural improvements needed in the yapper module for lazy loading.
-
-### Best Practices
-
-1. **Use context managers** for automatic cleanup
-2. **Start with Flask test client** for new features
-3. **Test error paths** with all strategies
-4. **Keep tests independent** - don't rely on test order
-5. **Use appropriate strategy** for the testing goal
+**Current Limitation**: Apps service may fail during testing due to yapper → vault connection requirements during import. This indicates architectural improvements needed in the yapper module for lazy loading.
 
 ---
 
