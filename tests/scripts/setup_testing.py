@@ -43,7 +43,7 @@ def check_postgres_connectivity() -> bool:
 
     try:
         # Run the existing postgres checker script
-        result = subprocess.run(['./check_postgres.sh'],
+        result = subprocess.run(['./scripts/check_postgres.sh'],
                                 capture_output=True,
                                 text=True,
                                 timeout=30)
@@ -51,14 +51,14 @@ def check_postgres_connectivity() -> bool:
         print("❌ PostgreSQL check timed out")
         return False
     except FileNotFoundError:
-        print("❌ check_postgres.sh script not found")
+        print("❌ scripts/check_postgres.sh script not found")
         return False
     except Exception as e:
         print(f"❌ Error running PostgreSQL check: {e}")
         return False
     else:
         if result.returncode == 0:
-            # Show the output from check_postgres.sh
+            # Show the output from scripts/check_postgres.sh
             print(result.stdout)
             return True
         else:
@@ -84,7 +84,7 @@ def main():
         print("💡 Troubleshooting:")
         print("   - Ensure devcontainer is running")
         print("   - Check the PostgreSQL status above for detailed diagnostics")
-        print("   - Run './check_postgres.sh' separately for more information")
+        print("   - Run './scripts/check_postgres.sh' separately for more information")
         sys.exit(1)
     print("")
 
