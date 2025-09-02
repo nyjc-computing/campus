@@ -2,302 +2,311 @@
 
 ## Overview
 
-Campus is structured as a monorepo with a single, centralized package that includes all components. This approach ensures consistent versioning and simplified dependency management while maintaining a clean, modular codebase structure. This guide covers architecture decisions, packaging strategy, distribution workflows, integration patterns, advanced operations, and troubleshooting.
+Campus uses a **monorepo with centralized dependencies** approach. All components are versioned together and distributed as a single package through Git-based dependencies.
 
-**Target Audience:**
-- DevOps contributors setting up CI/CD and automation
-- External integrators using Campus in other projects
-- Senior students learning Python packaging concepts
+**Key Benefits:**
+- Consistent versioning across all services
+- Simplified dependency management  
+- Clean modular structure
+- No PyPI publishing delays
 
----
+## Architecture Decisions
 
-## 1. Architecture & Design Decisions
+### Monorepo Structure
+Campus consolidates all services in a single repository with unified dependency management in the root `pyproject.toml`. This solves several challenges:
+- Eliminates complex inter-service dependency management
+- Ensures compatibility between components
+- Simplifies distribution and testing
 
-### 1.1 Problem Statement
+# Campus Packaging Guide
 
-The original Campus codebase had several challenges:
-- Monolithic structure made it difficult to distribute individual services
-- Vault service needed to be usable by external projects without pulling in all Campus dependencies
-- Unclear separation between global utilities and app-specific modules
-- Potential for naming conflicts between `common` and `apps/common`
+## Overview
 
-### 1.2 Solution: Monorepo with Centralized Dependencies
+Campus uses a **monorepo with centralized dependencies** approach. All components are versioned together and distributed as a single package through Git-based dependencies.
 
-We adopted a **monorepo** approach with centralized dependency management in the root `pyproject.toml`, which provides:
+**Key Benefits:**
+- Consistent versioning across all services
+- Simplified dependency management  
+- Clean modular structure
+- No PyPI publishing delays
 
-1. **Clean separation** of concerns through modular code organization
-2. **Simplified distribution** as a single package
-3. **Consistent import structure** across all modules
-4. **Unified versioning** for all components
-5. **Centralized dependency management** for easier maintenance
+## Architecture Decisions
 
-### 1.3 Current Structure
+### Monorepo Structure
+Campus consolidates all services in a single repository with unified dependency management in the root `pyproject.toml`. This solves several challenges:
+- Eliminates complex inter-service dependency management
+- Ensures compatibility between components
+- Simplifies distribution and testing
 
+### Branch Strategy
 ```
-campus/
-├── apps/           # Web applications and API endpoints
-├── common/         # Shared utilities and schemas
-├── services/       # Backend services (email, etc.)
-├── storage/        # Storage interfaces and backends
-└── vault/          # Secure secrets management service
+weekly → staging → main
 ```
+- **`weekly`**: Active development, expected breakage
+- **`staging`**: Extended testing, pre-production validation  
+- **`main`**: Stable, production-ready releases
 
-### 1.4 Package Responsibilities
+## Dependency Rules
 
-#### `campus.apps`
-- Web applications (Flask apps, API routes)
-- Authentication and authorization
-- OAuth integrations
-- User-facing interfaces
-
-**Key modules:**
-- `campus.apps.api` - REST API endpoints
-- `campus.apps.oauth` - OAuth2 flows
-- `campus.apps.campusauth` - Campus authentication
-- `campus.apps.models` - Application data models
-- `campus.apps.errors` - Application error handling
-
-#### `campus.common`
-- Shared utilities used across all packages
-- Configuration and environment management
-- Validation helpers
-- Common schemas and types
-
-**Key modules:**
-- `campus.common.utils` - Utility functions (time, IDs, etc.)
-- `campus.common.devops` - Environment configuration
-- `campus.common.schema` - Shared data schemas
-- `campus.common.validation` - Input validation helpers
-
-#### `campus.services`
-- Backend services that can operate independently
-- Business logic that doesn't require web framework
-- External service integrations
-
-**Key modules:**
-- `campus.services.email` - Email delivery service
-
-#### `campus.vault`
-- Secure secrets management service
-- **Completely independent** of other campus modules to avoid circular dependencies
-- Direct PostgreSQL connectivity - cannot use campus.storage since storage depends on vault
-- Other services depend on vault for secrets, so vault must be self-contained
-
-**Key modules:**
-- `campus.vault.client` - Vault client management
-- `campus.vault.access` - Permission and access control
-- `campus.vault.db` - Direct database operations (independent of campus.storage)
-
-#### `campus.storage`
-- Database and storage abstractions
-- Backend implementations (PostgreSQL, MongoDB)
-- Collection and table interfaces
-
-**Key modules:**
-- `campus.storage.documents` - Document storage interface
-- `campus.storage.tables` - Relational storage interface
-
-### 1.5 Cross-Package Dependencies
-
-Dependency flow follows this hierarchy:
+Services follow a clear hierarchy:
 ```
 apps → services, storage → vault → common
      ↘         ↙
       vault (for secrets)
 ```
 
-**Dependency Rules:**
+**Key Constraints:**
+- `campus.vault` imports only from `campus.common` (must be independent)
+- `campus.storage` can use vault for database secrets
 - `campus.apps` can import from any other package
-- `campus.services` can import from `campus.storage`, `campus.vault`, and `campus.common`
-- `campus.storage` can import from `campus.vault` and `campus.common` (uses vault for database secrets)
-- `campus.vault` can **only** import from `campus.common` (must be independent)
-- `campus.common` should be self-contained (minimal external dependencies)
+- `campus.common` should be self-contained
 
-**Key Constraint:** Vault must remain independent since all other modules depend on it for secrets management.
+## Installation
 
----
-
-## 2. Distribution & Branching Strategy
-
-### 2.1 Educational Three-Branch Model
-
-**Branch Strategy:**
-- `weekly` - Active student development, expected breakage
-- `staging` - Extended testing, migration validation, pre-production
-- `main` - Stable, production-ready packages for external consumption
-
-**Migration Path:**
-- Current: `campus-subpackaging` → will become `weekly`
-- Legacy: Original monorepo remains in git history
-
-### 2.2 Campus Suite Package Structure
-
-```
-campus-suite             Import Namespace
-├── campus.common       # Shared utilities and schemas
-├── campus.vault        # Secure secrets management
-├── campus.client       # Client libraries
-├── campus.models       # Data models
-├── campus.storage      # Storage interfaces
-└── campus.apps         # Web applications
-```
-
-**Key Principle:** All modules are versioned together and guaranteed compatible.
-
-### 2.3 Distribution Benefits
-
-Git-based dependencies provide:
-- ✅ **Immediate availability** - No PyPI publishing delays
-- ✅ **Development tracking** - External projects follow specific branches
-- ✅ **Granular control** - Pin to commits, branches, or tags
-- ✅ **Real-world validation** - Test packages in external environments
-- ✅ **Educational value** - Students learn industry packaging practices
-
-### 2.4 Branch Workflow
-
-#### Upstream Flow (Manual PRs Required)
-```bash
-# Feature development → weekly
-git checkout weekly
-git checkout -b feature/new-auth
-# ... make changes, create PR: feature/new-auth → weekly
-
-# Weekly → staging (after sprint review)
-# Create PR: weekly → staging (requires review)
-
-# Staging → main (after extended testing)
-# Create PR: staging → main (requires review)
-```
-
-#### Downstream Flow (Automatic Sync)
-```bash
-# Changes automatically flow downstream via GitHub Actions
-main → staging    # Auto-sync (no PR needed)
-main → weekly     # Auto-sync (no PR needed)  
-staging → weekly  # Auto-sync (no PR needed)
-```
-
-**Rationale**: Changes that passed review going upstream should automatically flow to all downstream environments without manual overhead.
-
----
-
-## 3. Integration Patterns & Examples
-
-### 3.1 Recommended Import Style
-
-```python
-# Global utilities
-from campus.common.utils import uid, utc_time
-from campus.common import devops
-
-# Application modules
-from campus.apps.api import routes
-from campus.apps.models import user
-from campus.common.errors import api_errors
-
-# Services
-from campus.vault import get_vault
-from campus.services.email import create_email_sender
-
-# Storage
-from campus.storage import get_collection, get_table
-```
-
-### 3.2 Production Dependencies (Recommended)
-
+### Production Use
 ```toml
-# pyproject.toml - Production environment
 [tool.poetry.dependencies]
 campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main"}
 ```
 
-### 3.3 Pre-Production Testing
-
+### Development Integration
 ```toml
-# Test upcoming releases before they hit main
-[tool.poetry.dependencies]
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "staging"}
-```
-
-### 3.4 Development Integration
-
-```toml
-# Latest features for development environments
-[tool.poetry.group.dev.dependencies]
+[tool.poetry.group.dev.dependencies]  
 campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
 ```
 
-### 3.5 Pinned Versions (High Stability)
-
-```toml
-# Pin to specific commit for exact reproducibility
-[tool.poetry.dependencies]
-campus-suite-vault = {git = "https://github.com/nyjc-computing/campus.git", subdirectory = "campus/vault", rev = "abc123def456"}
-```
-
-### 3.6 CLI Installation Commands
-
-#### Poetry Integration
-
+### CLI Installation
 ```bash
-# Production installation
+# Production
 poetry add git+https://github.com/nyjc-computing/campus.git@main
 
-# Development installation
-poetry add git+https://github.com/nyjc-computing/campus.git@staging --group dev
+# Development
+poetry add git+https://github.com/nyjc-computing/campus.git@weekly --group dev
 
-# Specific commit (for reproducible builds)
+# Specific commit (reproducible builds)
 poetry add git+https://github.com/nyjc-computing/campus.git@abc123def456
 ```
 
-#### Direct pip Installation
+## Development Workflow
 
+### Contributing to Campus
 ```bash
-# Install from main branch
-pip install git+https://github.com/nyjc-computing/campus.git@main
+# Clone repository
+git clone https://github.com/nyjc-computing/campus.git
+cd campus
 
-# Install specific commit
-pip install git+https://github.com/nyjc-computing/campus.git@abc123def456
+# Install dependencies
+poetry install
 
-# Install with extras
-pip install "git+https://github.com/nyjc-computing/campus.git@main[vault]"  # for vault only
-pip install "git+https://github.com/nyjc-computing/campus.git@main[apps]"   # for apps only
-pip install "git+https://github.com/nyjc-computing/campus.git@main[full]"   # for all features
+# Create feature branch from weekly
+git checkout weekly
+git checkout -b feature/new-feature
+
+# Make changes, test, submit PR to weekly
 ```
 
-### 3.7 Integration Examples
+### Using Campus in External Projects
+```bash
+# Add Campus as dependency
+poetry add git+https://github.com/nyjc-computing/campus.git@main
 
-#### Minimal Vault Client
+# Import and use
+python -c "from campus.vault import get_vault; print('Works')"
+```
 
-For projects needing only secrets management:
+## Building and Distribution
 
+### Local Development
+```bash
+# Install all dependencies
+poetry install
+
+# Test package integrity  
+poetry run python -c "import campus.vault, campus.storage, campus.apps"
+
+# Run tests
+poetry run pytest
+```
+
+### Release Process
+1. **Development**: Work in `weekly` branch
+2. **Integration**: Merge `weekly` → `staging` for extended testing
+3. **Release**: Merge `staging` → `main` when stable
+4. **Tagging**: Create version tags on `main` branch
+
+### Dependency Updates
+Update dependencies in root `pyproject.toml`:
+```bash
+# Update a specific package
+poetry add requests@^2.31.0
+
+# Update all packages
+poetry update
+
+# Lock dependencies
+poetry lock
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Import errors**: Ensure you're using `poetry run python` instead of system Python.
+
+**Dependency conflicts**: Update to latest main branch:
+```bash
+poetry add campus-suite@git+https://github.com/nyjc-computing/campus.git@main
+```
+
+**Authentication issues**: Verify GitHub access for private repositories:
+```bash
+git config --global url."https://username:token@github.com/".insteadOf "https://github.com/"
+```
+
+### Validation Commands
+```bash
+# Check environment
+poetry env info
+
+# Test installation
+poetry run python -c "import campus"
+
+# Test all modules
+for module in vault storage apps common; do
+    poetry run python -c "import campus.$module"
+done
+```
+
+## Dependency Rules
+
+Services follow a clear hierarchy:
+```
+apps → services, storage → vault → common
+     ↘         ↙
+      vault (for secrets)
+```
+
+**Key Constraints:**
+- `campus.vault` imports only from `campus.common` (must be independent)
+- `campus.storage` can use vault for database secrets
+- `campus.apps` can import from any other package
+- `campus.common` should be self-contained
+
+## Installation
+
+### Production Use
 ```toml
-# pyproject.toml
 [tool.poetry.dependencies]
-python = "^3.11"
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["vault"]}
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main"}
 ```
 
-```python
-# main.py
-from campus.vault import get_vault
-from campus.common.utils import uid
-
-# External school system integration
-vault = get_vault("school_system")
-api_key = vault["external_apis"].get("student_info_system")
-db_url = vault["databases"].get("enrollment_db")
-```
-
-#### Full Campus Integration
-
-For comprehensive educational platform integration:
-
+### Development Integration
 ```toml
-# pyproject.toml
-[tool.poetry.dependencies]
-python = "^3.11"
-# Install complete suite with all features
+[tool.poetry.group.dev.dependencies]  
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
+```
+
+### CLI Installation
+```bash
+# Production
+poetry add git+https://github.com/nyjc-computing/campus.git@main
+
+# Development
+poetry add git+https://github.com/nyjc-computing/campus.git@weekly --group dev
+
+# Specific commit (reproducible builds)
+poetry add git+https://github.com/nyjc-computing/campus.git@abc123def456
+```
+
+## Development Workflow
+
+### Contributing to Campus
+```bash
+# Clone repository
+git clone https://github.com/nyjc-computing/campus.git
+cd campus
+
+# Install dependencies
+poetry install
+
+# Create feature branch from weekly
+git checkout weekly
+git checkout -b feature/new-feature
+
+# Make changes, test, submit PR to weekly
+```
+
+### Using Campus in External Projects
+```bash
+# Add Campus as dependency
+poetry add git+https://github.com/nyjc-computing/campus.git@main
+
+# Import and use
+python -c "from campus.vault import get_vault; print('✅ Works')"
+```
+
+## Building and Distribution
+
+### Local Development
+```bash
+# Install all dependencies
+poetry install
+
+# Test package integrity  
+poetry run python -c "import campus.vault, campus.storage, campus.apps"
+
+# Run tests
+poetry run pytest
+```
+
+### Release Process
+1. **Development**: Work in `weekly` branch
+2. **Integration**: Merge `weekly` → `staging` for extended testing
+3. **Release**: Merge `staging` → `main` when stable
+4. **Tagging**: Create version tags on `main` branch
+
+### Dependency Updates
+Update dependencies in root `pyproject.toml`:
+```bash
+# Update a specific package
+poetry add requests@^2.31.0
+
+# Update all packages
+poetry update
+
+# Lock dependencies
+poetry lock
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Import errors**: Ensure you're using `poetry run python` instead of system Python.
+
+**Dependency conflicts**: Update to latest main branch:
+```bash
+poetry add campus-suite@git+https://github.com/nyjc-computing/campus.git@main
+```
+
+**Authentication issues**: Verify GitHub access for private repositories:
+```bash
+git config --global url."https://username:token@github.com/".insteadOf "https://github.com/"
+```
+
+### Validation Commands
+```bash
+# Check environment
+poetry env info
+
+# Test installation
+poetry run python -c "import campus"
+
+# Test all modules
+for module in vault storage apps common; do
+    poetry run python -c "import campus.$module"
+done
+```
 campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["full"]}
 
 [tool.poetry.group.dev.dependencies]
@@ -766,7 +775,3 @@ This approach provides a **migration path**:
 - **CONTRIBUTING.md** - New developer onboarding and contribution workflows
 - **subpackaging-plan.md** - Implementation roadmap and validation commands
 - **README.md** - Project overview and quick start guide
-
----
-
-*This comprehensive guide replaces and consolidates the content from `packaging-architecture.md` and `git-dependencies-guide.md`.*

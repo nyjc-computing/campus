@@ -6,9 +6,168 @@ Welcome to Campus development! This guide will help you understand our developme
 
 Campus uses a simple three-branch model designed for educational development:
 
+# Contributing to Campus
+
+Welcome to Campus development! This guide covers our development workflow and contribution process.
+
+## 🌳 Branch Structure
+
+Campus uses a three-branch model for educational development:
+
 ```
 weekly → staging → main
 ```
+
+### Branch Purposes
+
+- **`main`** - Stable, production-ready releases
+  - Only accepts PRs from `staging`
+  - Requires project owner approval
+- **`staging`** - Extended testing and pre-production validation
+  - Requires PR with review
+- **`weekly`** - Active development, all new work
+  - Requires PR (review recommended for major features)
+
+## 🚀 Quick Start
+
+### 1. Initial Setup
+
+```bash
+# Clone repository and switch to development branch
+git clone https://github.com/nyjc-computing/campus.git
+cd campus
+git checkout weekly
+
+# Install dependencies (monorepo with single pyproject.toml)
+poetry install
+```
+
+### 2. Development Workflow
+
+All changes use GitHub Pull Requests:
+
+```bash
+# Create feature branch from weekly
+git checkout weekly
+git pull origin weekly
+git checkout -b feature/your-feature-name
+
+# Make changes and test
+poetry run python -m pytest tests/
+poetry run python main.py  # Test application starts
+
+# Commit with descriptive message
+git add .
+git commit -m "feat: describe your changes"
+git push origin feature/your-feature-name
+
+# Create PR to weekly branch via GitHub UI
+```
+
+### 3. Pull Request Guidelines
+
+**Target Branch**: Always target `weekly` for development work
+
+**PR Title Format**: Use conventional commits:
+- `feat:` - New features
+- `fix:` - Bug fixes  
+- `docs:` - Documentation changes
+- `test:` - Adding tests
+- `refactor:` - Code restructuring
+
+**Description**: Include what changed, why, and how to test
+
+## 🧪 Testing Your Changes
+
+See [Testing Strategies](testing-strategies.md) for comprehensive testing approaches.
+
+**Quick Testing**:
+```bash
+# Run unit tests
+poetry run pytest tests/unit/
+
+# Test package imports
+poetry run python -c "import campus.vault, campus.storage, campus.apps"
+
+# Start application
+poetry run python main.py
+```
+
+## 📦 Package Structure
+
+Campus is a monorepo with these key packages:
+
+```
+campus/
+├── common/     # Shared utilities (no dependencies)
+├── vault/      # Secrets management (depends on common)
+├── storage/    # Data persistence (depends on common + vault)
+├── models/     # Business logic (depends on common)
+├── apps/       # Web applications (depends on all others)
+└── client/     # HTTP client library
+```
+
+### Dependency Rules
+- `vault` imports only from `common` (must be independent)
+- `storage` can use `vault` for database secrets
+- `apps` can import from any package
+- Follow the import guidelines in [Style Guide](STYLE-GUIDE.md)
+
+## 🔀 Branch Promotion (Maintainers)
+
+### Weekly → Staging
+After sprint review, promote stable features:
+```bash
+# Create PR: weekly → staging
+# Title: "promote: weekly sprint [date] to staging"
+```
+
+### Staging → Main  
+After extended validation:
+```bash
+# Create PR: staging → main
+# Title: "release: promote staging to production"
+# Tag release after merge: git tag v1.x.x
+```
+
+### Automatic Downstream Flow
+Changes in higher branches automatically sync downstream:
+- `main` → `staging` → `weekly` (automated)
+
+## 🎯 Best Practices
+
+### Code Quality
+- Follow [Style Guide](STYLE-GUIDE.md) for coding standards
+- Write tests for new features
+- Update documentation for changes
+- Use `poetry run python` instead of bare `python`
+
+### Common Pitfalls
+- **Environment**: Always use `poetry run python` for consistent environment
+- **Imports**: Import packages not individual functions (see [Style Guide](STYLE-GUIDE.md))
+- **Dependencies**: Update `pyproject.toml` for new dependencies
+- **Testing**: Test locally before pushing
+
+### Commit Messages
+Follow conventional commit format:
+```bash
+feat(vault): add encrypted secret storage
+fix(storage): resolve PostgreSQL connection timeout
+docs(api): update authentication examples
+```
+
+## 🆘 Getting Help
+
+- **Code Reviews**: See [code review best practices](https://nyjc-computing.github.io/nanyang-system-developers/contributors/training/code-reviews.html)
+- **Issues**: Report bugs via [GitHub Issues](https://github.com/nyjc-computing/campus/issues)
+- **Discussions**: Ask questions in [GitHub Discussions](https://github.com/nyjc-computing/campus/discussions)
+
+## 📚 Additional Resources
+
+- **[Architecture](architecture.md)** - System design overview
+- **[Development Guidelines](development-guidelines.md)** - Coding patterns and abstractions
+- **[Testing Strategies](testing-strategies.md)** - Testing approaches
+- **[Style Guide](STYLE-GUIDE.md)** - Code and documentation standards
 
 ### Branch Purposes
 
@@ -17,10 +176,10 @@ weekly → staging → main
   - 🛡️ requires approval from project owner
 - **`staging`** - Extended testing, migration validation, pre-production quality
   - ✔️ requires PR
-  - 🔒 PR must have at least one review
+  - 🔒 PR **must have** at least one review
 - **`weekly`** - Active development, all new work, expected breakage welcome!
   - ✔️ requires PR
-  - 👀 PR for critical/major features should be reviewed by a collaborator
+  - 👀 PR for critical/major features **should be** reviewed by a collaborator
 
 Bugfixes, CI/CD work, general documentation updates may be PRed to `staging` directly if urgent and does not need to pass through weekly review
 
@@ -93,19 +252,6 @@ git push origin feature/your-feature-name
 - **Use for**: New features, bug fixes, experiments, infrastructure improvements
 
 **Never target `main` or `staging` directly** - these are managed through the promotion flow.
-
-**Examples:**
-```bash
-# New authentication feature
-git checkout weekly
-git checkout -b feature/oauth-integration
-# PR: feature/oauth-integration → weekly
-
-# Fix package build issue  
-git checkout weekly
-git checkout -b fix/poetry-dependencies
-# PR: fix/poetry-dependencies → weekly
-```
 
 ## 🎯 Branch Promotion Flow (Maintainer Workflow)
 
