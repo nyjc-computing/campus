@@ -13,7 +13,7 @@ def set_test_env_vars():
 
 def set_postgres_env_vars():
     """Set PostgreSQL environment variables for devcontainer setup."""
-    os.environ["PGHOST"] = "db"
+    os.environ["PGHOST"] = "postgres"
     os.environ["PGPORT"] = "5432"
     os.environ["PGUSER"] = "devuser"
     os.environ["PGPASSWORD"] = "devpass"

@@ -32,7 +32,7 @@ def run_sql_query(query):
     import subprocess
     try:
         result = subprocess.run([
-            'psql', 'postgresql://devuser:devpass@db:5432/vaultdb',
+            'psql', 'postgresql://devuser:devpass@postgres:5432/vaultdb',
             '-c', query, '-t'
         ], capture_output=True, text=True, timeout=10)
         return result.stdout.strip()
