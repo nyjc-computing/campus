@@ -12,6 +12,7 @@
 ## Development
 
 - **[Development Guidelines](development-guidelines.md)** — Architectural patterns, design decisions, and best practices
+- **[Testing Strategies](testing-strategies.md)** — Three testing approaches: development server, local services, and Flask test clients
 
 ## API and Endpoints
 
