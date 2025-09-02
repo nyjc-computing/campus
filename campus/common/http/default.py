@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 import requests
 
 from campus.common.utils import secret
-from campus.client.errors import (
+from .errors import (
     AuthenticationError,
     NetworkError,
 )
@@ -76,7 +76,7 @@ class DefaultResponse(JsonResponse):
         self._response = response
 
     @property
-    def status(self) -> int:
+    def status_code(self) -> int:
         return self._response.status_code
 
     @property

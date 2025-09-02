@@ -13,6 +13,16 @@ responses.
 
 from .interface import JsonClient, JsonResponse
 from .default import DefaultResponse, DefaultClient
+from .errors import (
+    HttpClientError,
+    AuthenticationError,
+    AccessDeniedError,
+    ConflictError,
+    NotFoundError,
+    InvalidRequestError,
+    NetworkError,
+    MalformedResponseError,
+)
 
 # Cache instantiated clients to reuse sessions
 __client_cache: dict[tuple, JsonClient] = {}
@@ -45,5 +55,13 @@ __all__ = [
     "DefaultResponse",
     "JsonClient",
     "JsonResponse",
-    "get_client"
+    "get_client",
+    "HttpClientError",
+    "AuthenticationError",
+    "AccessDeniedError",
+    "ConflictError",
+    "NotFoundError",
+    "InvalidRequestError",
+    "NetworkError",
+    "MalformedResponseError",
 ]

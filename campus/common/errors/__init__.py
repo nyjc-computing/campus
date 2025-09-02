@@ -51,7 +51,7 @@ def handle_werkzeug_error(err: HTTPException) -> tuple[JsonDict, int]:
     )
     match err:
         case InternalServerError():
-            return api_errors.InvalidRequestError().to_dict(), 500
+            return api_errors.InternalError().to_dict(), 500
         case _:
             raise err
 

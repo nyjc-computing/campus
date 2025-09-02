@@ -75,14 +75,12 @@ from flask import Blueprint, Flask
 
 from campus.common import devops, errors
 
-from . import access, db, client
-from .model import Vault
+from . import access, client, vault
+from .vault import get_vault
 
 __all__ = [
     "get_vault",
-    "get_authenticated_vault",
-    "Vault",
-    "AuthenticatedVault",
+    "create_app",
     "init_app",
     "init_db",
     "access",
@@ -90,128 +88,38 @@ __all__ = [
 ]
 
 
-def get_vault(label: str) -> Vault:
-    """Get a Vault instance by label.
+# This file uses local imports to avoid polluting global space
+# pylint: disable=import-outside-toplevel
 
-    This is a convenience function for programmatic access to vaults.
-    For HTTP API access, use the routes which handle authentication.
+def create_app() -> Flask:
+    """Factory function to create the vault app.
 
-    Note: When using this function programmatically, CLIENT_ID and CLIENT_SECRET
-    environment variables must be set for the vault operations to work.
-
-    For the new architecture, this returns a Vault model instance.
-    Authentication and permission checking should be handled at the application layer.
+    This is called if vault is run as a standalone app.
     """
-    return Vault(label)
-
-
-class AuthenticatedVault:
-    """Backward-compatible vault wrapper that includes authentication.
-
-    This class provides the same interface as the old Vault class for
-    backward compatibility, while using the new separated architecture.
-    """
-
-    def __init__(self, label: str):
-        self.label = label
-        self.vault = Vault(label)
-
-        # Authenticate client using the new auth system
-        from .auth import authenticate_client
-        self.client_id = authenticate_client()
-
-    def __repr__(self) -> str:
-        return f"AuthenticatedVault(label={self.label!r})"
-
-    def get(self, key: str) -> str:
-        """Get a secret from the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-        check_vault_access(self.client_id, self.label, access.READ)
-        return self.vault.get(key)
-
-    def has(self, key: str) -> bool:
-        """Check if a secret exists in the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-        check_vault_access(self.client_id, self.label, access.READ)
-        return self.vault.has(key)
-
-    def set(self, key: str, value: str) -> None:
-        """Set a secret in the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-
-        # Check if key exists to determine required permission
-        key_exists = self.vault.has(key) if self._can_read() else False
-        required_permission = access.UPDATE if key_exists else access.CREATE
-        check_vault_access(self.client_id, self.label, required_permission)
-
-        self.vault.set(key, value)
-
-    def delete(self, key: str) -> None:
-        """Delete a secret from the vault with authentication and permission checking."""
-        from .auth import check_vault_access
-        check_vault_access(self.client_id, self.label, access.DELETE)
-        self.vault.delete(key)
-
-    def _can_read(self) -> bool:
-        """Check if client can read from this vault (for internal use)."""
-        try:
-            from .auth import check_vault_access
-            check_vault_access(self.client_id, self.label, access.READ)
-            return True
-        except errors.api_errors.ForbiddenError:
-            return False
-
-
-def get_authenticated_vault(label: str) -> AuthenticatedVault:
-    """Get an authenticated vault instance with the old interface.
-
-    This function provides backward compatibility for code that expects
-    the old Vault behavior with built-in authentication and permission checking.
-
-    For new code, prefer using the routes for HTTP access or the model.Vault
-    class directly with explicit authentication handling.
-    """
-    return AuthenticatedVault(label)
+    app = Flask(__name__)
+    init_app(app)
+    errors.init_app(app)
+    return app
 
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app."""
-    bp = Blueprint('v1', __name__, url_prefix='/api/v1')
+    bp = Blueprint('vault_v1', __name__, url_prefix='/api/v1')
     from . import routes
+    routes.vaults.init_app(bp)
     routes.access.init_app(bp)
-    routes.client.init_app(bp)
-    routes.vault.init_app(bp)
+    routes.clients.init_app(bp)
     app.register_blueprint(bp)
-    # Use Vault to retrieve secret key since campus.vault deployment
-    # has VAULTDB_URI env var
-    if isinstance(app, Flask):
-        app.secret_key = get_vault("vault").get("SECRET_KEY")
 
 
 @devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def init_db():
     """Initialize the tables needed by the model.
 
-    This function is intended to be called only in a test environment or
-    staging.
+    This function is intended to be called only in a test or staging
+    environment.
     """
-    # Initialize vault table
-    with db.get_connection_context() as conn:
-        with conn.cursor() as cursor:
-            vault_schema = """
-                CREATE TABLE IF NOT EXISTS vault (
-                    id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL,
-                    label TEXT NOT NULL,
-                    key TEXT NOT NULL,
-                    value TEXT NOT NULL,
-                    UNIQUE(label, key)
-                )
-            """
-            cursor.execute(vault_schema)
-
-    # Initialize access control table
-    access.init_db()
-
-    # Initialize vault client table
+    vault.init_db()
     client.init_db()
+    access.init_db()

@@ -38,7 +38,7 @@ from typing import NotRequired, Required, TypedDict
 from flask import Blueprint, Flask, redirect, request, url_for
 from werkzeug.wrappers import Response
 
-from campus.client import VaultClient
+from campus.client.vault import get_vault
 from campus.common import integration
 from campus.common.errors import api_errors
 from campus.common.utils import url, utc_time
@@ -55,7 +55,7 @@ PROVIDER = 'google'
 google_user_credentials = UserCredentials(PROVIDER)
 
 sessions = Session()
-vault = VaultClient()[PROVIDER]
+vault = get_vault()[PROVIDER]
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = integration.get_config(PROVIDER)
 oauth2: OAuth2Flow = OAuth2Flow.from_json(oauthconfig, security="oauth2")
@@ -113,7 +113,7 @@ def authorize() -> Response:
     )
     # Store session with target URL
     session = oauth2.create_session(
-        client_id=vault["CLIENT_ID"].get(),
+        client_id=vault["CLIENT_ID"].get()["value"],
         scopes=oauth2.scopes,
         target=params.pop('target'),
     )
@@ -151,7 +151,7 @@ def callback() -> Response:
                 )
             token_response = session.exchange_code_for_token(
                 code=code,
-                client_secret=vault["CLIENT_SECRET"].get(),
+                client_secret=vault["CLIENT_SECRET"].get()["value"],
             )
         case _:
             api_errors.raise_api_error(400, **params)
@@ -208,8 +208,8 @@ def get_valid_token(user_id: str) -> CredentialToken:
         # token is refreshed in-place
         oauth2.refresh_token(
             token=token,
-            client_id=vault["CLIENT_ID"].get(),
-            client_secret=vault["CLIENT_SECRET"].get(),
+            client_id=vault["CLIENT_ID"].get()["value"],
+            client_secret=vault["CLIENT_SECRET"].get()["value"],
         )
         google_user_credentials.store(
             user_id=record["user_id"],

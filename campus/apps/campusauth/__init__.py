@@ -12,13 +12,8 @@ from .authentication import (
     client_auth_required
 )
 
-__all__ = [
-    'init_app',
-    'init_db',
-    'authenticate_client',
-    'client_auth_required',
-]
 
+# pylint: disable=import-outside-toplevel
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the campusauth blueprint with the given Flask app."""
@@ -34,3 +29,11 @@ def init_db() -> None:
     models.
     """
     # campusauth relies on existing models and does not use any drums.
+
+
+__all__ = [
+    'init_app',
+    'init_db',
+    'authenticate_client',
+    'client_auth_required',
+]

@@ -5,8 +5,16 @@ function correctly without returning 404 errors.
 """
 
 import unittest
+
+# Set up environment variables before importing campus modules
+from tests.fixtures import setup
+setup.set_test_env_vars()
+setup.set_vault_env_vars()
+
 import campus.vault
 from campus.common import devops
+
+
 
 
 class TestVaultIntegration(unittest.TestCase):

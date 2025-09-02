@@ -7,7 +7,7 @@ from typing import Protocol
 
 from flask import Blueprint, Flask
 
-from campus.common import introspect
+from campus.common import devops, introspect
 import campus.common.errors
 
 # Available deployment modes
@@ -33,13 +33,20 @@ def configure_for_deployment(app) -> None:
 
     - adds health check route
     """
-    # TODO: configure based on ENV
+    import os
+    
     # Health check route for deployments
     # Many services expect a 200 response from the root URL to verify the
     # service is running
     @app.route('/')
     def health_check():
-        return {'status': 'healthy', 'service': 'campus-apps'}, 200
+        # Determine service name from deployment mode
+        deploy_mode = os.environ["DEPLOY"]
+        return {
+            'status': 'healthy',
+            'deployment': deploy_mode,
+            'environment': devops.ENV,
+        }, 200
     return
 
 

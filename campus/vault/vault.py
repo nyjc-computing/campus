@@ -7,12 +7,50 @@ without authentication or permission checking. Those concerns are handled at
 the route level for better separation of responsibilities.
 """
 
+from campus.common import devops
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 
 from . import db
 
 TABLE = "vault"
+
+
+@devops.block_env(devops.PRODUCTION)
+def init_db():
+    """Initialize the vault table containing keys and secrets.
+
+    This function is intended to be called only in a test or staging
+    environment.
+    """
+    with db.get_connection_context() as conn:
+        with conn.cursor() as cursor:
+            vault_schema = """
+                CREATE TABLE IF NOT EXISTS vault (
+                    id TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    key TEXT NOT NULL,
+                    value TEXT NOT NULL,
+                    UNIQUE(label, key)
+                )
+            """
+            cursor.execute(vault_schema)
+
+
+def get_vault(label: str) -> "Vault":
+    """Get a Vault instance by label.
+
+    This is a convenience function for programmatic access to vaults.
+    For HTTP API access, use the routes which handle authentication.
+
+    Note: When using this function programmatically, CLIENT_ID and CLIENT_SECRET
+    environment variables must be set for the vault operations to work.
+
+    For the new architecture, this returns a Vault model instance.
+    Authentication and permission checking should be handled at the application layer.
+    """
+    return Vault(label)
 
 
 class Vault:
@@ -42,6 +80,23 @@ class Vault:
 
     def __repr__(self) -> str:
         return f"Vault(label={self.label!r})"
+
+    @staticmethod
+    def get_labels(client_id: str) -> list[str]:
+        """Get a list of all vault labels that the client has access to."""
+        with db.get_connection_context() as conn:
+            rows = db.execute_query(
+                conn,
+                (
+                    "SELECT DISTINCT label FROM vault "
+                    "INNER JOIN vault_access ON vault.label = vault_access.label "
+                    "WHERE client_id = %s "
+                    "ORDER BY label"
+                ),
+                (client_id,),
+                fetch_all=True
+            )
+            return [row["label"] for row in rows] if rows else []
 
     def get(self, key: str) -> str:
         """Get a secret from the vault.
