@@ -17,6 +17,7 @@ from .response import FlaskTestResponse
 from .factory import create_test_client, create_test_client_from_manager
 from .configure import configure_for_testing
 
+
 __all__ = [
     "FlaskTestClient",
     "FlaskTestResponse",

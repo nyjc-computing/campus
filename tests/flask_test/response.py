@@ -6,8 +6,6 @@ FlaskTestResponse adapter for Campus JsonResponse protocol.
 from typing import Any
 from werkzeug.test import TestResponse
 
-from campus.common.http.interface import JsonResponse
-
 
 class FlaskTestResponse:
     """Adapter that wraps werkzeug.test.TestResponse to implement JsonResponse protocol.

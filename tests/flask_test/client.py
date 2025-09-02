@@ -7,9 +7,9 @@ from typing import Any, Iterable, Mapping, Self
 from urllib.parse import urljoin
 
 from flask import Flask
-from flask.testing import FlaskClient
 
 from campus.common.http.interface import JsonDict, JsonResponse
+
 from .response import FlaskTestResponse
 
 
