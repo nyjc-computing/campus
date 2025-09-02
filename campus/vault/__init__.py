@@ -80,7 +80,6 @@ from .vault import get_vault
 
 __all__ = [
     "get_vault",
-    "create_app",
     "init_app",
     "init_db",
     "access",
@@ -91,19 +90,19 @@ __all__ = [
 # This file uses local imports to avoid polluting global space
 # pylint: disable=import-outside-toplevel
 
-def create_app() -> Flask:
-    """Factory function to create the vault app.
-
-    This is called if vault is run as a standalone app.
-    """
-    app = Flask(__name__)
-    init_app(app)
-    errors.init_app(app)
-    return app
-
 
 def init_app(app: Flask | Blueprint) -> None:
-    """Initialize the vault blueprints with the given Flask app."""
+    """Initialize the vault blueprints with the given Flask app.
+
+    This function sets up the vault service routes and blueprints.
+
+    Note: For creating new Flask applications, use the recommended pattern:
+        from campus.common.devops.deploy import create_app
+        import campus.vault
+        app = create_app(campus.vault)
+
+    This ensures proper error handling and deployment configuration.
+    """
     bp = Blueprint('vault_v1', __name__, url_prefix='/api/v1')
     from . import routes
     routes.vaults.init_app(bp)

@@ -16,7 +16,18 @@ from . import api, campusauth, oauth
 
 
 def init_app(app: Blueprint | Flask) -> None:
-    """Initialize the Campus app with all modules."""
+    """Initialize the Campus app with all modules.
+
+    This function sets up all Campus apps components including API,
+    authentication, and OAuth modules.
+
+    Note: For creating new Flask applications, use the recommended pattern:
+        from campus.common.devops.deploy import create_app
+        import campus.apps
+        app = create_app(campus.apps)
+
+    This ensures proper error handling and deployment configuration.
+    """
     api.init_app(app)
     campusauth.init_app(app)
     oauth.init_app(app)
