@@ -16,7 +16,7 @@ def get_db(name: str):
     """Get a collection by name, using appropriate backend for environment."""
     # Import testing module to check for test mode
     from campus.storage.testing import is_test_mode
-    
+
     if is_test_mode():
         from .backend.memory import MemoryCollection
         return MemoryCollection(name)
