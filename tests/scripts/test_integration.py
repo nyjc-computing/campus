@@ -27,19 +27,6 @@ sys.path.insert(0, str(project_root))
 # Import after path setup
 
 
-def run_sql_query(query):
-    """Helper function to run SQL queries for debugging."""
-    import subprocess
-    try:
-        result = subprocess.run([
-            'psql', 'postgresql://devuser:devpass@postgres:5432/vaultdb',
-            '-c', query, '-t'
-        ], capture_output=True, text=True, timeout=10)
-        return result.stdout.strip()
-    except Exception as e:
-        return f"Error: {e}"
-
-
 class Config:
     """Test configuration with service details."""
 
@@ -84,7 +71,7 @@ class ServiceManager:
         os.environ['DEPLOY'] = 'vault'
 
         # Debug: Print CLIENT_ID being used in main thread
-        client_id = os.environ.get('CLIENT_ID', 'NOT_SET')
+        client_id = os.environ['CLIENT_ID']
         print(f"🔑 MAIN THREAD CLIENT_ID for vault: {client_id}")
 
         stop_event = threading.Event()
@@ -108,7 +95,7 @@ class ServiceManager:
         os.environ['DEPLOY'] = 'apps'
 
         # Debug: Print CLIENT_ID being used in main thread
-        client_id = os.environ.get('CLIENT_ID', 'NOT_SET')
+        client_id = os.environ['CLIENT_ID']
         print(f"🔑 MAIN THREAD CLIENT_ID for apps: {client_id}")
 
         stop_event = threading.Event()
@@ -128,9 +115,9 @@ class ServiceManager:
         """Run a Flask service with proper environment setup."""
         try:
             # Debug: Print environment variables inherited by thread
-            client_id = os.environ.get('CLIENT_ID', 'NOT_SET')
-            client_secret = os.environ.get('CLIENT_SECRET', 'NOT_SET')
-            deploy_mode = os.environ.get('DEPLOY', 'NOT_SET')
+            client_id = os.environ['CLIENT_ID']
+            client_secret = os.environ['CLIENT_SECRET']
+            deploy_mode = os.environ['DEPLOY']
             print(
                 f"🔑 {service_name.upper()} THREAD inherited CLIENT_ID: {client_id}")
             print(
@@ -161,9 +148,9 @@ class ServiceManager:
         print(f"⏳ Waiting for {service_name.title()} to become healthy...")
 
         # Get authentication credentials for health check
-        client_id = os.getenv('CLIENT_ID')
-        client_secret = os.getenv('CLIENT_SECRET')
-        auth = (client_id, client_secret) if client_id and client_secret else None
+        client_id = os.environ['CLIENT_ID']
+        client_secret = os.environ['CLIENT_SECRET']
+        auth = (client_id, client_secret)
 
         start_time = time.time()
         while time.time() - start_time < self.config.health_timeout:
@@ -242,7 +229,7 @@ class TestSuite:
 
         missing_vars = []
         for var in required_vars:
-            if not os.getenv(var):
+            if var not in os.environ:
                 missing_vars.append(var)
 
         if missing_vars:
@@ -252,7 +239,7 @@ class TestSuite:
         print("✅ All required environment variables are set")
 
         # Debug: Print CLIENT_ID
-        client_id = os.getenv('CLIENT_ID', 'NOT_SET')
+        client_id = os.environ['CLIENT_ID']
         print(f"🔑 TEST SUITE using CLIENT_ID: {client_id}")
 
         return True
@@ -293,8 +280,8 @@ class TestSuite:
         print("\n📋 Phase: Vault Configuration")
         print("🔐 Testing vault configuration...")
 
-        client_id = os.getenv('CLIENT_ID')
-        client_secret = os.getenv('CLIENT_SECRET')
+        client_id = os.environ['CLIENT_ID']
+        client_secret = os.environ['CLIENT_SECRET']
 
         if not client_id or not client_secret:
             print("❌ Vault credentials not configured")
@@ -336,8 +323,12 @@ def main():
         setup.set_postgres_env_vars()
         print("✅ PostgreSQL environment variables configured")
 
-        # Skip PostgreSQL check for now
-        print("🔍 Skipping PostgreSQL connectivity check (assume working)")
+        # Set MongoDB environment variables
+        setup.set_mongodb_env_vars()
+        print("✅ MongoDB environment variables configured")
+
+        # Skip PostgreSQL/MongoDB check for now
+        print("🔍 Skipping PostgreSQL/MongoDB connectivity check (assume working)")
 
         # Initialize vault fixtures only (creates test client)
         print("🔐 Initializing vault fixtures...")
@@ -376,35 +367,8 @@ def main():
         # Now that vault is healthy, initialize yapper database
         print("📢 Initializing yapper fixtures (requires vault to be running)...")
 
-        # Check access before yapper init
-        client_id = os.getenv('CLIENT_ID')
-        try:
-            print(
-                f"🔍 Checking vault access for client {client_id} before yapper init...")
-            result = run_sql_query(
-                f"SELECT client_id, label, access FROM vault_access WHERE client_id = '{client_id}' ORDER BY label;")
-            print(f"📋 Current access: {result}")
-        except Exception as e:
-            print(f"🚨 Error checking access: {e}")
-
         yapper_fixtures.init()
         print("✅ Yapper fixtures initialized")
-
-        # Check access after yapper init
-        try:
-            print(
-                f"🔍 Checking vault access for client {client_id} after yapper init...")
-            result = run_sql_query(
-                f"SELECT client_id, label, access FROM vault_access WHERE client_id = '{client_id}' ORDER BY label;")
-            print(f"📋 Updated access: {result}")
-
-            # Also check if the YAPPERDB_URI secret exists
-            print("🔍 Checking if YAPPERDB_URI secret exists in yapper vault...")
-            secret_result = run_sql_query(
-                "SELECT label, key, value FROM vault WHERE label = 'yapper' AND key = 'YAPPERDB_URI';")
-            print(f"📋 Yapper secrets: {secret_result}")
-        except Exception as e:
-            print(f"🚨 Error checking access: {e}")
 
         # Give a moment for any database transactions to fully commit
         print("⏳ Allowing database changes to fully commit...")
