@@ -1,24 +1,17 @@
 #!/usr/bin/env python3
 """Test Flask test client strategy with storage backends"""
 
-from tests.flask_test.client import FlaskTestClient
-from tests.flask_test.configure import configure_for_testing
+from tests.flask_test import FlaskTestClient, create_test_app
 import campus.vault
-from campus.common.devops.deploy import create_app
-import os
-os.environ["CAMPUS_ENV"] = "testing"
-os.environ["STORAGE_MODE"] = "1"
 
 
 def test_vault_with_storage():
     """Test that vault works with test storage configuration."""
     print("Testing vault service with test storage...")
 
-    # Create vault app
-    app = create_app(campus.vault)
-
-    # Configure testing environment
-    configure_for_testing(app)
+    # Create vault app using proper factory function
+    # This handles ENV, STORAGE_MODE, and test configuration automatically
+    app = create_test_app(campus.vault)
 
     # Debug: Print all registered routes
     print("Registered routes:")

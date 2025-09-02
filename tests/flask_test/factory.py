@@ -3,6 +3,7 @@
 Factory functions for creating Campus test client with Flask apps.
 """
 
+import os
 from typing import Mapping, cast
 
 from campus.client.core import Campus
@@ -14,7 +15,8 @@ def create_test_client_from_manager(manager) -> Campus:
     """Create a Campus client from a ServiceManager.
 
     This is the preferred way to create test clients as it ensures proper
-    service setup and resource management.
+    service setup and resource management. Automatically sets STORAGE_MODE
+    for test storage backends.
 
     Args:
         manager: ServiceManager instance with vault_app and apps_app set up
@@ -34,18 +36,22 @@ def create_test_client_from_manager(manager) -> Campus:
         raise ValueError(
             "ServiceManager must be set up with vault_app and apps_app")
 
+    # Ensure test storage mode is enabled
+    os.environ["STORAGE_MODE"] = "1"
+
     # Create override mapping with Flask test clients, cast to satisfy typing
+    import campus.config
+    from campus.common import devops
     override: Mapping[str, JsonClient] = {
         "campus.vault": cast(JsonClient, FlaskTestClient(
             manager.vault_app,
-            base_url="http://localhost:8080/api/v1/"
+            base_url=campus.config.BASE_URLS["campus.vault"][devops.TESTING]
         )),
         "campus.apps": cast(JsonClient, FlaskTestClient(
             manager.apps_app,
-            base_url="http://localhost:8081/api/v1/"
+            base_url=campus.config.BASE_URLS["campus.apps"][devops.TESTING]
         )),
     }
-
     return Campus(override=override)
 
 
@@ -54,6 +60,7 @@ def create_test_client() -> Campus:
 
     This creates a Campus client that uses FlaskTestClient instances instead
     of making actual HTTP requests. Perfect for integration testing.
+    Automatically sets STORAGE_MODE for test storage backends.
 
     Note: This function sets up services automatically but doesn't provide
     a way to clean them up. For better resource management, use:
@@ -69,6 +76,9 @@ def create_test_client() -> Campus:
     Returns:
         Campus: Client instance configured with Flask test clients
     """
+    # Ensure test storage mode is enabled
+    os.environ["STORAGE_MODE"] = "1"
+
     from tests.fixtures import services
 
     # This creates a service manager but doesn't clean it up
@@ -77,3 +87,39 @@ def create_test_client() -> Campus:
     manager.setup()
 
     return create_test_client_from_manager(manager)
+
+
+def create_test_app(module):
+    """Create a single Flask app for testing with proper test configuration.
+
+    This function handles all the proper setup for testing a single service:
+    - Sets test environment variables 
+    - Enables test storage mode
+    - Creates and configures Flask app
+
+    Args:
+        module: Campus service module (e.g., campus.vault, campus.apps)
+
+    Returns:
+        Flask app configured for testing
+
+    Example:
+        import campus.vault
+        from tests.flask_test import create_test_app
+
+        app = create_test_app(campus.vault)
+        # App is ready for FlaskTestClient testing
+    """
+    from tests.fixtures import setup
+    from campus.common.devops.deploy import create_app
+    from .configure import configure_for_testing
+
+    # Set proper environment variables
+    setup.set_test_env_vars()
+    os.environ["STORAGE_MODE"] = "1"
+
+    # Create and configure app
+    app = create_app(module)
+    configure_for_testing(app)
+
+    return app
