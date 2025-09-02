@@ -5,29 +5,51 @@ Functions for initialising campus.vault for testing use
 
 import os
 
-from . import require
+from . import require, setup
+from .setup import set_db_uri
 
-def init_vault():
-    """Populate campus.vault with required data for testing, and
-    set the CLIENT_ID and CLIENT_SECRET env variables.
 
-    ENV must be 'testing' and VAULTDB_URI must be set before calling
-    this function.
+def init():
+    """Initialize vault fixtures for testing.
+
+    This function:
+    - Sets up VAULTDB_URI using postgres env vars
+    - Initializes vault database
+    - Creates test client and sets CLIENT_ID/CLIENT_SECRET env vars
+    - Sets up SECRET_KEY in 'vault' vault
+    - Gives client access to 'vault' label
+
+    ENV must be 'testing' and postgres env vars must be set before calling.
     """
     require.env("testing")
-    require.envvar("VAULTDB_URI")
-
+    setup.set_db_uri("VAULTDB_URI", "vaultdb")
     import campus.vault
-
-    # Initialise postgresql tables
     campus.vault.init_db()
+
+    # Set up SECRET_KEY in vault vault first (needed for client creation)
+    # We need to bootstrap this manually since there's no client yet
+    from campus.vault.vault import Vault
+    vault_instance = Vault("vault")
+    vault_instance.set("SECRET_KEY", "vault-secret-key")
+
     # Create client for testing
-    client, client_secret = campus.vault.client.create_client(
+    clientconfig = campus.vault.client.create_client(
         name="test-client",
         description="Campus test client"
     )
+    client, secret = clientconfig["client"], clientconfig["secret"]
+
+    # Set client credentials in environment
     os.environ["CLIENT_ID"] = client["id"]
-    os.environ["CLIENT_SECRET"] = client_secret
+    os.environ["CLIENT_SECRET"] = secret
+
+    # Give client access to vault label
+    campus.vault.access.grant_access(
+        client_id=client["id"],
+        label="vault",
+        access=campus.vault.access.ALL
+    )
+
 
 def give_vault_access(
         label: str,
