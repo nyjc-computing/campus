@@ -60,10 +60,14 @@ class ServiceManager:
         # 2. Yapper needs vault credentials to access secrets
         # 3. Apps imports yapper routes, so yapper must be ready first
 
-        # Step 1: Initialize vault service and create Flask app
+        # Step 1: Initialize vault service and create Flask app using devops.deploy
         vault.init()      # Creates test client credentials
         import campus.vault
-        self.vault_app = campus.vault.create_app()
+        from campus.common import devops
+        from tests import flask_test
+
+        self.vault_app = devops.deploy.create_app(campus.vault)
+        flask_test.configure_for_testing(self.vault_app)
 
         # Step 2: Initialize storage (doesn't depend on other services)
         storage.init()    # Sets up database connections
@@ -77,25 +81,11 @@ class ServiceManager:
         # Apps imports yapper routes, so yapper must be fully initialized first
         apps.init()       # Requires vault credentials
 
-        # Step 5: Create apps Flask application
+        # Step 5: Create apps Flask application using devops.deploy
         # Import here to avoid circular imports and ensure all dependencies are ready
-        try:
-            import campus.apps
-            from campus.common import devops
-            self.apps_app = devops.deploy.create_app(campus.apps)
-        except Exception as e:
-            # If we can't create the apps service due to dependencies,
-            # create a minimal Flask app instead
-            from flask import Flask
-            self.apps_app = Flask('test_apps_minimal')
-            self.apps_app.config['TESTING'] = True
-
-            @self.apps_app.route('/')
-            def health():
-                return {'status': 'healthy', 'service': 'test-apps-minimal'}
-
-            print(
-                f"Warning: Could not create full apps service, using minimal app: {e}")
+        import campus.apps
+        self.apps_app = devops.deploy.create_app(campus.apps)
+        flask_test.configure_for_testing(self.apps_app)
 
         self._setup_done = True
         return self
