@@ -4,15 +4,65 @@ Functions for initialising campus.vault for testing use
 """
 
 import os
+import subprocess
 
 from . import require, setup
 from .setup import set_db_uri
+
+
+def ensure_vault_database() -> bool:
+    """Ensure vaultdb exists, create if needed."""
+    print("🗃️  Ensuring vault database exists...")
+
+    # Use environment variables (should be set by setup_testing_env)
+    pg_env = os.environ
+
+    # Check if vaultdb exists
+    try:
+        result = subprocess.run([
+            'psql', '-h', pg_env['PGHOST'], '-U', pg_env['PGUSER'], '-d', 'postgres',
+            '-t', '-A', '-c', "SELECT 1 FROM pg_database WHERE datname='vaultdb';"
+        ],
+            env=pg_env,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0 and result.stdout.strip() == '1':
+            print("✅ vaultdb database already exists")
+            return True
+        else:
+            print("📝 Creating vaultdb database...")
+            # Create vaultdb
+            create_result = subprocess.run([
+                'psql', '-h', pg_env['PGHOST'], '-U', pg_env['PGUSER'], '-d', 'postgres',
+                '-c', 'CREATE DATABASE vaultdb;'
+            ],
+                env=pg_env,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            if create_result.returncode == 0:
+                print("✅ vaultdb database created successfully")
+                return True
+            else:
+                print(
+                    f"❌ Failed to create vaultdb: {create_result.stderr.strip()}")
+                return False
+
+    except Exception as e:
+        print(f"❌ Error ensuring vault database exists: {e}")
+        return False
 
 
 def init():
     """Initialize vault fixtures for testing.
 
     This function:
+    - Ensures vaultdb database exists
     - Sets up VAULTDB_URI using postgres env vars
     - Initializes vault database
     - Creates test client and sets CLIENT_ID/CLIENT_SECRET env vars
@@ -22,19 +72,26 @@ def init():
     ENV must be 'testing' and postgres env vars must be set before calling.
     """
     require.env("testing")
+
+    # Ensure database exists first
+    if not ensure_vault_database():
+        raise RuntimeError("Failed to ensure vault database exists")
+
     setup.set_db_uri("VAULTDB_URI", "vaultdb")
     import campus.vault
     campus.vault.init_db()
 
-    # Set up SECRET_KEY in vault vault first (needed for client creation)
+    # Set up SECRET_KEY in campus vault first (needed for client creation)
     # We need to bootstrap this manually since there's no client yet
     from campus.vault.vault import Vault
-    vault_instance = Vault("vault")
-    vault_instance.set("SECRET_KEY", "vault-secret-key")
+    campus_vault = Vault("campus")
+    campus_vault.set("SECRET_KEY", "vault-secret-key")
 
-    # Create client for testing
+    # Create client for testing (use unique name with timestamp)
+    import time
+    client_name = f"test-client-{int(time.time())}"
     clientconfig = campus.vault.client.create_client(
-        name="test-client",
+        name=client_name,
         description="Campus test client"
     )
     client, secret = clientconfig["client"], clientconfig["secret"]
