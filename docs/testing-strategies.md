@@ -5,6 +5,7 @@ This document outlines the three primary testing strategies available in the Cam
 ## Table of Contents
 
 - [Overview](#overview)
+- [Recommended Entry Points](#recommended-entry-points)
 - [Strategy 1: Development Server Testing](#strategy-1-development-server-testing)
 - [Strategy 2: Local Service Testing](#strategy-2-local-service-testing)
 - [Strategy 3: Flask Test Client Testing](#strategy-3-flask-test-client-testing)
@@ -23,6 +24,14 @@ Campus provides three distinct testing strategies to accommodate different testi
 | **Flask Test Client** | In-process Flask apps | Test data | No network | Unit/component testing |
 
 All strategies use the same Campus client interface, ensuring consistent testing patterns across different levels of integration.
+
+## Recommended Entry Points
+
+For quick reference, here are the main entry points for each strategy:
+
+- **Local Services**: `tests.fixtures.services.init()` - Sets up local HTTP services
+- **Flask Test Client**: `tests.flask_test.create_test_client_from_manager()` - Creates Campus client with Flask test clients  
+- **Development Server**: Set `ENV=development` and use `Campus()` - Connects to Railway
 
 ## Strategy 1: Development Server Testing
 
@@ -123,7 +132,43 @@ manager.close()  # Clean shutdown
 
 ### Setup
 
-Configure test storage before importing campus modules:
+Use the factory functions for easy Flask test client creation:
+
+```python
+# Recommended: Use factory function with automatic cleanup
+from tests.flask_test import create_test_client_from_manager
+from tests.fixtures import services
+
+with services.init() as manager:
+    # Create Campus client with Flask test clients (no network calls)
+    client = create_test_client_from_manager(manager)
+    
+    # Use like normal Campus client
+    vault = client.vault["test-vault"]
+    vault.set("test_key", "test_value")
+    
+    # Test health endpoints
+    response = client.vault.client.get('/test/health')
+    print(response.json())  # {'status': 'healthy', 'storage_mode': 'test'}
+
+# Alternative: One-shot factory (less control over cleanup)
+from tests.flask_test import create_test_client
+
+client = create_test_client()
+# Use client for testing (cleanup is automatic but less predictable)
+```
+
+### Storage Backends
+
+Test storage uses lightweight, in-memory backends:
+
+- **Tables**: SQLite in-memory database (`:memory:`)
+- **Documents**: Python dictionaries 
+- **Configuration**: `STORAGE_MODE=1` (any non-zero enables test mode)
+
+### Advanced: Manual Setup
+
+For advanced use cases where you need direct control over Flask apps:
 
 ```python
 import os
@@ -133,21 +178,15 @@ from tests.flask_test import FlaskTestClient, configure_for_testing
 from campus.common.devops.deploy import create_app
 import campus.vault
 
-# Create and configure Flask app
+# Create and configure Flask app manually
 vault_app = create_app(campus.vault)
 configure_for_testing(vault_app)  # Sets up test storage + health endpoints
 
-# Test with Flask test client
+# Use FlaskTestClient directly
 with FlaskTestClient(vault_app) as client:
     response = client.get('/test/health')
     print(response.json())  # {'status': 'healthy', 'storage_mode': 'test'}
 ```
-
-### Storage Backends
-
-Test storage uses lightweight, in-memory backends:
-
-- **Tables**: SQLite in-memory database (`:memory:`)
 - **Documents**: Python dictionaries 
 - **Configuration**: `STORAGE_MODE=1` (any non-zero enables test mode)
 
@@ -244,32 +283,38 @@ python tests/run_tests.py unit
 python tests/run_tests.py integration
 ```
 
-**For manual testing/debugging**: Run individual strategies
+**For manual testing/debugging**: Use these entry points for each strategy
+
 ```python
 # Development Server
 from campus.client import Campus
-client = Campus()  # Uses ENV variable
+import os
+os.environ['ENV'] = 'development'
+client = Campus()  # Uses ENV variable to connect to Railway
 
-# Local Services  
+# Local Services (HTTP to localhost)
 from tests.fixtures import services
 with services.init() as manager:
-    client = Campus()  # Connects to local services
+    client = Campus()  # Connects to local HTTP services
 
-# Flask Test Client
+# Flask Test Client (no network)
 from tests.flask_test import create_test_client_from_manager
 from tests.fixtures import services
 with services.init() as manager:
-    client = create_test_client_from_manager(manager)
+    client = create_test_client_from_manager(manager)  # Uses Flask test clients
 ```
 
 ### Best Practices
 
 1. **Use the test runner** for organized test execution (`python tests/run_tests.py`)
-2. **Use context managers** for automatic cleanup in manual testing
-3. **Start with Flask test client** for new features
-4. **Test error paths** with all strategies
-5. **Keep tests independent** - don't rely on test order
-6. **Use appropriate strategy** for the testing goal
+2. **Use proper entry points**:
+   - Local services: `tests.fixtures.services.init()` 
+   - Flask test clients: `tests.flask_test.create_test_client_from_manager()`
+3. **Use context managers** for automatic cleanup in manual testing
+4. **Start with Flask test client** for new features (fastest feedback)
+5. **Test error paths** with all strategies
+6. **Keep tests independent** - don't rely on test order
+7. **Use appropriate strategy** for the testing goal
 
 ### Architecture Notes
 
