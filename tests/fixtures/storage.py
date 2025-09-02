@@ -3,27 +3,36 @@
 Functions for initialising campus.storage for testing use
 """
 
-from . import require, vault
+from . import postgres, require, setup
 
-def init_storage():
-    """Populate campus.storage with required data for testing.
 
-    ENV must be 'testing' and client credentials must be set before calling
-    this function.
+def init():
+    """Initialize storage fixtures for testing.
+
+    This function:
+    - Ensures storagedb database exists
+    - Initializes 'storage' vault label
+    - Sets POSTGRESDB_URI as a vault secret (not environment variable)
+    - Gives client access to 'storage' label
+
+    ENV must be 'testing' and client credentials must be set before calling.
     """
     require.env("testing")
     client_id = require.envvar("CLIENT_ID")
     require.envvar("CLIENT_SECRET")
 
-    # Vault must already be initialised
-    # Test client must have access to storage secrets
-    vault.give_vault_access("storage", all=True)
-    
-    import campus.vault
+    # Ensure database exists first
+    postgres.ensure_database_exists("storagedb")
 
-    # campus.storage needs POSTGRESDB_URI use local instance
-    storage_vault = campus.vault.get_vault("storage")
-    storage_vault.set(
-        "POSTGRESDB_URI",
-        "postgresql://devuser:devpass@db:5432/storagedb"
+    # Give test client access to storage vault
+    import campus.vault
+    campus.vault.access.grant_access(
+        client_id=client_id,
+        label="storage",
+        access=campus.vault.access.ALL
     )
+
+    # Set up storage vault with database URI as a secret
+    storage_vault = campus.vault.get_vault("storage")
+    db_uri = setup.get_db_uri("storagedb")
+    storage_vault.set("POSTGRESDB_URI", db_uri)

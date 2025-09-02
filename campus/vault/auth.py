@@ -49,19 +49,8 @@ def get_client_credentials() -> Tuple[str, str]:
                 client_id, client_secret = token.split(':', 1)
                 if client_id and client_secret:
                     return client_id, client_secret
-
-    # Fall back to environment variables
-    client_id = os.environ.get("CLIENT_ID")
-    client_secret = os.environ.get("CLIENT_SECRET")
-
-    if not client_id:
-        raise api_errors.UnauthorizedError(
-            message="CLIENT_ID missing from Authorization header or environment")
-    if not client_secret:
-        raise api_errors.UnauthorizedError(
-            message="CLIENT_SECRET missing from Authorization header or environment")
-
-    return client_id, client_secret
+    raise api_errors.UnauthorizedError(
+        message="Authentication required. Provide credentials in Authorization header.")
 
 
 def authenticate_client() -> str:

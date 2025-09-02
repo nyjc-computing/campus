@@ -30,16 +30,16 @@ CLIENT_TABLE = "vault_clients"
 
 
 def _get_secret_key() -> str:
-    """Get the SECRET_KEY from the campus vault on demand.
+    """Get the SECRET_KEY from the vault's own vault on demand.
 
     Returns:
-        The SECRET_KEY value from the 'campus' vault
+        The SECRET_KEY value from the 'vault' vault label
 
     Raises:
-        VaultKeyError: If SECRET_KEY is not found in the campus vault
+        VaultKeyError: If SECRET_KEY is not found in the vault vault
     """
-    campus_vault = vault.Vault("campus")
-    return campus_vault.get("SECRET_KEY")
+    vault_vault = vault.Vault("vault")
+    return vault_vault.get("SECRET_KEY")
 
 
 class ClientNew(TypedDict, total=True):
