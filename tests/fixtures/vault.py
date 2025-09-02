@@ -4,58 +4,9 @@ Functions for initialising campus.vault for testing use
 """
 
 import os
-import subprocess
+import time
 
-from . import require, setup
-from .setup import set_db_uri
-
-
-def ensure_vault_database() -> bool:
-    """Ensure vaultdb exists, create if needed."""
-    print("🗃️  Ensuring vault database exists...")
-
-    # Use environment variables (should be set by setup_testing_env)
-    pg_env = os.environ
-
-    # Check if vaultdb exists
-    try:
-        result = subprocess.run([
-            'psql', '-h', pg_env['PGHOST'], '-U', pg_env['PGUSER'], '-d', 'postgres',
-            '-t', '-A', '-c', "SELECT 1 FROM pg_database WHERE datname='vaultdb';"
-        ],
-            env=pg_env,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode == 0 and result.stdout.strip() == '1':
-            print("✅ vaultdb database already exists")
-            return True
-        else:
-            print("📝 Creating vaultdb database...")
-            # Create vaultdb
-            create_result = subprocess.run([
-                'psql', '-h', pg_env['PGHOST'], '-U', pg_env['PGUSER'], '-d', 'postgres',
-                '-c', 'CREATE DATABASE vaultdb;'
-            ],
-                env=pg_env,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-
-            if create_result.returncode == 0:
-                print("✅ vaultdb database created successfully")
-                return True
-            else:
-                print(
-                    f"❌ Failed to create vaultdb: {create_result.stderr.strip()}")
-                return False
-
-    except Exception as e:
-        print(f"❌ Error ensuring vault database exists: {e}")
-        return False
+from . import postgres, require, setup
 
 
 def init():
@@ -74,8 +25,7 @@ def init():
     require.env("testing")
 
     # Ensure database exists first
-    if not ensure_vault_database():
-        raise RuntimeError("Failed to ensure vault database exists")
+    postgres.ensure_database_exists("vaultdb")
 
     setup.set_db_uri("VAULTDB_URI", "vaultdb")
     import campus.vault
@@ -88,7 +38,6 @@ def init():
     vault_vault.set("SECRET_KEY", "vault-secret-key")
 
     # Create client for testing (use unique name with timestamp)
-    import time
     client_name = f"test-client-{int(time.time())}"
     clientconfig = campus.vault.client.create_client(
         name=client_name,
