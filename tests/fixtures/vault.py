@@ -66,7 +66,7 @@ def init():
     - Sets up VAULTDB_URI using postgres env vars
     - Initializes vault database
     - Creates test client and sets CLIENT_ID/CLIENT_SECRET env vars
-    - Sets up SECRET_KEY in 'vault' vault
+    - Sets up vault's own SECRET_KEY in 'vault' vault
     - Gives client access to 'vault' label
 
     ENV must be 'testing' and postgres env vars must be set before calling.
@@ -81,11 +81,11 @@ def init():
     import campus.vault
     campus.vault.init_db()
 
-    # Set up SECRET_KEY in campus vault first (needed for client creation)
+    # Set up vault's own SECRET_KEY (for vault service client authentication)
     # We need to bootstrap this manually since there's no client yet
-    from campus.vault.vault import Vault
-    campus_vault = Vault("campus")
-    campus_vault.set("SECRET_KEY", "vault-secret-key")
+    from campus.vault import get_vault
+    vault_vault = get_vault("vault")
+    vault_vault.set("SECRET_KEY", "vault-secret-key")
 
     # Create client for testing (use unique name with timestamp)
     import time
