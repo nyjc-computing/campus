@@ -25,7 +25,7 @@ def init_app(app: Blueprint | Flask) -> None:
     if isinstance(app, Flask):
         from campus.client.vault import get_vault
         vault = get_vault()
-    app.secret_key = vault["campus"]["SECRET_KEY"].get()["value"]
+        app.secret_key = vault["campus"]["SECRET_KEY"].get()["value"]
 
 
 __all__ = [
