@@ -88,10 +88,10 @@ class Vault:
             rows = db.execute_query(
                 conn,
                 (
-                    "SELECT DISTINCT label FROM vault "
+                    "SELECT DISTINCT vault.label FROM vault "
                     "INNER JOIN vault_access ON vault.label = vault_access.label "
                     "WHERE client_id = %s "
-                    "ORDER BY label"
+                    "ORDER BY vault.label"
                 ),
                 (client_id,),
                 fetch_all=True
