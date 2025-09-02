@@ -9,15 +9,15 @@ This interface is usually provided by document-oriented databases like MongoDB
 or CouchDB.
 """
 
-import os
-
 from .interface import CollectionInterface
 
 
 def get_db(name: str):
     """Get a collection by name, using appropriate backend for environment."""
-    # Check for test mode first
-    if os.environ.get("CAMPUS_STORAGE_TEST_MODE"):
+    # Import testing module to check for test mode
+    from campus.storage.testing import is_test_mode
+    
+    if is_test_mode():
         from .backend.memory import MemoryCollection
         return MemoryCollection(name)
     else:

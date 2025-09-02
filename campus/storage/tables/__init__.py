@@ -7,7 +7,6 @@ This interface is usually provided by relational databases like PostgreSQL
 or SQLite.
 """
 
-import os
 from campus.common import devops
 
 from .interface import TableInterface
@@ -15,8 +14,10 @@ from .interface import TableInterface
 
 def get_db(name: str):
     """Get a table by name, using appropriate backend for environment."""
-    # Check for test mode first
-    if os.environ.get("CAMPUS_STORAGE_TEST_MODE"):
+    # Import testing module to check for test mode
+    from campus.storage.testing import is_test_mode
+    
+    if is_test_mode():
         from .backend.sqlite import SQLiteTable
         return SQLiteTable(name)
     elif devops.ENV in (devops.STAGING, devops.PRODUCTION):
