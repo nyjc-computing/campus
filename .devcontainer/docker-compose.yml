@@ -14,6 +14,8 @@ services:
       - VAULTDB_URI=postgresql://devuser:devpass@postgres:5432/vaultdb
       - MONGODB_HOST=mongo
       - MONGODB_PORT=27017
+      - MONGO_INITDB_ROOT_USERNAME=devuser
+      - MONGO_INITDB_ROOT_PASSWORD=devpass
     depends_on:
       - postgres
       - mongo
