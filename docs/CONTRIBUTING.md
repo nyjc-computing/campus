@@ -180,6 +180,13 @@ campus/
 
 ## 🧪 Testing Your Changes
 
+Campus provides **three testing strategies** for different scenarios. See **[Testing Strategies](testing-strategies.md)** for comprehensive documentation.
+
+**Quick Summary**:
+- **Unit tests**: `poetry run python tests/run_tests.py unit` (Flask test clients)
+- **Integration tests**: `poetry run python tests/run_tests.py integration` (local services)  
+- **Manual testing**: Set `ENV=development` (Railway services)
+
 ### Individual Package Testing
 
 ```bash

@@ -201,6 +201,16 @@ poetry install --all-extras
 
 ## Testing and CI/CD
 
+### Testing Strategies
+
+Campus provides **three distinct testing strategies** for different use cases:
+
+1. **Development Server Testing** - Test against live Railway services with simulated data
+2. **Local Service Testing** - Run services locally in background for integration testing  
+3. **Flask Test Client Testing** - In-process testing with no network calls (fastest)
+
+**📖 See [Testing Strategies](testing-strategies.md) for comprehensive documentation and examples.**
+
 ### Test Organization and Structure
 
 **Test Separation**: Tests are organized by package and type for maintainability and reliability.
