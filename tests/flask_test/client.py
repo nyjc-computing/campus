@@ -3,12 +3,15 @@
 FlaskTestClient adapter for Campus JsonClient protocol.
 """
 
+import os
 from typing import Any, Iterable, Mapping, Self
 from urllib.parse import urljoin
 
 from flask import Flask
 
 from campus.common.http.interface import JsonDict, JsonResponse
+from campus.common.http.errors import AuthenticationError
+from campus.common.webauth.header import HttpHeaderDict
 
 from .response import FlaskTestResponse
 
@@ -42,8 +45,29 @@ class FlaskTestClient:
         self.base_url = base_url
         self._test_client = app.test_client()
 
+        # Load authentication from environment variables
+        self._auth_headers = self._load_auth_headers()
+
         # Store app context for proper request handling
         self._app_context = None
+
+    def _load_auth_headers(self) -> dict[str, str]:
+        """Load authentication headers from environment variables."""
+        # Try ACCESS_TOKEN first (Bearer auth)
+        access_token = os.getenv("ACCESS_TOKEN")
+        if access_token:
+            return HttpHeaderDict.from_bearer_token(access_token)
+
+        # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
+        client_id = os.getenv("CLIENT_ID")
+        client_secret = os.getenv("CLIENT_SECRET")
+        if client_id and client_secret:
+            return HttpHeaderDict.from_credentials(client_id, client_secret)
+
+        # No credentials found - unauthenticated requests are not yet supported
+        raise AuthenticationError(
+            "Missing credentials. Set ACCESS_TOKEN or both CLIENT_ID and CLIENT_SECRET environment variables."
+        )
 
     def _ensure_app_context(self):
         """Ensure we have an active app context."""
@@ -63,7 +87,8 @@ class FlaskTestClient:
 
         response = self._test_client.get(
             self._make_path(path),
-            query_string=params
+            query_string=params,
+            headers=self._auth_headers
         )
         return FlaskTestResponse(response)
 
@@ -74,7 +99,8 @@ class FlaskTestClient:
         response = self._test_client.post(
             self._make_path(path),
             json=json,
-            content_type='application/json'
+            content_type='application/json',
+            headers=self._auth_headers
         )
         return FlaskTestResponse(response)
 
@@ -85,7 +111,8 @@ class FlaskTestClient:
         response = self._test_client.put(
             self._make_path(path),
             json=json,
-            content_type='application/json'
+            content_type='application/json',
+            headers=self._auth_headers
         )
         return FlaskTestResponse(response)
 
@@ -96,7 +123,8 @@ class FlaskTestClient:
         response = self._test_client.delete(
             self._make_path(path),
             json=json,
-            content_type='application/json'
+            content_type='application/json',
+            headers=self._auth_headers
         )
         return FlaskTestResponse(response)
 
@@ -107,7 +135,8 @@ class FlaskTestClient:
         response = self._test_client.patch(
             self._make_path(path),
             json=json,
-            content_type='application/json'
+            content_type='application/json',
+            headers=self._auth_headers
         )
         return FlaskTestResponse(response)
 
