@@ -8,6 +8,8 @@ This package provides the Yapper class for sending and receiving events.
 # See https://docs.python.org/3/tutorial/modules.html#packages for more
 # information.
 
+from campus.client.vault import VaultResource
+
 from .base import Event, EventHandler, YapperInterface
 
 
