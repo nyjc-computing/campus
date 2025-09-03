@@ -6,6 +6,8 @@ Functions for PostgreSQL database management during testing.
 import os
 import subprocess
 
+from campus.common import devops
+
 
 def database_exists(database_name: str) -> bool:
     """Check if a PostgreSQL database exists.
@@ -88,6 +90,7 @@ def ensure_database_exists(database_name: str) -> None:
         print(f"✅ {database_name} database created successfully")
 
 
+@devops.require_env(devops.TESTING)
 def purge_database(database_name: str) -> None:
     """Purge (drop and recreate) a PostgreSQL database for clean testing state.
 
