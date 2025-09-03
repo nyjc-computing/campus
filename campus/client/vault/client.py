@@ -10,7 +10,7 @@ from campus.common.http import JsonResponse
 class VaultClientResource(Resource):
     """Resource for Campus /vault/clients endpoint."""
 
-    def authenticate(self, client_id: str, client_secret: str) -> JsonResponse:
+    def authenticate(self, client_id: str, client_secret: str) -> dict:
         """Authenticate a vault client using client_id and client_secret.
 
         Args:
@@ -18,10 +18,12 @@ class VaultClientResource(Resource):
             client_secret: The client secret
         """
         data = {"client_id": client_id, "client_secret": client_secret}
-        response = self.client.post(self.make_path("authenticate"), data)
-        return response
+        json = self._process_response(
+            self.client.post(self.make_path("authenticate"), data)
+        )
+        return json
 
-    def new(self, name: str, description: str) -> JsonResponse:
+    def new(self, name: str, description: str) -> dict:
         """Create a new vault client.
 
         Args:
@@ -29,20 +31,22 @@ class VaultClientResource(Resource):
             description: Client description
 
         Returns:
-            Tuple of (client_data, client_secret)
+            {"client": client_data, "secret": client_secret}
 
         Example:
-            client_data, secret = vault.client.new("My App", "App description")
-            print(f"Created client {client_data['id']} with secret {secret}")
+            client_info = vault.client.new("My App", "App description")
+            print(f"Created client {client_info['client']['id']} with secret {client_info['secret']}")
         """
         data = {
             "name": name,
             "description": description
         }
-        response = self.client.post(self.path, json=data)
-        return response
+        json = self._process_response(
+            self.client.post(self.path, json=data)
+        )
+        return json
 
-    def get(self, client_id: str) -> JsonResponse:
+    def get(self, client_id: str) -> dict:
         """Get details of a specific vault client.
 
         Args:
@@ -55,10 +59,12 @@ class VaultClientResource(Resource):
             client_info = vault.client.get("client_abc123")
             print(f"Client: {client_info['name']}")
         """
-        response = self.client.get(self.make_path(client_id))
-        return response
+        json = self._process_response(
+            self.client.get(self.make_path(client_id))
+        )
+        return json
 
-    def list(self) -> JsonResponse:
+    def list(self) -> list[dict]:
         """List all vault clients.
 
         Returns:
@@ -69,10 +75,10 @@ class VaultClientResource(Resource):
             for client in clients:
                 print(f"Client: {client['name']} (ID: {client['id']})")
         """
-        response = self.client.get(self.path)
-        return response
+        json = self._process_response(self.client.get(self.path))
+        return json
 
-    def delete(self, client_id: str) -> JsonResponse:
+    def delete(self, client_id: str) -> dict:
         """Delete a vault client.
 
         Args:
@@ -85,8 +91,10 @@ class VaultClientResource(Resource):
             result = vault.client.delete("client_abc123")
             print(f"Action: {result['action']}")
         """
-        response = self.client.delete(self.make_path(client_id))
-        return response
+        json = self._process_response(
+            self.client.delete(self.make_path(client_id))
+        )
+        return json
 
 
 __all__ = ['VaultClientResource']
