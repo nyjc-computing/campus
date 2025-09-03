@@ -5,9 +5,11 @@ Provides a clean interface to start and stop all Campus services for testing.
 """
 
 from contextlib import contextmanager
-from typing import Optional
+from typing import Optional, cast
 
 from . import setup, vault, apps, storage, yapper
+
+# pylint: disable=import-outside-toplevel
 
 
 class ServiceManager:
@@ -69,6 +71,25 @@ class ServiceManager:
         self.vault_app = devops.deploy.create_app(campus.vault)
         flask_test.configure_for_testing(self.vault_app)
 
+        # Step 1.5: Set up vault factory for testing to use Flask test client
+        # This must happen after vault app is created but before yapper/apps import
+        from flask import Flask
+        import campus.client.vault
+        from campus.common.http.interface import JsonClient
+        import campus.config
+
+        def test_vault_factory() -> campus.client.vault.VaultResource:
+            vault_base_url = campus.config.BASE_URLS["campus.vault"][devops.TESTING]
+            if self.vault_app is None:
+                raise RuntimeError("vault_app not initialized")
+            test_client = cast(JsonClient, flask_test.client.FlaskTestClient(
+                cast(Flask, self.vault_app), base_url=vault_base_url)
+            )
+            return campus.client.vault.VaultResource(test_client, raw=False)
+
+        # Set the vault factory - this will be used by both yapper and apps modules
+        campus.client.vault.set_vault_factory(test_vault_factory)
+
         # Step 2: Initialize storage (doesn't depend on other services)
         storage.init()    # Sets up database connections
 
@@ -96,6 +117,10 @@ class ServiceManager:
         This method cleans up resources and resets the manager state.
         Can be called multiple times safely.
         """
+        # Reset vault factory to default
+        import campus.client.vault
+        campus.client.vault.set_vault_factory(None)
+
         # Clean up Flask apps
         if self.vault_app is not None:
             # Flask apps don't need explicit cleanup, but we can clear references
