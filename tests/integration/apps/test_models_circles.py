@@ -1,21 +1,33 @@
 import unittest
 
-# Set up environment variables before importing campus modules
-from tests.fixtures import setup
-setup.set_test_env_vars()
-setup.set_vault_env_vars()
-
-from campus.apps.api.routes import admin
-from campus.models import circle
-
-
+from tests.fixtures import services
 
 
 class TestCircles(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        """Set up local services once for the entire test class."""
+        cls.service_manager = services.create_service_manager()
+        cls.service_manager.setup()
+        
+        # Import after service setup to avoid connection issues
+        from campus.apps.api.routes import admin
+        from campus.models import circle
+        
+        cls.admin = admin
+        cls.circle = circle
+
+    @classmethod 
+    def tearDownClass(cls):
+        """Clean up services after all tests in the class."""
+        if hasattr(cls, 'service_manager'):
+            cls.service_manager.close()
+
     def setUp(self):
-        admin.purge_db()
-        admin.init_db()
+        # Initialize the database for each test
+        self.admin.purge_db()
+        self.admin.init_db()
 
     def test_circle_creation(self):
         data = {
@@ -24,7 +36,7 @@ class TestCircles(unittest.TestCase):
             "tag": "test",
             "parents": {"root": 15}
         }
-        circle_obj = circle.Circle()
+        circle_obj = self.circle.Circle()
         resp = circle_obj.new(**data)
         self.assertIsNotNone(resp)
 
@@ -35,7 +47,7 @@ class TestCircles(unittest.TestCase):
             "tag": "test",
             "parents": {"root": 15}
         }
-        circle_obj = circle.Circle()
+        circle_obj = self.circle.Circle()
         circle_data = circle_obj.new(**data)
         circle_id = circle_data["id"]
 
@@ -54,7 +66,7 @@ class TestCircles(unittest.TestCase):
             "tag": "test",
             "parents": {"root": 15}
         }
-        circle_obj = circle.Circle()
+        circle_obj = self.circle.Circle()
         circle_data = circle_obj.new(**data)
         circle_id = circle_data["id"]
 
@@ -75,7 +87,7 @@ class TestCircles(unittest.TestCase):
             "tag": "member",
             "parents": {"root": 15}
         }
-        circle_obj = circle.Circle()
+        circle_obj = self.circle.Circle()
         parent = circle_obj.new(**parent_data)
         member = circle_obj.new(**member_data)
         parent_id = parent["id"]

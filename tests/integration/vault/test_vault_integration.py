@@ -6,24 +6,34 @@ function correctly without returning 404 errors.
 
 import unittest
 
-# Set up environment variables before importing campus modules
-from tests.fixtures import setup
-setup.set_test_env_vars()
-setup.set_vault_env_vars()
-
-import campus.vault
-from campus.common import devops
-
-
+from tests.fixtures import services
 
 
 class TestVaultIntegration(unittest.TestCase):
     """Integration tests for the vault service."""
 
+    @classmethod
+    def setUpClass(cls):
+        """Set up local services once for the entire test class."""
+        cls.service_manager = services.create_service_manager()
+        cls.service_manager.setup()
+        
+        # Get the vault app from the service manager
+        from flask import Flask
+        vault_app = cls.service_manager.vault_app
+        if not isinstance(vault_app, Flask):
+            raise RuntimeError("Expected Flask app from service manager")
+        
+        cls.app = vault_app
+
+    @classmethod 
+    def tearDownClass(cls):
+        """Clean up services after all tests in the class."""
+        if hasattr(cls, 'service_manager'):
+            cls.service_manager.close()
+
     def setUp(self):
         """Set up test environment before each test."""
-        # Create the Flask test app using devops.deploy
-        self.app = devops.deploy.create_app(campus.vault)
         self.client = self.app.test_client()
         
         # Set up test context
