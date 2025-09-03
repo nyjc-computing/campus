@@ -10,15 +10,15 @@ class TestUsers(unittest.TestCase):
         """Set up local services once for the entire test class."""
         cls.service_manager = services.create_service_manager()
         cls.service_manager.setup()
-        
+
         # Import after service setup to avoid connection issues
         from campus.apps.api.routes import admin
         from campus.models import user
-        
+
         cls.admin = admin
         cls.user = user
 
-    @classmethod 
+    @classmethod
     def tearDownClass(cls):
         """Clean up services after all tests in the class."""
         if hasattr(cls, 'service_manager'):

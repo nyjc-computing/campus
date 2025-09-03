@@ -10,15 +10,15 @@ class TestCircles(unittest.TestCase):
         """Set up local services once for the entire test class."""
         cls.service_manager = services.create_service_manager()
         cls.service_manager.setup()
-        
+
         # Import after service setup to avoid connection issues
         from campus.apps.api.routes import admin
         from campus.models import circle
-        
+
         cls.admin = admin
         cls.circle = circle
 
-    @classmethod 
+    @classmethod
     def tearDownClass(cls):
         """Clean up services after all tests in the class."""
         if hasattr(cls, 'service_manager'):
@@ -56,7 +56,8 @@ class TestCircles(unittest.TestCase):
         self.assertIsNotNone(resp)
 
         # Test update
-        update_data = {"name": "Updated Circle", "description": "Updated description"}
+        update_data = {"name": "Updated Circle",
+                       "description": "Updated description"}
         circle_obj.update(circle_id, **update_data)
 
     def test_circle_delete(self):

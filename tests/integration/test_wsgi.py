@@ -6,14 +6,14 @@ from tests.fixtures import services
 
 
 class TestWSGI(unittest.TestCase):
-    
+
     @classmethod
     def setUpClass(cls):
         """Set up local services once for the entire test class."""
         cls.service_manager = services.create_service_manager()
         cls.service_manager.setup()
 
-    @classmethod 
+    @classmethod
     def tearDownClass(cls):
         """Clean up services after all tests in the class."""
         if hasattr(cls, 'service_manager'):
@@ -32,12 +32,12 @@ class TestWSGI(unittest.TestCase):
     def test_wsgi_import(self):
         for deploy_mode in ("apps", "vault"):
             os.environ["DEPLOY"] = deploy_mode
-            
+
             # Import wsgi after service setup to avoid connection issues
-            import wsgi 
+            import wsgi
             from wsgi import app
             self.assertIsNotNone(app, "App should not be None")
-            
+
             # Clean up for next iteration
             if 'wsgi' in sys.modules:
                 del sys.modules['wsgi']
