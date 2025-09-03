@@ -45,8 +45,18 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
         case "basic":
             client_id, client_secret = auth.credentials()
             # Raises API errors if auth fails
-            auth_result = vault.clients.authenticate(client_id, client_secret)
-            if not auth_result["status"] == "success":
+            try:
+                auth_json = vault.clients.authenticate(
+                    client_id,
+                    client_secret
+                )
+            except api_errors.NotFoundError:
+                # Client ID not found means invalid credentials
+                raise api_errors.UnauthorizedError(
+                    "Invalid client credentials"
+                )
+            # Passthrough other errors
+            if not auth_json["status"] == "success":
                 raise api_errors.UnauthorizedError(
                     "Invalid client credentials")
             g.current_client = vault.clients.get(client_id)
