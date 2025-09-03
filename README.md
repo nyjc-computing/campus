@@ -13,7 +13,7 @@ Campus is a comprehensive educational management platform that provides:
 
 - **User Management**: Student, teacher, and administrator accounts with role-based permissions
 - **Circle Management**: Groups, classes, and organizational units with hierarchical permissions
-- **Secure Authentication**: OAuth integration (Google) and email-based verification
+- **Secure Authentication**: OAuth integration (Google Workspace) and email-based verification
 - **Secrets Management**: Secure credential storage with fine-grained access control
 - **Flexible Storage**: Multi-backend data persistence (PostgreSQL, MongoDB)
 - **RESTful APIs**: Clean HTTP interfaces for all services
@@ -25,8 +25,8 @@ Campus is a comprehensive educational management platform that provides:
 
 - Python 3.11 or higher
 - Poetry for dependency management
-- PostgreSQL (for vault and storage services)
-- MongoDB (optional, for alternative storage backend)
+- PostgreSQL and MongoDB
+  (for vault and storage services; extensible to support other storage backends)
 
 ### Installation
 
@@ -38,86 +38,24 @@ cd campus
 # Install dependencies
 poetry install
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
 # Run the application
 poetry run python main.py
 ```
 
-### Docker Setup (Alternative)
-
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
-
-# The application will be available at http://localhost:5000
-```
-
-## 📁 Project Structure
-
-```
-campus/
-├── 📄 README.md                    # This file - project overview
-├── 📄 main.py                      # Application entry point
-├── 📄 pyproject.toml              # Root project configuration
-├── 📄 poetry.lock                 # Dependency lock file
-├── 📄 docker-compose.yml          # Docker setup
-├── 📄 .env.example                # Environment template
-├── 📁 campus/                     # Main package namespace
-│   ├── 📄 README.md               # Architecture overview
-│   ├── 🌐 apps/                  # Web applications and API services
-│   ├── 🔌 client/                # Client interfaces (HTTP-like APIs)
-│   ├── 🛠️ common/                # Shared utilities and schemas
-│   ├── 🏛️ models/                # Business logic and data models
-│   ├── 📧 services/              # Supporting services (email, etc.)
-│   ├── 💾 storage/               # Data persistence layer
-│   ├── 🔐 vault/                 # Secrets management service
-│   └── 📦 workspace/             # Deployment meta-package
-├── 📁 docs/                      # Additional documentation
-├── 📁 tests/                     # Test suite
-├── 📁 migrations/                # Database migrations
-└── 📁 deploy/                    # Deployment configurations
-```
+> **Note**: Configuration is managed through environment variables and the vault service. See [Configuration](#-configuration) section below for details.
 
 ## 🏗️ Architecture
 
-Campus follows a **modular monolith** architecture with clear service boundaries:
+Campus follows a **modular monolith** architecture with clear service boundaries. Services can be deployed together or separately, each with well-defined responsibilities and clean interfaces.
 
-### Core Principles
+**Key Components:**
+- **Apps**: Web APIs and authentication
+- **Vault**: Secure secrets management  
+- **Storage**: Multi-backend data persistence
+- **Client**: HTTP interfaces for external integration
+- **Models**: Business logic and data models
 
-- **🔄 Separation of Concerns**: Each service has a single, well-defined responsibility
-- **🔌 Loose Coupling**: Services communicate through clean interfaces
-- **🔐 Security First**: Authentication and authorization built into every layer
-- **📈 Scalable**: Can be deployed as monolith or microservices
-- **🧪 Testable**: Comprehensive test coverage with mocking support
-
-### Service Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   🌐 Apps       │    │   🔌 Client     │    │   🛠️ Common     │
-│   Web APIs      │    │   Interfaces    │    │   Utilities     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-         ┌───────────────────────┼───────────────────────┐
-         │                       │                       │
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   🏛️ Models     │    │   🔐 Vault      │    │   📧 Services   │
-│   Business      │    │   Secrets       │    │   Email, etc.   │
-│   Logic         │    │   Management    │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-                    ┌─────────────────┐
-                    │   💾 Storage    │
-                    │   Data Layer    │
-                    └─────────────────┘
-```
+For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
 
 ## 🔧 Configuration
 
@@ -141,11 +79,15 @@ secrets securely.
 
 ## 📚 Documentation
 
-- **[📄 Campus Architecture](campus/README.md)** - Detailed architecture overview and design principles
-- **[🔐 Vault Service](campus/vault/README.md)** - Secrets management and authentication
-- **[🔌 Client Interfaces](campus/client/README.md)** - HTTP-like APIs and usage patterns
-- **[📦 Workspace Package](campus/workspace/README.md)** - Deployment and platform compatibility
-- **[🏛️ Models Documentation](campus/models/README.md)** - Business logic and data models
+- **[� Getting Started](docs/GETTING-STARTED.md)** - New user guide and navigation
+- **[🏗️ Architecture](docs/architecture.md)** - Detailed architecture overview and design principles  
+- **[🤝 Contributing](docs/CONTRIBUTING.md)** - Development workflow and guidelines
+- **[🧪 Testing](docs/testing-strategies.md)** - Testing approaches and strategies
+- **[📦 Packaging](docs/PACKAGING.md)** - Monorepo structure and distribution
+
+**Service Documentation:**
+- **[� Vault Service](campus/vault/README.md)** - Secrets management and authentication
+- **[🔌 Client Interfaces](campus/client/README.md)** - HTTP APIs and usage patterns  
 - **[💾 Storage Documentation](campus/storage/README.md)** - Data persistence and backends
 
 ## 🚀 Deployment
@@ -186,26 +128,4 @@ Campus is developed by the **NYJC Computing Department** as an open-source educa
 
 ---
 
-**Ready to get started?** Check out the [Campus Architecture Guide](campus/README.md) for detailed technical documentation.
-
-## Installable Subpackages
-
-The following subpackages can be installed independently. Each provides an `install.sh` script for reliable installation with all dependencies:
-
-- `campus/client` — The client library for interacting with Campus APIs.
-- `campus/vault` — The Vault service and related tools.
-- `campus/apps` — The main application server and API endpoints.
-- `campus/workspace` — The meta-package for a full Campus deployment (installs all components).
-
-**To install any subpackage:**
-
-```bash
-cd campus/<subpackage>
-bash install.sh
-```
-
-Replace `<subpackage>` with `client`, `vault`, `apps`, or `workspace` as needed.
-
-> **Note:** Do not use `pip install` or `poetry install` directly for these subpackages unless you are developing locally. The install scripts ensure all dependencies are present and installed in the correct order.
-
-For more details, see the README in each subpackage directory.
+**Ready to get started?** Check out the [Getting Started Guide](docs/GETTING-STARTED.md) for step-by-step instructions.
