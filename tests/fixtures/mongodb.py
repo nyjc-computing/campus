@@ -6,6 +6,8 @@ Functions for MongoDB database management during testing.
 import os
 from pymongo import MongoClient
 
+from campus.common import devops
+
 
 def get_mongodb_uri(database_name: str | None = None) -> str:
     """Get MongoDB connection URI for testing.
@@ -106,6 +108,7 @@ def ensure_database_exists(database_name: str) -> None:
         print(f"✅ MongoDB database '{database_name}' created successfully")
 
 
+@devops.require_env(devops.TESTING)
 def purge_database(database_name: str) -> None:
     """Purge (drop and recreate) a MongoDB database for clean testing state.
 
