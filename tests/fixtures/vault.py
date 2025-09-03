@@ -37,8 +37,8 @@ def init():
     vault_vault = get_vault("vault")
     vault_vault.set("SECRET_KEY", "vault-secret-key")
 
-    # Create client for testing (use unique name with timestamp)
-    client_name = f"test-client-{int(time.time())}"
+    # Create client for testing (use consistent name)
+    client_name = "test-client"
     clientconfig = campus.vault.client.create_client(
         name=client_name,
         description="Campus test client"
@@ -48,10 +48,11 @@ def init():
     # Set client credentials in environment
     os.environ["CLIENT_ID"] = client["id"]
     os.environ["CLIENT_SECRET"] = secret
+    client_id = client["id"]
 
     # Give client access to vault label
     campus.vault.access.grant_access(
-        client_id=client["id"],
+        client_id=client_id,
         label="vault",
         access=campus.vault.access.ALL
     )

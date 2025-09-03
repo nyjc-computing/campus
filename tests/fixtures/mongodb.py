@@ -7,11 +7,20 @@ import os
 from pymongo import MongoClient
 
 
-def get_mongodb_uri() -> str:
+def get_mongodb_uri(database_name: str | None = None) -> str:
     """Get MongoDB connection URI for testing.
 
+    Args:
+        database_name: Optional name of the database to connect to (e.g., "storagedb").
+                      If None, returns a general connection URI.
+
     Returns:
-        MongoDB connection URI string
+        MongoDB connection URI string with authSource=admin for dev container.
+        The authSource=admin parameter is required because in the dev container
+        setup, the MongoDB root user credentials are stored in the 'admin'
+        database, but we need to connect to other databases. MongoDB requires
+        authentication against the database where the user was created (admin),
+        then allows access to the target database.
 
     Raises:
         OSError: If required environment variables are not set
@@ -21,7 +30,10 @@ def get_mongodb_uri() -> str:
     username = os.environ["MONGO_INITDB_ROOT_USERNAME"]
     password = os.environ["MONGO_INITDB_ROOT_PASSWORD"]
 
-    return f"mongodb://{username}:{password}@{host}:{port}/"
+    if database_name:
+        return f"mongodb://{username}:{password}@{host}:{port}/{database_name}?authSource=admin"
+    else:
+        return f"mongodb://{username}:{password}@{host}:{port}/?authSource=admin"
 
 
 def database_exists(database_name: str) -> bool:

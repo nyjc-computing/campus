@@ -4,6 +4,7 @@ Service management for local Campus service instances.
 Provides a clean interface to start and stop all Campus services for testing.
 """
 
+import os
 from contextlib import contextmanager
 from typing import Optional, cast
 
@@ -31,10 +32,27 @@ class ServiceManager:
             # Use manager.vault_app and manager.apps_app
     """
 
-    def __init__(self):
+    # Class-level shared instance for reuse across test suites
+    _shared_instance = None
+    _shared_setup_done = False
+
+    def __init__(self, shared=True):
+        """Initialize ServiceManager.
+
+        Args:
+            shared: If True, reuse shared instance across test suites.
+                   If False, create independent instance.
+        """
         self.vault_app: Optional[object] = None
         self.apps_app: Optional[object] = None
         self._setup_done = False
+        self._shared = shared
+
+        if shared and ServiceManager._shared_instance is not None:
+            # Reuse existing shared instance
+            self.vault_app = ServiceManager._shared_instance.vault_app
+            self.apps_app = ServiceManager._shared_instance.apps_app
+            self._setup_done = ServiceManager._shared_setup_done
 
     def setup(self):
         """Set up all Campus services for testing.
@@ -49,6 +67,13 @@ class ServiceManager:
             ServiceManager: Self for method chaining
         """
         if self._setup_done:
+            return self
+
+        # If using shared mode and shared instance exists, reuse it
+        if self._shared and ServiceManager._shared_setup_done and ServiceManager._shared_instance:
+            self.vault_app = ServiceManager._shared_instance.vault_app
+            self.apps_app = ServiceManager._shared_instance.apps_app
+            self._setup_done = True
             return self
 
         # Set up test environment
@@ -109,6 +134,12 @@ class ServiceManager:
         flask_test.configure_for_testing(self.apps_app)
 
         self._setup_done = True
+
+        # Store as shared instance if using shared mode
+        if self._shared:
+            ServiceManager._shared_instance = self
+            ServiceManager._shared_setup_done = True
+
         return self
 
     def close(self):
@@ -116,7 +147,15 @@ class ServiceManager:
 
         This method cleans up resources and resets the manager state.
         Can be called multiple times safely.
+
+        Note: For shared instances, the vault client is only deleted
+        when cleanup_shared() is called to prevent interfering with
+        other test suites that might still be using the client.
         """
+        # Only clean up vault client if this is not a shared instance
+        if not self._shared:
+            self._cleanup_vault_client()
+
         # Reset vault factory to default
         import campus.client.vault
         campus.client.vault.set_vault_factory(None)
@@ -129,7 +168,63 @@ class ServiceManager:
         if self.apps_app is not None:
             self.apps_app = None
 
+        # For non-shared instances, clear client credentials from environment
+        if not self._shared:
+            if "CLIENT_ID" in os.environ:
+                del os.environ["CLIENT_ID"]
+            if "CLIENT_SECRET" in os.environ:
+                del os.environ["CLIENT_SECRET"]
+
         self._setup_done = False
+
+    def _cleanup_vault_client(self):
+        """Properly clean up the test client from vault service.
+
+        This method attempts to delete the test client from the vault service
+        using the vault API, which ensures proper cleanup of both client records
+        and associated access permissions.
+        """
+        client_id = os.environ.get("CLIENT_ID")
+        if not client_id:
+            return  # No client to clean up
+
+        try:
+            # Try to delete the client through the vault service
+            # This is the proper way to clean up as it handles:
+            # 1. Client record deletion
+            # 2. Associated access record cleanup (if implemented)
+            # 3. Any other cleanup logic in the vault service
+            import campus.vault.client
+            campus.vault.client.delete_client(client_id)
+        except Exception:
+            # If deletion fails (e.g., vault service already shut down,
+            # client already deleted, database connection issues),
+            # we continue with environment cleanup silently.
+            # This is acceptable for test cleanup scenarios.
+            pass
+
+    @classmethod
+    def cleanup_shared(cls):
+        """Clean up shared service instances and reset storage.
+
+        This should be called at the end of test runs to ensure clean state.
+        """
+        if cls._shared_instance:
+            # For shared instances, we do the vault client cleanup here
+            cls._shared_instance._cleanup_vault_client()
+            cls._shared_instance.close()
+            cls._shared_instance = None
+            cls._shared_setup_done = False
+
+        # Clear client credentials from environment
+        if "CLIENT_ID" in os.environ:
+            del os.environ["CLIENT_ID"]
+        if "CLIENT_SECRET" in os.environ:
+            del os.environ["CLIENT_SECRET"]
+
+        # Reset test storage
+        from campus.storage.testing import reset_test_storage
+        reset_test_storage()
 
     def __enter__(self):
         """Context manager entry."""
@@ -163,10 +258,14 @@ def init():
         manager.close()
 
 
-def create_service_manager():
+def create_service_manager(shared=True):
     """Factory function to create a new ServiceManager.
 
+    Args:
+        shared: If True, reuse shared instance across test suites.
+               If False, create independent instance.
+
     Returns:
-        ServiceManager: New uninitialized service manager
+        ServiceManager: New or shared service manager
     """
-    return ServiceManager()
+    return ServiceManager(shared=shared)
