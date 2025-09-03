@@ -81,7 +81,12 @@ vault.set("api_key", "test-value")
 ### Setup
 
 ```python
-from tests.fixtures import services
+from tests.fixtures import services, postgres, mongodb
+
+# Purge databases for clean state (optional but recommended)
+postgres.purge_database("vaultdb")
+postgres.purge_database("storagedb") 
+mongodb.purge_database("storagedb")
 
 # Context manager automatically handles setup/cleanup
 with services.init() as manager:

@@ -106,6 +106,27 @@ def ensure_database_exists(database_name: str) -> None:
         print(f"✅ MongoDB database '{database_name}' created successfully")
 
 
+def purge_database(database_name: str) -> None:
+    """Purge (drop and recreate) a MongoDB database for clean testing state.
+
+    Args:
+        database_name: Name of the database to purge
+
+    Raises:
+        ServerSelectionTimeoutError: If MongoDB connection fails
+        OperationFailure: If authentication fails
+    """
+    uri = get_mongodb_uri()
+
+    with MongoClient(uri, serverSelectionTimeoutMS=5000) as client:
+        # Drop the database if it exists
+        if database_name in client.list_database_names():
+            client.drop_database(database_name)
+
+        # Recreate the database
+        create_database(database_name)
+
+
 def test_connection() -> None:
     """Test MongoDB connection.
 
