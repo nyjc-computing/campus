@@ -122,6 +122,16 @@ class MemoryCollection(CollectionInterface):
         for doc in matching_docs:
             self.delete_by_id(doc[PK])
 
+    def init_collection(self) -> None:
+        """Initialize the collection.
+
+        This method is intended for development/testing environments.
+        For memory collections, this is a no-op since collections are
+        automatically created when accessed.
+        """
+        # No-op for memory collections - they're created automatically
+        pass
+
     @classmethod
     def reset_storage(cls):
         """Reset the in-memory storage. Useful for testing."""
