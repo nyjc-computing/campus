@@ -7,11 +7,11 @@ This package provides the Yapper class for sending and receiving events.
 # This file is required to make this directory a package.
 # See https://docs.python.org/3/tutorial/modules.html#packages for more
 # information.
-
+from campus.client.vault import VaultResource
 from .base import Event, EventHandler, YapperInterface
 
 
-def create(**kwargs) -> YapperInterface:
+def create(vault: VaultResource | None = None, **kwargs) -> YapperInterface:
     """Factory function to get a Yapper client instance.
 
     # TODO: Update docstring (https://github.com/nyjc-computing/campus/issues/177)
@@ -62,7 +62,7 @@ def create(**kwargs) -> YapperInterface:
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
-            vault = get_vault()
+            vault = vault or get_vault()
             yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()["value"]
             if not yapperdb_uri:
                 raise ValueError(
