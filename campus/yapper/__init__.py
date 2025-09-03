@@ -64,8 +64,16 @@ def create(**kwargs) -> YapperInterface:
         # For now, use the development branch of the yapper db for testing
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
-            vault = get_vault()
-            yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()["value"]
+            try:
+                vault = get_vault()
+                yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()["value"]
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to retrieve YAPPERDB_URI from vault service for {env} environment. "
+                    f"Vault error: {e}. "
+                    f"This could indicate vault service connectivity issues or authentication problems."
+                ) from e
+                
             if not yapperdb_uri:
                 raise ValueError(
                     f"YAPPERDB_URI environment variable is required for {env} environment. "
