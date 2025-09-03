@@ -47,26 +47,6 @@ def get_db_uri(database_name: str) -> str:
     return f"postgresql://{user}:{password}@{host}:{port}/{database_name}"
 
 
-def get_mongodb_uri(database_name: str) -> str:
-    """Get a MongoDB URI string using existing mongodb env vars.
-
-    Args:
-        database_name: Name of the database (e.g., "storagedb")
-
-    Returns:
-        MongoDB URI string
-
-    Raises:
-        OSError: If required mongodb environment variables are not set
-    """
-    host = os.environ["MONGODB_HOST"]
-    port = os.environ["MONGODB_PORT"]
-    username = os.environ["MONGO_INITDB_ROOT_USERNAME"]
-    password = os.environ["MONGO_INITDB_ROOT_PASSWORD"]
-
-    return f"mongodb://{username}:{password}@{host}:{port}/{database_name}"
-
-
 def set_db_uri(env_var_name: str, database_name: str):
     """Set a database URI environment variable using existing postgres env vars.
 

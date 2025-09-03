@@ -42,6 +42,6 @@ def init():
     storage_vault.set("POSTGRESDB_URI", postgres_uri)
 
     # MongoDB URI and database name
-    mongodb_uri = setup.get_mongodb_uri("storagedb")
+    mongodb_uri = mongodb.get_mongodb_uri("storagedb")
     storage_vault.set("MONGODB_URI", mongodb_uri)
     storage_vault.set("MONGODB_NAME", "storagedb")

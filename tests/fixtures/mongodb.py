@@ -7,8 +7,12 @@ import os
 from pymongo import MongoClient
 
 
-def get_mongodb_uri() -> str:
+def get_mongodb_uri(database_name: str | None = None) -> str:
     """Get MongoDB connection URI for testing.
+
+    Args:
+        database_name: Optional name of the database to connect to (e.g., "storagedb").
+                      If None, returns a general connection URI.
 
     Returns:
         MongoDB connection URI string with authSource=admin for dev container.
@@ -26,7 +30,10 @@ def get_mongodb_uri() -> str:
     username = os.environ["MONGO_INITDB_ROOT_USERNAME"]
     password = os.environ["MONGO_INITDB_ROOT_PASSWORD"]
 
-    return f"mongodb://{username}:{password}@{host}:{port}/?authSource=admin"
+    if database_name:
+        return f"mongodb://{username}:{password}@{host}:{port}/{database_name}?authSource=admin"
+    else:
+        return f"mongodb://{username}:{password}@{host}:{port}/?authSource=admin"
 
 
 def database_exists(database_name: str) -> bool:
