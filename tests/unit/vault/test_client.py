@@ -129,7 +129,7 @@ class TestVaultClientResource(unittest.TestCase):
 
         result = self.client_resource.authenticate("client123", "secret456")
 
-        self.assertEqual(result, mock_response)
+        self.assertEqual(result, {"status": "success"})
         self.mock_client.post.assert_called_once_with(
             "vault/clients/authenticate",
             {"client_id": "client123", "client_secret": "secret456"}
@@ -146,7 +146,10 @@ class TestVaultClientResource(unittest.TestCase):
 
         result = self.client_resource.new("Test Client", "Description")
 
-        self.assertEqual(result, mock_response)
+        self.assertEqual(result, {
+            "client": {"id": "client123", "name": "Test Client"},
+            "client_secret": "secret456"
+        })
         self.mock_client.post.assert_called_once_with(
             "vault/clients",
             json={"name": "Test Client", "description": "Description"}
@@ -162,7 +165,9 @@ class TestVaultClientResource(unittest.TestCase):
 
         result = self.client_resource.get("client123")
 
-        self.assertEqual(result, mock_response)
+        self.assertEqual(result, {
+            "client": {"id": "client123", "name": "Test Client"}
+        })
         self.mock_client.get.assert_called_once_with("vault/clients/client123")
 
     def test_list_clients(self):
@@ -178,7 +183,12 @@ class TestVaultClientResource(unittest.TestCase):
 
         result = self.client_resource.list()
 
-        self.assertEqual(result, mock_response)
+        self.assertEqual(result, {
+            "clients": [
+                {"id": "client1", "name": "Client 1"},
+                {"id": "client2", "name": "Client 2"}
+            ]
+        })
         self.mock_client.get.assert_called_once_with("vault/clients")
 
     def test_delete_client(self):
@@ -192,7 +202,10 @@ class TestVaultClientResource(unittest.TestCase):
 
         result = self.client_resource.delete("client123")
 
-        self.assertEqual(result, mock_response)
+        self.assertEqual(result, {
+            "action": "deleted",
+            "client_id": "client123"
+        })
         self.mock_client.delete.assert_called_once_with(
             "vault/clients/client123")
 
@@ -302,7 +315,10 @@ class TestVaultResource(unittest.TestCase):
         # Test the public interface: vault.clients.new(...)
         result = self.vault_resource.clients.new("Test", "Description")
 
-        self.assertEqual(result, mock_response)
+        self.assertEqual(result, {
+            "client": {"id": "client123", "name": "Test"},
+            "client_secret": "secret456"
+        })
         self.mock_client.post.assert_called_once_with(
             "vault/clients",
             json={"name": "Test", "description": "Description"}

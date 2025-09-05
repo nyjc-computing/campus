@@ -240,8 +240,7 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
         client_secret: The client secret
 
     Raises:
-        NotFoundError: If client not found
-        UnauthorizedError: If client secret is invalid
+        UnauthorizedError: If client not found or client secret is invalid
     """
     with db.get_connection_context() as conn:
         client_record = db.execute_query(
@@ -250,17 +249,17 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
             (client_id,),
             fetch_one=True
         )
-        if not client_record:
-            raise api_errors.NotFoundError(
-                message=f"Vault client '{client_id}' not found", client_id=client_id)
-        if not client_record["secret_hash"]:
-            raise api_errors.InternalError(
-                message=f"Vault client '{client_id}' has no secret configured", client_id=client_id)
-        expected_hash = secret.hash_client_secret(
-            client_secret, _get_secret_key())
-        if client_record["secret_hash"] != expected_hash:
-            raise api_errors.UnauthorizedError(
-                message=f"Invalid secret for vault client '{client_id}'", client_id=client_id)
+    if not client_record:
+        raise api_errors.UnauthorizedError(
+            message=f"Invalid credentials", client_id=client_id)
+    if not client_record["secret_hash"]:
+        raise api_errors.InternalError(
+            message=f"Vault client '{client_id}' has no secret configured", client_id=client_id)
+    expected_hash = secret.hash_client_secret(
+        client_secret, _get_secret_key())
+    if client_record["secret_hash"] != expected_hash:
+        raise api_errors.UnauthorizedError(
+            message=f"Invalid secret for '{client_id}'", client_id=client_id)
 
 
 def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:

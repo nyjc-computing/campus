@@ -6,6 +6,8 @@ Functions for PostgreSQL database management during testing.
 import os
 import subprocess
 
+from campus.common import devops
+
 
 def database_exists(database_name: str) -> bool:
     """Check if a PostgreSQL database exists.
@@ -86,3 +88,30 @@ def ensure_database_exists(database_name: str) -> None:
         print(f"📝 Creating {database_name} database...")
         create_database(database_name)
         print(f"✅ {database_name} database created successfully")
+
+
+@devops.require_env(devops.TESTING)
+def purge_database(database_name: str) -> None:
+    """Purge (drop and recreate) a PostgreSQL database for clean testing state.
+
+    Args:
+        database_name: Name of the database to purge
+
+    Raises:
+        subprocess.SubprocessError: If database operations fail
+        OSError: If required postgres environment variables are not set
+    """
+    pg_env = os.environ
+
+    # Drop the database if it exists
+    result = subprocess.run([
+        'psql', '-h', pg_env['PGHOST'], '-U', pg_env['PGUSER'], '-d', 'postgres',
+        '-c', f'DROP DATABASE IF EXISTS {database_name};'
+    ], env=pg_env, capture_output=True, text=True, timeout=10)
+
+    if result.returncode != 0:
+        raise subprocess.SubprocessError(
+            f"Failed to drop database {database_name}: {result.stderr.strip()}")
+
+    # Recreate the database
+    create_database(database_name)

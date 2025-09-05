@@ -178,6 +178,21 @@ class SQLiteTable(TableInterface):
         for row in matching_rows:
             self.delete_by_id(row[PK])
 
+    def init_table(self, schema: str) -> None:
+        """Initialize the table with the given SQL schema.
+
+        This method is intended for development/testing environments.
+        For SQLite in-memory databases, tables need to be created with SQL.
+
+        Args:
+            schema: SQL CREATE TABLE statement defining the table structure.
+        """
+        self._ensure_connection()
+        assert self._connection is not None, "Database connection not initialized"
+        cursor = self._connection.cursor()
+        cursor.execute(schema)
+        self._connection.commit()
+
     @classmethod
     def reset_database(cls):
         """Reset the in-memory database. Useful for testing."""
