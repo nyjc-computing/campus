@@ -82,21 +82,22 @@ class JsonResponse(Protocol):
 
         match status:
             case 400:
-                raise InvalidRequestError(f"{status} Bad Request: {message}")
+                error = InvalidRequestError(f"{status} Bad Request")
             case 401:
-                raise AuthenticationError(f"{status} Unauthorized: {message}")
+                error = AuthenticationError(f"{status} Unauthorized")
             case 403:
-                raise AccessDeniedError(f"{status} Forbidden: {message}")
+                error = AccessDeniedError(f"{status} Forbidden")
             case 404:
-                raise NotFoundError(f"{status} Not Found: {message}")
+                error = NotFoundError(f"{status} Not Found")
             case 409:
-                raise ConflictError(f"{status} Conflict: {message}")
+                error = ConflictError(f"{status} Conflict")
             case 422:
-                raise InvalidRequestError(
-                    f"{status} Unprocessable Entity: {message}")
+                error = InvalidRequestError(f"{status} Unprocessable Entity")
             case _:
                 # Generic error for other 4xx/5xx codes
-                raise HttpClientError(f"{status} HTTP Error: {message}")
+                error = HttpClientError(f"{status} Unknown HTTP Error")
+        error.add_note(f"Headers: {self.headers}")
+        error.add_note(f"Body: {self.json() or self.text}")
 
     def json(self) -> Any:
         """Returns the response body as JSON."""
