@@ -51,6 +51,10 @@ class JsonResponse(Protocol):
         """Returns the response body as a string."""
         ...
 
+    def json(self) -> Any:
+        """Returns the response body as JSON."""
+        ...
+
     def ok(self) -> bool:
         """Returns True if the response status code is 2xx, False otherwise."""
         return 200 <= self.status_code < 300
@@ -97,11 +101,7 @@ class JsonResponse(Protocol):
                 # Generic error for other 4xx/5xx codes
                 error = HttpClientError(f"{status} Unknown HTTP Error")
         error.add_note(f"Headers: {self.headers}")
-        error.add_note(f"Body: {self.json() or self.text}")
-
-    def json(self) -> Any:
-        """Returns the response body as JSON."""
-        ...
+        error.add_note(f"Body: {self.json() or self}")
 
 
 @runtime_checkable
