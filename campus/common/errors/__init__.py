@@ -34,6 +34,12 @@ def handle_api_error(err: APIError) -> tuple[JsonDict, int]:
     logging.getLogger("campus.common.errors").exception(
         "APIError in %s: %s", module, err
     )
+    err_dict = err.to_dict()
+    from campus.common import devops
+    # Remove traceback in production for security reasons
+    if devops.ENV == devops.PRODUCTION:
+        del err_dict["traceback"]
+    return err_dict, err.status_code
 
 
 def handle_werkzeug_error(err: HTTPException) -> tuple[JsonDict, int]:
