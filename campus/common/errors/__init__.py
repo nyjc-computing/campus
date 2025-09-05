@@ -31,10 +31,9 @@ def handle_api_error(err: APIError) -> tuple[JsonDict, int]:
     standardised JSON responses.
     """
     module = get_caller()
-    logging.getLogger("campus.common.errors").error(
-        "APIError in %s: %s\n%s", module, err, traceback.format_exc()
+    logging.getLogger("campus.common.errors").exception(
+        "APIError in %s: %s", module, err
     )
-    return err.to_dict(), err.status_code
 
 
 def handle_werkzeug_error(err: HTTPException) -> tuple[JsonDict, int]:
@@ -46,8 +45,8 @@ def handle_werkzeug_error(err: HTTPException) -> tuple[JsonDict, int]:
     Reference: https://flask.palletsprojects.com/en/stable/errorhandling/
     """
     module = get_caller()
-    logging.getLogger("campus.common.errors").error(
-        "Werkzeug HTTPException in %s: %s\n%s", module, err, traceback.format_exc()
+    logging.getLogger("campus.common.errors").exception(
+        "Werkzeug HTTPException in %s: %s", module, err
     )
     match err:
         case InternalServerError():
