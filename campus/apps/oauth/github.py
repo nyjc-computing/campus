@@ -20,10 +20,6 @@ PROVIDER = 'github'
 
 github_user_credentials = UserCredentials(PROVIDER)
 
-GITHUB_CLIENT_ID = os.environ.get('CLIENT_ID')
-GITHUB_CLIENT_SECRET = os.environ.get('CLIENT_SECRET')
-
-
 session = Session()
 vault = get_vault()[PROVIDER]
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
