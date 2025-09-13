@@ -4,6 +4,7 @@ Default implementation for JsonClient and JsonResponse, using `requests`.
 """
 
 import os
+import logging
 
 from typing import Any, Callable, Iterable, Mapping, Optional, Self, TypedDict
 from urllib.parse import urljoin
@@ -16,6 +17,8 @@ from .errors import (
     NetworkError,
 )
 from .interface import JsonClient, JsonDict, JsonResponse
+
+logger = logging.getLogger(__name__)
 
 
 ClientFactory = Callable[[], JsonClient]
@@ -173,6 +176,11 @@ class DefaultClient(JsonClient):
             urljoin(self.base_url, path.lstrip('/')) if self.base_url
             else path
         )
+        
+        logger.debug(f"HTTP {method} {url}")
+        if json:
+            logger.debug(f"Request body: {json}")
+            
         try:
             response = self._session.request(
                 method=method,
@@ -181,7 +189,18 @@ class DefaultClient(JsonClient):
                 json=json,
                 timeout=30
             )
+            logger.debug(f"HTTP {method} {url} -> {response.status_code}")
+            
+            # Log response details for error cases
+            if response.status_code >= 400:
+                try:
+                    response_text = response.text[:500]  # Limit to avoid huge logs
+                    logger.warning(f"HTTP {method} {url} failed ({response.status_code}): {response_text}")
+                except:
+                    logger.warning(f"HTTP {method} {url} failed ({response.status_code}): <unable to read response>")
+                    
         except requests.RequestException as e:
+            logger.error(f"HTTP {method} {url} network error: {e}")
             raise NetworkError(f"Network request failed: {e}") from e
         else:
             return DefaultResponse(response)

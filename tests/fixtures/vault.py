@@ -4,30 +4,59 @@ Functions for initialising campus.vault for testing use
 """
 
 import os
+import time
 
-from . import require
+from . import postgres, require, setup
 
-def init_vault():
-    """Populate campus.vault with required data for testing, and
-    set the CLIENT_ID and CLIENT_SECRET env variables.
 
-    ENV must be 'testing' and VAULTDB_URI must be set before calling
-    this function.
+def init():
+    """Initialize vault fixtures for testing.
+
+    This function:
+    - Ensures vaultdb database exists
+    - Sets up VAULTDB_URI using postgres env vars
+    - Initializes vault database
+    - Creates test client and sets CLIENT_ID/CLIENT_SECRET env vars
+    - Sets up vault's own SECRET_KEY in 'vault' vault
+    - Gives client access to 'vault' label
+
+    ENV must be 'testing' and postgres env vars must be set before calling.
     """
     require.env("testing")
-    require.envvar("VAULTDB_URI")
 
+    # Ensure database exists first
+    postgres.ensure_database_exists("vaultdb")
+
+    setup.set_db_uri("VAULTDB_URI", "vaultdb")
     import campus.vault
-
-    # Initialise postgresql tables
     campus.vault.init_db()
-    # Create client for testing
-    client, client_secret = campus.vault.client.create_client(
-        name="test-client",
+
+    # Set up vault's own SECRET_KEY (for vault service client authentication)
+    # We need to bootstrap this manually since there's no client yet
+    from campus.vault import get_vault
+    vault_vault = get_vault("vault")
+    vault_vault.set("SECRET_KEY", "vault-secret-key")
+
+    # Create client for testing (use consistent name)
+    client_name = "test-client"
+    clientconfig = campus.vault.client.create_client(
+        name=client_name,
         description="Campus test client"
     )
+    client, secret = clientconfig["client"], clientconfig["secret"]
+
+    # Set client credentials in environment
     os.environ["CLIENT_ID"] = client["id"]
-    os.environ["CLIENT_SECRET"] = client_secret
+    os.environ["CLIENT_SECRET"] = secret
+    client_id = client["id"]
+
+    # Give client access to vault label
+    campus.vault.access.grant_access(
+        client_id=client_id,
+        label="vault",
+        access=campus.vault.access.ALL
+    )
+
 
 def give_vault_access(
         label: str,

@@ -1,0 +1,58 @@
+"""campus.storage.testing
+
+This module provides test storage backends and configuration for Campus testing.
+
+This allows the storage system to use lightweight, in-memory backends during testing
+instead of requiring full database connections.
+"""
+
+import os
+from typing import Type
+
+from campus.storage.tables.interface import TableInterface
+from campus.storage.documents.interface import CollectionInterface
+
+
+def is_test_mode() -> bool:
+    """Check if storage should use test backends based on STORAGE_MODE."""
+    storage_mode = os.environ.get("STORAGE_MODE", "0")
+    try:
+        return int(storage_mode) != 0
+    except ValueError:
+        return False
+
+
+def configure_test_storage():
+    """Configure storage to use test backends."""
+    # Set environment variable to indicate test mode
+    os.environ["STORAGE_MODE"] = "1"
+
+
+def get_table_backend() -> Type[TableInterface]:
+    """Get the appropriate table backend based on configuration."""
+    if is_test_mode():
+        from campus.storage.tables.backend.sqlite import SQLiteTable
+        return SQLiteTable
+    else:
+        from campus.storage.tables.backend.postgres import PostgreSQLTable
+        return PostgreSQLTable
+
+
+def get_collection_backend() -> Type[CollectionInterface]:
+    """Get the appropriate collection backend based on configuration."""
+    if is_test_mode():
+        from campus.storage.documents.backend.memory import MemoryCollection
+        return MemoryCollection
+    else:
+        from campus.storage.documents.backend.mongodb import MongoDBCollection
+        return MongoDBCollection
+
+
+def reset_test_storage():
+    """Reset all test storage. Only works in test mode."""
+    if is_test_mode():
+        from campus.storage.tables.backend.sqlite import SQLiteTable
+        from campus.storage.documents.backend.memory import MemoryCollection
+
+        SQLiteTable.reset_database()
+        MemoryCollection.reset_storage()

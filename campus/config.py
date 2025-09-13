@@ -15,13 +15,13 @@ BASE_URLS = {
     "campus.vault": {
         devops.PRODUCTION: "https://vault.campus.nyjc.app/api/v1/",
         devops.STAGING: "https://vault.campus.nyjc.dev/api/v1/",
-        devops.TESTING: "https://vault.campus.testing/",
+        devops.TESTING: "http://vault.campus.testing:8080/api/v1/",
         devops.DEVELOPMENT: "https://campusvault-development.up.railway.app/api/v1/",
     },
     "campus.apps": {
         devops.PRODUCTION: "https://api.campus.nyjc.app/api/v1/",
         devops.STAGING: "https://api.campus.nyjc.dev/api/v1/",
-        devops.TESTING: "https://apps.campus.testing/",
+        devops.TESTING: "http://apps.campus.testing:8081/api/v1/",
         devops.DEVELOPMENT: "https://campusapps-development.up.railway.app/api/v1/",
     }
 }

@@ -3,27 +3,36 @@
 Functions for initialising campus.yapper for testing use
 """
 
-from . import require, vault
+from . import postgres, require, setup
 
-def init_yapper():
-    """Populate campus.yapper with required data for testing.
 
-    ENV must be 'testing' and client credentials must be set before calling
-    this function.
+def init():
+    """Initialize yapper fixtures for testing.
+
+    This function:
+    - Ensures yapperdb database exists
+    - Initializes 'yapper' vault label
+    - Sets YAPPERDB_URI as a vault secret (not environment variable)
+    - Gives client access to 'yapper' label
+
+    ENV must be 'testing' and client credentials must be set before calling.
     """
     require.env("testing")
     client_id = require.envvar("CLIENT_ID")
     require.envvar("CLIENT_SECRET")
 
-    # Vault must already be initialised
-    # Test client must have access to yapper secrets
-    vault.give_vault_access("yapper", all=True)
-    
-    import campus.vault
+    # Ensure database exists first
+    postgres.ensure_database_exists("yapperdb")
 
-    # campus.yapper needs YAPPERDB_URI; use local instance
-    yapper_vault = campus.vault.get_vault("yapper")
-    yapper_vault.set(
-        "YAPPERDB_URI",
-        "postgresql://devuser:devpass@db:5432/yapperdb"
+    # Give test client access to yapper vault
+    import campus.vault
+    campus.vault.access.grant_access(
+        client_id=client_id,
+        label="yapper",
+        access=campus.vault.access.ALL
     )
+
+    # Set up yapper vault with database URI as a secret
+    yapper_vault = campus.vault.get_vault("yapper")
+    db_uri = setup.get_db_uri("yapperdb")
+    yapper_vault.set("YAPPERDB_URI", db_uri)

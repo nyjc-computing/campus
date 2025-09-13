@@ -70,6 +70,27 @@ def confirm_action_in_env(*envs, prompt: str = "Proceed? (y/N): "):
     return decorator
 
 
+def load_dotenv() -> bool:
+    """Load environment variables from a .env file if it exists.
+
+    Returns True if .env file was found and loaded, False otherwise.
+    """
+    dotenv_path = os.path.join(os.getcwd(), ".env")
+    if os.path.exists(dotenv_path):
+        with open(dotenv_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip(" \"\'")
+                    os.environ.setdefault(key, value)
+        return True
+    return False
+
+
 def require_env(*envs: str):
     """Decorator to require specified environments for function execution.
     """

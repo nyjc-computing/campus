@@ -51,6 +51,10 @@ class JsonResponse(Protocol):
         """Returns the response body as a string."""
         ...
 
+    def json(self) -> Any:
+        """Returns the response body as JSON."""
+        ...
+
     def ok(self) -> bool:
         """Returns True if the response status code is 2xx, False otherwise."""
         return 200 <= self.status_code < 300
@@ -78,29 +82,50 @@ class JsonResponse(Protocol):
             return
 
         status = self.status_code
-        message = str(self._response)
+        
+        # Try to get meaningful error details from response
+        try:
+            # First try to parse as JSON for structured error
+            response_data = self.json()
+            if isinstance(response_data, dict):
+                # Look for common error message fields
+                error_msg = (
+                    response_data.get('message') or 
+                    response_data.get('error') or 
+                    response_data.get('detail') or
+                    response_data.get('error_description')
+                )
+                if error_msg:
+                    message = error_msg
+                else:
+                    message = str(response_data)
+            else:
+                message = str(response_data)
+        except:
+            # Fall back to response text if JSON parsing fails
+            try:
+                message = self.text.strip() or f"HTTP {status}"
+            except:
+                message = f"HTTP {status} (no response body)"
 
         match status:
             case 400:
-                raise InvalidRequestError(f"{status} Bad Request: {message}")
+                error = InvalidRequestError(f"{status} Bad Request")
             case 401:
-                raise AuthenticationError(f"{status} Unauthorized: {message}")
+                error = AuthenticationError(f"{status} Unauthorized")
             case 403:
-                raise AccessDeniedError(f"{status} Forbidden: {message}")
+                error = AccessDeniedError(f"{status} Forbidden")
             case 404:
-                raise NotFoundError(f"{status} Not Found: {message}")
+                error = NotFoundError(f"{status} Not Found")
             case 409:
-                raise ConflictError(f"{status} Conflict: {message}")
+                error = ConflictError(f"{status} Conflict")
             case 422:
-                raise InvalidRequestError(
-                    f"{status} Unprocessable Entity: {message}")
+                error = InvalidRequestError(f"{status} Unprocessable Entity")
             case _:
                 # Generic error for other 4xx/5xx codes
-                raise HttpClientError(f"{status} HTTP Error: {message}")
-
-    def json(self) -> Any:
-        """Returns the response body as JSON."""
-        ...
+                error = HttpClientError(f"{status} Unknown HTTP Error")
+        error.add_note(f"Headers: {self.headers}")
+        error.add_note(f"Body: {self.json() or self}")
 
 
 @runtime_checkable

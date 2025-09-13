@@ -3,11 +3,14 @@
 Main vault client interface for secrets management and access control.
 """
 
+import logging
 from campus.client.interface import Resource
 from campus.common.http import JsonClient
 
 from .access import VaultAccessResource
 from .client import VaultClientResource
+
+logger = logging.getLogger(__name__)
 
 
 class VaultKeyResource(Resource):
@@ -15,19 +18,37 @@ class VaultKeyResource(Resource):
 
     def get(self) -> dict:
         """Get the secret value."""
-        response = self.client.get(self.path)
-        return self._process_response(response)  # type: ignore[return-value]
+        logger.debug(f"Vault GET request: {self.path}")
+        try:
+            response = self.client.get(self.path)
+            logger.debug(f"Vault GET response: {response.status_code}")
+            return self._process_response(response)  # type: ignore[return-value]
+        except Exception as e:
+            logger.error(f"Vault GET failed for {self.path}: {e}")
+            raise
 
     def set(self, *, value: str) -> dict:
         """Set the secret value."""
+        logger.debug(f"Vault SET request: {self.path}")
         data = {"value": value}
-        response = self.client.post(self.path, data)
-        return self._process_response(response)  # type: ignore[return-value]
+        try:
+            response = self.client.post(self.path, data)
+            logger.debug(f"Vault SET response: {response.status_code}")
+            return self._process_response(response)  # type: ignore[return-value]
+        except Exception as e:
+            logger.error(f"Vault SET failed for {self.path}: {e}")
+            raise
 
     def delete(self) -> dict:
         """Delete the secret."""
-        response = self.client.delete(self.path)
-        return self._process_response(response)  # type: ignore[return-value]
+        logger.debug(f"Vault DELETE request: {self.path}")
+        try:
+            response = self.client.delete(self.path)
+            logger.debug(f"Vault DELETE response: {response.status_code}")
+            return self._process_response(response)  # type: ignore[return-value]
+        except Exception as e:
+            logger.error(f"Vault DELETE failed for {self.path}: {e}")
+            raise
 
 
 class Vault(Resource):
@@ -50,8 +71,14 @@ class Vault(Resource):
         Returns:
             List of key names
         """
-        response = self.client.get(self.path)
-        return self._process_response(response)  # type: ignore[return-value]
+        logger.debug(f"Vault LIST request: {self.path}")
+        try:
+            response = self.client.get(self.path)
+            logger.debug(f"Vault LIST response: {response.status_code}")
+            return self._process_response(response)  # type: ignore[return-value]
+        except Exception as e:
+            logger.error(f"Vault LIST failed for {self.path}: {e}")
+            raise
 
 
 class VaultResource(Resource):
@@ -76,8 +103,14 @@ class VaultResource(Resource):
         Returns:
             List of available vault labels
         """
-        response = self.client.get(self.path)
-        return self._process_response(response)  # type: ignore[return-value]
+        logger.debug(f"Vault LABELS request: {self.path}")
+        try:
+            response = self.client.get(self.path)
+            logger.debug(f"Vault LABELS response: {response.status_code}")
+            return self._process_response(response)  # type: ignore[return-value]
+        except Exception as e:
+            logger.error(f"Vault LABELS failed for {self.path}: {e}")
+            raise
 
     @property
     def access(self) -> VaultAccessResource:
