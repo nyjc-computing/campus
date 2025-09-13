@@ -7,13 +7,14 @@ from flask import Blueprint, Flask
 
 from campus.common import devops
 
-from . import google
+from . import discord, google
 
 
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the oauth blueprint with the given Flask app."""
     # Organise API routes under api blueprint
     bp = Blueprint('oauth', __name__, url_prefix='/oauth')
+    discord.init_app(bp)
     google.init_app(bp)
     app.register_blueprint(bp)
 
