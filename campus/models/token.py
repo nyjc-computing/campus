@@ -81,6 +81,15 @@ class Tokens:
         """Initialize the Token model with a table storage interface."""
         self.storage = get_table(TABLE)
 
+    @staticmethod
+    def _sanitize_token(token: dict[str, str]) -> dict[str, str]:
+        """Remove sensitive fields from a token record before returning it."""
+        sanitized = dict(token)
+        del token[schema.CAMPUS_KEY]
+        del sanitized["access_token"]
+        del token["expires_at"]
+        return sanitized
+
     def delete(self, token_id: schema.CampusID) -> None:
         """Delete a token from the database."""
         self.storage.delete_by_id(token_id)
@@ -97,11 +106,10 @@ class Tokens:
             "find() by id is not allowed.\n"
             "use get() instead."
         )
-        tokens = self.storage.get_matching(match)
-        for token in tokens:
-            del token[schema.CAMPUS_KEY]
-            del token["access_token"]
-            del token["expires_at"]
+        tokens = [
+            self._sanitize_token(token)
+            for token in self.storage.get_matching(match)
+        ]
         return tokens
 
     def get(self, token_id: schema.CampusID) -> dict:
