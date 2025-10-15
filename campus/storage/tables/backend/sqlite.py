@@ -29,9 +29,6 @@ from typing import Any, Dict, List, Optional
 
 from campus.storage.tables.interface import TableInterface, PK
 
-# This constant should match the one in campus.common.schema
-PK = "id"
-
 
 class SQLiteTable(TableInterface):
     """SQLite implementation of the table storage interface."""

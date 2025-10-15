@@ -44,4 +44,3 @@ class BaseRecord:
 class UserRecord(BaseRecord):
     """Base class for user records in Campus."""
     id: schema.UserID = field(init=True)
-    id: schema.CampusID | schema.UserID

@@ -49,8 +49,6 @@ from campus.common.webauth.oauth2 import (
 from campus.common.webauth.token import CredentialToken
 from campus.models.credentials import UserCredentials
 from campus.models.session import Sessions
-from campus.models.credentials import UserCredentials
-from campus.models.session import Sessions
 
 PROVIDER = 'google'
 
