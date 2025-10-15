@@ -43,7 +43,7 @@ class SessionNew(TypedDict, total=False):
     scopes: list[str]
 
 
-class Session:
+class Sessions:
     """Model for Sessions.
 
     This model represents a Session in the database.
