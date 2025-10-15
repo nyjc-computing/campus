@@ -111,7 +111,7 @@ class Sessions:
                 session_id=session_id
             )
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e) from e
+            raise api_errors.InternalError(message=str(e), error=e)
         else:
             # For consistency, only remove client-side session after
             # successful server-side deletion

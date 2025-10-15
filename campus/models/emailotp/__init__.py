@@ -15,6 +15,7 @@ from campus.common import devops, schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.models.base import BaseRecordDict
+from campus.common import devops, schema
 from campus.storage import (
     errors as storage_errors,
     get_table,
