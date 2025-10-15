@@ -3,6 +3,11 @@
 Base configs and models for authentication flows.
 """
 
+__all__ = [
+    "SecurityError",
+    "SecurityScheme",
+]
+
 from typing import Protocol, Type, TypeVar, Unpack
 
 from campus.common.integration.config import (
@@ -52,9 +57,3 @@ class SecurityScheme(Protocol):
         security_config = data["security"][security]
         security_config.update(override_config)  # type: ignore[typeddict-item]
         return cls(provider, **security_config)
-
-
-__all__ = [
-    "SecurityError",
-    "SecurityScheme",
-]

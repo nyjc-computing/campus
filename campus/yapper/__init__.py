@@ -8,6 +8,16 @@ This package provides the Yapper class for sending and receiving events.
 # See https://docs.python.org/3/tutorial/modules.html#packages for more
 # information.
 
+# The __all__ variable is used to define the public API of this module.
+# See https://docs.python.org/3/tutorial/modules.html#importing-from-a-package
+# for more information.
+__all__ = [
+    "Event",
+    "EventHandler",
+    "YapperInterface",
+    "create",
+]
+
 from campus.client.vault import VaultResource
 
 from .base import Event, EventHandler, YapperInterface
@@ -87,14 +97,3 @@ def create(**kwargs) -> YapperInterface:
         f"Unsupported ENV value: {env}. "
         "Use 'development', 'testing', 'staging', or 'production'."
     )
-
-
-# The __all__ variable is used to define the public API of this module.
-# See https://docs.python.org/3/tutorial/modules.html#importing-from-a-package
-# for more information.
-__all__ = [
-    "Event",
-    "EventHandler",
-    "YapperInterface",
-    "create",
-]

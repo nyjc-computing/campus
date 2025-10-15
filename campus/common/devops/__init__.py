@@ -3,6 +3,8 @@
 This module contains the DevOps-related functionality for the Campus project.
 """
 
+__all__ = ["deploy"]
+
 import os
 from functools import wraps
 import logging
@@ -104,8 +106,3 @@ def require_env(*envs: str):
             return func(*args, **kwargs)
         return wrapper
     return decorator
-
-
-__all__ = [
-    "deploy",
-]

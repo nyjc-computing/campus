@@ -71,13 +71,6 @@ USAGE EXAMPLE:
     # DELETE /vault/api-secrets/my_key
 """
 
-from flask import Blueprint, Flask
-
-from campus.common import devops, errors
-
-from . import access, client, vault
-from .vault import get_vault
-
 __all__ = [
     "get_vault",
     "init_app",
@@ -85,6 +78,13 @@ __all__ = [
     "access",
     "client",
 ]
+
+from flask import Blueprint, Flask
+
+from campus.common import devops, errors
+
+from . import access, client, vault
+from .vault import get_vault
 
 
 # This file uses local imports to avoid polluting global space

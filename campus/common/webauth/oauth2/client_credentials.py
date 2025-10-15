@@ -5,7 +5,14 @@ OAuth2 Client Credentials flow schemas and models.
 Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4
 """
 
-from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
+__all__ = [
+    "OAuth2ClientCredentialsConfigSchema",
+    "OAuth2ClientCredentialsFlowScheme",
+    "ClientCredentialsTokenRequestSchema",
+    "ClientCredentialsTokenResponseSchema",
+]
+
+from typing import Any, Literal, NotRequired, TypedDict, Unpack
 
 import requests
 
@@ -167,11 +174,3 @@ class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
             provider=config["provider"],
             **security_config
         )
-
-
-__all__ = [
-    "OAuth2ClientCredentialsConfigSchema",
-    "OAuth2ClientCredentialsFlowScheme",
-    "ClientCredentialsTokenRequestSchema",
-    "ClientCredentialsTokenResponseSchema",
-]

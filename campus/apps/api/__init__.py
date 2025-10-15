@@ -3,6 +3,8 @@
 Web API for Campus services.
 """
 
+__all__ = []
+
 from flask import Blueprint, Flask
 
 from campus.apps.api import routes
@@ -19,8 +21,3 @@ def init_app(app: Flask | Blueprint) -> None:
     routes.users.init_app(bp)
     routes.admin.init_app(bp)
     app.register_blueprint(bp)
-
-
-__all__ = [
-    'init_app',
-]

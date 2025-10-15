@@ -3,6 +3,11 @@
 Web endpoints for Campus authentication.
 """
 
+__all__ = [
+    'authenticate_client',
+    'client_auth_required',
+]
+
 from flask import Blueprint, Flask
 
 from campus.common import devops
@@ -29,11 +34,3 @@ def init_db() -> None:
     models.
     """
     # campusauth relies on existing models and does not use any drums.
-
-
-__all__ = [
-    'init_app',
-    'init_db',
-    'authenticate_client',
-    'client_auth_required',
-]

@@ -11,6 +11,8 @@ Main operations:
 - 
 """
 
+__all__ = []
+
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.models.base import BaseRecordDict
@@ -147,8 +149,3 @@ class Source:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
             raise api_errors.InternalError.from_exception(e) from e
-
-
-__all__ = [
-    "init_db",
-]

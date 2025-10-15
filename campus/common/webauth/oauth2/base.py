@@ -1,8 +1,14 @@
 """campus.common.webauth.oauth2.base
 
 OAuth2 security scheme base configs and models.
-
 """
+
+__all__ = [
+    "OAuth2AuthorizationCodeConfigSchema",
+    "OAuth2Flow",
+    "OAuth2FlowScheme",
+    "OAuth2SecurityError",
+]
 
 from typing import Generic, TypeVar, Unpack
 
@@ -44,12 +50,3 @@ class OAuth2FlowScheme(SecurityScheme, Generic[F]):
     ):
         super().__init__(provider, **config)
         self.flow = config["flow"]
-
-
-__all__ = [
-    "OAuth2AuthorizationCodeConfigSchema",
-    "OAuth2FlowScheme",
-    "OAuth2SecurityError",
-    "OAuth2Flow",
-    "OAuth2SecurityError"
-]

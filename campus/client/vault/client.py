@@ -3,6 +3,8 @@
 Vault client management for creating and managing vault authentication clients.
 """
 
+__all__ = ['VaultClientResource']
+
 from campus.client.interface import Resource
 
 
@@ -98,6 +100,3 @@ class VaultClientResource(Resource):
         )
         assert isinstance(json, dict)
         return json
-
-
-__all__ = ['VaultClientResource']

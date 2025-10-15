@@ -10,6 +10,11 @@ This interface is designed to:
 - so aa to enable WSGI hooks or unit testing with a local WSGI app.
 """
 
+__all__ = [
+    "JsonClient",
+    "JsonResponse",
+]
+
 from collections.abc import Mapping
 from typing import Any, Iterable, Protocol, Self, runtime_checkable
 
@@ -168,9 +173,3 @@ class JsonClient(Protocol):
     def patch(self: Self, path: str, json: Any = None) -> JsonResponse:
         """Sends a PATCH request."""
         ...
-
-
-__all__ = [
-    "JsonClient",
-    "JsonResponse",
-]
