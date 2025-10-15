@@ -10,11 +10,7 @@ Tokens are issued for:
 Tokens follow storage interface requirements and will have
 `id` and `created_at` fields.
 
-The browser/device is expected to store the token id in a client-side cookie.
-This enables multiple sign-in sessions per user-device.
-
-Tokens are long-lived and the session stored by the browser may persist over
-multiple days.
+Tokens are long-lived and may persist over multiple days.
 """
 
 from typing import TypedDict
@@ -58,11 +54,9 @@ def init_db():
 
 class TokenRecordDict(BaseRecordDict):
     """Schema for a full token record."""
-    expires_at: str
+    expires_at: schema.DateTime
     client_id: schema.CampusID
     user_id: schema.UserID
-    agent_string: str
-    access_token: str
     scopes: str
 
 
@@ -70,7 +64,6 @@ class TokenNew(TypedDict):
     """Schema for a new token request."""
     client_id: schema.CampusID
     user_id: schema.UserID
-    agent_string: str
     scopes: list[str]
 
 
@@ -94,29 +87,33 @@ class Tokens:
         """Delete a token from the database."""
         self.storage.delete_by_id(token_id)
 
-    def find(self, **match: str) -> list[dict]:
+    def find(self, sanitized: bool = True, **match: str):
         """Retrieve a list of matching tokens. 
 
         This is intended for session retrieval by user and/or client, 
         and not meant for authentication. 
         For security reasons, the token id, access_token and expiry
-        are stripped.
+        are stripped by default. Pass `sanitized=False` to get full records.
         """
-        assert schema.CAMPUS_KEY not in match, (
-            "find() by id is not allowed.\n"
-            "use get() instead."
-        )
-        tokens = [
-            self._sanitize_token(token)
-            for token in self.storage.get_matching(match)
-        ]
+        if schema.CAMPUS_KEY in match:
+            raise ValueError(
+                "'id=' keyword argument in find() by id is not allowed.\n"
+                "use get() instead."
+            )
+        tokens = self.storage.get_matching(match)
         return tokens
 
-    def get(self, token_id: schema.CampusID) -> dict:
+    def get(self, token_id: schema.CampusID) -> TokenRecordDict:
         """Retrieve a token from the database by its ID."""
-        return self.storage.get_by_id(token_id)
+        token_record = self.storage.get_by_id(token_id)
+        return token
 
-    def new(self, token_data: TokenNew, *, expiry_seconds: int) -> dict:
+    def new(
+            self,
+            token_data: TokenNew,
+            *,
+            expiry_seconds: int = DEFAULT_EXPIRY_SECONDS
+    ) -> TokenRecordDict:
         """Create a new token in the database."""
         token = dict(token_data)
         token[schema.CAMPUS_KEY] = uid.generate_category_uid("token")
@@ -129,41 +126,10 @@ class Tokens:
         token["scopes"] = " ".join(token_data["scopes"])
         try:
             self.storage.insert_one(token)
-        except storage_errors.ConflictError as e:
+        except storage_errors.ConflictError:
             raise api_errors.ConflictError(
                 message="Token already exists for this user and client",
                 client_id=token_data["client_id"],
                 user_id=token_data["user_id"]
             ) from None
         return token
-
-    def validate_token(self, access_token: str) -> dict:
-        """Retrieve and return a token by its access token."""
-        toks = self.storage.get_matching({"access_token": access_token})
-        if not toks:
-            raise api_errors.UnauthorizedError(
-                message="Invalid token",
-                access_token=access_token
-            )
-        token = toks[0]
-        if utc_time.is_expired(token["expires_at"]):
-            raise api_errors.UnauthorizedError(
-                message="Token expired",
-                access_token=access_token
-        )
-        return token
-
-    def validate_scope(
-            self,
-            session: dict,
-            scopes: str | list[str]
-    ) -> list[str]:
-        """Validate the requested scopes against the session's granted scopes.
-        Returns the missing scopes.
-        """
-        if isinstance(scopes, str):
-            scopes = scopes.split(" ")
-        return [
-            scope for scope in scopes
-            if scope not in session["scopes"]
-        ]

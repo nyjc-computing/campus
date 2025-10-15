@@ -214,8 +214,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
         {
             "client_id": g.current_client["id"],
             "user_id": g.current_user["id"],
-            "agent_string": g.user_agent,
-            "scopes": session.get("scopes", []),
+            "scopes": session["scopes"],
         },
         expiry_seconds=DEFAULT_EXPIRY
     )
