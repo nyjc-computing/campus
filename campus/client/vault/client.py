@@ -4,7 +4,6 @@ Vault client management for creating and managing vault authentication clients.
 """
 
 from campus.client.interface import Resource
-from campus.common.http import JsonResponse
 
 
 class VaultClientResource(Resource):
@@ -21,7 +20,7 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.post(self.make_path("authenticate"), data)
         )
-        return json
+        return json.json()
 
     def new(self, name: str, description: str) -> dict:
         """Create a new vault client.
@@ -44,7 +43,7 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.post(self.path, json=data)
         )
-        return json
+        return json.json()
 
     def get(self, client_id: str) -> dict:
         """Get details of a specific vault client.
@@ -62,7 +61,7 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.get(self.make_path(client_id))
         )
-        return json
+        return json.json()
 
     def list(self) -> list[dict]:
         """List all vault clients.
@@ -76,7 +75,7 @@ class VaultClientResource(Resource):
                 print(f"Client: {client['name']} (ID: {client['id']})")
         """
         json = self._process_response(self.client.get(self.path))
-        return json
+        return json.json()
 
     def delete(self, client_id: str) -> dict:
         """Delete a vault client.
@@ -94,7 +93,7 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.delete(self.make_path(client_id))
         )
-        return json
+        return json.json()
 
 
 __all__ = ['VaultClientResource']
