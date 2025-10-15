@@ -5,8 +5,7 @@ Base types and classes for all Campus models.
 
 from typing import TypedDict
 
-from campus.common.schema import CampusID, UserID
-from campus.common.utils import utc_time
+from campus.common import schema
 
 
 class BaseRecord(TypedDict):
@@ -15,5 +14,5 @@ class BaseRecord(TypedDict):
     Records are Mapping objects that represent a single record in the database.
     BaseRecord reflects the keys that are common to all records in the system.
     """
-    id: CampusID | UserID
-    created_at: utc_time.datetime
+    id: schema.CampusID | schema.UserID
+    created_at: schema.DatetimeStr

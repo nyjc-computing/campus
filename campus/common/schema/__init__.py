@@ -3,9 +3,13 @@
 Schema definitions, enums, and constants for Campus.
 """
 
-from .base import CampusID, UserID
-
 __all__ = [
     "CampusID",
+    "DatetimeStr",
+    "CAMPUS_KEY",
     "UserID",
 ]
+
+from .base import CampusID, DatetimeStr, UserID
+
+CAMPUS_KEY = "id"
