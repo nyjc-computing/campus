@@ -10,4 +10,5 @@ ResponseStatus = Literal["ok", "error"]
 
 # TODO: Replace with OpenAPI-based pattern-string schema
 CampusID = str
+DatetimeStr = str
 UserID = str

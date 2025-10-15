@@ -6,8 +6,7 @@ Base types and classes for all Campus models.
 from dataclasses import asdict, dataclass, field
 from typing import Any, Self, Type, TypedDict
 
-from campus.common.schema import CampusID, DateTime, UserID
-from campus.common.utils import utc_time
+from campus.common import schema
 
 
 class BaseRecordDict(TypedDict):
@@ -16,8 +15,8 @@ class BaseRecordDict(TypedDict):
     Records are Mapping objects that represent a single record in the database.
     BaseRecord reflects the keys that are common to all records in the system.
     """
-    id: CampusID | UserID
-    created_at: utc_time.datetime
+    id: schema.CampusID | schema.UserID
+    created_at: schema.DatetimeStr
 
 
 # Issue 201: refactoring to dataclasses
@@ -28,8 +27,8 @@ class BaseRecord:
     
     Subclasses are expected to provide their own CampusID factories.
     """
-    id: CampusID = field(init=True)
-    created_at: DateTime = field(default_factory=DateTime.utcnow)
+    id: schema.CampusID = field(init=True)
+    created_at: schema.DateTime = field(default_factory=schema.DateTime.utcnow)
 
     @classmethod
     def from_dict(cls: Type[Self], data: dict) -> Self:
@@ -44,4 +43,5 @@ class BaseRecord:
 @dataclass(eq=False, kw_only=True)
 class UserRecord(BaseRecord):
     """Base class for user records in Campus."""
-    id: UserID = field(init=True)
+    id: schema.UserID = field(init=True)
+    id: schema.CampusID | schema.UserID

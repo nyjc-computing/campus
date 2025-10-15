@@ -21,12 +21,11 @@ from .openapi import (
 
 __all__ = [
     "CampusID",
+    "DatetimeStr",
+    "CAMPUS_KEY",
     "UserID",
-    "Boolean",
-    "Integer",
-    "Number",
-    "String",
-    "DateTime",
-    "Array",
-    "Object",
 ]
+
+from .base import CampusID, DatetimeStr, UserID
+
+CAMPUS_KEY = "id"
