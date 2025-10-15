@@ -275,5 +275,5 @@ def logout() -> Response:
         501 Not Implemented: str
         - Returned as revoking the login is not implemented yet.
     """
-    # TODO: Revoke login token
-    return "Not implemented", 501
+    sessions.delete()
+    return redirect(url_for('campus.home'))
