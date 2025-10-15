@@ -79,12 +79,12 @@ def init_db():
             parents={}
         )
     else:
-        root_circle = root_circles[0]
+        root_circle = CircleRecord.from_dict(root_circles[0])
     if "root" not in meta_record or not meta_record["root"]:
         update_circle_meta(
             {
-                "root": root_circle[schema.CAMPUS_KEY],
-                root_circle[schema.CAMPUS_KEY]: {}
+                "root": root_circle.id,
+                root_circle.id: {}
             }
         )
     # Check for existing admin circle, otherwise create one
@@ -97,7 +97,7 @@ def init_db():
             name="campus-admin",
             description="Campus admin circle",
             tag="admin",
-            parents={root_circle[schema.CAMPUS_KEY]: 15}
+            parents={root_circle.id: 15}
         )
     else:
         admin_circle = admin_circles[0]
@@ -145,6 +145,7 @@ class CircleRecord(BaseRecord):
     description: str = ""
     tag: CircleTag
     members: dict[CircleID, AccessValue] = field(default_factory=dict)
+    sources: dict = field(default_factory=dict)
 
 
 class CircleMemberRemove(TypedDict):
@@ -371,7 +372,7 @@ class Circle:
         else:
             return [CircleRecord(**record) for record in records]
 
-    def new(self, **fields: Unpack[CircleNew]) -> CircleResource:
+    def new(self, **fields: Unpack[CircleNew]) -> CircleRecord:
         """This creates a new circle and adds it to the circle collection.
 
         It does not add it to the circle hierarchy or access control.
@@ -398,18 +399,22 @@ class Circle:
         # TODO: Use transactions for atomic creation of circles and their parents
         # https://www.mongodb.com/docs/languages/python/pymongo-driver/upcoming/write/transactions/
         try:
-            self.storage.insert_one(dict(record))
+            self.storage.insert_one(record.to_dict())
             for parent_id, access_value in parents.items():
                 # TODO: Drum notation for updating nested fields
-                self.members.add(parent_id, member_id=circle_id,
-                                 access_value=access_value)
-            # Return as CircleResource (add sources field)
-            resource = CircleResource(**record)
-            # TODO: join with sources and access values
-            resource["sources"] = {}
-            return resource
+                self.members.add(
+                    parent_id,
+                    member_id=circle_id,
+                    access_value=access_value
+                )
         except storage_errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+        else:
+            # Return as CircleResource (add sources field)
+            # TODO: join with sources and access values
+            record.sources = {}
+            return record
+
 
     def delete(self, circle_id: str) -> None:
         """Delete a circle by id.
