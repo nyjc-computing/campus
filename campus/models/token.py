@@ -40,7 +40,7 @@ def init_db():
     production.
     """
     storage = get_table(TABLE)
-    schema = f"""
+    table_schema = f"""
         CREATE TABLE IF NOT EXISTS "{TABLE}" (
             id TEXT PRIMARY KEY,
             created_at TEXT,
@@ -53,10 +53,10 @@ def init_db():
             UNIQUE(client_id, user_id)
         )
     """
-    storage.init_table(schema)
+    storage.init_table(table_schema)
 
 
-class TokenRecord(BaseRecordDict):
+class TokenRecordDict(BaseRecordDict):
     """Schema for a full token record."""
     expires_at: str
     client_id: schema.CampusID

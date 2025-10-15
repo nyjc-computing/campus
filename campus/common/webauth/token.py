@@ -77,7 +77,7 @@ class CredentialToken:
         
         return utc_time.is_expired(
             self.expires_at.to_datetime(),
-            from_time=from_time or utc_time.now(),
+            at_time=from_time or utc_time.now(),
             threshold=EXPIRY_THRESHOLD
         )
     
