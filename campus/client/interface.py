@@ -42,14 +42,14 @@ class Resource:
                 self.path = '/'.join(parts)
                 self.raw = raw if raw is not None else False
 
-    def _process_response(self, response: JsonResponse) -> Union[JsonResponse, Any]:
+    def _process_response(self, response: JsonResponse) -> JsonResponse | Any:
         """Process response based on raw setting.
 
         If raw=True, returns JsonResponse directly.
         If raw=False, calls raise_for_status() then returns response.json().
         """
         if self.raw:
-            return response  # type: ignore
+            return response
 
         response.raise_for_status()
         return response.json()

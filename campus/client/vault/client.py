@@ -22,7 +22,7 @@ class VaultClientResource(Resource):
         )
         return json.json()
 
-    def new(self, name: str, description: str) -> dict:
+    def new(self, name: str, description: str) -> dict[str, str]:
         """Create a new vault client.
 
         Args:
@@ -43,9 +43,10 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.post(self.path, json=data)
         )
-        return json.json()
+        assert isinstance(json, dict)
+        return json
 
-    def get(self, client_id: str) -> dict:
+    def get(self, client_id: str) -> dict[str, str]:
         """Get details of a specific vault client.
 
         Args:
@@ -61,7 +62,8 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.get(self.make_path(client_id))
         )
-        return json.json()
+        assert isinstance(json, dict)
+        return json
 
     def list(self) -> list[dict]:
         """List all vault clients.
@@ -75,7 +77,8 @@ class VaultClientResource(Resource):
                 print(f"Client: {client['name']} (ID: {client['id']})")
         """
         json = self._process_response(self.client.get(self.path))
-        return json.json()
+        assert isinstance(json, list)
+        return json
 
     def delete(self, client_id: str) -> dict:
         """Delete a vault client.
@@ -93,7 +96,8 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.delete(self.make_path(client_id))
         )
-        return json.json()
+        assert isinstance(json, dict)
+        return json
 
 
 __all__ = ['VaultClientResource']
