@@ -20,9 +20,9 @@ variable dependencies. Performance optimizations (such as API keys) can be addre
 
 from typing import Any, TypedDict, NotRequired, Unpack
 
-from campus.common.utils import secret, uid, utc_time
-from campus.common import devops
+from campus.common import devops, schema
 from campus.common.errors import api_errors
+from campus.common.utils import secret, uid, utc_time
 
 from . import db, vault
 
@@ -73,7 +73,7 @@ def init_db():
         with conn.cursor() as cursor:
             client_schema = f"""
                 CREATE TABLE IF NOT EXISTS {CLIENT_TABLE} (
-                    id TEXT PRIMARY KEY,
+                    {schema.CAMPUS_KEY} TEXT PRIMARY KEY,
                     secret_hash TEXT,
                     name TEXT NOT NULL,
                     description TEXT,
@@ -104,7 +104,7 @@ def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
         client_secret, _get_secret_key())
 
     record = {
-        "id": client_id,
+        schema.CAMPUS_KEY: client_id,
         "created_at": utc_time.now(),
         "secret_hash": secret_hash,
         **fields,
@@ -115,10 +115,10 @@ def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
             db.execute_query(
                 conn,
                 f"""
-                INSERT INTO {CLIENT_TABLE} (id, secret_hash, name, description, created_at)
+                INSERT INTO {CLIENT_TABLE} ({schema.CAMPUS_KEY}, secret_hash, name, description, created_at)
                 VALUES (%s, %s, %s, %s, %s)
                 """,
-                (record["id"], record["secret_hash"], record["name"],
+                (record[schema.CAMPUS_KEY], record["secret_hash"], record["name"],
                  record["description"], record["created_at"]),
                 fetch_one=False,
                 fetch_all=False
@@ -152,7 +152,7 @@ def get_client(client_id: str) -> dict[str, Any]:
     with db.get_connection_context() as conn:
         client_record = db.execute_query(
             conn,
-            f"SELECT id, name, description, created_at FROM {CLIENT_TABLE} WHERE id = %s",
+            f"SELECT {schema.CAMPUS_KEY}, name, description, created_at FROM {CLIENT_TABLE} WHERE {schema.CAMPUS_KEY} = %s",
             (client_id,),
             fetch_one=True
         )
@@ -171,7 +171,7 @@ def list_clients() -> list[ClientResource]:
     with db.get_connection_context() as conn:
         client_records = db.execute_query(
             conn,
-            f"SELECT id, name, description, created_at FROM {CLIENT_TABLE}",
+            f"SELECT {schema.CAMPUS_KEY}, name, description, created_at FROM {CLIENT_TABLE}",
             (),
             fetch_all=True
         )
@@ -191,7 +191,7 @@ def delete_client(client_id: str) -> None:
     with db.get_connection_context() as conn:
         result = db.execute_query(
             conn,
-            f"DELETE FROM {CLIENT_TABLE} WHERE id = %s RETURNING *",
+            f"DELETE FROM {CLIENT_TABLE} WHERE {schema.CAMPUS_KEY} = %s RETURNING *",
             (client_id,),
             fetch_one=True,
             fetch_all=False
@@ -223,7 +223,7 @@ def replace_client_secret(client_id: str) -> str:
     with db.get_connection_context() as conn:
         db.execute_query(
             conn,
-            f"UPDATE {CLIENT_TABLE} SET secret_hash = %s WHERE id = %s",
+            f"UPDATE {CLIENT_TABLE} SET secret_hash = %s WHERE {schema.CAMPUS_KEY} = %s",
             (secret_hash, client_id),
             fetch_one=False,
             fetch_all=False
@@ -245,7 +245,7 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
     with db.get_connection_context() as conn:
         client_record = db.execute_query(
             conn,
-            f"SELECT secret_hash FROM {CLIENT_TABLE} WHERE id = %s",
+            f"SELECT secret_hash FROM {CLIENT_TABLE} WHERE {schema.CAMPUS_KEY} = %s",
             (client_id,),
             fetch_one=True
         )

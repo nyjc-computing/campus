@@ -7,7 +7,7 @@ without authentication or permission checking. Those concerns are handled at
 the route level for better separation of responsibilities.
 """
 
-from campus.common import devops
+from campus.common import devops, schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 
@@ -25,9 +25,9 @@ def init_db():
     """
     with db.get_connection_context() as conn:
         with conn.cursor() as cursor:
-            vault_schema = """
+            vault_schema = f"""
                 CREATE TABLE IF NOT EXISTS vault (
-                    id TEXT PRIMARY KEY,
+                    {schema.CAMPUS_KEY} TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
                     label TEXT NOT NULL,
                     key TEXT NOT NULL,
@@ -137,7 +137,7 @@ class Vault:
         with db.get_connection_context() as conn:
             secret_record = db.execute_query(
                 conn,
-                "SELECT id FROM vault WHERE label = %s AND key = %s",
+                f"SELECT {schema.CAMPUS_KEY} FROM vault WHERE label = %s AND key = %s",
                 (self.label, key),
                 fetch_one=True
             )
@@ -157,7 +157,7 @@ class Vault:
             # Check if the key already exists for this label
             existing_record = db.execute_query(
                 conn,
-                "SELECT id FROM vault WHERE label = %s AND key = %s",
+                f"SELECT {schema.CAMPUS_KEY} FROM vault WHERE label = %s AND key = %s",
                 (self.label, key),
                 fetch_one=True
             )
@@ -166,8 +166,8 @@ class Vault:
                 # Update existing secret
                 db.execute_query(
                     conn,
-                    "UPDATE vault SET value = %s WHERE id = %s",
-                    (value, existing_record["id"]),
+                    f"UPDATE vault SET value = %s WHERE {schema.CAMPUS_KEY} = %s",
+                    (value, existing_record[schema.CAMPUS_KEY]),
                     fetch_one=False,
                     fetch_all=False
                 )
@@ -178,7 +178,7 @@ class Vault:
                 db.execute_query(
                     conn,
                     (
-                        "INSERT INTO vault (id, created_at, label, key, value)"
+                        f"INSERT INTO vault ({schema.CAMPUS_KEY}, created_at, label, key, value)"
                         "VALUES (%s, %s, %s, %s, %s)"
                     ),
                     (secret_id, utc_time.now(), self.label, key, value),
@@ -204,7 +204,7 @@ class Vault:
             # First check if the key exists
             existing_record = db.execute_query(
                 conn,
-                "SELECT id FROM vault WHERE label = %s AND key = %s",
+                f"SELECT {schema.CAMPUS_KEY} FROM vault WHERE label = %s AND key = %s",
                 (self.label, key),
                 fetch_one=True
             )

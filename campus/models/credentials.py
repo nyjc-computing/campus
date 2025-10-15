@@ -9,8 +9,8 @@ Credentials are assumed to be issued by a provider.
 
 from typing import NotRequired, TypedDict, Unpack
 
+from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.schema import CampusID
 from campus.common.utils import utc_time
 from campus.common.webauth.token import TokenSchema
 from campus.storage import (
@@ -25,7 +25,7 @@ class ClientCredentialsSchema(TypedDict):
     """TokenCredentials type for storing access and refresh tokens."""
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by ClientCredentials
-    client_id: CampusID  # must be provided
+    client_id: schema.CampusID  # must be provided
     issued_at: utc_time.datetime
     token: TokenSchema
 
@@ -34,7 +34,7 @@ class UserCredentialsSchema(TypedDict):
     """TokenCredentials type for storing access and refresh tokens."""
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by UserCredentials
-    user_id: CampusID  # must be provided
+    user_id: schema.CampusID  # must be provided
     issued_at: utc_time.datetime
     token: TokenSchema
 
@@ -55,7 +55,7 @@ class ClientCredentials:
         self.provider = provider
         self.storage = get_collection(COLLECTION)
 
-    def delete(self, client_id: CampusID) -> None:
+    def delete(self, client_id: schema.CampusID) -> None:
         """Delete a client credential by its ID."""
         try:
             self.storage.delete_by_id(client_id)
@@ -67,7 +67,7 @@ class ClientCredentials:
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
 
-    def get(self, client_id: CampusID) -> dict | None:
+    def get(self, client_id: schema.CampusID) -> dict | None:
         """Retrieve a client credential by its ID."""
         try:
             record = self.storage.get_by_id(client_id)
@@ -87,13 +87,13 @@ class ClientCredentials:
         """Store a client credential with the given ID and data."""
         try:
             # Add id primary key which is needed by the backend interface.
-            assert "id" in credentials, "Client credentials must have an ID"
+            assert schema.CAMPUS_KEY in credentials, "Client credentials must have an ID"
             credentials_data = dict(credentials)
 
             # Check if record already exists
             try:
                 existing_record = self.storage.get_by_id(
-                    credentials_data["id"])
+                    credentials_data[schema.CAMPUS_KEY])
             except storage_errors.NotFoundError:
                 existing_record = None
             # Other exceptions are handled below
@@ -101,13 +101,13 @@ class ClientCredentials:
                 # If the record already exists, we update it.
                 try:
                     self.storage.update_by_id(
-                        credentials_data["id"],
+                        credentials_data[schema.CAMPUS_KEY],
                         credentials_data
                     )
                 except storage_errors.NoChangesAppliedError as e:
                     raise api_errors.ConflictError(
                         message="No client credential updated",
-                        client_id=credentials_data["id"]
+                        client_id=credentials_data[schema.CAMPUS_KEY]
                     ) from e
                 # Other exceptions are handled below
             else:
@@ -116,7 +116,7 @@ class ClientCredentials:
                 except storage_errors.ConflictError as e:
                     raise api_errors.ConflictError(
                         message="Client credential conflict",
-                        client_id=credentials_data["id"]
+                        client_id=credentials_data[schema.CAMPUS_KEY]
                     ) from e
                 # Other exceptions are handled below
         except Exception as e:
@@ -140,7 +140,7 @@ class UserCredentials:
         self.provider = provider
         self.storage = get_collection(COLLECTION)
 
-    def delete(self, user_id: CampusID) -> None:
+    def delete(self, user_id: schema.CampusID) -> None:
         """Delete user credentials by ID."""
         try:
             self.storage.delete_matching(
@@ -154,7 +154,7 @@ class UserCredentials:
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
 
-    def get(self, user_id: CampusID) -> UserCredentialsSchema:
+    def get(self, user_id: schema.CampusID) -> UserCredentialsSchema:
         """Retrieve user credentials by user ID."""
         try:
             records = self.storage.get_matching(
@@ -172,8 +172,8 @@ class UserCredentials:
             # Remove the primary key field from the record
             # Make a copy to avoid modifying the original
             credentials_data = dict(record)
-            if "id" in credentials_data:
-                del credentials_data["id"]
+            if schema.CAMPUS_KEY in credentials_data:
+                del credentials_data[schema.CAMPUS_KEY]
             return credentials_data  # type: ignore
 
     def store(self, **credentials: Unpack[UserCredentialsSchema]) -> None:
@@ -183,7 +183,7 @@ class UserCredentials:
         # Add id primary key which is needed by the backend interface.
         token_id = self.provider + ":" + credentials["user_id"]
         credentials_data = dict(credentials)
-        credentials_data["id"] = token_id
+        credentials_data[schema.CAMPUS_KEY] = token_id
         credentials_data["provider"] = self.provider
         try:
             # Check if record already exists

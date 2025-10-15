@@ -93,7 +93,7 @@ def execute_query(
 
     Example:
         # Get single record
-        user = execute_query(conn, "SELECT * FROM vault WHERE id = %s", ("123",), fetch_one=True)
+        user = execute_query(conn, "SELECT * FROM vault WHERE CAMPUS_KEY = %s", ("123",), fetch_one=True)
 
         # Get multiple records  
         secrets = execute_query(conn, "SELECT * FROM vault WHERE label = %s", ("api-keys",))

@@ -49,7 +49,7 @@ class TestCircles(unittest.TestCase):
         }
         circle_obj = self.circle.Circle()
         circle_data = circle_obj.new(**data)
-        circle_id = circle_data["id"]
+        circle_id = circle_data[schema.CAMPUS_KEY]
 
         # Test get
         resp = circle_obj.get(circle_id)
@@ -69,7 +69,7 @@ class TestCircles(unittest.TestCase):
         }
         circle_obj = self.circle.Circle()
         circle_data = circle_obj.new(**data)
-        circle_id = circle_data["id"]
+        circle_id = circle_data[schema.CAMPUS_KEY]
 
         # Test delete
         circle_obj.delete(circle_id)
@@ -91,8 +91,8 @@ class TestCircles(unittest.TestCase):
         circle_obj = self.circle.Circle()
         parent = circle_obj.new(**parent_data)
         member = circle_obj.new(**member_data)
-        parent_id = parent["id"]
-        member_id = member["id"]
+        parent_id = parent[schema.CAMPUS_KEY]
+        member_id = member[schema.CAMPUS_KEY]
 
         # Add member to parent
         circle_obj.members.add(parent_id, member_id=member_id, access_value=1)

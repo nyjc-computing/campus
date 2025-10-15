@@ -18,7 +18,7 @@ Usage Example:
 from campus.storage.documents.backend.mongodb import MongoDBCollection
 
 collection = MongoDBCollection("users")
-collection.insert_one({"id": "123", "name": "John"})
+collection.insert_one({PK: "123", "name": "John"})
 user = collection.get_by_id("123")
 collection.update_by_id("123", {"name": "Jane"})
 collection.delete_by_id("123")
@@ -77,7 +77,7 @@ class MongoRecord(dict):
     Campus schema; `_id` is only generated when exporting to MongoDB.
 
     Example:
-        record = MongoRecord({"id": "123", "name": "John"})
+        record = MongoRecord({PK: "123", "name": "John"})
         mongo_doc = record.to_mongo()  # {"_id": "123", "name": "John"}
     """
 
@@ -117,7 +117,7 @@ class MongoDBCollection(CollectionInterface):
 
     Example:
         collection = MongoDBCollection("users")
-        collection.insert_one({"id": "123", "name": "John"})
+        collection.insert_one({PK: "123", "name": "John"})
         user = collection.get_by_id("123")
     """
 
@@ -166,7 +166,7 @@ class MongoDBCollection(CollectionInterface):
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve documents matching a query."""
-        assert "id" not in query, "Matching by 'id' is not allowed"
+        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
         try:
             cursor = self.collection.find(query)
         except Exception as e:
@@ -219,7 +219,7 @@ class MongoDBCollection(CollectionInterface):
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
-        assert "id" not in query, "Matching by 'id' is not allowed"
+        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
         if not update:
             return
         try:
@@ -252,7 +252,7 @@ class MongoDBCollection(CollectionInterface):
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
-        assert "id" not in query, "Matching by 'id' is not allowed"
+        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
         try:
             result = self.collection.delete_many(query)
         except Exception as e:

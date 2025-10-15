@@ -9,6 +9,7 @@ Each row in the table is assumed to have:
 
 from abc import ABC, abstractmethod
 
+# This constant should match the one in campus.common.schema
 PK = "id"
 
 

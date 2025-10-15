@@ -16,7 +16,7 @@ Usage Example:
 from campus.storage.tables.backend.sqlite import SQLiteTable
 
 table = SQLiteTable("users")
-table.insert_one({"id": "123", "created_at": "2023-01-01", "name": "John"})
+table.insert_one({PK: "123", "created_at": "2023-01-01", "name": "John"})
 user = table.get_by_id("123")
 table.update_by_id("123", {"name": "Jane"})
 table.delete_by_id("123")
@@ -28,6 +28,9 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from campus.storage.tables.interface import TableInterface, PK
+
+# This constant should match the one in campus.common.schema
+PK = "id"
 
 
 class SQLiteTable(TableInterface):
@@ -79,7 +82,7 @@ class SQLiteTable(TableInterface):
         if sqlite_row is None:
             return {}
 
-        row = {PK: sqlite_row["id"]}
+        row = {PK: sqlite_row[PK]}
         if sqlite_row["created_at"]:
             row["created_at"] = sqlite_row["created_at"]
 
