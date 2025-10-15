@@ -9,7 +9,7 @@ Each row in the table is assumed to have:
 
 from abc import ABC, abstractmethod
 
-PK = "id"
+PK = schema.CAMPUS_KEY
 
 
 class TableInterface(ABC):

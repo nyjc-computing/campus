@@ -16,8 +16,8 @@ Main operations:
 from collections.abc import Iterator, Mapping
 from typing import NotRequired, TypedDict, Unpack
 
+from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.schema import CampusID
 from campus.common.utils import uid, utc_time
 from campus.common import devops
 from campus.models.base import BaseRecord
@@ -28,7 +28,7 @@ from campus.storage import (
 
 # TODO: Replace with OpenAPI-based string-pattern schema
 AccessValue = int
-CircleID = CampusID
+CircleID = schema.CampusID
 CirclePath = str
 CircleTag = str
 CircleTree = dict[CircleID, "CircleTree"]
@@ -59,7 +59,7 @@ def init_db():
         storage.insert_one({
             # The meta document id is unused but required by the
             # storage interface
-            "id": uid.generate_category_uid("meta", length=8),
+            schema.CAMPUS_KEY: uid.generate_category_uid("meta", length=8),
             "created_at": utc_time.now(),
             "@meta": True
         })
@@ -82,8 +82,8 @@ def init_db():
     if "root" not in meta_record or not meta_record["root"]:
         update_circle_meta(
             {
-                "root": root_circle["id"],
-                root_circle["id"]: {}
+                "root": root_circle[schema.CAMPUS_KEY],
+                root_circle[schema.CAMPUS_KEY]: {}
             }
         )
     # Check for existing admin circle, otherwise create one
@@ -96,7 +96,7 @@ def init_db():
             name="campus-admin",
             description="Campus admin circle",
             tag="admin",
-            parents={root_circle["id"]: 15}
+            parents={root_circle[schema.CAMPUS_KEY]: 15}
         )
     else:
         admin_circle = admin_circles[0]
@@ -358,10 +358,12 @@ class Circle:
                 message="Root circle cannot have parents",
                 id=fields["tag"]
             )
-        circle_id = CampusID(uid.generate_category_uid("circle", length=8))
+        circle_id = schema.CampusID(
+            uid.generate_category_uid("circle", length=8)
+        )
         record = CircleRecord(
             id=circle_id,
-            created_at=utc_time.now(),
+            created_at=schema.DatetimeStr(utc_time.to_rfc3339(utc_time.now())),
             name=fields["name"],
             description=fields.get("description", ""),
             tag=fields["tag"],

@@ -91,7 +91,7 @@ def grant_access(client_id: str, label: str, access: int) -> None:
             db.execute_query(
                 conn,
                 "UPDATE vault_access SET access = %s WHERE id = %s",
-                (access, existing_access["id"]),
+                (access, existing_access[schema.CAMPUS_KEY]),
                 fetch_one=False,
                 fetch_all=False
             )

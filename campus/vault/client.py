@@ -122,7 +122,7 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
         client_secret, _get_secret_key())
 
     record = {
-        "id": client_id,
+        schema.CAMPUS_KEY: client_id,
         "created_at": utc_time.now(),
         "secret_hash": secret_hash,
         **fields,
@@ -135,7 +135,7 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
             INSERT INTO {CLIENT_TABLE} (id, secret_hash, name, description, created_at)
             VALUES (%s, %s, %s, %s, %s)
             """,
-            (record["id"], record["secret_hash"], record["name"],
+            (record[schema.CAMPUS_KEY], record["secret_hash"], record["name"],
              record["description"], record["created_at"]),
             fetch_one=False,
             fetch_all=False

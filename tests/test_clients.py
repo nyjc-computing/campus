@@ -25,7 +25,7 @@ class TestClients(unittest.TestCase):
         }
         client_obj = client.Client()
         client_data = client_obj.new(**data)
-        client_id = client_data["id"]
+        client_id = client_data[schema.CAMPUS_KEY]
         result = client_obj.replace(client_id)
         secret_hash = result["secret"]
 

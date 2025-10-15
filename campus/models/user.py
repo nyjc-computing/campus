@@ -4,9 +4,9 @@ This module provides classes for managing Campus users.
 """
 from typing import NotRequired, TypedDict, Unpack
 
+from campus.common import devops, schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
-from campus.common import devops
 from campus.models.base import BaseRecord
 from campus.storage import (
     errors as storage_errors,
@@ -80,7 +80,7 @@ class User:
         user_id = uid.generate_user_uid(fields["email"])
         record = dict(
             id=user_id,
-            created_at=utc_time.now(),
+            created_at=schema.DatetimeStr(utc_time.to_rfc3339(utc_time.now())),
             **fields,
             # do not activate user on creation
         )

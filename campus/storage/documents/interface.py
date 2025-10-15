@@ -10,7 +10,7 @@ Each document in the collection is assumed to have:
 
 from abc import ABC, abstractmethod
 
-PK = "id"
+PK = schema.CAMPUS_KEY
 
 
 class CollectionInterface(ABC):

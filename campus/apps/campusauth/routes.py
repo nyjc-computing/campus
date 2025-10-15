@@ -33,7 +33,7 @@ Legend:
     token endpoint for user profile.
 """
 
-from typing import NotRequired, TypedDict, Unpack
+from typing import NotRequired, TypedDict
 from urllib.parse import urlencode
 
 from flask import (
@@ -44,6 +44,7 @@ from flask import (
     url_for
 )
 
+from campus.common import schema
 from campus.common.errors import api_errors
 from campus.models.session import Sessions
 from campus.models.token import Tokens
@@ -128,7 +129,7 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
     authorization_code = secret.generate_authorization_code()
     # TODO: Handle update errors
     session = sessions.update(
-        session["id"],
+        session[schema.CAMPUS_KEY],
         authorization_code=authorization_code
     )
     # Redirect user to the specified redirect URI
@@ -172,7 +173,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
         expiry_seconds=DEFAULT_EXPIRY
     )
     # OAuth2 flow complete, revoke session
-    sessions.delete(session["id"])
+    sessions.delete(session[schema.CAMPUS_KEY])
     return {"message": "Not implemented"}, 501
 
 
@@ -188,7 +189,7 @@ def login() -> flask_validation.HtmlResponse:
             },
             expiry_seconds=DEFAULT_EXPIRY
         )
-        flask_session["session_id"] = session["id"]
+        flask_session["session_id"] = session[schema.CAMPUS_KEY]
     return redirect(url_for('oauth.google.authorize'))
 
 

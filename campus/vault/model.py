@@ -36,12 +36,13 @@ class Vault:
 
     def __init__(self, label: str):
         """Initialize a vault for the given label.
-        
+
         Args:
             label: The vault label identifier
         """
         if not isinstance(label, str):
-            raise TypeError(f"label must be a string, got {type(label).__name__}")
+            raise TypeError(
+                f"label must be a string, got {type(label).__name__}")
         self.label = label
 
     def __repr__(self) -> str:
@@ -113,7 +114,7 @@ class Vault:
                 db.execute_query(
                     conn,
                     "UPDATE vault SET value = %s WHERE id = %s",
-                    (value, existing_record["id"]),
+                    (value, existing_record[schema.CAMPUS_KEY]),
                     fetch_one=False,
                     fetch_all=False
                 )
@@ -154,7 +155,7 @@ class Vault:
                 (self.label, key),
                 fetch_one=True
             )
-            
+
             if existing_record:
                 db.execute_query(
                     conn,
