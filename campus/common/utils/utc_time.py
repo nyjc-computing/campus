@@ -8,10 +8,13 @@ All timestamps are handled in UTC to avoid timezone issues.
 
 from datetime import UTC, datetime, timedelta
 
+DAY_SECONDS = 86400
+
 
 def now() -> datetime:
     """Get the current time in UTC."""
     return datetime.now(UTC)
+
 
 def after(time: datetime | None = None, **delta) -> datetime:
     """Create an expiry timestamp at a given delta after time.
@@ -39,6 +42,7 @@ def is_expired(ts: datetime | float, *, at_time: datetime | None = None, thresho
 def from_rfc3339(dtstr: str) -> datetime:
     """Parse an RFC3339 formatted string into a datetime object."""
     return datetime.fromisoformat(dtstr)
+
 
 def to_rfc3339(dt: datetime) -> str:
     """Convert a datetime object to an RFC3339 formatted string."""
