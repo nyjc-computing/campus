@@ -38,7 +38,7 @@ from urllib.parse import urlencode
 
 from flask import (
     Blueprint,
-    Flask,
+    g,
     redirect,
     session as flask_session,
     url_for
@@ -51,6 +51,8 @@ from campus.models.session import Sessions
 from campus.models.token import Tokens
 from campus.common.utils import secret
 import campus.common.validation.flask as flask_validation
+
+from .authentication import client_auth_required
 
 
 # No url prefix because authentication endpoints are not only used by the API
@@ -81,6 +83,7 @@ class TokenRequest(TypedDict):
 
 
 # OAuth2 endpoints
+@client_auth_required
 @bp.get('/oauth2/authorize')
 def oauth2_authorize() -> Response:
     """Summary: 
@@ -137,21 +140,26 @@ def oauth2_authorize() -> Response:
     #     return "Additional scope authorization not implemented", 501
     # Issue authorization code
     authorization_code = secret.generate_authorization_code()
+    target = req_json.get("state", "")
     # TODO: Handle update errors
     session = sessions.update(
         session[schema.CAMPUS_KEY],
-        authorization_code=authorization_code
+        authorization_code=authorization_code,
+        # scopes=req_json.get("scope", "").split(),
+        redirect_uri=req_json["redirect_uri"],
+        target=target
     )
     # Redirect user to the specified redirect URI
     params = {
         "code": authorization_code,
     }
-    if "state" in req_json:
-        params["state"] = req_json["state"]
+    if target:
+        params["state"] = target
     redirect_uri = f'{req_json["redirect_uri"]}?{urlencode(params)}'
-    return redirect(redirect_uri), 302
+    return redirect(redirect_uri)
 
 
+@client_auth_required
 @bp.post('/oauth2/token')
 def oauth2_token() -> flask_validation.JsonResponse:
     """Summary:
@@ -201,11 +209,12 @@ def oauth2_token() -> flask_validation.JsonResponse:
         return {"error": "Invalid grant_type: expected 'authorization_code'"}, 400
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
-    # TODO: Issue token; get client_id from header, user_id from session
+    # TODO: Issue token
     token = tokens.new(
         {
-            "client_id": session["client_id"],
-            "user_id": session["user_id"],
+            "client_id": g.current_client["id"],
+            "user_id": g.current_user["id"],
+            "agent_string": g.user_agent,
             "scopes": session.get("scopes", []),
         },
         expiry_seconds=DEFAULT_EXPIRY

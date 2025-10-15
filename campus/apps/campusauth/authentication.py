@@ -65,6 +65,7 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
             token = tokens.validate_token(access_token)
             g.current_user = users.get(token["user_id"])
             g.current_client = vault.client.get(token["client_id"])
+            g.user_agent = request.headers.get("User-Agent", "")
             return {"message": "Bearer auth not implemented"}, 501
 
 
