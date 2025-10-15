@@ -79,13 +79,12 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/token')
-def get_app_token() -> Response:
+def get_app_token() -> AppTokenResponseSchema:
     """Get Discord app token using Client Credentials flow."""
     # Validate request parameters
     params = flask_validation.validate_request_and_extract_json(
         TokenRequestSchema.__annotations__,
         on_error=api_errors.raise_api_error,
-        ignore_extra=False,
     )
     
     # Get client credentials from vault
@@ -130,7 +129,7 @@ def get_app_token() -> Response:
 
 
 @bp.get('/token')
-def get_app_token_get() -> Response:
+def get_app_token_get() -> AppTokenResponseSchema:
     """Get Discord app token using Client Credentials flow (GET method)."""
     # Validate query parameters
     params = flask_validation.validate_request_and_extract_urlparams(

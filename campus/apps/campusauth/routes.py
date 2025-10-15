@@ -43,13 +43,15 @@ from flask import (
     session as flask_session,
     url_for
 )
+from werkzeug.wrappers import Response
 
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.models.session import Sessions
 from campus.models.token import Tokens
-import campus.common.validation.flask as flask_validation
 from campus.common.utils import secret
+import campus.common.validation.flask as flask_validation
+
 
 # No url prefix because authentication endpoints are not only used by the API
 bp = Blueprint('campusauth', __name__, url_prefix='/')
@@ -85,7 +87,7 @@ def init_app(app: Flask | Blueprint) -> None:
 
 # OAuth2 endpoints
 @bp.get('/oauth2/authorize')
-def oauth2_authorize() -> flask_validation.HtmlResponse:
+def oauth2_authorize() -> Response:
     """Summary: 
         OAuth2 authorization endpoint for user consent and code grant.
         1. Validates the authorization request
@@ -219,7 +221,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
 
 
 @bp.get('/login')
-def login() -> flask_validation.HtmlResponse:
+def login() -> Response:
     """Summary:
         Login endpoint for user authentication.
 
@@ -253,7 +255,7 @@ def login() -> flask_validation.HtmlResponse:
 
 
 @bp.post('/logout')
-def logout() -> flask_validation.HtmlResponse:
+def logout() -> Response:
     """Summary:
         Logout endpoint for user session termination.
 

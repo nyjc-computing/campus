@@ -17,7 +17,6 @@ from campus.common.errors import api_errors
 from campus.common.webauth import http
 from campus.models.token import Tokens
 from campus.models.user import User
-import campus.vault
 
 tokens = Tokens()
 users = User()
