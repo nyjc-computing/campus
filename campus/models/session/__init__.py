@@ -15,7 +15,8 @@ Sessions are only initiated by client, but may be revoked by either party.
 Additional metadata may be included, e.g. for use for OAuth
 
 For authenticated HTTP requests in the Campus API, clients must include 
-the session_id (from cookie), client_id, user_id, and access_token in headers.
+the session_id (in cookie), client_id (in header), and access_token (in header).
+user_id is retrieved from the session record.
 The access token itself is not stored in sessions; it's validated per-request.
 """
 
