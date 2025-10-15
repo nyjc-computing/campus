@@ -16,6 +16,7 @@ from typing import Any, Literal, NotRequired, TypedDict, Unpack
 
 import requests
 
+from campus.common.integration.schema import IntegrationConfigSchema
 from campus.common.webauth.token import CredentialToken
 from campus.common.utils import utc_time
 
@@ -76,7 +77,7 @@ class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
         self,
         client_id: str,
         client_secret: str,
-        scopes: list[str] = None
+        scopes: list[str] | None = None
     ) -> dict[str, Any]:
         """Get an application access token using Client Credentials flow.
         
@@ -158,7 +159,12 @@ class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
         token.refresh_from_response(new_token_response)
 
     @classmethod
-    def from_json(cls, config: dict[str, Any], security: str = "oauth2") -> "OAuth2ClientCredentialsFlowScheme":
+    def from_json(
+            cls,
+            config: IntegrationConfigSchema,
+            security: Literal["oauth2"] = "oauth2",
+            **kwargs,
+    ) -> "OAuth2ClientCredentialsFlowScheme":
         """Create OAuth2ClientCredentialsFlowScheme from JSON config.
         
         Args:
