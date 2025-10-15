@@ -126,6 +126,7 @@ class JsonResponse(Protocol):
                 error = HttpClientError(f"{status} Unknown HTTP Error")
         error.add_note(f"Headers: {self.headers}")
         error.add_note(f"Body: {self.json() or self}")
+        raise error from None
 
 
 @runtime_checkable
