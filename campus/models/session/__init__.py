@@ -154,12 +154,20 @@ class Sessions:
         else:
             return [SessionRecord(**r) for r in records]
 
-    def get_by_id(
+    def get(
             self,
             session_id: schema.CampusID | None = None
-    ) -> SessionRecord:
-        """Retrieve a session by its ID."""
+    ) -> SessionRecord | None:
+        """Retrieve a session by its ID, or return None if not found.
+        
+        If session_id is not provided, uses the session ID from the client
+        cookie.
+        """
         session_id = self._verify_session_id(session_id)
+        return self.get_by_id(session_id)
+
+    def get_by_id(self, session_id: schema.CampusID) -> SessionRecord:
+        """Retrieve a session by its ID."""
         try:
             record = self.storage.get_by_id(session_id)
         except storage_errors.NotFoundError:

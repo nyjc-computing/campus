@@ -126,28 +126,18 @@ def oauth2_authorize() -> flask_validation.HtmlResponse:
         AuthorizationCodeRequest.__annotations__,
         on_error=api_errors.raise_api_error
     )  # type: ignore
-    if "session_id" not in flask_session:
-        # TODO: redirect to login for authentication
-        return redirect(url_for("campusauth.login"))
-    session = sessions.get(flask_session["session_id"])
+    session = sessions.get()
     if not session:
         # TODO: Redirect to login with error message
-        return "Session not found", 404
-    # Verify client_id and user_id
-    if session["client_id"] != req_json["client_id"]:
-        # TODO: Redirect to login with error message
-        return "Invalid client_id", 401
-    if session["user_id"] != flask_session["user_id"]:
-        # TODO: Redirect to login with error message
-        return "Invalid user_id", 401
-    # Verify scope of consent
-    missing_scopes = tokens.validate_scope(
-        session=session,
-        scopes=req_json.get("scope") or ""
-    )
-    if missing_scopes:
-        # TODO: redirect for additional scope authorization
-        return "Additional scope authorization not implemented", 501
+        return redirect(url_for("campusauth.login"))
+    # TODO: Verify scope of consent against user access level
+    # missing_scopes = tokens.validate_scope(
+    #     session=dict(session),
+    #     scopes=req_json.get("scope") or ""
+    # )
+    # if missing_scopes:
+    #     # TODO: redirect for additional scope authorization
+    #     return "Additional scope authorization not implemented", 501
     # Issue authorization code
     authorization_code = secret.generate_authorization_code()
     # TODO: Handle update errors
@@ -207,16 +197,11 @@ def oauth2_token() -> flask_validation.JsonResponse:
         TokenRequest.__annotations__,
         on_error=api_errors.raise_api_error
     )  # type: ignore
-    # No valid session
-    if "session_id" not in flask_session:
-        return {"error": "No OAuth session"}, 401
-    session = sessions.get(flask_session["session_id"])
+    session = sessions.get()
     if not session:
         return {"error": "No OAuth session"}, 401
     if not req_json["grant_type"] == "authorization_code":
         return {"error": "Invalid grant_type: expected 'authorization_code'"}, 400
-    if not req_json["redirect_uri"] == session["redirect_uri"]:
-        return {"error": "redirect_uri mismatch"}, 400
     if req_json["code"] != session["authorization_code"]:
         return {"error": "Invalid authorization code"}, 400
     # TODO: Issue token; get client_id from header, user_id from session
@@ -251,9 +236,9 @@ def login() -> flask_validation.HtmlResponse:
         302 Found: Redirect
         - If the user is already logged in, redirects to the home or dashboard page, 
           otherwise creates a new session and redirects to OAuth authorization.
-
     """
-    if "session_id" in flask_session:
+    login_session = sessions.get()
+    if login_session:
         # User already logged in, redirect to home or dashboard
         return redirect(url_for('campus.home'))
     # TODO: get user_id, client_id from auth header
