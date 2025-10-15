@@ -91,11 +91,21 @@ class DateTime(String):
     def from_datetime(cls: Type[Self], dt: utc_time.datetime) -> Self:
         """Create a DateTime string from a UTC datetime object."""
         return cls(utc_time.to_rfc3339(dt))
-    
+
+    @classmethod
+    def utcafter(cls: Type[Self], now: Self | None = None, **delta) -> Self:
+        """Get a DateTime string at a given delta after the current time.
+
+        Keyword arguments:
+        - **delta: follows that of timedelta
+        """
+        dtnow = utc_time.now() if now is None else now.to_datetime()
+        return cls.from_datetime(utc_time.after(dtnow, **delta))
+
     @classmethod
     def utcnow(cls: Type[Self]) -> Self:
         """Get the current UTC time as a DateTime string."""
-        return cls(utc_time.to_rfc3339(utc_time.now()))
+        return cls.from_datetime(utc_time.now())
 
     def to_datetime(self) -> utc_time.datetime:
         """Convert the DateTime string to a UTC datetime object."""

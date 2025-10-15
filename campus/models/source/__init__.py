@@ -16,7 +16,7 @@ from typing import NotRequired, TypedDict, Unpack
 from campus.models.base import BaseRecordDict
 from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import uid
 from campus.storage import get_collection
 
 SourceID = str
@@ -85,7 +85,7 @@ class Source:
         source_id = SourceID(uid.generate_category_uid("source", length=16))
         record = SourceRecord(
             id=source_id,
-            created_at=schema.DatetimeStr(utc_time.to_rfc3339(utc_time.now())),
+            created_at=schema.DateTime.utcnow(),
             name=fields["name"],
             description=fields.get("description", ""),
             type=fields["type"],

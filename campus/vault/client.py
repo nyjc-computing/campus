@@ -22,7 +22,7 @@ from typing import Any, TypedDict, NotRequired, Unpack
 
 from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import secret, uid, utc_time
+from campus.common.utils import secret, uid
 
 from . import db, vault
 
@@ -53,7 +53,7 @@ class ClientResource(TypedDict, total=True):
     id: str
     name: str
     description: str
-    created_at: str
+    created_at: schema.DateTime
     secret_hash: NotRequired[str]
 
 
@@ -105,7 +105,7 @@ def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
 
     record = {
         schema.CAMPUS_KEY: client_id,
-        "created_at": utc_time.now(),
+        "created_at": schema.DateTime.utcnow(),
         "secret_hash": secret_hash,
         **fields,
     }

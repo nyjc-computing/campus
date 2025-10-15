@@ -9,7 +9,7 @@ the route level for better separation of responsibilities.
 
 from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import uid
 
 from . import db
 
@@ -181,7 +181,7 @@ class Vault:
                         f"INSERT INTO vault ({schema.CAMPUS_KEY}, created_at, label, key, value)"
                         "VALUES (%s, %s, %s, %s, %s)"
                     ),
-                    (secret_id, utc_time.now(), self.label, key, value),
+                    (secret_id, schema.DateTime.utcnow(), self.label, key, value),
                     fetch_one=False,
                     fetch_all=False
                 )

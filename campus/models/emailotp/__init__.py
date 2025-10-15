@@ -116,7 +116,7 @@ class OTPRecord(OTPRequest, BaseRecordDict, total=True):
     Currently unused in the API, provided for documentation purpose.
     """
     otp_hash: str
-    expires_at: schema.DatetimeStr
+    expires_at: schema.DateTime
 
 
 class EmailOTPAuth:
@@ -150,9 +150,9 @@ class EmailOTPAuth:
         # Hash the OTP for secure storage
         otp_hash = plain_otp.hash()
         # Set expiration and creation times
-        created_at = schema.DatetimeStr(utc_time.to_rfc3339(utc_time.now()))
-        expires_at = schema.DatetimeStr(utc_time.to_rfc3339(
-            utc_time.after(minutes=expiry_minutes)))
+        now = schema.DateTime.utcnow()
+        created_at = now
+        expires_at = schema.DateTime.utcafter(now, minutes=expiry_minutes)
 
         try:
             # Delete any existing OTP for this email (find by email field)
@@ -207,14 +207,10 @@ class EmailOTPAuth:
             # Get the most recent OTP record (assuming they're ordered by creation time)
             record = otp_records[0]
             hashed_otp = _hashedOTP(record['otp_hash'])
-            expires_at = record['expires_at']
-
-            # Convert expires_at to datetime if it's a string
-            if isinstance(expires_at, str):
-                expires_at = utc_time.from_rfc3339(expires_at)
+            expires_at = schema.DateTime(record['expires_at'])
 
             # Check if OTP is expired
-            if utc_time.is_expired(expires_at):
+            if utc_time.is_expired(expires_at.to_datetime()):
                 raise api_errors.UnauthorizedError("OTP expired")
 
             # Verify OTP

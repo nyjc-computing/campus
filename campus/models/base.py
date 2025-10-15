@@ -16,7 +16,7 @@ class BaseRecordDict(TypedDict):
     BaseRecord reflects the keys that are common to all records in the system.
     """
     id: schema.CampusID | schema.UserID
-    created_at: schema.DatetimeStr
+    created_at: schema.DateTime
 
 
 # Issue 201: refactoring to dataclasses

@@ -19,7 +19,7 @@ from typing import Any, NotRequired, TypedDict, Unpack
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import uid
 from campus.common import devops
 from campus.models.base import BaseRecord, BaseRecordDict
 from campus.storage import (
@@ -61,7 +61,7 @@ def init_db():
             # The meta document id is unused but required by the
             # storage interface
             schema.CAMPUS_KEY: uid.generate_category_uid("meta", length=8),
-            "created_at": utc_time.now(),
+            "created_at": schema.DateTime.utcnow(),
             "@meta": True
         })
         meta_record = get_circle_meta()
@@ -388,7 +388,7 @@ class Circle:
         )
         record = CircleRecord(
             id=circle_id,
-            created_at=schema.DatetimeStr(utc_time.to_rfc3339(utc_time.now())),
+            created_at=schema.DateTime.utcnow(),
             name=fields["name"],
             description=fields.get("description", ""),
             tag=fields["tag"],

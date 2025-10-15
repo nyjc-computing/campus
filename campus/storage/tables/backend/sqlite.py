@@ -16,7 +16,7 @@ Usage Example:
 from campus.storage.tables.backend.sqlite import SQLiteTable
 
 table = SQLiteTable("users")
-table.insert_one({PK: "123", "created_at": "2023-01-01", "name": "John"})
+table.insert_one({PK: "123", "created_at": "2023-01-01T00:00:00Z", "name": "John"})
 user = table.get_by_id("123")
 table.update_by_id("123", {"name": "Jane"})
 table.delete_by_id("123")

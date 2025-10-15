@@ -29,7 +29,7 @@ This allows efficient storage and checking of multiple permissions in one intege
 
 from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import uid
 
 from . import db
 
@@ -172,7 +172,7 @@ def grant_access(client_id: str, label: str, access: int) -> None:
                         "INSERT INTO vault_access (id, created_at, client_id, label, access)"
                         "VALUES (%s, %s, %s, %s, %s)"
                     ),
-                    (access_id, utc_time.now(), client_id, label, access),
+                    (access_id, schema.DateTime.utcnow(), client_id, label, access),
                     fetch_one=False,
                     fetch_all=False
                 )

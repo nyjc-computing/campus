@@ -11,7 +11,6 @@ from typing import NotRequired, TypedDict, Unpack
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import utc_time
 from campus.common.webauth.token import TokenSchema
 from campus.storage import (
     errors as storage_errors,
@@ -26,7 +25,7 @@ class ClientCredentialsSchema(TypedDict):
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by ClientCredentials
     client_id: schema.CampusID  # must be provided
-    issued_at: utc_time.datetime
+    issued_at: schema.DateTime
     token: TokenSchema
 
 
@@ -35,7 +34,7 @@ class UserCredentialsSchema(TypedDict):
     id: NotRequired[str]  # Primary key, only used internally
     provider: NotRequired[str]  # added by UserCredentials
     user_id: schema.CampusID  # must be provided
-    issued_at: utc_time.datetime
+    issued_at: schema.DateTime
     token: TokenSchema
 
 

@@ -25,10 +25,7 @@ from flask import session as client_session
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import (
-    uid,
-    utc_time,
-)
+from campus.common.utils import uid
 import campus.common.validation.record as record_validation
 from campus.models.base import BaseRecordDict
 from campus.storage import (
@@ -123,8 +120,8 @@ class Sessions:
             client_id: schema.CampusID | None = None,
             user_id: schema.UserID | None = None,
             agent_string: str | None = None,
-            # expire_after: schema.DatetimeStr | None = None,
-            # expire_before: schema.DatetimeStr | None = None,
+            # expire_after: schema.DateTime | None = None,
+            # expire_before: schema.DateTime | None = None,
             limit: int = 100,
     ) -> list[SessionRecord]:
         """Find sessions matching the given criteria.
@@ -194,10 +191,10 @@ class Sessions:
         )
         session_id = uid.generate_category_uid(COLLECTION)
         session_data[schema.CAMPUS_KEY] = session_id
-        dt_now = utc_time.now()
-        session_data["created_at"] = utc_time.to_rfc3339(dt_now)
-        session_data["expires_at"] = utc_time.to_rfc3339(
-            utc_time.after(dt_now, seconds=expiry_seconds)
+        now = schema.DateTime.utcnow()
+        session_data["created_at"] = now
+        session_data["expires_at"] = schema.DateTime.utcafter(
+            now, seconds=expiry_seconds
         )
         try:
             self.storage.insert_one(session_data)

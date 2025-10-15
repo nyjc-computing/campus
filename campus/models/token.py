@@ -21,7 +21,7 @@ from typing import TypedDict
 
 from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import secret, uid, utc_time
+from campus.common.utils import secret, uid
 from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
@@ -112,10 +112,10 @@ class Tokens:
         """Create a new token in the database."""
         token = dict(token_data)
         token[schema.CAMPUS_KEY] = uid.generate_category_uid("token")
-        now = utc_time.now()
-        token["created_at"] = utc_time.to_rfc3339(now)
-        token["expires_at"] = utc_time.to_rfc3339(
-            utc_time.after(now, seconds=expiry_seconds)
+        now = schema.DateTime.utcnow()
+        token["created_at"] = now
+        token["expires_at"] = schema.DateTime.utcafter(
+            now, seconds=expiry_seconds
         )
         token["access_token"] = secret.generate_access_code()
         token["scopes"] = " ".join(token_data.get("scopes", []))
