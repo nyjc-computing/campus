@@ -18,7 +18,7 @@ from .authentication import (
 def init_app(app: Flask | Blueprint) -> None:
     """Initialise the campusauth blueprint with the given Flask app."""
     from . import routes
-    routes.init_app(app)
+    app.register_blueprint(routes.bp)
 
 
 @devops.block_env(devops.PRODUCTION)

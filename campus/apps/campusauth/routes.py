@@ -80,11 +80,6 @@ class TokenRequest(TypedDict):
     client_secret: str
 
 
-def init_app(app: Flask | Blueprint) -> None:
-    """Initialise campusauth routes with the given Flask app/blueprint."""
-    app.register_blueprint(bp)
-
-
 # OAuth2 endpoints
 @bp.get('/oauth2/authorize')
 def oauth2_authorize() -> Response:
