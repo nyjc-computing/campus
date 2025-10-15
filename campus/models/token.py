@@ -21,7 +21,7 @@ from typing import TypedDict
 
 from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import secret, uid
+from campus.common.utils import secret, uid, utc_time
 from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
@@ -85,9 +85,9 @@ class Tokens:
     def _sanitize_token(token: dict[str, str]) -> dict[str, str]:
         """Remove sensitive fields from a token record before returning it."""
         sanitized = dict(token)
-        del token[schema.CAMPUS_KEY]
+        del sanitized[schema.CAMPUS_KEY]
         del sanitized["access_token"]
-        del token["expires_at"]
+        del sanitized["expires_at"]
         return sanitized
 
     def delete(self, token_id: schema.CampusID) -> None:
@@ -126,8 +126,15 @@ class Tokens:
             now, seconds=expiry_seconds
         )
         token["access_token"] = secret.generate_access_code()
-        token["scopes"] = " ".join(token_data.get("scopes", []))
-        self.storage.insert_one(token)
+        token["scopes"] = " ".join(token_data["scopes"])
+        try:
+            self.storage.insert_one(token)
+        except storage_errors.ConflictError as e:
+            raise api_errors.ConflictError(
+                message="Token already exists for this user and client",
+                client_id=token_data["client_id"],
+                user_id=token_data["user_id"]
+            ) from None
         return token
 
     def validate_token(self, access_token: str) -> dict:
@@ -139,6 +146,11 @@ class Tokens:
                 access_token=access_token
             )
         token = toks[0]
+        if utc_time.is_expired(token["expires_at"]):
+            raise api_errors.UnauthorizedError(
+                message="Token expired",
+                access_token=access_token
+        )
         return token
 
     def validate_scope(
