@@ -41,8 +41,8 @@ from werkzeug.wrappers import Response
 from campus.client.vault import get_vault
 from campus.common import integration
 from campus.common.errors import api_errors
-from campus.common.utils import url, utc_time
-from campus.common.validation import flask as flask_validation
+from campus.models.credentials import UserCredentials
+from campus.models.session import Sessions
 from campus.common.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
@@ -54,7 +54,7 @@ PROVIDER = 'google'
 
 google_user_credentials = UserCredentials(PROVIDER)
 
-sessions = Session()
+sessions = Sessions()
 vault = get_vault()[PROVIDER]
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = integration.get_config(PROVIDER)

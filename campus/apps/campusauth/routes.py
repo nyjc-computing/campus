@@ -45,7 +45,7 @@ from flask import (
 )
 
 from campus.common.errors import api_errors
-from campus.models.session import Session
+from campus.models.session import Sessions
 from campus.models.token import Tokens
 import campus.common.validation.flask as flask_validation
 from campus.common.utils import secret
@@ -54,7 +54,7 @@ from campus.common.utils import secret
 bp = Blueprint('campusauth', __name__, url_prefix='/')
 
 tokens = Tokens()
-sessions = Session()
+sessions = Sessions()
 
 DEFAULT_EXPIRY = 600
 
