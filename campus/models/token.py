@@ -19,10 +19,9 @@ multiple days.
 
 from typing import TypedDict
 
-from campus.common import devops
+from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import secret, uid, utc_time
-from campus.common.schema import CampusID, UserID
+from campus.common.utils import secret, uid
 from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
@@ -60,8 +59,8 @@ def init_db():
 class TokenRecord(BaseRecordDict):
     """Schema for a full token record."""
     expires_at: str
-    client_id: CampusID
-    user_id: UserID
+    client_id: schema.CampusID
+    user_id: schema.UserID
     agent_string: str
     access_token: str
     scopes: str
@@ -69,8 +68,8 @@ class TokenRecord(BaseRecordDict):
 
 class TokenNew(TypedDict):
     """Schema for a new token request."""
-    client_id: CampusID
-    user_id: UserID
+    client_id: schema.CampusID
+    user_id: schema.UserID
     agent_string: str
     scopes: list[str]
 
@@ -82,7 +81,16 @@ class Tokens:
         """Initialize the Token model with a table storage interface."""
         self.storage = get_table(TABLE)
 
-    def delete(self, token_id: CampusID) -> None:
+    @staticmethod
+    def _sanitize_token(token: dict[str, str]) -> dict[str, str]:
+        """Remove sensitive fields from a token record before returning it."""
+        sanitized = dict(token)
+        del token[schema.CAMPUS_KEY]
+        del sanitized["access_token"]
+        del token["expires_at"]
+        return sanitized
+
+    def delete(self, token_id: schema.CampusID) -> None:
         """Delete a token from the database."""
         self.storage.delete_by_id(token_id)
 
@@ -94,29 +102,28 @@ class Tokens:
         For security reasons, the token id, access_token and expiry
         are stripped.
         """
-        assert "id" not in match, (
+        assert schema.CAMPUS_KEY not in match, (
             "find() by id is not allowed.\n"
             "use get() instead."
         )
-        tokens = self.storage.get_matching(match)
-        for token in tokens:
-            del token["id"]
-            del token["access_token"]
-            del token["expires_at"]
+        tokens = [
+            self._sanitize_token(token)
+            for token in self.storage.get_matching(match)
+        ]
         return tokens
 
-    def get(self, token_id: CampusID) -> dict:
+    def get(self, token_id: schema.CampusID) -> dict:
         """Retrieve a token from the database by its ID."""
         return self.storage.get_by_id(token_id)
 
     def new(self, token_data: TokenNew, *, expiry_seconds: int) -> dict:
         """Create a new token in the database."""
         token = dict(token_data)
-        token["id"] = uid.generate_category_uid("token")
-        now = utc_time.now()
-        token["created_at"] = utc_time.to_rfc3339(now)
-        token["expires_at"] = utc_time.to_rfc3339(
-            utc_time.after(now, seconds=expiry_seconds)
+        token[schema.CAMPUS_KEY] = uid.generate_category_uid("token")
+        now = schema.DateTime.utcnow()
+        token["created_at"] = now
+        token["expires_at"] = schema.DateTime.utcafter(
+            now, seconds=expiry_seconds
         )
         token["access_token"] = secret.generate_access_code()
         token["scopes"] = " ".join(token_data.get("scopes", []))

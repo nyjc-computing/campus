@@ -17,7 +17,6 @@ from campus.common.errors import api_errors
 from campus.common.webauth import http
 from campus.models.token import Tokens
 from campus.models.user import User
-import campus.vault
 
 tokens = Tokens()
 users = User()
@@ -66,6 +65,7 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
             token = tokens.validate_token(access_token)
             g.current_user = users.get(token["user_id"])
             g.current_client = vault.client.get(token["client_id"])
+            g.user_agent = request.headers.get("User-Agent", "")
             return {"message": "Bearer auth not implemented"}, 501
 
 

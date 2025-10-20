@@ -28,13 +28,13 @@ This flow is suitable for server-to-server authentication where no user
 interaction is required.
 """
 
-from typing import NotRequired, Required, TypedDict
+from typing import NotRequired, TypedDict
 
-from flask import Blueprint, Flask, request
+from flask import Blueprint, Flask
 from werkzeug.wrappers import Response
 
 from campus.client.vault import get_vault
-from campus.common import integration
+from campus.common import integration, schema
 from campus.common.errors import api_errors
 from campus.common.utils import utc_time
 from campus.common.validation import flask as flask_validation
@@ -70,7 +70,7 @@ class AppTokenResponseSchema(TypedDict):
     token_type: str  # Token type (Bearer)
     expires_in: int  # Token lifetime in seconds
     scope: list[str]  # Granted scopes as list
-    expires_at: str  # RFC3339 timestamp when token expires
+    expires_at: schema.DateTime  # RFC3339 timestamp when token expires
 
 
 def init_app(app: Flask | Blueprint) -> None:
@@ -79,13 +79,12 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/token')
-def get_app_token() -> Response:
+def get_app_token() -> AppTokenResponseSchema:
     """Get Discord app token using Client Credentials flow."""
     # Validate request parameters
     params = flask_validation.validate_request_and_extract_json(
         TokenRequestSchema.__annotations__,
         on_error=api_errors.raise_api_error,
-        ignore_extra=False,
     )
     
     # Get client credentials from vault
@@ -112,9 +111,7 @@ def get_app_token() -> Response:
     
     # Create normalized response
     credentials = CredentialToken(provider=PROVIDER, **token_response)
-    expires_at = utc_time.to_rfc3339(
-        utc_time.after(utc_time.now(), seconds=token_response["expires_in"])
-    )
+    expires_at = schema.DateTime.utcafter(seconds=token_response["expires_in"])
     
     response_data: AppTokenResponseSchema = {
         "access_token": token_response["access_token"],
@@ -123,12 +120,16 @@ def get_app_token() -> Response:
         "scope": credentials.scopes,
         "expires_at": expires_at,
     }
-    
-    return flask_validation.json_response(response_data)
+    flask_validation.validate_json_response(
+        schema=AppTokenResponseSchema.__annotations__,
+        resp_json=response_data,
+        on_error=api_errors.raise_api_error,
+    )
+    return response_data
 
 
 @bp.get('/token')
-def get_app_token_get() -> Response:
+def get_app_token_get() -> AppTokenResponseSchema:
     """Get Discord app token using Client Credentials flow (GET method)."""
     # Validate query parameters
     params = flask_validation.validate_request_and_extract_urlparams(
@@ -161,9 +162,7 @@ def get_app_token_get() -> Response:
     
     # Create normalized response
     credentials = CredentialToken(provider=PROVIDER, **token_response)
-    expires_at = utc_time.to_rfc3339(
-        utc_time.after(utc_time.now(), seconds=token_response["expires_in"])
-    )
+    expires_at = schema.DateTime.utcafter(seconds=token_response["expires_in"])
     
     response_data: AppTokenResponseSchema = {
         "access_token": token_response["access_token"],
@@ -172,11 +171,15 @@ def get_app_token_get() -> Response:
         "scope": credentials.scopes,
         "expires_at": expires_at,
     }
-    
-    return flask_validation.json_response(response_data)
+    flask_validation.validate_json_response(
+        schema=AppTokenResponseSchema.__annotations__,
+        resp_json=response_data,
+        on_error=api_errors.raise_api_error,
+    )
+    return response_data
 
 
-def get_valid_app_token(scopes: list[str] = None) -> CredentialToken:
+def get_valid_app_token(scopes: list[str] | None = None) -> CredentialToken:
     """Retrieve a valid Discord app token.
     
     This function is not a flask view function.

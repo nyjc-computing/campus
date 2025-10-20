@@ -39,22 +39,22 @@ from flask import Blueprint, Flask, redirect, request, url_for
 from werkzeug.wrappers import Response
 
 from campus.client.vault import get_vault
-from campus.common import integration
+from campus.common import integration, schema
 from campus.common.errors import api_errors
-from campus.common.utils import url, utc_time
 from campus.common.validation import flask as flask_validation
+from campus.common.utils import url
 from campus.common.webauth.oauth2 import (
     OAuth2AuthorizationCodeFlowScheme as OAuth2Flow
 )
 from campus.common.webauth.token import CredentialToken
 from campus.models.credentials import UserCredentials
-from campus.models.session import Session
+from campus.models.session import Sessions
 
 PROVIDER = 'google'
 
 google_user_credentials = UserCredentials(PROVIDER)
 
-sessions = Session()
+sessions = Sessions()
 vault = get_vault()[PROVIDER]
 bp = Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauthconfig = integration.get_config(PROVIDER)
@@ -189,7 +189,7 @@ def callback() -> Response:
     # Store the access token in the user's credentials
     google_user_credentials.store(
         user_id=user_info["email"],
-        issued_at=utc_time.now(),
+        issued_at=schema.DateTime.utcnow(),
         token=credentials.token,
     )
 
@@ -213,7 +213,7 @@ def get_valid_token(user_id: str) -> CredentialToken:
         )
         google_user_credentials.store(
             user_id=record["user_id"],
-            issued_at=utc_time.now(),
+            issued_at=schema.DateTime.utcnow(),
             token=token.to_dict(),
         )
     return token

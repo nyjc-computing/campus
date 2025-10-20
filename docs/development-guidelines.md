@@ -34,7 +34,7 @@ api_key = vault.get("EXTERNAL_API_KEY")
 **Storage Interface Requirements**:
 All storage implementations must provide:
 - `id` field - unique identifier (string)
-- `created_at` field - creation timestamp (ISO 8601 UTC)
+- `created_at` field - creation timestamp (RFC3339 UTC)
 - Standard CRUD operations
 - Consistent error handling
 

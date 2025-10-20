@@ -27,9 +27,9 @@ To check if a permission is granted, we use the bitwise AND operator (&):
 This allows efficient storage and checking of multiple permissions in one integer.
 """
 
-from campus.common.utils import uid, utc_time
-from campus.common import devops
+from campus.common import devops, schema
 from campus.common.errors import api_errors
+from campus.common.utils import uid
 
 from . import db
 
@@ -68,9 +68,9 @@ def init_db():
     with db.get_connection_context() as conn:
         with conn.cursor() as cursor:
             # Create vault_access table
-            access_schema = """
+            access_schema = f"""
                 CREATE TABLE IF NOT EXISTS vault_access (
-                    id TEXT PRIMARY KEY,
+                    {schema.CAMPUS_KEY} TEXT PRIMARY KEY,
                     created_at TEXT NOT NULL,
                     client_id TEXT NOT NULL,
                     label TEXT NOT NULL,
@@ -159,7 +159,7 @@ def grant_access(client_id: str, label: str, access: int) -> None:
                 db.execute_query(
                     conn,
                     "UPDATE vault_access SET access = %s WHERE id = %s",
-                    (access, existing_access["id"]),
+                    (access, existing_access[schema.CAMPUS_KEY]),
                     fetch_one=False,
                     fetch_all=False
                 )
@@ -172,7 +172,7 @@ def grant_access(client_id: str, label: str, access: int) -> None:
                         "INSERT INTO vault_access (id, created_at, client_id, label, access)"
                         "VALUES (%s, %s, %s, %s, %s)"
                     ),
-                    (access_id, utc_time.now(), client_id, label, access),
+                    (access_id, schema.DateTime.utcnow(), client_id, label, access),
                     fetch_one=False,
                     fetch_all=False
                 )

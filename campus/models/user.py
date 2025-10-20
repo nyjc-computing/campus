@@ -4,8 +4,9 @@ This module provides classes for managing Campus users.
 """
 from typing import NotRequired, TypedDict, Unpack
 
+from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import uid
 from campus.common import devops
 from campus.models.base import BaseRecordDict
 from campus.storage import (
@@ -51,7 +52,7 @@ class UserUpdate(TypedDict, total=False):
 
 class UserResourceDict(UserNew, BaseRecordDict, TypedDict, total=True):
     """Response body schema representing the result of a users.get operation."""
-    activated_at: NotRequired[utc_time.datetime]
+    activated_at: NotRequired[schema.DateTime]
 
 
 class User:
@@ -66,7 +67,7 @@ class User:
         user_id = uid.generate_user_uid(email)
         try:
             self.storage.update_by_id(
-                user_id, {'activated_at': utc_time.now()})
+                user_id, {'activated_at': schema.DateTime.utcnow()})
         except storage_errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="User not found",
@@ -80,7 +81,7 @@ class User:
         user_id = uid.generate_user_uid(fields["email"])
         record = dict(
             id=user_id,
-            created_at=utc_time.now(),
+            created_at=schema.DateTime.utcnow(),
             **fields,
             # do not activate user on creation
         )

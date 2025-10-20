@@ -11,9 +11,9 @@ from typing import TypedDict, Unpack
 
 import bcrypt
 
+from campus.common import devops, schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
-from campus.common import devops
 from campus.models.base import BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
@@ -115,7 +115,7 @@ class OTPRecord(OTPRequest, BaseRecordDict, total=True):
     Currently unused in the API, provided for documentation purpose.
     """
     otp_hash: str
-    expires_at: utc_time.datetime
+    expires_at: schema.DateTime
 
 
 class EmailOTPAuth:
@@ -149,8 +149,9 @@ class EmailOTPAuth:
         # Hash the OTP for secure storage
         otp_hash = plain_otp.hash()
         # Set expiration and creation times
-        created_at = utc_time.now()
-        expires_at = utc_time.after(minutes=expiry_minutes)
+        now = schema.DateTime.utcnow()
+        created_at = now
+        expires_at = schema.DateTime.utcafter(now, minutes=expiry_minutes)
 
         try:
             # Delete any existing OTP for this email (find by email field)
@@ -160,7 +161,7 @@ class EmailOTPAuth:
                 existing_otps = []
             for otp_record in existing_otps:
                 try:
-                    self.storage.delete_by_id(otp_record["id"])
+                    self.storage.delete_by_id(otp_record[schema.CAMPUS_KEY])
                 except storage_errors.NotFoundError:
                     continue
 
@@ -205,14 +206,10 @@ class EmailOTPAuth:
             # Get the most recent OTP record (assuming they're ordered by creation time)
             record = otp_records[0]
             hashed_otp = _hashedOTP(record['otp_hash'])
-            expires_at = record['expires_at']
-
-            # Convert expires_at to datetime if it's a string
-            if isinstance(expires_at, str):
-                expires_at = utc_time.from_rfc3339(expires_at)
+            expires_at = schema.DateTime(record['expires_at'])
 
             # Check if OTP is expired
-            if utc_time.is_expired(expires_at):
+            if utc_time.is_expired(expires_at.to_datetime()):
                 raise api_errors.UnauthorizedError("OTP expired")
 
             # Verify OTP
@@ -242,7 +239,7 @@ class EmailOTPAuth:
             # Delete all OTP records for this email
             for record in otp_records:
                 try:
-                    self.storage.delete_by_id(record["id"])
+                    self.storage.delete_by_id(record[schema.CAMPUS_KEY])
                 except storage_errors.NotFoundError:
                     continue
         except Exception as e:
