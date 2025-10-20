@@ -3,6 +3,11 @@
 OAuth2 Authorization Code flow schemas and models.
 """
 
+__all__ = [
+    "OAuth2AuthorizationCodeConfigSchema",
+    "OAuth2AuthorizationCodeFlowScheme",
+]
+
 from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
@@ -338,9 +343,3 @@ class OAuth2AuthorizationCodeSession:
             "state": self.state,
             "target": self.target,
         }
-
-
-__all__ = [
-    "OAuth2AuthorizationCodeConfigSchema",
-    "OAuth2AuthorizationCodeFlowScheme",
-]

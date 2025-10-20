@@ -9,6 +9,11 @@ This interface is usually provided by document-oriented databases like MongoDB
 or CouchDB.
 """
 
+__all__ = [
+    "CollectionInterface",
+    "get_db",
+]
+
 from .interface import CollectionInterface
 
 
@@ -23,9 +28,3 @@ def get_db(name: str):
     else:
         from .backend.mongodb import MongoDBCollection
         return MongoDBCollection(name)
-
-
-__all__ = [
-    "CollectionInterface",
-    "get_db",
-]

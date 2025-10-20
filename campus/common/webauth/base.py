@@ -3,6 +3,11 @@
 Base configs and models for authentication flows.
 """
 
+__all__ = [
+    "SecurityError",
+    "SecurityScheme",
+]
+
 from typing import Protocol, Type, TypeVar, Unpack
 
 from campus.common.integration.config import (
@@ -39,22 +44,16 @@ class SecurityScheme(Protocol):
     @classmethod
     def from_json(
             cls: Type[S],
-            data: IntegrationConfigSchema,
+            config: IntegrationConfigSchema,
             security: Security,
             **override_config
         ) -> S:
         """Instantiate a security scheme from a JSON-like dictionary."""
-        if security not in data["security"]:
+        if security not in config["security"]:
             raise ValueError(
-                f"Integration {data['provider']} does not have {security} security configured."
+                f"Integration {config['provider']} does not have {security} security configured."
             )
-        provider = data["provider"]
-        security_config = data["security"][security]
+        provider = config["provider"]
+        security_config = config["security"][security]
         security_config.update(override_config)  # type: ignore[typeddict-item]
         return cls(provider, **security_config)
-
-
-__all__ = [
-    "SecurityError",
-    "SecurityScheme",
-]

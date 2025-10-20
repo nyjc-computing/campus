@@ -33,7 +33,7 @@ Legend:
     token endpoint for user profile.
 """
 
-from typing import NotRequired, TypedDict
+from typing import NotRequired, TypedDict, cast
 from urllib.parse import urlencode
 
 from flask import (
@@ -198,10 +198,13 @@ def oauth2_token() -> flask_validation.JsonResponse:
         401 Not authenticated: None
         - Returned when the session ID is not in the Flask session
     """
-    req_json: TokenRequest = flask_validation.validate_request_and_extract_json(
-        TokenRequest.__annotations__,
-        on_error=api_errors.raise_api_error
-    )  # type: ignore
+    req_json: TokenRequest = cast(
+        TokenRequest,
+        flask_validation.validate_request_and_extract_json(
+            TokenRequest.__annotations__,
+            on_error=api_errors.raise_api_error
+        )
+    )
     session = sessions.get()
     if not session:
         return {"error": "No OAuth session"}, 401
@@ -214,8 +217,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
         {
             "client_id": g.current_client["id"],
             "user_id": g.current_user["id"],
-            "agent_string": g.user_agent,
-            "scopes": session.get("scopes", []),
+            "scopes": session["scopes"],
         },
         expiry_seconds=DEFAULT_EXPIRY
     )

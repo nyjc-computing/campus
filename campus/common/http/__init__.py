@@ -11,6 +11,22 @@ This module provides abstractions for making HTTP requests and handling
 responses.
 """
 
+__all__ = [
+    "AccessDeniedError",
+    "AuthenticationError",
+    "ConflictError",
+    "DefaultClient",
+    "DefaultResponse",
+    "HttpClientError",
+    "InvalidRequestError",
+    "JsonClient",
+    "JsonResponse",
+    "MalformedResponseError",
+    "NetworkError",
+    "NotFoundError",
+    "get_client",
+]
+
 from .interface import JsonClient, JsonResponse
 from .default import DefaultResponse, DefaultClient
 from .errors import (
@@ -48,20 +64,3 @@ def get_client(*args, cache: bool = True, **kwargs) -> JsonClient:
     if key not in __client_cache:
         __client_cache[key] = client_factory(*args, **kwargs)
     return __client_cache[key]
-
-
-__all__ = [
-    "DefaultClient",
-    "DefaultResponse",
-    "JsonClient",
-    "JsonResponse",
-    "get_client",
-    "HttpClientError",
-    "AuthenticationError",
-    "AccessDeniedError",
-    "ConflictError",
-    "NotFoundError",
-    "InvalidRequestError",
-    "NetworkError",
-    "MalformedResponseError",
-]

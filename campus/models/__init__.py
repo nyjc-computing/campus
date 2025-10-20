@@ -95,6 +95,12 @@ resources.
   invalid.
 """
 
+__all__ = [
+    "circle",
+    "emailotp",
+    "user"
+]
+
 from campus.common import devops
 
 from . import (
@@ -116,10 +122,3 @@ def init_db():
     circle.init_db()
     emailotp.init_db()
     user.init_db()
-
-
-__all__ = [
-    "circle",
-    "emailotp",
-    "user"
-]

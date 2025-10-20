@@ -27,6 +27,19 @@ To check if a permission is granted, we use the bitwise AND operator (&):
 This allows efficient storage and checking of multiple permissions in one integer.
 """
 
+__all__ = [
+    "ALL",
+    "CREATE",
+    "DELETE",
+    "READ",
+    "UPDATE",
+    "convert_perms_to_access",
+    "grant_access",
+    "has_access",
+    "init_db",
+    "revoke_access",
+]
+
 from campus.common import devops, schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
@@ -43,19 +56,6 @@ UPDATE = 4  # 0100 in binary - Can modify existing secrets
 DELETE = 8  # 1000 in binary - Can delete secrets
 # 1111 in binary - All permissions (value: 15)
 ALL = READ | CREATE | UPDATE | DELETE
-
-__all__ = [
-    "convert_perms_to_access",
-    "grant_access",
-    "revoke_access",
-    "has_access",
-    "init_db",
-    "READ",
-    "CREATE",
-    "UPDATE",
-    "DELETE",
-    "ALL",
-]
 
 
 @devops.block_env(devops.PRODUCTION)

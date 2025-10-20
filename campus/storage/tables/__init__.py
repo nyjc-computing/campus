@@ -7,6 +7,11 @@ This interface is usually provided by relational databases like PostgreSQL
 or SQLite.
 """
 
+__all__ = [
+    "TableInterface",
+    "get_db",
+]
+
 from campus.common import devops
 
 from .interface import TableInterface
@@ -32,9 +37,3 @@ def get_db(name: str):
             # Fall back to PostgreSQL if SQLite backend is not available
             from .backend.postgres import PostgreSQLTable
             return PostgreSQLTable(name)
-
-
-__all__ = [
-    "TableInterface",
-    "get_db",
-]

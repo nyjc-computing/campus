@@ -3,14 +3,16 @@
 Vault client management for creating and managing vault authentication clients.
 """
 
+__all__ = ['VaultClientResource']
+
+from typing import Any
 from campus.client.interface import Resource
-from campus.common.http import JsonResponse
 
 
 class VaultClientResource(Resource):
     """Resource for Campus /vault/clients endpoint."""
 
-    def authenticate(self, client_id: str, client_secret: str) -> dict:
+    def authenticate(self, client_id: str, client_secret: str) -> dict[str, str]:
         """Authenticate a vault client using client_id and client_secret.
 
         Args:
@@ -21,9 +23,10 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.post(self.make_path("authenticate"), data)
         )
+        assert isinstance(json, dict)
         return json
 
-    def new(self, name: str, description: str) -> dict:
+    def new(self, name: str, description: str) -> dict[str, str]:
         """Create a new vault client.
 
         Args:
@@ -44,9 +47,10 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.post(self.path, json=data)
         )
+        assert isinstance(json, dict)
         return json
 
-    def get(self, client_id: str) -> dict:
+    def get(self, client_id: str) -> dict[str, str]:
         """Get details of a specific vault client.
 
         Args:
@@ -62,9 +66,10 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.get(self.make_path(client_id))
         )
+        assert isinstance(json, dict)
         return json
 
-    def list(self) -> list[dict]:
+    def list(self) -> dict[str, Any]:
         """List all vault clients.
 
         Returns:
@@ -76,9 +81,10 @@ class VaultClientResource(Resource):
                 print(f"Client: {client['name']} (ID: {client['id']})")
         """
         json = self._process_response(self.client.get(self.path))
+        assert isinstance(json, dict)
         return json
 
-    def delete(self, client_id: str) -> dict:
+    def delete(self, client_id: str) -> dict[str, str]:
         """Delete a vault client.
 
         Args:
@@ -94,7 +100,5 @@ class VaultClientResource(Resource):
         json = self._process_response(
             self.client.delete(self.make_path(client_id))
         )
+        assert isinstance(json, dict)
         return json
-
-
-__all__ = ['VaultClientResource']

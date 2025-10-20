@@ -3,6 +3,8 @@
 OAuth2 routes for integrations.
 """
 
+__all__ = []
+
 from flask import Blueprint, Flask
 
 from campus.common import devops
@@ -26,10 +28,3 @@ def init_db() -> None:
     This convenience function makes it easier to initialise tables for all
     models.
     """
-
-
-__all__ = [
-    'init_app',
-    'init_db',
-]
-    

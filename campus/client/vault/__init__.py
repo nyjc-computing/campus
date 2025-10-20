@@ -3,6 +3,14 @@
 Provides clean module interfaces for Campus Vault service resources.
 """
 
+__all__ = [
+    'VaultAccessResource',
+    'VaultClientResource',
+    'VaultResource',
+    'get_vault',
+    'set_vault_factory',
+]
+
 from typing import Callable
 
 import campus.config
@@ -41,12 +49,3 @@ def get_vault(*, raw: bool = False) -> VaultResource:
 
     vault_base_url = campus.config.get_base_url("campus.vault")
     return VaultResource(get_client(base_url=vault_base_url), raw=raw)
-
-
-__all__ = [
-    'VaultAccessResource',
-    'VaultClientResource',
-    'VaultResource',
-    'get_vault',
-    'set_vault_factory',
-]

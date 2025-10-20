@@ -4,6 +4,10 @@ This module provides classes for creating and managing Campus integrations,
 which are connections to third-party platforms and APIs.
 """
 
+__all__ = [
+    "get_config",
+]
+
 from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
@@ -18,10 +22,6 @@ from .config import Security, IntegrationConfigSchema, SecurityConfigSchema, get
 Url = str
 
 COLLECTION = "integrations"
-
-__all__ = [
-    "get_config",
-]
 
 
 # TODO: Refactor settings into a separate model
