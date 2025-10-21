@@ -229,6 +229,7 @@ def callback() -> Response:
             # Reference: https://developers.google.com/identity/protocols/oauth2/web-server#exchange-errors-invalid-grant
             # TODO: display user-friendly error message before restarting flow
             logger.warning("Invalid grant error - restarting OAuth flow")
+            api_errors.raise_api_error(400, **token_response)
             return redirect(url_for('.authorize', target=session.target))
         case {"error": _}:
             # Handle other errors returned by the token exchange
