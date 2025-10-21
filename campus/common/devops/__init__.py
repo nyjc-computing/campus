@@ -12,7 +12,9 @@ from typing import Literal
 from warnings import warn
 
 # Namespace exports
-from . import deploy, env
+from campus.common import env
+
+from . import deploy
 
 # typing stub
 Env = Literal["development", "testing", "staging", "production"]
