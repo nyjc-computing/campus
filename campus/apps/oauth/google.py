@@ -138,6 +138,12 @@ def callback() -> Response:
 
     # Retrive session stored in /authorize
     # Exchange the authorization code for an access token.
+    if "code" in params and "state" in params:
+        pass  # success
+    elif "error" in params:
+        pass  # error
+    else:
+        raise AssertionError(f"Unexpected response: {params}") from None
     match params:
         case {"error": _}:
             api_errors.raise_api_error(401, **params)
