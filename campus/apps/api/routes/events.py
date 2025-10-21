@@ -3,18 +3,17 @@
 API routes for the events resource (abstract endpoints only).
 """
 
-from typing import Callable, Any
+from typing import Callable
 
-from flask import Blueprint, Flask, 
+from flask import Blueprint, Flask
 from flask import request as flask_request # For datetime wrapper
-
-import campus_yapper
 
 import campus.common.validation.flask as flask_validation
 from campus.apps.campusauth import authenticate_client
 from campus.common.errors import api_errors
 from campus.models import event  # Event model to be implemented
 from campus.common.utils import utc_time
+import campus.yapper as campus_yapper
 
 bp = Blueprint('events', __name__, url_prefix='/events')
 bp.before_request(authenticate_client)
@@ -67,12 +66,12 @@ def new_event(*_: str) -> flask_validation.JsonResponse:
     resource = events.new(**payload)
     flask_validation.validate_json_response(
         event.EventResource.__annotations__,
-        resource,
+        resource.to_dict(),
         on_error=api_errors.raise_api_error,
     )
 
     yapper.emit('campus.events.new')
-    return dict(resource), 201
+    return resource.to_dict(), 200
 
 
 @bp.get('/<string:event_id>')
