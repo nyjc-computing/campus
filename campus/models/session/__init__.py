@@ -43,6 +43,7 @@ SESSION_KEY = "session_id"
 
 class SessionRecord(BaseRecordDict):
     """Schema for a full session record."""
+    # BaseRecordDict includes id and created_at
     expires_at: schema.DateTime
     client_id: schema.CampusID
     user_id: schema.UserID
