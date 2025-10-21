@@ -3,10 +3,10 @@
 Functions for initialising campus.vault for testing use
 """
 
-import os
 import time
 
 from . import postgres, require, setup
+from campus.common import env
 
 
 def init():
@@ -46,8 +46,8 @@ def init():
     client, secret = clientconfig["client"], clientconfig["secret"]
 
     # Set client credentials in environment
-    os.environ["CLIENT_ID"] = client["id"]
-    os.environ["CLIENT_SECRET"] = secret
+    env.CLIENT_ID = client["id"]
+    env.CLIENT_SECRET = secret
     client_id = client["id"]
 
     # Give client access to vault label

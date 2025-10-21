@@ -3,9 +3,9 @@
 Configuration utilities for Flask apps in testing environments.
 """
 
-import os
 from flask import Flask
 from campus.common import devops
+from campus.common import env
 
 
 def configure_for_testing(app: Flask) -> None:
@@ -26,7 +26,7 @@ def configure_for_testing(app: Flask) -> None:
     app.config['DEBUG'] = True
 
     # Configure test storage backends
-    os.environ["STORAGE_MODE"] = "1"
+    env.STORAGE_MODE = "1"
 
     # Disable CSRF for easier testing
     app.config['WTF_CSRF_ENABLED'] = False

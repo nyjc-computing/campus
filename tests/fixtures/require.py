@@ -3,17 +3,19 @@
 Functions for asserting the existence of test prerequisites.
 """
 
-import os
+import campus.common.env as campus_env
+
 
 def env(env: str) -> None:
     """Raise a RuntimeError if not in the required environment."""
-    if (this_env := os.environ.get("ENV")) != env:
+    if (this_env := campus_env.ENV) != env:
         raise RuntimeError(f"ENV != {env} (currently in {this_env})")
+
 
 def envvar(var: str) -> str:
     """Raise an EnvironmentError if the required environment variable
     is unavailable.
     """
-    if var not in os.environ:
+    if getattr(campus_env, var) is None:
         raise EnvironmentError(f"{var} not set")
-    return os.environ[var]
+    return getattr(campus_env, var)

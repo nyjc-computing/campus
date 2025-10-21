@@ -3,7 +3,7 @@
 Functions for PostgreSQL database management during testing.
 """
 
-import os
+import os  # Keep os.environ for subprocess full environment
 import subprocess
 
 from campus.common import devops

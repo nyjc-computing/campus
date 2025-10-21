@@ -3,10 +3,10 @@
 Functions for MongoDB database management during testing.
 """
 
-import os
 from pymongo import MongoClient
 
 from campus.common import devops
+from campus.common import env
 
 
 def get_mongodb_uri(database_name: str | None = None) -> str:
@@ -27,10 +27,10 @@ def get_mongodb_uri(database_name: str | None = None) -> str:
     Raises:
         OSError: If required environment variables are not set
     """
-    host = os.environ["MONGODB_HOST"]
-    port = os.environ["MONGODB_PORT"]
-    username = os.environ["MONGO_INITDB_ROOT_USERNAME"]
-    password = os.environ["MONGO_INITDB_ROOT_PASSWORD"]
+    host = env.MONGODB_HOST
+    port = env.MONGODB_PORT
+    username = env.MONGO_INITDB_ROOT_USERNAME
+    password = env.MONGO_INITDB_ROOT_PASSWORD
 
     if database_name:
         return f"mongodb://{username}:{password}@{host}:{port}/{database_name}?authSource=admin"
