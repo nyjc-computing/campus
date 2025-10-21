@@ -96,10 +96,22 @@ class Sessions:
             ) from None
         return client_session_id
 
-    def delete(self, session_id: schema.CampusID | None = None) -> None:
-        """Delete a session by its ID."""
+    def delete(
+            self,
+            session_id: schema.CampusID | None = None,
+            sync_client: bool = True
+    ) -> None:
+        """Delete a session by its ID.
+        
+        Args:
+            session_id: The ID of the session to delete. If None, uses the
+                session ID from the client cookie.
+            sync_client: If True, also removes the session ID from the client
+                cookie.
+        """
         # Check if session exists client-side
-        session_id = self._verify_session_id(session_id)
+        if sync_client:
+            session_id = self._verify_session_id(session_id)
         # Remove server-side session
         try:
             self.storage.delete_by_id(session_id)
@@ -113,7 +125,8 @@ class Sessions:
         else:
             # For consistency, only remove client-side session after
             # successful server-side deletion
-            del client_session[SESSION_KEY]
+            if sync_client and SESSION_KEY in client_session:
+                del client_session[SESSION_KEY]
 
     def find(
             self,
@@ -212,6 +225,29 @@ class Sessions:
         else:
             client_session[SESSION_KEY] = session_data[schema.CAMPUS_KEY]
             return cast(SessionRecord, session_data)
+
+    def sweep(
+            self,
+            *, 
+            at_time: schema.DateTime | None = None
+    ) -> int:
+        """Delete expired sessions from the database.
+
+        Returns the number of deleted sessions.
+        """
+        at_time = at_time or schema.DateTime.utcnow()
+        # TODO: implement query DSL for ranges
+        try:
+            records = self.storage.get_matching({})
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        deleted_ids = []
+        # TODO: Optimize to do this in a single query
+        for record in records:
+            if schema.DateTime(record["expires_at"]) <= at_time:
+                self.delete(record[schema.CAMPUS_KEY], sync_client=False)
+                deleted_ids.append(record[schema.CAMPUS_KEY])
+        return len(deleted_ids)
 
     def update(
             self,

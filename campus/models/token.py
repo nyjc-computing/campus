@@ -260,3 +260,23 @@ class Tokens:
                 user_id=token_data["user_id"]
             ) from None
         return token
+
+    def sweep(
+            self,
+            *, 
+            at_time: schema.DateTime | None = None
+    ) -> int:
+        """Delete expired tokens from the database.
+
+        Returns the number of deleted tokens.
+        """
+        at_time = at_time or schema.DateTime.utcnow()
+        all_tokens = self.find(sanitized=False)
+        expired_token_ids = [
+            token.id for token in all_tokens
+            if token.is_expired(at_time=at_time)
+        ]
+        # TODO: Optimize to do this in a single query
+        for token_id in expired_token_ids:
+            self.delete(token_id)
+        return len(expired_token_ids)
