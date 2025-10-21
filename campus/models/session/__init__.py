@@ -78,19 +78,37 @@ class Sessions:
         """Initialize the Session model with a collection storage interface."""
         self.storage = get_collection(COLLECTION)
 
+    def _check_existing_id(self) -> schema.CampusID | None:
+        """Check if a session already exists.
+
+        A session exists if:
+        - there is a session_id stored in the client cookie, and
+        - a session with that ID exists on the server.
+        Returns the session ID if a session exists, otherwise None.
+        """
+        client_session_id = client_session.get(SESSION_KEY)
+        if not client_session_id:
+            return None
+        try:
+            self.storage.get_by_id(client_session_id)
+        except storage_errors.NotFoundError:
+            return None
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return client_session_id
+
     def _verify_session_id(
             self,
-            session_id: schema.CampusID | None = None
+            session_id: schema.CampusID
     ) -> schema.CampusID:
-        """Get the session ID from the client cookie, if it exists.
-        If session_id is provided, it is verified against the client cookie and
-        returned if they match.
+        """Verify the session ID against the stored session.
         Returns None if no session ID is found or if there is a mismatch.
         This avoids accidental deletion of a session that does not belong to the
         client.
         """
-        client_session_id = client_session.get(SESSION_KEY)
-        if session_id and session_id != client_session_id:
+        client_session_id = self._check_existing_id()
+        if client_session_id and session_id != client_session_id:
             raise api_errors.ConflictError(
                 message="Mismatch with client session ID",
                 session_id=session_id
@@ -182,8 +200,12 @@ class Sessions:
         If session_id is not provided, uses the session ID from the client
         cookie.
         """
-        session_id = self._verify_session_id(session_id)
-        return self.get_by_id(session_id)
+        if session_id:
+            return self.get_by_id(session_id)
+        existing_session_id = self._check_existing_id()
+        if existing_session_id is not None:
+            return self.get_by_id(existing_session_id)
+        return None
 
     def get_by_id(self, session_id: schema.CampusID) -> SessionRecord:
         """Retrieve a session by its ID."""
@@ -199,19 +221,19 @@ class Sessions:
         else:
             return cast(SessionRecord, record)
 
-    def new(self, session_data: dict, *, expiry_seconds: int) -> SessionRecord:
+    def new(
+            self,
+            *,
+            expiry_seconds: int,
+            **session_data: Unpack[SessionNew]
+    ) -> SessionRecord:
         """Create a new session.
 
         Any existing session will be revoked.
         """
         # Delete any existing session
-        try:
-            session_id = self._verify_session_id()
-        except (api_errors.NotFoundError, api_errors.ConflictError):
-            # No existing session, or mismatch - ignore
-            pass
-        else:
-            self.delete(session_id)
+        if (existing_id := self._check_existing_id()):
+            self.delete(existing_id)
         record_validation.validate_keys(
             session_data,
             valid_keys=SessionNew.__annotations__,
