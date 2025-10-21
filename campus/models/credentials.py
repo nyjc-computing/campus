@@ -191,7 +191,7 @@ class UserCredentials:
             except storage_errors.NotFoundError:
                 existing_record = None
             # Other exceptions are handled below
-            if existing_record is not None:
+            if existing_record:
                 # If the record already exists, update it.
                 try:
                     self.storage.update_by_id(token_id, credentials_data)
