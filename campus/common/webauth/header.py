@@ -3,7 +3,12 @@
 Utility functions and classes for handling HTTP headers
 """
 
-from base64 import b64decode
+__all__ = [
+    "HttpAuthProperty",
+    "HttpHeaderDict",
+]
+
+from base64 import b64decode, b64encode
 
 
 class HttpAuthProperty(str):
@@ -43,7 +48,7 @@ class HttpAuthProperty(str):
     def from_credentials(cls, c_id: str, c_secret: str) -> "HttpAuthProperty":
         """Create an HttpAuthProperty from client credentials."""
         credentials = f"{c_id}:{c_secret}"
-        encoded_credentials = b64decode(credentials.encode()).decode()
+        encoded_credentials = b64encode(credentials.encode()).decode()
         return cls(f"Basic {encoded_credentials}")
 
     @classmethod
@@ -67,15 +72,9 @@ class HttpHeaderDict(dict):
         """Create an HTTP header dictionary from client credentials."""
         auth_property = HttpAuthProperty.from_credentials(c_id, c_secret)
         return cls({"Authorization": auth_property})
-    
+
     @classmethod
     def from_bearer_token(cls, token: str) -> "HttpHeaderDict":
         """Create an HTTP header dictionary from a bearer token."""
         auth_property = HttpAuthProperty.from_bearer_token(token)
         return cls({"Authorization": auth_property})
-
-
-__all__ = [
-    "HttpAuthProperty",
-    "HttpHeaderDict",
-]

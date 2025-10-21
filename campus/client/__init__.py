@@ -5,22 +5,16 @@ Campus Client Package
 Provides unified Campus client interface.
 """
 
-from campus.client.core import Campus
-from campus.client.errors import (
-    CampusClientError,
-    AuthenticationError,
-    AccessDeniedError,
-    NotFoundError,
-    ValidationError,
-    NetworkError
-)
-
 __all__ = [
+    'AdminResource',
     'Campus',
-    'CampusClientError',
-    'AuthenticationError',
-    'AccessDeniedError',
-    'NotFoundError',
-    'ValidationError',
-    'NetworkError',
+    'CirclesResource',
+    'UsersResource',
+    'VaultResource',
 ]
+
+from .core import Campus
+
+# Namespace imports
+from .apps import AdminResource, CirclesResource, UsersResource
+from .vault import VaultResource

@@ -15,10 +15,11 @@ JsonDict = dict[str, JsonValues]
 class ErrorConstant(str):
     """Error enums"""
     CONFLICT = "CONFLICT"
-    UNAUTHORIZED = "UNAUTHORIZED"
     FORBIDDEN = "FORBIDDEN"
     INVALID_REQUEST = "INVALID_REQUEST"
+    NOT_FOUND = "NOT_FOUND"
     SERVER_ERROR = "SERVER_ERROR"
+    UNAUTHORIZED = "UNAUTHORIZED"
 
 
 class APIError(Exception):
@@ -27,7 +28,7 @@ class APIError(Exception):
     This class is used to catch common API errors and return
     standardised JSON responses.
     """
-    status_code: int = 500
+    status_code: int
     message: str
     error_code: ErrorConstant
     details: JsonDict
@@ -35,7 +36,7 @@ class APIError(Exception):
     def __init__(
             self,
             message: str,
-            error_code: str = ErrorConstant.SERVER_ERROR,
+            error_code: str,
             **details
     ) -> None:
         super().__init__(message)
@@ -49,8 +50,15 @@ class APIError(Exception):
         This function is used to convert the error to a dictionary
         for JSON serialisation.
         """
-        return {
+        err_obj = {
             "message": self.message,
             "error_code": self.error_code,
             "details": self.details,
         }
+        # We can't use campus.common.devops to do a env check here because
+        # it would create a circular import.
+        # Pop the traceback in production environment.
+        if 500 <= self.status_code < 600:
+            import traceback
+            err_obj.update(traceback=traceback.format_exc())
+        return err_obj

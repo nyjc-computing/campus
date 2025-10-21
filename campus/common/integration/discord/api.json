@@ -12,6 +12,16 @@
   "security": {
     "oauth2": {
       "security_scheme": "oauth2",
+      "flow": "clientCredentials",
+      "scopes": [
+        "applications.commands",
+        "bot",
+        "webhook.incoming"
+      ],
+      "token_url": "https://discord.com/api/oauth2/token"
+    },
+    "oauth2_user": {
+      "security_scheme": "oauth2",
       "flow": "authorizationCode",
       "scopes": [
         "identify",

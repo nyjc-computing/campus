@@ -12,34 +12,34 @@ to the vault database, maintaining compatibility with the main client schema
 where possible.
 
 SECRET_KEY USAGE:
-This module retrieves the SECRET_KEY from the vault itself (from the 'campus' 
+This module retrieves the SECRET_KEY from the vault itself (from the 'vault' 
 vault label) on demand. While this creates additional database load, it provides
-consistency with the vault-first architecture and eliminates environment variable
-dependencies. Performance optimizations (such as API keys) can be addressed
-when needed.
+consistency with the vault-first architecture and eliminates environment
+variable dependencies. Performance optimizations (such as API keys) can be addressed when needed.
 """
 
-from typing import TypedDict, NotRequired, Unpack
+from typing import Any, TypedDict, NotRequired, Unpack
 
-from campus.common.utils import secret, uid, utc_time
-from campus.common import devops
-from . import db
-from .model import Vault
+from campus.common import devops, schema
+from campus.common.errors import api_errors
+from campus.common.utils import secret, uid
+
+from . import db, vault
 
 CLIENT_TABLE = "vault_clients"
 
 
 def _get_secret_key() -> str:
-    """Get the SECRET_KEY from the campus vault on demand.
+    """Get the SECRET_KEY from the vault's own vault on demand.
 
     Returns:
-        The SECRET_KEY value from the 'campus' vault
+        The SECRET_KEY value from the 'vault' vault label
 
     Raises:
-        VaultKeyError: If SECRET_KEY is not found in the campus vault
+        VaultKeyError: If SECRET_KEY is not found in the vault vault
     """
-    campus_vault = Vault("campus")
-    return campus_vault.get("SECRET_KEY")
+    vault_vault = vault.Vault("vault")
+    return vault_vault.get("SECRET_KEY")
 
 
 class ClientNew(TypedDict, total=True):
@@ -53,17 +53,8 @@ class ClientResource(TypedDict, total=True):
     id: str
     name: str
     description: str
-    created_at: str
+    created_at: schema.DateTime
     secret_hash: NotRequired[str]
-
-
-class ClientResourceWithSecret(TypedDict, total=True):
-    """Response body schema for new client creation including the secret."""
-    id: str
-    name: str
-    description: str
-    created_at: str
-    secret: str
 
 
 class VaultClientSecretResponse(TypedDict, total=True):
@@ -71,27 +62,18 @@ class VaultClientSecretResponse(TypedDict, total=True):
     secret: str
 
 
-class ClientAuthenticationError(Exception):
-    """Custom error for client authentication failures."""
-
-    def __init__(self, message: str, client_id: str | None = None):
-        super().__init__(message)
-        self.client_id = client_id
-
-
 @devops.block_env(devops.PRODUCTION)
 def init_db():
     """Initialize the vault client table.
 
-    This function is intended to be called only in a test environment or
-    staging. The vault client table is separate from the main clients table
-    to avoid circular dependencies.
+    This function is intended to be called only in a test or staging
+    environment.
     """
     with db.get_connection_context() as conn:
         with conn.cursor() as cursor:
             client_schema = f"""
                 CREATE TABLE IF NOT EXISTS {CLIENT_TABLE} (
-                    id TEXT PRIMARY KEY,
+                    {schema.CAMPUS_KEY} TEXT PRIMARY KEY,
                     secret_hash TEXT,
                     name TEXT NOT NULL,
                     description TEXT,
@@ -103,7 +85,7 @@ def init_db():
             cursor.execute(client_schema)
 
 
-def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
+def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
     """Create a new vault client with authentication credentials.
 
     Args:
@@ -122,32 +104,40 @@ def create_client(**fields: Unpack[ClientNew]) -> tuple[ClientResource, str]:
         client_secret, _get_secret_key())
 
     record = {
-        "id": client_id,
-        "created_at": utc_time.now(),
+        schema.CAMPUS_KEY: client_id,
+        "created_at": schema.DateTime.utcnow(),
         "secret_hash": secret_hash,
         **fields,
     }
 
-    with db.get_connection_context() as conn:
-        db.execute_query(
-            conn,
-            f"""
-            INSERT INTO {CLIENT_TABLE} (id, secret_hash, name, description, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (record["id"], record["secret_hash"], record["name"],
-             record["description"], record["created_at"]),
-            fetch_one=False,
-            fetch_all=False
-        )
+    try:
+        with db.get_connection_context() as conn:
+            db.execute_query(
+                conn,
+                f"""
+                INSERT INTO {CLIENT_TABLE} ({schema.CAMPUS_KEY}, secret_hash, name, description, created_at)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (record[schema.CAMPUS_KEY], record["secret_hash"], record["name"],
+                 record["description"], record["created_at"]),
+                fetch_one=False,
+                fetch_all=False
+            )
+    except db.psycopg2.IntegrityError:
+        raise api_errors.ConflictError(
+            message="Client name already exists."
+        ) from None
 
     # Return client resource without secret_hash
-    client_resource: ClientResource = {
-        k: v for k, v in record.items() if k != "secret_hash"}  # type: ignore
-    return client_resource, client_secret
+    client_resource = {
+        k: v for k, v in record.items() if k != "secret_hash"}
+    return {
+        "client": client_resource,
+        "secret": client_secret
+    }
 
 
-def get_client(client_id: str) -> ClientResource:
+def get_client(client_id: str) -> dict[str, Any]:
     """Retrieve a vault client by its ID.
 
     Args:
@@ -162,18 +152,14 @@ def get_client(client_id: str) -> ClientResource:
     with db.get_connection_context() as conn:
         client_record = db.execute_query(
             conn,
-            f"SELECT id, name, description, created_at FROM {CLIENT_TABLE} WHERE id = %s",
+            f"SELECT {schema.CAMPUS_KEY}, name, description, created_at FROM {CLIENT_TABLE} WHERE {schema.CAMPUS_KEY} = %s",
             (client_id,),
             fetch_one=True
         )
-
-        if not client_record:
-            raise ClientAuthenticationError(
-                f"Vault client '{client_id}' not found",
-                client_id=client_id
-            )
-
-        return client_record
+    if not client_record:
+        raise api_errors.NotFoundError(
+            message=f"Vault client '{client_id}' not found", client_id=client_id)
+    return client_record
 
 
 def list_clients() -> list[ClientResource]:
@@ -185,7 +171,7 @@ def list_clients() -> list[ClientResource]:
     with db.get_connection_context() as conn:
         client_records = db.execute_query(
             conn,
-            f"SELECT id, name, description, created_at FROM {CLIENT_TABLE}",
+            f"SELECT {schema.CAMPUS_KEY}, name, description, created_at FROM {CLIENT_TABLE}",
             (),
             fetch_all=True
         )
@@ -202,17 +188,17 @@ def delete_client(client_id: str) -> None:
     Raises:
         VaultClientAuthenticationError: If client not found
     """
-    # Check if client exists first
-    get_client(client_id)  # This will raise if not found
-
     with db.get_connection_context() as conn:
-        db.execute_query(
+        result = db.execute_query(
             conn,
-            f"DELETE FROM {CLIENT_TABLE} WHERE id = %s",
+            f"DELETE FROM {CLIENT_TABLE} WHERE {schema.CAMPUS_KEY} = %s RETURNING *",
             (client_id,),
-            fetch_one=False,
+            fetch_one=True,
             fetch_all=False
         )
+    if not result:
+        raise api_errors.NotFoundError(
+            message=f"Vault client '{client_id}' not found", client_id=client_id)
 
 
 def replace_client_secret(client_id: str) -> str:
@@ -228,7 +214,7 @@ def replace_client_secret(client_id: str) -> str:
         VaultClientAuthenticationError: If client not found
     """
     # Check if client exists first
-    get_client(client_id)  # This will raise if not found
+    get_client(client_id)  # This will raise NotFoundError if not found
 
     new_secret = secret.generate_client_secret()
     secret_hash = secret.hash_client_secret(
@@ -237,7 +223,7 @@ def replace_client_secret(client_id: str) -> str:
     with db.get_connection_context() as conn:
         db.execute_query(
             conn,
-            f"UPDATE {CLIENT_TABLE} SET secret_hash = %s WHERE id = %s",
+            f"UPDATE {CLIENT_TABLE} SET secret_hash = %s WHERE {schema.CAMPUS_KEY} = %s",
             (secret_hash, client_id),
             fetch_one=False,
             fetch_all=False
@@ -254,35 +240,26 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
         client_secret: The client secret
 
     Raises:
-        VaultClientAuthenticationError: If authentication fails
+        UnauthorizedError: If client not found or client secret is invalid
     """
     with db.get_connection_context() as conn:
         client_record = db.execute_query(
             conn,
-            f"SELECT secret_hash FROM {CLIENT_TABLE} WHERE id = %s",
+            f"SELECT secret_hash FROM {CLIENT_TABLE} WHERE {schema.CAMPUS_KEY} = %s",
             (client_id,),
             fetch_one=True
         )
-
-        if not client_record:
-            raise ClientAuthenticationError(
-                f"Vault client '{client_id}' not found",
-                client_id=client_id
-            )
-
-        if not client_record["secret_hash"]:
-            raise ClientAuthenticationError(
-                f"Vault client '{client_id}' has no secret configured",
-                client_id=client_id
-            )
-
-        expected_hash = secret.hash_client_secret(
-            client_secret, _get_secret_key())
-        if client_record["secret_hash"] != expected_hash:
-            raise ClientAuthenticationError(
-                f"Invalid secret for vault client '{client_id}'",
-                client_id=client_id
-            )
+    if not client_record:
+        raise api_errors.UnauthorizedError(
+            message=f"Invalid credentials", client_id=client_id)
+    if not client_record["secret_hash"]:
+        raise api_errors.InternalError(
+            message=f"Vault client '{client_id}' has no secret configured", client_id=client_id)
+    expected_hash = secret.hash_client_secret(
+        client_secret, _get_secret_key())
+    if client_record["secret_hash"] != expected_hash:
+        raise api_errors.UnauthorizedError(
+            message=f"Invalid secret for '{client_id}'", client_id=client_id)
 
 
 def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
@@ -293,13 +270,14 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
         **updates: Fields to update (name, description)
 
     Raises:
-        VaultClientAuthenticationError: If client not found
+        NotFoundError: If client not found
+        ConflictError: If updated name conflicts with existing client
     """
     if not updates:
         return
 
     # Check if client exists first
-    get_client(client_id)  # This will raise if not found
+    get_client(client_id)  # This will raise NotFoundError if not found
 
     # Build dynamic update query
     set_clauses = []
@@ -315,11 +293,25 @@ def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:
 
     values.append(client_id)
 
-    with db.get_connection_context() as conn:
-        db.execute_query(
-            conn,
-            f"UPDATE {CLIENT_TABLE} SET {', '.join(set_clauses)} WHERE id = %s",
-            tuple(values),
-            fetch_one=False,
-            fetch_all=False
-        )
+    try:
+        with db.get_connection_context() as conn:
+            updated_record = db.execute_query(
+                conn,
+                (
+                    f"UPDATE {CLIENT_TABLE} "
+                    f"SET {', '.join(set_clauses)} "
+                    "WHERE id = %s RETURNING *"
+                ),
+                tuple(values),
+                fetch_one=True,
+                fetch_all=False
+            )
+    except db.psycopg2.IntegrityError:
+        raise api_errors.ConflictError(
+            message="Client name already exists."
+        ) from None
+    else:
+        if updated_record is None:
+            raise api_errors.NotFoundError(
+                message="Client not found."
+            )

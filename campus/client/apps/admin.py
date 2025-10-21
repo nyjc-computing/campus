@@ -3,23 +3,27 @@
 Admin management client for Campus API /admin endpoints.
 """
 
-from typing import Dict, Any
-from campus.client.base import HttpClient
-from campus.client import config
+from campus.client.interface import Resource
+from campus.common.http import JsonClient
 
-class AdminClient:
-    """Client for Campus /admin endpoints."""
-    def __init__(self, base_url: str | None = None):
-        self._client = HttpClient(base_url or config.get_apps_base_url())
 
-    def status(self) -> Dict[str, Any]:
+class AdminResource(Resource):
+    """Resource for Campus /admin endpoint."""
+
+    def __init__(self, client: JsonClient, *, raw: bool = False):
+        super().__init__(client, "admin", raw=raw)
+
+    def status(self) -> dict:
         """GET /admin/status - Get admin status info."""
-        return self._client.get("/admin/status")
+        response = self.client.get(self.make_path("status"))
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def init_db(self) -> Dict[str, Any]:
+    def init_db(self) -> dict:
         """POST /admin/init-db - Initialise the database."""
-        return self._client.post("/admin/init-db", data={})
+        response = self.client.post(self.make_path("init-db"), json={})
+        return self._process_response(response)  # type: ignore[return-value]
 
-    def purge_db(self) -> Dict[str, Any]:
+    def purge_db(self) -> dict:
         """POST /admin/purge-db - Purge the database."""
-        return self._client.post("/admin/purge-db", data={})
+        response = self.client.post(self.make_path("purge-db"), json={})
+        return self._process_response(response)  # type: ignore[return-value]

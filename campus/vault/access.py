@@ -27,8 +27,22 @@ To check if a permission is granted, we use the bitwise AND operator (&):
 This allows efficient storage and checking of multiple permissions in one integer.
 """
 
-from campus.common.utils import uid, utc_time
-from campus.common import devops
+__all__ = [
+    "ALL",
+    "CREATE",
+    "DELETE",
+    "READ",
+    "UPDATE",
+    "convert_perms_to_access",
+    "grant_access",
+    "has_access",
+    "init_db",
+    "revoke_access",
+]
+
+from campus.common import devops, schema
+from campus.common.errors import api_errors
+from campus.common.utils import uid
 
 from . import db
 
@@ -43,17 +57,71 @@ DELETE = 8  # 1000 in binary - Can delete secrets
 # 1111 in binary - All permissions (value: 15)
 ALL = READ | CREATE | UPDATE | DELETE
 
-__all__ = [
-    "grant_access",
-    "revoke_access",
-    "has_access",
-    "init_db",
-    "READ",
-    "CREATE",
-    "UPDATE",
-    "DELETE",
-    "ALL",
-]
+
+@devops.block_env(devops.PRODUCTION)
+def init_db():
+    """Initialize the access control table.
+
+    This function is intended to be called only in a test or staging
+    environment.
+    """
+    with db.get_connection_context() as conn:
+        with conn.cursor() as cursor:
+            # Create vault_access table
+            access_schema = f"""
+                CREATE TABLE IF NOT EXISTS vault_access (
+                    {schema.CAMPUS_KEY} TEXT PRIMARY KEY,
+                    created_at TEXT NOT NULL,
+                    client_id TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    access INTEGER NOT NULL DEFAULT 0,
+                    UNIQUE(client_id, label)
+                )
+            """
+            cursor.execute(access_schema)
+
+
+def convert_perms_to_access(permissions: int | list[str]) -> int:
+    """Convert permissions given as an integer or list of strings
+    to an access value integer.
+    """
+    match permissions:
+        case list():
+            # Convert permission names to bitflags
+            permission_map = {
+                "READ": READ,
+                "CREATE": CREATE,
+                "UPDATE": UPDATE,
+                "DELETE": DELETE,
+                "ALL": ALL
+            }
+            access_flags = 0
+            invalid_perms = [
+                perm for perm in permissions
+                if perm not in permission_map
+            ]
+            if invalid_perms:
+                raise api_errors.InvalidRequestError(
+                    "Invalid permissions provided",
+                    invalid_perms=invalid_perms
+                )
+            access_flags = 0
+            for perm in permissions:
+                access_flags |= permission_map[perm]
+        case int():
+            if not READ <= permissions <= ALL:
+                raise api_errors.InvalidRequestError(
+                    "Invalid permissions range",
+                    accepted_range="1 - 15"
+                )
+            access_flags = permissions
+        case _:
+            raise api_errors.InvalidRequestError(
+                "Invalid permissions argument type",
+                given_type=type(permissions).__name__,
+                required_type="integer | array[string]"
+            )
+    return access_flags
 
 
 def grant_access(client_id: str, label: str, access: int) -> None:
@@ -77,37 +145,40 @@ def grant_access(client_id: str, label: str, access: int) -> None:
         grant_access("client-456", "api-keys", READ | CREATE)  # Read + create
         grant_access("admin-789", "api-keys", ALL)  # Full access
     """
-    with db.get_connection_context() as conn:
-        # Check if access already exists
-        existing_access = db.execute_query(
-            conn,
-            "SELECT * FROM vault_access WHERE client_id = %s AND label = %s",
-            (client_id, label),
-            fetch_one=True
-        )
-
-        if existing_access:
-            # Update existing access permissions
-            db.execute_query(
+    try:
+        with db.get_connection_context() as conn:
+            # Check if access already exists
+            existing_access = db.execute_query(
                 conn,
-                "UPDATE vault_access SET access = %s WHERE id = %s",
-                (access, existing_access["id"]),
-                fetch_one=False,
-                fetch_all=False
+                "SELECT * FROM vault_access WHERE client_id = %s AND label = %s",
+                (client_id, label),
+                fetch_one=True
             )
-        else:
-            # Create new access record
-            access_id = uid.generate_category_uid(TABLE, length=16)
-            db.execute_query(
-                conn,
-                (
-                    "INSERT INTO vault_access (id, created_at, client_id, label, access)"
-                    "VALUES (%s, %s, %s, %s, %s)"
-                ),
-                (access_id, utc_time.now(), client_id, label, access),
-                fetch_one=False,
-                fetch_all=False
-            )
+            if existing_access:
+                # Update existing access permissions
+                db.execute_query(
+                    conn,
+                    "UPDATE vault_access SET access = %s WHERE id = %s",
+                    (access, existing_access[schema.CAMPUS_KEY]),
+                    fetch_one=False,
+                    fetch_all=False
+                )
+            else:
+                # Create new access record
+                access_id = uid.generate_category_uid(TABLE, length=16)
+                db.execute_query(
+                    conn,
+                    (
+                        "INSERT INTO vault_access (id, created_at, client_id, label, access)"
+                        "VALUES (%s, %s, %s, %s, %s)"
+                    ),
+                    (access_id, schema.DateTime.utcnow(), client_id, label, access),
+                    fetch_one=False,
+                    fetch_all=False
+                )
+    except db.psycopg2.IntegrityError:
+        raise api_errors.ConflictError(
+            message="Access for this client and label already exists.")
 
 
 def revoke_access(client_id: str, label: str) -> None:
@@ -156,32 +227,7 @@ def has_access(client_id: str, label: str, required_access: int) -> bool:
             (client_id, label),
             fetch_one=True
         )
-
         if not access_record:
             return False
-
         granted_access = access_record["access"]
         return (granted_access & required_access) == required_access
-
-
-@devops.block_env(devops.PRODUCTION)
-def init_db():
-    """Initialize the access control table.
-
-    This function is intended to be called only in a test environment or
-    staging.
-    """
-    with db.get_connection_context() as conn:
-        with conn.cursor() as cursor:
-            # Create vault_access table
-            access_schema = """
-                CREATE TABLE IF NOT EXISTS vault_access (
-                    id TEXT PRIMARY KEY,
-                    created_at TEXT NOT NULL,
-                    client_id TEXT NOT NULL,
-                    label TEXT NOT NULL,
-                    access INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(client_id, label)
-                )
-            """
-            cursor.execute(access_schema)

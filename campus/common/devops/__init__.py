@@ -3,10 +3,16 @@
 This module contains the DevOps-related functionality for the Campus project.
 """
 
+__all__ = ["deploy"]
+
 import os
 from functools import wraps
+import logging
 from typing import Literal
 from warnings import warn
+
+# Namespace exports
+from . import deploy
 
 # typing stub
 Env = Literal["development", "testing", "staging", "production"]
@@ -16,6 +22,9 @@ DEVELOPMENT = "development"
 TESTING = "testing"
 STAGING = "staging"
 PRODUCTION = "production"
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # If not defined, assume development environment
 ENV = os.getenv("ENV", "development")
@@ -55,12 +64,33 @@ def confirm_action_in_env(*envs, prompt: str = "Proceed? (y/N): "):
                 if input(prompt).lower() == 'y':
                     return func(*args, **kwargs)
                 else:
-                    print("Action cancelled.")
+                    logger.info("Action cancelled.")
                     return None
             else:
                 return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def load_dotenv() -> bool:
+    """Load environment variables from a .env file if it exists.
+
+    Returns True if .env file was found and loaded, False otherwise.
+    """
+    dotenv_path = os.path.join(os.getcwd(), ".env")
+    if os.path.exists(dotenv_path):
+        with open(dotenv_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip(" \"\'")
+                    os.environ.setdefault(key, value)
+        return True
+    return False
 
 
 def require_env(*envs: str):

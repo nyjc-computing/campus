@@ -10,11 +10,17 @@ This module handles:
 from functools import wraps
 from typing import Callable
 
-from flask import request
+from flask import g, request
 
-from campus.apps.campusauth.context import ctx
-from campus.client import Campus
+from campus.client.vault import get_vault
+from campus.common.errors import api_errors
 from campus.common.webauth import http
+from campus.models.token import Tokens
+from campus.models.user import User
+
+tokens = Tokens()
+users = User()
+vault = get_vault()
 
 
 def authenticate_client() -> tuple[dict[str, str], int] | None:
@@ -28,21 +34,38 @@ def authenticate_client() -> tuple[dict[str, str], int] | None:
 
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
+    req_header = dict(request.headers)
     auth = (
         http.HttpAuthenticationScheme
-        .from_header("campus", request.headers)
-        .get_auth(request.headers)
+        .from_header(provider="campus", header=req_header)
+        .get_auth(header=req_header)
     )
     match auth.scheme:
         case "basic":
             client_id, client_secret = auth.credentials()
-            campus_client = Campus()
+            # Raises API errors if auth fails
             try:
-                campus_client.vault.client.authenticate(client_id, client_secret)
-                ctx.client = campus_client.vault.client.get(client_id)
-            except Exception:
-                return {"message": "Invalid client credentials"}, 403
+                auth_json = vault.clients.authenticate(
+                    client_id,
+                    client_secret
+                )
+            except api_errors.NotFoundError:
+                # Client ID not found means invalid credentials
+                raise api_errors.UnauthorizedError(
+                    "Invalid client credentials"
+                )
+            # Passthrough other errors
+            if not auth_json["status"] == "success":
+                raise api_errors.UnauthorizedError(
+                    "Invalid client credentials")
+            g.current_client = vault.clients.get(client_id)
         case "bearer":
+            access_token = auth.value
+            # raises UnauthorizedError for invalid access_token
+            token = tokens.get(access_token)
+            g.current_user = users.get(token.user_id)
+            g.current_client = vault.client.get(token.client_id)
+            g.user_agent = request.headers.get("User-Agent", "")
             return {"message": "Bearer auth not implemented"}, 501
 
 

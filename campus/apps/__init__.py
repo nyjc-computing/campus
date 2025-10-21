@@ -10,42 +10,32 @@ This module contains the main applications for Campus.
 - oauth: Campus OAuth2 implementation.
 """
 
-from flask import Flask
-from campus.client import Campus
+__all__ = ["api", "campusauth", "oauth"]
+
+from flask import Blueprint, Flask
 
 from . import api, campusauth, oauth
-from .campusauth import ctx
 
 
-def create_app_from_modules(*modules) -> Flask:
-    """Factory function to create the Flask app.
+def init_app(app: Blueprint | Flask) -> None:
+    """Initialize the Campus app with all modules.
 
-    This is called if api is run as a standalone app.
+    This function sets up all Campus apps components including API,
+    authentication, and OAuth modules.
+
+    Note: For creating new Flask applications, use the recommended pattern:
+        from campus.common.devops.deploy import create_app
+        import campus.apps
+        app = create_app(campus.apps)
+
+    This ensures proper error handling and deployment configuration.
     """
-    app = Flask(__name__)
-    for module in modules:
-        module.init_app(app)
-    campus_client = Campus()
-    app.secret_key = campus_client.vault["campus"]["SECRET_KEY"].get()
-
-    # Health check route for deployments
-    @app.route('/')
-    def health_check():
-        return {'status': 'healthy', 'service': 'campus-apps'}, 200
-
-    return app
-
-
-def create_app() -> Flask:
-    """Create the main Campus app with all modules"""
-    return create_app_from_modules(api, campusauth, oauth)
-
-
-__all__ = [
-    "api",
-    "campusauth",
-    "oauth",
-    "create_app_from_modules",
-    "create_app",
-    "ctx",
-]
+    api.init_app(app)
+    campusauth.init_app(app)
+    oauth.init_app(app)
+    # Use vault client to retrieve secret key since campus.apps deployment
+    # does not have VAULTDB_URI env var
+    if isinstance(app, Flask):
+        from campus.client.vault import get_vault
+        vault = get_vault()
+        app.secret_key = vault["campus"]["SECRET_KEY"].get()["value"]

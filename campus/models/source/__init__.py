@@ -11,12 +11,14 @@ Main operations:
 - 
 """
 
+__all__ = []
+
 from typing import NotRequired, TypedDict, Unpack
 
-from campus.models.base import BaseRecord
+from campus.models.base import BaseRecordDict
+from campus.common import devops, schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
-from campus.common import devops
+from campus.common.utils import uid
 from campus.storage import get_collection
 
 SourceID = str
@@ -35,7 +37,7 @@ def init_db():
     pass
 
 
-class SourceRecord(BaseRecord, total=False):
+class SourceRecord(BaseRecordDict, total=False):
     """Schema for a source record in the sources collection."""
     type: str  # Source type (integration.type)
     external_id: str  # Unique ID used by the external platform
@@ -85,7 +87,7 @@ class Source:
         source_id = SourceID(uid.generate_category_uid("source", length=16))
         record = SourceRecord(
             id=source_id,
-            created_at=utc_time.now(),
+            created_at=schema.DateTime.utcnow(),
             name=fields["name"],
             description=fields.get("description", ""),
             type=fields["type"],
@@ -100,7 +102,7 @@ class Source:
             self.storage.insert_one(dict(record))
             return source_id
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def delete(self, source_id: str) -> None:
         """Delete a source by id.
@@ -113,7 +115,7 @@ class Source:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def get(self, source_id: str) -> dict:
         """Get a source by id from the source collection."""
@@ -128,7 +130,7 @@ class Source:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def list(self) -> list[dict]:
         """List all sources in the sources collection."""
@@ -137,7 +139,7 @@ class Source:
             sources = self.storage.get_matching({"@meta": {"$ne": True}})
             return sources
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def update(self, source_id: str, **updates: Unpack[SourceUpdate]) -> None:
         """Update a source by id."""
@@ -146,9 +148,4 @@ class Source:
         except Exception as e:
             if isinstance(e, type(api_errors.APIError)) and hasattr(e, 'status_code'):
                 raise  # Re-raise API errors as-is
-            raise api_errors.InternalError(message=str(e), error=e)
-
-
-__all__ = [
-    "init_db",
-]
+            raise api_errors.InternalError.from_exception(e) from e

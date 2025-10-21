@@ -95,6 +95,14 @@ resources.
   invalid.
 """
 
+__all__ = [
+    "circle",
+    "emailotp",
+    "user"
+]
+
+from campus.common import devops
+
 from . import (
     circle,
     emailotp,
@@ -102,9 +110,16 @@ from . import (
     event
 )
 
-__all__ = [
-    "circle",
-    "emailotp",
-    "user",
-    "event"
-]
+
+@devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
+def init_db():
+    """Initialize tables needed by models.
+
+    This function is intended to be called only in a test environment (using a
+    local-only db like SQLite), or in a staging environment before upgrading to
+    production.
+    """
+    circle.init_db()
+    emailotp.init_db()
+    user.init_db()

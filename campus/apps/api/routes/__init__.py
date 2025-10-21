@@ -3,12 +3,11 @@
 This is a namespace module for the Campus API routes.
 """
 
-from . import circles, emailotp, users, admin, events
-
 __all__ = [
+    "admin",
     "circles",
     "emailotp",
     "users",
-    "admin",
-    "events"
 ]
+
+from . import circles, emailotp, users, admin

@@ -138,7 +138,7 @@ Each service can be developed and tested independently:
 
 ```bash
 # Test vault service
-cd campus/vault && python -m pytest
+cd campus/vault && python -m unittest
 
 # Run vault standalone
 python -c "from campus.vault import create_app; create_app().run()"

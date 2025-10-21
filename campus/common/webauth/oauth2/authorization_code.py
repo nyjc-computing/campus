@@ -3,15 +3,21 @@
 OAuth2 Authorization Code flow schemas and models.
 """
 
+__all__ = [
+    "OAuth2AuthorizationCodeConfigSchema",
+    "OAuth2AuthorizationCodeFlowScheme",
+]
+
 from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
 import requests
 from flask import session
 
+from campus.common import schema
+from campus.common.utils import uid, utc_time
 from campus.common.webauth.http import HttpScheme
 from campus.common.webauth.token import CredentialToken
-from campus.common.utils import uid, utc_time
 
 from .base import (
     OAuth2AuthorizationCodeConfigSchema,
@@ -229,7 +235,7 @@ class OAuth2AuthorizationCodeSession:
     """
     provider: OAuth2AuthorizationCodeFlowScheme
     client_id: str
-    created_at: str  # RFC3339 timestamp of when the session was created
+    created_at: schema.DateTime
     response_type: Literal["code"]
     scopes: list[str]
     state: str  # Unique state for CSRF protection
@@ -249,7 +255,7 @@ class OAuth2AuthorizationCodeSession:
         Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
         """
         self.provider = provider
-        self.created_at = utc_time.to_rfc3339(utc_time.now())
+        self.created_at = schema.DateTime.utcnow()
         self.client_id = client_id
         self.response_type = "code"
         self.scopes = scopes
@@ -312,9 +318,10 @@ class OAuth2AuthorizationCodeSession:
         This method checks if the session was created more than 10 minutes ago.
         If so, it considers the session expired.
         """
-        created_at = utc_time.from_rfc3339(self.created_at)
-        expires_at = utc_time.after(created_at, minutes=OAUTH_EXPIRY_MINUTES)
-        return expires_at > utc_time.now()
+        return utc_time.is_expired(
+            self.created_at.to_datetime(),
+            threshold=OAUTH_EXPIRY_MINUTES * 60
+        )
 
     def store(self) -> None:
         """Store the session in the database or cache.
@@ -336,9 +343,3 @@ class OAuth2AuthorizationCodeSession:
             "state": self.state,
             "target": self.target,
         }
-
-
-__all__ = [
-    "OAuth2AuthorizationCodeConfigSchema",
-    "OAuth2AuthorizationCodeFlowScheme",
-]

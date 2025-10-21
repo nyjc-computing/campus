@@ -3,6 +3,16 @@
 Config for third-party integrations.
 """
 
+__all__ = [
+    "HttpScheme",
+    "IntegrationConfigSchema",
+    "OAuth2AuthorizationCodeConfigSchema",
+    "OAuth2Flow",
+    "Security",
+    "SecurityConfigSchema",
+    "get_config",
+]
+
 import json
 import os
 from pathlib import Path
@@ -44,14 +54,3 @@ def get_config(provider: str, resource: str = "api") -> dict[str, Any]:
     # Load the provider's config file
     config = _load_json(f"{provider}/{resource}.json")
     return config
-
-
-__all__ = [
-    "get_config",
-    "IntegrationConfigSchema",
-    "SecurityConfigSchema",
-    "OAuth2AuthorizationCodeConfigSchema",
-    "HttpScheme",
-    "OAuth2Flow",
-    "Security",
-]

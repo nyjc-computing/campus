@@ -7,13 +7,32 @@ Two kinds of storage interface are provided:
 2. Documents: For storing documents that can have different schemas.
 """
 
+__all__ = [
+    "CollectionInterface",
+    "ConflictError",
+    "NoChangesAppliedError",
+    "NotFoundError",
+    "TableInterface",
+    "StorageError",
+    "get_collection",
+    "get_table",
+    "purge_all",
+    "purge_collections",
+    "purge_tables",
+]
+
 from campus.common import devops
 
 from . import documents, tables
 
 from .documents import CollectionInterface
 from .tables import TableInterface
-from .errors import StorageError, NotFoundError, NoChangesAppliedError
+from .errors import (
+    StorageError,
+    ConflictError,
+    NotFoundError,
+    NoChangesAppliedError
+)
 
 
 def get_table(name: str):
@@ -69,17 +88,3 @@ def purge_all() -> None:
     """
     purge_tables()
     purge_collections()
-
-
-__all__ = [
-    "CollectionInterface",
-    "TableInterface",
-    "StorageError",
-    "NotFoundError",
-    "NoChangesAppliedError",
-    "get_table",
-    "get_collection",
-    "purge_tables",
-    "purge_collections",
-    "purge_all",
-]

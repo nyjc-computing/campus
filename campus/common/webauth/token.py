@@ -5,6 +5,7 @@ Token management schemas and models
 
 from typing import NotRequired, TypedDict, Unpack
 
+from campus.common import schema
 from campus.common.utils import utc_time
 
 EXPIRY_THRESHOLD = 300  # 5 minutes in seconds, used to check token expiry
@@ -16,18 +17,20 @@ class TokenResponseSchema(TypedDict):
     token_type: str  # Type of the token (e.g., "Bearer")
     expires_in: int  # Lifetime of the access token in seconds
     scope: str  # Scopes granted by the access token
-    refresh_token: NotRequired[str]  # Optional refresh token for long-lived sessions
-    refresh_token_expires_in: NotRequired[int]  # Lifetime of the refresh token in seconds
+    # Optional refresh token for long-lived sessions
+    refresh_token: NotRequired[str]
+    # Lifetime of the refresh token in seconds
+    refresh_token_expires_in: NotRequired[int]
 
 
 class TokenSchema(TypedDict):
     """Schema for token storage."""
     token_type: str
     access_token: str
-    expires_at: utc_time.datetime
+    expires_at: schema.DateTime
     scopes: list[str]
     refresh_token: NotRequired[str]
-    refresh_token_expires_at: NotRequired[utc_time.datetime]
+    refresh_token_expires_at: NotRequired[schema.DateTime]
 
 
 class CredentialToken:
@@ -42,7 +45,7 @@ class CredentialToken:
     def __repr__(self) -> str:
         """String representation of the CredentialToken."""
         return f"CredentialToken(provider={self.provider}, token={self.token})"
-    
+
     @property
     def token_type(self) -> str:
         return self.token["token_type"]
@@ -50,35 +53,36 @@ class CredentialToken:
     @property
     def access_token(self) -> str:
         return self.token["access_token"]
-    
+
     @property
-    def expires_at(self) -> utc_time.datetime:
+    def expires_at(self) -> schema.DateTime:
         return self.token["expires_at"]
-    
+
     @property
     def scopes(self) -> list[str]:
         return self.token["scopes"]
-    
+
     @property
     def refresh_token(self) -> str | None:
         return self.token.get("refresh_token")
-    
+
     @property
-    def refresh_token_expires_at(self) -> utc_time.datetime | None:
+    def refresh_token_expires_at(self) -> schema.DateTime | None:
         return self.token.get("refresh_token_expires_at")
-        
+
     def to_dict(self) -> TokenSchema:
         """Convert the token to a dictionary representation."""
         return self.token
-    
-    def is_expired(self, from_time: utc_time.datetime | None = None) -> bool:
+
+    def is_expired(self, at_time: utc_time.datetime | None = None) -> bool:
         """Check if the token is expired based on the current time."""
+
         return utc_time.is_expired(
-            self.token["expires_at"],
-            from_time=from_time or utc_time.now(),
+            self.expires_at.to_datetime(),
+            at_time=at_time or utc_time.now(),
             threshold=EXPIRY_THRESHOLD
         )
-    
+
     def refresh_from_response(self, response: TokenResponseSchema) -> None:
         """Update the token from a token response."""
         token = self.prepare_token_from_response(response)
@@ -101,13 +105,15 @@ class CredentialToken:
         token: TokenSchema = {
             "token_type": response["token_type"],
             "access_token": response["access_token"],
-            "expires_at": utc_time.after(seconds=response["expires_in"]),
+            "expires_at": schema.DateTime.utcafter(
+                seconds=response["expires_in"]
+            ),
             "scopes": response["scope"].split(" "),
         }
         if "refresh_token" in response:
             token["refresh_token"] = response["refresh_token"]
         if "refresh_token_expires_in" in response:
-            token["refresh_token_expires_at"] = utc_time.after(
+            token["refresh_token_expires_at"] = schema.DateTime.utcafter(
                 seconds=response["refresh_token_expires_in"]
             )
         return token

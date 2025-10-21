@@ -10,6 +10,7 @@ Each document in the collection is assumed to have:
 
 from abc import ABC, abstractmethod
 
+# This constant should match the one in campus.common.schema
 PK = "id"
 
 

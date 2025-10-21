@@ -7,6 +7,13 @@ The HTTP authentication scheme comprises two types of authentication:
 2. Bearer Authentication: Uses a token (e.g., JWT) in the Authorization header
 """
 
+__all__ = [
+    "HttpAuthConfigSchema",
+    "HttpAuthenticationScheme",
+    "HttpScheme",
+    "HttpSecurityError",
+]
+
 from typing import Literal, Unpack
 
 from campus.common.errors import api_errors
@@ -44,7 +51,7 @@ class HttpAuthenticationScheme(SecurityScheme):
         super().__init__(provider, **config)
         self.scheme = config["scheme"]
 
-    def get_auth(self, header: dict) -> HttpAuthProperty:
+    def get_auth(self, *, header: dict) -> HttpAuthProperty:
         """Validate the HTTP header for authentication.
 
         Raises an API error if the header is invalid or missing.
@@ -61,7 +68,9 @@ class HttpAuthenticationScheme(SecurityScheme):
         return auth
 
     @classmethod
-    def from_header(cls,
+    def from_header(
+            cls,
+            *,
             provider: str,
             header: dict
     ) -> "HttpAuthenticationScheme":
@@ -75,11 +84,3 @@ class HttpAuthenticationScheme(SecurityScheme):
             case "bearer":
                 return cls(provider, security_scheme="http", scheme="bearer")
         raise HttpSecurityError(f"Unsupported HTTP scheme: {auth.scheme}")
-
-
-__all__ = [
-    "HttpAuthConfigSchema",
-    "HttpAuthenticationScheme",
-    "HttpScheme",
-    "HttpSecurityError",
-]

@@ -11,11 +11,11 @@ configuration and validation methods for authentication headers. Actual
 authentication logic is handled by the campusauth module.
 """
 
-from . import http, oauth2
-from .base import SecurityScheme
-
 __all__ = [
     "SecurityScheme",
     "http",
     "oauth2",
 ]
+
+from . import http, oauth2
+from .base import SecurityScheme

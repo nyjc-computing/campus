@@ -3,42 +3,30 @@
 Vault client management for creating and managing vault authentication clients.
 """
 
-from typing import List, Dict, Any, Tuple
-from campus.client.base import HttpClient
+__all__ = ['VaultClientResource']
+
+from typing import Any
+from campus.client.interface import Resource
 
 
-class VaultClientManagement:
-    """Client for vault client management operations.
+class VaultClientResource(Resource):
+    """Resource for Campus /vault/clients endpoint."""
 
-    Provides methods for creating, listing, and deleting vault authentication
-    clients that can access vault secrets with appropriate permissions.
-    """
-
-    def __init__(self, vault_client: HttpClient):
-        """Initialize client management.
-
-        Args:
-            vault_client: The vault client instance
-        """
-        self._client = vault_client
-
-    def authenticate(self, client_id: str, client_secret: str) -> bool:
+    def authenticate(self, client_id: str, client_secret: str) -> dict[str, str]:
         """Authenticate a vault client using client_id and client_secret.
 
         Args:
             client_id: The client ID
             client_secret: The client secret
-
-        Returns:
-            True if authentication is successful, raises Exception otherwise
         """
         data = {"client_id": client_id, "client_secret": client_secret}
-        response = self._client.post("/client/authenticate", data)
-        if response.get("status") == "success":
-            return True
-        raise Exception(response.get("error", "Authentication failed"))
+        json = self._process_response(
+            self.client.post(self.make_path("authenticate"), data)
+        )
+        assert isinstance(json, dict)
+        return json
 
-    def new(self, name: str, description: str) -> Tuple[Dict[str, Any], str]:
+    def new(self, name: str, description: str) -> dict[str, str]:
         """Create a new vault client.
 
         Args:
@@ -46,22 +34,23 @@ class VaultClientManagement:
             description: Client description
 
         Returns:
-            Tuple of (client_data, client_secret)
+            {"client": client_data, "secret": client_secret}
 
         Example:
-            client_data, secret = vault.client.new("My App", "App description")
-            print(f"Created client {client_data['id']} with secret {secret}")
+            client_info = vault.client.new("My App", "App description")
+            print(f"Created client {client_info['client']['id']} with secret {client_info['secret']}")
         """
         data = {
             "name": name,
             "description": description
         }
-        response = self._client.post("/client", data)
-        client_data = response["client"]
-        client_secret = response["client_secret"]
-        return client_data, client_secret
+        json = self._process_response(
+            self.client.post(self.path, json=data)
+        )
+        assert isinstance(json, dict)
+        return json
 
-    def get(self, client_id: str) -> Dict[str, Any]:
+    def get(self, client_id: str) -> dict[str, str]:
         """Get details of a specific vault client.
 
         Args:
@@ -74,10 +63,13 @@ class VaultClientManagement:
             client_info = vault.client.get("client_abc123")
             print(f"Client: {client_info['name']}")
         """
-        response = self._client.get(f"/client/{client_id}")
-        return response["client"]
+        json = self._process_response(
+            self.client.get(self.make_path(client_id))
+        )
+        assert isinstance(json, dict)
+        return json
 
-    def list(self) -> List[Dict[str, Any]]:
+    def list(self) -> dict[str, Any]:
         """List all vault clients.
 
         Returns:
@@ -88,10 +80,11 @@ class VaultClientManagement:
             for client in clients:
                 print(f"Client: {client['name']} (ID: {client['id']})")
         """
-        response = self._client.get("/client")
-        return response["clients"]
+        json = self._process_response(self.client.get(self.path))
+        assert isinstance(json, dict)
+        return json
 
-    def delete(self, client_id: str) -> Dict[str, Any]:
+    def delete(self, client_id: str) -> dict[str, str]:
         """Delete a vault client.
 
         Args:
@@ -104,37 +97,8 @@ class VaultClientManagement:
             result = vault.client.delete("client_abc123")
             print(f"Action: {result['action']}")
         """
-        return self._client.delete(f"/client/{client_id}")
-
-
-class VaultClientModule:
-    """Custom module wrapper for vault client management operations."""
-
-    def __init__(self, vault_client: HttpClient):
-        self._client_mgmt = VaultClientManagement(vault_client)
-
-    def new(self, name: str, description: str) -> Tuple[Dict[str, Any], str]:
-        """Create a new vault client."""
-        return self._client_mgmt.new(name, description)
-
-    def get(self, client_id: str) -> Dict[str, Any]:
-        """Get details of a specific vault client."""
-        return self._client_mgmt.get(client_id)
-
-    def list(self) -> List[Dict[str, Any]]:
-        """List all vault clients."""
-        return self._client_mgmt.list()
-
-    def delete(self, client_id: str) -> Dict[str, Any]:
-        """Delete a vault client."""
-        return self._client_mgmt.delete(client_id)
-
-    @property
-    def client(self) -> VaultClientManagement:
-        """Direct access to the client management instance."""
-        return self._client_mgmt
-
-
-# For module replacement pattern, we'll export the class
-# The actual module replacement happens in vault.py
-__all__ = ['VaultClientManagement', 'VaultClientModule']
+        json = self._process_response(
+            self.client.delete(self.make_path(client_id))
+        )
+        assert isinstance(json, dict)
+        return json
