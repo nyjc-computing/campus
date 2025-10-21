@@ -86,6 +86,10 @@ class Callback(TypedDict, total=False):
     state: Required[str]
     redirect_uri: Required[str]  # The URI to redirect to after authorization
     code: str  # on success
+    scope: str  # on success
+    authuser: str  # on success
+    hd: str  # on success
+    prompt: str  # on success
     error: str  # on error
     error_description: str  # on error
     error_uri: str  # on error
@@ -199,11 +203,14 @@ def callback() -> Response:
             client_secret = vault["CLIENT_SECRET"].get()["value"]
             logger.debug(
                 f"Client secret retrieved (length: {len(client_secret)})")
+            redirect_uri = url.create_url(
+                "https", request.host, url_for('.callback'))
             logger.info("Exchanging authorization code for token...")
 
             token_response = session.exchange_code_for_token(
                 code=code,
                 client_secret=client_secret,
+                redirect_uri=redirect_uri,
             )
             logger.info(
                 f"Token exchange response received: {list(token_response.keys())}")

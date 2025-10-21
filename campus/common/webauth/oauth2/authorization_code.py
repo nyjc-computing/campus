@@ -276,13 +276,14 @@ class OAuth2AuthorizationCodeSession:
             self,
             code: str,
             client_secret: str,
+            redirect_uri: Url,
     ) -> dict[str, Any]:
         """Exchange authorization code for access token."""
         logger.info("=== Exchanging authorization code for token ===")
 
         params = {
             "grant_type": "authorization_code",
-            "redirect_uri": self.provider.redirect_uri,
+            "redirect_uri": redirect_uri,
             "client_id": self.client_id,
             "code": code,
             "client_secret": client_secret,
@@ -290,7 +291,7 @@ class OAuth2AuthorizationCodeSession:
 
         logger.debug(f"Token exchange URL: {self.provider.token_url}")
         logger.debug(f"Grant type: {params['grant_type']}")
-        logger.debug(f"Redirect URI: {params['redirect_uri']}")
+        logger.debug(f"Redirect URI: {redirect_uri}")
         logger.debug(f"Client ID: {params['client_id']}")
         logger.debug(f"Authorization code (first 10 chars): {code[:10]}...")
         logger.debug(f"Client secret (length): {len(client_secret)}")
