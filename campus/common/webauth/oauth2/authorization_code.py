@@ -12,7 +12,7 @@ from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
 import requests
-from flask import session
+from flask import session as flask_session
 
 from campus.common import schema
 from campus.common.utils import uid, utc_time
@@ -140,10 +140,10 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     def retrieve_session(self) -> "OAuth2AuthorizationCodeSession":
         """Retrieve an existing OAuth2 Authorization Code flow session by state."""
         return OAuth2AuthorizationCodeSession(
-            client_id=session["client_id"],
-            scopes=session["scopes"],
-            target=session["target"],
-            state=session["state"],
+            client_id=flask_session["client_id"],
+            scopes=flask_session["scopes"],
+            target=flask_session["target"],
+            state=flask_session["state"],
             provider=self
         )
 
@@ -265,7 +265,7 @@ class OAuth2AuthorizationCodeSession:
     def delete(self) -> None:
         """Delete the session from the database or cache."""
         for key in self.to_dict():
-            del session[key]
+            del flask_session[key]
 
     def exchange_code_for_token(
             self,
@@ -330,7 +330,7 @@ class OAuth2AuthorizationCodeSession:
         data, such as in a database or cache.
         """
         for key, value in self.to_dict().items():
-            session[key] = value
+            flask_session[key] = value
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the session."""

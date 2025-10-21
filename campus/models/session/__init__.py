@@ -20,7 +20,7 @@ user_id is retrieved from the session record.
 The access token itself is not stored in sessions; it's validated per-request.
 """
 
-from typing import NotRequired, Required, TypedDict, cast
+from typing import Any, NotRequired, Required, TypedDict, Unpack, cast
 
 from flask import session as client_session
 
@@ -34,25 +34,32 @@ from campus.storage import (
     get_collection
 )
 
+# Type aliases
+Url = str
+
 COLLECTION = "sessions"
 SESSION_KEY = "session_id"
 
 
 class SessionRecord(BaseRecordDict):
     """Schema for a full session record."""
-    expires_at: str
+    # BaseRecordDict includes id and created_at
+    expires_at: schema.DateTime
     client_id: schema.CampusID
     user_id: schema.UserID
     agent_string: str
     # fields for OAuth sessions
     scopes: NotRequired[list[str]]
     authorization_code: NotRequired[str]
-    target: NotRequired[str]
-    redirect_uri: NotRequired[str]
+    target: NotRequired[Url]
+    redirect_uri: NotRequired[Url]
 
 
 class SessionNew(TypedDict, total=False):
     """Schema for a new session request."""
+    id: schema.CampusID
+    created_at: schema.DateTime
+    expires_at: schema.DateTime
     client_id: Required[schema.CampusID]
     user_id: Required[schema.UserID]
     agent_string: str
@@ -72,19 +79,37 @@ class Sessions:
         """Initialize the Session model with a collection storage interface."""
         self.storage = get_collection(COLLECTION)
 
+    def _check_existing_id(self) -> schema.CampusID | None:
+        """Check if a session already exists.
+
+        A session exists if:
+        - there is a session_id stored in the client cookie, and
+        - a session with that ID exists on the server.
+        Returns the session ID if a session exists, otherwise None.
+        """
+        client_session_id = client_session.get(SESSION_KEY)
+        if not client_session_id:
+            return None
+        try:
+            self.storage.get_by_id(client_session_id)
+        except storage_errors.NotFoundError:
+            return None
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        else:
+            return client_session_id
+
     def _verify_session_id(
             self,
-            session_id: schema.CampusID | None = None
+            session_id: schema.CampusID
     ) -> schema.CampusID:
-        """Get the session ID from the client cookie, if it exists.
-        If session_id is provided, it is verified against the client cookie and
-        returned if they match.
+        """Verify the session ID against the stored session.
         Returns None if no session ID is found or if there is a mismatch.
         This avoids accidental deletion of a session that does not belong to the
         client.
         """
-        client_session_id = client_session.get(SESSION_KEY)
-        if session_id and session_id != client_session_id:
+        client_session_id = self._check_existing_id()
+        if client_session_id and session_id != client_session_id:
             raise api_errors.ConflictError(
                 message="Mismatch with client session ID",
                 session_id=session_id
@@ -176,8 +201,12 @@ class Sessions:
         If session_id is not provided, uses the session ID from the client
         cookie.
         """
-        session_id = self._verify_session_id(session_id)
-        return self.get_by_id(session_id)
+        if session_id:
+            return self.get_by_id(session_id)
+        existing_session_id = self._check_existing_id()
+        if existing_session_id is not None:
+            return self.get_by_id(existing_session_id)
+        return None
 
     def get_by_id(self, session_id: schema.CampusID) -> SessionRecord:
         """Retrieve a session by its ID."""
@@ -193,19 +222,19 @@ class Sessions:
         else:
             return cast(SessionRecord, record)
 
-    def new(self, session_data: dict, *, expiry_seconds: int) -> SessionRecord:
+    def new(
+            self,
+            *,
+            expiry_seconds: int,
+            **session_data: Unpack[SessionNew]
+    ) -> SessionRecord:
         """Create a new session.
 
         Any existing session will be revoked.
         """
         # Delete any existing session
-        try:
-            session_id = self._verify_session_id()
-        except (api_errors.NotFoundError, api_errors.ConflictError):
-            # No existing session, or mismatch - ignore
-            pass
-        else:
-            self.delete(session_id)
+        if (existing_id := self._check_existing_id()):
+            self.delete(existing_id)
         record_validation.validate_keys(
             session_data,
             valid_keys=SessionNew.__annotations__,
@@ -219,11 +248,11 @@ class Sessions:
             now, seconds=expiry_seconds
         )
         try:
-            self.storage.insert_one(session_data)
+            self.storage.insert_one(cast(dict[str, Any], session_data))
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
         else:
-            client_session[SESSION_KEY] = session_data[schema.CAMPUS_KEY]
+            client_session[SESSION_KEY] = session_id
             return cast(SessionRecord, session_data)
 
     def sweep(

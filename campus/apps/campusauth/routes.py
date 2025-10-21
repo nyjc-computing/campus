@@ -43,7 +43,7 @@ from flask import (
     session as flask_session,
     url_for
 )
-from werkzeug.wrappers import Response
+import werkzeug
 
 from campus.common import schema
 from campus.common.errors import api_errors
@@ -84,8 +84,8 @@ class TokenRequest(TypedDict):
 
 # OAuth2 endpoints
 @client_auth_required
-@bp.get('/oauth2/authorize')
-def oauth2_authorize() -> Response:
+@bp.get('/authorize')
+def authorize() -> werkzeug.Response:
     """Summary: 
         OAuth2 authorization endpoint for user consent and code grant.
         1. Validates the authorization request
@@ -160,8 +160,8 @@ def oauth2_authorize() -> Response:
 
 
 @client_auth_required
-@bp.post('/oauth2/token')
-def oauth2_token() -> flask_validation.JsonResponse:
+@bp.post('/token')
+def token() -> flask_validation.JsonResponse:
     """Summary:
         OAuth2 token endpoint for exchanging authorization code for access token.
 
@@ -227,59 +227,31 @@ def oauth2_token() -> flask_validation.JsonResponse:
 
 
 @bp.get('/login')
-def login() -> Response:
-    """Summary:
-        Login endpoint for user authentication.
-
-    Method:
-        GET /login
-
-    Path Parameters:
-        None
-
-    Query Parameters:
-        None
-
-    Responses:
-        302 Found: Redirect
-        - If the user is already logged in, redirects to the home or dashboard page, 
-          otherwise creates a new session and redirects to OAuth authorization.
+def login() -> werkzeug.Response:
+    """Main login page user authentication.
+    
+    For now, it redirects directly to Google OAuth2 authorization.
+    TODO: Implement a proper login page with security options.
     """
     login_session = sessions.get()
     if login_session:
         # User already logged in, redirect to home or dashboard
         return redirect(url_for('campus.home'))
-    # TODO: get user_id, client_id from auth header
-    sessions.new(
-        {
-            "user_id": flask_session["user_id"],
-            "client_id": flask_session["client_id"]
-        },
-        expiry_seconds=DEFAULT_EXPIRY
+    # Redirect to Google OAuth2 for authentication
+    return redirect(
+        url_for(
+            endpoint='oauth.google.authorize',
+            target=url_for(
+                'campusauth.login',
+                _external=True,
+                _scheme='https'
+            ),
+        )
     )
-    return redirect(url_for('oauth.google.authorize'))
 
 
 @bp.post('/logout')
-def logout() -> Response:
-    """Summary:
-        Logout endpoint for user session termination.
-
-    Method:
-        POST /logout
-
-    Path Parameters:
-        None
-
-    Query Parameters:
-        None
-
-    Request Body:
-        None
-
-    Responses:
-        501 Not Implemented: str
-        - Returned as revoking the login is not implemented yet.
-    """
+def logout() -> werkzeug.Response:
+    """Page to log user out."""
     sessions.delete()
     return redirect(url_for('campus.home'))

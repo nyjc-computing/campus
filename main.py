@@ -40,13 +40,13 @@ def get_deployment_mode():
     return mode
 
 
-def create_app() -> devops.deploy.Flask:
+def create_app(mode: str | None = None) -> devops.deploy.Flask:
     """Create the appropriate Campus app based on deployment mode.
 
     This factory only initialises the apropriate app.
     It does not configure for deployment or testing.
     """
-    mode = get_deployment_mode()
+    mode = mode or get_deployment_mode()
 
     match mode:
         case "vault":
