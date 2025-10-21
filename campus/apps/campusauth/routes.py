@@ -43,7 +43,7 @@ from flask import (
     session as flask_session,
     url_for
 )
-from werkzeug.wrappers import Response
+import werkzeug
 
 from campus.common import schema
 from campus.common.errors import api_errors
@@ -85,7 +85,7 @@ class TokenRequest(TypedDict):
 # OAuth2 endpoints
 @client_auth_required
 @bp.get('/oauth2/authorize')
-def oauth2_authorize() -> Response:
+def oauth2_authorize() -> werkzeug.Response:
     """Summary: 
         OAuth2 authorization endpoint for user consent and code grant.
         1. Validates the authorization request
@@ -227,23 +227,7 @@ def oauth2_token() -> flask_validation.JsonResponse:
 
 
 @bp.get('/login')
-def login() -> Response:
-    """Summary:
-        Login endpoint for user authentication.
-
-    Method:
-        GET /login
-
-    Path Parameters:
-        None
-
-    Query Parameters:
-        None
-
-    Responses:
-        302 Found: Redirect
-        - If the user is already logged in, redirects to the home or dashboard page, 
-          otherwise creates a new session and redirects to OAuth authorization.
+def login() -> werkzeug.Response:
     """
     login_session = sessions.get()
     if login_session:
@@ -261,25 +245,6 @@ def login() -> Response:
 
 
 @bp.post('/logout')
-def logout() -> Response:
-    """Summary:
-        Logout endpoint for user session termination.
-
-    Method:
-        POST /logout
-
-    Path Parameters:
-        None
-
-    Query Parameters:
-        None
-
-    Request Body:
-        None
-
-    Responses:
-        501 Not Implemented: str
-        - Returned as revoking the login is not implemented yet.
-    """
+def logout() -> werkzeug.Response:
     sessions.delete()
     return redirect(url_for('campus.home'))
