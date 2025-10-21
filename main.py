@@ -18,7 +18,7 @@ Usage:
 import os
 import logging
 
-from campus.common import devops
+from campus.common import devops, env
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,12 +26,12 @@ logger = logging.getLogger(__name__)
 
 def get_deployment_mode():
     """Get deployment mode from DEPLOY environment variable"""
-    if "DEPLOY" not in os.environ:
+    mode = env.DEPLOY
+    if not mode:
         raise EnvironmentError(
             "Deployment mode not set. "
             "Set environment variable: export DEPLOY=<mode>"
         )
-    mode = os.environ["DEPLOY"]
     if mode not in devops.deploy.MODES:
         raise ValueError(
             f"Invalid deployment mode '{mode}'. "
