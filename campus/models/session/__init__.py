@@ -20,7 +20,7 @@ user_id is retrieved from the session record.
 The access token itself is not stored in sessions; it's validated per-request.
 """
 
-from typing import NotRequired, Required, TypedDict, cast
+from typing import Any, NotRequired, Required, TypedDict, Unpack, cast
 
 from flask import session as client_session
 
@@ -34,25 +34,31 @@ from campus.storage import (
     get_collection
 )
 
+# Type aliases
+Url = str
+
 COLLECTION = "sessions"
 SESSION_KEY = "session_id"
 
 
 class SessionRecord(BaseRecordDict):
     """Schema for a full session record."""
-    expires_at: str
+    expires_at: schema.DateTime
     client_id: schema.CampusID
     user_id: schema.UserID
     agent_string: str
     # fields for OAuth sessions
     scopes: NotRequired[list[str]]
     authorization_code: NotRequired[str]
-    target: NotRequired[str]
-    redirect_uri: NotRequired[str]
+    target: NotRequired[Url]
+    redirect_uri: NotRequired[Url]
 
 
 class SessionNew(TypedDict, total=False):
     """Schema for a new session request."""
+    id: schema.CampusID
+    created_at: schema.DateTime
+    expires_at: schema.DateTime
     client_id: Required[schema.CampusID]
     user_id: Required[schema.UserID]
     agent_string: str
@@ -219,11 +225,11 @@ class Sessions:
             now, seconds=expiry_seconds
         )
         try:
-            self.storage.insert_one(session_data)
+            self.storage.insert_one(cast(dict[str, Any], session_data))
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
         else:
-            client_session[SESSION_KEY] = session_data[schema.CAMPUS_KEY]
+            client_session[SESSION_KEY] = session_id
             return cast(SessionRecord, session_data)
 
     def sweep(
