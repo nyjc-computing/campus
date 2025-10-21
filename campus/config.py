@@ -1,4 +1,4 @@
-"""campus.client.config
+"""campus.config
 
 Configuration for Campus base URLs and service mappings.
 
