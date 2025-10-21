@@ -124,13 +124,19 @@ def validate_request_and_extract_urlparams(
         schema: Mapping[str, Type], *,
         on_error: ErrorHandler,
         ignore_extra: bool = False,
+        strict: bool = False,
 ) -> JsonObject:
     """Validate the request URL parameters against the provided schema before
     returning the parameters.
     """
     try:
         params = get_request_urlparams()
-        record.validate_keys(params, schema, ignore_extra=ignore_extra)
+        record.validate_keys(
+            params,
+            schema,
+            ignore_extra=ignore_extra,
+            required=strict  # If strict, all schema keys are required
+        )
     except (KeyError, TypeError) as err:
         on_error(400, message=err.args[0])
     else:

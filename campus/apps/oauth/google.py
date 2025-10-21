@@ -134,6 +134,7 @@ def callback() -> Response:
         Callback.__annotations__,
         on_error=api_errors.raise_api_error,
         ignore_extra=True,
+        strict=False,
     )
 
     # Retrive session stored in /authorize
