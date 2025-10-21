@@ -244,7 +244,7 @@ def callback() -> Response:
     logger.info("Token response validated successfully")
 
     # Verify requested scopes were granted
-    credentials = CredentialToken.from_response(**token_response)
+    credentials = CredentialToken.from_response(token_response)
     logger.debug(f"Credentials created - scopes granted: {credentials.scopes}")
 
     missing_scopes = set(session.scopes) - set(credentials.scopes)
