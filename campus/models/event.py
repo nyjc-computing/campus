@@ -9,17 +9,18 @@ Main operations:
 - CRUD
 """
 
-from typing import NotRequired, TypedDict, Unpack
+from typing import TypedDict, Unpack
 
-from campus.common.utils import uid, utc_time
+from campus.common import schema
+from campus.common.utils import uid
 from campus.common.errors import api_errors
-from campus.common.schema import CampusID
-from campus.storage import get_table
+# from campus.common.schema import CampusID
+from campus.storage import get_table, errors as storage_errors
 from campus.common import devops
 from campus.models.base import BaseRecord
 
 # Create a new EventID with CampusID(uid.generate_category_uid("event", length=8))
-EventID = CampusID
+EventID = schema.CampusID
 
 # Database-related code
 
@@ -62,7 +63,9 @@ def init_db():
     storage.init_table(schema)
 
 
-class EventRecord(BaseRecord, total=True):
+
+# TODO: Update to dataclass (https://docs.python.org/3.11/library/dataclasses.html)
+class EventRecord(BaseRecord):
     """The event record stored in the events table."""
     id: EventID
     name: str
@@ -73,8 +76,6 @@ class EventRecord(BaseRecord, total=True):
     # Also has created_at from BaseRecord.
 
 # Request body schemas
-
-# NOTE: THIS MODEL DEALS ONLY WITH DATETIMES. THE FLASK FILE WILL DEAL WITH CONVERSIONS FROM STRING.
 
 
 class RequestEventInfo(TypedDict):
@@ -115,26 +116,32 @@ class Event:
         """Initialize the User model with a table storage interface."""
         self.storage = get_table(TABLE)
 
-    def new(self, **fields: Unpack[EventNew]) -> EventResource:
+    def new(self, **fields: Unpack[EventNew]) -> EventRecord:
         """Create a new event."""
         event_id = EventID(uid.generate_category_uid("event", length=16))
 
         # Least ugly solution due to type gymnastics.
+        dtnow = schema.DateTime.utcnow()
         record = EventRecord(
             id=event_id,
-            created_at=utc_time.to_rfc3339(utc_time.now()),
+            created_at=dtnow,
             name=fields["name"],
             location=fields["location"],
             location_url=fields["location_url"],
             duration=fields["duration"],
-            start_time=utc_time.to_rfc3339(fields["start_time"])
+            start_time=schema.DateTime(fields["start_time"])
         )
 
         try:
-            self.storage.insert_one(dict(record))
-            return EventResource(**record)
+            self.storage.insert_one(record.to_dict())
+            return record
+        except storage_errors.ConflictError:
+            raise api_errors.ConflictError(
+                message="Event with the same ID already exists",
+                event_id=event_id
+            ) from None
         except Exception as e:
-            raise api_errors.InternalError(message=str(e), error=e)
+            raise api_errors.InternalError(message=str(e), error=e) from e
 
     def _try_get(self, event_id: EventID) -> EventRecord:
         """Tries to get event by event_id
