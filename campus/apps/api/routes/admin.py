@@ -14,6 +14,11 @@ bp = Blueprint("admin", __name__, url_prefix="/admin")
 # and polluting global space
 # pylint: disable=import-outside-toplevel
 
+def init_app(app: Blueprint | Flask) -> None:
+    """Register the admin blueprint with the given Flask app or blueprint."""
+    app.register_blueprint(bp)
+
+
 @bp.route("/status", methods=["GET"])
 def status():
     """Return admin status info."""
@@ -39,6 +44,18 @@ def purge_db():
     return {"status": "ok", "message": f"{devops.ENV}: Database purged."}
 
 
-def init_app(app: Blueprint | Flask) -> None:
-    """Register the admin blueprint with the given Flask app or blueprint."""
-    app.register_blueprint(bp)
+@bp.route("/sweep", methods=["POST"])
+def sweep():
+    """Sweep expired records from the database."""
+    from campus.models import session, token
+    session_model = session.Sessions()
+    token_model = token.Tokens()
+    num_sessions = session_model.sweep()
+    num_tokens = token_model.sweep()
+    return {
+        "status": "ok",
+        "details": {
+            "expired_sessions": num_sessions,
+            "expired_tokens": num_tokens
+        }
+    }

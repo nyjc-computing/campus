@@ -213,6 +213,29 @@ class Sessions:
             client_session[SESSION_KEY] = session_data[schema.CAMPUS_KEY]
             return cast(SessionRecord, session_data)
 
+    def sweep(
+            self,
+            *, 
+            at_time: schema.DateTime | None = None
+    ) -> int:
+        """Delete expired sessions from the database.
+
+        Returns the number of deleted sessions.
+        """
+        at_time = at_time or schema.DateTime.utcnow()
+        # TODO: implement query DSL for ranges
+        try:
+            records = self.storage.get_matching({})
+        except Exception as e:
+            raise api_errors.InternalError(message=str(e), error=e)
+        deleted_ids = []
+        # TODO: Optimize to do this in a single query
+        for record in records:
+            if schema.DateTime(record["expires_at"]) <= at_time:
+                self.delete(record[schema.CAMPUS_KEY])
+                deleted_ids.append(record[schema.CAMPUS_KEY])
+        return len(deleted_ids)
+
     def update(
             self,
             session_id: schema.CampusID | None = None,
