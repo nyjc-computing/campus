@@ -237,15 +237,17 @@ def login() -> werkzeug.Response:
     if login_session:
         # User already logged in, redirect to home or dashboard
         return redirect(url_for('campus.home'))
-    # TODO: get user_id, client_id from auth header
-    sessions.new(
-        {
-            "user_id": flask_session["user_id"],
-            "client_id": flask_session["client_id"]
-        },
-        expiry_seconds=DEFAULT_EXPIRY
+    # Redirect to Google OAuth2 for authentication
+    return redirect(
+        url_for(
+            endpoint='oauth.google.authorize',
+            target=url_for(
+                'campusauth.login',
+                _external=True,
+                _scheme='https'
+            ),
+        )
     )
-    return redirect(url_for('oauth.google.authorize'))
 
 
 @bp.post('/logout')
