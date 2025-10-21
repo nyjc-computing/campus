@@ -76,15 +76,14 @@ class AuthorizeRequestSchema(TypedDict, total=False):
 class Callback(TypedDict, total=False):
     """Response type for a Google OAuth callback.
 
-    This should be cast to either AuthorizationResponseSchema or
-    AuthorizationErrorResponseSchema based on the presence of 'code' or 'error'.
+    This may be a success or error callback.
     """
-    error: str
-    code: str
     state: Required[str]
-    error_description: str
-    error_uri: str
     redirect_uri: Required[str]  # The URI to redirect to after authorization
+    code: str  # on success
+    error: str  # on error
+    error_description: str  # on error
+    error_uri: str  # on error
 
 
 class GoogleTokenResponseSchema(TypedDict):
