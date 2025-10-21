@@ -19,8 +19,10 @@ import os
 import logging
 
 from campus.common import devops, env
+from campus.logging_config import configure_logging
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging with OAuth debugging enabled
+configure_logging(log_level=logging.INFO, enable_oauth_debug=True)
 logger = logging.getLogger(__name__)
 
 

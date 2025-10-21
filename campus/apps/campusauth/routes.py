@@ -33,6 +33,7 @@ Legend:
     token endpoint for user profile.
 """
 
+import logging
 from typing import NotRequired, TypedDict, cast
 from urllib.parse import urlencode
 
@@ -62,6 +63,10 @@ tokens = Tokens()
 sessions = Sessions()
 
 DEFAULT_EXPIRY = 600
+
+# Set up logger for authentication flow
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class AuthorizationCodeRequest(TypedDict):
@@ -229,25 +234,35 @@ def token() -> flask_validation.JsonResponse:
 @bp.get('/login')
 def login() -> werkzeug.Response:
     """Main login page user authentication.
-    
+
     For now, it redirects directly to Google OAuth2 authorization.
     TODO: Implement a proper login page with security options.
     """
+    logger.info("=== Login endpoint called ===")
+    logger.debug(f"Request URL: {url_for('campusauth.login', _external=True)}")
+
     login_session = sessions.get()
     if login_session:
         # User already logged in, redirect to home or dashboard
+        logger.info("User already logged in, redirecting to home")
         return redirect(url_for('campus.home'))
+
     # Redirect to Google OAuth2 for authentication
-    return redirect(
-        url_for(
-            endpoint='oauth.google.authorize',
-            target=url_for(
-                'campusauth.login',
-                _external=True,
-                _scheme='https'
-            ),
-        )
+    target_url = url_for(
+        'campusauth.login',
+        _external=True,
+        _scheme='https'
     )
+    oauth_authorize_url = url_for(
+        endpoint='oauth.google.authorize',
+        target=target_url,
+    )
+    logger.info(f"No active session - redirecting to Google OAuth")
+    logger.debug(f"Target URL after auth: {target_url}")
+    logger.debug(f"OAuth authorize URL: {oauth_authorize_url}")
+    logger.info("=== Redirecting to Google OAuth authorize ===")
+
+    return redirect(oauth_authorize_url)
 
 
 @bp.post('/logout')

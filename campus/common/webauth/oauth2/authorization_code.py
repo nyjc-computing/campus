@@ -8,6 +8,7 @@ __all__ = [
     "OAuth2AuthorizationCodeFlowScheme",
 ]
 
+import logging
 from typing import Any, Literal, NotRequired, Required, TypedDict, Unpack
 from urllib.parse import urlencode
 
@@ -30,6 +31,10 @@ Url = str
 OAUTH_EXPIRY_MINUTES = 10  # Default expiry time for OAuth2 sessions in minutes
 TIMEOUT = 10  # Default timeout for requests in seconds
 TABLE = "webauth"
+
+# Set up logger for OAuth2 flow
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class AuthorizationRequestSchema(TypedDict, total=False):
@@ -273,6 +278,8 @@ class OAuth2AuthorizationCodeSession:
             client_secret: str,
     ) -> dict[str, Any]:
         """Exchange authorization code for access token."""
+        logger.info("=== Exchanging authorization code for token ===")
+
         params = {
             "grant_type": "authorization_code",
             "redirect_uri": self.provider.redirect_uri,
@@ -280,18 +287,60 @@ class OAuth2AuthorizationCodeSession:
             "code": code,
             "client_secret": client_secret,
         }
-        resp = requests.post(
-            self.provider.token_url,
-            params=params,
-            headers=self.provider.headers,
-            timeout=TIMEOUT
-        )
+
+        logger.debug(f"Token exchange URL: {self.provider.token_url}")
+        logger.debug(f"Grant type: {params['grant_type']}")
+        logger.debug(f"Redirect URI: {params['redirect_uri']}")
+        logger.debug(f"Client ID: {params['client_id']}")
+        logger.debug(f"Authorization code (first 10 chars): {code[:10]}...")
+        logger.debug(f"Client secret (length): {len(client_secret)}")
+        logger.debug(f"Request headers: {self.provider.headers}")
+
+        try:
+            logger.info(f"Sending POST request to {self.provider.token_url}")
+            resp = requests.post(
+                self.provider.token_url,
+                params=params,
+                headers=self.provider.headers,
+                timeout=TIMEOUT
+            )
+            logger.info(f"Token exchange response status: {resp.status_code}")
+            logger.debug(f"Response headers: {dict(resp.headers)}")
+
+            # Log the raw response text for debugging
+            # First 500 chars
+            logger.debug(f"Response text: {resp.text[:500]}")
+
+        except requests.exceptions.Timeout as err:
+            logger.error(f"Token exchange request timed out after {TIMEOUT}s")
+            raise OAuth2SecurityError(
+                "Token exchange request timed out") from err
+        except requests.exceptions.RequestException as err:
+            logger.error(f"Token exchange request failed: {err}")
+            raise OAuth2SecurityError("Token exchange request failed") from err
+
         try:
             body = resp.json()
+            logger.info(
+                f"Token exchange response parsed - keys: {list(body.keys())}")
+            if "error" in body:
+                logger.error(f"Token exchange returned error: {body}")
+            else:
+                logger.debug(
+                    f"Access token received (first 10 chars): {body.get('access_token', '')[:10]}...")
+                logger.debug(f"Token type: {body.get('token_type')}")
+                logger.debug(f"Expires in: {body.get('expires_in')} seconds")
+                logger.debug(f"Scope: {body.get('scope')}")
         except Exception as err:
+            logger.error(
+                f"Failed to parse token exchange response as JSON: {err}")
+            logger.error(
+                f"Response status: {resp.status_code}, content: {resp.text[:500]}")
             raise OAuth2SecurityError(
                 "Failed to exchange code for token"
             ) from err
+
+        logger.info("=== Token exchange complete ===")
         return body
 
     def get_authorization_url(self, redirect_uri: Url, **additional_params: str) -> str:
@@ -301,6 +350,12 @@ class OAuth2AuthorizationCodeSession:
         Subclasses should extend this method to implement provider-specific
         logic, such as custom headers or additional parameters.
         """
+        logger.debug("=== Constructing authorization URL ===")
+        logger.debug(
+            f"Provider authorization URL: {self.provider.authorization_url}")
+        logger.debug(f"Redirect URI: {redirect_uri}")
+        logger.debug(f"Additional params: {additional_params}")
+
         params = {
             "client_id": self.client_id,
             "redirect_uri": redirect_uri,
@@ -310,7 +365,13 @@ class OAuth2AuthorizationCodeSession:
             **self.provider.extra_params,
             **additional_params
         }
-        return f"""{self.provider.authorization_url}?{urlencode(params)}"""
+
+        logger.debug(f"Final URL params: {params}")
+        authorization_url = f"""{self.provider.authorization_url}?{urlencode(params)}"""
+        logger.info(
+            f"Authorization URL constructed (length: {len(authorization_url)})")
+
+        return authorization_url
 
     def is_expired(self) -> bool:
         """Check if the session has expired.
