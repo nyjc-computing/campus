@@ -84,8 +84,8 @@ class TokenRequest(TypedDict):
 
 # OAuth2 endpoints
 @client_auth_required
-@bp.get('/oauth2/authorize')
-def oauth2_authorize() -> werkzeug.Response:
+@bp.get('/authorize')
+def authorize() -> werkzeug.Response:
     """Summary: 
         OAuth2 authorization endpoint for user consent and code grant.
         1. Validates the authorization request
@@ -160,8 +160,8 @@ def oauth2_authorize() -> werkzeug.Response:
 
 
 @client_auth_required
-@bp.post('/oauth2/token')
-def oauth2_token() -> flask_validation.JsonResponse:
+@bp.post('/token')
+def token() -> flask_validation.JsonResponse:
     """Summary:
         OAuth2 token endpoint for exchanging authorization code for access token.
 
@@ -228,6 +228,10 @@ def oauth2_token() -> flask_validation.JsonResponse:
 
 @bp.get('/login')
 def login() -> werkzeug.Response:
+    """Main login page user authentication.
+    
+    For now, it redirects directly to Google OAuth2 authorization.
+    TODO: Implement a proper login page with security options.
     """
     login_session = sessions.get()
     if login_session:
@@ -246,5 +250,6 @@ def login() -> werkzeug.Response:
 
 @bp.post('/logout')
 def logout() -> werkzeug.Response:
+    """Page to log user out."""
     sessions.delete()
     return redirect(url_for('campus.home'))
