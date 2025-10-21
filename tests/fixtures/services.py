@@ -4,12 +4,12 @@ Service management for local Campus service instances.
 Provides a clean interface to start and stop all Campus services for testing.
 """
 
-import os
 from contextlib import contextmanager
 from typing import Optional, cast
 
 from . import setup, vault, apps, storage, yapper
 from campus.common import devops
+import campus.common.env as env
 
 # pylint: disable=import-outside-toplevel
 
@@ -68,7 +68,7 @@ class ServiceManager:
             ServiceManager: Self for method chaining
         """
         # Ensure we're not accidentally running in development/production
-        current_env = os.environ.get("ENV")
+        current_env = env.ENV
         if current_env in ("development", "production"):
             raise RuntimeError(
                 f"ServiceManager.setup() cannot be run in {current_env} environment. "
@@ -179,10 +179,10 @@ class ServiceManager:
 
         # For non-shared instances, clear client credentials from environment
         if not self._shared:
-            if "CLIENT_ID" in os.environ:
-                del os.environ["CLIENT_ID"]
-            if "CLIENT_SECRET" in os.environ:
-                del os.environ["CLIENT_SECRET"]
+            if env.CLIENT_ID is not None:
+                delattr(env, "CLIENT_ID")
+            if env.CLIENT_SECRET is not None:
+                delattr(env, "CLIENT_SECRET")
 
         self._setup_done = False
 
@@ -193,7 +193,7 @@ class ServiceManager:
         using the vault API, which ensures proper cleanup of both client records
         and associated access permissions.
         """
-        client_id = os.environ.get("CLIENT_ID")
+        client_id = env.CLIENT_ID
         if not client_id:
             return  # No client to clean up
 
@@ -226,10 +226,10 @@ class ServiceManager:
             cls._shared_setup_done = False
 
         # Clear client credentials from environment
-        if "CLIENT_ID" in os.environ:
-            del os.environ["CLIENT_ID"]
-        if "CLIENT_SECRET" in os.environ:
-            del os.environ["CLIENT_SECRET"]
+        if env.CLIENT_ID is not None:
+            delattr(env, "CLIENT_ID")
+        if env.CLIENT_SECRET is not None:
+            delattr(env, "CLIENT_SECRET")
 
         # Reset test storage
         from campus.storage.testing import reset_test_storage

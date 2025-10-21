@@ -2,11 +2,11 @@
 """Test the new storage backends for Flask test client strategy."""
 
 from campus.storage import get_table, get_collection
-import os
+from campus.common import env
 import sys
 
 # Configure test storage before importing storage modules
-os.environ["STORAGE_MODE"] = "1"
+env.STORAGE_MODE = "1"
 
 
 def test_sqlite_backend():

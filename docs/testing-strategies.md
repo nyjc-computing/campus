@@ -50,7 +50,7 @@ import os
 from campus.client import Campus
 
 # Set environment to development
-os.environ['ENV'] = 'development'
+env.ENV = 'development'
 
 # Client automatically uses development servers
 client = Campus()
@@ -177,7 +177,7 @@ For advanced use cases where you need direct control over Flask apps:
 
 ```python
 import os
-os.environ["STORAGE_MODE"] = "1"  # Enable test storage backends
+env.STORAGE_MODE = "1"  # Enable test storage backends
 
 from tests.flask_test import FlaskTestClient, configure_for_testing
 from campus.common.devops.deploy import create_app
@@ -271,9 +271,9 @@ python tests/run_tests.py integration --module apps  # Only apps integration tes
 ```python
 # Set testing environment
 import os
-os.environ['ENV'] = 'testing'      # Local services
-os.environ['ENV'] = 'development'  # Remote development server
-os.environ['STORAGE_MODE'] = '1'   # Enable test storage backends
+env.ENV = 'testing'      # Local services
+env.ENV = 'development'  # Remote development server
+env.STORAGE_MODE = '1'   # Enable test storage backends
 
 # Test configuration for Flask apps
 from tests.flask_test import configure_for_testing
@@ -294,7 +294,7 @@ python tests/run_tests.py integration
 # Development Server
 from campus.client import Campus
 import os
-os.environ['ENV'] = 'development'
+env.ENV = 'development'
 client = Campus()  # Uses ENV variable to connect to Railway
 
 # Local Services (HTTP to localhost)

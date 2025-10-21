@@ -3,11 +3,11 @@
 Factory functions for creating Campus test client with Flask apps.
 """
 
-import os
 from typing import Mapping, cast
 
 from campus.client.core import Campus
 from campus.common.http.interface import JsonClient
+from campus.common import env
 from .client import FlaskTestClient
 
 
@@ -37,7 +37,7 @@ def create_test_client_from_manager(manager) -> Campus:
             "ServiceManager must be set up with vault_app and apps_app")
 
     # Ensure test storage mode is enabled
-    os.environ["STORAGE_MODE"] = "1"
+    env.STORAGE_MODE = "1"
 
     # Create override mapping with Flask test clients, cast to satisfy typing
     import campus.config
@@ -77,7 +77,7 @@ def create_test_client() -> Campus:
         Campus: Client instance configured with Flask test clients
     """
     # Ensure test storage mode is enabled
-    os.environ["STORAGE_MODE"] = "1"
+    env.STORAGE_MODE = "1"
 
     from tests.fixtures import services
 
@@ -116,7 +116,7 @@ def create_test_app(module):
 
     # Set proper environment variables
     setup.set_test_env_vars()
-    os.environ["STORAGE_MODE"] = "1"
+    env.STORAGE_MODE = "1"
 
     # Create and configure app
     app = create_app(module)

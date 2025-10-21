@@ -1,6 +1,7 @@
 import unittest
 
 from tests.fixtures import services
+from campus.common import env
 
 
 class TestYapper(unittest.TestCase):
@@ -18,15 +19,13 @@ class TestYapper(unittest.TestCase):
             cls.service_manager.close()
 
     def test_setup_vars(self):
-        import os
         # After service setup, VAULTDB_URI should be available
-        self.assertIsNotNone(os.environ.get("VAULTDB_URI"))
+        self.assertIsNotNone(env.VAULTDB_URI)
 
     def test_vault_vars_and_access(self):
-        import os
         # After service setup, vault credentials should be available
-        self.assertIsNotNone(os.environ.get("CLIENT_SECRET"))
-        self.assertIsNotNone(os.environ.get("CLIENT_ID"))
+        self.assertIsNotNone(env.CLIENT_SECRET)
+        self.assertIsNotNone(env.CLIENT_ID)
 
     def test_yapper_vars(self):
         # The yapper database URI should be stored in the vault after service setup

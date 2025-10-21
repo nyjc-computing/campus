@@ -6,7 +6,6 @@ Complete integration testing with DNS verification and service orchestration.
 Uses threading approach to start services without blocking.
 """
 
-import os
 import sys
 import time
 import threading
@@ -19,6 +18,7 @@ import tests.fixtures.yapper as yapper_fixtures
 import tests.fixtures.vault as vault_fixtures
 import tests.fixtures.apps as apps_fixtures
 import tests.fixtures.setup as setup
+from campus.common import env
 
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
@@ -68,10 +68,10 @@ class ServiceManager:
         print("🔐 Starting Campus Vault...")
 
         # Set deployment mode for vault
-        os.environ['DEPLOY'] = 'vault'
+        env.DEPLOY = 'vault'
 
         # Debug: Print CLIENT_ID being used in main thread
-        client_id = os.environ['CLIENT_ID']
+        client_id = env.CLIENT_ID
         print(f"🔑 MAIN THREAD CLIENT_ID for vault: {client_id}")
 
         stop_event = threading.Event()
@@ -92,10 +92,10 @@ class ServiceManager:
         print("🏫 Starting Campus Apps...")
 
         # Set deployment mode for apps
-        os.environ['DEPLOY'] = 'apps'
+        env.DEPLOY = 'apps'
 
         # Debug: Print CLIENT_ID being used in main thread
-        client_id = os.environ['CLIENT_ID']
+        client_id = env.CLIENT_ID
         print(f"🔑 MAIN THREAD CLIENT_ID for apps: {client_id}")
 
         stop_event = threading.Event()
@@ -115,9 +115,9 @@ class ServiceManager:
         """Run a Flask service with proper environment setup."""
         try:
             # Debug: Print environment variables inherited by thread
-            client_id = os.environ['CLIENT_ID']
-            client_secret = os.environ['CLIENT_SECRET']
-            deploy_mode = os.environ['DEPLOY']
+            client_id = env.CLIENT_ID
+            client_secret = env.CLIENT_SECRET
+            deploy_mode = env.DEPLOY
             print(
                 f"🔑 {service_name.upper()} THREAD inherited CLIENT_ID: {client_id}")
             print(
@@ -148,8 +148,8 @@ class ServiceManager:
         print(f"⏳ Waiting for {service_name.title()} to become healthy...")
 
         # Get authentication credentials for health check
-        client_id = os.environ['CLIENT_ID']
-        client_secret = os.environ['CLIENT_SECRET']
+        client_id = env.CLIENT_ID
+        client_secret = env.CLIENT_SECRET
         auth = (client_id, client_secret)
 
         start_time = time.time()
@@ -229,7 +229,7 @@ class TestSuite:
 
         missing_vars = []
         for var in required_vars:
-            if var not in os.environ:
+            if getattr(env, var) is None:
                 missing_vars.append(var)
 
         if missing_vars:
@@ -239,7 +239,7 @@ class TestSuite:
         print("✅ All required environment variables are set")
 
         # Debug: Print CLIENT_ID
-        client_id = os.environ['CLIENT_ID']
+        client_id = env.CLIENT_ID
         print(f"🔑 TEST SUITE using CLIENT_ID: {client_id}")
 
         return True
@@ -280,8 +280,8 @@ class TestSuite:
         print("\n📋 Phase: Vault Configuration")
         print("🔐 Testing vault configuration...")
 
-        client_id = os.environ['CLIENT_ID']
-        client_secret = os.environ['CLIENT_SECRET']
+        client_id = env.CLIENT_ID
+        client_secret = env.CLIENT_SECRET
 
         if not client_id or not client_secret:
             print("❌ Vault credentials not configured")
