@@ -98,7 +98,9 @@ resources.
 __all__ = [
     "circle",
     "emailotp",
-    "user"
+    "user",
+    "session",
+    "webauth",
 ]
 
 from campus.common import devops
@@ -106,7 +108,9 @@ from campus.common import devops
 from . import (
     circle,
     emailotp,
-    user
+    user,
+    session,
+    webauth,
 )
 
 

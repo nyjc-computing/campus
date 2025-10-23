@@ -14,7 +14,7 @@ from flask import g, request
 
 from campus.client.vault import get_vault
 from campus.common.errors import api_errors
-from campus.common.webauth import http
+from campus.models.webauth import http
 from campus.models.token import Tokens
 from campus.models.user import User
 

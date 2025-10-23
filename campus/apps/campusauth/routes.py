@@ -34,73 +34,67 @@ Legend:
 """
 
 import logging
-from typing import NotRequired, TypedDict, cast
-from urllib.parse import urlencode
+from typing import Any
 
-from flask import (
-    Blueprint,
-    g,
-    redirect,
-    session as flask_session,
-    url_for
-)
+import flask
 import werkzeug
 
-from campus.common import schema
-from campus.common.errors import api_errors
-from campus.models.session import Sessions
-from campus.models.token import Tokens
-from campus.common.utils import secret
+from campus.common import env, schema
+from campus.models import credentials, session
+from campus.common.utils import url, secret
 import campus.common.validation.flask as flask_validation
+from campus.vault import credentials
 
-from .authentication import client_auth_required
-
+DEFAULT_TARGET_ENDPOINT = ".success"
+PROVIDER = "campus"
 
 # No url prefix because authentication endpoints are not only used by the API
-bp = Blueprint('campusauth', __name__, url_prefix='/')
+bp = flask.Blueprint('campusauth', __name__, url_prefix='/')
 
-tokens = Tokens()
-sessions = Sessions()
+# tokens = Tokens()
+auth_sessions = session.AuthSessions(PROVIDER)
+login_sessions = session.LoginSessions()
+campus_credentials = credentials.get_provider(PROVIDER)
 
-DEFAULT_EXPIRY = 600
+DEFAULT_EXPIRY = 600  # in minutes
 
 # Set up logger for authentication flow
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class AuthorizationCodeRequest(TypedDict):
-    """Request data for OAuth2 authorization code request."""
-    client_id: str
-    response_type: str
-    redirect_uri: str
-    scope: NotRequired[str]
-    state: NotRequired[str]
+# class AuthorizationCodeRequest(TypedDict):
+#     """Request data for OAuth2 authorization code request."""
+#     client_id: str
+#     response_type: str
+#     redirect_uri: str
+#     scope: NotRequired[str]
+#     state: NotRequired[str]
 
 
-class TokenRequest(TypedDict):
-    """Request data for OAuth2 token request."""
-    grant_type: str
-    code: str
-    redirect_uri: str
-    client_id: str
-    client_secret: str
-
+# class TokenRequest(TypedDict):
+#     """Request data for OAuth2 token request."""
+#     grant_type: str
+#     code: str
+#     redirect_uri: str
+#     client_id: str
+#     client_secret: str
 
 # OAuth2 endpoints
-@client_auth_required
 @bp.get('/authorize')
-def authorize() -> werkzeug.Response:
-    """Summary: 
-        OAuth2 authorization endpoint for user consent and code grant.
-        1. Validates the authorization request
-        2. Authenticates the user (through Google Workspace)
-        3. Verifies scope of consent
-        4. Issues authorization code
-        5. Redirects user to the specified redirect URI
+@flask_validation.unpack_request
+def authorize(
+        client_id: str,
+        response_type: str,
+        redirect_uri: str | None = None,
+        scope: str | None = None,
+        state: str | None = None,  # client secret
+        target: str | None = None,
+) -> werkzeug.Response:
+    """Implements RFC 6749 4.1.1 Authorization Code Grant
 
     Method:
-        GET /oauth2/authorize
+        GET /authorize
 
     Path Parameters:
         None
@@ -127,46 +121,58 @@ def authorize() -> werkzeug.Response:
         - Redirects to the specified redirect URI with the authorization code, as well as state if provided.
           e.g. /oauth2/authorize?code=abc123&state=xyz
     """
-    req_json: AuthorizationCodeRequest = flask_validation.validate_request_and_extract_json(
-        AuthorizationCodeRequest.__annotations__,
-        on_error=api_errors.raise_api_error
-    )  # type: ignore
-    session = sessions.get()
-    if not session:
-        # TODO: Redirect to login with error message
-        return redirect(url_for("campusauth.login"))
-    # TODO: Verify scope of consent against user access level
-    # missing_scopes = tokens.validate_scope(
-    #     session=dict(session),
-    #     scopes=req_json.get("scope") or ""
-    # )
-    # if missing_scopes:
-    #     # TODO: redirect for additional scope authorization
-    #     return "Additional scope authorization not implemented", 501
-    # Issue authorization code
-    authorization_code = secret.generate_authorization_code()
-    target = req_json.get("state", "")
-    # TODO: Handle update errors
-    session = sessions.update(
-        session[schema.CAMPUS_KEY],
-        authorization_code=authorization_code,
-        # scopes=req_json.get("scope", "").split(),
-        redirect_uri=req_json["redirect_uri"],
+    if response_type != "code":
+        flask.abort(400, description="Invalid response_type: expected 'code'")
+    auth_session = auth_sessions.get()
+    if auth_session and auth_session.client_id == client_id:
+        # Valid auth session exists; revoke and restart auth flow
+        auth_sessions.delete(auth_session.id)
+    # Create new auth session
+    auth_session = auth_sessions.new(
+        client_id=client_id,
+        redirect_uri=schema.Url(redirect_uri),
+        scopes=scope.split() if scope else [],
+        authorization_code=secret.generate_authorization_code(),
+        state=state,
         target=target
     )
-    # Redirect user to the specified redirect URI
-    params = {
-        "code": authorization_code,
-    }
-    if target:
-        params["state"] = target
-    redirect_uri = f'{req_json["redirect_uri"]}?{urlencode(params)}'
-    return redirect(redirect_uri)
+    # Defer to campus.oauth.google for user authentication
+    oauth_authorize_url = flask.url_for(
+        endpoint='oauth.google.authorize',
+        target=flask.url_for('.campusapp_callback'),
+    )
+    return flask.redirect(oauth_authorize_url)
 
 
-@client_auth_required
+@bp.get('/callback')
+def campusapp_callback() -> werkzeug.Response:
+    """After user authentication with Google."""
+    auth_session = auth_sessions.get()
+    if not auth_session:
+        flask.abort(401, description="No OAuth session found")
+    # Redirect to callback uri with authorization code
+    params: dict[str, Any] = {"code": auth_session.authorization_code}
+    if auth_session.state:
+        params["state"] = auth_session.state
+    if auth_session.scopes:
+        params["scope"] = " ".join(auth_session.scopes)
+    redirect_uri_with_params = url.with_params(
+        auth_session.target or flask.request.host_url,
+        **params
+    )
+    # Don't delete auth session yet; needed for token exchange
+    return flask.redirect(redirect_uri_with_params)
+
+
 @bp.post('/token')
-def token() -> flask_validation.JsonResponse:
+@flask_validation.unpack_request
+def token(
+        grant_type: str,
+        code: str,
+        redirect_uri: str,
+        client_id: str,
+        client_secret: str,
+) -> flask_validation.JsonResponse:
     """Summary:
         OAuth2 token endpoint for exchanging authorization code for access token.
 
@@ -203,70 +209,54 @@ def token() -> flask_validation.JsonResponse:
         401 Not authenticated: None
         - Returned when the session ID is not in the Flask session
     """
-    req_json: TokenRequest = cast(
-        TokenRequest,
-        flask_validation.validate_request_and_extract_json(
-            TokenRequest.__annotations__,
-            on_error=api_errors.raise_api_error
-        )
-    )
-    session = sessions.get()
+    session = auth_sessions.get()
     if not session:
         return {"error": "No OAuth session"}, 401
-    if not req_json["grant_type"] == "authorization_code":
+    if not grant_type == "authorization_code":
         return {"error": "Invalid grant_type: expected 'authorization_code'"}, 400
-    if req_json["code"] != session["authorization_code"]:
+    if code != session.authorization_code:
         return {"error": "Invalid authorization code"}, 400
+    # TODO: Validate client_id and client_secret
+    # TODO: Validate redirect_uri
     # TODO: Issue token
-    token = tokens.new(
-        {
-            "client_id": g.current_client["id"],
-            "user_id": g.current_user["id"],
-            "scopes": session["scopes"],
-        },
-        expiry_seconds=DEFAULT_EXPIRY
+    token = campus_credentials.create_credentials(
+        user_id=session.user_id,
+        client_id=session.client_id,
+        scopes=session.scopes,
+        expiry_seconds=DEFAULT_EXPIRY * 60
     )
-    # OAuth2 flow complete, revoke session
-    sessions.delete(session[schema.CAMPUS_KEY])
-    return {"message": "Not implemented"}, 501
+    # OAuth2 flow complete, revoke auth code and clear session state
+    auth_sessions.delete(session.id)
+    return token.to_dict(), 200
 
 
 @bp.get('/login')
 def login() -> werkzeug.Response:
     """Main login page user authentication.
 
+    For testing only, should be implemented by client applications.
     For now, it redirects directly to Google OAuth2 authorization.
-    TODO: Implement a proper login page with security options.
     """
-    logger.info("=== Login endpoint called ===")
-    logger.debug(f"Request URL: {url_for('campusauth.login', _external=True)}")
-
-    login_session = sessions.get()
-    if login_session:
-        # User already logged in, redirect to home or dashboard
-        logger.info("User already logged in, redirecting to home")
-        return redirect(url_for('campus.home'))
-
-    # Redirect to Google OAuth2 for authentication
-    target_url = url_for(
-        'campusauth.login',
-        _external=True,
-        _scheme='https'
+    authorization_url = flask.url_for(
+        ".authorize",
+        client_id=env.CLIENT_ID,
+        response_type="code",
+        redirect_uri=url.full_url_for('.campusapp_callback'),
+        scope="",
+        state=secret.generate_session_state(),
+        target=url.full_url_for('.success')
     )
-    oauth_authorize_url = url_for(
-        endpoint='oauth.google.authorize',
-        target=target_url,
-    )
-    logger.info(f"No active session - redirecting to Google OAuth")
-    logger.debug(f"Target URL after auth: {target_url}")
-    logger.debug(f"OAuth authorize URL: {oauth_authorize_url}")
-    logger.info("=== Redirecting to Google OAuth authorize ===")
-
-    return redirect(oauth_authorize_url)
+    return flask.redirect(authorization_url)
 
 
 @bp.post('/logout')
 def logout() -> werkzeug.Response:
     """Page to log user out."""
-    sessions.delete()
-    return redirect(url_for('campus.home'))
+    auth_sessions.delete()
+    return flask.redirect(flask.url_for('campus.home'))
+
+
+@bp.get('/success')
+def success() -> str:
+    """Placeholder success page after successful authentication."""
+    return f"Authentication successful!<br>Args: {flask.request.args}"

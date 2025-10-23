@@ -62,6 +62,10 @@ def generate_access_code() -> str:
     """Generate a secure random access code."""
     return secrets.token_urlsafe(32)
 
+def generate_access_token() -> str:
+    """Generate a secure random access token."""
+    return secrets.token_urlsafe(48)
+
 def generate_authorization_code() -> str:
     """Generate an OAuth2 authorization code"""
     return secrets.token_urlsafe(32)
@@ -90,6 +94,10 @@ def generate_otp(length: int = 6) -> str:
     """
     passcode: int = secrets.randbelow(10 ** length)
     return f"{passcode:0{length}d}"
+
+def generate_session_state() -> str:
+    """Generate a secure random session state string for OAuth2 flows."""
+    return secrets.token_urlsafe(32)
 
 def hash_client_secret(secret: str, key: str) -> str:
     """Hash the client secret using HMAC for secure storage.
