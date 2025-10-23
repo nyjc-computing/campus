@@ -15,7 +15,6 @@ Usage:
     gunicorn wsgi:app               # Production deployment
 """
 
-import os
 import logging
 
 from campus.common import devops, env
@@ -48,36 +47,41 @@ def create_app(mode: str | None = None) -> devops.deploy.Flask:
     This factory only initialises the apropriate app.
     It does not configure for deployment or testing.
     """
+    import importlib
+    import warnings
     mode = mode or get_deployment_mode()
+    if '.' not in mode or not mode.startswith('campus.'):
+        warnings.warn(
+            f"Deployment mode {mode!r} will be deprecated.\n"
+            f"Use {('campus.' + mode)!r} instead.", DeprecationWarning
+        )
+        mode = 'campus.' + mode
 
-    match mode:
-        case "vault":
-            import campus.vault
-            logger.info("🔐 Creating Campus Vault Service")
-            app = devops.deploy.create_app(campus.vault)
-        case "apps":
-            import campus.apps
-            logger.info("🚀 Creating Campus Apps Service")
-            app = devops.deploy.create_app(campus.apps)
-        case _:
-            raise ValueError(
-                f"Unsupported deployment mode '{mode}'. "
-                f"Valid modes are: {', '.join(devops.deploy.MODES)}"
-            )
+    try:
+        module = importlib.import_module(mode)
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            f"Unable to create app for deployment mode '{mode}': {e}"
+        )
+    if not isinstance(module, devops.deploy.AppModule):
+        raise TypeError(
+            f"Module '{mode}' does not fulfill the AppModule protocol."
+        )
+    app = devops.deploy.create_app(module)
     return app
 
 
 def main():
     """Development server entry point for testing Campus services locally"""
     # Development server configuration
-    host = "0.0.0.0"
-    port = 5000
 
     # Create app instance for development server
-    app = create_app()
+    app = create_app("campus.apps")
+    devops.deploy.configure_for_development(app)
 
-    print(f"🧪 Starting development server on {host}:{port}")
     print("📝 For production deployment, use wsgi.py with Gunicorn")
+    host = "0.0.0.0"
+    port = int(env.PORT)
     app.run(host=host, port=port, debug=True)
 
 

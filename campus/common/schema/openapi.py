@@ -79,7 +79,7 @@ class DateTime(String):
     """
 
     def __new__(cls, value: str):
-        return super().__new__(cls, value)
+        return super().__new__(cls, str(value))
 
     def __repr__(self) -> str:
         return f"DateTime({str(self)})"
@@ -91,6 +91,11 @@ class DateTime(String):
     def from_datetime(cls: Type[Self], dt: utc_time.datetime) -> Self:
         """Create a DateTime string from a UTC datetime object."""
         return cls(utc_time.to_rfc3339(dt))
+
+    @classmethod
+    def from_timestamp(cls: Type[Self], ts: int) -> Self:
+        """Create a DateTime string from a UTC timestamp."""
+        return cls.from_datetime(utc_time.from_timestamp(ts))
 
     @classmethod
     def utcafter(cls: Type[Self], now: Self | None = None, **delta) -> Self:
@@ -110,6 +115,10 @@ class DateTime(String):
     def to_datetime(self) -> utc_time.datetime:
         """Convert the DateTime string to a UTC datetime object."""
         return utc_time.from_rfc3339(self)
+
+    def to_timestamp(self) -> int:
+        """Convert the DateTime string to a UTC timestamp."""
+        return utc_time.to_timestamp(self.to_datetime())
 
     @property
     def year(self) -> int:

@@ -11,7 +11,7 @@ from typing import NotRequired, TypedDict, Unpack
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.webauth.token import TokenSchema
+from campus.models.webauth.token import TokenSchema
 from campus.storage import (
     errors as storage_errors,
     get_collection

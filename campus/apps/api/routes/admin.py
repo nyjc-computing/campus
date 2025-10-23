@@ -48,7 +48,7 @@ def purge_db():
 def sweep():
     """Sweep expired records from the database."""
     from campus.models import session, token
-    session_model = session.Sessions()
+    session_model = session.LoginSessions()
     token_model = token.Tokens()
     num_sessions = session_model.sweep()
     num_tokens = token_model.sweep()

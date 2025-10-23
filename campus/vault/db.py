@@ -18,7 +18,7 @@ Usage:
 
 import os
 from contextlib import contextmanager
-from typing import Generator, Any, Optional
+from typing import Generator, Any, Optional, Sequence
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -73,7 +73,7 @@ def get_connection_context() -> Generator[psycopg2.extensions.connection, None, 
 def execute_query(
     conn: psycopg2.extensions.connection,
     query: str,
-    params: tuple = (),
+    params: Sequence = tuple(),
     fetch_one: bool = False,
     fetch_all: bool = True
 ) -> Optional[Any]:

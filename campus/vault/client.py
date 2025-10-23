@@ -85,11 +85,12 @@ def init_db():
             cursor.execute(client_schema)
 
 
-def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
+def create_client(*, name: str, description: str) -> dict[str, Any]:
     """Create a new vault client with authentication credentials.
 
     Args:
-        **fields: Client creation fields (name, description)
+        name: The name of the client
+        description: A brief description of the client
 
     Returns:
         Tuple of (client_resource, client_secret)
@@ -107,7 +108,8 @@ def create_client(**fields: Unpack[ClientNew]) -> dict[str, Any]:
         schema.CAMPUS_KEY: client_id,
         "created_at": schema.DateTime.utcnow(),
         "secret_hash": secret_hash,
-        **fields,
+        "name": name,
+        "description": description
     }
 
     try:

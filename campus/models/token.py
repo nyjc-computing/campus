@@ -1,6 +1,6 @@
 """campus.models.token
 
-(Bearer) Token model for the Campus API.
+JWT Token model for OAuth2 providers.
 
 Tokens are issued for:
 - a specific Campus client (by client_id)
@@ -109,15 +109,17 @@ class TokenRecord(BaseRecord):
     # access_token is stored in id
     id: str = field(default_factory=secret.generate_access_code)
     # expires_at is generated in __post_init__ if not provided
-    expires_at: schema.DateTime = field(default=None)  # type: ignore
+    expires_at: schema.DateTime = None  # type: ignore
     client_id: schema.CampusID
     user_id: schema.UserID
     scopes: list[str] = field(default_factory=list)
 
     def __post_init__(self):
+        """Set expiry time based on creation timestamp."""
         if self.expires_at is None:
             self.expires_at = schema.DateTime.utcafter(
-                self.created_at, seconds=DEFAULT_EXPIRY_SECONDS
+                self.created_at,
+                seconds=DEFAULT_EXPIRY_SECONDS
             )
 
     @property

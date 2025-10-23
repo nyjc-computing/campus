@@ -1,4 +1,4 @@
-"""campus.common.webauth.base
+"""campus.models.webauth.base
 
 Base configs and models for authentication flows.
 """
@@ -43,11 +43,11 @@ class SecurityScheme(Protocol):
 
     @classmethod
     def from_json(
-            cls: Type[S],
-            config: IntegrationConfigSchema,
-            security: Security,
-            **override_config
-        ) -> S:
+        cls: Type[S],
+        config: IntegrationConfigSchema,
+        security: Security,
+        **override_config
+    ) -> S:
         """Instantiate a security scheme from a JSON-like dictionary."""
         if security not in config["security"]:
             raise ValueError(
