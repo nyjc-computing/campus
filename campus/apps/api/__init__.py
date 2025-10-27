@@ -16,8 +16,9 @@ def init_app(app: Flask | Blueprint) -> None:
     bp = Blueprint('api_v1', __name__, url_prefix='/api/v1')
     # Users need to be initialised first as other blueprints
     # rely on user table
+    routes.admin.init_app(bp)
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
+    routes.session.init_app(bp)
     routes.users.init_app(bp)
-    routes.admin.init_app(bp)
     app.register_blueprint(bp)

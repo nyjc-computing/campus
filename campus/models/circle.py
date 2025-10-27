@@ -141,6 +141,7 @@ class CircleResource(CircleRecordDict, total=False):
 @dataclass(eq=False, kw_only=True)
 class CircleRecord(BaseRecord):
     """Dataclass representation of a circle record."""
+    # id and created_at inherited from BaseRecord
     name: str
     description: str = ""
     tag: CircleTag

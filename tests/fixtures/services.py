@@ -8,8 +8,7 @@ from contextlib import contextmanager
 from typing import Optional, cast
 
 from . import setup, vault, apps, storage, yapper
-from campus.common import devops
-import campus.common.env as env
+from campus.common import devops, env
 
 # pylint: disable=import-outside-toplevel
 
@@ -68,7 +67,7 @@ class ServiceManager:
             ServiceManager: Self for method chaining
         """
         # Ensure we're not accidentally running in development/production
-        current_env = env.ENV
+        current_env = devops.ENV
         if current_env in ("development", "production"):
             raise RuntimeError(
                 f"ServiceManager.setup() cannot be run in {current_env} environment. "

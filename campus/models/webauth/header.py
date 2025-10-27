@@ -1,4 +1,4 @@
-"""campus.common.webauth.header
+"""campus.models.webauth.header
 
 Utility functions and classes for handling HTTP headers
 """
@@ -78,3 +78,7 @@ class HttpHeaderDict(dict):
         """Create an HTTP header dictionary from a bearer token."""
         auth_property = HttpAuthProperty.from_bearer_token(token)
         return cls({"Authorization": auth_property})
+
+    def user_agent(self) -> str | None:
+        """Get the User-Agent header value."""
+        return self.get("User-Agent", "Unknown")

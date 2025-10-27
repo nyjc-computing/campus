@@ -1,4 +1,4 @@
-"""campus.common.webauth
+"""campus.models.webauth
 
 Web authentication models for the Campus API.
 
@@ -15,7 +15,8 @@ __all__ = [
     "SecurityScheme",
     "http",
     "oauth2",
+    "token",
 ]
 
-from . import http, oauth2
+from . import http, oauth2, token
 from .base import SecurityScheme

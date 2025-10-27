@@ -47,3 +47,13 @@ def from_rfc3339(dtstr: str) -> datetime:
 def to_rfc3339(dt: datetime) -> str:
     """Convert a datetime object to an RFC3339 formatted string."""
     return dt.isoformat()
+
+
+def from_timestamp(ts: int) -> datetime:
+    """Create a datetime object from a UTC timestamp."""
+    return datetime.fromtimestamp(ts, tz=UTC)
+
+
+def to_timestamp(dt: datetime) -> int:
+    """Convert a datetime object to a UTC timestamp."""
+    return int(dt.timestamp())
