@@ -10,7 +10,7 @@ from flask import Flask
 
 from campus.common.http.interface import JsonDict, JsonResponse
 from campus.common.http.errors import AuthenticationError
-from campus.common.webauth.header import HttpHeaderDict
+from campus.models.webauth.header import HttpHeaderDict
 from campus.common import env
 
 from .response import FlaskTestResponse

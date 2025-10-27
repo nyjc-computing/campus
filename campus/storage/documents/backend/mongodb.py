@@ -56,7 +56,7 @@ def _get_mongodb_uri() -> str:
     except Exception as e:
         raise MongoCollectionError(
             f"Failed to retrieve MONGODB_URI from 'storage' vault: {e}"
-        ) from e
+        ) from None
 
 
 def _get_mongodb_name() -> str:
@@ -66,7 +66,7 @@ def _get_mongodb_name() -> str:
     except Exception as e:
         raise MongoCollectionError(
             f"Failed to retrieve MONGODB_NAME from 'storage' vault: {e}"
-        ) from e
+        ) from None
 
 
 class MongoRecord(dict):
@@ -159,19 +159,21 @@ class MongoDBCollection(CollectionInterface):
             mongo_doc = self.collection.find_one({MONGO_PK: doc_id})
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to retrieve document by id: {e}") from e
+                f"Failed to retrieve document by id: {e}"
+            ) from None
         if mongo_doc:
             return MongoRecord.from_mongo(mongo_doc).to_record()
         return {}
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve documents matching a query."""
-        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
+        assert 'id' not in query, "Matching by 'id' is not allowed"
         try:
             cursor = self.collection.find(query)
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to retrieve documents matching query: {e}") from e
+                f"Failed to retrieve documents matching query: {e}"
+            ) from None
         return [
             MongoRecord.from_mongo(mongo_doc).to_record()
             for mongo_doc in cursor
@@ -190,7 +192,7 @@ class MongoDBCollection(CollectionInterface):
                     message="Conflict occurred during insert",
                     collection_name=self.name,
                     details={"row": record, "error": str(e)}
-                ) from e
+                ) from None
             raise
 
     def update_by_id(self, doc_id: str, update: dict) -> None:
@@ -213,13 +215,14 @@ class MongoDBCollection(CollectionInterface):
             )
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to update document by id: {e}") from e
+                f"Failed to update document by id: {e}"
+            ) from None
         if result.matched_count == 0:
-            raise NotFoundError(doc_id, self.name)
+            raise NotFoundError(doc_id, self.name) from None
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
-        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
+        assert 'id' not in query, "Matching by 'id' is not allowed"
         if not update:
             return
         try:
@@ -236,7 +239,8 @@ class MongoDBCollection(CollectionInterface):
             )
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to update documents matching query: {e}") from e
+                f"Failed to update documents matching query: {e}"
+            ) from None
         if result.matched_count == 0:
             raise NoChangesAppliedError("update", query, self.name)
 
@@ -246,18 +250,20 @@ class MongoDBCollection(CollectionInterface):
             result = self.collection.delete_one({MONGO_PK: doc_id})
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to delete document by id: {e}") from e
+                f"Failed to delete document by id: {e}"
+            ) from None
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
-        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
+        assert 'id' not in query, "Matching by 'id' is not allowed"
         try:
             result = self.collection.delete_many(query)
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to delete documents matching query: {e}") from e
+                f"Failed to delete documents matching query: {e}"
+            ) from None
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
@@ -309,4 +315,5 @@ def purge_collections() -> None:
 
     except Exception as e:
         raise MongoCollectionError(
-            f"Failed to purge MongoDB collections: {e}") from e
+            f"Failed to purge MongoDB collections: {e}"
+        ) from None

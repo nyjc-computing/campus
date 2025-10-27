@@ -1,7 +1,9 @@
-"""campus.common.webauth.token
+"""campus.models.webauth.token
 
 Token management schemas and models
 """
+
+# TODO: Replace with vault.credentials when available
 
 from typing import NotRequired, TypedDict, Unpack
 

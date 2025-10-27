@@ -1,4 +1,4 @@
-"""campus.common.webauth.http
+"""campus.models.webauth.http
 
 HTTP Authentication configs and models.
 
@@ -17,7 +17,7 @@ __all__ = [
 from typing import Literal, Unpack
 
 from campus.common.errors import api_errors
-from campus.common.webauth.header import HttpAuthProperty, HttpHeaderDict
+from campus.models.webauth.header import HttpAuthProperty, HttpHeaderDict
 from campus.common.integration.config import SecurityConfigSchema
 
 from .base import SecurityError, SecurityScheme
@@ -36,7 +36,7 @@ class HttpAuthConfigSchema(SecurityConfigSchema):
 
 class HttpAuthenticationScheme(SecurityScheme):
     """HTTP authentication for Basic and Bearer schemes.
-    
+
     This class provides methods to:
     - retrieve the authentication credentials from an HTTP header
     - validate the credentials against the configured scheme

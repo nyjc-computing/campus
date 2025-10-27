@@ -38,10 +38,10 @@ from campus.common import integration, schema
 from campus.common.errors import api_errors
 from campus.common.utils import utc_time
 from campus.common.validation import flask as flask_validation
-from campus.common.webauth.oauth2.client_credentials import (
+from campus.models.webauth.oauth2.client_credentials import (
     OAuth2ClientCredentialsFlowScheme as OAuth2Flow
 )
-from campus.common.webauth.token import CredentialToken
+from campus.models.webauth.token import CredentialToken
 
 PROVIDER = 'discord'
 
@@ -86,21 +86,21 @@ def get_app_token() -> AppTokenResponseSchema:
         TokenRequestSchema.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    
+
     # Get client credentials from vault
     client_id = vault["CLIENT_ID"].get()["value"]
     client_secret = vault["CLIENT_SECRET"].get()["value"]
-    
+
     # Use requested scopes or default application scopes
     scopes = params.get('scopes', oauth2.scopes)
-    
+
     # Get app token from Discord
     token_response = oauth2.get_app_token(
         client_id=client_id,
         client_secret=client_secret,
         scopes=scopes
     )
-    
+
     # Validate token response
     flask_validation.validate_json_response(
         schema=DiscordTokenResponseSchema.__annotations__,
@@ -108,11 +108,11 @@ def get_app_token() -> AppTokenResponseSchema:
         on_error=api_errors.raise_api_error,
         ignore_extra=True,
     )
-    
+
     # Create normalized response
     credentials = CredentialToken(provider=PROVIDER, **token_response)
     expires_at = schema.DateTime.utcafter(seconds=token_response["expires_in"])
-    
+
     response_data: AppTokenResponseSchema = {
         "access_token": token_response["access_token"],
         "token_type": token_response["token_type"],
@@ -137,21 +137,21 @@ def get_app_token_get() -> AppTokenResponseSchema:
         on_error=api_errors.raise_api_error,
         ignore_extra=False,
     )
-    
+
     # Get client credentials from vault
     client_id = vault["CLIENT_ID"].get()["value"]
     client_secret = vault["CLIENT_SECRET"].get()["value"]
-    
+
     # Use requested scopes or default application scopes
     scopes = params.get('scopes', oauth2.scopes)
-    
+
     # Get app token from Discord
     token_response = oauth2.get_app_token(
         client_id=client_id,
         client_secret=client_secret,
         scopes=scopes
     )
-    
+
     # Validate token response
     flask_validation.validate_json_response(
         schema=DiscordTokenResponseSchema.__annotations__,
@@ -159,11 +159,11 @@ def get_app_token_get() -> AppTokenResponseSchema:
         on_error=api_errors.raise_api_error,
         ignore_extra=True,
     )
-    
+
     # Create normalized response
     credentials = CredentialToken(provider=PROVIDER, **token_response)
     expires_at = schema.DateTime.utcafter(seconds=token_response["expires_in"])
-    
+
     response_data: AppTokenResponseSchema = {
         "access_token": token_response["access_token"],
         "token_type": token_response["token_type"],
@@ -181,27 +181,27 @@ def get_app_token_get() -> AppTokenResponseSchema:
 
 def get_valid_app_token(scopes: list[str] | None = None) -> CredentialToken:
     """Retrieve a valid Discord app token.
-    
+
     This function is not a flask view function.
     Returns a cached token if valid, otherwise fetches a new one.
     """
     # TODO: Implement token caching logic
     # For now, always fetch a new token
-    
+
     client_id = vault["CLIENT_ID"].get()["value"]
     client_secret = vault["CLIENT_SECRET"].get()["value"]
-    
+
     scopes = scopes or oauth2.scopes
-    
+
     token_response = oauth2.get_app_token(
         client_id=client_id,
         client_secret=client_secret,
         scopes=scopes
     )
-    
+
     credentials = CredentialToken(provider=PROVIDER, **token_response)
-    
+
     # TODO: Cache the token with expiry timestamp
     # TODO: Check cache first and return cached token if still valid
-    
+
     return credentials

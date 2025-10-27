@@ -6,6 +6,19 @@ An environment proxy.
 import os
 import sys
 
+# Expected environment variables (for type checking)
+
+# Codespaces environment variables
+CODESPACES: str  # 'true' if running in GitHub Codespaces
+CODESPACE_NAME: str  # name of the Codespace
+GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str  # domain for port forwarding in Codespaces
+
+CLIENT_ID: str
+CLIENT_SECRET: str
+DEPLOY: str
+HOSTNAME: str  # used for generating redirect_uris
+PORT: str  # port for running development server
+
 
 class EnvironmentProxy:
     """Proxy object for environment variables.

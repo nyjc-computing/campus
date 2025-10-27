@@ -7,5 +7,10 @@ from typing import Literal
 
 ResponseStatus = Literal["ok", "error"]
 
+# Common type aliases
+Email = str
+Url = str
+
+# Campus types
 CampusID = str
 UserID = str
