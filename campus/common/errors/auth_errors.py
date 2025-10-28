@@ -48,6 +48,22 @@ def raise_from_error(
     raise errorClass(error_description, **details)
 
 
+def raise_from_json(error_json: dict[str, str]) -> NoReturn:
+    """Raise the appropriate TokenError from a JSON error response."""
+    if "error" not in error_json:
+        raise ValueError("No 'error' field in error response.")
+    error = error_json["error"]
+    error_description = error_json.get("error_description", "")
+    error_uri = error_json.get("error_uri")
+    if not error:
+        raise ValueError("No 'error' field in error response.")
+    raise_from_error(
+        error=error,  # type: ignore
+        error_description=error_description,
+        error_uri=error_uri
+    )
+
+
 class AuthorizationError(base.OAuthError):
     """OAuth Authorization Errors.
     
