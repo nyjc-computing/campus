@@ -14,7 +14,7 @@ __all__ = [
     "HttpSecurityError",
 ]
 
-from typing import Literal, Unpack
+from typing import Any, Literal, Unpack
 
 from campus.common.errors import api_errors
 from campus.models.webauth.header import HttpAuthProperty, HttpHeaderDict
@@ -41,15 +41,46 @@ class HttpAuthenticationScheme(SecurityScheme):
     - retrieve the authentication credentials from an HTTP header
     - validate the credentials against the configured scheme
     """
+    security_scheme = "http"
     scheme: HttpScheme
 
     def __init__(
             self,
             provider: str,
-            **config: Unpack[HttpAuthConfigSchema]
+            scheme: HttpScheme,
     ):
-        super().__init__(provider, **config)
-        self.scheme = config["scheme"]
+        super().__init__(provider)
+        self.scheme = scheme  # type: ignore[assignment]
+
+    @classmethod
+    def from_config(
+            cls: type["HttpAuthenticationScheme"],
+            provider: str,
+            config: dict[str, Any]
+    ) -> "HttpAuthenticationScheme":
+        """Create an HTTP authentication scheme from a config dictionary."""
+        scheme = config["scheme"]
+        if scheme not in ["basic", "bearer"]:
+            raise HttpSecurityError(f"Unsupported HTTP scheme: {scheme}")
+        return cls(provider, scheme)
+
+    @classmethod
+    def from_header(
+            cls,
+            *,
+            provider: str,
+            header: dict
+    ) -> "HttpAuthenticationScheme":
+        """Create an HTTP authentication scheme from an HTTP header."""
+        auth = HttpHeaderDict(header).get_auth()
+        if auth is None:
+            api_errors.raise_api_error(401)
+        match auth.scheme:
+            case "basic":
+                return cls(provider, scheme="basic")
+            case "bearer":
+                return cls(provider, scheme="bearer")
+        raise HttpSecurityError(f"Unsupported HTTP scheme: {auth.scheme}")
 
     def get_auth(self, *, header: dict) -> HttpAuthProperty:
         """Validate the HTTP header for authentication.
@@ -66,21 +97,3 @@ class HttpAuthenticationScheme(SecurityScheme):
         if auth.scheme != self.scheme:
             api_errors.raise_api_error(401)
         return auth
-
-    @classmethod
-    def from_header(
-            cls,
-            *,
-            provider: str,
-            header: dict
-    ) -> "HttpAuthenticationScheme":
-        """Create an HTTP authentication scheme from an HTTP header."""
-        auth = HttpHeaderDict(header).get_auth()
-        if auth is None:
-            api_errors.raise_api_error(401)
-        match auth.scheme:
-            case "basic":
-                return cls(provider, security_scheme="http", scheme="basic")
-            case "bearer":
-                return cls(provider, security_scheme="http", scheme="bearer")
-        raise HttpSecurityError(f"Unsupported HTTP scheme: {auth.scheme}")

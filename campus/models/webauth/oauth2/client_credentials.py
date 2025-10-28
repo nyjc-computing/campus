@@ -7,7 +7,7 @@ Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4
 
 __all__ = ["OAuth2ClientCredentialsFlowScheme"]
 
-from typing import Type
+from typing import Any
 
 import requests
 
@@ -76,9 +76,9 @@ class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
 
     @classmethod
     def from_config(
-            cls: Type["OAuth2ClientCredentialsFlowScheme"],
+            cls: type["OAuth2ClientCredentialsFlowScheme"],
             provider: str,
-            config: integration.config.OAuth2ClientCredentialsConfigSchema,
+            config: dict[str, Any],
     ) -> "OAuth2ClientCredentialsFlowScheme":
         """Create an OAuth2ClientCredentialsFlowScheme instance from
         config.

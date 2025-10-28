@@ -5,7 +5,7 @@ OAuth2 Authorization Code flow schemas and models.
 
 __all__ = ["OAuth2AuthorizationCodeFlowScheme"]
 
-from typing import Type
+from typing import Any
 
 import requests
 
@@ -72,9 +72,9 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     @classmethod
     def from_config(
-            cls: Type["OAuth2AuthorizationCodeFlowScheme"],
+            cls: type["OAuth2AuthorizationCodeFlowScheme"],
             provider: str,
-            config: integration.schema.OAuth2AuthorizationCodeConfigSchema
+            config: dict[str, Any]
     ) -> "OAuth2AuthorizationCodeFlowScheme":
         """Create an OAuth2AuthorizationCodeFlowScheme instance from
         config.

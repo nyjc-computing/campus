@@ -5,7 +5,7 @@ OAuth2 security scheme base configs and models.
 
 __all__ = ["OAuth2FlowScheme"]
 
-from typing import Generic, Type, TypeVar
+from typing import Any, Generic, Type, TypeVar
 
 from campus.common import integration
 from campus.models.webauth import base
@@ -34,10 +34,16 @@ class OAuth2FlowScheme(base.SecurityScheme, Generic[F]):
     def from_config(  # type: ignore[override]
             cls: type[F],
             provider: str,
-            config: integration.config.OAuth2AuthorizationCodeConfigSchema
+            config: dict[str, Any]
     ) -> F:
         """Create an OAuth2FlowScheme instance from config."""
+        assert provider == config["provider"]
         for flow in FLOW_PREFERENCE:
-            if flow in config["flow"]:
-                return cls._flow_map[flow].from_config(provider, config)
+            for scheme_cfg in config["security"].values():
+                if (
+                        scheme_cfg["security_scheme"] == "oauth2"
+                        and scheme_cfg["flow"] == flow
+                ):
+                    return cls._flow_map[flow].from_config(provider,
+                                                           scheme_cfg)
         raise ValueError("No supported OAuth2 flow found in config.")
