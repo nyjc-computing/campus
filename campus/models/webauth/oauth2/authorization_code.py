@@ -208,122 +208,98 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         )
         return schema.Url(authorization_url)
 
-    # def get_token(
-    #         self,
-    #         *,
-    #         auth: tuple[str, str] | None = None,
-    #         client_id: str | None = None,
-    #         client_secret: str | None = None
-    # ) -> token.TokenRecord:
-    #     """Retrieve access token using client credentials.
+    def refresh_token(
+            self,
+            auth_token: token.TokenRecord,
+            *,
+            auth: tuple[str, str] | None = None,
+            client_id: str | None = None,
+            client_secret: str | None = None,
+            force=False
+    ) -> token.TokenRecord:
+        """Refresh the access token using the refresh token if present,
+        otherwise retrieve a new token.
 
-    #     Args:
-    #         auth: Optional tuple of (username, password) for basic auth.
-    #             Used by Discord
-    #         client_id, client_secret: Client ID and secret.
-    #             Used by Google, GitHub, etc.
-    #     """
-    #     # TODO: refactor into client_credentials submodule
-    #     # Only pass auth or client_id/client_secret, not both
-    #     if auth and (client_id or client_secret):
-    #         raise ValueError(
-    #             "Provide only auth or client_id/client_secret, not both"
-    #         )
-    #     if auth:
-    #         resp = requests.post(
-    #             url=self.token_url,
-    #             data={
-    #                 "grant_type": "client_credentials",
-    #             },
-    #             headers=self.headers,
-    #             auth=auth,
-    #             timeout=TIMEOUT
-    #         )
-    #     else:  # client credentials
-    #         if not client_id or not client_secret:
-    #             raise ValueError(
-    #                 "client_id and client_secret must be provided"
-    #             )
-    #         resp = requests.post(
-    #             url=self.token_url,
-    #             data={
-    #                 "grant_type": "client_credentials",
-    #                 "client_id": client_id,
-    #                 "client_secret": client_secret,
-    #             },
-    #             headers=self.headers,
-    #             timeout=TIMEOUT
-    #         )
-    #     token_payload = resp.json()
-    #     if "error" in token_payload:
-    #         token_errors.raise_from_json(token_payload)
-    #     return token.TokenRecord.from_dict(token_payload)
+        Args:
+            token: The CredentialToken instance to refresh.
+            auth: Optional tuple of (username, password) for basic auth.
+                Used by Discord
+            client_id, client_secret: Client ID and secret.
+                Used by Google, GitHub, etc.
+            force: If True, force refresh even if the token is not expired.
 
-    # def refresh_token(
-    #         self,
-    #         auth_token: token.TokenRecord,
-    #         *,
-    #         auth: tuple[str, str] | None = None,
-    #         client_id: str | None = None,
-    #         client_secret: str | None = None,
-    #         force=False
-    # ) -> token.TokenRecord:
-    #     """Refresh the access token using the refresh token if present,
-    #     otherwise retrieve a new token.
+        auth or client_id/client_secret must be provided, but not both.
+        """
+        # Only pass auth or client_id/client_secret, not both
+        if auth and (client_id or client_secret):
+            raise ValueError(
+                "Provide only auth or client_id/client_secret, not both"
+            )
+        if not auth_token.is_expired() and not force:
+            return auth_token
+        if not auth_token.refresh_token:
+            raise token_errors.UnsupportedGrantTypeError(
+                "No refresh token available; cannot refresh token"
+            )
+        if auth:
+            token_payload = self._post_with_auth(
+                auth_token,
+                auth=auth
+            )
+        else:  # client credentials
+            if not client_id or not client_secret:
+                raise ValueError(
+                    "client_id and client_secret must be provided"
+                )
+            token_payload = self._post_with_credentials(
+                auth_token,
+                client_id=client_id,
+                client_secret=client_secret
+            )
+        if "error" in token_payload:
+            token_errors.raise_from_json(token_payload)
+        auth_token = token.TokenRecord.from_dict(token_payload)
+        tokens.update(auth_token)
+        return auth_token
 
-    #     Args:
-    #         token: The CredentialToken instance to refresh.
-    #         auth: Optional tuple of (username, password) for basic auth.
-    #             Used by Discord
-    #         client_id, client_secret: Client ID and secret.
-    #             Used by Google, GitHub, etc.
-    #         force: If True, force refresh even if the token is not expired.
+    def _post_with_auth(
+            self,
+            auth_token: token.TokenRecord,
+            *,
+            auth: tuple[str, str]
+    ) -> dict[str, Any]:
+        """Send a POST request with the given auth token."""
+        resp = requests.post(
+            url=self.token_url,
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": auth_token.refresh_token,
+            },
+            headers=self.headers,
+            auth=auth,
+            timeout=TIMEOUT
+        )
+        token_payload = resp.json()
+        return token_payload
 
-    #     auth or client_id/client_secret must be provided, but not both.
-    #     """
-    #     # Only pass auth or client_id/client_secret, not both
-    #     if auth and (client_id or client_secret):
-    #         raise ValueError(
-    #             "Provide only auth or client_id/client_secret, not both"
-    #         )
-    #     if not auth_token.is_expired() and not force:
-    #         return auth_token
-    #     if not auth_token.refresh_token:
-    #         return self.get_token(
-    #             auth=auth,
-    #             client_id=client_id,
-    #             client_secret=client_secret
-    #         )
-    #     if auth:
-    #         resp = requests.post(
-    #             url=self.token_url,
-    #             data={
-    #                 "grant_type": "refresh_token",
-    #                 "refresh_token": auth_token.refresh_token,
-    #             },
-    #             headers=self.headers,
-    #             auth=auth,
-    #             timeout=TIMEOUT
-    #         )
-    #     else:  # client credentials
-    #         if not client_id or not client_secret:
-    #             raise ValueError(
-    #                 "client_id and client_secret must be provided"
-    #             )
-    #         resp = requests.post(
-    #             url=self.token_url,
-    #             data={
-    #                 "grant_type": "refresh_token",
-    #                 "refresh_token": auth_token.refresh_token,
-    #                 "client_id": client_id,
-    #                 "client_secret": client_secret,
-    #             },
-    #             headers=self.headers,
-    #             timeout=TIMEOUT
-    #         )
-    #     token_payload = resp.json()
-    #     if "error" in token_payload:
-    #         token_errors.raise_from_json(token_payload)
-    #     auth_token = token.TokenRecord.from_dict(token_payload)
-    #     tokens.update(auth_token)
-    #     return auth_token
+    def _post_with_credentials(
+            self,
+            auth_token: token.TokenRecord,
+            *,
+            client_id: str,
+            client_secret: str
+    ) -> dict[str, Any]:
+        """Send a POST request with the given client credentials."""
+        resp = requests.post(
+            url=self.token_url,
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": auth_token.refresh_token,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+            headers=self.headers,
+            timeout=TIMEOUT
+        )
+        token_payload = resp.json()
+        return token_payload
