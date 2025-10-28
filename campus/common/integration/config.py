@@ -7,6 +7,7 @@ __all__ = [
     "HttpScheme",
     "IntegrationConfigSchema",
     "OAuth2AuthorizationCodeConfigSchema",
+    "OAuth2ClientCredentialsConfigSchema",
     "OAuth2Flow",
     "Security",
     "SecurityConfigSchema",
@@ -20,11 +21,12 @@ from typing import Any
 
 from .schema import (
     HttpScheme,
-    OAuth2Flow,
-    Security,
     IntegrationConfigSchema,
+    OAuth2Flow,
+    OAuth2AuthorizationCodeConfigSchema,
+    OAuth2ClientCredentialsConfigSchema,
+    Security,
     SecurityConfigSchema,
-    OAuth2AuthorizationCodeConfigSchema
 )
 
 CONFIG_ROOT = os.path.dirname(__file__)
