@@ -99,8 +99,8 @@ class APIError(Exception):
             "error_code": self.error_code,
             "details": self.details,
         }
-        # We can't use campus.common.devops to do a env check here because
-        # it would create a circular import.
+        # We can't use campus.common.devops to do a env check here
+        # because it would create a circular import.
         # Pop the traceback in production environment.
         if 500 <= self.status_code < 600:
             import traceback
