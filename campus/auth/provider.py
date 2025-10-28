@@ -271,11 +271,9 @@ def token(
     # OAuth2 flow complete, revoke session
     sessions.delete(authsession.id)
     token = tokens.new(
-        {
-            "client_id": flask.g.current_client["id"],
-            "user_id": flask.g.current_user["id"],
-            "scopes": authsession.scopes,
-        },
+        client_id=flask.g.current_client["id"],
+        user_id=flask.g.current_user["id"],
+        scopes=authsession.scopes,
         expiry_seconds=DEFAULT_TOKEN_EXPIRY
     )
     return token.to_dict(), 200

@@ -7,13 +7,11 @@ from campus.client.vault import get_vault
 from campus.common import integration, schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.validation import flask as flask_validation
-from campus.models import session, webauth
-from campus.models.session import LoginSessions
-from campus.vault import credentials
+from campus.models import session, token, webauth
 
 PROVIDER = 'github'
 
-github_credentials = credentials.get_provider(PROVIDER)
+tokens = token.Tokens()
 
 auth_sessions = session.AuthSessions(PROVIDER)
 vault = get_vault()[PROVIDER]
@@ -23,26 +21,6 @@ oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme.from_json(
     config=cast(integration.schema.IntegrationConfigSchema, oauthconfig),
     security="oauth2"
 )
-
-
-# class AuthorizeRequestSchema(TypedDict, total=False):
-
-#     target: Required[str]
-
-
-# class Callback(TypedDict, total=False):
-
-#     error: str
-#     code: str
-#     state: Required[str]
-#     error_description: str
-#     redirect_uri: Required[str]
-
-
-# class GithubTokenResponseSchema(TypedDict):
-#     access_token: str
-#     token_type: str
-#     scope: str
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
@@ -134,24 +112,20 @@ def success_callback(
             error_uri=user_info.get("error_uri")
         )
 
-    token = github_credentials.create_credentials(
-        expiry_seconds=token_response["expires_in"],
-        access_token=token_response["access_token"],
-        scopes=token_response["scope"].split(", "),
+    token = tokens.new(
         client_id=vault["CLIENT_ID"].get()["value"],
-        user_id=user_info["id"]
+        user_id=user_info["id"],
+        scopes=token_response["scope"].split(", "),
+        expiry_seconds=token_response["expires_in"]
     )
     assert token.access_token  # for static checkers
 
     # Verify requested scopes were granted
-    if missing_scopes := token.get_missing_scopes(
-        requested_scopes=auth_session.scopes
-    ):
+    if missing_scopes := token.validate_scope(auth_session.scopes):
         raise auth_errors.InvalidScopeError(
             f"Missing required scopes: {', '.join(missing_scopes)}"
         )
 
-    github_credentials.store_credentials(token)
     auth_sessions.delete()
     return flask.redirect(oauth2.session.target
                           or flask.request.host_url)

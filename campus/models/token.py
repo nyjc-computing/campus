@@ -13,7 +13,7 @@ Tokens follow storage interface requirements and will have
 Tokens are long-lived and may persist over multiple days.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from typing import Any, Literal, TypedDict, overload
 
 from campus.common import devops, schema
@@ -251,22 +251,25 @@ class Tokens:
 
     def new(
             self,
-            token_data: TokenNew,
             *,
+            client_id: schema.CampusID,
+            user_id: schema.UserID,
+            scopes: list[str],
             expiry_seconds: int = DEFAULT_EXPIRY_SECONDS
     ) -> TokenRecord:
         """Create a new token in the database."""
-        token = TokenRecord.from_dict(dict(token_data))
-        token.expires_at = schema.DateTime.utcafter(
-            token.created_at, seconds=expiry_seconds
+        token = TokenRecord(
+            client_id=client_id,
+            user_id=user_id,
+            scopes=scopes,
         )
         try:
             self.storage.insert_one(token.to_dict())
         except storage_errors.ConflictError:
             raise api_errors.ConflictError(
                 message="Token already exists for this user and client",
-                client_id=token_data["client_id"],
-                user_id=token_data["user_id"]
+                client_id=token.client_id,
+                user_id=token.user_id
             ) from None
         return token
 

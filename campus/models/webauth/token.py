@@ -3,8 +3,6 @@
 Token management schemas and models
 """
 
-# TODO: Replace with vault.credentials when available
-
 from typing import NotRequired, TypedDict, Unpack
 
 from campus.common import schema
