@@ -93,7 +93,7 @@ def authorize(
 def callback() -> werkzeug.Response:
     """Handles the Google OAuth callback request.
 
-    Dispatches to success or error handlers based on paylaod type.
+    Dispatches to success or error handlers based on payload type.
     """
     callback_payload = flask_validation.get_request_payload()
     if "error" in callback_payload:
