@@ -19,36 +19,10 @@ from .base import (
     OAuth2FlowScheme,
 )
 
-TIMEOUT = 10  # Default timeout for requests in seconds
+# Default timeout for requests in seconds
+TIMEOUT = 10
 
 tokens = token.Tokens()
-
-
-# class ClientCredentialsTokenRequestSchema(TypedDict):
-#     """Request schema for OAuth2 Client Credentials flow.
-#     Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4.2
-#     """
-#     grant_type: Literal["client_credentials"]  # Must be "client_credentials"
-#     scope: NotRequired[str]  # Space-separated scopes for the request
-
-
-# class ClientCredentialsTokenResponseSchema(TypedDict):
-#     """Response schema for OAuth2 Client Credentials flow.
-#     Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4.3
-#     """
-#     access_token: str  # Access token issued by the OAuth2 provider
-#     token_type: str  # Type of the token (e.g., "Bearer")
-#     expires_in: NotRequired[int]  # Lifetime of the access token in seconds
-#     scope: NotRequired[str]  # Scopes granted by the access token
-
-
-# class OAuth2ClientCredentialsConfigSchema(TypedDict):
-#     """Schema for OAuth2 Client Credentials configuration."""
-#     security_scheme: Literal["oauth2"]
-#     flow: Literal["clientCredentials"]
-#     scopes: list[str]
-#     token_url: str
-#     headers: NotRequired[dict[str, str]]
 
 
 class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):

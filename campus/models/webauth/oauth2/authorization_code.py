@@ -18,8 +18,10 @@ from .base import (
     OAuth2FlowScheme,
 )
 
-OAUTH_EXPIRY_MINUTES = 10  # Default expiry time for OAuth2 sessions in minutes
-TIMEOUT = 10  # Default timeout for requests in seconds
+# Default expiry time for OAuth2 sessions in minutes
+OAUTH_EXPIRY_MINUTES = 10
+# Default timeout for requests in seconds
+TIMEOUT = 10
 
 tokens = token.Tokens()
 
