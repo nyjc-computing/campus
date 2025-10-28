@@ -17,6 +17,8 @@ Usage:
 
 import logging
 
+import flask
+
 from campus.common import devops, env
 from campus.logging_config import configure_logging
 
@@ -41,7 +43,7 @@ def get_deployment_mode():
     return mode
 
 
-def create_app(mode: str | None = None) -> devops.deploy.Flask:
+def create_app(mode: str | None = None) -> flask.Flask:
     """Create the appropriate Campus app based on deployment mode.
 
     This factory only initialises the apropriate app.
@@ -76,7 +78,7 @@ def main():
     # Development server configuration
 
     # Create app instance for development server
-    app = create_app("campus.apps")
+    app = create_app("campus.auth")
     devops.deploy.configure_for_development(app)
 
     print("📝 For production deployment, use wsgi.py with Gunicorn")
