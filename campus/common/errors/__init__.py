@@ -62,8 +62,7 @@ def handle_api_error(err: api_errors.APIError) -> tuple[JsonDict, int]:
     from campus.common import devops
     # Remove traceback in production for security reasons
     if devops.ENV == devops.PRODUCTION:
-        del err_dict["details"]
-        del err_dict["traceback"]
+        err_dict.pop("traceback")
     return err_dict, err.status_code
 
 
