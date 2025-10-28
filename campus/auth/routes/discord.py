@@ -1,4 +1,4 @@
-"""campus.apps.oauth.discord
+"""campus.auth.routes.discord
 
 Routes for Discord OAuth2 Client Credentials flow.
 
@@ -46,10 +46,9 @@ tokens = token.Tokens()
 auth_sessions = session.AuthSessions(PROVIDER)
 vault = get_vault()[PROVIDER]
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f"/{PROVIDER}")
-oauthconfig = integration.get_config(PROVIDER)
-oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme.from_json(
-    config=cast(integration.schema.IntegrationConfigSchema, oauthconfig),
-    security="oauth2"
+oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme.from_config(
+    provider=PROVIDER,
+    config=integration.get_config(PROVIDER),
 )
 
 
@@ -122,20 +121,13 @@ def success_callback(
     client_secret = vault["CLIENT_SECRET"].get()["value"]
 
     # Retrieve access token from Discord
-    token_response = oauth2.exchange_code_for_token(
+    token = oauth2.exchange_code_for_token(
         code=code,
         client_secret=client_secret,
         redirect_uri=auth_session.redirect_uri
     )
-    if "error" in token_response:
-        raise token_errors.raise_from_error(
-            error=token_response["error"],
-            error_description=token_response.get(
-                "error_description", "Unknown error during token exchange."
-            )
-        )
     # user_id is needed to store creds
-    user_info = oauth2.get_user_info(token_response["access_token"])
+    user_info = oauth2.get_user_info(token.access_token)
     if "error" in user_info:
         raise token_errors.raise_from_error(
             error=user_info["error"],
@@ -146,13 +138,13 @@ def success_callback(
     token_data = {
         "client_id": vault["CLIENT_ID"].get()["value"],
         "user_id": user_info["id"],
-        "scopes": token_response["scope"].split(" "),
+        "scopes": token.scopes,
     }
     token = tokens.new(
         client_id=vault["CLIENT_ID"].get()["value"],
         user_id=user_info["id"],
-        scopes=token_response["scope"].split(" "),
-        expiry_seconds=token_response["expires_in"]
+        scopes=token.scopes,
+        expiry_seconds=token.expires_in
     )
     assert token.access_token  # for static checkers
 
