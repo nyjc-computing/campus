@@ -44,6 +44,7 @@ from campus.models import session
 from campus.models.token import Tokens, TokenNew
 from campus.common.utils import url, secret
 import campus.common.validation.flask as flask_validation
+from campus.vault import credentials
 
 DEFAULT_TARGET_ENDPOINT = ".success"
 PROVIDER = "campus"
