@@ -113,6 +113,7 @@ class TokenRecord(BaseRecord):
     expiry_seconds: InitVar[int] = DEFAULT_EXPIRY_SECONDS
     client_id: schema.CampusID
     user_id: schema.UserID
+    refresh_token: str | None = None
     scopes: list[str] = field(default_factory=list)
 
     def __post_init__(self, expiry_seconds: int):
@@ -128,16 +129,26 @@ class TokenRecord(BaseRecord):
         """Convenience property that makes access_token an alias for id."""
         return self.id
 
+    @property
+    def expires_in(self) -> int:
+        """Get the number of seconds until the token expires."""
+        created_at_dt = self.created_at.to_datetime()
+        expires_at_dt = self.expires_at.to_datetime()
+        assert expires_at_dt >= created_at_dt
+        delta = (expires_at_dt - created_at_dt).total_seconds()
+        return int(delta)
+
     @classmethod
     def from_dict(cls, data: dict) -> "TokenRecord":
         """Create a TokenRecord from a dictionary.
         
+        The dictionary is expected to be obtained from a token endpoint.
         Scopes are stored as space-separated strings in the database,
         but as a list in the dataclass.
         """
         token_data = dict(data)  # Make a copy to avoid mutating input
-        if isinstance(token_data["scopes"], str):
-            token_data["scopes"] = token_data["scopes"].split(" ")
+        if isinstance(token_data["scope"], str):
+            token_data["scopes"] = token_data["scope"].split(" ")
         if "access_token" in token_data:
             token_data["id"] = token_data.pop("access_token")
         if "token_type" in token_data:
@@ -292,3 +303,7 @@ class Tokens:
         for token_id in expired_token_ids:
             self.delete(token_id)
         return len(expired_token_ids)
+
+    def update(self, token: TokenRecord) -> None:
+        """Update an existing token in the database."""
+        self.storage.update_by_id(token.id, token.to_dict())
