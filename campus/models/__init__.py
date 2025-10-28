@@ -100,6 +100,7 @@ __all__ = [
     "emailotp",
     "user",
     "session",
+    "token",
     "webauth",
 ]
 
@@ -110,6 +111,7 @@ from . import (
     emailotp,
     user,
     session,
+    token,
     webauth,
 )
 
