@@ -133,11 +133,6 @@ def success_callback(
                 "error_description", "Unknown error retrieving user info."
             )
         )
-    token_data = {
-        "client_id": vault["CLIENT_ID"].get()["value"],
-        "user_id": user_info["id"],
-        "scopes": token.scopes,
-    }
     token = tokens.new(
         client_id=vault["CLIENT_ID"].get()["value"],
         user_id=user_info["id"],
