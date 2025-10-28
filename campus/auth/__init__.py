@@ -2,7 +2,7 @@
 
 This module contains the OAuth2 authentication hub for Campus.
 
-campus-auth manages authentication and authhorization for Campus
+campus-auth manages authentication and authorization for Campus
 applications, as well as serving as a proxy for auth with third-party
 integrations.
 """
