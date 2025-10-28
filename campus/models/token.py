@@ -110,16 +110,17 @@ class TokenRecord(BaseRecord):
     id: str = field(default_factory=secret.generate_access_code)
     # expires_at is generated in __post_init__ if not provided
     expires_at: schema.DateTime = None  # type: ignore
+    expiry_seconds: InitVar[int] = DEFAULT_EXPIRY_SECONDS
     client_id: schema.CampusID
     user_id: schema.UserID
     scopes: list[str] = field(default_factory=list)
 
-    def __post_init__(self):
+    def __post_init__(self, expiry_seconds: int):
         """Set expiry time based on creation timestamp."""
         if self.expires_at is None:
             self.expires_at = schema.DateTime.utcafter(
                 self.created_at,
-                seconds=DEFAULT_EXPIRY_SECONDS
+                seconds=expiry_seconds
             )
 
     @property
