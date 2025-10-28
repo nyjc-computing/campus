@@ -8,7 +8,7 @@ flows.
 
 The classes do not authenticate credentials, but provide the necessary
 configuration and validation methods for authentication headers. Actual
-authentication logic is handled by the campusauth module.
+authentication logic is handled by the campus.auth module.
 """
 
 __all__ = [

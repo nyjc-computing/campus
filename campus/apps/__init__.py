@@ -10,7 +10,7 @@ This module contains the main applications for Campus.
 - oauth: Campus OAuth2 implementation.
 """
 
-__all__ = ["api", "campusauth", "oauth"]
+__all__ = ["api", "oauth"]
 
 from flask import Blueprint, Flask
 

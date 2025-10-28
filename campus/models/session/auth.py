@@ -18,7 +18,7 @@ from flask import session as client_session
 
 from campus.common import env, schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import secret, uid, utc_time
 from campus.models.base import BaseRecord
 from campus.storage import (
     errors as storage_errors,
@@ -30,36 +30,6 @@ DEFAULT_LOGIN_EXPIRY_DAYS = 30
 DEFAULT_OAUTH_EXPIRY_MINUTES = 10
 
 
-# @dataclass(eq=False, kw_only=True)
-# class LoginSessionRecord(BaseRecord):
-#     """Dataclass representation of a login session record."""
-#     # id and created_at inherited from BaseRecord
-#     expires_at: schema.DateTime = None  # type: ignore
-#     client_id: schema.CampusID
-#     user_id: schema.UserID | None = None
-#     device_id: str | None = None
-#     # TODO: add ip_address
-#     # TODO: add last_login?
-#     agent_string: str
-
-#     def __post_init__(self):
-#         """Set expiry time based on creation timestamp."""
-#         if self.expires_at is None:
-#             self.expires_at = schema.DateTime.utcafter(
-#                 self.created_at,
-#                 seconds=DEFAULT_LOGIN_EXPIRY_DAYS * utc_time.DAY_SECONDS
-#             )
-
-#     def is_expired(self, at_time: schema.DateTime | None = None) -> bool:
-#         """Check if the session is expired."""
-#         if at_time is None:
-#             at_time = schema.DateTime.utcnow()
-#         return utc_time.is_expired(
-#             self.expires_at.to_datetime(),
-#             at_time=at_time.to_datetime()
-#         )
-
-
 @dataclass(eq=False, kw_only=True)
 class AuthSessionRecord(BaseRecord):
     """Dataclass representation of an auth session record."""
@@ -68,7 +38,7 @@ class AuthSessionRecord(BaseRecord):
     client_id: schema.CampusID
     user_id: schema.UserID | None = None
     # TODO: add ip_address
-    redirect_uri: schema.Url
+    redirect_uri: schema.Url | None = None
     scopes: list[str] = field(default_factory=list)
     authorization_code: Optional[str] = None
     state: Optional[str] = None
@@ -239,7 +209,7 @@ class AuthSessions:
     def finalize(
             self,
             auth_session: AuthSessionRecord
-    ) -> schema.Url:
+    ) -> schema.Url | None:
         """Finalize an auth session and return the redirect URI.
         This typically involves cleaning up the session and preparing
         for redirection to the target.
@@ -317,7 +287,7 @@ class AuthSessions:
         *,
         client_id: schema.CampusID,
         expiry_seconds: int = DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-        redirect_uri: schema.Url,
+        redirect_uri: schema.Url | None = None,
         user_id: schema.UserID | None = None,
         session_id: Optional[schema.CampusID] = None,
         created_at: Optional[schema.DateTime] = None,
@@ -345,9 +315,12 @@ class AuthSessions:
             user_id=user_id,
             redirect_uri=redirect_uri,
             scopes=scopes or [],
-            authorization_code=authorization_code,
+            authorization_code=(
+                authorization_code
+                or secret.generate_authorization_code()
+            ),
             state=state,
-            target=target,
+            target=target,  # TODO: deprecate for client impl
         )
         try:
             self.storage.insert_one(session.to_dict())

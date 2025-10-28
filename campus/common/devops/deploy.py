@@ -6,7 +6,7 @@ application.
 
 from typing import Protocol, runtime_checkable
 
-from flask import Blueprint, Flask
+import flask
 
 from campus.common import devops, env, introspect
 import campus.common.errors
@@ -26,7 +26,7 @@ class AppModule(Protocol):
     """
 
     @staticmethod
-    def init_app(app: Flask | Blueprint) -> None:
+    def init_app(app: flask.Flask | flask.Blueprint) -> None:
         """Initialize the app module with the given Flask app."""
         ...
 
@@ -36,7 +36,7 @@ def is_codespace() -> bool:
     return env.CODESPACES is not None and env.CODESPACES.lower() == "true"
 
 
-def configure_for_codespace(app: Flask) -> None:
+def configure_for_codespace(app: flask.Flask) -> None:
     """Configure the Flask app for GitHub Codespaces.
 
     - sets HOSTNAME from Codespace environment variables
@@ -47,7 +47,7 @@ def configure_for_codespace(app: Flask) -> None:
     env.HOSTNAME = f"{env.CODESPACE_NAME}-{env.PORT}.{env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
 
 
-def configure_for_development(app: Flask) -> None:
+def configure_for_development(app: flask.Flask) -> None:
     """Configure the Flask app for development.
 
     - enables debug mode
@@ -63,18 +63,30 @@ def configure_for_development(app: Flask) -> None:
 
     @app.get('/')
     def index():
-        return f"""
-        <h1>Campus Development Server</h1>
-        <p>Deployment mode: {env.DEPLOY}</p>
-        <p>Hostname: {env.HOSTNAME}</p>
-        <p>Port: {env.PORT}</p>
-        <p>
-            <a href="{url.full_url_for('campusauth.login')}">Click here to log in</a>
-        </p>
-        """
+        return flask.render_template_string(
+            """
+            <h1>Campus Development Server</h1>
+            <p>Deployment mode: {{deploy}}</p>
+            <p>Hostname: {{hostname}}</p>
+            <p>Port: {{port}}</p>
+            <ul>
+                {% for rule in url_map.iter_rules() %}
+                <li>{{ rule }}</li>
+                {% endfor %}
+            </ul>
+            <p>
+                <a href="{{login_url}}">Click here to log in</a>
+            </p>
+            """,
+            deploy=env.DEPLOY,
+            hostname=env.HOSTNAME,
+            port=env.PORT,
+            url_map=app.url_map,
+            login_url=url.full_url_for('auth.test_login')
+        )
 
 
-def configure_for_deployment(app: Flask) -> None:
+def configure_for_deployment(app: flask.Flask) -> None:
     """Configure the Flask app for deployment.
 
     - adds health check route
@@ -94,7 +106,7 @@ def configure_for_deployment(app: Flask) -> None:
     return
 
 
-def create_app(*appmodules: AppModule) -> Flask:
+def create_app(*appmodules: AppModule) -> flask.Flask:
     """Single entrypoint for creating a deployment app.
 
     AppModules are expected to initialise the app with the bare minimum
@@ -102,7 +114,7 @@ def create_app(*appmodules: AppModule) -> Flask:
 
     This function adds other handlers, but does not carry out configuration.
     """
-    app = Flask(introspect.get_caller_module().__name__)
+    app = flask.Flask(introspect.get_caller_module().__name__)
     for module in appmodules:
         module.init_app(app)
     campus.common.errors.init_app(app)
