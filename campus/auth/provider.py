@@ -48,7 +48,7 @@ from . import authentication
 
 PROVIDER = "campus"
 
-bp = flask.Blueprint(PROVIDER, __name__, url_prefix="/")
+bp = flask.Blueprint('auth', __name__, url_prefix='/auth')
 
 tokens = token_model.Tokens()
 sessions = session.AuthSessions(PROVIDER)

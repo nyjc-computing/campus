@@ -31,12 +31,12 @@ def authorization_url(
 ):
     """Return the authorization URL for the OAuth flow."""
     return flask.jsonify(flask.url_for(
-        'campusauth.authorize',
+        'campus.auth.authorize',
         _external=True,
         client_id=client_id,
         response_type="code",
         redirect_uri=redirect_uri or flask.request.host_url,
-        scope=scope or "profile email",
+        scope=scope or "profile email",  # TODO: change to Campus scopes
         state=state,
     ))
 

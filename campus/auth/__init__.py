@@ -33,8 +33,7 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     # does not have VAULTDB_URI env var
     from . import provider, routes
 
-    bp = flask.Blueprint('auth', __name__, url_prefix='/auth')
-    provider.init_app(bp)
+    bp = provider.bp
     routes.init_app(bp)
 
     if devops.ENV == devops.DEVELOPMENT:
@@ -45,12 +44,11 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
             """Test login endpoint."""
             return flask.redirect(
                 flask.url_for(
-                    "campus.auth.authorize",
-                    _external=True,
+                    ".authorize",
                     client_id=env.CLIENT_ID,
                     response_type="code",
                     redirect_uri=flask.url_for(
-                        "campus.auth.callback",
+                        ".callback",
                         _external=True,
                     ),
                     scope="profile email",
@@ -72,6 +70,6 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     if isinstance(app, flask.Flask):
         from campus.client.vault import get_vault
         vault = get_vault()
-        app.secret_key = vault["auth"]["SECRET_KEY"].get()["value"]
+        app.secret_key = vault["campus"]["SECRET_KEY"].get()["value"]
 
     app.register_blueprint(bp)

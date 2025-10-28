@@ -1,4 +1,4 @@
-"""campus.apps.campusauth.models
+"""campus.auth.authentication
 
 Authentication and authorisation implementation for the Campus API.
 
