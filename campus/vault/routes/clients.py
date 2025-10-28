@@ -25,7 +25,8 @@ _yapper_instance = None
 
 
 def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular dependencies."""
+    """Get yapper instance, creating it lazily to avoid circular
+    dependencies."""
     global _yapper_instance
     if _yapper_instance is None:
         _yapper_instance = campus.yapper.create()
@@ -33,7 +34,9 @@ def get_yapper():
 
 
 def init_app(app: Flask | Blueprint) -> None:
-    """Initialize the client routes with the given Flask app or blueprint."""
+    """Initialize the client routes with the given Flask app or
+    blueprint.
+    """
     app.register_blueprint(bp)
 
 
@@ -103,8 +106,8 @@ def list_vault_clients() -> flask_validation.JsonResponse:
 
 # Authenticate a vault client by client_id and client_secret
 @bp.post("/authenticate")
-# Client authentication not required (since API clients would need to use this
-# route to authenticate)
+# Client authentication not required (since API clients would need to
+# use this route to authenticate)
 def authenticate_vault_client() -> flask_validation.JsonResponse:
     """Authenticate a vault client by client_id and client_secret.
 
