@@ -166,10 +166,6 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             override: If True, override any existing session.
         """
         auth_session = self._auth.get()
-        if not auth_session:
-            raise OAuth2SecurityError("Session not found")
-        if auth_session.is_expired():
-            raise OAuth2SecurityError("Session has expired")
         self._session = auth_session
         return self.session
 
