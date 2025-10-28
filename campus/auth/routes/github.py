@@ -18,7 +18,7 @@ tokens = token.Tokens()
 auth_sessions = session.AuthSessions(PROVIDER)
 vault = get_vault()[PROVIDER]
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
-oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme.from_config(
+oauth2 = webauth.oauth2.OAuth2FlowScheme.from_config(
     provider=PROVIDER,
     config=integration.get_config(PROVIDER),
 )
