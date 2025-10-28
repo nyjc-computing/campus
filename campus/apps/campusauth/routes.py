@@ -40,10 +40,10 @@ import flask
 import werkzeug
 
 from campus.common import env, schema
-from campus.models import credentials, session
+from campus.models import session
+from campus.models.token import Tokens, TokenNew
 from campus.common.utils import url, secret
 import campus.common.validation.flask as flask_validation
-from campus.vault import credentials
 
 DEFAULT_TARGET_ENDPOINT = ".success"
 PROVIDER = "campus"
@@ -51,10 +51,9 @@ PROVIDER = "campus"
 # No url prefix because authentication endpoints are not only used by the API
 bp = flask.Blueprint('campusauth', __name__, url_prefix='/')
 
-# tokens = Tokens()
+tokens = Tokens()
 auth_sessions = session.AuthSessions(PROVIDER)
 login_sessions = session.LoginSessions()
-campus_credentials = credentials.get_provider(PROVIDER)
 
 DEFAULT_EXPIRY = 600  # in minutes
 
@@ -219,12 +218,14 @@ def token(
     # TODO: Validate client_id and client_secret
     # TODO: Validate redirect_uri
     # TODO: Issue token
-    token = campus_credentials.create_credentials(
-        user_id=session.user_id,
-        client_id=session.client_id,
-        scopes=session.scopes,
-        expiry_seconds=DEFAULT_EXPIRY * 60
-    )
+    if not session.user_id or not session.client_id:
+        return {"error": "Missing user_id or client_id in session"}, 400
+    token_data: TokenNew = {
+        "client_id": session.client_id,
+        "user_id": session.user_id,
+        "scopes": session.scopes,
+    }
+    token = tokens.new(token_data, expiry_seconds=DEFAULT_EXPIRY * 60)
     # OAuth2 flow complete, revoke auth code and clear session state
     auth_sessions.delete(session.id)
     return token.to_dict(), 200
