@@ -66,7 +66,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @flask_validation.unpack_request
 def authorize(
         target: schema.Url,
-        login_hint: Optional[schema.Email] = None
+        login_hint: schema.Email | None = None
 ) -> werkzeug.Response:
     """Prepares the Google OAuth authorization URL and redirects to it."""
     # Requests to this endpoint are internal and should be strictly

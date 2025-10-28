@@ -28,8 +28,6 @@ This flow is suitable for server-to-server authentication where no user
 interaction is required.
 """
 
-from typing import cast
-
 import flask
 import werkzeug
 

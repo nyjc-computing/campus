@@ -2,6 +2,7 @@
 
 Proxy and callback routes for GitHub OAuth2 authentication.
 """
+
 import flask
 import werkzeug
 
