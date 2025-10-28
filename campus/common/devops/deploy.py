@@ -63,15 +63,27 @@ def configure_for_development(app: flask.Flask) -> None:
 
     @app.get('/')
     def index():
-        return f"""
-        <h1>Campus Development Server</h1>
-        <p>Deployment mode: {env.DEPLOY}</p>
-        <p>Hostname: {env.HOSTNAME}</p>
-        <p>Port: {env.PORT}</p>
-        <p>
-            <a href="{url.full_url_for('campusauth.login')}">Click here to log in</a>
-        </p>
-        """
+        return flask.render_template_string(
+            """
+            <h1>Campus Development Server</h1>
+            <p>Deployment mode: {{deploy}}</p>
+            <p>Hostname: {{hostname}}</p>
+            <p>Port: {{port}}</p>
+            <ul>
+                {% for rule in url_map.iter_rules() %}
+                <li>{{ rule }}</li>
+                {% endfor %}
+            </ul>
+            <p>
+                <a href="{{login_url}}">Click here to log in</a>
+            </p>
+            """,
+            deploy=env.DEPLOY,
+            hostname=env.HOSTNAME,
+            port=env.PORT,
+            url_map=app.url_map,
+            login_url=url.full_url_for('auth.test_login')
+        )
 
 
 def configure_for_deployment(app: flask.Flask) -> None:
