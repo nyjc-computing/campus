@@ -1,6 +1,8 @@
 """campus.models.webauth.oauth2.authorization_code
 
 OAuth2 Authorization Code flow schemas and models.
+
+Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.1
 """
 
 __all__ = ["OAuth2AuthorizationCodeFlowScheme"]
@@ -27,8 +29,8 @@ tokens = token.Tokens()
 
 
 class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
-    """Configures OAuth2 Authorization Code flow for a specified provider
-    (google, github, discord, ...).
+    """Configures OAuth2 Authorization Code flow for a specified
+    provider (google, github, discord, ...).
 
     The attributes are typically provided from a config file.
     """

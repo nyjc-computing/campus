@@ -26,8 +26,8 @@ tokens = token.Tokens()
 
 
 class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
-    """Configures OAuth2 Client Credentials flow for a specified provider
-    (discord, github, etc.).
+    """Configures OAuth2 Client Credentials flow for a specified
+    provider (discord, github, etc.).
 
     The attributes are typically provided from a config file.
     """
