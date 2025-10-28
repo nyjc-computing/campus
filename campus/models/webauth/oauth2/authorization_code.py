@@ -62,11 +62,6 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         self.extra_params = extra_params or {}
         self.token_params = token_params or {}
         self.user_info_params = user_info_params or {}
-        self.headers = headers or {}
-        self.user_info_url = user_info_url
-        self.extra_params = extra_params or {}
-        self.token_params = token_params or {}
-        self.user_info_params = user_info_params or {}
         self._auth = session.AuthSessions(self.provider)
         self._session: session.AuthSessionRecord | None = None
 
