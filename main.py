@@ -46,7 +46,7 @@ def get_deployment_mode():
 def create_app(mode: str | None = None) -> flask.Flask:
     """Create the appropriate Campus app based on deployment mode.
 
-    This factory only initialises the apropriate app.
+    This factory only initialises the appropriate app.
     It does not configure for deployment or testing.
     """
     import importlib
