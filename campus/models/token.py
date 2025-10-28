@@ -137,6 +137,10 @@ class TokenRecord(BaseRecord):
         token_data = dict(data)  # Make a copy to avoid mutating input
         if isinstance(token_data["scopes"], str):
             token_data["scopes"] = token_data["scopes"].split(" ")
+        if "access_token" in token_data:
+            token_data["id"] = token_data.pop("access_token")
+        if "token_type" in token_data:
+            token_data.pop("token_type")  # Ignore token_type if present
         return super().from_dict(token_data)
 
     def is_expired(self, *, at_time: schema.DateTime | None = None) -> bool:
@@ -162,7 +166,9 @@ class TokenRecord(BaseRecord):
         but as a list in the dataclass.
         """
         data = super().to_dict()
+        data["token_type"] = "Bearer"
         data["scopes"] = " ".join(self.scopes)
+        data["access_token"] = data.pop("id")
         return data
 
     def validate_scope(self, scopes: str | list[str]) -> list[str]:
