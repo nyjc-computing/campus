@@ -45,7 +45,7 @@ class SecurityScheme(Protocol[S]):
         cls._scheme_map[cls.security_scheme] = cls
 
     @classmethod
-    def from_config(
+    def from_provider_config(
         cls: Type[S],
         provider: str,
         config: integration.config.IntegrationConfigSchema,
@@ -58,7 +58,7 @@ class SecurityScheme(Protocol[S]):
                 cfg.update(override_config)  # type: ignore[typeddict-item]
                 return (
                     cls._scheme_map[security_scheme]
-                    .from_config(provider, cfg)
+                    .from_provider_config(provider, cfg)
                 )
         raise ValueError(
             "No supported security scheme found in config."
