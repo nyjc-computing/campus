@@ -10,11 +10,11 @@ This module contains the main applications for Campus.
 - oauth: Campus OAuth2 implementation.
 """
 
-__all__ = ["api", "oauth"]
+__all__ = ["api"]
 
 from flask import Blueprint, Flask
 
-from . import api, campusauth, oauth
+from . import api
 
 
 def init_app(app: Blueprint | Flask) -> None:
@@ -31,8 +31,6 @@ def init_app(app: Blueprint | Flask) -> None:
     This ensures proper error handling and deployment configuration.
     """
     api.init_app(app)
-    campusauth.init_app(app)
-    oauth.init_app(app)
     # Use vault client to retrieve secret key since campus.apps deployment
     # does not have VAULTDB_URI env var
     if isinstance(app, Flask):
