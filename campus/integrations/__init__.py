@@ -1,4 +1,4 @@
-"""apps.common.models.integration
+"""campus.integrations
 
 This module provides classes for creating and managing Campus integrations,
 which are connections to third-party platforms and APIs.

@@ -1,4 +1,4 @@
-"""apps.common.models.integration.config.schema
+"""campus.integrations.base
 
 Schema to describe the JSON files describing third-party integration
 configurations.

@@ -1,4 +1,4 @@
-"""apps.integration.config
+"""campus.integrations.config
 
 Config for third-party integrations.
 """
