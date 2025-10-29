@@ -8,12 +8,10 @@ from flask import Blueprint, Flask
 import campus.yapper
 
 import campus.common.validation.flask as flask_validation
-from campus.apps.campusauth import authenticate_client
 from campus.common.errors import api_errors
 from campus.models import user
 
 bp = Blueprint('users', __name__, url_prefix='/users')
-bp.before_request(authenticate_client)
 
 users = user.User()
 yapper = campus.yapper.create()
