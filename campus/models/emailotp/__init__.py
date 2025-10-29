@@ -20,6 +20,8 @@ from campus.storage import (
     get_table,
 )
 
+from . import template
+
 TABLE = "emailotp"
 
 
