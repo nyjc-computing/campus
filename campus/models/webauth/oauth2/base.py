@@ -7,7 +7,7 @@ __all__ = ["OAuth2FlowScheme"]
 
 from typing import Any, Generic, Type, TypeVar
 
-from campus.common import integration
+import campus.integrations as integrations
 from campus.models.webauth import base
 
 # Generic type for OAuth2 flow schemes
@@ -19,8 +19,8 @@ FLOW_PREFERENCE = ("authorizationCode", "clientCredentials")
 class OAuth2FlowScheme(base.SecurityScheme, Generic[F]):
     """OAuth2 security scheme base class for OAuth2 flows."""
     _flow_map: dict[str, Type[F]] = {}
-    security_scheme: integration.base.Security = "oauth2"
-    flow: integration.config.OAuth2Flow
+    security_scheme: integrations.base.Security = "oauth2"
+    flow: integrations.config.OAuth2Flow
 
     def __init__(self, provider: str):
         super().__init__(provider)
