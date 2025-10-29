@@ -5,18 +5,12 @@ API routes for the emailotp resource.
 
 from flask import Blueprint, Flask
 
-import campus.common.validation.flask as flask_validation
-from campus.apps.campusauth import authenticate_client
 from campus.common.errors import api_errors
+from campus.common.validation import flask as flask_validation
 from campus.models import emailotp
 from campus.services.email import create_email_sender
 
-from campus.models.emailotp import template
-
 bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
-# All routes in this blueprint can be called by a client without token auth
-# but must be authenticated with a client id and secret
-bp.before_request(authenticate_client)
 
 otpauth = emailotp.EmailOTPAuth()
 
@@ -44,9 +38,9 @@ def request_otp() -> flask_validation.JsonResponse:
     email_sender = create_email_sender(EMAIL_PROVIDER)
     error = email_sender.send_email(
         recipient=email,
-        subject=template.subject("Campus", otp_code),
-        body=template.body("Campus", otp_code),
-        html_body=template.html_body("Campus", otp_code)
+        subject=emailotp.template.subject("Campus", otp_code),
+        body=emailotp.template.body("Campus", otp_code),
+        html_body=emailotp.template.html_body("Campus", otp_code)
     )
     if error:
         api_errors.raise_api_error(

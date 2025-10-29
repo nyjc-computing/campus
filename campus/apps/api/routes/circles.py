@@ -7,13 +7,11 @@ from flask import Blueprint, Flask
 
 import campus.yapper
 
-import campus.common.validation.flask as flask_validation
-from campus.apps.campusauth import authenticate_client
 from campus.common.errors import api_errors
+from campus.common.validation import flask as flask_validation
 from campus.models import circle
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')
-bp.before_request(authenticate_client)
 
 circles = circle.Circle()
 # users = user.User()

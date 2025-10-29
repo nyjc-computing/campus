@@ -14,7 +14,7 @@ __all__ = [
     "HttpSecurityError",
 ]
 
-from typing import Any, Literal, Unpack
+from typing import Any, Literal, Mapping
 
 from campus.common.errors import api_errors
 from campus.models.webauth.header import HttpAuthProperty, HttpHeaderDict
@@ -82,7 +82,7 @@ class HttpAuthenticationScheme(SecurityScheme):
                 return cls(provider, scheme="bearer")
         raise HttpSecurityError(f"Unsupported HTTP scheme: {auth.scheme}")
 
-    def get_auth(self, *, header: dict) -> HttpAuthProperty:
+    def get_auth(self, *, header: Mapping[str, str]) -> HttpAuthProperty:
         """Validate the HTTP header for authentication.
 
         Raises an API error if the header is invalid or missing.
