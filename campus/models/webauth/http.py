@@ -18,7 +18,7 @@ from typing import Any, Literal, Mapping
 
 from campus.common.errors import api_errors
 from campus.models.webauth.header import HttpAuthProperty, HttpHeaderDict
-from campus.common.integration.config import SecurityConfigSchema
+from campus.integrations.config import SecurityConfigSchema
 
 from .base import SecurityError, SecurityScheme
 

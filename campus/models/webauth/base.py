@@ -10,7 +10,7 @@ __all__ = [
 
 from typing import Protocol, Type, TypeVar
 
-from campus.common import integration
+import campus.integrations as integrations
 
 S = TypeVar("S", bound="SecurityScheme")
 
@@ -29,7 +29,7 @@ class SecurityScheme(Protocol[S]):
     """
     _scheme_map: dict[str, Type[S]] = {}
     provider: str
-    security_scheme: integration.config.Security
+    security_scheme: integrations.config.Security
 
     def __init__(self, provider: str):
         """Subclasses must implement an __init__() method that
@@ -48,7 +48,7 @@ class SecurityScheme(Protocol[S]):
     def from_provider_config(
         cls: Type[S],
         provider: str,
-        config: integration.config.IntegrationConfigSchema,
+        config: integrations.config.IntegrationConfigSchema,
         **override_config
     ) -> S:
         """Instantiate a security scheme from a JSON-like dictionary."""

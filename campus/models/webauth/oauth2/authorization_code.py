@@ -11,7 +11,8 @@ from typing import Any
 
 import requests
 
-from campus.common import integration, schema
+import campus.integrations as integrations
+from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
 from campus.models import session, token
@@ -34,7 +35,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     The attributes are typically provided from a config file.
     """
-    flow: integration.config.OAuth2Flow = "authorizationCode"
+    flow: integrations.config.OAuth2Flow = "authorizationCode"
     authorization_url: schema.Url
     token_url: schema.Url
     redirect_uri: schema.Url

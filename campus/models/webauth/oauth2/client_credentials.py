@@ -11,7 +11,8 @@ from typing import Any
 
 import requests
 
-from campus.common import integration, schema
+import campus.integrations as integrations
+from campus.common import schema
 from campus.common.errors import token_errors
 from campus.models import token
 
@@ -31,7 +32,7 @@ class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
 
     The attributes are typically provided from a config file.
     """
-    flow: integration.config.OAuth2Flow = "clientCredentials"
+    flow: integrations.config.OAuth2Flow = "clientCredentials"
     token_url: str
     headers: dict[str, str]
     scopes: list[str]

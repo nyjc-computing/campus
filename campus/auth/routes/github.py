@@ -7,7 +7,8 @@ import flask
 import werkzeug
 
 from campus.client.vault import get_vault
-from campus.common import integration, schema
+import campus.integrations as integrations
+from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.validation import flask as flask_validation
 from campus.models import session, token, webauth
@@ -21,7 +22,7 @@ vault = get_vault()[PROVIDER]
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 oauth2 = webauth.oauth2.OAuth2FlowScheme.from_config(
     provider=PROVIDER,
-    config=integration.get_config(PROVIDER),
+    config=integrations.get_config(PROVIDER),
 )
 
 
