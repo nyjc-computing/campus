@@ -12,14 +12,12 @@ from collections.abc import Mapping
 from typing import Any, NotRequired, TypedDict
 
 from campus.common.devops import Env
-from campus.common import devops
+from campus.common import devops, schema
 from campus.storage import get_collection
 
-from . import config, schema
+from . import base, config
 
-from .config import Security, IntegrationConfigSchema, SecurityConfigSchema, get_config
-
-Url = str
+from .config import get_config
 
 COLLECTION = "integrations"
 
@@ -73,9 +71,9 @@ class IntegrationConfig(TypedDict, total=False):
     """
     name: str  # lowercase, e.g. "google" | "discord" | "github"
     description: str
-    servers: Mapping[Env, Url]
-    api_doc: Url  # URL to OpenAPI spec or API documentation
-    security: Mapping[Security, SecurityConfigSchema]
+    servers: Mapping[Env, schema.Url]
+    api_doc: schema.Url  # URL to OpenAPI spec or API documentation
+    security: Mapping[config.Security, config.SecurityConfigSchema]
     capabilities: CommonCapabilities
     enabled: bool  # Whether the integration is enabled in Campus
 
@@ -87,9 +85,9 @@ class Integration:
             self,
             provider: str,
             description: str,
-            servers: Mapping[Env, Url],
-            api_doc: Url,
-            security: Mapping[Security, SecurityConfigSchema],
+            servers: Mapping[Env, schema.Url],
+            api_doc: schema.Url,
+            security: Mapping[config.Security, config.SecurityConfigSchema],
             capabilities: CommonCapabilities,
             enabled: bool | None = None
     ):
