@@ -121,7 +121,7 @@ def authenticate_vault_client() -> flask_validation.JsonResponse:
         on_error=api_errors.raise_api_error
     )
     client.authenticate_client(**payload)
-    return {"status": "success", "client_id": payload["client_id"]}, 200
+    return {"client_id": payload["client_id"]}, 200
 
 
 @bp.get("/<client_id>")
