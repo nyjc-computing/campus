@@ -19,7 +19,7 @@ FLOW_PREFERENCE = ("authorizationCode", "clientCredentials")
 class OAuth2FlowScheme(base.SecurityScheme, Generic[F]):
     """OAuth2 security scheme base class for OAuth2 flows."""
     _flow_map: dict[str, Type[F]] = {}
-    security_scheme: integration.schema.Security = "oauth2"
+    security_scheme: integration.base.Security = "oauth2"
     flow: integration.config.OAuth2Flow
 
     def __init__(self, provider: str):
