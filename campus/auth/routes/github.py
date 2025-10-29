@@ -8,7 +8,7 @@ import werkzeug
 
 from campus.client.vault import get_vault
 import campus.integrations as integrations
-import schema
+from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.validation import flask as flask_validation
 from campus.models import session, token, webauth

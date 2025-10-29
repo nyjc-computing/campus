@@ -12,7 +12,7 @@ from typing import Any
 import requests
 
 import campus.integrations as integrations
-import schema
+from campus.common import schema
 from campus.common.errors import token_errors
 from campus.models import token
 
