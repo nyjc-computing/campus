@@ -33,8 +33,6 @@ Apps and view functions sending the user to this endpoint must first establish
 a server-side session with a target.
 """
 
-from typing import Optional
-
 import flask
 import werkzeug
 

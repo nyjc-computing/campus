@@ -45,6 +45,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     token_params: dict[str, str]
     user_info_params: dict[str, str]
     scopes: list[str]
+    _session: session.AuthSessionRecord | None
 
     def __init__(
             self,
@@ -97,7 +98,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             raise ValueError("Session not initialized")
         return self._session
 
-    def get_user_info(self, access_token: str) -> dict:
+    def get_user_info(self, access_token: str) -> dict[str, Any]:
         """Fetch user info from the provider's user info endpoint."""
         if not self.user_info_url:
             return {}
@@ -239,7 +240,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
                 Used by Discord
             client_id, client_secret: Client ID and secret.
                 Used by Google, GitHub, etc.
-            force: If True, force refresh even if the token is not expired.
+            force: If True, force refresh even if the token is not
 
         auth or client_id/client_secret must be provided, but not both.
         """
