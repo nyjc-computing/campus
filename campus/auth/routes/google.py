@@ -141,6 +141,8 @@ def success_callback(
         raise auth_errors.InvalidScopeError(
             f"Missing required scopes: {', '.join(missing_scopes)}"
         )
+    # Store token
+    tokens.store(token)
     target = oauth2.auth_session.target
     oauth2.end_session()
     return flask.redirect(target or flask.request.host_url)

@@ -275,6 +275,11 @@ class Tokens:
             user_id=user_id,
             scopes=scopes,
         )
+        self.store(token)
+        return token
+
+    def store(self, token: TokenRecord) -> None:
+        """Store a new token in the database."""
         try:
             self.storage.insert_one(token.to_dict())
         except storage_errors.ConflictError:
@@ -283,7 +288,6 @@ class Tokens:
                 client_id=token.client_id,
                 user_id=token.user_id
             ) from None
-        return token
 
     def sweep(
             self,
