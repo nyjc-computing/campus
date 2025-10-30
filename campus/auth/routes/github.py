@@ -3,6 +3,8 @@
 Proxy and callback routes for GitHub OAuth2 authentication.
 """
 
+from typing import Literal
+
 import flask
 import werkzeug
 
@@ -33,7 +35,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 @bp.get('/authorize')
 @flask_validation.unpack_request
-def authorize(target: schema.Url) -> werkzeug.Response:
+def authorize(
+        target: schema.Url,
+        prompt: Literal["select_account"] | None = None
+) -> werkzeug.Response:
     """Redirect to GitHub OAuth authorization endpoint."""
     redirect_uri = flask.url_for('.callback', _external=True)
     oauth2.init_session(
@@ -42,7 +47,9 @@ def authorize(target: schema.Url) -> werkzeug.Response:
         scopes=oauth2.scopes,
         target=target
     )
-    authorization_url = oauth2.get_authorization_url()
+    authorization_url = oauth2.get_authorization_url(
+        **{"prompt": prompt} if prompt else {}
+    )
     return flask.redirect(authorization_url)
 
 
@@ -61,9 +68,7 @@ def success_callback(
         state: str,
         code: str,  # on success
         scope: str,  # on success
-        authuser: str,  # on success
-        hd: str,  # on success
-        prompt: str  # on success
+        prompt: str | None = None  # on success
 ) -> werkzeug.Response:
     """Handle a Github OAuth callback request."""
     oauth2.validate_callback(state)

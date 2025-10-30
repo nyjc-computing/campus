@@ -254,6 +254,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             client_id, client_secret: Client ID and secret.
                 Used by Google, GitHub, etc.
             force: If True, force refresh even if the token is not
+                expired.
 
         auth or client_id/client_secret must be provided, but not both.
         """

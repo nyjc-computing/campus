@@ -28,6 +28,8 @@ This flow is suitable for server-to-server authentication where no user
 interaction is required.
 """
 
+from typing import Literal
+
 import flask
 import werkzeug
 
@@ -57,7 +59,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 
 @bp.get("/authorize")
-def authorize(target: schema.Url) -> werkzeug.Response:
+def authorize(
+        target: schema.Url,
+        prompt: Literal["consent", "none"] | None = None
+) -> werkzeug.Response:
     """Prepares the Discord OAuth authorization URL and redirects to it."""
     redirect_uri = flask.url_for('.callback', _external=True)
     oauth2.init_session(
@@ -66,7 +71,9 @@ def authorize(target: schema.Url) -> werkzeug.Response:
         scopes=oauth2.scopes,
         target=target
     )
-    authorization_url = oauth2.get_authorization_url()
+    authorization_url = oauth2.get_authorization_url(
+        **{"prompt": prompt} if prompt else {}
+    )
     return flask.redirect(authorization_url)
 
 
@@ -88,9 +95,7 @@ def success_callback(
         state: str,
         code: str,  # on success
         scope: str,  # on success
-        authuser: str,  # on success
-        hd: str,  # on success
-        prompt: str  # on success
+        prompt: str | None  # on success
 ) -> werkzeug.Response:
     """Handle a Discord OAuth callback request."""
     oauth2.validate_callback(state)

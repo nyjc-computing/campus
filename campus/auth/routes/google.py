@@ -33,6 +33,8 @@ Apps and view functions sending the user to this endpoint must first establish
 a server-side session with a target.
 """
 
+from typing import Literal
+
 import flask
 import werkzeug
 
@@ -43,6 +45,7 @@ from campus.common.errors import auth_errors, token_errors
 from campus.common.validation import flask as flask_validation
 from campus.models import session, token, webauth
 
+PROMPT_OPTION = Literal["consent", "login", "none", "select_account"]
 PROVIDER = 'google'
 
 tokens = token.Tokens()
@@ -65,7 +68,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @flask_validation.unpack_request
 def authorize(
         target: schema.Url,
-        login_hint: schema.Email | None = None
+        login_hint: schema.Email | None = None,
+        prompt: PROMPT_OPTION | None = None,
 ) -> werkzeug.Response:
     """Prepares the Google OAuth authorization URL and redirects to it."""
     # Requests to this endpoint are internal and should be strictly
@@ -84,7 +88,9 @@ def authorize(
         scopes=oauth2.scopes,
         target=target
     )
-    authorization_url = oauth2.get_authorization_url()
+    authorization_url = oauth2.get_authorization_url(
+        **{"prompt": prompt} if prompt else {}
+    )
     return flask.redirect(authorization_url)
 
 
@@ -108,7 +114,7 @@ def success_callback(
         scope: str,  # on success
         authuser: str,  # on success
         hd: str,  # on success
-        prompt: str  # on success
+        prompt: str | None  # on success
 ) -> werkzeug.Response:
     """Handle a Google OAuth callback request."""
     oauth2.validate_callback(state)
