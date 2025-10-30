@@ -98,20 +98,10 @@ def callback() -> werkzeug.Response:
     """
     callback_payload = flask_validation.get_request_payload()
     if "error" in callback_payload:
-        return flask_validation.unpack_into(error_callback,
-                                            **callback_payload)
+        auth_errors.raise_from_json(callback_payload)
     else:
         return flask_validation.unpack_into(success_callback,
                                             **callback_payload)
-
-
-def error_callback(
-        error: str,
-        error_description: str,
-        error_uri: str
-) -> werkzeug.Response:
-    """Handle a Google OAuth error callback request."""
-    auth_errors.raise_from_error(error, error_description)  # type: ignore
 
 
 def success_callback(
