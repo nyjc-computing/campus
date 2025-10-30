@@ -5,7 +5,10 @@ which are connections to third-party platforms and APIs.
 """
 
 __all__ = [
+    "discord",
     "get_config",
+    "github",
+    "google",
 ]
 
 from collections.abc import Mapping
@@ -15,7 +18,7 @@ from campus.common.devops import Env
 from campus.common import devops, schema
 from campus.storage import get_collection
 
-from . import base, config
+from . import config, discord, github, google
 
 from .config import get_config
 
