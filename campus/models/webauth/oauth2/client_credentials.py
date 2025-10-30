@@ -7,18 +7,13 @@ Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4
 
 __all__ = ["OAuth2ClientCredentialsFlowScheme"]
 
-from typing import Any
-
 import requests
 
-import campus.integrations as integrations
 from campus.common import schema
 from campus.common.errors import token_errors
 from campus.models import token
 
-from .base import (
-    OAuth2FlowScheme,
-)
+from . import base
 
 # Default timeout for requests in seconds
 TIMEOUT = 10
@@ -26,13 +21,13 @@ TIMEOUT = 10
 tokens = token.Tokens()
 
 
-class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
+class OAuth2ClientCredentialsFlowScheme(base.OAuth2FlowScheme):
     """Configures OAuth2 Client Credentials flow for a specified
     provider (discord, github, etc.).
 
     The attributes are typically provided from a config file.
     """
-    flow: integrations.config.OAuth2Flow = "clientCredentials"
+    flow = "clientCredentials"
     token_url: str
     headers: dict[str, str]
     scopes: list[str]
@@ -48,22 +43,6 @@ class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
         self.token_url = token_url
         self.scopes = scopes
         self.headers = headers or {}
-
-    @classmethod
-    def from_config(
-            cls: type["OAuth2ClientCredentialsFlowScheme"],
-            provider: str,
-            config: dict[str, Any],
-    ) -> "OAuth2ClientCredentialsFlowScheme":
-        """Create an OAuth2ClientCredentialsFlowScheme instance from
-        config.
-        """
-        return cls(
-            provider=provider,
-            token_url=config["token_url"],
-            scopes=config["scopes"],
-            headers=config.get("headers", {})
-        )
 
     def get_token(
             self,

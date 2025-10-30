@@ -11,15 +11,12 @@ from typing import Any
 
 import requests
 
-import campus.integrations as integrations
 from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
 from campus.models import session, token
 
-from .base import (
-    OAuth2FlowScheme,
-)
+from . import base
 
 # Default expiry time for OAuth2 sessions in minutes
 OAUTH_EXPIRY_MINUTES = 10
@@ -29,13 +26,13 @@ TIMEOUT = 10
 tokens = token.Tokens()
 
 
-class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
+class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
     """Configures OAuth2 Authorization Code flow for a specified
     provider (google, github, discord, ...).
 
     The attributes are typically provided from a config file.
     """
-    flow: integrations.config.OAuth2Flow = "authorizationCode"
+    flow = "authorizationCode"
     authorization_url: schema.Url
     token_url: schema.Url
     redirect_uri: schema.Url
@@ -45,6 +42,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     token_params: dict[str, str]
     user_info_params: dict[str, str]
     scopes: list[str]
+    _session: session.AuthSessionRecord | None
 
     def __init__(
             self,
@@ -70,34 +68,13 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         self._auth = session.AuthSessions(self.provider)
         self._session: session.AuthSessionRecord | None = None
 
-    @classmethod
-    def from_config(
-            cls: type["OAuth2AuthorizationCodeFlowScheme"],
-            provider: str,
-            config: dict[str, Any]
-    ) -> "OAuth2AuthorizationCodeFlowScheme":
-        """Create an OAuth2AuthorizationCodeFlowScheme instance from
-        config.
-        """
-        return cls(
-            provider=provider,
-            authorization_url=config["authorization_url"],
-            token_url=config["token_url"],
-            scopes=config["scopes"],
-            headers=config.get("headers", {}),
-            user_info_url=config["user_info_url"],
-            extra_params=config.get("extra_params", {}),
-            token_params=config.get("token_params", {}),
-            user_info_params=config.get("user_info_params", {}),
-        )
-
     @property
     def auth_session(self) -> session.AuthSessionRecord:
         if self._session is None:
             raise ValueError("Session not initialized")
         return self._session
 
-    def get_user_info(self, access_token: str) -> dict:
+    def get_user_info(self, access_token: str) -> dict[str, Any]:
         """Fetch user info from the provider's user info endpoint."""
         if not self.user_info_url:
             return {}
@@ -116,6 +93,17 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             auth_errors.raise_from_json(userinfo_payload)
         return userinfo_payload
 
+    def validate_callback(self, state: str) -> None:
+        error_description = None
+        if not self._session:
+            error_description = "No active OAuth session found."
+        elif self._session.is_expired():
+            error_description = "OAuth session has expired."
+        elif self._session.id != state:
+            error_description = "Session state mismatch."
+        if error_description:
+            raise auth_errors.InvalidRequestError(error_description)
+
     def init_session(
             self,
             *,
@@ -124,7 +112,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             client_id: str,
             scopes: list[str],
             target: schema.Url | None = None,
-    ) -> session.AuthSessionRecord:
+    ) -> None:
         """Create a new OAuth2 Authorization Code flow session.
         Revokes any existing session for the user.
         Note that this sets session_id in client-side cookie.
@@ -139,9 +127,17 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             scopes=scopes,
             target=target,
         )
-        return self.auth_session
 
-    def retrieve_session(self) -> session.AuthSessionRecord:
+    def end_session(self) -> None:
+        """End the current OAuth2 Authorization Code flow session."""
+        if not self._session:
+            raise auth_errors.InvalidRequestError(
+                "No active OAuth session found."
+            )
+        self._auth.delete(self.auth_session.id)
+        self._session = None
+
+    def load_session(self) -> None:
         """Retrieve an existing OAuth2 Authorization Code flow session.
 
         Args:
@@ -150,22 +146,22 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         """
         auth_session = self._auth.get()
         self._session = auth_session
-        return self.auth_session
 
     def exchange_code_for_token(
             self,
             code: str,
+            client_id: schema.CampusID,
             client_secret: str,
-            redirect_uri: schema.Url,
     ) -> token.TokenRecord:
         """Exchange authorization code for access token."""
         params = {
             "grant_type": "authorization_code",
-            "redirect_uri": redirect_uri,
+            "redirect_uri": self.auth_session.redirect_uri,
             "client_id": self.auth_session.client_id,
             "code": code,
             "client_secret": client_secret,
         }
+        request_time = schema.DateTime.utcnow()
         try:
             # TODO: retry logic for transient errors
             resp = requests.post(
@@ -180,32 +176,34 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             ) from None
         token_payload = resp.json()
         if "error" in token_payload:
-            token_errors.raise_from_error(
-                token_payload["error"],
-                token_payload.get("error_description"),
-                token_payload.get("error_uri")
-            )
-        return token.TokenRecord.from_dict(token_payload)
+            token_errors.raise_from_json(token_payload)
+        user_info = self.get_user_info(token_payload["access_token"])
+        return token.TokenRecord(
+            id=token_payload["access_token"],
+            created_at=request_time,
+            expiry_seconds=token_payload["expires_in"],
+            client_id=client_id,
+            user_id=user_info["email"],
+            refresh_token=token_payload["refresh_token"],
+            scopes=token_payload["scope"].split(" "),
+        )
 
-    def get_authorization_url(
-            self,
-            redirect_uri: schema.Url,
-            **additional_params: str
-    ) -> schema.Url:
-        """Return the authorization URL for redirect, with provider-specific
-        params.
+    def get_authorization_url(self, **add_params: str) -> schema.Url:
+        """Return the authorization URL for redirect, with
+        provider-specific params.
 
-        Subclasses should extend this method to implement provider-specific
-        logic, such as custom headers or additional parameters.
+        Subclasses should extend this method to implement
+        provider-specific logic, such as custom headers or additional
+        parameters.
         """
         params = {
             "client_id": self.auth_session.client_id,
-            "redirect_uri": redirect_uri,
+            "redirect_uri": self.auth_session.redirect_uri,
             "response_type": "code",
             "scope": " ".join(self.scopes),
             "state": self.auth_session.id,
             **self.extra_params,
-            **additional_params
+            **add_params
         }
         authorization_url = url.create_url(
             hostname=self.authorization_url,
@@ -231,7 +229,8 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
                 Used by Discord
             client_id, client_secret: Client ID and secret.
                 Used by Google, GitHub, etc.
-            force: If True, force refresh even if the token is not expired.
+            force: If True, force refresh even if the token is not
+                expired.
 
         auth or client_id/client_secret must be provided, but not both.
         """

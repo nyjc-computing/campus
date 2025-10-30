@@ -1,13 +1,18 @@
-"""apps.common.models.integration.config.schema
+"""campus.integrations.base
 
 Schema to describe the JSON files describing third-party integration
 configurations.
 """
 
-from typing import Literal, NotRequired, TypedDict
+from abc import ABC, abstractmethod
+import contextlib
+from typing import Iterator, Literal, Self
 
+import werkzeug
+
+from campus.client.vault import get_vault
 from campus.common import schema
-from campus.common.devops import Env
+from campus.models import token, webauth
 
 HttpScheme = Literal["basic", "bearer"]
 OAuth2Flow = Literal[
@@ -23,42 +28,59 @@ Security = Literal[
     "openIdConnect"
 ]
 
-
-class SecurityConfigSchema(TypedDict):
-    """Schema for security configuration."""
-    security_scheme: Security
+tokens = token.Tokens()
 
 
-class OAuth2FlowConfigSchema(SecurityConfigSchema):
-    """Schema for OAuth2 flow configuration."""
-    flow: OAuth2Flow
+class Provider(ABC):
+    """Base provider class for OAuth2 integrations.
 
-
-class OAuth2AuthorizationCodeConfigSchema(OAuth2FlowConfigSchema):
-    """Schema for OAuth2 security configuration."""
-    scopes: list[str]
+    This class encapsulates the metadata and core OAuth2 operations
+    for a third-party authentication provider.
+    """
+    provider: str
+    title: str
+    description: str
+    version: str
+    openapi_version: str
     authorization_url: schema.Url
     token_url: schema.Url
-    headers: NotRequired[dict[str, str]]
-    user_info_url: schema.Url
-    extra_params: NotRequired[dict[str, str]]
-    token_params: NotRequired[dict[str, str]]
-    user_info_params: NotRequired[dict[str, str]]
+    _headers: dict[str, str]
+    _token: token.TokenRecord | None = None
+    _CLIENT_ID: str
+    _CLIENT_SECRET: str
+
+    def __init__(self) -> None:
+        vault = get_vault()[self.provider]
+        self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
+        self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
 
 
-class OAuth2ClientCredentialsConfigSchema(OAuth2FlowConfigSchema):
-    """Schema for OAuth2 Client Credentials configuration."""
-    scopes: list[str]
-    token_url: schema.Url
-    headers: NotRequired[dict[str, str]]
+    def with_token(self, token: token.TokenRecord) -> Self:
+        """A chainable method for passing a token to the instance."""
+        self._token = token
+        return self
 
+    def release_token(self) -> token.TokenRecord | None:
+        """Release the token held by the provider, if any."""
+        self._token = None
 
-class IntegrationConfigSchema(TypedDict):
-    """Schema for integration configuration."""
-    provider: str
-    description: str
-    servers: dict[Env, schema.Url]
-    redirect_uri: str
-    api_doc: schema.Url
-    discovery_url: schema.Url
-    security: dict[Security, SecurityConfigSchema]
+    @abstractmethod
+    def redirect_for_authorization(
+            self,
+            target: schema.Url,
+    ) -> werkzeug.Response:
+        """Return a 302 Redirect response to the provider's
+        authorization URL.
+        """
+
+    @contextlib.contextmanager
+    def authorize_for_user(
+            self: Self,
+            user_id: schema.UserID
+    ) -> Iterator[Self]:
+        """Context manager to authorize a user API use."""
+        token = tokens.get_by_client_user(self._CLIENT_ID, user_id)
+        try:
+            yield self.with_token(token)
+        finally:
+            self.release_token()

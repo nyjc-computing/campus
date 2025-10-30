@@ -19,6 +19,7 @@ from typing import Any, Literal, TypedDict, overload
 from campus.common import devops, schema
 from campus.common.errors import api_errors
 from campus.common.utils import secret, utc_time
+from campus.models import base
 from campus.models.base import BaseRecord, BaseRecordDict
 from campus.storage import (
     errors as storage_errors,
@@ -104,7 +105,7 @@ class SanitizedTokenRecord:
 
 
 @dataclass(eq=False, kw_only=True)
-class TokenRecord(BaseRecord):
+class TokenRecord(base.BaseRecord):
     """Dataclass representation of a token record."""
     # access_token is stored in id
     id: str = field(default_factory=secret.generate_access_code)
@@ -274,6 +275,11 @@ class Tokens:
             user_id=user_id,
             scopes=scopes,
         )
+        self.store(token)
+        return token
+
+    def store(self, token: TokenRecord) -> None:
+        """Store a new token in the database."""
         try:
             self.storage.insert_one(token.to_dict())
         except storage_errors.ConflictError:
@@ -282,7 +288,6 @@ class Tokens:
                 client_id=token.client_id,
                 user_id=token.user_id
             ) from None
-        return token
 
     def sweep(
             self,

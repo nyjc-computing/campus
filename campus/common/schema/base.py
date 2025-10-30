@@ -5,12 +5,10 @@ Base schema definitions, enums, and constants for Campus.
 
 from typing import Literal
 
-ResponseStatus = Literal["ok", "error"]
+from . import openapi
 
-# Common type aliases
-Email = str
-Url = str
+ResponseStatus = Literal["ok", "error"]
 
 # Campus types
 CampusID = str
-UserID = str
+UserID = openapi.Email
