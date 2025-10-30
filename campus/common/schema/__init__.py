@@ -27,18 +27,12 @@ from .openapi import (
     Array,
     Boolean,
     DateTime,
+    Email,
     Integer,
     Number,
     Object,
     String,
-)
-
-
-from .base import (
-    CampusID,
-    Email,
     Url,
-    UserID,
 )
 
 CAMPUS_KEY = "id"

@@ -11,6 +11,7 @@ See: https://swagger.io/specification/v3/#data-types
 """
 
 from typing import Any, Self, Type
+from urllib import parse
 
 from campus.common.utils import utc_time
 
@@ -149,6 +150,79 @@ class DateTime(String):
     def second(self) -> int:
         """Passthrough to datetime.second"""
         return self.to_datetime().second
+
+
+class Email(String):
+    """Emulates Python str behavior for Emails."""
+
+    def __new__(cls, value: str):
+        return super().__new__(cls, str(value))
+
+    def __repr__(self) -> str:
+        return f"Email({str(self)})"
+
+    def __str__(self) -> str:
+        return str(self)
+
+    @property
+    def user(self) -> str:
+        """Get the local part of the email (before the @)."""
+        return str(self).split("@")[0]
+
+    @property
+    def domain(self) -> str:
+        """Get the domain part of the email (after the @)."""
+        return str(self).split("@")[1]
+
+
+class Url(String):
+    """Emulates Python str behavior for URLs."""
+
+    def __new__(cls, value: str):
+        return super().__new__(cls, str(value))
+
+    def __repr__(self) -> str:
+        return f"Url({str(self)})"
+
+    def __str__(self) -> str:
+        return str(self)
+
+    @property
+    def scheme(self) -> str:
+        """Get the URL scheme (e.g., "http", "https")."""
+        return parse.urlparse(self).scheme
+
+    @property
+    def netloc(self) -> str:
+        """Get the URL network location (e.g., "example.com:8080")."""
+        return parse.urlparse(self).netloc
+
+    @property
+    def path(self) -> str:
+        """Get the URL path (e.g., "/api/v1/resource")."""
+        return parse.urlparse(self).path
+
+    @property
+    def query(self) -> str:
+        """Get the URL query string (e.g., "key=value&foo=bar")."""
+        return parse.urlparse(self).query
+
+    @property
+    def fragment(self) -> str:
+        """Get the URL fragment (e.g., "section1")."""
+        return parse.urlparse(self).fragment
+
+    def get_query_params(self) -> dict[str, str]:
+        """Get the URL query parameters as a dictionary."""
+        return dict(parse.parse_qsl(self.query))
+    
+    @classmethod
+    def unparse(
+        cls: Type[Self],
+        parts: tuple[str, str, str, str, str, str]
+    ) -> Self:
+        """Unparse the URL components into a URL string."""
+        return cls(parse.urlunparse(parts))
 
 
 class Array(list):
