@@ -116,6 +116,17 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             auth_errors.raise_from_json(userinfo_payload)
         return userinfo_payload
 
+    def validate_callback(self, state: str) -> None:
+        error_description = None
+        if not self._session:
+            error_description = "No active OAuth session found."
+        elif self._session.is_expired():
+            error_description = "OAuth session has expired."
+        elif self._session.id != state:
+            error_description = "Session state mismatch."
+        if error_description:
+            raise auth_errors.InvalidRequestError(error_description)
+
     def init_session(
             self,
             *,
@@ -124,7 +135,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             client_id: str,
             scopes: list[str],
             target: schema.Url | None = None,
-    ) -> session.AuthSessionRecord:
+    ) -> None:
         """Create a new OAuth2 Authorization Code flow session.
         Revokes any existing session for the user.
         Note that this sets session_id in client-side cookie.
@@ -139,9 +150,17 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             scopes=scopes,
             target=target,
         )
-        return self.auth_session
 
-    def retrieve_session(self) -> session.AuthSessionRecord:
+    def end_session(self) -> None:
+        """End the current OAuth2 Authorization Code flow session."""
+        if not self._session:
+            raise auth_errors.InvalidRequestError(
+                "No active OAuth session found."
+            )
+        self._auth.delete(self.auth_session.id)
+        self._session = None
+
+    def load_session(self) -> None:
         """Retrieve an existing OAuth2 Authorization Code flow session.
 
         Args:
@@ -150,7 +169,6 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         """
         auth_session = self._auth.get()
         self._session = auth_session
-        return self.auth_session
 
     def exchange_code_for_token(
             self,

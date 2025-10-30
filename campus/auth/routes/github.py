@@ -36,7 +36,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 def authorize(target: schema.Url) -> werkzeug.Response:
     """Redirect to GitHub OAuth authorization endpoint."""
     redirect_uri = flask.url_for('.callback', _external=True)
-    auth_session = oauth2.init_session(
+    oauth2.init_session(
         redirect_uri=redirect_uri,
         client_id=vault["CLIENT_ID"].get()['value'],
         scopes=oauth2.scopes,
@@ -66,19 +66,7 @@ def success_callback(
         prompt: str  # on success
 ) -> werkzeug.Response:
     """Handle a Github OAuth callback request."""
-    auth_session = oauth2.retrieve_session()
-    error_description = None
-    if not auth_session:
-        error_description = "No active OAuth session found."
-    elif auth_session.is_expired():
-        error_description = "OAuth session has expired."
-    elif auth_session.id != state:
-        error_description = "Session state mismatch."
-    elif auth_session.redirect_uri is None:
-        error_description = "No redirect URI in auth session."
-    if error_description:
-        raise auth_errors.InvalidRequestError(error_description)
-    assert auth_session.redirect_uri
+    oauth2.validate_callback(state)
     client_secret = vault["CLIENT_SECRET"].get()["value"]
 
     # Retrieve access token from GitHub
@@ -109,7 +97,6 @@ def success_callback(
         raise auth_errors.InvalidScopeError(
             f"Missing required scopes: {', '.join(missing_scopes)}"
         )
-
-    auth_sessions.delete()
-    return flask.redirect(oauth2.auth_session.target
-                          or flask.request.host_url)
+    target = oauth2.auth_session.target
+    oauth2.end_session()
+    return flask.redirect(target or flask.request.host_url)
