@@ -5,9 +5,9 @@ OAuth2 security scheme base configs and models.
 
 __all__ = ["OAuth2FlowScheme"]
 
-from typing import Any, Generic, Type, TypeVar
+from typing import Generic, Type, TypeVar
 
-from campus.models.webauth import base
+from .. import base
 
 # Generic type for OAuth2 flow schemes
 F = TypeVar('F', bound='OAuth2FlowScheme')

@@ -64,8 +64,8 @@ def authenticate_client_from_request(
     req_header = dict(request.headers)
     auth = (
         webauth.http.HttpAuthenticationScheme
-        .from_header(provider="campus", header=req_header)
-        .get_auth(header=req_header)
+        .from_header(provider="campus", http_header=req_header)
+        .get_auth(http_header=req_header)
     )
     match auth.scheme:
         case "basic":

@@ -16,9 +16,7 @@ from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
 from campus.models import session, token
 
-from .base import (
-    OAuth2FlowScheme,
-)
+from . import base
 
 # Default expiry time for OAuth2 sessions in minutes
 OAUTH_EXPIRY_MINUTES = 10
@@ -28,7 +26,7 @@ TIMEOUT = 10
 tokens = token.Tokens()
 
 
-class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
+class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
     """Configures OAuth2 Authorization Code flow for a specified
     provider (google, github, discord, ...).
 

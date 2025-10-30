@@ -7,17 +7,13 @@ Reference: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4
 
 __all__ = ["OAuth2ClientCredentialsFlowScheme"]
 
-from typing import Any
-
 import requests
 
 from campus.common import schema
 from campus.common.errors import token_errors
 from campus.models import token
 
-from .base import (
-    OAuth2FlowScheme,
-)
+from . import base
 
 # Default timeout for requests in seconds
 TIMEOUT = 10
@@ -25,7 +21,7 @@ TIMEOUT = 10
 tokens = token.Tokens()
 
 
-class OAuth2ClientCredentialsFlowScheme(OAuth2FlowScheme):
+class OAuth2ClientCredentialsFlowScheme(base.OAuth2FlowScheme):
     """Configures OAuth2 Client Credentials flow for a specified
     provider (discord, github, etc.).
 

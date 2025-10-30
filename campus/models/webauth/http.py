@@ -13,21 +13,18 @@ __all__ = [
     "HttpSecurityError",
 ]
 
-from typing import Any, Literal, Mapping
+from typing import Literal, Mapping
 
-from campus.common.errors import api_errors
-from campus.models.webauth.header import HttpAuthProperty, HttpHeaderDict
-
-from .base import SecurityError, SecurityScheme
+from . import base, header
 
 HttpScheme = Literal["basic", "bearer"]
 
 
-class HttpSecurityError(SecurityError):
+class HttpSecurityError(base.SecurityError):
     """HTTP authentication error."""
 
 
-class HttpAuthenticationScheme(SecurityScheme):
+class HttpAuthenticationScheme(base.SecurityScheme):
     """HTTP authentication for Basic and Bearer schemes.
 
     This class provides methods to:
@@ -50,10 +47,10 @@ class HttpAuthenticationScheme(SecurityScheme):
             cls,
             *,
             provider: str,
-            header: dict
+            http_header: dict
     ) -> "HttpAuthenticationScheme":
         """Create an HTTP authentication scheme from an HTTP header."""
-        auth = HttpHeaderDict(header).get_auth()
+        auth = header.HttpHeaderDict(http_header).get_auth()
         if auth is None:
             api_errors.raise_api_error(401)
         match auth.scheme:
@@ -63,16 +60,20 @@ class HttpAuthenticationScheme(SecurityScheme):
                 return cls(provider, scheme="bearer")
         raise HttpSecurityError(f"Unsupported HTTP scheme: {auth.scheme}")
 
-    def get_auth(self, *, header: Mapping[str, str]) -> HttpAuthProperty:
+    def get_auth(
+            self,
+            *,
+            http_header: Mapping[str, str]
+    ) -> header.HttpAuthProperty:
         """Validate the HTTP header for authentication.
 
         Raises an API error if the header is invalid or missing.
 
         Returns:
-            HttpHeaderDict: The HTTP header dictionary containing the
-            authentication information.
+            HttpAuthProperty: The authentication property extracted from
+            the header.
         """
-        auth = HttpHeaderDict(header).get_auth()
+        auth = header.HttpHeaderDict(http_header).get_auth()
         if auth is None:
             api_errors.raise_api_error(401)
         if auth.scheme != self.scheme:
