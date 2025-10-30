@@ -28,6 +28,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     routes.emailotp.init_app(bp)
     routes.session.init_app(bp)
     routes.users.init_app(bp)
+
     @bp.before_request
     def authorize_api_request():
         """Check request header for authorization credentials.
@@ -38,8 +39,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         req_header = dict(flask.request.headers)
         auth = (
             webauth.http.HttpAuthenticationScheme
-            .from_header(provider="campus", header=req_header)
-            .get_auth(header=req_header)
+            .from_header(provider="campus", http_header=req_header)
+            .get_auth(http_header=req_header)
         )
         match auth.scheme:
             case "basic":
