@@ -174,17 +174,18 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
     def exchange_code_for_token(
             self,
             code: str,
+            client_id: schema.CampusID,
             client_secret: str,
-            redirect_uri: schema.Url,
     ) -> token.TokenRecord:
         """Exchange authorization code for access token."""
         params = {
             "grant_type": "authorization_code",
-            "redirect_uri": redirect_uri,
+            "redirect_uri": self.auth_session.redirect_uri,
             "client_id": self.auth_session.client_id,
             "code": code,
             "client_secret": client_secret,
         }
+        request_time = schema.DateTime.utcnow()
         try:
             # TODO: retry logic for transient errors
             resp = requests.post(
@@ -199,6 +200,18 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             ) from None
         token_payload = resp.json()
         if "error" in token_payload:
+            token_errors.raise_from_json(token_payload)
+        user_info = self.get_user_info(token_payload["access_token"])
+        return token.TokenRecord(
+            id=token_payload["access_token"],
+            created_at=request_time,
+            expiry_seconds=token_payload["expires_in"],
+            client_id=client_id,
+            user_id=user_info["email"],
+            refresh_token=token_payload["refresh_token"],
+            scopes=token_payload["scope"].split(" "),
+        )
+
     def get_authorization_url(self, **add_params: str) -> schema.Url:
         """Return the authorization URL for redirect, with
         provider-specific params.

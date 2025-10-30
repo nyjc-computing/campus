@@ -94,31 +94,14 @@ def success_callback(
 ) -> werkzeug.Response:
     """Handle a Discord OAuth callback request."""
     oauth2.validate_callback(state)
+    client_id = vault["CLIENT_ID"].get()["value"]
     client_secret = vault["CLIENT_SECRET"].get()["value"]
-
     # Retrieve access token from Discord
     token = oauth2.exchange_code_for_token(
         code=code,
+        client_id=client_id,
         client_secret=client_secret,
-        redirect_uri=auth_session.redirect_uri
     )
-    # user_id is needed to store creds
-    user_info = oauth2.get_user_info(token.access_token)
-    if "error" in user_info:
-        raise token_errors.raise_from_error(
-            error=user_info["error"],
-            error_description=user_info.get(
-                "error_description", "Unknown error retrieving user info."
-            )
-        )
-    token = tokens.new(
-        client_id=vault["CLIENT_ID"].get()["value"],
-        user_id=user_info["id"],
-        scopes=token.scopes,
-        expiry_seconds=token.expires_in
-    )
-    assert token.access_token  # for static checkers
-
     # Verify requested scopes were granted
     if missing_scopes := token.validate_scope(auth_session.scopes):
         raise auth_errors.InvalidScopeError(
