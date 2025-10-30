@@ -11,7 +11,6 @@ from typing import Any
 
 import requests
 
-import campus.integrations as integrations
 from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
@@ -35,7 +34,7 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
 
     The attributes are typically provided from a config file.
     """
-    flow: integrations.config.OAuth2Flow = "authorizationCode"
+    flow = "authorizationCode"
     authorization_url: schema.Url
     token_url: schema.Url
     redirect_uri: schema.Url
@@ -70,27 +69,6 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
         self.user_info_params = user_info_params or {}
         self._auth = session.AuthSessions(self.provider)
         self._session: session.AuthSessionRecord | None = None
-
-    @classmethod
-    def from_config(
-            cls: type["OAuth2AuthorizationCodeFlowScheme"],
-            provider: str,
-            config: dict[str, Any]
-    ) -> "OAuth2AuthorizationCodeFlowScheme":
-        """Create an OAuth2AuthorizationCodeFlowScheme instance from
-        config.
-        """
-        return cls(
-            provider=provider,
-            authorization_url=config["authorization_url"],
-            token_url=config["token_url"],
-            scopes=config["scopes"],
-            headers=config.get("headers", {}),
-            user_info_url=config["user_info_url"],
-            extra_params=config.get("extra_params", {}),
-            token_params=config.get("token_params", {}),
-            user_info_params=config.get("user_info_params", {}),
-        )
 
     @property
     def auth_session(self) -> session.AuthSessionRecord:

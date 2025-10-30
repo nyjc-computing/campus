@@ -41,9 +41,9 @@ import werkzeug
 from campus.client.vault import get_vault
 import campus.integrations as integrations
 from campus.common import schema
-from campus.common.errors import auth_errors, token_errors
+from campus.common.errors import auth_errors
 from campus.common.validation import flask as flask_validation
-from campus.models import session, token, webauth
+from campus.models import session, token
 
 PROMPT_OPTION = Literal["consent", "login", "none", "select_account"]
 PROVIDER = 'google'
@@ -53,10 +53,6 @@ tokens = token.Tokens()
 auth_sessions = session.AuthSessions(PROVIDER)
 vault = get_vault()[PROVIDER]
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
-oauth2 = webauth.oauth2.OAuth2FlowScheme.from_config(
-    provider=PROVIDER,
-    config=integrations.get_config(PROVIDER),
-)
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:

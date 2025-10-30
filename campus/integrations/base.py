@@ -6,13 +6,12 @@ configurations.
 
 from abc import ABC, abstractmethod
 import contextlib
-from typing import Any, Iterator, Literal, NotRequired, Self, TypedDict
+from typing import Iterator, Literal, Self
 
-import flask
 import werkzeug
 
+from campus.client.vault import get_vault
 from campus.common import schema
-from campus.common.devops import Env
 from campus.models import token, webauth
 
 HttpScheme = Literal["basic", "bearer"]
@@ -32,46 +31,6 @@ Security = Literal[
 tokens = token.Tokens()
 
 
-class SecurityConfigSchema(TypedDict):
-    """Schema for security configuration."""
-    security_scheme: Security
-
-
-class OAuth2FlowConfigSchema(SecurityConfigSchema):
-    """Schema for OAuth2 flow configuration."""
-    flow: OAuth2Flow
-
-
-class OAuth2AuthorizationCodeConfigSchema(OAuth2FlowConfigSchema):
-    """Schema for OAuth2 security configuration."""
-    scopes: list[str]
-    authorization_url: schema.Url
-    token_url: schema.Url
-    headers: NotRequired[dict[str, str]]
-    user_info_url: schema.Url
-    extra_params: NotRequired[dict[str, str]]
-    token_params: NotRequired[dict[str, str]]
-    user_info_params: NotRequired[dict[str, str]]
-
-
-class OAuth2ClientCredentialsConfigSchema(OAuth2FlowConfigSchema):
-    """Schema for OAuth2 Client Credentials configuration."""
-    scopes: list[str]
-    token_url: schema.Url
-    headers: NotRequired[dict[str, str]]
-
-
-class IntegrationConfigSchema(TypedDict):
-    """Schema for integration configuration."""
-    provider: str
-    description: str
-    servers: dict[Env, schema.Url]
-    redirect_uri: str
-    api_doc: schema.Url
-    discovery_url: schema.Url
-    security: dict[Security, SecurityConfigSchema]
-
-
 class Provider(ABC):
     """Base provider class for OAuth2 integrations.
 
@@ -85,7 +44,6 @@ class Provider(ABC):
     openapi_version: str
     authorization_url: schema.Url
     token_url: schema.Url
-    security_scheme: webauth.SecurityScheme
     _headers: dict[str, str]
     _token: token.TokenRecord | None = None
     _CLIENT_ID: str

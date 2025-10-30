@@ -8,7 +8,6 @@ The HTTP authentication scheme comprises two types of authentication:
 """
 
 __all__ = [
-    "HttpAuthConfigSchema",
     "HttpAuthenticationScheme",
     "HttpScheme",
     "HttpSecurityError",
@@ -18,7 +17,6 @@ from typing import Any, Literal, Mapping
 
 from campus.common.errors import api_errors
 from campus.models.webauth.header import HttpAuthProperty, HttpHeaderDict
-from campus.integrations.config import SecurityConfigSchema
 
 from .base import SecurityError, SecurityScheme
 
@@ -27,11 +25,6 @@ HttpScheme = Literal["basic", "bearer"]
 
 class HttpSecurityError(SecurityError):
     """HTTP authentication error."""
-
-
-class HttpAuthConfigSchema(SecurityConfigSchema):
-    """HTTP authentication scheme schema."""
-    scheme: HttpScheme
 
 
 class HttpAuthenticationScheme(SecurityScheme):
@@ -51,18 +44,6 @@ class HttpAuthenticationScheme(SecurityScheme):
     ):
         super().__init__(provider)
         self.scheme = scheme  # type: ignore[assignment]
-
-    @classmethod
-    def from_config(
-            cls: type["HttpAuthenticationScheme"],
-            provider: str,
-            config: dict[str, Any]
-    ) -> "HttpAuthenticationScheme":
-        """Create an HTTP authentication scheme from a config dictionary."""
-        scheme = config["scheme"]
-        if scheme not in ["basic", "bearer"]:
-            raise HttpSecurityError(f"Unsupported HTTP scheme: {scheme}")
-        return cls(provider, scheme)
 
     @classmethod
     def from_header(
