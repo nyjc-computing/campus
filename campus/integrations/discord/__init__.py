@@ -10,7 +10,6 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.client.vault import get_vault
 from campus.common import env, schema
 from campus.common.errors import auth_errors
 from campus.integrations import base
@@ -21,7 +20,6 @@ REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
 SCOPE_SEP = " "
 
 tokens = token.Tokens()
-vault = get_vault()[PROVIDER]
 
 
 def get_provider() -> "DiscordProvider":
@@ -44,21 +42,11 @@ class DiscordProvider(base.Provider):
         "https://discord.com/api/users/@me"
     )
     _headers = {"Accept": "application/json"}
-    _oauth2: webauth.oauth2.OAuth2AuthorizationCodeFlowScheme | None
+    _oauth2: webauth.oauth2.OAuth2AuthorizationCodeFlowScheme
     _PROMPT_OPTIONS = Literal["consent", "none"] | None
 
     def __init__(self) -> None:
-        self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
-        self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
-        self._oauth2 = None
-
-    def redirect_for_authorization(
-            self,
-            target: schema.Url,
-            *,
-            prompt: _PROMPT_OPTIONS = None,
-    ) -> werkzeug.Response:
-        """Redirect to GitHub OAuth2 authorization endpoint."""
+        super().__init__()
         self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
             provider=PROVIDER,
             authorization_url=self.authorization_url,
@@ -67,6 +55,15 @@ class DiscordProvider(base.Provider):
             scopes=["identify", "email", "guilds"],
             headers=self._headers,
         )
+
+    def redirect_for_authorization(
+            self,
+            target: schema.Url,
+            *,
+            prompt: _PROMPT_OPTIONS = None,
+    ) -> werkzeug.Response:
+        """Redirect to GitHub OAuth2 authorization endpoint."""
+        
         self._oauth2.init_session(
             redirect_uri=REDIRECT_URI,
             client_id=self._CLIENT_ID,

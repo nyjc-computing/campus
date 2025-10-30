@@ -49,6 +49,12 @@ class Provider(ABC):
     _CLIENT_ID: str
     _CLIENT_SECRET: str
 
+    def __init__(self) -> None:
+        vault = get_vault()[self.provider]
+        self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
+        self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
+
+
     def with_token(self, token: token.TokenRecord) -> Self:
         """A chainable method for passing a token to the instance."""
         self._token = token

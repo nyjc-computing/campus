@@ -10,7 +10,6 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.client.vault import get_vault
 from campus.common import env, schema
 from campus.common.errors import auth_errors
 from campus.integrations import base
@@ -21,7 +20,6 @@ REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
 SCOPE_SEP = " "
 
 tokens = token.Tokens()
-vault = get_vault()[PROVIDER]
 
 
 def get_provider() -> "GitHubProvider":
@@ -43,12 +41,11 @@ class GitHubProvider(base.Provider):
     )
     user_info_url = schema.Url("https://api.github.com/user")
     _headers = {"Accept": "application/json"}
-    _oauth2: webauth.oauth2.OAuth2AuthorizationCodeFlowScheme | None
+    _oauth2: webauth.oauth2.OAuth2AuthorizationCodeFlowScheme
     _PROMPT_OPTIONS = Literal["select_account"] | None
 
     def __init__(self) -> None:
-        self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
-        self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
+        super().__init__()
         self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
             provider=PROVIDER,
             authorization_url=schema.Url(
