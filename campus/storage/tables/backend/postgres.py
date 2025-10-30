@@ -36,13 +36,13 @@ vault = get_vault()["storage"]
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
-    try:
-        return vault["POSTGRESDB_URI"].get()["value"]
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "
-            f"in 'storage' vault: {e}"
-        ) from e
+    if db_uri := env.POSTGRESDB_URI:
+        return db_uri
+    from campus.vault import access, vault
+    if not access.has_access(env.CLIENT_ID, "storage", access.READ):
+        raise access.PermissionError(f"{__name__} does not have {access.READ} permission for vault 'storage'")
+    db_uri = vault.get_vault("storage").get("POSTGRESODB_URI")
+    return db_uri
 
 
 class PostgreSQLTable(TableInterface):

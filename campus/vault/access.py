@@ -81,6 +81,10 @@ def init_db():
             cursor.execute(access_schema)
 
 
+class PermissionError(Exception):
+    """Error raised when user does not have the required permissions for an operation."""
+
+
 def convert_perms_to_access(permissions: int | list[str]) -> int:
     """Convert permissions given as an integer or list of strings
     to an access value integer.
