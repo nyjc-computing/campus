@@ -58,23 +58,21 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(bp)
 
 
+@bp.before_request
+def before_request() -> None:
+    flask.g.provider = integrations.discord.get_provider()
+
+
 @bp.get("/authorize")
 def authorize(
         target: schema.Url,
         prompt: Literal["consent", "none"] | None = None
 ) -> werkzeug.Response:
     """Prepares the Discord OAuth authorization URL and redirects to it."""
-    redirect_uri = flask.url_for('.callback', _external=True)
-    oauth2.init_session(
-        redirect_uri=redirect_uri,
-        client_id=vault["CLIENT_ID"].get()['value'],
-        scopes=oauth2.scopes,
-        target=target
+    return flask.g.provider.redirect_for_authorization(
+        target,
+        prompt=prompt
     )
-    authorization_url = oauth2.get_authorization_url(
-        **{"prompt": prompt} if prompt else {}
-    )
-    return flask.redirect(authorization_url)
 
 
 @bp.get("/callback")
@@ -93,28 +91,14 @@ def callback() -> werkzeug.Response:
 
 def success_callback(
         state: str,
-        code: str,  # on success
-        scope: str,  # on success
-        prompt: str | None  # on success
+        code: str,
+        scope: str,
+        **kwargs: str
 ) -> werkzeug.Response:
     """Handle a Discord OAuth callback request."""
-    oauth2.validate_callback(state)
-    client_id = vault["CLIENT_ID"].get()["value"]
-    client_secret = vault["CLIENT_SECRET"].get()["value"]
-    # Retrieve access token from Discord
-    token = oauth2.exchange_code_for_token(
-        code=code,
-        client_id=client_id,
-        client_secret=client_secret,
+    return flask.g.provider.handle_callback(
+        state,
+        code,
+        scope,
+        **kwargs
     )
-    # Verify requested scopes were granted
-    scopes = scope.split(" ")
-    if missing_scopes := token.validate_scope(scopes):
-        raise auth_errors.InvalidScopeError(
-            f"Missing scopes: {', '.join(missing_scopes)}"
-        )
-    # Store token
-    tokens.store(token)
-    target = oauth2.auth_session.target
-    oauth2.end_session()
-    return flask.redirect(target or flask.request.host_url)

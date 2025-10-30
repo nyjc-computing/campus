@@ -22,15 +22,16 @@ tokens = token.Tokens()
 auth_sessions = session.AuthSessions(PROVIDER)
 vault = get_vault()[PROVIDER]
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
-oauth2 = webauth.oauth2.OAuth2FlowScheme.from_config(
-    provider=PROVIDER,
-    config=integrations.get_config(PROVIDER),
-)
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise auth routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
+
+
+@bp.before_request
+def before_request() -> None:
+    flask.g.provider = integrations.github.get_provider()
 
 
 @bp.get('/authorize')
@@ -40,17 +41,7 @@ def authorize(
         prompt: Literal["select_account"] | None = None
 ) -> werkzeug.Response:
     """Redirect to GitHub OAuth authorization endpoint."""
-    redirect_uri = flask.url_for('.callback', _external=True)
-    oauth2.init_session(
-        redirect_uri=redirect_uri,
-        client_id=vault["CLIENT_ID"].get()['value'],
-        scopes=oauth2.scopes,
-        target=target
-    )
-    authorization_url = oauth2.get_authorization_url(
-        **{"prompt": prompt} if prompt else {}
-    )
-    return flask.redirect(authorization_url)
+    return flask.g.provider.redirect_for_authorization(target, prompt)
 
 
 @bp.get('/callback')
@@ -66,28 +57,14 @@ def callback() -> werkzeug.Response:
 
 def success_callback(
         state: str,
-        code: str,  # on success
-        scope: str,  # on success
-        prompt: str | None = None  # on success
+        code: str,
+        scope: str,
+        **kwargs: str
 ) -> werkzeug.Response:
     """Handle a Github OAuth callback request."""
-    oauth2.validate_callback(state)
-    client_id = vault["CLIENT_ID"].get()["value"]
-    client_secret = vault["CLIENT_SECRET"].get()["value"]
-    # Retrieve access token from GitHub
-    token = oauth2.exchange_code_for_token(
-        code=code,
-        client_id=client_id,
-        client_secret=client_secret,
+    return flask.g.provider.handle_callback(
+        state,
+        code,
+        scope,
+        **kwargs
     )
-    # Verify requested scopes were granted
-    scopes = scope.split(" ")
-    if missing_scopes := token.validate_scope(scopes):
-        raise auth_errors.InvalidScopeError(
-            f"Missing scopes: {', '.join(missing_scopes)}"
-        )
-    # Store token
-    tokens.store(token)
-    target = oauth2.auth_session.target
-    oauth2.end_session()
-    return flask.redirect(target or flask.request.host_url)

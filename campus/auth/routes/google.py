@@ -64,34 +64,27 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(bp)
 
 
+@bp.before_request
+def before_request() -> None:
+    flask.g.provider = integrations.google.get_provider()
+
+
 @bp.get('/authorize')
 @flask_validation.unpack_request
 def authorize(
         target: schema.Url,
+        hd: str | None = "nyjc.edu.sg",
         login_hint: schema.Email | None = None,
         prompt: PROMPT_OPTION | None = None,
 ) -> werkzeug.Response:
-    """Prepares the Google OAuth authorization URL and redirects to it."""
-    # Requests to this endpoint are internal and should be strictly
-    # validated.
-    # Transform codespace URL
-    # target = url.create_url(
-    #     protocol="https",
-    #     domain=env.HOSTNAME,
-    #     path=target
-    # )
-    redirect_uri = flask.url_for('.callback', _external=True)
-    oauth2.init_session(
-        redirect_uri=redirect_uri,
-        user_id=login_hint,
-        client_id=vault["CLIENT_ID"].get()["value"],
-        scopes=oauth2.scopes,
-        target=target
+    """Prepares the Google OAuth authorization URL and redirects to it.
+    """
+    return flask.g.provider.redirect_for_authorization(
+        target,
+        hd=hd,
+        login_hint=login_hint,
+        prompt=prompt
     )
-    authorization_url = oauth2.get_authorization_url(
-        **{"prompt": prompt} if prompt else {}
-    )
-    return flask.redirect(authorization_url)
 
 
 @bp.get('/callback')
@@ -110,30 +103,14 @@ def callback() -> werkzeug.Response:
 
 def success_callback(
         state: str,
-        code: str,  # on success
-        scope: str,  # on success
-        authuser: str,  # on success
-        hd: str,  # on success
-        prompt: str | None  # on success
+        code: str,
+        scope: str,
+        **kwargs: str
 ) -> werkzeug.Response:
     """Handle a Google OAuth callback request."""
-    oauth2.validate_callback(state)
-    client_id = vault["CLIENT_ID"].get()["value"]
-    client_secret = vault["CLIENT_SECRET"].get()["value"]
-    # Retrieve access token from Google
-    token = oauth2.exchange_code_for_token(
-        code=code,
-        client_id=client_id,
-        client_secret=client_secret,
+    return flask.g.provider.handle_callback(
+        state,
+        code,
+        scope,
+        **kwargs
     )
-    # Verify requested scopes were granted
-    scopes = scope.split(" ")
-    if missing_scopes := token.validate_scope(scopes):
-        raise auth_errors.InvalidScopeError(
-            f"Missing required scopes: {', '.join(missing_scopes)}"
-        )
-    # Store token
-    tokens.store(token)
-    target = oauth2.auth_session.target
-    oauth2.end_session()
-    return flask.redirect(target or flask.request.host_url)
