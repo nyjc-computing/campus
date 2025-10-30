@@ -180,32 +180,22 @@ class OAuth2AuthorizationCodeFlowScheme(OAuth2FlowScheme):
             ) from None
         token_payload = resp.json()
         if "error" in token_payload:
-            token_errors.raise_from_error(
-                token_payload["error"],
-                token_payload.get("error_description"),
-                token_payload.get("error_uri")
-            )
-        return token.TokenRecord.from_dict(token_payload)
+    def get_authorization_url(self, **add_params: str) -> schema.Url:
+        """Return the authorization URL for redirect, with
+        provider-specific params.
 
-    def get_authorization_url(
-            self,
-            redirect_uri: schema.Url,
-            **additional_params: str
-    ) -> schema.Url:
-        """Return the authorization URL for redirect, with provider-specific
-        params.
-
-        Subclasses should extend this method to implement provider-specific
-        logic, such as custom headers or additional parameters.
+        Subclasses should extend this method to implement
+        provider-specific logic, such as custom headers or additional
+        parameters.
         """
         params = {
             "client_id": self.auth_session.client_id,
-            "redirect_uri": redirect_uri,
+            "redirect_uri": self.auth_session.redirect_uri,
             "response_type": "code",
             "scope": " ".join(self.scopes),
             "state": self.auth_session.id,
             **self.extra_params,
-            **additional_params
+            **add_params
         }
         authorization_url = url.create_url(
             hostname=self.authorization_url,

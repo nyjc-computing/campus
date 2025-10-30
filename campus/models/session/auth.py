@@ -38,7 +38,7 @@ class AuthSessionRecord(BaseRecord):
     client_id: schema.CampusID
     user_id: schema.UserID | None = None
     # TODO: add ip_address
-    redirect_uri: schema.Url | None = None
+    redirect_uri: schema.Url
     scopes: list[str] = field(default_factory=list)
     authorization_code: Optional[str] = None
     state: Optional[str] = None
@@ -287,7 +287,7 @@ class AuthSessions:
         *,
         client_id: schema.CampusID,
         expiry_seconds: int = DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-        redirect_uri: schema.Url | None = None,
+        redirect_uri: schema.Url,
         user_id: schema.UserID | None = None,
         session_id: Optional[schema.CampusID] = None,
         created_at: Optional[schema.DateTime] = None,

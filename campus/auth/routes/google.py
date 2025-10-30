@@ -86,7 +86,7 @@ def authorize(
         scopes=oauth2.scopes,
         target=target
     )
-    authorization_url = oauth2.get_authorization_url(redirect_uri)
+    authorization_url = oauth2.get_authorization_url()
     return flask.redirect(authorization_url)
 
 
