@@ -121,7 +121,8 @@ def success_callback(
         client_secret=client_secret,
     )
     # Verify requested scopes were granted
-    if missing_scopes := token.validate_scope(oauth2.auth_session.scopes):
+    scopes = scope.split(" ")
+    if missing_scopes := token.validate_scope(scopes):
         raise auth_errors.InvalidScopeError(
             f"Missing required scopes: {', '.join(missing_scopes)}"
         )
