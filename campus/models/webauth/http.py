@@ -10,18 +10,14 @@ The HTTP authentication scheme comprises two types of authentication:
 __all__ = [
     "HttpAuthenticationScheme",
     "HttpScheme",
-    "HttpSecurityError",
 ]
 
 from typing import Literal, Mapping
 
+from campus.common.errors import api_errors, token_errors
 from . import base, header
 
 HttpScheme = Literal["basic", "bearer"]
-
-
-class HttpSecurityError(base.SecurityError):
-    """HTTP authentication error."""
 
 
 class HttpAuthenticationScheme(base.SecurityScheme):
@@ -58,7 +54,9 @@ class HttpAuthenticationScheme(base.SecurityScheme):
                 return cls(provider, scheme="basic")
             case "bearer":
                 return cls(provider, scheme="bearer")
-        raise HttpSecurityError(f"Unsupported HTTP scheme: {auth.scheme}")
+        raise token_errors.InvalidClientError(
+            f"Unsupported HTTP scheme: {auth.scheme}"
+        )
 
     def get_auth(
             self,

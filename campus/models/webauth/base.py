@@ -4,7 +4,6 @@ Base configs and models for authentication flows.
 """
 
 __all__ = [
-    "SecurityError",
     "SecurityScheme",
 ]
 
@@ -13,10 +12,6 @@ from typing import Protocol, Type, TypeVar
 S = TypeVar("S", bound="SecurityScheme")
 
 SECURITY_PREFERENCE = ("openIdConnect", "oauth2")
-
-
-class SecurityError(Exception):
-    """Base class for security-related errors."""
 
 
 class SecurityScheme(Protocol[S]):
