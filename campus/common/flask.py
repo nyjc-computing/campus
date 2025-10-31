@@ -13,9 +13,7 @@ from typing import (
     Generic,
     Mapping,
     NoReturn,
-    NotRequired,
     Protocol,
-    Required,
     Type,
     TypeVar
 )

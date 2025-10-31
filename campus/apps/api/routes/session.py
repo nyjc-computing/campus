@@ -7,7 +7,7 @@ These routes are used by clients to facilitate login sessions.
 from flask import Blueprint, Flask
 import flask
 
-from campus.common.validation import flask as flask_validation
+from campus.common import flask as campus_flask
 from campus.models import session
 
 bp = Blueprint("session", __name__, url_prefix="/session")
@@ -22,7 +22,7 @@ def init_app(app: Blueprint | Flask) -> None:
 
 
 @bp.get("/authorization_url")
-@flask_validation.unpack_request
+@campus_flask.unpack_request
 def authorization_url(
         client_id: str,
         redirect_uri: str | None = None,
