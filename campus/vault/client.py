@@ -139,7 +139,7 @@ def create_client(*, name: str, description: str) -> dict[str, Any]:
     }
 
 
-def get_client(client_id: str, sanitize=True) -> dict[str, Any]:
+def get_client(client_id: str) -> dict[str, Any]:
     """Retrieve a vault client by its ID.
 
     Args:
@@ -161,8 +161,6 @@ def get_client(client_id: str, sanitize=True) -> dict[str, Any]:
     if not client_record:
         raise api_errors.NotFoundError(
             message=f"Vault client '{client_id}' not found", client_id=client_id)
-    if sanitize:
-        del client_record["secret_hash"]
     return client_record
 
 
