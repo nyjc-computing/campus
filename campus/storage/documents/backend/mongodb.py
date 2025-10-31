@@ -30,7 +30,7 @@ from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
 from campus.client.vault import get_vault
-from campus.common import devops
+from campus.common import devops, env
 from campus.storage.documents.interface import CollectionInterface, PK
 from campus.storage.errors import (
     ConflictError,
@@ -51,12 +51,8 @@ class MongoCollectionError(StorageError):
 
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
-    try:
-        return vault["MONGODB_URI"].get()["value"]
-    except Exception as e:
-        raise MongoCollectionError(
-            f"Failed to retrieve MONGODB_URI from 'storage' vault: {e}"
-        ) from None
+    db_uri = env.getsecret("MONGODB_URI", "storage")
+    return db_uri
 
 
 def _get_mongodb_name() -> str:

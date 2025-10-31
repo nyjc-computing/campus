@@ -36,13 +36,8 @@ vault = get_vault()["storage"]
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
-    try:
-        return vault["POSTGRESDB_URI"].get()["value"]
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "
-            f"in 'storage' vault: {e}"
-        ) from e
+    db_uri = env.getsecret("POSTGRESDB_URI", "storage")
+    return db_uri
 
 
 class PostgreSQLTable(TableInterface):
