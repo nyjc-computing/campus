@@ -26,10 +26,10 @@ collection.delete_by_id("123")
 """
 
 from pymongo import MongoClient
+from pymongo.database import Database
 from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
-from campus.client.vault import get_vault
 from campus.common import devops, env
 from campus.storage.documents.interface import CollectionInterface, PK
 from campus.storage.errors import (
@@ -40,8 +40,6 @@ from campus.storage.errors import (
 )
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
-
-vault = get_vault()["storage"]
 
 
 class MongoCollectionError(StorageError):
@@ -58,7 +56,7 @@ def _get_mongodb_uri() -> str:
 def _get_mongodb_name() -> str:
     """Get the MongoDB database name from the vault using the core client API."""
     try:
-        return vault["MONGODB_NAME"].get()["value"]
+        return env.getsecret("MONGODB_NAME", "storage")
     except Exception as e:
         raise MongoCollectionError(
             f"Failed to retrieve MONGODB_NAME from 'storage' vault: {e}"
@@ -123,9 +121,9 @@ class MongoDBCollection(CollectionInterface):
         Connection is established lazily on first database operation.
         """
         super().__init__(name)
-        self._client = None
-        self._db = None
-        self._collection = None
+        self._client: MongoClient | None = None
+        self._db: Database | None = None
+        self._collection: Collection | None = None
 
     def _ensure_connection(self):
         """Ensure MongoDB connection is established.
@@ -141,12 +139,13 @@ class MongoDBCollection(CollectionInterface):
             mongodb_name = _get_mongodb_name()
             self._client = MongoClient(mongodb_uri)
             self._db = self._client[mongodb_name]
-            self._collection: Collection = self._db[self.name]
+            self._collection = self._db[self.name]
 
     @property
     def collection(self) -> Collection:
         """Get the MongoDB collection, establishing connection if needed."""
         self._ensure_connection()
+        assert self._collection is not None
         return self._collection
 
     def get_by_id(self, doc_id: str) -> dict:
@@ -175,7 +174,7 @@ class MongoDBCollection(CollectionInterface):
             for mongo_doc in cursor
         ]
 
-    def insert_one(self, record: dict) -> None:
+    def insert_one(self, record: dict) -> None:  # type: ignore
         """Insert a document into the collection."""
         mongo_doc = MongoRecord.from_record(record).to_mongo()
         try:
