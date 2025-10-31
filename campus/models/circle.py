@@ -132,7 +132,9 @@ class CircleRecordDict(BaseRecordDict):
 
 
 class CircleResource(CircleRecordDict, total=False):
-    """Response body schema representing the result of a circles.get operation."""
+    """Response body schema representing the result of a circles.get
+    operation.
+    """
     # TODO: store ancestry tree
     # ancestry: CircleTree
     sources: dict  # SourceID, SourceHeader
@@ -170,7 +172,8 @@ class CircleMeta(TypedDict, total=False):
     """Circle meta schema for the circles collection.
 
     A meta record is used to store metadata about the circle collection.
-    This record must be present before any circle operations are attempted.
+    This record must be present before any circle operations are
+    attempted.
     This is used to store the root circle and the address tree.
     """
     root: CircleID
@@ -241,8 +244,8 @@ def get_address_tree() -> "CircleAddressTree":
 
 
 class CircleMember:
-    """Circle model for handling database operations related to circle members
-    (subcircles).
+    """Circle model for handling database operations related to circle
+    members (subcircles).
     """
 
     def __init__(self):
@@ -374,7 +377,8 @@ class Circle:
             return [CircleRecord(**record) for record in records]
 
     def new(self, **fields: Unpack[CircleNew]) -> CircleRecord:
-        """This creates a new circle and adds it to the circle collection.
+        """This creates a new circle and adds it to the circle
+        collection.
 
         It does not add it to the circle hierarchy or access control.
         """
@@ -475,10 +479,11 @@ class CircleAddressTree(Mapping[CircleID, "CircleAddressTree"]):
     """Circle address tree for managing circle hierarchy.
 
     While each circle already stores its descendancy information,
-    this class provides a more efficient way to trace members of any circle.
+    this class provides a more efficient way to trace members of any
+    circle.
 
-    The address tree does not include user circles, for reasons of size and
-    speed (MongoDB limits documents to 16MB).
+    The address tree does not include user circles, for reasons of size
+    and speed (MongoDB limits documents to 16MB).
     """
 
     def __init__(self, root: CircleTree):

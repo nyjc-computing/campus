@@ -21,9 +21,9 @@ TABLE = "users"
 def init_db():
     """Initialize the tables needed by the model.
 
-    This function is intended to be called only in a test environment (using a
-    local-only db like SQLite), or in a staging environment before upgrading to
-    production.
+    This function is intended to be called only in a test environment
+    (using a local-only db like SQLite), or in a staging environment
+    before upgrading to production.
     """
     storage = get_table(TABLE)
     schema = f"""
@@ -51,7 +51,9 @@ class UserUpdate(TypedDict, total=False):
 
 
 class UserResourceDict(UserNew, BaseRecordDict, TypedDict, total=True):
-    """Response body schema representing the result of a users.get operation."""
+    """Response body schema representing the result of a users.get
+    operation.
+    """
     activated_at: NotRequired[schema.DateTime]
 
 
