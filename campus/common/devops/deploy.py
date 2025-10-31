@@ -12,9 +12,6 @@ from campus.common import devops, env, introspect
 import campus.common.errors
 from campus.common.utils import url
 
-# Available deployment modes
-MODES = ("apps", "vault")
-
 
 # pylint disable=unnecessary-ellipsis
 

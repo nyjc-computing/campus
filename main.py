@@ -35,11 +35,6 @@ def get_deployment_mode():
             "Deployment mode not set. "
             "Set environment variable: export DEPLOY=<mode>"
         )
-    if mode not in devops.deploy.MODES:
-        raise ValueError(
-            f"Invalid deployment mode '{mode}'. "
-            f"Valid modes are: {', '.join(devops.deploy.MODES)}."
-        )
     return mode
 
 
