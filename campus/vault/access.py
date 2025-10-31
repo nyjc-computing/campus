@@ -33,12 +33,14 @@ __all__ = [
     "DELETE",
     "READ",
     "UPDATE",
-    "convert_perms_to_access",
+    "permissions_to_access",
     "grant_access",
     "has_access",
     "init_db",
     "revoke_access",
 ]
+
+from typing import overload
 
 from campus.common import devops, schema
 from campus.common.errors import api_errors
@@ -85,7 +87,7 @@ class PermissionError(Exception):
     """Error raised when user does not have the required permissions for an operation."""
 
 
-def convert_perms_to_access(permissions: int | list[str]) -> int:
+def permissions_to_access(permissions: int | list[str]) -> int:
     """Convert permissions given as an integer or list of strings
     to an access value integer.
     """
@@ -126,6 +128,97 @@ def convert_perms_to_access(permissions: int | list[str]) -> int:
                 required_type="integer | array[string]"
             )
     return access_flags
+
+
+def access_to_permissions(access: int) -> list[str]:
+    """Get a list of permission names from an access integer bitflag."""
+    permissions = []
+    if access & READ:
+        permissions.append("READ")
+    if access & CREATE:
+        permissions.append("CREATE")
+    if access & UPDATE:
+        permissions.append("UPDATE")
+    if access & DELETE:
+        permissions.append("DELETE")
+    if access == ALL:
+        permissions = ["ALL"]
+    return permissions
+
+
+@overload
+def get_client_access(client_id: str, label: None) -> dict[str, int]: ...
+@overload
+def get_client_access(client_id: str, label: str) -> int: ...
+
+
+def get_client_access(
+        client_id: str,
+        label: str | None = None
+):
+    """Get vault access permissions for a client.
+
+    Args:
+        client_id: The client identifier
+        label: Optional vault label to get specific access for
+
+    Returns:
+        - If label is provided: The access permissions as an integer
+          bitflag
+        - If label is None: A dictionary mapping vault labels to access
+          permission integers
+    """
+    if label:
+        return get_client_access_vault(client_id, label)
+    else:
+        return get_client_access_all(client_id)
+
+
+def get_client_access_all(client_id: str) -> dict[str, int]:
+    """Get all vault label access permissions for a client.
+
+    Args:
+        client_id: The client identifier
+
+    Returns:
+        A dictionary mapping vault labels to access permission integers.
+    """
+    with db.get_connection_context() as conn:
+        access_records = db.execute_query(
+            conn,
+            "SELECT label, access FROM vault_access WHERE client_id = %s",
+            (client_id,),
+            fetch_one=False,
+            fetch_all=True
+        )
+        assert access_records
+        access_dict = {
+            record["label"]: record["access"]
+            for record in access_records
+        }
+        return access_dict
+
+
+def get_client_access_vault(client_id: str, label: str) -> int:
+    """Get the access permissions for a client on a vault label.
+
+    Args:
+        client_id: The client identifier
+        label: The vault label
+
+    Returns:
+        The access permissions as an integer bitflag, or None if no access exists
+    """
+    with db.get_connection_context() as conn:
+        access_record = db.execute_query(
+            conn,
+            "SELECT access FROM vault_access WHERE client_id = %s AND label = %s",
+            (client_id, label),
+            fetch_one=True
+        )
+        if not access_record:
+            return 0
+        return access_record["access"]
 
 
 def grant_access(client_id: str, label: str, access: int) -> None:

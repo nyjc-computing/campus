@@ -63,7 +63,7 @@ def grant_vault_access(label) -> flask_validation.JsonResponse:
     )
     target_client_id = payload["client_id"]
     permissions = payload["permissions"]
-    access_value = access.convert_perms_to_access(permissions)
+    access_value = access.permissions_to_access(permissions)
     access.grant_access(target_client_id, label, access_value)
 
     return {
