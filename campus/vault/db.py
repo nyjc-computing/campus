@@ -16,12 +16,13 @@ Usage:
         results = execute_query(conn, "SELECT * FROM vault WHERE label = %s", ("api-keys",))
 """
 
-import os
 from contextlib import contextmanager
 from typing import Generator, Any, Optional, Sequence
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
+
+from campus.common import env
 
 
 def get_connection() -> psycopg2.extensions.connection:
@@ -34,11 +35,7 @@ def get_connection() -> psycopg2.extensions.connection:
         ValueError: If VAULTDB_URI environment variable is not set
         psycopg2.Error: If connection to database fails
     """
-    vault_db_uri = os.environ.get("VAULTDB_URI")
-    if not vault_db_uri:
-        raise ValueError("VAULTDB_URI environment variable is required")
-
-    conn = psycopg2.connect(vault_db_uri)
+    conn = psycopg2.connect(env.VAULTDB_URI)
     conn.autocommit = False
     return conn
 
