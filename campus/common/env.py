@@ -1,6 +1,9 @@
 """campus.common.env
 
 An environment proxy.
+
+The module is expected to be widely imported throughout Campus.
+It should be lightweight and have minimal dependencies.
 """
 
 import os
@@ -110,7 +113,7 @@ class EnvironmentProxy:
             access.PermissionError: If access to the vault label is denied.
         """
         if name in self:
-            return self[name]
+            return getattr(self, name)
         from campus.vault import access, get_vault
         access.raise_for_access(
             self.CLIENT_ID,
