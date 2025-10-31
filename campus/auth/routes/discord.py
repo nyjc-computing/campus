@@ -33,18 +33,12 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.client.vault import get_vault
 import campus.integrations as integrations
 from campus.common import flask as campus_flask, schema
 from campus.common.errors import auth_errors
-from campus.models import session, token
 
 PROVIDER = "discord"
 
-tokens = token.Tokens()
-
-auth_sessions = session.AuthSessions(PROVIDER)
-vault = get_vault()[PROVIDER]
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f"/{PROVIDER}")
 
 
