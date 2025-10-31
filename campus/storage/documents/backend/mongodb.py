@@ -51,12 +51,7 @@ class MongoCollectionError(StorageError):
 
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
-    if db_uri := env.MONGODB_URI:
-        return db_uri
-    from campus.vault import access, vault
-    if not access.has_access(env.CLIENT_ID, "storage", access.READ):
-        raise access.PermissionError(f"{__name__} does not have {access.READ} permission for vault 'storage'")
-    db_uri = vault.get_vault("storage").get("MONGODB_URI")
+    db_uri = env.getsecret("MONGODB_URI", "storage")
     return db_uri
 
 
