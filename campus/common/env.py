@@ -41,7 +41,7 @@ class EnvironmentProxy:
         """
         return name in os.environ
 
-    def __delattr__(self, name: str):
+    def __delattr__(self, name: str) -> None:
         """Delete environment variable by name.
 
         Args:
