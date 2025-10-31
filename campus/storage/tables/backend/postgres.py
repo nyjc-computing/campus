@@ -260,6 +260,8 @@ class PostgreSQLTable(TableInterface):
         """Initialize the table from a Campus model definition."""
         columns = []
         for name, field in model.fields().items():
+            if not field.metadata.get("storage", True):
+                continue  # skip non-storage fields
             column_def = _field_to_sql_schema(field)
             columns.append(column_def)
         columns_sql = ", ".join(columns)

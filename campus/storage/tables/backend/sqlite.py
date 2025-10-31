@@ -215,7 +215,9 @@ class SQLiteTable(TableInterface):
         assert self._connection is not None, "Database connection not initialized"
         # Build the CREATE TABLE statement
         columns_sql = []
-        for field in dataclasses.fields(model):
+        for name, field in model.fields().items():
+            if not field.metadata.get("storage", True):
+                continue  # skip non-storage fields
             column_sql = _field_to_sql_schema(field)
             columns_sql.append(column_sql)
         create_table_sql = f"""
