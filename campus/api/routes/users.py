@@ -3,21 +3,20 @@
 API routes for the users resource.
 """
 
-from flask import Blueprint, Flask
-
-import campus.yapper
+import flask
 
 from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
 from campus.models import user
+import campus.yapper
 
-bp = Blueprint('users', __name__, url_prefix='/users')
+bp = flask.Blueprint('users', __name__, url_prefix='/users')
 
 users = user.User()
 yapper = campus.yapper.create()
 
 
-def init_app(app: Flask | Blueprint) -> None:
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Summary:
         Initialize and register all user-related routes with the given Flask app or blueprint.
 

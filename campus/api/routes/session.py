@@ -4,17 +4,16 @@ Session routes for Campus API.
 These routes are used by clients to facilitate login sessions.
 """
 
-from flask import Blueprint, Flask
 import flask
 
 from campus.common import flask as campus_flask
 from campus.models import session
 
-bp = Blueprint("session", __name__, url_prefix="/session")
+bp = flask.Blueprint("session", __name__, url_prefix="/session")
 sessions = session.LoginSessions()
 
 
-def init_app(app: Blueprint | Flask) -> None:
+def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Register the session blueprint with the given Flask app or
     blueprint.
     """

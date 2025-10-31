@@ -3,12 +3,13 @@
 Configuration utilities for Flask apps in testing environments.
 """
 
-from flask import Flask
+import flask
+
 from campus.common import devops
 from campus.common import env
 
 
-def configure_for_testing(app: Flask) -> None:
+def configure_for_testing(app: flask.Flask) -> None:
     """Configure the Flask app for testing.
 
     This function sets up Flask applications with testing-specific configuration:

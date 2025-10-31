@@ -8,7 +8,7 @@ Admin operations require ALL permissions, access checking requires READ permissi
 
 from typing import TypedDict
 
-from flask import Blueprint, Flask
+import flask
 
 from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
@@ -17,10 +17,10 @@ from .. import access
 from ..auth import require_client_authentication, require_vault_permission
 
 # Create blueprint for access management routes
-bp = Blueprint('access', __name__, url_prefix='/access')
+bp = flask.Blueprint('access', __name__, url_prefix='/access')
 
 
-def init_app(app: Flask | Blueprint) -> None:
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialize the access routes with the given Flask app or blueprint."""
     app.register_blueprint(bp)
 

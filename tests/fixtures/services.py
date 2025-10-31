@@ -106,7 +106,7 @@ class ServiceManager:
 
         # Step 1.5: Set up vault factory for testing to use Flask test client
         # This must happen after vault app is created but before yapper/apps import
-        from flask import Flask
+        import flask
         import campus.client.vault
         from campus.common.http.interface import JsonClient
         import campus.config
@@ -116,7 +116,7 @@ class ServiceManager:
             if self.vault_app is None:
                 raise RuntimeError("vault_app not initialized")
             test_client = cast(JsonClient, flask_test.client.FlaskTestClient(
-                cast(Flask, self.vault_app), base_url=vault_base_url)
+                cast(flask.Flask, self.vault_app), base_url=vault_base_url)
             )
             return campus.client.vault.VaultResource(test_client, raw=False)
 

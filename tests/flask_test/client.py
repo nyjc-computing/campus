@@ -6,7 +6,7 @@ FlaskTestClient adapter for Campus JsonClient protocol.
 from typing import Any, Iterable, Mapping, Self
 from urllib.parse import urljoin
 
-from flask import Flask
+import flask
 
 from campus.common.http.interface import JsonDict, JsonResponse
 from campus.common.http.errors import AuthenticationError
@@ -25,7 +25,7 @@ class FlaskTestClient:
 
     def __init__(
             self,
-            app: Flask,
+            app: flask.Flask,
             base_url: str | None = None,
             *,
             auth: Iterable[str] | str | None = None,

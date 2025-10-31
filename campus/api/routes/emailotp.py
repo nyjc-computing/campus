@@ -3,21 +3,21 @@
 API routes for the emailotp resource.
 """
 
-from flask import Blueprint, Flask
+import flask
 
 from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
 from campus.models import emailotp
 from campus.services.email import create_email_sender
 
-bp = Blueprint('emailotp', __name__, url_prefix='/emailotp')
+bp = flask.Blueprint('emailotp', __name__, url_prefix='/emailotp')
 
 otpauth = emailotp.EmailOTPAuth()
 
 EMAIL_PROVIDER = "smtp"
 
 
-def init_app(app: Flask | Blueprint) -> None:
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise emailotp routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
 

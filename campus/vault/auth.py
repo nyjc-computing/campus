@@ -10,7 +10,7 @@ import logging
 from functools import wraps
 from typing import Tuple
 
-from flask import request, jsonify, g
+import flask
 
 from campus.common.errors import api_errors
 
@@ -34,11 +34,11 @@ def get_client_credentials() -> Tuple[str, str]:
         ClientAuthenticationError: If credentials are missing or invalid
     """
     auth_logger.debug("🔍 AUTH: Starting credential extraction")
-    auth_logger.debug(f"🔍 AUTH: Request path: {request.path}")
-    auth_logger.debug(f"🔍 AUTH: Request method: {request.method}")
+    auth_logger.debug(f"🔍 AUTH: Request path: {flask.request.path}")
+    auth_logger.debug(f"🔍 AUTH: Request method: {flask.request.method}")
 
     # Check for Authorization header first
-    auth_header = request.headers.get('Authorization')
+    auth_header = flask.request.headers.get('Authorization')
     auth_logger.debug(
         f"🔍 AUTH: Authorization header present: {bool(auth_header)}")
 
@@ -177,7 +177,7 @@ def require_client_authentication(f):
             auth_logger.debug(f"🔍 AUTH: Client authenticated: {client_id}")
 
             client_info = client.get_client(client_id)
-            g.current_client = client_info
+            flask.g.current_client = client_info
             auth_logger.debug(f"🔍 AUTH: Client info loaded for {client_id}")
 
             result = f(*args, **kwargs)
@@ -237,13 +237,13 @@ def require_vault_permission(*required_permissions: int):
                     auth_logger.debug(
                         "🔍 AUTH: No client_id in kwargs - checking g.current_client")
                     # Try to get from Flask g context
-                    if hasattr(g, 'current_client') and g.current_client:
-                        client_id = g.current_client.get('id')
+                    if hasattr(flask.g, 'current_client') and flask.g.current_client:
+                        client_id = flask.g.current_client.get('id')
                         auth_logger.debug(
                             f"🔍 AUTH: Got client_id from g.current_client: {client_id}")
                     else:
                         auth_logger.error("🔍 AUTH: No client_id available")
-                        return jsonify({"error": "Client authentication required"}), 401
+                        return flask.jsonify({"error": "Client authentication required"}), 401
 
                 # Extract vault label from route parameters
                 vault_label = kwargs.get('label')
@@ -252,7 +252,7 @@ def require_vault_permission(*required_permissions: int):
 
                 if not vault_label:
                     auth_logger.error("🔍 AUTH: No vault label in kwargs")
-                    return jsonify({"error": "Vault label required"}), 400
+                    return flask.jsonify({"error": "Vault label required"}), 400
 
                 # Check if client has ANY of the required permissions (OR logic)
                 has_any_permission = False
@@ -295,11 +295,11 @@ def require_vault_permission(*required_permissions: int):
                 return f(*args, **kwargs)
 
             except api_errors.ForbiddenError as e:
-                response = jsonify(e.to_dict())
+                response = flask.jsonify(e.to_dict())
                 response.status_code = getattr(e, 'status_code', 403)
                 return response
             except Exception as e:
-                response = jsonify(
+                response = flask.jsonify(
                     {"message": f"Internal error: {e}", "error_code": "SERVER_ERROR", "details": {}})
                 response.status_code = 500
                 return response

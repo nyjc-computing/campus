@@ -8,7 +8,7 @@ Admin operations require ALL permissions, read operations require READ permissio
 
 from typing import TypedDict
 
-from flask import Blueprint, Flask
+import flask
 
 from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
@@ -18,7 +18,7 @@ from .. import client
 from ..auth import require_client_authentication
 
 # Create blueprint for client management routes
-bp = Blueprint('clients', __name__, url_prefix='/clients')
+bp = flask.Blueprint('clients', __name__, url_prefix='/clients')
 
 # Lazy-loaded yapper instance to avoid circular dependencies
 _yapper_instance = None
@@ -33,7 +33,7 @@ def get_yapper():
     return _yapper_instance
 
 
-def init_app(app: Flask | Blueprint) -> None:
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialize the client routes with the given Flask app or
     blueprint.
     """

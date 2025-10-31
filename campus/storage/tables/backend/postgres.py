@@ -33,7 +33,7 @@ from campus.storage import errors
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
-    db_uri = env.getsecret("POSTGRESDB_URI", "storage")
+    db_uri = env.getsecret("POSTGRESDB_URI", env.DEPLOY)
     return db_uri
 
 

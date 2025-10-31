@@ -18,8 +18,6 @@ __all__ = [
     "create",
 ]
 
-from campus.client.vault import VaultResource
-
 from .base import Event, EventHandler, YapperInterface
 
 
@@ -76,7 +74,7 @@ def create(**kwargs) -> YapperInterface:
         case  "development" | "testing" | "staging" | "production":
             try:
                 vault = get_vault()
-                yapperdb_uri = vault["yapper"]["YAPPERDB_URI"].get()["value"]
+                yapperdb_uri = vault["campus.yapper"]["YAPPERDB_URI"].get()["value"]
             except Exception as e:
                 raise ValueError(
                     f"Failed to retrieve YAPPERDB_URI from vault service for {env} environment. "

@@ -24,7 +24,7 @@ collection.delete_by_id("123")
 """
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from campus.storage.documents.interface import CollectionInterface, PK
 

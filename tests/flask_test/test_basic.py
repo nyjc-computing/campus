@@ -5,7 +5,7 @@ Basic tests for FlaskTestClient functionality.
 
 import unittest
 
-from flask import Flask
+import flask
 
 from tests.flask_test import FlaskTestClient, FlaskTestResponse
 
@@ -15,7 +15,7 @@ class TestFlaskTestResponse(unittest.TestCase):
 
     def setUp(self):
         """Set up test Flask app."""
-        self.app = Flask(__name__)
+        self.app = flask.Flask(__name__)
 
         @self.app.route('/success')
         def success():
@@ -73,7 +73,7 @@ class TestFlaskTestClient(unittest.TestCase):
 
     def setUp(self):
         """Set up test Flask app."""
-        self.app = Flask(__name__)
+        self.app = flask.Flask(__name__)
 
         @self.app.route('/get-test')
         def get_test():
@@ -81,8 +81,8 @@ class TestFlaskTestClient(unittest.TestCase):
 
         @self.app.route('/post-test', methods=['POST'])
         def post_test():
-            from flask import request
-            data = request.get_json() or {}
+            import flask
+            data = flask.request.get_json() or {}
             return {'method': 'POST', 'received': data}
 
         @self.app.route('/put-test', methods=['PUT'])
