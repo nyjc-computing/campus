@@ -27,6 +27,11 @@ WORKSPACE_DOMAIN: str  # Google Workspace domain
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
 
+# Stubs for type checking
+def get(name: str, default: str | None = None) -> str | None: ...
+def getsecret(name: str, vault_label: str) -> str: ...
+
+
 class EnvironmentProxy:
     """Proxy object for environment variables.
 
