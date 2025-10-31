@@ -15,7 +15,7 @@ Sessions are only initiated by client, but may be revoked by either party.
 from dataclasses import dataclass
 from typing import Optional
 
-from flask import session as client_session
+import flask
 
 from campus.common import env, schema
 from campus.common.errors import api_errors
@@ -86,7 +86,7 @@ class LoginSessions:
         - a session with that ID exists on the server.
         Returns the session ID if a session exists, otherwise None.
         """
-        client_session_id = client_session.get(SESSION_KEY)
+        client_session_id = flask.session.get(SESSION_KEY)
         if not client_session_id:
             return None
         try:
@@ -156,8 +156,8 @@ class LoginSessions:
         else:
             # For consistency, only remove client-side session after
             # successful server-side deletion
-            if sync_client and SESSION_KEY in client_session:
-                del client_session[SESSION_KEY]
+            if sync_client and SESSION_KEY in flask.session:
+                del flask.session[SESSION_KEY]
 
     def find(
             self,
@@ -263,7 +263,7 @@ class LoginSessions:
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
         else:
-            client_session[SESSION_KEY] = session.id
+            flask.session[SESSION_KEY] = session.id
             return session
 
     def sweep(

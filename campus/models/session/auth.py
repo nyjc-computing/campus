@@ -14,7 +14,7 @@ session, as a precaution against CSRF attacks.
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from flask import session as client_session
+import flask
 
 from campus.common import env, schema
 from campus.common.errors import api_errors
@@ -130,14 +130,14 @@ class AuthSessions:
         server-side sweeps happen.
         """
         session_key = self._session_key()
-        client_session_id = client_session.get(session_key)
+        client_session_id = flask.session.get(session_key)
         if not client_session_id:
             return None
         try:
             self.storage.get_by_id(client_session_id)
         except storage_errors.NotFoundError:
             # Revoke client-side
-            client_session.pop(session_key, None)
+            flask.session.pop(session_key, None)
             return None
         except Exception as e:
             raise api_errors.InternalError.from_exception(e)
@@ -203,8 +203,8 @@ class AuthSessions:
         else:
             # For consistency, only remove client-side session after
             # successful server-side deletion
-            if sync_client and self._session_key() in client_session:
-                del client_session[self._session_key()]
+            if sync_client and self._session_key() in flask.session:
+                del flask.session[self._session_key()]
 
     def finalize(
             self,
@@ -327,7 +327,7 @@ class AuthSessions:
         except Exception as e:
             raise api_errors.InternalError.from_exception(e)
         else:
-            client_session[self._session_key()] = session.id
+            flask.session[self._session_key()] = session.id
             return session
 
     def sweep(

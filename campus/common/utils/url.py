@@ -6,7 +6,7 @@ This module provides utility functions for URL manipulation and validation.
 from typing import Any
 from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
 
-from flask import url_for
+import flask
 
 from campus.common import env
 
@@ -49,7 +49,7 @@ def full_url_for(
     full_url = create_url(
         protocol="https",
         domain=hostname,
-        path=url_for(endpoint, **kwargs)
+        path=flask.url_for(endpoint, **kwargs)
     )
     return full_url
 

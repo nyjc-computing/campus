@@ -8,7 +8,7 @@ This follows the principle of handling cross-cutting concerns at the appropriate
 
 from typing import TypedDict
 
-from flask import Blueprint, Flask, g
+import flask
 
 from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
@@ -21,10 +21,10 @@ from ..auth import (
 )
 
 # Create blueprint for vault routes
-bp = Blueprint('vault', __name__, url_prefix='/vault')
+bp = flask.Blueprint('vault', __name__, url_prefix='/vault')
 
 
-def init_app(app: Flask | Blueprint) -> None:
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialize the vault routes with the given Flask app or blueprint."""
     app.register_blueprint(bp)
 
@@ -38,7 +38,7 @@ class SetSecretValue(TypedDict):
 @require_client_authentication
 def list_vaults() -> campus_flask.JsonResponse:
     """List available vault labels"""
-    labels = vault.Vault.get_labels(g.current_client["id"])
+    labels = vault.Vault.get_labels(flask.g.current_client["id"])
     return {"vaults": labels}, 200
 
 
@@ -81,7 +81,7 @@ def set_secret(label: str, key: str) -> campus_flask.JsonResponse:
     # Check if key exists to determine specific permission and validate
     required_permission = access.UPDATE if _vault.has(key) else access.CREATE
     # Verify client has the specific permission required for this operation
-    check_vault_access(g.current_client["id"], label, required_permission)
+    check_vault_access(flask.g.current_client["id"], label, required_permission)
     # Perform the operation
     is_new = _vault.set(key, value)
     action = "created" if is_new else "updated"

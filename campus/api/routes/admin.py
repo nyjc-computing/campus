@@ -3,18 +3,18 @@
 Admin routes for Campus API.
 """
 
-from flask import Blueprint, Flask
+import flask
 
 from campus.common import devops
 
-bp = Blueprint("admin", __name__, url_prefix="/admin")
+bp = flask.Blueprint("admin", __name__, url_prefix="/admin")
 
 
 # This file uses local imports to avoid exposing sensitive imports
 # and polluting global space
 # pylint: disable=import-outside-toplevel
 
-def init_app(app: Blueprint | Flask) -> None:
+def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Register the admin blueprint with the given Flask app or blueprint."""
     app.register_blueprint(bp)
 

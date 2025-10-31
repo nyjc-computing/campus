@@ -3,7 +3,7 @@
 API routes for the circles resource.
 """
 
-from flask import Blueprint, Flask
+import flask
 
 import campus.yapper
 
@@ -11,14 +11,14 @@ from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
 from campus.models import circle
 
-bp = Blueprint('circles', __name__, url_prefix='/circles')
+bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
 circles = circle.Circle()
 # users = user.User()
 yapper = campus.yapper.create()
 
 
-def init_app(app: Flask | Blueprint) -> None:
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
 

@@ -1,12 +1,13 @@
 import unittest
-from flask import Flask
-from campus.common import flask as campus_flask
+
+import flask
+
 from campus.common.validation import record as record_validation
 
 
 class TestSchemaValidation(unittest.TestCase):
     def setUp(self):
-        self.app = Flask(__name__)
+        self.app = flask.Flask(__name__)
         self.app.testing = True
         self.app.config['PROPAGATE_EXCEPTIONS'] = True
         self.client = self.app.test_client()

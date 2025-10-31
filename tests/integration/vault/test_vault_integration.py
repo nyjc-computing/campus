@@ -19,9 +19,9 @@ class TestVaultIntegration(unittest.TestCase):
         cls.service_manager.setup()
 
         # Get the vault app from the service manager
-        from flask import Flask
+        import flask
         vault_app = cls.service_manager.vault_app
-        if not isinstance(vault_app, Flask):
+        if not isinstance(vault_app, flask.Flask):
             raise RuntimeError("Expected Flask app from service manager")
 
         cls.app = vault_app

@@ -5,7 +5,7 @@ Email templates for OTP authentication.
 
 import os
 
-from flask import render_template_string
+import flask
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 
@@ -34,7 +34,7 @@ def body(service: str, otp: str) -> str:
     """Plaintext email body for OTP authentication."""
     if not plaintext_template:
         load_plaintext_template()
-    return render_template_string(
+    return flask.render_template_string(
         plaintext_template,
         service=service,
         otp=otp
@@ -44,7 +44,7 @@ def html_body(service: str, otp: str) -> str:
     """HTML email body for OTP authentication."""
     if not html_template:
         load_html_template()
-    return render_template_string(
+    return flask.render_template_string(
         html_template,
         service=service,
         otp=otp

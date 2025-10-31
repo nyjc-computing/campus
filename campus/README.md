@@ -168,10 +168,10 @@ app = create_app()
 All services can be combined in a single deployment:
 
 ```python
-from flask import Flask
+import flask
 from campus import vault, apps, services
 
-app = Flask(__name__)
+app = flask.Flask(__name__)
 vault.init_app(app)
 apps.init_app(app)
 services.init_app(app)
