@@ -31,8 +31,9 @@ class EnvironmentProxy:
     """Proxy object for environment variables.
 
     This class provides attribute-style access to environment variables.
-    Getting, setting, deleting, and checking for attributes correspond to
-    getting, setting, deleting, and checking for environment variables.
+    Getting, setting, deleting, and checking for attributes correspond
+    to getting, setting, deleting, and checking for environment
+    variables.
     """
 
     def __contains__(self, name: str) -> bool:
@@ -41,7 +42,8 @@ class EnvironmentProxy:
         Args:
             name (str): Name of the environment variable.
         Returns:
-            bool: True if the environment variable is set, False otherwise.
+            bool: True if the environment variable is set, False
+            otherwise.
         """
         return name in os.environ
 
@@ -93,7 +95,8 @@ class EnvironmentProxy:
             default (str | None): Default value to return if not set.
 
         Returns:
-            str | None: Value of the environment variable, or default if not set.
+            str | None: Value of the environment variable, or default if
+            not set.
         """
         return os.getenv(name, default)
 
@@ -109,8 +112,10 @@ class EnvironmentProxy:
             str: Value of the environment variable or vault secret.
 
         Raises:
-            OSError: If neither environment variable nor vault secret is found.
-            access.PermissionError: If access to the vault label is denied.
+            OSError: If neither environment variable nor vault secret is
+            found.
+            access.PermissionError: If access to the vault label is
+            denied.
         """
         if name in self:
             return getattr(self, name)
