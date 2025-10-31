@@ -2,31 +2,37 @@
 
 Vault service for managing secrets and sensitive system data in Campus.
 
-Each vault is identified by a unique label and stores key-value pairs of secrets.
+Each vault is identified by a unique label and stores key-value pairs of
+secrets.
 Client access to vault labels is controlled through bitflag permissions.
-Clients are identified and authenticated using CLIENT_ID and CLIENT_SECRET environment variables.
+Clients are identified and authenticated using CLIENT_ID and
+CLIENT_SECRET environment variables.
 
 DATABASE ACCESS:
-This service uses direct PostgreSQL connectivity instead of the storage module
-to avoid circular dependencies. Since other services may depend on vault for
-secrets management, vault must be independent of the storage layer. The vault
-connects directly to PostgreSQL using the VAULTDB_URI environment variable.
+This service uses direct PostgreSQL connectivity instead of the storage
+module to avoid circular dependencies. Since other services may depend
+on vault for secrets management, vault must be independent of the
+storage layer. The vault connects directly to PostgreSQL using the
+VAULTDB_URI environment variable.
 
 CLIENT AUTHENTICATION:
-The vault service maintains its own client storage system to avoid circular
-dependencies with the main client model. Vault clients are stored in the
-vault_clients table and authenticated using client ID and secret pairs.
+The vault service maintains its own client storage system to avoid
+circular dependencies with the main client model. Vault clients are
+stored in the vault_clients table and authenticated using client ID and
+secret pairs.
 
 Both CLIENT_ID and CLIENT_SECRET environment variables must be set:
 - CLIENT_ID: Identifies the client making the request
 - CLIENT_SECRET: Authenticates the client's identity
 
 PERMISSION SYSTEM:
-The vault uses bitflag permissions to control what operations clients can perform:
+The vault uses bitflag permissions to control what operations clients
+can perform:
 
 - READ (1): Can retrieve existing secrets with vault.get()
 - CREATE (2): Can add new secrets with vault.set() (for new keys)
-- UPDATE (4): Can modify existing secrets with vault.set() (for existing keys)  
+- UPDATE (4): Can modify existing secrets with vault.set() (for existing
+  keys)
 - DELETE (8): Can remove secrets with vault.delete()
 
 Permissions can be combined using the | operator:
@@ -58,7 +64,8 @@ USAGE EXAMPLE:
     from vault.access import grant_access, READ, CREATE
     grant_access(client_resource["id"], "api-secrets", READ | CREATE)
     
-    # Use vault programmatically (CLIENT_ID and CLIENT_SECRET env vars must be set)
+    # Use vault programmatically (CLIENT_ID and CLIENT_SECRET env vars
+    # must be set)
     vault = get_vault("api-secrets")
     vault.set("api_key", "secret123")  # Requires CREATE (new key)
     secret = vault.get("api_key")      # Requires READ
@@ -81,7 +88,7 @@ __all__ = [
 
 from flask import Blueprint, Flask
 
-from campus.common import devops, errors
+from campus.common import devops
 
 from . import access, client, vault
 from .vault import get_vault
