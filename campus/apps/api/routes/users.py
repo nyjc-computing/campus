@@ -7,7 +7,7 @@ from flask import Blueprint, Flask
 
 import campus.yapper
 
-import campus.common.validation.flask as flask_validation
+from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
 from campus.models import user
 
@@ -74,13 +74,13 @@ def get_authenticated_user():
 
 
 @bp.get('/')
-def list_users() -> flask_validation.JsonResponse:
+def list_users() -> campus_flask.JsonResponse:
     """List all users (not yet implemented)."""
     return {"message": "List users not implemented"}, 501
 
 
 @bp.post('/')
-def new_user() -> flask_validation.JsonResponse:
+def new_user() -> campus_flask.JsonResponse:
     """Summary:
         Create a new user in the system.
 
@@ -126,12 +126,12 @@ def new_user() -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         user.UserNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
     resource = users.new(**payload)
-    flask_validation.validate_json_response(
+    campus_flask.validate_json_response(
         user.UserResourceDict.__annotations__,
         resource,
         on_error=api_errors.raise_api_error,
@@ -141,7 +141,7 @@ def new_user() -> flask_validation.JsonResponse:
 
 
 @bp.delete('/<string:user_id>')
-def delete_user(user_id: str) -> flask_validation.JsonResponse:
+def delete_user(user_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Delete a user by their unique ID.
 
@@ -181,7 +181,7 @@ def delete_user(user_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.get('/<string:user_id>')
-def get_user(user_id: str) -> flask_validation.JsonResponse:
+def get_user(user_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve a single user's summary by their unique ID.
 
@@ -227,17 +227,17 @@ def get_user(user_id: str) -> flask_validation.JsonResponse:
     summary = {}
     record, _ = get_user_profile(user_id)
     summary['profile'] = record
-    flask_validation.validate_json_response(
+    campus_flask.validate_json_response(
         summary,
         user.UserResourceDict.__annotations__,
-        on_error = api_errors.raise_api_error
+        on_error=api_errors.raise_api_error
     )
     # future calls for other user info go here
     return summary, 200
 
 
-@ bp.patch('/<string:user_id>')
-def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
+@bp.patch('/<string:user_id>')
+def patch_user_profile(user_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Update a single user's profile by their unique ID.
 
@@ -280,17 +280,17 @@ def patch_user_profile(user_id: str) -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         user.UserUpdate.__annotations__,
-        on_error = api_errors.raise_api_error,
+        on_error=api_errors.raise_api_error,
     )
     users.update(user_id, **payload)
     yapper.emit('campus.users.update')
     return {}, 200
 
 
-@ bp.get('/<string:user_id>/profile')
-def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
+@bp.get('/<string:user_id>/profile')
+def get_user_profile(user_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve a single user's full profile by their unique ID.
 
@@ -331,10 +331,10 @@ def get_user_profile(user_id: str) -> flask_validation.JsonResponse:
                 "error": str
             }
     """
-    resource= users.get(user_id)
-    flask_validation.validate_json_response(
+    resource = users.get(user_id)
+    campus_flask.validate_json_response(
         user.UserResourceDict.__annotations__,
         resource,
-        on_error = api_errors.raise_api_error,
+        on_error=api_errors.raise_api_error,
     )
     return dict(resource), 200

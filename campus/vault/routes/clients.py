@@ -10,8 +10,8 @@ from typing import TypedDict
 
 from flask import Blueprint, Flask
 
+from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
-import campus.common.validation.flask as flask_validation
 import campus.yapper
 
 from .. import client
@@ -54,7 +54,7 @@ class AuthenticateClient(TypedDict):
 
 @bp.post("/")
 @require_client_authentication
-def create_vault_client() -> flask_validation.JsonResponse:
+def create_vault_client() -> campus_flask.JsonResponse:
     """Create a new vault client.
 
     POST /client
@@ -74,7 +74,7 @@ def create_vault_client() -> flask_validation.JsonResponse:
         "client_secret": "secret_xyz789"
     }
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         VaultClientNew.__annotations__,
         on_error=api_errors.raise_api_error
     )
@@ -85,7 +85,7 @@ def create_vault_client() -> flask_validation.JsonResponse:
 
 @bp.get("/")
 @require_client_authentication
-def list_vault_clients() -> flask_validation.JsonResponse:
+def list_vault_clients() -> campus_flask.JsonResponse:
     """List all vault clients
 
     GET /client
@@ -108,7 +108,7 @@ def list_vault_clients() -> flask_validation.JsonResponse:
 @bp.post("/authenticate")
 # Client authentication not required (since API clients would need to
 # use this route to authenticate)
-def authenticate_vault_client() -> flask_validation.JsonResponse:
+def authenticate_vault_client() -> campus_flask.JsonResponse:
     """Authenticate a vault client by client_id and client_secret.
 
     POST /client/authenticate
@@ -116,7 +116,7 @@ def authenticate_vault_client() -> flask_validation.JsonResponse:
 
     Returns: {"status": "success", "client_id": ...} or error JSON
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         AuthenticateClient.__annotations__,
         on_error=api_errors.raise_api_error
     )
@@ -126,7 +126,7 @@ def authenticate_vault_client() -> flask_validation.JsonResponse:
 
 @bp.get("/<client_id>")
 @require_client_authentication
-def get_vault_client(client_id) -> flask_validation.JsonResponse:
+def get_vault_client(client_id) -> campus_flask.JsonResponse:
     """Get details of a specific vault client
 
     GET /client/{client_id}
@@ -145,7 +145,7 @@ def get_vault_client(client_id) -> flask_validation.JsonResponse:
 
 @bp.delete("/<client_id>")
 @require_client_authentication
-def delete_vault_client(client_id) -> flask_validation.JsonResponse:
+def delete_vault_client(client_id) -> campus_flask.JsonResponse:
     """Delete a vault client
 
     DELETE /client/{client_id}

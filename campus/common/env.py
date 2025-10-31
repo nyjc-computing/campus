@@ -1,6 +1,9 @@
 """campus.common.env
 
 An environment proxy.
+
+The module is expected to be widely imported throughout Campus.
+It should be lightweight and have minimal dependencies.
 """
 
 import os
@@ -24,12 +27,18 @@ WORKSPACE_DOMAIN: str  # Google Workspace domain
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
 
+# Stubs for type checking
+def get(name: str, default: str | None = None) -> str | None: ...
+def getsecret(name: str, vault_label: str) -> str: ...
+
+
 class EnvironmentProxy:
     """Proxy object for environment variables.
 
     This class provides attribute-style access to environment variables.
-    Getting, setting, deleting, and checking for attributes correspond to
-    getting, setting, deleting, and checking for environment variables.
+    Getting, setting, deleting, and checking for attributes correspond
+    to getting, setting, deleting, and checking for environment
+    variables.
     """
 
     def __contains__(self, name: str) -> bool:
@@ -38,7 +47,8 @@ class EnvironmentProxy:
         Args:
             name (str): Name of the environment variable.
         Returns:
-            bool: True if the environment variable is set, False otherwise.
+            bool: True if the environment variable is set, False
+            otherwise.
         """
         return name in os.environ
 
@@ -90,7 +100,8 @@ class EnvironmentProxy:
             default (str | None): Default value to return if not set.
 
         Returns:
-            str | None: Value of the environment variable, or default if not set.
+            str | None: Value of the environment variable, or default if
+            not set.
         """
         return os.getenv(name, default)
 
@@ -106,11 +117,13 @@ class EnvironmentProxy:
             str: Value of the environment variable or vault secret.
 
         Raises:
-            OSError: If neither environment variable nor vault secret is found.
-            access.PermissionError: If access to the vault label is denied.
+            OSError: If neither environment variable nor vault secret is
+            found.
+            access.PermissionError: If access to the vault label is
+            denied.
         """
         if name in self:
-            return self[name]
+            return getattr(self, name)
         from campus.vault import access, get_vault
         access.raise_for_access(
             self.CLIENT_ID,

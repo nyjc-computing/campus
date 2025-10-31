@@ -10,8 +10,8 @@ from typing import TypedDict
 
 from flask import Blueprint, Flask
 
+from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
-import campus.common.validation.flask as flask_validation
 
 from .. import access
 from ..auth import require_client_authentication, require_vault_permission
@@ -44,7 +44,7 @@ class RevokeVaultAccess(TypedDict):
 @bp.post("/<label>")
 @require_client_authentication
 @require_vault_permission(access.ALL)  # Require admin-level permissions
-def grant_vault_access(label) -> flask_validation.JsonResponse:
+def grant_vault_access(label) -> campus_flask.JsonResponse:
     """Grant access to a vault for a client
 
     POST /access/{vault_label}
@@ -57,13 +57,13 @@ def grant_vault_access(label) -> flask_validation.JsonResponse:
         client_id: The authenticated client making this request (injected by decorator)
         label: The vault label from the URL path
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         GrantVaultAccess.__annotations__,
         on_error=api_errors.raise_api_error
     )
     target_client_id = payload["client_id"]
     permissions = payload["permissions"]
-    access_value = access.convert_perms_to_access(permissions)
+    access_value = access.permissions_to_access(permissions)
     access.grant_access(target_client_id, label, access_value)
 
     return {
@@ -76,7 +76,7 @@ def grant_vault_access(label) -> flask_validation.JsonResponse:
 @bp.delete("/<label>")
 @require_client_authentication
 @require_vault_permission(access.ALL)  # Require admin-level permissions
-def revoke_vault_access(label: str) -> flask_validation.JsonResponse:
+def revoke_vault_access(label: str) -> campus_flask.JsonResponse:
     """Revoke access to a vault for a client
 
     DELETE /access/{vault_label}?client_id={client_id}
@@ -86,7 +86,7 @@ def revoke_vault_access(label: str) -> flask_validation.JsonResponse:
         label: The vault label from the URL path
     """
 
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         RevokeVaultAccess.__annotations__,
         on_error=api_errors.raise_api_error
     )
@@ -104,7 +104,7 @@ def revoke_vault_access(label: str) -> flask_validation.JsonResponse:
 @bp.get("/<label>")
 @require_client_authentication
 @require_vault_permission(access.READ)
-def get_vault_access(label) -> flask_validation.JsonResponse:
+def get_vault_access(label) -> campus_flask.JsonResponse:
     """Check if a client has access to a vault
 
     GET /access/{vault_label}?client_id={client_id}
@@ -123,7 +123,7 @@ def get_vault_access(label) -> flask_validation.JsonResponse:
         client_id: The authenticated client making this request (injected by decorator)
         label: The vault label from the URL path
     """
-    payload = flask_validation.validate_request_and_extract_urlparams(
+    payload = campus_flask.validate_request_and_extract_urlparams(
         GetVaultAccess.__annotations__,
         on_error=api_errors.raise_api_error
     )

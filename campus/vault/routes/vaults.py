@@ -10,8 +10,8 @@ from typing import TypedDict
 
 from flask import Blueprint, Flask, g
 
+from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
-import campus.common.validation.flask as flask_validation
 
 from .. import access, vault
 from ..auth import (
@@ -36,7 +36,7 @@ class SetSecretValue(TypedDict):
 
 @bp.get("/")
 @require_client_authentication
-def list_vaults() -> flask_validation.JsonResponse:
+def list_vaults() -> campus_flask.JsonResponse:
     """List available vault labels"""
     labels = vault.Vault.get_labels(g.current_client["id"])
     return {"vaults": labels}, 200
@@ -45,7 +45,7 @@ def list_vaults() -> flask_validation.JsonResponse:
 @bp.get("/<label>/")
 @require_client_authentication
 @require_vault_permission(access.READ)
-def list_keys(label: str) -> flask_validation.JsonResponse:
+def list_keys(label: str) -> campus_flask.JsonResponse:
     """List all keys in a vault"""
     keys = vault.get_vault(label).list_keys()
     return {"label": label, "keys": keys}, 200
@@ -54,7 +54,7 @@ def list_keys(label: str) -> flask_validation.JsonResponse:
 @bp.get("/<label>/<key>")
 @require_client_authentication
 @require_vault_permission(access.READ)
-def get_secret(label: str, key: str) -> flask_validation.JsonResponse:
+def get_secret(label: str, key: str) -> campus_flask.JsonResponse:
     """Get a secret from a vault"""
     value = vault.Vault(label).get(key)
     return {"key": key, "value": value}, 200
@@ -64,14 +64,14 @@ def get_secret(label: str, key: str) -> flask_validation.JsonResponse:
 @require_client_authentication
 # Client needs CREATE OR UPDATE
 @require_vault_permission(access.CREATE, access.UPDATE)
-def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
+def set_secret(label: str, key: str) -> campus_flask.JsonResponse:
     """Set a secret in a vault
 
     Requires CREATE permission for new keys, UPDATE permission for existing
     keys.
     The decorator ensures the client has at least one of these permissions.
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         SetSecretValue.__annotations__,
         on_error=api_errors.raise_api_error
     )
@@ -95,7 +95,7 @@ def set_secret(label: str, key: str) -> flask_validation.JsonResponse:
 @bp.delete("/<label>/<key>")
 @require_client_authentication
 @require_vault_permission(access.DELETE)
-def delete_secret(label, key) -> flask_validation.JsonResponse:
+def delete_secret(label, key) -> campus_flask.JsonResponse:
     """Delete a secret from a vault"""
     _vault = vault.get_vault(label)
     deleted = _vault.delete(key)

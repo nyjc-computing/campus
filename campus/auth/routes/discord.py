@@ -35,9 +35,8 @@ import werkzeug
 
 from campus.client.vault import get_vault
 import campus.integrations as integrations
-from campus.common import schema
+from campus.common import flask as campus_flask, schema
 from campus.common.errors import auth_errors
-from campus.common.validation import flask as flask_validation
 from campus.models import session, token
 
 PROVIDER = "discord"
@@ -77,11 +76,11 @@ def callback() -> werkzeug.Response:
 
     Dispatches to success or error handlers based on payload type.
     """
-    callback_payload = flask_validation.get_request_payload()
+    callback_payload = campus_flask.get_request_payload()
     if "error" in callback_payload:
         auth_errors.raise_from_json(callback_payload)
     else:
-        return flask_validation.unpack_into(success_callback,
+        return campus_flask.unpack_into(success_callback,
                                             **callback_payload)
 
 

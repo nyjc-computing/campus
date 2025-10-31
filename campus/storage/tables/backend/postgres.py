@@ -26,12 +26,9 @@ table.delete_by_id("123")
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from campus.client.vault import get_vault
-from campus.common import devops
+from campus.common import devops, env
 from campus.storage.tables.interface import TableInterface, PK
 from campus.storage import errors
-
-vault = get_vault()["storage"]
 
 
 def _get_db_uri() -> str:

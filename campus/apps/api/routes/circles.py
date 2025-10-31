@@ -7,8 +7,8 @@ from flask import Blueprint, Flask
 
 import campus.yapper
 
+from campus.common import flask as campus_flask
 from campus.common.errors import api_errors
-from campus.common.validation import flask as flask_validation
 from campus.models import circle
 
 bp = Blueprint('circles', __name__, url_prefix='/circles')
@@ -22,18 +22,20 @@ def init_app(app: Flask | Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
 
+
 @bp.get('/')
-def list_circles() -> flask_validation.JsonResponse:
+def list_circles() -> campus_flask.JsonResponse:
     """List all circles matching filter requirements."""
-    filters = flask_validation.validate_request_and_extract_json(
+    filters = campus_flask.validate_request_and_extract_json(
         circle.CircleRecordDict.__annotations__,
         on_error=api_errors.raise_api_error,
     ) or {}
     result = circles.list(**filters)
     return {"data": [circle.to_dict() for circle in result]}, 200
 
+
 @bp.post('/')
-def new_circle(*_: str) -> flask_validation.JsonResponse:
+def new_circle(*_: str) -> campus_flask.JsonResponse:
     """Summary:
         Create a new circle.
 
@@ -78,12 +80,12 @@ def new_circle(*_: str) -> flask_validation.JsonResponse:
         422 Unprocessable Entity: None
             Returned if validation fails (e.g., tag or parent format is incorrect).
     """
-    payload = flask_validation.validate_request_and_extract_json(
+    payload = campus_flask.validate_request_and_extract_json(
         circle.CircleNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
     resource = circles.new(**payload)
-    flask_validation.validate_json_response(
+    campus_flask.validate_json_response(
         circle.CircleResource.__annotations__,
         resource,
         on_error=api_errors.raise_api_error,
@@ -93,7 +95,7 @@ def new_circle(*_: str) -> flask_validation.JsonResponse:
 
 
 @bp.delete('/<string:circle_id>')
-def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
+def delete_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Delete a circle by its unique ID.
 
@@ -133,7 +135,7 @@ def delete_circle(circle_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.get('/<string:circle_id>')
-def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
+def get_circle_details(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve detailed information about a specific circle.
 
@@ -177,7 +179,7 @@ def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
         - Currently, `sources` is always an empty object (may change in future with enrichment).
     """
     resource = circles.get(circle_id)
-    flask_validation.validate_json_response(
+    campus_flask.validate_json_response(
         circle.CircleResource.__annotations__,
         resource,
         on_error=api_errors.raise_api_error,
@@ -186,7 +188,7 @@ def get_circle_details(circle_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.patch('/<string:circle_id>')
-def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
+def edit_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Update the name and/or description of an existing circle.
 
@@ -223,7 +225,7 @@ def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
         - If no changes are detected, the request is treated as a no-op (200 OK, no error).
         - Emits the event: `campus.circles.update`.
     """
-    params = flask_validation.validate_request_and_extract_json(
+    params = campus_flask.validate_request_and_extract_json(
         circle.CircleUpdate.__annotations__,
         on_error=api_errors.raise_api_error,
     )
@@ -233,13 +235,13 @@ def edit_circle(circle_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.post('/<string:circle_id>/move')
-def move_circle(circle_id: str) -> flask_validation.JsonResponse:
+def move_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Move a circle to a new parent."""
     return {"message": "Not implemented"}, 501
 
 
 @bp.get('/<string:circle_id>/members')
-def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
+def get_circle_members(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve the member IDs of a circle along with their access values.
 
@@ -282,7 +284,7 @@ def get_circle_members(circle_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.post('/<string:circle_id>/members/add')
-def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
+def add_circle_member(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Add a member to a circle with a specified access level.
 
@@ -320,7 +322,7 @@ def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
         - This operation directly updates a nested field (`members.{member_id}`) in storage.
         - Only circle IDs can be added as members — not users or arbitrary entities.
     """
-    params = flask_validation.validate_request_and_extract_json(
+    params = campus_flask.validate_request_and_extract_json(
         circle.CircleMemberAdd.__annotations__,
         on_error=api_errors.raise_api_error,
     )
@@ -330,7 +332,7 @@ def add_circle_member(circle_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.delete('/<string:circle_id>/members/remove')
-def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
+def remove_circle_member(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Remove a member from a circle.
 
@@ -368,7 +370,7 @@ def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
         - Only direct member circles can be removed this way.
         - The response is not currently validated.
     """
-    params = flask_validation.validate_request_and_extract_json(
+    params = campus_flask.validate_request_and_extract_json(
         circle.CircleMemberRemove.__annotations__,
         on_error=api_errors.raise_api_error,
     )
@@ -381,7 +383,7 @@ def remove_circle_member(circle_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
-def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
+def patch_circle_member(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Update the access level of a member within a circle.
 
@@ -422,7 +424,7 @@ def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
         - No validation is currently performed to compare existing access.
     """
 
-    params = flask_validation.validate_request_and_extract_json(
+    params = campus_flask.validate_request_and_extract_json(
         circle.CircleMemberSet.__annotations__,
         on_error=api_errors.raise_api_error,
     )
@@ -433,7 +435,7 @@ def patch_circle_member(circle_id: str) -> flask_validation.JsonResponse:
 
 
 @bp.get('/<string:circle_id>/users')
-def get_circle_users(circle_id: str) -> flask_validation.JsonResponse:
+def get_circle_users(circle_id: str) -> campus_flask.JsonResponse:
     # TODO: validate request
     """Get users in a circle."""
     return {"message": "Not implemented"}, 501

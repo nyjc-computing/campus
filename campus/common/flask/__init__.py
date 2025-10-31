@@ -13,9 +13,7 @@ from typing import (
     Generic,
     Mapping,
     NoReturn,
-    NotRequired,
     Protocol,
-    Required,
     Type,
     TypeVar
 )
@@ -25,6 +23,8 @@ from werkzeug import Response as FlaskResponse
 
 from campus.common.errors import api_errors
 from campus.common.validation import record
+
+from . import parameter
 
 R = TypeVar("R", covariant=True)
 # Only expecting strings or dicts
@@ -91,73 +91,6 @@ def get_request_payload() -> dict[str, typing.Any]:
     return json_payload
 
 
-def has_default(parameter: inspect.Parameter) -> bool:
-    """Check if a function parameter has a default value."""
-    return parameter.default is not inspect.Parameter.empty
-
-
-def is_keyword_supported(parameter: inspect.Parameter) -> bool:
-    """Check if a parameter can be passed as a keyword argument."""
-    return parameter.kind in (
-        inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        inspect.Parameter.KEYWORD_ONLY,
-    )
-
-
-def is_optional(parameter: inspect.Parameter) -> bool:
-    """Check if a parameter is Optional.
-
-    A parameter is optional if:
-    - Its annotation is of the form Optional[T] or Union[T, None]
-    - It has a default value
-    """
-    origin = typing.get_origin(parameter.annotation)
-    if not origin is typing.Union:
-        return False
-    args = typing.get_args(parameter.annotation)
-    if not type(None) in args:
-        return False
-    if not has_default(parameter):
-        return False
-    return True
-
-
-def reconcile(
-        request_args: dict[str, typing.Any],
-        func: Callable[..., typing.Any],
-        allow_extra: bool = False,
-) -> tuple[dict[str, typing.Any], dict[str, typing.Any], list[str]]:
-    """Reconcile request arguments with function parameters. Returns a tuple of:
-    - reconciled arguments (with defaults applied)
-    - extra arguments (not in function parameters)
-    - missing required parameters
-
-    Args:
-        request_args: The arguments from the request (e.g., URL params)
-        params: The function parameters to reconcile against
-        allow_extra: Whether to allow extra arguments not in params
-                     if True, they are included in reconciled args
-                     if False, they are returned in extra_args
-    """
-    func_params = dict(inspect.signature(func).parameters)
-    MISSING: object = object()
-    reconciled: dict[str, typing.Any] = {}
-    extra_args: dict[str, typing.Any] = {}
-    missing_params: list[str] = []
-    for name, param in func_params.items():
-        arg = request_args.get(name, MISSING)
-        if not is_optional(param) and arg is MISSING:
-            missing_params.append(name)
-        else:
-            reconciled[name] = param.default if arg is MISSING else arg
-    extra_args = {k: v for k, v in request_args.items()
-                  if k not in func_params}
-    if allow_extra:
-        reconciled.update(extra_args)
-        extra_args = {}
-    return reconciled, extra_args, missing_params
-
-
 def unpack_into(
         func: typing.Callable[..., typing.Any],
         **request_args: typing.Any,
@@ -165,7 +98,10 @@ def unpack_into(
     """Unpack request arguments into the given function's arguments,
     based on its signature.
     """
-    reconciled, extra_args, missing_params = reconcile(request_args, func)
+    reconciled, extra_args, missing_params = parameter.reconcile(
+        request_args,
+        func
+    )
     if missing_params:
         raise KeyError(f"Missing required parameters: {missing_params}")
     # Call the original function with unpacked arguments
@@ -184,7 +120,7 @@ def unpack_request(
     if not func.__annotations__:
         raise ValueError(f"{func.__name__} missing type annotations")
     for param in inspect.signature(func).parameters.values():
-        if not is_keyword_supported(param):
+        if not parameter.is_keyword_supported(param):
             raise ValueError(
                 f"Parameter {param.name!r} must be keyword-argument-compatible"
             )
@@ -255,69 +191,3 @@ def validate_json_response(
         record.validate_keys(resp_json, schema, ignore_extra=ignore_extra)
     except (KeyError, TypeError) as err:
         on_error(error_status_code, message=error_message or err.args[0])
-
-
-def validate(
-        *,
-        request: Mapping[str, Type] | None = None,
-        response: Mapping[str, Type] | None = None,
-        on_error: ErrorHandler,
-) -> ViewFunctionDecorator:
-    """Returns a decorator that takes a view-function and returns a
-    validated-view-function.
-
-    The validated-view-function only takes positional arguments, passing them
-    to the wrapped view-function.
-    The validated-view-function will unpack the request JSON body and pass it
-    to the wrapped view-function as keyword arguments.
-
-    An error handler must be provided, which will be called with the status
-    code and any additional keyword arguments.
-    The error handler must raise an exception.
-    """
-
-    def vfdecorator(vf: ViewFunction) -> ViewFunction:
-        """Validates the current Flask request JSON body, and unpacks it into
-        the wrapped view-function.
-        Validates the response JSON body before returning.
-        """
-        # TODO: provide helpful validation hints
-        @wraps(vf)
-        def validatedvf(*args: str, **payload) -> JsonResponse:
-            """The decorated ValidatedViewFunction that unpacks the response
-            JSON body into the inner view-function.
-            """
-            # Validate request body
-            if request is not None:
-                try:
-                    record.validate_keys(
-                        payload,
-                        request,
-                        ignore_extra=True,
-                        required=True,
-                    )
-                except (KeyError, TypeError):
-                    on_error(400)
-
-                except Exception:
-                    on_error(500)
-            # Call view function
-            resp_json, status_code = vf(*args, **payload)
-            assert isinstance(
-                resp_json, dict), "Response body must be a JSON object"
-            # Validate response body
-            if response is not None and 200 <= status_code < 300:
-                try:
-                    record.validate_keys(
-                        resp_json,
-                        response,
-                        ignore_extra=True,
-                        required=True,
-                    )
-                except (KeyError, TypeError):
-                    on_error(500)
-                except Exception:
-                    on_error(500)
-            return resp_json, status_code
-        return validatedvf
-    return vfdecorator
