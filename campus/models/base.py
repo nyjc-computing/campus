@@ -12,8 +12,10 @@ from campus.common import schema
 class BaseRecordDict(TypedDict):
     """Base class for all records in the Campus system.
 
-    Records are Mapping objects that represent a single record in the database.
-    BaseRecord reflects the keys that are common to all records in the system.
+    Records are Mapping objects that represent a single record in the
+    database.
+    BaseRecord reflects the keys that are common to all records in the
+    system.
     """
     id: schema.CampusID | schema.UserID
     created_at: schema.DateTime
@@ -43,4 +45,4 @@ class BaseRecord:
 @dataclass(eq=False, kw_only=True)
 class UserRecord(BaseRecord):
     """Base class for user records in Campus."""
-    id: schema.UserID = field(init=True)
+    id: schema.UserID = field(init=True)  # type: ignore

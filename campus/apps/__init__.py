@@ -12,12 +12,12 @@ This module contains the main applications for Campus.
 
 __all__ = ["api"]
 
-from flask import Blueprint, Flask
+import flask
 
 from . import api
 
 
-def init_app(app: Blueprint | Flask) -> None:
+def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Initialize the Campus app with all modules.
 
     This function sets up all Campus apps components including API,
@@ -33,7 +33,7 @@ def init_app(app: Blueprint | Flask) -> None:
     api.init_app(app)
     # Use vault client to retrieve secret key since campus.apps deployment
     # does not have VAULTDB_URI env var
-    if isinstance(app, Flask):
+    if isinstance(app, flask.Flask):
         from campus.client.vault import get_vault
         vault = get_vault()
         app.secret_key = vault["campus"]["SECRET_KEY"].get()["value"]
