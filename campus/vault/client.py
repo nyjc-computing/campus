@@ -20,7 +20,7 @@ variable dependencies. Performance optimizations (such as API keys) can be addre
 
 from typing import Any, TypedDict, NotRequired, Unpack
 
-from campus.common import devops, schema
+from campus.common import devops, env, schema
 from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import secret, uid
 
@@ -38,7 +38,8 @@ def _get_secret_key() -> str:
     Raises:
         VaultKeyError: If SECRET_KEY is not found in the vault vault
     """
-    vault_vault = vault.Vault("vault")
+    assert env.DEPLOY == "campus.vault"
+    vault_vault = vault.Vault(env.DEPLOY)
     return vault_vault.get("SECRET_KEY")
 
 

@@ -86,9 +86,9 @@ __all__ = [
     "client",
 ]
 
-from flask import Blueprint, Flask
+import flask
 
-from campus.common import devops
+from campus.common import devops, env
 
 from . import access, client, vault
 from .vault import get_vault
@@ -98,7 +98,7 @@ from .vault import get_vault
 # pylint: disable=import-outside-toplevel
 
 
-def init_app(app: Flask | Blueprint) -> None:
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialize the vault blueprints with the given Flask app.
 
     This function sets up the vault service routes and blueprints.
@@ -110,12 +110,14 @@ def init_app(app: Flask | Blueprint) -> None:
 
     This ensures proper error handling and deployment configuration.
     """
-    bp = Blueprint('vault_v1', __name__, url_prefix='/api/v1')
+    bp = flask.Blueprint('vault_v1', __name__, url_prefix='/api/v1')
     from . import routes
     routes.vaults.init_app(bp)
     routes.access.init_app(bp)
     routes.clients.init_app(bp)
     app.register_blueprint(bp)
+    if isinstance(app, flask.Flask):
+        app.secret_key = vault.get_vault(env.DEPLOY).get("SECRET_KEY")
 
 
 @devops.block_env(devops.PRODUCTION)
