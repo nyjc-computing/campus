@@ -147,15 +147,10 @@ def access_to_permissions(access: int) -> list[str]:
 
 
 @overload
-def get_client_access(client_id: str, label: None) -> dict[str, int]: ...
+def get_client_access(client_id: str) -> dict[str, int]: ...
 @overload
 def get_client_access(client_id: str, label: str) -> int: ...
-
-
-def get_client_access(
-        client_id: str,
-        label: str | None = None
-):
+def get_client_access(client_id: str, label: str | None = None):
     """Get vault access permissions for a client.
 
     Args:
