@@ -235,3 +235,13 @@ def has_access(client_id: str, label: str, required_access: int) -> bool:
             return False
         granted_access = access_record["access"]
         return (granted_access & required_access) == required_access
+
+
+def raise_for_access(client_id: str, label: str, required_access: int) -> None:
+    """Raise PermissionError if client lacks required access to vault label."""
+    if not has_access(client_id, label, required_access):
+        raise PermissionError(
+            f"Client '{client_id}' lacks required access "
+            f"to vault label '{label}'"
+        )
+
