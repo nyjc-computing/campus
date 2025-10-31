@@ -34,9 +34,9 @@ DEFAULT_EXPIRY_SECONDS = utc_time.DAY_SECONDS * 30  # 30 days
 def init_db():
     """Initialize the tables needed by the model.
 
-    This function is intended to be called only in a test environment (using a
-    local-only db like SQLite), or in a staging environment before upgrading to
-    production.
+    This function is intended to be called only in a test environment
+    (using a local-only db like SQLite), or in a staging environment
+    before upgrading to production.
     """
     storage = get_table(TABLE)
     table_schema = f"""
@@ -93,7 +93,8 @@ class SanitizedTokenRecord:
         return cls(**token_data)
 
     def get_missing_scopes(self, scopes: str | list[str]) -> list[str]:
-        """Validate the requested scopes against the session's granted scopes.
+        """Validate the requested scopes against the session's granted
+        scopes.
         Returns the missing scopes.
         """
         if isinstance(scopes, str):
@@ -185,7 +186,8 @@ class TokenRecord(base.BaseRecord):
         return data
 
     def validate_scope(self, scopes: str | list[str]) -> list[str]:
-        """Validate the requested scopes against the session's granted scopes.
+        """Validate the requested scopes against the session's granted
+        scopes.
         Returns the missing scopes.
         """
         if isinstance(scopes, str):
@@ -217,7 +219,8 @@ class Tokens:
         This is intended for session retrieval by user and/or client, 
         and not meant for authentication. 
         For security reasons, the token id, access_token and expiry
-        are stripped by default. Pass `sanitized=False` to get full records.
+        are stripped by default. Pass `sanitized=False` to get full
+        records.
         """
         if schema.CAMPUS_KEY in match:
             raise ValueError(
@@ -237,7 +240,9 @@ class Tokens:
         return tokens
 
     def get_by_client_user(self, client_id: str, user_id: str) -> TokenRecord:
-        """Get the token for a client/user pair. Returns None if not found."""
+        """Get the token for a client/user pair. Returns None if not
+        found.
+        """
         results = self.find(sanitized=False, client_id=client_id, user_id=user_id)
         if len(results) == 0:
             raise api_errors.NotFoundError(

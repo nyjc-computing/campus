@@ -80,7 +80,8 @@ def list_users() -> campus_flask.JsonResponse:
 
 
 @bp.post('/')
-def new_user() -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def new_user(email: str, name: str) -> campus_flask.JsonResponse:
     """Summary:
         Create a new user in the system.
 
@@ -126,11 +127,7 @@ def new_user() -> campus_flask.JsonResponse:
                 "error": str
             }
     """
-    payload = campus_flask.validate_request_and_extract_json(
-        user.UserNew.__annotations__,
-        on_error=api_errors.raise_api_error,
-    )
-    resource = users.new(**payload)
+    resource = users.new(email=email, name=name)
     campus_flask.validate_json_response(
         user.UserResourceDict.__annotations__,
         resource,

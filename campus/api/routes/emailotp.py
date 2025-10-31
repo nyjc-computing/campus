@@ -23,13 +23,9 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.post('/request')
-def request_otp() -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def request_otp(email: str) -> campus_flask.JsonResponse:
     """Request a new OTP for email authentication."""
-    payload = campus_flask.validate_request_and_extract_json(
-        emailotp.OTPRequest.__annotations__,
-        on_error=api_errors.raise_api_error,
-    )
-    email = payload['email']
     # TODO: Validate email format
     # TODO: Check if email is already registered
     otp_code = otpauth.request(email)
@@ -52,13 +48,10 @@ def request_otp() -> campus_flask.JsonResponse:
 
 
 @bp.post('/verify')
-def verify_otp() -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def verify_otp(email: str, otp: str) -> campus_flask.JsonResponse:
     """Verify an OTP for email authentication."""
     # TODO: Validate email format
     # TODO: Validate OTP format
-    payload = campus_flask.validate_request_and_extract_json(
-        emailotp.OTPVerify.__annotations__,
-        on_error=api_errors.raise_api_error,
-    )
-    otpauth.verify(**payload)
+    otpauth.verify(email=email, otp=otp)
     return {"message": "OTP verified"}, 200

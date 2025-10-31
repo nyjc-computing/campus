@@ -21,7 +21,7 @@ variable dependencies. Performance optimizations (such as API keys) can be addre
 from typing import Any, TypedDict, NotRequired, Unpack
 
 from campus.common import devops, schema
-from campus.common.errors import api_errors
+from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import secret, uid
 
 from . import db, vault
@@ -139,7 +139,7 @@ def create_client(*, name: str, description: str) -> dict[str, Any]:
     }
 
 
-def get_client(client_id: str) -> dict[str, Any]:
+def get_client(client_id: str, sanitize=True) -> dict[str, Any]:
     """Retrieve a vault client by its ID.
 
     Args:
@@ -161,6 +161,8 @@ def get_client(client_id: str) -> dict[str, Any]:
     if not client_record:
         raise api_errors.NotFoundError(
             message=f"Vault client '{client_id}' not found", client_id=client_id)
+    if sanitize:
+        del client_record["secret_hash"]
     return client_record
 
 
@@ -252,16 +254,19 @@ def authenticate_client(client_id: str, client_secret: str) -> None:
             fetch_one=True
         )
     if not client_record:
-        raise api_errors.UnauthorizedError(
-            message=f"Invalid credentials", client_id=client_id)
+        raise auth_errors.UnauthorizedClientError(
+            "Invalid credentials",
+            client_id=client_id
+        )
     if not client_record["secret_hash"]:
         raise api_errors.InternalError(
             message=f"Vault client '{client_id}' has no secret configured", client_id=client_id)
     expected_hash = secret.hash_client_secret(
         client_secret, _get_secret_key())
     if client_record["secret_hash"] != expected_hash:
-        raise api_errors.UnauthorizedError(
-            message=f"Invalid secret for '{client_id}'", client_id=client_id)
+        raise auth_errors.UnauthorizedClientError(
+            "Invalid credentials",
+            client_id=client_id)
 
 
 def update_client(client_id: str, **updates: Unpack[ClientNew]) -> None:

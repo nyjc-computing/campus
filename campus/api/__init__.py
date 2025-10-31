@@ -1,4 +1,4 @@
-"""campus.apps.api
+"""campus.api
 
 Web API for Campus services.
 """
@@ -7,11 +7,10 @@ __all__ = []
 
 import flask
 
-from campus.apps.api import routes
-from campus.common.errors import api_errors
-import campus.client
+from campus.common.errors import auth_errors
 from campus.models import token, user, webauth
-vault = campus.client.vault.get_vault()
+
+from . import routes
 
 tokens = token.Tokens()
 users = user.User()
@@ -51,9 +50,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
                     client_secret
                 )
                 if "error" in auth_json:
-                    raise api_errors.UnauthorizedError(
-                        "Invalid client credentials"
-                    )
+                    auth_errors.raise_from_json(auth_json)
                 flask.g.current_client = vault.client.get(client_id)
             case "bearer":
                 access_token = auth.value
@@ -61,5 +58,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
                 token = tokens.get(access_token)
                 flask.g.current_user = users.get(token.user_id)
                 flask.g.current_client = vault.client.get(token.client_id)
-
+    
     app.register_blueprint(bp)
+
+    if isinstance(app, flask.Flask):
+        from campus.client.vault import get_vault
+        vault = get_vault()
+        app.secret_key = vault["api"]["SECRET_KEY"].get()["value"]

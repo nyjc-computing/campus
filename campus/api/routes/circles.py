@@ -24,18 +24,21 @@ def init_app(app: Flask | Blueprint) -> None:
 
 
 @bp.get('/')
-def list_circles() -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def list_circles(tag: str | None = None) -> campus_flask.JsonResponse:
     """List all circles matching filter requirements."""
-    filters = campus_flask.validate_request_and_extract_json(
-        circle.CircleRecordDict.__annotations__,
-        on_error=api_errors.raise_api_error,
-    ) or {}
-    result = circles.list(**filters)
+    result = circles.list(**{"tag": tag} if tag else {})
     return {"data": [circle.to_dict() for circle in result]}, 200
 
 
 @bp.post('/')
-def new_circle(*_: str) -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def new_circle(
+        name: str,
+        description: str,
+        tag: str,
+        parents: dict[str, int] | None = None,
+) -> campus_flask.JsonResponse:
     """Summary:
         Create a new circle.
 
@@ -80,18 +83,19 @@ def new_circle(*_: str) -> campus_flask.JsonResponse:
         422 Unprocessable Entity: None
             Returned if validation fails (e.g., tag or parent format is incorrect).
     """
-    payload = campus_flask.validate_request_and_extract_json(
-        circle.CircleNew.__annotations__,
-        on_error=api_errors.raise_api_error,
+    resource = circles.new(
+        name=name,
+        description=description,
+        tag=tag,
+        **{"parents": parents} if parents else {},
     )
-    resource = circles.new(**payload)
     campus_flask.validate_json_response(
         circle.CircleResource.__annotations__,
-        resource,
+        resource.to_dict(),
         on_error=api_errors.raise_api_error,
     )
     yapper.emit('campus.circles.new')
-    return dict(resource), 201
+    return resource.to_dict(), 201
 
 
 @bp.delete('/<string:circle_id>')
