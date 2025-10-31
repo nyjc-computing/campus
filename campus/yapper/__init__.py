@@ -18,8 +18,6 @@ __all__ = [
     "create",
 ]
 
-from campus.client.vault import VaultResource
-
 from .base import Event, EventHandler, YapperInterface
 
 
