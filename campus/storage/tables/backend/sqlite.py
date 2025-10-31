@@ -28,6 +28,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 
 from campus.common import devops
+from campus.model import Model
 from ..interface import TableInterface, PK
 
 
@@ -178,6 +179,11 @@ class SQLiteTable(TableInterface):
         matching_rows = self.get_matching(query)
         for row in matching_rows:
             self.delete_by_id(row[PK])
+
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(self, model: Model) -> None:
+        """Initialize the table from a Campus model definition."""
+        pass
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:

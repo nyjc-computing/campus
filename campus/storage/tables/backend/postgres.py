@@ -27,6 +27,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from campus.common import devops, env
+from campus.model import Model
 from campus.storage import errors
 
 from ..interface import TableInterface, PK
@@ -225,6 +226,11 @@ class PostgreSQLTable(TableInterface):
                             "delete", query, self.name
                         )
                     conn.commit()
+    
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(self, model: Model) -> None:
+        """Initialize the table from a Campus model definition."""
+        pass
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:
