@@ -40,3 +40,8 @@ def get_base_url(app_name: str) -> Url:
         raise ValueError(
             f"No base URL registered for app: {app_name} in environment: {devops.ENV}")
     return app_envs[devops.ENV]
+
+
+DEFAULT_LOGIN_EXPIRY_DAYS = 30
+DEFAULT_OAUTH_EXPIRY_MINUTES = 10
+DEFAULT_TOKEN_EXPIRY_DAYS = 7
