@@ -26,7 +26,7 @@ table.delete_by_id("123")
 import dataclasses
 import json
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from campus.common import devops
 from campus.common.utils import datacls
@@ -38,7 +38,7 @@ _TYPEMAP = {
     str: "TEXT",
     int: "INTEGER",
     float: "REAL",
-    bool: "BOOLEAN",
+    bool: "INTEGER",
 }
 
 
@@ -47,17 +47,44 @@ def _field_to_sql_schema(field: dataclasses.Field) -> str:
     field_name = field.name
     field_type = field.type
     sql_type = _TYPEMAP.get(field_type, "TEXT")
-    sql_constraints = []
+    sql_field_constraints = []
 
-    if field_name == PK:
-        sql_constraints.append("PRIMARY KEY")
+    if field_name == "__constraints__":
+        match field.default:
+            case constraints.Unique():
+                unique_fields = field.default.fields
+                unique_constraint = ", ".join(unique_fields)
+                return f"UNIQUE ({unique_constraint})"
+            case _:
+                raise ValueError(
+                    f"Unsupported constraint type: {field.default}"
+                )
+    elif field_name == PK:
+        sql_field_constraints.append("PRIMARY KEY")
     if constraints.UNIQUE in field.metadata.get("constraints", []):
-        sql_constraints.append("UNIQUE")
+        sql_field_constraints.append("UNIQUE")
     if not datacls.is_optional(field):
-        sql_constraints.append("NOT NULL")
+        sql_field_constraints.append("NOT NULL")
 
-    constraints_sql = " ".join(sql_constraints)
-    return f"{field_name} {sql_type} {constraints_sql}".strip()
+    constraints_sql = " ".join(sql_field_constraints)
+    return f"{field_name} {sql_type} {constraints_sql}"
+
+
+def _model_to_sql_schema(model: type[Model]) -> str:
+    """Convert a dataclass model to SQL schema."""
+    columns = []
+    constraints_ = []
+    for field in model.fields().values():
+        if not field.metadata.get("storage", True):
+            continue  # skip non-storage fields
+        if field.name == "__constraints__":
+            constraints_.append(field)
+            continue
+        columns.append(_field_to_sql_schema(field))
+    for field in constraints_:
+        columns.append(_field_to_sql_schema(field))
+    columns_sql = ", ".join(columns)
+    return f"CREATE TABLE IF NOT EXISTS ({columns_sql});"
 
 
 class SQLiteTable(TableInterface):
@@ -70,7 +97,6 @@ class SQLiteTable(TableInterface):
         """Initialize the SQLite table interface."""
         super().__init__(name)
         self._ensure_connection()
-        self._ensure_table()
 
     @classmethod
     def _ensure_connection(cls):
@@ -79,19 +105,6 @@ class SQLiteTable(TableInterface):
             cls._connection = sqlite3.connect(
                 ":memory:", check_same_thread=False)
             cls._connection.row_factory = sqlite3.Row
-
-    def _ensure_table(self):
-        """Ensure the table exists."""
-        assert self._connection is not None, "Database connection not initialized"
-        cursor = self._connection.cursor()
-        cursor.execute(f"""
-            CREATE TABLE IF NOT EXISTS {self.name} (
-                id TEXT PRIMARY KEY,
-                created_at TEXT,
-                data TEXT
-            )
-        """)
-        self._connection.commit()
 
     def _serialize_row(self, row: Dict[str, Any]) -> tuple:
         """Serialize a row for storage."""
@@ -213,18 +226,7 @@ class SQLiteTable(TableInterface):
         """Initialize the table from a Campus model definition."""
         self._ensure_connection()
         assert self._connection is not None, "Database connection not initialized"
-        # Build the CREATE TABLE statement
-        columns_sql = []
-        for name, field in model.fields().items():
-            if not field.metadata.get("storage", True):
-                continue  # skip non-storage fields
-            column_sql = _field_to_sql_schema(field)
-            columns_sql.append(column_sql)
-        create_table_sql = f"""
-            CREATE TABLE IF NOT EXISTS {self.name} (
-                {', '.join(columns_sql)}
-            )
-        """
+        create_table_sql = _model_to_sql_schema(model)
         cursor = self._connection.cursor()
         try:
             cursor.execute(create_table_sql)
