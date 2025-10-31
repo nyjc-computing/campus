@@ -23,13 +23,41 @@ table.delete_by_id("123")
 ```
 """
 
+import dataclasses
 import json
 import sqlite3
 from typing import Any, Dict, List, Optional
 
 from campus.common import devops
-from campus.model import Model
+from campus.common.utils import datacls
+from campus.model import Model, constraints
 from ..interface import TableInterface, PK
+
+
+_TYPEMAP = {
+    str: "TEXT",
+    int: "INTEGER",
+    float: "REAL",
+    bool: "BOOLEAN",
+}
+
+
+def _field_to_sql_schema(field: dataclasses.Field) -> str:
+    """Convert a dataclass field to a SQL column definition."""
+    field_name = field.name
+    field_type = field.type
+    sql_type = _TYPEMAP.get(field_type, "TEXT")
+    sql_constraints = []
+
+    if field_name == PK:
+        sql_constraints.append("PRIMARY KEY")
+    if constraints.UNIQUE in field.metadata.get("constraints", []):
+        sql_constraints.append("UNIQUE")
+    if not datacls.is_optional(field):
+        sql_constraints.append("NOT NULL")
+
+    constraints_sql = " ".join(sql_constraints)
+    return f"{field_name} {sql_type} {constraints_sql}".strip()
 
 
 class SQLiteTable(TableInterface):
@@ -181,9 +209,29 @@ class SQLiteTable(TableInterface):
             self.delete_by_id(row[PK])
 
     @devops.block_env(devops.PRODUCTION)
-    def init_from_model(self, model: Model) -> None:
+    def init_from_model(self, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
-        pass
+        self._ensure_connection()
+        assert self._connection is not None, "Database connection not initialized"
+        # Build the CREATE TABLE statement
+        columns_sql = []
+        for field in dataclasses.fields(model):
+            column_sql = _field_to_sql_schema(field)
+            columns_sql.append(column_sql)
+        create_table_sql = f"""
+            CREATE TABLE IF NOT EXISTS {self.name} (
+                {', '.join(columns_sql)}
+            )
+        """
+        cursor = self._connection.cursor()
+        try:
+            cursor.execute(create_table_sql)
+        except Exception as e:
+            raise
+        else:
+            self._connection.commit()
+        finally:
+            self._connection.close()
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:

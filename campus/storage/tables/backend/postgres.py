@@ -23,14 +23,42 @@ table.delete_by_id("123")
 ```
 """
 
+import dataclasses
+import typing
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from campus.common import devops, env
-from campus.model import Model
+from campus.common.utils import datacls
+from campus.model import Model, constraints
 from campus.storage import errors
 
 from ..interface import TableInterface, PK
+
+
+_TYPEMAP = {
+    str: "TEXT",
+    int: "INTEGER",
+    float: "REAL",
+    bool: "BOOLEAN",
+}
+def _field_to_sql_schema(field: dataclasses.Field) -> str:
+    """Convert a dataclass field to a SQL column definition."""
+    field_name = field.name
+    field_type = field.type
+    sql_type = _TYPEMAP.get(field_type, "TEXT")
+    sql_constraints = []
+
+    if field_name == PK:
+        sql_constraints.append("PRIMARY KEY")
+    if constraints.UNIQUE in field.metadata.get("constraints", []):
+        sql_constraints.append("UNIQUE")
+    if not datacls.is_optional(field):
+        sql_constraints.append("NOT NULL")
+
+    constraints_sql = " ".join(sql_constraints)
+    return f"{field_name} {sql_type} {constraints_sql}".strip()
 
 
 def _get_db_uri() -> str:
@@ -228,9 +256,20 @@ class PostgreSQLTable(TableInterface):
                     conn.commit()
     
     @devops.block_env(devops.PRODUCTION)
-    def init_from_model(self, model: Model) -> None:
+    def init_from_model(self, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
-        pass
+        columns = []
+        for name, field in model.fields().items():
+            column_def = _field_to_sql_schema(field)
+            columns.append(column_def)
+        columns_sql = ", ".join(columns)
+        create_table_sql = f"CREATE TABLE IF NOT EXISTS {self.name} ({columns_sql});"
+        with self._get_connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(create_table_sql)
+            finally:
+                conn.close()
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:
