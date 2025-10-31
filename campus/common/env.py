@@ -5,6 +5,7 @@ An environment proxy.
 
 import os
 import sys
+from typing import Iterator
 
 # Expected environment variables (for type checking)
 
@@ -64,7 +65,7 @@ class EnvironmentProxy:
         """
         return os.environ[name]
 
-    def __iter__(self) -> iter[str]:
+    def __iter__(self) -> Iterator[str]:
         """Iterate over environment variable names.
 
         Returns:
