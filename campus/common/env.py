@@ -41,7 +41,6 @@ class EnvironmentProxy:
         """
         return name in os.environ
 
-
     def __delattr__(self, name: str):
         """Delete environment variable by name.
 
@@ -65,8 +64,7 @@ class EnvironmentProxy:
         """
         return os.environ[name]
 
-
-    def __iter__(self):
+    def __iter__(self) -> iter[str]:
         """Iterate over environment variable names.
 
         Returns:
@@ -74,8 +72,7 @@ class EnvironmentProxy:
         """
         return iter(os.environ)
 
-
-    def __setattr__(self, name: str, value: str):
+    def __setattr__(self, name: str, value: str) -> None:
         """Set environment variable by name.
 
         Args:
