@@ -67,10 +67,10 @@ def _field_to_sql_schema(field: dataclasses.Field) -> str:
         sql_field_constraints.append("NOT NULL")
 
     constraints_sql = " ".join(sql_field_constraints)
-    return f"{field_name} {sql_type} {constraints_sql}"
+    return f"\"{field_name}\" {sql_type} {constraints_sql}"
 
 
-def _model_to_sql_schema(model: type[Model]) -> str:
+def _model_to_sql_schema(name: str, model: type[Model]) -> str:
     """Convert a dataclass model to SQL schema."""
     columns = []
     constraints_ = []
@@ -84,7 +84,7 @@ def _model_to_sql_schema(model: type[Model]) -> str:
     for field in constraints_:
         columns.append(_field_to_sql_schema(field))
     columns_sql = ", ".join(columns)
-    return f"CREATE TABLE IF NOT EXISTS ({columns_sql});"
+    return f"CREATE TABLE IF NOT EXISTS \"{name}\" ({columns_sql});"
 
 
 class SQLiteTable(TableInterface):
@@ -222,15 +222,16 @@ class SQLiteTable(TableInterface):
             self.delete_by_id(row[PK])
 
     @devops.block_env(devops.PRODUCTION)
-    def init_from_model(self, model: type[Model]) -> None:
+    def init_from_model(self, name: str, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
         self._ensure_connection()
         assert self._connection is not None, "Database connection not initialized"
-        create_table_sql = _model_to_sql_schema(model)
+        create_table_sql = _model_to_sql_schema(name, model)
         cursor = self._connection.cursor()
         try:
             cursor.execute(create_table_sql)
         except Exception as e:
+            breakpoint()
             raise
         else:
             self._connection.commit()

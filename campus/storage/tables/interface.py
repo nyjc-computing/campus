@@ -58,6 +58,6 @@ class TableInterface(ABC):
         ...
 
     @abstractmethod
-    def init_from_model(self, model: type[Model]) -> None:
+    def init_from_model(self, name: str, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
         ...

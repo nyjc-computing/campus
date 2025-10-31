@@ -69,9 +69,9 @@ def _field_to_sql_schema(field: dataclasses.Field) -> str:
         sql_field_constraints.append("NOT NULL")
 
     constraints_sql = " ".join(sql_field_constraints)
-    return f"{field_name} {sql_type} {constraints_sql}"
+    return f"\"{field_name}\" {sql_type} {constraints_sql}"
 
-def _model_to_sql_schema(model: type[Model]) -> str:
+def _model_to_sql_schema(name: str, model: type[Model]) -> str:
     """Convert a dataclass model to SQL schema."""
     columns = []
     constraints_ = []
@@ -85,7 +85,7 @@ def _model_to_sql_schema(model: type[Model]) -> str:
     for field in constraints_:
         columns.append(_field_to_sql_schema(field))
     columns_sql = ", ".join(columns)
-    return f"CREATE TABLE IF NOT EXISTS ({columns_sql});"
+    return f"CREATE TABLE IF NOT EXISTS \"{name}\" ({columns_sql});"
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
@@ -284,9 +284,9 @@ class PostgreSQLTable(TableInterface):
                     conn.commit()
     
     @devops.block_env(devops.PRODUCTION)
-    def init_from_model(self, model: type[Model]) -> None:
+    def init_from_model(self, name: str, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
-        create_table_sql = _model_to_sql_schema(model)
+        create_table_sql = _model_to_sql_schema(name, model)
         with self._get_connection() as conn:
             try:
                 with conn.cursor() as cursor:
