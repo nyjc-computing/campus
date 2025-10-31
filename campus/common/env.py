@@ -5,6 +5,7 @@ An environment proxy.
 
 import os
 import sys
+from typing import Iterator
 
 # Expected environment variables (for type checking)
 
@@ -41,8 +42,7 @@ class EnvironmentProxy:
         """
         return name in os.environ
 
-
-    def __delattr__(self, name: str):
+    def __delattr__(self, name: str) -> None:
         """Delete environment variable by name.
 
         Args:
@@ -51,20 +51,21 @@ class EnvironmentProxy:
         if name in os.environ:
             del os.environ[name]
 
-
-    def __getattr__(self, name: str) -> str | None:
+    def __getattr__(self, name: str) -> str:
         """Get environment variable by name.
 
         Args:
             name (str): Name of the environment variable.
 
         Returns:
-            str | None: Value of the environment variable, or None if not set.
+            str: Value of the environment variable.
+
+        Raises:
+            KeyError: If the environment variable is not set.
         """
-        return os.getenv(name)
+        return os.environ[name]
 
-
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         """Iterate over environment variable names.
 
         Returns:
@@ -72,8 +73,7 @@ class EnvironmentProxy:
         """
         return iter(os.environ)
 
-
-    def __setattr__(self, name: str, value: str):
+    def __setattr__(self, name: str, value: str) -> None:
         """Set environment variable by name.
 
         Args:
@@ -82,6 +82,43 @@ class EnvironmentProxy:
         """
         os.environ[name] = value
 
+    def get(self, name: str, default: str | None = None) -> str | None:
+        """Get environment variable by name.
+
+        Args:
+            name (str): Name of the environment variable.
+            default (str | None): Default value to return if not set.
+
+        Returns:
+            str | None: Value of the environment variable, or default if not set.
+        """
+        return os.getenv(name, default)
+
+    def getsecret(self, name: str, vault_label: str) -> str:
+        """Get environment variable by name, falling back to retrieval
+        from campus.vault if not set.
+
+        Args:
+            name (str): Name of the environment variable.
+            vault_label (str): Label to use when retrieving from vault.
+
+        Returns:
+            str: Value of the environment variable or vault secret.
+
+        Raises:
+            OSError: If neither environment variable nor vault secret is found.
+            access.PermissionError: If access to the vault label is denied.
+        """
+        if name in self:
+            return self[name]
+        from campus.vault import access, get_vault
+        access.raise_for_access(
+            self.CLIENT_ID,
+            vault_label,
+            access.READ
+        )
+        vault = get_vault(vault_label)
+        return vault.get(name)
 
     def keys(self) -> list[str]:
         """Get a list of all environment variable names.

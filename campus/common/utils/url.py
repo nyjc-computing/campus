@@ -31,7 +31,7 @@ def create_url(
 
 def full_url_for(
         endpoint: str,
-        hostname: str = env.HOSTNAME,
+        hostname: str | None = None,
         **kwargs
 ) -> str:
     """Get the full URL for the current request.
@@ -42,6 +42,7 @@ def full_url_for(
         **kwargs: Additional arguments to build the URL. Passed to
                   `url_for`.
     """
+    hostname = hostname or env.HOSTNAME
     # Validate that endpoint does not contain scheme or domain
     if urlparse(endpoint).scheme or urlparse(endpoint).netloc:
         raise ValueError("Endpoint should not contain scheme or domain.")

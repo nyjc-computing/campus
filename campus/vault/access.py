@@ -185,18 +185,6 @@ def grant_access(client_id: str, label: str, access: int) -> None:
             message="Access for this client and label already exists.")
 
 
-def revoke_access(client_id: str, label: str) -> None:
-    """Revoke a client's access to a vault label."""
-    with db.get_connection_context() as conn:
-        db.execute_query(
-            conn,
-            "DELETE FROM vault_access WHERE client_id = %s AND label = %s",
-            (client_id, label),
-            fetch_one=False,
-            fetch_all=False
-        )
-
-
 def has_access(client_id: str, label: str, required_access: int) -> bool:
     """Check if a client has the required access permissions for a vault label.
 
@@ -235,3 +223,24 @@ def has_access(client_id: str, label: str, required_access: int) -> bool:
             return False
         granted_access = access_record["access"]
         return (granted_access & required_access) == required_access
+
+
+def raise_for_access(client_id: str, label: str, required_access: int) -> None:
+    """Raise PermissionError if client lacks required access to vault label."""
+    if not has_access(client_id, label, required_access):
+        raise PermissionError(
+            f"Client '{client_id}' lacks required access "
+            f"to vault label '{label}'"
+        )
+
+
+def revoke_access(client_id: str, label: str) -> None:
+    """Revoke a client's access to a vault label."""
+    with db.get_connection_context() as conn:
+        db.execute_query(
+            conn,
+            "DELETE FROM vault_access WHERE client_id = %s AND label = %s",
+            (client_id, label),
+            fetch_one=False,
+            fetch_all=False
+        )

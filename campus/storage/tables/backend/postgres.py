@@ -36,12 +36,7 @@ vault = get_vault()["storage"]
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
-    if db_uri := env.POSTGRESDB_URI:
-        return db_uri
-    from campus.vault import access, vault
-    if not access.has_access(env.CLIENT_ID, "storage", access.READ):
-        raise access.PermissionError(f"{__name__} does not have {access.READ} permission for vault 'storage'")
-    db_uri = vault.get_vault("storage").get("POSTGRESODB_URI")
+    db_uri = env.getsecret("POSTGRESDB_URI", "storage")
     return db_uri
 
 
