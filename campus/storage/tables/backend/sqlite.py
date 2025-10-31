@@ -27,7 +27,8 @@ import json
 import sqlite3
 from typing import Any, Dict, List, Optional
 
-from campus.storage.tables.interface import TableInterface, PK
+from campus.common import devops
+from ..interface import TableInterface, PK
 
 
 class SQLiteTable(TableInterface):
@@ -178,7 +179,8 @@ class SQLiteTable(TableInterface):
         for row in matching_rows:
             self.delete_by_id(row[PK])
 
-    def init_table(self, schema: str) -> None:
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_schema(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
 
         This method is intended for development/testing environments.

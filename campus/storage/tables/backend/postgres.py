@@ -27,8 +27,9 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from campus.common import devops, env
-from campus.storage.tables.interface import TableInterface, PK
 from campus.storage import errors
+
+from ..interface import TableInterface, PK
 
 
 def _get_db_uri() -> str:
@@ -226,7 +227,7 @@ class PostgreSQLTable(TableInterface):
                     conn.commit()
 
     @devops.block_env(devops.PRODUCTION)
-    def init_table(self, schema: str) -> None:
+    def init_from_schema(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
 
         This method is intended for development/testing environments.
