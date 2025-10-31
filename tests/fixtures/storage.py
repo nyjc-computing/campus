@@ -30,12 +30,12 @@ def init():
     import campus.vault
     campus.vault.access.grant_access(
         client_id=client_id,
-        label="storage",
+        label="campus.api",
         access=campus.vault.access.ALL
     )
 
     # Set up storage vault with database URIs as secrets
-    storage_vault = campus.vault.get_vault("storage")
+    storage_vault = campus.vault.get_vault("campus.api")
 
     # PostgreSQL URI
     postgres_uri = setup.get_db_uri("storagedb")

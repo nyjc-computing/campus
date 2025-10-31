@@ -49,14 +49,14 @@ class MongoCollectionError(StorageError):
 
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
-    db_uri = env.getsecret("MONGODB_URI", "storage")
+    db_uri = env.getsecret("MONGODB_URI", env.DEPLOY)
     return db_uri
 
 
 def _get_mongodb_name() -> str:
     """Get the MongoDB database name from the vault using the core client API."""
     try:
-        return env.getsecret("MONGODB_NAME", "storage")
+        return env.getsecret("MONGODB_NAME", env.DEPLOY)
     except Exception as e:
         raise MongoCollectionError(
             f"Failed to retrieve MONGODB_NAME from 'storage' vault: {e}"

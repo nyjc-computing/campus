@@ -7,6 +7,7 @@ __all__ = []
 
 import flask
 
+from campus.common import env
 from campus.common.errors import auth_errors
 from campus.models import token, user, webauth
 
@@ -64,4 +65,4 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     if isinstance(app, flask.Flask):
         from campus.client.vault import get_vault
         vault = get_vault()
-        app.secret_key = vault["api"]["SECRET_KEY"].get()["value"]
+        app.secret_key = vault[env.DEPLOY]["SECRET_KEY"].get()["value"]
