@@ -14,37 +14,20 @@ minimal dependencies, ideally none. Data processing logic should be
 kept out of models.
 """
 
-from dataclasses import dataclass, field
-import typing
-
-from campus.common import schema
-from campus.common.utils import uid
+__all__ = [
+    "AuthSession",
+    "Client",
+    "ClientAccess",
+    "LoginSession",
+    "Model",
+    "OAuthToken",
+    "User",
+    "UserCredentials"
+]
 
 from .base import Model
-
-
-@dataclass(eq=False, frozen=True, kw_only=True)
-class Client(Model):
-    """Represents a Campus client application."""
-    id: schema.CampusID = field(
-        default_factory=(
-            lambda: uid.generate_category_uid("client", length=8)
-        )
-    )
-    created_at: schema.DateTime = field(
-        default_factory=schema.DateTime.utcnow
-    )
-    name: str
-    description: str
-    permissions: dict[str, int] = field(default_factory=dict)
-
-
-@dataclass(eq=False, frozen=True, kw_only=True)
-class User(Model):
-    id: schema.UserID  # type: ignore[override]
-    email: schema.Email
-    name: schema.String
-    created_at: schema.DateTime = field(
-        default_factory=schema.DateTime.utcnow
-    )
-    activated_at: schema.DateTime | None = None
+from .client import Client, ClientAccess
+from .credentials import OAuthToken, UserCredentials
+from .login import LoginSession
+from .session import AuthSession
+from .user import User

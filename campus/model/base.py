@@ -2,6 +2,7 @@
 
 Base Model class.
 """
+
 import dataclasses
 from dataclasses import dataclass
 import typing
@@ -21,17 +22,41 @@ class FieldMeta(typing.TypedDict):
     resource: bool
     # Whether the field is stored in the database. Default is True.
     storage: bool
+    # Any additional constraints for the field, e.g., UNIQUE.
+    constraints: typing.Sequence[str]
 
 
-@dataclass(frozen=True)
+@dataclass(kw_only=True)
 class Model(typing.Protocol):
     """Base class for all models in Campus."""
     id: schema.CampusID | schema.UserID
-    created_at: schema.DateTime
+    created_at: schema.DateTime = dataclasses.field(
+        default_factory=schema.DateTime.utcnow
+    )
 
     @classmethod
-    def fields(cls) -> dict[str, dataclasses.Field]:
+    def fields(cls) -> dict[str, dataclasses.Field]:  # type: ignore[override]
         return {field.name: field for field in dataclasses.fields(cls)}
+
+    @classmethod
+    def validate_update(cls, update: dict[str, typing.Any]) -> None:
+        """Validate an update dictionary against the model's mutable
+        fields.
+
+        Args:
+            update: Dictionary of fields to update
+
+        Raises:
+            ValueError: If any field in the update is not mutable
+        """
+        for field_name in update.keys():
+            field = cls.fields().get(field_name)
+            if field is None:
+                raise ValueError(
+                    f"Field '{field_name}' does not exist in model"
+                )
+            if not field.metadata.get("mutable", False):
+                raise ValueError(f"Field '{field_name}' is not mutable")
 
     @classmethod
     def from_resource(cls, resource: dict[str, typing.Any]) -> "Model":
@@ -45,7 +70,10 @@ class Model(typing.Protocol):
         )
 
     @classmethod
-    def from_storage(cls, record: dict[str, typing.Any]) -> "Model":
+    def from_storage(
+            cls: type[typing.Self],
+            record: dict[str, typing.Any]
+    ) -> typing.Self:
         """Create a model instance from a storage record dictionary."""
         return cls(
             **{
