@@ -1,6 +1,10 @@
-"""campus.auth.resources.token
+"""campus.auth.resources.credentials
 
-Token resource for Campus API.
+Credentials resource for Campus API.
+
+This includes user credentials and tokens.
+
+Credentials link an issued token to a provider, client, and user.
 """
 
 import typing
@@ -39,7 +43,12 @@ def delete_by_provider_user(
 def find_credentials(
         *,
         provider: str,
-        user_id: schema.UserID
+        user_id: schema.UserID,
+) -> campus.model.UserCredentials: ...
+@typing.overload
+def find_credentials(
+        *,
+        access_token: str,
 ) -> campus.model.UserCredentials: ...
 @typing.overload
 def find_credentials(
@@ -57,6 +66,7 @@ def find_credentials(
         *,
         provider: str | None = None,
         user_id: schema.UserID | None = None,
+        access_token: str | None = None,
 ):
     """Find tokens matching criteria.
 
@@ -67,8 +77,10 @@ def find_credentials(
         query["provider"] = provider
     if user_id:
         query["user_id"] = str(user_id)
+    if access_token:
+        query["id"] = access_token
     records = cred_storage.get_matching(query)
-    if provider and user_id:
+    if (provider and user_id) or access_token:
         return (
             campus.model.UserCredentials.from_storage(records[0])
             if records else None
