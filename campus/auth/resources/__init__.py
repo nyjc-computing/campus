@@ -1,6 +1,6 @@
 """campus.auth.resources
 
-Namespace for ampus.auth resources.
+Namespace for campus.auth resources.
 Note: These resources directly access storage without authentication,
 and with minimal model-based validation.
 They are intended for internal use within campus.auth.
