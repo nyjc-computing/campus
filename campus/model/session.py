@@ -23,6 +23,7 @@ class AuthSession(Model):
     # created_at inherited from BaseRecord
     expiry_seconds: InitVar[int | None] = None
     expires_at: schema.DateTime = None  # type: ignore
+    provider: str
     client_id: schema.CampusID
     user_id: schema.UserID | None = None
     # TODO: add ip_address
