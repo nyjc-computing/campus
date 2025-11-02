@@ -1,4 +1,4 @@
-"""campus.auth.resources.ogin
+"""campus.auth.resources.login
 
 Login session resource for Campus API.
 """
