@@ -231,7 +231,6 @@ class SQLiteTable(TableInterface):
         try:
             cursor.execute(create_table_sql)
         except Exception as e:
-            breakpoint()
             raise
         else:
             self._connection.commit()
