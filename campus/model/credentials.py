@@ -70,6 +70,7 @@ class OAuthToken(Model):
 class UserCredentials(Model):
     __constraints__ = constraints.Unique("provider", "user_id")
     provider: str
+    client_id: str
     user_id: schema.UserID
     # storage will hold token_id, while resource will hold the token
     token: OAuthToken = field(metadata={

@@ -8,9 +8,10 @@ from typing import Literal
 import flask
 import werkzeug
 
-import campus.integrations as integrations
 from campus.common import flask as campus_flask, schema
 from campus.common.errors import auth_errors
+
+from . import proxy
 
 PROVIDER = 'github'
 
@@ -24,7 +25,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 @bp.before_request
 def before_request() -> None:
-    flask.g.provider = integrations.github.get_provider()
+    flask.g.provider = proxy.get_proxy()
 
 
 @bp.get('/authorize')
