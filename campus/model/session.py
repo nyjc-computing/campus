@@ -9,7 +9,6 @@ from dataclasses import InitVar, dataclass, field
 
 from campus.common import schema
 from campus.common.utils import uid, utc_time
-import campus.config
 
 from .base import Model
 
