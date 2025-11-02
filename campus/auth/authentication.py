@@ -51,14 +51,14 @@ def authenticate_client_from_request(
             # raises UnauthorizedError for invalid access_token
             # TODO: use campus.auth.resources to retrieve token,
             # retrieve credentials
-            credentials = resources.credentials.find_credentials(
-                access_token=access_token
+            credentials = resources.credentials["campus"].get(
+                token_id=access_token
             )
-            flask.g.current_user = resources.user.get(
+            flask.g.current_user = resources.user[
                 credentials.user_id
-            )
-            flask.g.current_client = resources.client.get(
-                credentials.client_id
+            ].get()
+            flask.g.current_client = (
+                resources.client[credentials.client_id].get()
             )
             flask.g.user_agent = request.headers.get("User-Agent", "")
 

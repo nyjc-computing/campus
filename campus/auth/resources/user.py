@@ -32,77 +32,6 @@ def init_storage() -> None:
     user_storage.init_from_model("users", campus.model.User)
 
 
-def activate(user_id: schema.UserID) -> None:
-    """Activate a user account.
-
-    Args:
-        user_id: The user identifier
-    """
-    user = get(user_id)
-    if user.activated_at:
-        raise api_errors.InvalidRequestError(
-            "Account already activated",
-            user_id=user_id
-        )
-    user_storage.update_by_id(
-        user_id,
-        {"activated_at": schema.DateTime.utcnow()}
-    )
-
-def delete(user_id: schema.UserID) -> None:
-    """Delete a user by ID.
-
-    Args:
-        user_id: The user ID
-    """
-    user_storage.delete_by_id(user_id)
-
-def get(user_id: schema.UserID) -> campus.model.User:
-    """Get a user by ID.
-
-    Args:
-        user_id: The user ID
-
-    Returns:
-        User instance
-    """
-    record = user_storage.get_by_id(user_id)
-    if not record:
-        raise api_errors.NotFoundError(
-            f"User '{user_id}' not found",
-            user_id=user_id
-        )
-    return _from_record(record=record)
-
-
-def new(**kwargs: typing.Any) -> campus.model.User:
-    """Create a new Campus user.
-
-    Args:
-        **kwargs: Additional fields for user creation
-
-    Returns:
-        User instance
-    """
-    user = _from_record(kwargs)
-    user_storage.insert_one(user.to_storage())
-    return user
-
-
-def update(user_id: schema.UserID, **updates: typing.Any) -> None:
-    """Update a Campus user's information.
-
-    Args:
-        user_id: The user identifier
-        **updates: Fields to update
-
-    Raises:
-        NotFoundError: If user not found
-    """
-    campus.model.User.validate_update(updates)
-    user_storage.update_by_id(user_id, updates)
-
-
 class UsersResource:
     """Represents the users resource in Campus API Schema."""
 
@@ -118,7 +47,7 @@ class UsersResource:
         return UserResource(user_id)
 
     def new(self, **kwargs: typing.Any) -> campus.model.User:
-        """Create a new user and return it.
+        """Create a new Campus user.
 
         Args:
             **kwargs: Additional fields for user creation
@@ -126,35 +55,68 @@ class UsersResource:
         Returns:
             User instance
         """
-        return new(**kwargs)
+        user = _from_record(kwargs)
+        user_storage.insert_one(user.to_storage())
+        return user
 
 
 class UserResource:
     """Represents a single user in Campus API Schema."""
 
     def __init__(self, user_id: schema.UserID):
-        self._user_id = user_id
+        self.user_id = user_id
 
     def activate(self) -> None:
-        """Activate the user account."""
-        activate(self._user_id)
+        """Activate a user account.
+
+        Args:
+            user_id: The user identifier
+        """
+        user = self.get()
+        if user.activated_at:
+            raise api_errors.InvalidRequestError(
+                "Account already activated",
+                user_id=self.user_id
+            )
+        user_storage.update_by_id(
+            self.user_id,
+            {"activated_at": schema.DateTime.utcnow()}
+        )
 
     def delete(self) -> None:
-        """Delete the user record."""
-        delete(self._user_id)
+        """Delete a user by ID.
+
+        Args:
+            user_id: The user ID
+        """
+        user_storage.delete_by_id(self.user_id)
 
     def get(self) -> campus.model.User:
-        """Get the user record.
+        """Get a user by ID.
+
+        Args:
+            user_id: The user ID
 
         Returns:
             User instance
         """
-        return get(self._user_id)
+        record = user_storage.get_by_id(self.user_id)
+        if not record:
+            raise api_errors.NotFoundError(
+                f"User '{self.user_id}' not found",
+                user_id=self.user_id
+            )
+        return _from_record(record=record)
 
     def update(self, **updates: typing.Any) -> None:
-        """Update the user record.
+        """Update a Campus user's information.
 
         Args:
-            **updates: Fields to update (email, name)
+            user_id: The user identifier
+            **updates: Fields to update
+
+        Raises:
+            NotFoundError: If user not found
         """
-        update(self._user_id, **updates)
+        campus.model.User.validate_update(updates)
+        user_storage.update_by_id(self.user_id, updates)

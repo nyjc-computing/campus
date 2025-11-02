@@ -8,7 +8,6 @@ External clients should access resources via API.
 """
 
 __all__ = [
-    "access",
     "client",
     "credentials",
     "login",
@@ -17,12 +16,16 @@ __all__ = [
     "vault",
 ]
 
-from . import(
-    access,
-    client,
-    credentials,
-    login,
-    session,
-    user,
-    vault,
-)
+from .client import ClientsResource
+from .credentials import CredentialsResource
+from .login import LoginSessionsResource
+from .session import AuthSessionsResource
+from .user import UsersResource
+from .vault import VaultsResource
+
+client = ClientsResource()
+credentials = CredentialsResource()
+login = LoginSessionsResource()
+session = AuthSessionsResource()
+user = UsersResource()
+vault = VaultsResource()

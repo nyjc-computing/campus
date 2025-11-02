@@ -3,21 +3,9 @@
 Implements Campus API for vault access.
 """
 
-__all__ = ['get']
-
 import campus.storage
 
 vault_storage = campus.storage.get_table("vault")
-
-
-def get(label: str) -> "VaultResource":
-    """Get the Vault service client.
-
-    Args:
-        label: The vault label to access
-        permission: The required permission bitflag for access
-    """
-    return VaultResource(label)
 
 
 class VaultsResource:
@@ -32,7 +20,7 @@ class VaultsResource:
         Returns:
             VaultResource instance
         """
-        return get(label)
+        return VaultResource(label)
 
 
 class VaultResource:

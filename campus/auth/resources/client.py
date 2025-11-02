@@ -13,8 +13,6 @@ from campus.common.utils import secret
 import campus.model
 import campus.storage
 
-from . import access
-
 client_storage = campus.storage.get_table("clients")
 access_storage = campus.storage.get_table("client_access")
 
@@ -57,162 +55,56 @@ def init_storage() -> None:
     access_storage.init_from_model("client_access", campus.model.ClientAccess)
 
 
-def authenticate(client_id: schema.CampusID, client_secret: str) -> None:
-    """Authenticate a client using their ID and secret.
-    Pushes the authenticated client into flask.g.current_client if
-    successful, otherwise raises an authentication error.
-
-    Args:
-        client_id: The client identifier
-        client_secret: The client secret
-
-    Raises:
-        UnauthorizedError: If client not found or client secret is invalid
-    """
-    client = get(client_id)
-    if not client.secret_hash:
-        raise auth_errors.ServerError(
-            "Invalid configuration",
-            client_id=client_id
-        )
-    expected_hash = secret.hash_client_secret(
-        client_secret,
-        env.getsecret("SECRET_KEY", env.DEPLOY)
-    )
-    if client.secret_hash != expected_hash:
-        raise auth_errors.UnauthorizedClientError(
-            "Invalid credentials",
-            client_id=client_id
-        )
-    if flask.has_request_context():
-        flask.g.current_client = get(client_id)
-
-
-def get(client_id: schema.CampusID) -> campus.model.Client:
-    """Get a client by ID.
-
-    Args:
-        client_id: The vault client ID
-
-    Returns:
-        Client instance
-    """
-    record = client_storage.get_by_id(client_id)
-    if not record:
-        raise auth_errors.InvalidRequestError(
-            f"Client '{client_id}' not found",
-            client_id=client_id
-        )
-    return _from_record(
-        record=record,
-        permissions=_get_client_permissions(client_id)
-    )
-
-
-def new(**kwargs: typing.Any) -> campus.model.Client:
-    """Create a new Campus client.
-
-    Args:
-        **kwargs: Additional fields for client creation
-    
-    Returns:
-        Client instance
-    """
-    client = _from_record(kwargs)
-    client_storage.insert_one(client.to_storage())
-    return client
-
-
-def revoke(client_id: schema.CampusID) -> str:
-    """Revoke a vault client's secret and regenerate it.
-
-    Args:
-        client_id: The client identifier
-
-    Returns:
-        The generated client secret
-    """
-    # Check if client exists first
-    get(client_id)
-    new_secret = secret.generate_client_secret()
-    secret_hash = secret.hash_client_secret(new_secret, env.SECRET_KEY)
-    client_storage.update_by_id(client_id, {"secret_hash": secret_hash})
-    return new_secret
-
-
-def update(client_id: schema.CampusID, **updates: typing.Any) -> None:
-    """Update a vault client's information.
-
-    Args:
-        client_id: The client identifier
-        **updates: Fields to update (name, description)
-
-    Raises:
-        NotFoundError: If client not found
-    """
-    campus.model.Client.validate_update(updates)
-    client_storage.update_by_id(client_id, updates)
-
-
-def check_vault_access(
-        client_id: str,
-        vault_label: str,
-        required_permission: int
-) -> None:
-    """Check if client has required permission for vault label.
-
-    Args:
-        client_id: The authenticated client ID
-        vault_label: The vault label to check access for
-        required_permission: The permission bitflag required (READ,
-        CREATE, UPDATE, DELETE)
-
-    Raises:
-        VaultAccessDeniedError: If client lacks the required permission
-    """
-    client = get(client_id)
-    vault_access = client.permissions.get(vault_label, 0)
-    if not vault_access & required_permission:
-        reqd_perms = access.access_to_permissions(required_permission)
-        raise auth_errors.AccessDeniedError(
-            (
-                f"Client '{client_id}' does not have "
-                f"{reqd_perms} permission for vault '{vault_label}'"
-            ),
-            client_id=client_id,
-            label=vault_label,
-            permission=reqd_perms
-        )
-
-
 class ClientsResource:
     """Represents the clients resource in Campus API Schema."""
 
-    def __getitem__(self, client_id: schema.CampusID) -> "ClientResource":
-        """Get a client record by client ID.
+    def __getitem__(
+            self,
+            client_id: schema.CampusID
+    ) -> "ClientResource":
+        """Get a client resource by client ID.
 
         Args:
             client_id: The vault client ID
 
         Returns:
-            ClientRecord instance
+            ClientResource instance
         """
         return ClientResource(client_id)
 
+    def authenticate(
+            self,
+            client_id: schema.CampusID,
+            client_secret: str
+    ) -> None:
+        """Authenticate a client using their ID and secret.
+        Pushes the authenticated client into flask.g.current_client if
+        successful, otherwise raises an authentication error.
 
-class ClientResource(ClientsResource):
-    """Represents a single client in Campus API Schema."""
+        Args:
+            client_id: The client identifier
+            client_secret: The client secret
 
-    def __init__(self, client_id: schema.CampusID):
-        self._client_id = client_id
-
-    def get(self) -> campus.model.Client:
-        """Get the client record.
-
-        Returns:
-            ClientRecord instance
+        Raises:
+            UnauthorizedError: If client not found or client secret is invalid
         """
-        return get(self._client_id)
+        client = self[client_id].get()
+        if not client.secret_hash:
+            raise auth_errors.ServerError(
+                "Invalid configuration",
+                client_id=client_id
+            )
+        expected_hash = secret.hash_client_secret(
+            client_secret,
+            env.getsecret("SECRET_KEY", env.DEPLOY)
+        )
+        if client.secret_hash != expected_hash:
+            raise auth_errors.UnauthorizedClientError(
+                "Invalid credentials",
+                client_id=client_id
+            )
+        if flask.has_request_context():
+            flask.g.current_client = client
 
     def new(self, **kwargs: typing.Any) -> campus.model.Client:
         """Create a new client and return it.
@@ -223,11 +115,62 @@ class ClientResource(ClientsResource):
         Returns:
             Client instance
         """
-        return new(**kwargs)
+        client = _from_record(kwargs)
+        client_storage.insert_one(client.to_storage())
+        return client
+
+
+class ClientResource:
+    """Represents a single client in Campus API Schema."""
+
+    def __init__(self, client_id: schema.CampusID):
+        self.client_id = client_id
+
+    @property
+    def access(self) -> "ClientAccessResource":
+        """Get the client access resource.
+
+        Returns:
+            ClientAccessResource instance
+        """
+        return ClientAccessResource(self)
+
+    def get(self) -> campus.model.Client:
+        """Get the client record.
+
+        Returns:
+            ClientRecord instance
+        """
+        client_id = self.client_id
+        record = client_storage.get_by_id(client_id)
+        if not record:
+            raise auth_errors.InvalidRequestError(
+                f"Client '{client_id}' not found",
+                client_id=client_id
+            )
+        return _from_record(
+            record=record,
+            permissions=_get_client_permissions(client_id)
+        )
 
     def revoke(self) -> str:
-        """Revoke the client by deleting its secret."""
-        return revoke(self._client_id)
+        """Revoke the client by deleting its secret.
+
+        Returns:
+            The generated client secret
+        """
+        # Check if client exists first
+        self.get()
+        new_secret = secret.generate_client_secret()
+        secret_hash = secret.hash_client_secret(
+            secret=new_secret,
+            key=env.SECRET_KEY
+        )
+        client_storage.update_by_id(
+            self.client_id,
+            {"secret_hash": secret_hash}
+        )
+        return new_secret
 
     def update(self, **updates: typing.Any) -> None:
         """Update the client record.
@@ -235,4 +178,122 @@ class ClientResource(ClientsResource):
         Args:
             **updates: Fields to update (name, description)
         """
-        update(self._client_id, **updates)
+        campus.model.Client.validate_update(updates)
+        client_storage.update_by_id(self.client_id, updates)
+
+
+class ClientAccessResource:
+    """Represents the client access resource in Campus API Schema."""
+
+    def __init__(self, parent: "ClientResource"):
+        self._parent = parent
+
+    def check(
+            self,
+            vault_label: str,
+            permission: int
+    ) -> bool:
+        """Check if client has required permission for vault label.
+
+        Args:
+            client_id: The authenticated client ID
+            vault_label: The vault label to check access for
+            required_permission: The permission bitflag required (READ,
+            CREATE, UPDATE, DELETE)
+
+        Raises:
+            VaultAccessDeniedError: If client lacks the required permission
+        """
+        client = self._parent.get()
+        vault_access = client.permissions.get(vault_label, 0)
+        return bool(vault_access & permission)
+
+    def get(
+            self,
+            vault_label: str
+    ) -> int:
+        """Get the client's permission bitflag for a vault label.
+
+        Args:
+            vault_label: The vault label to get access for
+        
+        Returns:
+            The permission bitflag for the vault label
+        """
+        client = self._parent.get()
+        return client.permissions.get(vault_label, 0)
+
+    def grant(
+            self,
+            vault_label: str,
+            permission: int
+    ) -> None:
+        """Grant the client access permission for a vault label.
+
+        Args:
+            vault_label: The vault label to grant access for
+            permission: The permission bitflag to grant
+        """
+        client_id = self._parent.client_id
+        records = access_storage.get_matching({
+            "client_id": client_id,
+            "label": vault_label,
+        })
+        if records:
+            current_access = records[0]['access']
+            new_access = current_access | permission
+            access_storage.update_by_id(
+                records[0]['id'],
+                {"access": new_access}
+            )
+        else:
+            access_storage.insert_one({
+                "client_id": client_id,
+                "label": vault_label,
+                "access": permission,
+            })
+
+    def list(self) -> dict[str, int]:
+        """List all vault access permissions for the client.
+
+        Returns:
+            Dictionary mapping vault labels to permission bitflags
+        """
+        client_id = self._parent.client_id
+        access_records = access_storage.get_matching(
+            {"client_id": client_id}
+        )
+        permissions: dict[str, int] = {}
+        for record in access_records:
+            label = record['label']
+            access_flag = record['access']
+            permissions[label] = access_flag
+        return permissions
+
+    def revoke(
+            self,
+            vault_label: str,
+            permission: int
+    ) -> None:
+        """Revoke the client access permission for a vault label.
+
+        Args:
+            vault_label: The vault label to revoke access for
+            permission: The permission bitflag to revoke
+        """
+        client_id = self._parent.client_id
+        records = access_storage.get_matching({
+            "client_id": client_id,
+            "label": vault_label,
+        })
+        if not records:
+            return
+        current_access = records[0]['access']
+        new_access = current_access & ~permission
+        if new_access == 0:
+            access_storage.delete_by_id(records[0]['id'])
+        else:
+            access_storage.update_by_id(
+                records[0]['id'],
+                {"access": new_access}
+            )

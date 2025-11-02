@@ -7,7 +7,6 @@ This includes user credentials and tokens.
 Credentials link an issued token to a provider, client, and user.
 """
 
-import typing
 from campus.common import env, schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
@@ -21,181 +20,219 @@ cred_storage = campus.storage.get_table("credentials")
 cred_storage.init_from_model("credentials", campus.model.UserCredentials)
 
 
-def delete_by_token_id(token_id: str) -> None:
-    """Delete a token by its ID."""
-    cred_storage.delete_matching({"token_id": token_id})
-    token_storage.delete_by_id(token_id)
+class CredentialsResource:
+    """Represents the credentials resource in Campus API Schema."""
 
+    def __getitem__(
+            self,
+            provider: str
+    ) -> "ProviderCredentialsResource":
+        """Get a credential resource by provider.
 
-def delete_by_provider_user(
-        *,
-        provider: str,
-        user_id: schema.UserID
-) -> None:
-    """Delete tokens for a given provider and user."""
-    token_storage.delete_matching({
-        "provider": provider,
-        "user_id": user_id,
-    })
+        Args:
+            provider: The provider identifier
 
-
-@typing.overload
-def find_credentials(
-        *,
-        provider: str,
-        user_id: schema.UserID,
-) -> campus.model.UserCredentials: ...
-@typing.overload
-def find_credentials(
-        *,
-        access_token: str,
-) -> campus.model.UserCredentials: ...
-@typing.overload
-def find_credentials(
-        *,
-        user_id: schema.UserID
-) -> list[campus.model.UserCredentials]: ...
-@typing.overload
-def find_credentials(
-        *,
-        provider: str,
-) -> list[campus.model.UserCredentials]: ...
-@typing.overload
-def find_credentials() -> list[campus.model.UserCredentials]: ...
-def find_credentials(
-        *,
-        provider: str | None = None,
-        user_id: schema.UserID | None = None,
-        access_token: str | None = None,
-):
-    """Find tokens matching criteria.
-
-    To be supported in future; for now just returns all tokens.
-    """
-    query: dict[str, str] = {}
-    if provider:
-        query["provider"] = provider
-    if user_id:
-        query["user_id"] = str(user_id)
-    if access_token:
-        query["id"] = access_token
-    records = cred_storage.get_matching(query)
-    if (provider and user_id) or access_token:
-        return (
-            campus.model.UserCredentials.from_storage(records[0])
-            if records else None
-        )
-    return [
-        campus.model.UserCredentials.from_storage(record)
-        for record in cred_storage.get_matching(query)
-    ]
-
-
-def get_credentials_by_id(credentials_id: schema.CampusID) -> campus.model.UserCredentials:
-    """Retrieve credentials by their ID."""
-    record = cred_storage.get_by_id(credentials_id)
-    record["token"] = token_storage.get_by_id(record["token_id"])
-    if not record:
-        raise api_errors.NotFoundError(
-            f"Credentials {credentials_id} not found."
-        )
-    return campus.model.UserCredentials.from_storage(record)
-
-
-def get_token(token_id: str) -> campus.model.OAuthToken:
-    """Retrieve a token by its ID."""
-    record = token_storage.get_by_id(token_id)
-    if not record:
-        raise api_errors.NotFoundError(
-            f"Token {token_id} not found."
-        )
-    return campus.model.OAuthToken.from_storage(record)
-
-
-def new_campus_token(
-        *,
-        scopes: list[str],
-        expiry_seconds: int = (
-            campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
-            * utc_time.DAY_SECONDS
-        ),
-) -> campus.model.OAuthToken:
-    """Create a new Campus OAuth token."""
-    token_id = uid.generate_uid()
-    token = campus.model.OAuthToken(
-        id=token_id,
-        expiry_seconds=expiry_seconds,
-        scopes=scopes,
-    )
-    token_storage.insert_one(token.to_storage())
-    return token
-
-
-def store(
-        *,
-        provider: str,
-        user_id: schema.UserID,
-        token: campus.model.OAuthToken
-) -> None:
-    """Store or replace a token in the storage."""
-    records = cred_storage.get_matching({
-        "provider": provider,
-        "user_id": user_id,
-    })
-    if len(records) == 0:  # No token stored prior
-        token_storage.insert_one(token.to_storage())
-        return
-    elif len(records) == 1:  # Existing token
-        creds = campus.model.UserCredentials.from_storage(records[0])
-        if creds.token.id != token.id:
-            # id mismatch; revoke token and update cred
-            # TODO: perform transaction atomically
-            delete_by_token_id(creds.token_id)
-            token_storage.insert_one(token.to_storage())
-            cred_storage.update_by_id(creds.id, {"token_id": token.id})
-        else:
-            token_storage.update_by_id(token.id, token.to_storage())
-
-
-def sweep(
-        *,
-        at_time: schema.DateTime | None = None
-) -> int:
-    """Delete expired tokens from the database.
-
-        Returns the number of deleted tokens.
+        Returns:
+            ProviderCredentialsResource instance
         """
-    at_time = at_time or schema.DateTime.utcnow()
-    expired_tokens = [
-        cred.token for cred in find_credentials()
-        if cred.token.is_expired(at_time=at_time)
-    ]
-    # TODO: Optimize to do this in a single query
-    for token in expired_tokens:
-        delete_by_token_id(token.id)
-    return len(expired_tokens)
+        return ProviderCredentialsResource(provider)
 
 
-def update_credentials(
-        credentials: campus.model.UserCredentials,
-        token: campus.model.OAuthToken,
-) -> campus.model.UserCredentials:
-    """Update token for existing credentials."""
-    if credentials.token_id != token.id:
-        # id mismatch; revoke token and update cred
-        # TODO: perform transaction atomically
-        delete_by_token_id(credentials.token_id)
-        token_storage.insert_one(token.to_storage())
-        cred_storage.update_by_id(
-            credentials.id,
-            {"token_id": token.id}
+class ProviderCredentialsResource:
+    """Represents credentials for a specific provider."""
+
+    def __init__(self, provider: str):
+        self.provider = provider
+
+    def __getitem__(
+            self,
+            user_id: schema.UserID
+    ) -> "UserCredentialsResource":
+        """Get access token by user ID.
+
+        Args:
+            user_id: The user identifier
+
+        Returns:
+            access token (string)
+        """
+        return UserCredentialsResource(self, user_id)
+
+    def get(self, token_id: str) -> campus.model.UserCredentials:
+        """Get credentials by token ID.
+
+        Args:
+            token_id: The token identifier
+
+        Returns:
+            UserCredentials instance
+        """
+        query: dict[str, str] = {
+            "provider": self.provider,
+            "token_id": token_id
+        }
+        records = cred_storage.get_matching(query)
+        if not records:
+            raise api_errors.NotFoundError(
+                f"Credentials for provider {self.provider} "
+                f"and token {token_id} not found."
+            )
+        return campus.model.UserCredentials.from_storage(records[0])
+
+    def list_all(self) -> list[campus.model.UserCredentials]:
+        """List all credentials for this provider.
+
+        Returns:
+            List of UserCredentials instances
+        """
+        records = cred_storage.get_matching({
+            "provider": self.provider
+        })
+        return [
+            campus.model.UserCredentials.from_storage(record)
+            for record in records
+        ]
+
+
+class UserCredentialsResource:
+    """Represents credentials for a specific user.
+
+    Note: Credentials are issued for a specific client, so client_id
+    must always be specified in operations on this resource.
+
+    client_id while not secret is considered sensitive information and
+    so is not passed in the URL path but rather as part of the request
+    body.
+    """
+
+    def __init__(
+            self,
+            parent: ProviderCredentialsResource,
+            user_id: schema.UserID
+    ):
+        self.parent = parent
+        self.user_id = user_id
+
+    def delete(self, client_id: str) -> None:
+        """Delete credentials for this user-client."""
+        cred_storage.delete_matching({
+            "provider": self.parent.provider,
+            "user_id": str(self.user_id),
+            "client_id": client_id
+        })
+
+    def get(self, client_id: str) -> campus.model.UserCredentials:
+        """Get credentials for this user-client.
+
+        Returns:
+            UserCredentials instance
+        """
+        query: dict[str, str] = {
+            "provider": self.parent.provider,
+            "user_id": str(self.user_id),
+            "client_id": client_id
+        }
+        records = cred_storage.get_matching(query)
+        if not records:
+            raise api_errors.NotFoundError(
+                f"Credentials for provider {self.parent.provider} "
+                f"and user {self.user_id} not found.",
+                query=query
+            )
+        # TODO: refresh token if expired
+        credentials = campus.model.UserCredentials.from_storage(
+            records[0]
         )
-    else:
-        update_token(token)
-    updated_credentials = get_credentials_by_id(credentials.id)
-    return updated_credentials
+        return credentials
 
+    def list_all(self) -> list[campus.model.UserCredentials]:
+        """List all credentials for this user.
 
-def update_token(token: campus.model.OAuthToken) -> None:
-    """Update an existing token in storage."""
-    token_storage.update_by_id(token.id, token.to_storage())
+        Returns:
+            List of UserCredentials instances
+        """
+        records = cred_storage.get_matching({
+            "provider": self.parent.provider,
+            "user_id": str(self.user_id),
+        })
+        return [
+            campus.model.UserCredentials.from_storage(record)
+            for record in records
+        ]
+
+    def new(
+            self,
+            *,
+            scopes: list[str],
+            expiry_seconds: int = (
+                campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
+                * utc_time.DAY_SECONDS
+            ),
+    ) -> campus.model.OAuthToken:
+        """Create a new Campus OAuth token."""
+        assert self.parent.provider == "campus", (
+            f"Unable to issue token for provider {self.parent.provider!r}"
+        )
+        token_id = uid.generate_uid()
+        token = campus.model.OAuthToken(
+            id=token_id,
+            expiry_seconds=expiry_seconds,
+            scopes=scopes,
+        )
+        token_storage.insert_one(token.to_storage())
+        records = cred_storage.get_matching({
+            "provider": self.parent.provider,
+            "user_id": str(self.user_id),
+        })
+        if records:  # Existing credentials
+            cred_storage.update_by_id(
+                records[0]['id'],
+                {"token_id": token_id}
+            )
+        else:  # New credentials
+            cred_storage.insert_one({
+                "provider": self.parent.provider,
+                "user_id": str(self.user_id),
+                "client_id": "",
+                "token_id": token_id,
+            })
+        return token
+
+    def update(
+            self,
+            client_id: str,
+            token: campus.model.OAuthToken
+    ) -> None:
+        """Update access token.
+
+        Args:
+            client_id: The client identifier
+            **token: Token fields to update
+        """
+        records = cred_storage.get_matching({
+            "provider": self.parent.provider,
+            "user_id": str(self.user_id),
+            "client_id": client_id
+        })
+        if not records:  # No existing credentials
+            cred_storage.insert_one({
+                "provider": self.parent.provider,
+                "user_id": str(self.user_id),
+                "client_id": client_id,
+                "token_id": token.id,
+            })
+        else:  # Check if token_id changed
+            credentials = campus.model.UserCredentials.from_storage(
+                records[0]
+            )
+            if credentials.token.id != token.id:
+                cred_storage.update_by_id(
+                    credentials.id,
+                    {"token_id": token.id}
+                )
+        # Store/update token
+        record = token_storage.get_by_id(token.id)
+        if record:
+            token_storage.update_by_id(token.id, token.to_storage())
+        else:
+            token_storage.insert_one(token.to_storage())
