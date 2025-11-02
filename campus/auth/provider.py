@@ -33,29 +33,19 @@ Legend:
     token endpoint for user profile.
 """
 
-from typing import NotRequired, TypedDict
-
 import flask
 import werkzeug
 
-from campus.common import schema
+from campus.common import flask as campus_flask, schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url, utc_time
-from campus.common.validation import flask as flask_validation
-from campus.models import session, token as token_model
+import campus.config
 
-from . import authentication
+from . import resources
 
 PROVIDER = "campus"
 
 bp = flask.Blueprint('auth', __name__, url_prefix='/auth')
-
-tokens = token_model.Tokens()
-sessions = session.AuthSessions(PROVIDER)
-
-DEFAULT_OAUTH_EXPIRY = 600
-DEFAULT_TOKEN_EXPIRY = 30 * utc_time.DAY_SECONDS
-SUPPORTED_GRANT_TYPES = ("code",)
 
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
@@ -63,37 +53,19 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     app.register_blueprint(bp)
 
 
-class AuthorizationCodeRequest(TypedDict):
-    """Request data for OAuth2 authorization code request."""
-    client_id: str
-    response_type: str
-    redirect_uri: str
-    scope: NotRequired[str]
-    state: NotRequired[str]
-
-
-class TokenRequest(TypedDict):
-    """Request data for OAuth2 token request."""
-    grant_type: str
-    code: str
-    redirect_uri: str
-    client_id: str
-    client_secret: str
-
-
 # OAuth2 endpoints
 @bp.get('/authorize')
-@flask_validation.unpack_request
+@campus_flask.unpack_request
 def authorize(
-        client_id: schema.CampusID,  # required
-        response_type: str,  # required
-        redirect_uri: str | None = None,  # optional
-        scope: str | None = None,  # optional
-        state: str | None = None  # recommended
+        client_id: schema.CampusID,
+        response_type: str,
+        redirect_uri: str,
+        scope: str | None = None,
+        state: str | None = None,
 ) -> werkzeug.Response:
     """Follows RFC 6749 Section 4.1.1
     https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
-    
+
     Summary: 
         OAuth2 authorization endpoint for user consent and code grant.
         1. Validates the authorization request
@@ -130,20 +102,17 @@ def authorize(
         - Redirects to the specified redirect URI with the authorization code, as well as state if provided.
           e.g. /oauth2/authorize?code=abc123&state=xyz
     """
-    if response_type not in SUPPORTED_GRANT_TYPES:
+    if response_type not in campus.config.SUPPORTED_OAUTH2_GRANT_TYPES:
         raise auth_errors.UnsupportedResponseTypeError(
             f"Unsupported response_type: {response_type}"
         )
-    client = authentication.get_client(client_id)
-    if not client:
-        raise auth_errors.UnauthorizedClientError(
-            f"Invalid client_id: {client_id}"
-        )
+    client = resources.client.get(client_id)
     # TODO: Validate redirect_uri; must be absolute URL
-    authsession = sessions.new(
-        client_id=client_id,
-        expiry_seconds=DEFAULT_OAUTH_EXPIRY,
-        redirect_uri=redirect_uri,
+    authsession = resources.session.new(
+        PROVIDER,
+        expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
+        client_id=schema.CampusID(client_id),
+        redirect_uri=schema.Url(redirect_uri),
         scopes=scope.split(" ") if scope else [],
         state=state
     )
@@ -183,7 +152,8 @@ def callback() -> werkzeug.Response:
           e.g. /client/callback?code=abc123&state=xyz
     """
     # TODO: Check validity of Google OAuth token and identity
-    authsession = sessions.get()
+    # TODO: Get user_id from Google token
+    authsession = resources.session.get(PROVIDER)
     redirect_uri: str = (
         authsession.redirect_uri
         if authsession and authsession.redirect_uri
@@ -206,14 +176,14 @@ def callback() -> werkzeug.Response:
 
 
 @bp.post('/token')
-@flask_validation.unpack_request
+@campus_flask.unpack_request
 def token(
         grant_type: str,  # required
         code: str,  # required
         redirect_uri: str,  # required if used in /authorize
         client_id: str,  # required
         client_secret: str,  # required
-) -> flask_validation.JsonResponse:
+) -> campus_flask.JsonResponse:
     """Summary:
         OAuth2 token endpoint for exchanging authorization code for access token.
 
@@ -254,26 +224,37 @@ def token(
         raise token_errors.UnsupportedGrantTypeError(
             f"Unsupported grant_type: {grant_type}"
         )
-    authsession = sessions.get()
+    authsession = resources.session.get(PROVIDER)
     if not authsession:
         raise token_errors.InvalidRequestError()
     if code != authsession.authorization_code:
         raise token_errors.InvalidGrantError("Invalid authorization code")
     if redirect_uri != authsession.redirect_uri:
-        raise token_errors.InvalidGrantError(f"Invalid redirect_uri: {redirect_uri}")
-    if "error" in authentication.authenticate_client(
-        client_id,
-        client_secret
-    ):
-        raise token_errors.UnauthorizedClientError(
-            f"Unauthorized client: {client_id}"
-        )
+        raise token_errors.InvalidGrantError(
+            f"Invalid redirect_uri: {redirect_uri}")
+    resources.client.authenticate(client_id, client_secret)
     # OAuth2 flow complete, revoke session
-    sessions.delete(authsession.id)
-    token = tokens.new(
-        client_id=flask.g.current_client["id"],
-        user_id=flask.g.current_user["id"],
-        scopes=authsession.scopes,
-        expiry_seconds=DEFAULT_TOKEN_EXPIRY
+    resources.session.delete(PROVIDER, authsession.id)
+    if not authsession.user_id:
+        raise auth_errors.InvalidRequestError(
+            "User ID not found in auth session"
+        )
+    credentials = resources.credentials.find_credentials(
+        provider=PROVIDER,
+        user_id=authsession.user_id,
     )
-    return token.to_dict(), 200
+    if credentials.token:
+        token = credentials.token
+    else:
+        token = resources.credentials.new_campus_token(
+            scopes=authsession.scopes,
+            expiry_seconds=(
+                campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
+                * utc_time.DAY_SECONDS
+            ),
+        )
+        resources.credentials.update_credentials(
+            credentials=credentials,
+            token=token
+        )
+    return token.to_resource(), 200
