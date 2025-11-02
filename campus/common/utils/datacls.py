@@ -34,7 +34,7 @@ def is_optional(field: dataclasses.Field) -> bool:
     """
     t = field.type
     origin = typing.get_origin(t)
-    if not origin is typing.Union:
+    if origin is not typing.Union:
         return False
     args = typing.get_args(t)
     if not type(None) in args:
