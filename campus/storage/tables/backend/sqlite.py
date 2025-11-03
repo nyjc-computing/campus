@@ -26,7 +26,7 @@ table.delete_by_id("123")
 import dataclasses
 import json
 import sqlite3
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 from campus.common import devops
 from campus.common.utils import datacls
