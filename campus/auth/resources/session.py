@@ -10,7 +10,6 @@ import flask
 from campus.common import schema
 from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import uid, secret
-import campus.config
 import campus.model
 import campus.storage
 
@@ -84,16 +83,22 @@ class ProviderAuthSessionResource:
         """
         return AuthSessionResource(self, session_id)
 
-    def get(self) -> campus.model.AuthSession | None:
-        """Get the auth session for this provider.
+    def get(self, code: str) -> campus.model.AuthSession:
+        """Get the auth session for this provider by authorization code.
+
+        Args:
+            code: authorization code to match
 
         Returns:
             AuthSession instance or None if not found
         """
-        existing_session_id = _check_existing_id(self.provider)
-        if existing_session_id is not None:
-            return self[existing_session_id].get()
-        return None
+        record = session_storage.get_matching({"authorization_code": code})
+        if not record:
+            raise auth_errors.AccessDeniedError("Invalid authorization code")
+        session = _from_record(record[0])
+        if session.provider != self.provider:
+            raise auth_errors.AccessDeniedError("Invalid authorization code")
+        return self[session.id].get()
 
     def new(
         self,
@@ -218,6 +223,12 @@ class AuthSessionResource:
             "user_id",
             "agent_string",
             "created_at",
+            "expires_at",
+            "provider",
+            "redirect_uri",
+            "state",
+            "target",
+            "scopes",
         ):
             if immutable_key in update:
                 raise api_errors.InvalidRequestError(

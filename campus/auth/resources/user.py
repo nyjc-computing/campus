@@ -46,6 +46,15 @@ class UsersResource:
         """
         return UserResource(user_id)
 
+    def list(self) -> list[campus.model.User]:
+        """Get all users.
+
+        Returns:
+            List of User instances
+        """
+        records = user_storage.get_matching({})
+        return [_from_record(record) for record in records]
+
     def new(self, **kwargs: typing.Any) -> campus.model.User:
         """Create a new Campus user.
 

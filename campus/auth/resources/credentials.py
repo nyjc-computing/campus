@@ -7,7 +7,7 @@ This includes user credentials and tokens.
 Credentials link an issued token to a provider, client, and user.
 """
 
-from campus.common import env, schema
+from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 import campus.config
@@ -87,15 +87,19 @@ class ProviderCredentialsResource:
             )
         return campus.model.UserCredentials.from_storage(records[0])
 
-    def list_all(self) -> list[campus.model.UserCredentials]:
+    def list_all(
+            self,
+            user_id: str | None = None
+    ) -> list[campus.model.UserCredentials]:
         """List all credentials for this provider.
 
         Returns:
             List of UserCredentials instances
         """
-        records = cred_storage.get_matching({
-            "provider": self.provider
-        })
+        records = cred_storage.get_matching(dict(
+            provider=self.provider,
+            **{"user_id": user_id} if user_id else {}
+        ))
         return [
             campus.model.UserCredentials.from_storage(record)
             for record in records
@@ -153,24 +157,10 @@ class UserCredentialsResource:
         )
         return credentials
 
-    def list_all(self) -> list[campus.model.UserCredentials]:
-        """List all credentials for this user.
-
-        Returns:
-            List of UserCredentials instances
-        """
-        records = cred_storage.get_matching({
-            "provider": self.parent.provider,
-            "user_id": str(self.user_id),
-        })
-        return [
-            campus.model.UserCredentials.from_storage(record)
-            for record in records
-        ]
-
     def new(
             self,
             *,
+            client_id: str,
             scopes: list[str],
             expiry_seconds: int = (
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
@@ -201,7 +191,7 @@ class UserCredentialsResource:
             cred_storage.insert_one({
                 "provider": self.parent.provider,
                 "user_id": str(self.user_id),
-                "client_id": "",
+                "client_id": client_id,
                 "token_id": token_id,
             })
         return token

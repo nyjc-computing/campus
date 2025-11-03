@@ -107,10 +107,29 @@ class ClientsResource:
                 "Invalid credentials",
                 client_id=client_id
             )
-        if flask.has_request_context():
-            flask.g.current_client = client
 
-    def new(self, **kwargs: typing.Any) -> campus.model.Client:
+    def list_all(self) -> list[campus.model.Client]:
+        """List all clients.
+
+        Returns:
+            List of Client instances
+        """
+        records = client_storage.get_matching({})
+        clients = []
+        for record in records:
+            client_id = schema.CampusID(record['id'])
+            permissions = _get_client_permissions(client_id)
+            client = _from_record(
+                record=record,
+                permissions=permissions
+            )
+            clients.append(client)
+        return clients
+
+    def new(
+            self,
+            **kwargs: typing.Any
+    ) -> campus.model.Client:
         """Create a new client and return it.
 
         Args:
@@ -138,6 +157,10 @@ class ClientResource:
             ClientAccessResource instance
         """
         return ClientAccessResource(self)
+
+    def delete(self) -> None:
+        """Delete the client record."""
+        client_storage.delete_by_id(self.client_id)
 
     def get(self) -> campus.model.Client:
         """Get the client record.
@@ -220,7 +243,7 @@ class ClientAccessResource:
 
         Args:
             vault_label: The vault label to get access for
-        
+
         Returns:
             The permission bitflag for the vault label
         """
