@@ -234,8 +234,6 @@ class SQLiteTable(TableInterface):
             raise
         else:
             self._connection.commit()
-        finally:
-            self._connection.close()
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:

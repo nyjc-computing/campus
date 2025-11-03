@@ -24,7 +24,6 @@ table.delete_by_id("123")
 """
 
 import dataclasses
-import typing
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
