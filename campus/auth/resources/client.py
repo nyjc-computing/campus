@@ -252,6 +252,8 @@ class ClientAccessResource:
             )
         else:
             access_storage.insert_one({
+                "id": uid.generate_category_uid("vault_access"),
+                "created_at": schema.DateTime.utcnow(),
                 "client_id": client_id,
                 "label": vault_label,
                 "access": permission,
