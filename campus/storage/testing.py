@@ -6,7 +6,6 @@ This allows the storage system to use lightweight, in-memory backends during tes
 instead of requiring full database connections.
 """
 
-import os
 from typing import Type
 
 from campus.common import env
