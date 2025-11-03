@@ -1,7 +1,9 @@
-"""campus.integrations.base
+"""campus.auth.oauth_proxy.base
 
-Schema to describe the JSON files describing third-party integration
-configurations.
+Base class for oauth proxies.
+
+An oauth proxy carries out OAuth2 authorization flows with third-party
+authentication providers to obtain access tokens for user authentication.
 """
 
 from abc import ABC, abstractmethod
@@ -10,6 +12,7 @@ from typing import Iterator, Literal, Self
 
 import werkzeug
 
+from campus.auth import resources
 from campus.client.vault import get_vault
 from campus.common import schema
 from campus.models import token, webauth
@@ -31,11 +34,14 @@ Security = Literal[
 tokens = token.Tokens()
 
 
-class Provider(ABC):
-    """Base provider class for OAuth2 integrations.
+class AuthProxy(ABC):
+    """Base authorization proxy class for OAuth2 integrations.
 
     This class encapsulates the metadata and core OAuth2 operations
-    for a third-party authentication provider.
+    for a third-party authentication proxy.
+    The proxy generates the authorization URL, manages tokens, and
+    provides a context manager for authorizing API calls on behalf
+    of a user.
     """
     provider: str
     title: str
@@ -53,7 +59,6 @@ class Provider(ABC):
         vault = get_vault()[self.provider]
         self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
         self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
-
 
     def with_token(self, token: token.TokenRecord) -> Self:
         """A chainable method for passing a token to the instance."""
@@ -79,7 +84,11 @@ class Provider(ABC):
             user_id: schema.UserID
     ) -> Iterator[Self]:
         """Context manager to authorize a user API use."""
-        token = tokens.get_by_client_user(self._CLIENT_ID, user_id)
+        credentials = resources.credentials.find_credentials(
+            self.provider,
+            user_id
+        )  # type: ignore[var-annotated]
+        token = credentials.token
         try:
             yield self.with_token(token)
         finally:

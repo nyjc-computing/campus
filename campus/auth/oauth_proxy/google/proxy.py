@@ -1,9 +1,9 @@
-"""campus.integrations.google
+"""campus.auth.oauth_proxy.google.proxy
 
-Provide functions and classes for Campus integration with Google.
+Google OAuth2 proxy implementation.
 """
 
-__all__ = ["GoogleProvider", "get_provider"]
+__all__ = ["GoogleAuthProxy", "get_proxy"]
 
 from typing import Literal
 
@@ -12,22 +12,22 @@ import werkzeug
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors, token_errors
-from campus.integrations import base
-from campus.models import token, webauth
+from campus.models import webauth
+
+from .. import base
+from ... import resources
 
 PROVIDER = "google"
 REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
 SCOPE_SEP = " "
 
-tokens = token.Tokens()
+
+def get_proxy() -> "GoogleAuthProxy":
+    """Get an instance of the GoogleAuthProxy."""
+    return GoogleAuthProxy()
 
 
-def get_provider() -> "GoogleProvider":
-    """Get an instance of the GoogleProvider."""
-    return GoogleProvider()
-
-
-class GoogleProvider(base.Provider):
+class GoogleAuthProxy(base.AuthProxy):
     """Google OAuth2 provider implementation."""
     provider = PROVIDER
     title = "Google OAuth2 Authentication API"
@@ -73,7 +73,7 @@ class GoogleProvider(base.Provider):
             prompt: _PROMPT_OPTIONS = None,
     ) -> werkzeug.Response:
         """Redirect to GitHub OAuth2 authorization endpoint."""
-        
+
         self._oauth2.init_session(
             redirect_uri=REDIRECT_URI,
             client_id=self._CLIENT_ID,
@@ -103,11 +103,12 @@ class GoogleProvider(base.Provider):
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
         )
+        userinfo = self._oauth2.get_user_info(token.access_token)
         # Verify domain is permitted
-        if not token.user_id.domain == env.WORKSPACE_DOMAIN:
+        if not userinfo["email"].domain == env.WORKSPACE_DOMAIN:
             raise token_errors.InvalidGrantError(
                 f"Domain not allowed",
-                domain=token.user_id.domain
+                domain=userinfo["email"].domain
             )
         # Verify requested scopes were granted
         scopes = scope.split(SCOPE_SEP)
@@ -115,8 +116,12 @@ class GoogleProvider(base.Provider):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
-         # Store token
-        tokens.store(token)
+        # Store token
+        resources.credentials.store(
+            provider=PROVIDER,
+            user_id=userinfo["email"],
+            token=token,
+        )
         target = self._oauth2.auth_session.target
         self._oauth2.end_session()
         return flask.redirect(target or flask.request.host_url)

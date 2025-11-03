@@ -22,6 +22,7 @@ CLIENT_SECRET: str
 DEPLOY: str
 HOSTNAME: str  # used for generating redirect_uris
 PORT: str  # port for running development server
+SECRET_KEY: str  # secret key for signing sessions and tokens
 VAULTDB_URI: str  # PostgreSQL connection URI for vault service
 WORKSPACE_DOMAIN: str  # Google Workspace domain
 

@@ -23,11 +23,68 @@ table.delete_by_id("123")
 ```
 """
 
+import dataclasses
 import json
 import sqlite3
 from typing import Any, Dict, List, Optional
 
-from campus.storage.tables.interface import TableInterface, PK
+from campus.common import devops
+from campus.common.utils import datacls
+from campus.model import Model, constraints
+from ..interface import TableInterface, PK
+
+
+_TYPEMAP = {
+    str: "TEXT",
+    int: "INTEGER",
+    float: "REAL",
+    bool: "INTEGER",
+}
+
+
+def _field_to_sql_schema(field: dataclasses.Field) -> str:
+    """Convert a dataclass field to a SQL column definition."""
+    field_name = field.name
+    field_type = field.type
+    sql_type = _TYPEMAP.get(field_type, "TEXT")
+    sql_field_constraints = []
+
+    if field_name == "__constraints__":
+        match field.default:
+            case constraints.Unique():
+                unique_fields = field.default.fields
+                unique_constraint = ", ".join(unique_fields)
+                return f"UNIQUE ({unique_constraint})"
+            case _:
+                raise ValueError(
+                    f"Unsupported constraint type: {field.default}"
+                )
+    elif field_name == PK:
+        sql_field_constraints.append("PRIMARY KEY")
+    if constraints.UNIQUE in field.metadata.get("constraints", []):
+        sql_field_constraints.append("UNIQUE")
+    if not datacls.is_optional(field):
+        sql_field_constraints.append("NOT NULL")
+
+    constraints_sql = " ".join(sql_field_constraints)
+    return f"\"{field_name}\" {sql_type} {constraints_sql}"
+
+
+def _model_to_sql_schema(name: str, model: type[Model]) -> str:
+    """Convert a dataclass model to SQL schema."""
+    columns = []
+    constraints_ = []
+    for field in model.fields().values():
+        if not field.metadata.get("storage", True):
+            continue  # skip non-storage fields
+        if field.name == "__constraints__":
+            constraints_.append(field)
+            continue
+        columns.append(_field_to_sql_schema(field))
+    for field in constraints_:
+        columns.append(_field_to_sql_schema(field))
+    columns_sql = ", ".join(columns)
+    return f"CREATE TABLE IF NOT EXISTS \"{name}\" ({columns_sql});"
 
 
 class SQLiteTable(TableInterface):
@@ -40,7 +97,6 @@ class SQLiteTable(TableInterface):
         """Initialize the SQLite table interface."""
         super().__init__(name)
         self._ensure_connection()
-        self._ensure_table()
 
     @classmethod
     def _ensure_connection(cls):
@@ -49,19 +105,6 @@ class SQLiteTable(TableInterface):
             cls._connection = sqlite3.connect(
                 ":memory:", check_same_thread=False)
             cls._connection.row_factory = sqlite3.Row
-
-    def _ensure_table(self):
-        """Ensure the table exists."""
-        assert self._connection is not None, "Database connection not initialized"
-        cursor = self._connection.cursor()
-        cursor.execute(f"""
-            CREATE TABLE IF NOT EXISTS {self.name} (
-                id TEXT PRIMARY KEY,
-                created_at TEXT,
-                data TEXT
-            )
-        """)
-        self._connection.commit()
 
     def _serialize_row(self, row: Dict[str, Any]) -> tuple:
         """Serialize a row for storage."""
@@ -178,7 +221,22 @@ class SQLiteTable(TableInterface):
         for row in matching_rows:
             self.delete_by_id(row[PK])
 
-    def init_table(self, schema: str) -> None:
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(self, name: str, model: type[Model]) -> None:
+        """Initialize the table from a Campus model definition."""
+        self._ensure_connection()
+        assert self._connection is not None, "Database connection not initialized"
+        create_table_sql = _model_to_sql_schema(name, model)
+        cursor = self._connection.cursor()
+        try:
+            cursor.execute(create_table_sql)
+        except Exception as e:
+            raise
+        else:
+            self._connection.commit()
+
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_schema(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
 
         This method is intended for development/testing environments.

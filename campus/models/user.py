@@ -36,7 +36,7 @@ def init_db():
             UNIQUE(email)
         )
     """
-    storage.init_table(schema)
+    storage.init_from_schema(schema)
 
 
 class UserNew(TypedDict, total=True):

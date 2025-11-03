@@ -8,18 +8,13 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.client.vault import get_vault
-import campus.integrations as integrations
 from campus.common import flask as campus_flask, schema
 from campus.common.errors import auth_errors
-from campus.models import session, token
+
+from . import proxy
 
 PROVIDER = 'github'
 
-tokens = token.Tokens()
-
-auth_sessions = session.AuthSessions(PROVIDER)
-vault = get_vault()[PROVIDER]
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 
 
@@ -30,7 +25,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 @bp.before_request
 def before_request() -> None:
-    flask.g.provider = integrations.github.get_provider()
+    flask.g.provider = proxy.get_proxy()
 
 
 @bp.get('/authorize')

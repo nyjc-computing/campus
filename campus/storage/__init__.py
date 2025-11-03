@@ -35,7 +35,7 @@ from .errors import (
 )
 
 
-def get_table(name: str):
+def get_table(name: str) -> TableInterface:
     """Get a table by name."""
     return tables.get_db(name)
 

@@ -31,6 +31,7 @@ from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
 from campus.common import devops, env
+from campus.model.base import Model
 from campus.storage.documents.interface import CollectionInterface, PK
 from campus.storage.errors import (
     ConflictError,
@@ -283,6 +284,14 @@ class MongoDBCollection(CollectionInterface):
             self._client = None
             self._db = None
             self._collection = None
+    
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(self, name: str, model: type[Model]) -> None:
+        """Initialize the table from a Campus model definition."""
+        # Document stores do not need any initialization from model
+        # definitions as yet.
+        # This method is added for future use
+        pass
 
 
 @devops.block_env(devops.PRODUCTION)

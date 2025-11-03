@@ -14,6 +14,7 @@ import requests
 from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
+import campus.model
 from campus.models import session, token
 
 from . import base
@@ -152,7 +153,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             code: str,
             client_id: schema.CampusID,
             client_secret: str,
-    ) -> token.TokenRecord:
+    ) -> campus.model.OAuthToken:
         """Exchange authorization code for access token."""
         params = {
             "grant_type": "authorization_code",
@@ -177,13 +178,10 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         token_payload = resp.json()
         if "error" in token_payload:
             token_errors.raise_from_json(token_payload)
-        user_info = self.get_user_info(token_payload["access_token"])
-        return token.TokenRecord(
+        return campus.model.OAuthToken(
             id=token_payload["access_token"],
             created_at=request_time,
             expiry_seconds=token_payload["expires_in"],
-            client_id=client_id,
-            user_id=user_info["email"],
             refresh_token=token_payload["refresh_token"],
             scopes=token_payload["scope"].split(" "),
         )

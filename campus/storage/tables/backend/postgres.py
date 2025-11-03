@@ -23,13 +23,68 @@ table.delete_by_id("123")
 ```
 """
 
+import dataclasses
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from campus.common import devops, env
-from campus.storage.tables.interface import TableInterface, PK
+from campus.common.utils import datacls
+from campus.model import Model, constraints
 from campus.storage import errors
 
+from ..interface import TableInterface, PK
+
+
+_TYPEMAP = {
+    str: "TEXT",
+    int: "INTEGER",
+    float: "REAL",
+    bool: "BOOLEAN",
+}
+
+def _field_to_sql_schema(field: dataclasses.Field) -> str:
+    """Convert a dataclass field to a SQL column definition."""
+    field_name = field.name
+    field_type = field.type
+    sql_type = _TYPEMAP.get(field_type, "TEXT")
+    sql_field_constraints = []
+
+    if field_name == "__constraints__":
+        match field.default:
+            case constraints.Unique():
+                unique_fields = field.default.fields
+                unique_constraint = ", ".join(unique_fields)
+                return f"UNIQUE ({unique_constraint})"
+            case _:
+                raise ValueError(
+                    f"Unsupported constraint type: {field.default}"
+                )
+    elif field_name == PK:
+        sql_field_constraints.append("PRIMARY KEY")
+    if constraints.UNIQUE in field.metadata.get("constraints", []):
+        sql_field_constraints.append("UNIQUE")
+    if not datacls.is_optional(field):
+        sql_field_constraints.append("NOT NULL")
+
+    constraints_sql = " ".join(sql_field_constraints)
+    return f"\"{field_name}\" {sql_type} {constraints_sql}"
+
+def _model_to_sql_schema(name: str, model: type[Model]) -> str:
+    """Convert a dataclass model to SQL schema."""
+    columns = []
+    constraints_ = []
+    for field in model.fields().values():
+        if not field.metadata.get("storage", True):
+            continue  # skip non-storage fields
+        if field.name == "__constraints__":
+            constraints_.append(field)
+            continue
+        columns.append(_field_to_sql_schema(field))
+    for field in constraints_:
+        columns.append(_field_to_sql_schema(field))
+    columns_sql = ", ".join(columns)
+    return f"CREATE TABLE IF NOT EXISTS \"{name}\" ({columns_sql});"
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
@@ -106,7 +161,9 @@ class PostgreSQLTable(TableInterface):
                     (row_id,)
                 )
                 row = cursor.fetchone()
-                return dict(row) if row else {}
+                if not row:
+                    raise errors.NotFoundError(row_id, self.name)
+                return dict(row)
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve rows matching a query."""
@@ -224,9 +281,20 @@ class PostgreSQLTable(TableInterface):
                             "delete", query, self.name
                         )
                     conn.commit()
+    
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(self, name: str, model: type[Model]) -> None:
+        """Initialize the table from a Campus model definition."""
+        create_table_sql = _model_to_sql_schema(name, model)
+        with self._get_connection() as conn:
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(create_table_sql)
+            finally:
+                conn.close()
 
     @devops.block_env(devops.PRODUCTION)
-    def init_table(self, schema: str) -> None:
+    def init_from_schema(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
 
         This method is intended for development/testing environments.

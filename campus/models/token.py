@@ -50,7 +50,7 @@ def init_db():
             UNIQUE(client_id, user_id)
         )
     """
-    storage.init_table(table_schema)
+    storage.init_from_schema(table_schema)
 
 
 class TokenRecordDict(BaseRecordDict):
@@ -68,8 +68,6 @@ class TokenNew(TypedDict):
     scopes: list[str]
 
 
-
-
 @dataclass(eq=False, kw_only=True)
 class SanitizedTokenRecord:
     """Dataclass representation of a sanitized token record.
@@ -83,7 +81,7 @@ class SanitizedTokenRecord:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SanitizedTokenRecord":
         """Create a SanitizedTokenRecord from a dictionary.
-        
+
         Scopes are stored as space-separated strings in the database,
         but as a list in the dataclass.
         """
@@ -143,7 +141,7 @@ class TokenRecord(base.BaseRecord):
     @classmethod
     def from_dict(cls, data: dict) -> "TokenRecord":
         """Create a TokenRecord from a dictionary.
-        
+
         The dictionary is expected to be obtained from a token endpoint.
         Scopes are stored as space-separated strings in the database,
         but as a list in the dataclass.
@@ -210,9 +208,13 @@ class Tokens:
         self.storage.delete_by_id(token_id)
 
     @overload
-    def find(self, sanitized: Literal[True], **match: str) -> list[SanitizedTokenRecord]: ...
+    def find(self, sanitized: Literal[True], **
+             match: str) -> list[SanitizedTokenRecord]: ...
+
     @overload
-    def find(self, sanitized: Literal[False], **match: str) -> list[TokenRecord]: ...
+    def find(self, sanitized: Literal[False],
+             **match: str) -> list[TokenRecord]: ...
+
     def find(self, sanitized: bool = True, **match: str):
         """Retrieve a list of matching tokens. 
 
@@ -243,7 +245,8 @@ class Tokens:
         """Get the token for a client/user pair. Returns None if not
         found.
         """
-        results = self.find(sanitized=False, client_id=client_id, user_id=user_id)
+        results = self.find(
+            sanitized=False, client_id=client_id, user_id=user_id)
         if len(results) == 0:
             raise api_errors.NotFoundError(
                 message="Token not found for this client and user",
@@ -296,7 +299,7 @@ class Tokens:
 
     def sweep(
             self,
-            *, 
+            *,
             at_time: schema.DateTime | None = None
     ) -> int:
         """Delete expired tokens from the database.
