@@ -126,11 +126,13 @@ def unpack_request(
             )
 
     @wraps(func)
-    def wrapper() -> typing.Any:
+    def wrappervf(*args, **kwargs) -> typing.Any:
+        """The view function presented to Flask"""
+        assert not args, f"Positional arguments not supported: {args}"
         request_args = get_request_payload()
-        return unpack_into(func, **request_args)
+        return unpack_into(func, **kwargs, **request_args)
 
-    return wrapper
+    return wrappervf
 
 
 def validate_request_and_extract_json(
