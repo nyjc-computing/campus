@@ -45,7 +45,8 @@ def authenticate_client_from_request(
         case "basic":
             client_id, client_secret = auth.credentials()
             # Raises auth errors if auth fails
-            resources.client.authenticate(client_id, client_secret)
+            resources.client.raise_for_authentication(client_id, client_secret)
+            flask.g.current_client = resources.client[client_id].get()
         case "bearer":
             access_token = auth.value
             # raises UnauthorizedError for invalid access_token

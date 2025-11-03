@@ -224,14 +224,16 @@ def token(
             f"Unsupported grant_type: {grant_type}"
         )
     authsession = resources.session[PROVIDER].get()
-    if not authsession:
+    if not authsession:  # No session found
         raise token_errors.InvalidRequestError()
     if code != authsession.authorization_code:
         raise token_errors.InvalidGrantError("Invalid authorization code")
     if redirect_uri != authsession.redirect_uri:
         raise token_errors.InvalidGrantError(
-            f"Invalid redirect_uri: {redirect_uri}")
-    resources.client.authenticate(client_id, client_secret)
+            f"Invalid redirect_uri: {redirect_uri}"
+        )
+    # Raises auth errors if auth fails
+    resources.client.raise_for_authentication(client_id, client_secret)
     # OAuth2 flow complete, revoke session
     resources.session[PROVIDER][authsession.id].delete()
     if not authsession.user_id:
@@ -242,7 +244,8 @@ def token(
         resources.credentials[PROVIDER][authsession.user_id]
     )
     credentials = user_credentials_resource.get(authsession.client_id)
-    if credentials.token:
+    # Create token if not existing
+    if credentials.token and not credentials.token.is_expired():
         token = credentials.token
     else:
         token = user_credentials_resource.new(

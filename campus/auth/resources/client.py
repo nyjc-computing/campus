@@ -76,7 +76,7 @@ class ClientsResource:
         """
         return ClientResource(client_id)
 
-    def authenticate(
+    def raise_for_authentication(
             self,
             client_id: schema.CampusID,
             client_secret: str
