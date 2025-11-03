@@ -16,6 +16,9 @@ import flask
 from campus.common import devops, env
 from campus.models import session
 
+# Other local imports are intentionally omitted to avoid circular
+# dependencies.
+
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Initialize the Campus app with all modules.
