@@ -17,11 +17,19 @@ import campus.storage
 token_storage = campus.storage.get_collection("tokens")
 cred_storage = campus.storage.get_table("credentials")
 
-cred_storage.init_from_model("credentials", campus.model.UserCredentials)
-
 
 class CredentialsResource:
     """Represents the credentials resource in Campus API Schema."""
+
+    @staticmethod
+    def init_storage() -> None:
+        """Initialize storage for credentials resource."""
+        token_storage.init_from_model(
+            "tokens", campus.model.OAuthToken
+        )
+        cred_storage.init_from_model(
+            "credentials", campus.model.UserCredentials
+        )
 
     def __getitem__(
             self,

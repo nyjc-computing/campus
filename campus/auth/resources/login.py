@@ -7,7 +7,7 @@ import typing
 
 import flask
 
-from campus.common import env, schema
+from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
 import campus.model
@@ -15,7 +15,7 @@ import campus.storage
 
 PROVIDER = "campus"
 
-session_storage = campus.storage.get_collection("auth_sessions")
+login_storage = campus.storage.get_collection("login_sessions")
 
 
 class LoginSessionsResource:
@@ -24,6 +24,13 @@ class LoginSessionsResource:
     Note that this only manages Campus logins, not for external
     authentication providers.
     """
+
+    @staticmethod
+    def init_storage() -> None:
+        """Initialize storage for login resource."""
+        login_storage.init_from_model(
+            "login_sessions", campus.model.LoginSession
+        )
 
     def __getitem__(
             self,
@@ -72,7 +79,7 @@ class LoginSessionsResource:
             "agent_string": agent_string,
         })
         try:
-            session_storage.insert_one(session.to_storage())
+            login_storage.insert_one(session.to_storage())
         except Exception as e:
             raise api_errors.InternalError.from_exception(e)
         else:
@@ -99,7 +106,7 @@ class LoginSessionResource:
             session_id = _verify_session_id(session_id)
         # Remove server-side session
         try:
-            session_storage.delete_by_id(session_id)
+            login_storage.delete_by_id(session_id)
         except campus.storage.errors.NotFoundError:
             # Session already deleted server-side
             # TODO: logging for missing session
@@ -119,7 +126,7 @@ class LoginSessionResource:
             LoginSession instance
         """
         session_id = self.session_id
-        record = session_storage.get_by_id(str(session_id))
+        record = login_storage.get_by_id(str(session_id))
         if not record:
             raise api_errors.NotFoundError(
                 f"Session '{session_id}' not found",
@@ -148,7 +155,7 @@ class LoginSessionResource:
                     message=f"Cannot update immutable field: {immutable_key}"
                 )
         try:
-            session_storage.update_by_id(session_id, update)
+            login_storage.update_by_id(session_id, update)
         except campus.storage.errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="Session not found",
@@ -208,7 +215,7 @@ def _check_existing_id() -> schema.CampusID | None:
     if not client_session_id:
         return None
     try:
-        session_storage.get_by_id(client_session_id)
+        login_storage.get_by_id(client_session_id)
     except campus.storage.errors.NotFoundError:
         # Revoke client-side
         flask.session.pop(session_key, None)

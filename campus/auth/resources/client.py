@@ -3,6 +3,8 @@
 Client resource for Campus API.
 """
 
+__all__ = []
+
 import typing
 
 import flask
@@ -49,14 +51,16 @@ def _get_client_permissions(client_id: schema.CampusID) -> dict[str, int]:
     return permissions
 
 
-def init_storage() -> None:
-    """Initialize storage for client authentication."""
-    client_storage.init_from_model("clients", campus.model.Client)
-    access_storage.init_from_model("client_access", campus.model.ClientAccess)
-
-
 class ClientsResource:
     """Represents the clients resource in Campus API Schema."""
+
+    @staticmethod
+    def init_storage() -> None:
+        """Initialize storage for client authentication."""
+        client_storage.init_from_model("clients", campus.model.Client)
+        access_storage.init_from_model(
+            "client_access", campus.model.ClientAccess
+        )
 
     def __getitem__(
             self,

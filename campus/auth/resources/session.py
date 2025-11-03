@@ -7,7 +7,7 @@ import typing
 
 import flask
 
-from campus.common import env, schema
+from campus.common import schema
 from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import uid, secret
 import campus.config
@@ -19,6 +19,13 @@ session_storage = campus.storage.get_collection("auth_sessions")
 
 class AuthSessionsResource:
     """Represents the auth sessions resource in Campus API Schema."""
+
+    @staticmethod
+    def init_storage() -> None:
+        """Initialize storage for session resource."""
+        session_storage.init_from_model(
+            "auth_sessions", campus.model.AuthSession
+        )
 
     def __getitem__(
             self,

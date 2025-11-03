@@ -27,13 +27,13 @@ def _from_record(
     )
 
 
-def init_storage() -> None:
-    """Initialize storage for user authentication."""
-    user_storage.init_from_model("users", campus.model.User)
-
-
 class UsersResource:
     """Represents the users resource in Campus API Schema."""
+
+    @staticmethod
+    def init_storage() -> None:
+        """Initialize storage for user authentication."""
+        user_storage.init_from_model("users", campus.model.User)
 
     def __getitem__(self, user_id: schema.UserID) -> "UserResource":
         """Get a user record by user ID.
