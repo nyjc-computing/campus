@@ -28,6 +28,8 @@ WORKSPACE_DOMAIN: str  # Google Workspace domain
 
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
+_env_module = sys.modules[__name__]
+
 
 # Stubs for type checking
 def get(name: str, default: str | None = None) -> str | None: ...
@@ -75,7 +77,9 @@ class EnvironmentProxy:
         Raises:
             KeyError: If the environment variable is not set.
         """
-        return os.environ[name]
+        if name in os.environ:
+            return os.environ[name]
+        return getattr(_env_module, name)
 
     def __iter__(self) -> Iterator[str]:
         """Iterate over environment variable names.

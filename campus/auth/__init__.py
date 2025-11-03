@@ -7,12 +7,17 @@ applications, as well as serving as a proxy for auth with third-party
 integrations.
 """
 
+# Note: do not expose .resources directly here. It is meant for internal
+# use within campus.auth only.
 __all__ = ["init_app"]
 
 import flask
 
 from campus.common import devops, env
 from campus.models import session
+
+# Other local imports are intentionally omitted to avoid circular
+# dependencies.
 
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
@@ -21,20 +26,19 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     This function sets up all Campus apps components including API,
     authentication, and OAuth modules.
 
-    Note: For creating new Flask applications, use the recommended pattern:
+    Note: For creating new Flask applications, use the recommended
+    pattern:
         from campus.common.devops.deploy import create_app
         import campus.apps
         app = create_app(campus.apps)
 
     This ensures proper error handling and deployment configuration.
     """
-    # TODO: init blueprints for campus.auth
-    # Use vault client to retrieve secret key since campus.apps deployment
-    # does not have VAULTDB_URI env var
-    from . import provider, oauth_proxy
+    from . import oauth_proxy, provider, routes
 
     bp = provider.bp
     oauth_proxy.init_app(bp)
+    routes.init_app(bp)
 
     if devops.ENV == devops.DEVELOPMENT:
         # Add test login and logout endpoints in development environment

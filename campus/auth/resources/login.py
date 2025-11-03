@@ -43,17 +43,6 @@ class LoginSessionsResource:
         """
         return LoginSessionResource()
 
-    def get(self) -> campus.model.LoginSession | None:
-        """Get the login session for this provider.
-
-        Returns:
-            LoginSession instance or None if not found
-        """
-        existing_session_id = _check_existing_id()
-        if existing_session_id is not None:
-            return self[existing_session_id].get()
-        return None
-
     def new(
             self,
             *,

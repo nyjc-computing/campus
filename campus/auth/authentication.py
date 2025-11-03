@@ -21,10 +21,8 @@ tokens = token.Tokens()
 vault = get_vault()
 
 
-def authenticate_client_from_request(
-        request: flask.Request
-) -> tuple[dict[str, str], int] | None:
-    """Authenticate the client credentials using HTTP Basic
+def authenticate_client_from_request() -> tuple[dict[str, str], int] | None:
+    """Authenticate the client credentials using HTTP Basic/Bearer
     Authentication.
 
     This function is meant to be used with Flask.before_request
@@ -35,7 +33,7 @@ def authenticate_client_from_request(
 
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
-    req_header = dict(request.headers)
+    req_header = dict(flask.request.headers)
     auth = (
         webauth.http.HttpAuthenticationScheme
         .from_header(provider="campus", http_header=req_header)
@@ -45,7 +43,8 @@ def authenticate_client_from_request(
         case "basic":
             client_id, client_secret = auth.credentials()
             # Raises auth errors if auth fails
-            resources.client.authenticate(client_id, client_secret)
+            resources.client.raise_for_authentication(client_id, client_secret)
+            flask.g.current_client = resources.client[client_id].get()
         case "bearer":
             access_token = auth.value
             # raises UnauthorizedError for invalid access_token
@@ -60,7 +59,7 @@ def authenticate_client_from_request(
             flask.g.current_client = (
                 resources.client[credentials.client_id].get()
             )
-            flask.g.user_agent = request.headers.get("User-Agent", "")
+            flask.g.user_agent = flask.request.headers.get("User-Agent", "")
 
 
 def client_auth_required(vf) -> Callable:
@@ -72,7 +71,7 @@ def client_auth_required(vf) -> Callable:
         is successful.
         """
         return (
-            authenticate_client_from_request(flask.request)
+            authenticate_client_from_request()
             or vf(*args, **kwargs)
         )
     return authenticatedvf

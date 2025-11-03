@@ -15,6 +15,6 @@ class User(Model):
     """Dataclass representation of a user record."""
     id: schema.UserID  # type: ignore
     # created_at is inherited from Model
-    email: str
+    email: schema.Email
     name: str
     activated_at: schema.DateTime | None = None
