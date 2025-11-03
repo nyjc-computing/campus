@@ -31,10 +31,11 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     # TODO: init blueprints for campus.auth
     # Use vault client to retrieve secret key since campus.apps deployment
     # does not have VAULTDB_URI env var
-    from . import provider, oauth_proxy
+    from . import oauth_proxy, provider, routes
 
     bp = provider.bp
     oauth_proxy.init_app(bp)
+    routes.init_app(bp)
 
     if devops.ENV == devops.DEVELOPMENT:
         # Add test login and logout endpoints in development environment
