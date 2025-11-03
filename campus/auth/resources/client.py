@@ -11,12 +11,12 @@ import flask
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors
-from campus.common.utils import secret
+from campus.common.utils import secret, uid
 import campus.model
 import campus.storage
 
 client_storage = campus.storage.get_table("clients")
-access_storage = campus.storage.get_table("client_access")
+access_storage = campus.storage.get_table("vault_access")
 
 
 def _from_record(
@@ -59,7 +59,7 @@ class ClientsResource:
         """Initialize storage for client authentication."""
         client_storage.init_from_model("clients", campus.model.Client)
         access_storage.init_from_model(
-            "client_access", campus.model.ClientAccess
+            "vault_access", campus.model.ClientAccess
         )
 
     def __getitem__(
