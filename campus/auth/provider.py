@@ -129,7 +129,11 @@ def authorize(
 
 
 @bp.get('/callback')
-def callback() -> werkzeug.Response:
+@campus_flask.unpack_request
+def callback(
+        code: str,
+        state: str,
+) -> werkzeug.Response:
     """OAuth2 callback endpoint after user authenticates with Google.
 
     Method:
@@ -152,7 +156,8 @@ def callback() -> werkzeug.Response:
     """
     # TODO: Check validity of Google OAuth token and identity
     # TODO: Get user_id from Google token
-    authsession = resources.session[PROVIDER].get()
+    session_id = state
+    authsession = resources.session[PROVIDER][session_id].get()
     redirect_uri: str = (
         authsession.redirect_uri
         if authsession and authsession.redirect_uri
@@ -223,7 +228,7 @@ def token(
         raise token_errors.UnsupportedGrantTypeError(
             f"Unsupported grant_type: {grant_type}"
         )
-    authsession = resources.session[PROVIDER].get()
+    authsession = resources.session[PROVIDER].get(code)
     if not authsession:  # No session found
         raise token_errors.InvalidRequestError()
     if code != authsession.authorization_code:
