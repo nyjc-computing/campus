@@ -106,10 +106,9 @@ def authorize(
         raise auth_errors.UnsupportedResponseTypeError(
             f"Unsupported response_type: {response_type}"
         )
-    client = resources.client.get(client_id)
+    client = resources.client[client_id].get()
     # TODO: Validate redirect_uri; must be absolute URL
-    authsession = resources.session.new(
-        PROVIDER,
+    authsession = resources.session[PROVIDER].new(
         expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
         client_id=schema.CampusID(client_id),
         redirect_uri=schema.Url(redirect_uri),
@@ -153,7 +152,7 @@ def callback() -> werkzeug.Response:
     """
     # TODO: Check validity of Google OAuth token and identity
     # TODO: Get user_id from Google token
-    authsession = resources.session.get(PROVIDER)
+    authsession = resources.session[PROVIDER].get()
     redirect_uri: str = (
         authsession.redirect_uri
         if authsession and authsession.redirect_uri
@@ -224,7 +223,7 @@ def token(
         raise token_errors.UnsupportedGrantTypeError(
             f"Unsupported grant_type: {grant_type}"
         )
-    authsession = resources.session.get(PROVIDER)
+    authsession = resources.session[PROVIDER].get()
     if not authsession:
         raise token_errors.InvalidRequestError()
     if code != authsession.authorization_code:
@@ -234,27 +233,27 @@ def token(
             f"Invalid redirect_uri: {redirect_uri}")
     resources.client.authenticate(client_id, client_secret)
     # OAuth2 flow complete, revoke session
-    resources.session.delete(PROVIDER, authsession.id)
+    resources.session[PROVIDER][authsession.id].delete()
     if not authsession.user_id:
         raise auth_errors.InvalidRequestError(
             "User ID not found in auth session"
         )
-    credentials = resources.credentials.find_credentials(
-        provider=PROVIDER,
-        user_id=authsession.user_id,
+    user_credentials_resource = (
+        resources.credentials[PROVIDER][authsession.user_id]
     )
+    credentials = user_credentials_resource.get(authsession.client_id)
     if credentials.token:
         token = credentials.token
     else:
-        token = resources.credentials.new_campus_token(
+        token = user_credentials_resource.new(
             scopes=authsession.scopes,
             expiry_seconds=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
                 * utc_time.DAY_SECONDS
             ),
         )
-        resources.credentials.update_credentials(
-            credentials=credentials,
+        user_credentials_resource.update(
+            client_id=credentials.client_id,
             token=token
         )
     return token.to_resource(), 200
