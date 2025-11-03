@@ -3,6 +3,8 @@
 Implements Campus API for vault access.
 """
 
+from campus.common import schema
+from campus.common.utils import uid
 import campus.model
 import campus.storage
 
@@ -64,10 +66,21 @@ class VaultResource:
             key: The vault key (e.g., "apps", "storage", "oauth")
             value: The secret value to store
         """
-        vault_storage.update_matching(
-            {"key": key, "label": self.label},
-            {"value": value}
-        )
+        rows = vault_storage.get_matching({"key": key, "label": self.label})
+        # breakpoint()
+        if not rows:
+            vault_storage.insert_one({
+                "id": uid.generate_category_uid("vault"),
+                "created_at": schema.DateTime.utcnow(),
+                "label": self.label,
+                "key": key,
+                "value": value
+            })
+        else:
+            vault_storage.update_matching(
+                {"key": key, "label": self.label},
+                {"value": value}
+            )
 
     def keys(self) -> list[str]:
         """List available vault keys.
