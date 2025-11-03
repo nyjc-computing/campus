@@ -20,7 +20,7 @@ __all__ = [
 
 import flask
 
-from . import clients, logins, sessions, users, vaults
+from . import clients, credentials, logins, sessions, users, vaults
 from .. import authentication
 
 
@@ -29,6 +29,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     blueprint.
     """
     app.register_blueprint(clients.bp)
+    app.register_blueprint(credentials.bp)
     app.register_blueprint(logins.bp)
     app.register_blueprint(sessions.bp)
     app.register_blueprint(users.bp)
