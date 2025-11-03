@@ -22,7 +22,8 @@ __all__ = [
     "Model",
     "OAuthToken",
     "User",
-    "UserCredentials"
+    "UserCredentials",
+    "Vault",
 ]
 
 from .base import Model
@@ -31,3 +32,4 @@ from .credentials import OAuthToken, UserCredentials
 from .login import LoginSession
 from .session import AuthSession
 from .user import User
+from .vault import Vault

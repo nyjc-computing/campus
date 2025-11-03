@@ -3,6 +3,7 @@
 Implements Campus API for vault access.
 """
 
+import campus.model
 import campus.storage
 
 vault_storage = campus.storage.get_table("vault")
@@ -21,6 +22,11 @@ class VaultsResource:
             VaultResource instance
         """
         return VaultResource(label)
+
+    @staticmethod
+    def init_storage() -> None:
+        """Initialize storage for vault resource."""
+        vault_storage.init_from_model("vault", campus.model.Vault)
 
 
 class VaultResource:
