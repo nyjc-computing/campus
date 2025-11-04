@@ -80,13 +80,10 @@ class DateTime(String):
     """
 
     def __new__(cls, value: str):
-        return super().__new__(cls, str(value))
+        return super().__new__(cls, value)
 
     def __repr__(self) -> str:
         return f"DateTime({str(self)})"
-
-    def __str__(self) -> str:
-        return str(self)
 
     @classmethod
     def from_datetime(cls: Type[Self], dt: utc_time.datetime) -> Self:
