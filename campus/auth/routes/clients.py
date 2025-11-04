@@ -54,7 +54,7 @@ def new(name: str, description: str) -> campus_flask.JsonResponse:
     # Apps are expected to generate the secret separately
     client = client_resource.new(name=name, description=description)
     get_yapper().emit('campus.clients.create')
-    return client.to_resource(), 201
+    return client.to_resource(), 200
 
 @bp.get("/")
 @campus_flask.unpack_request
