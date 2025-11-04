@@ -3,6 +3,7 @@
 Client model definitions for Campus.
 """
 
+from typing import ClassVar
 from dataclasses import dataclass, field
 
 from campus.common import schema
@@ -15,6 +16,16 @@ from . import constraints
 @dataclass(eq=False, kw_only=True)
 class Client(Model):
     """Represents a Campus client application."""
+    class access:
+        """Namespace for access constants."""
+        READ = 1
+        CREATE = 2
+        UPDATE = 4
+        DELETE = 8
+        ALL = READ | CREATE | UPDATE | DELETE
+        def __init__(self) -> None:
+            raise NotImplementedError("Access is a static namespace.")
+
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("client", length=8)
     ))
