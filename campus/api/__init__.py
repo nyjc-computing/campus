@@ -37,11 +37,16 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         handlers.
         """
         req_header = dict(flask.request.headers)
-        auth = (
+        httpauth = (
             webauth.http.HttpAuthenticationScheme
             .from_header(provider="campus", http_header=req_header)
-            .get_auth(http_header=req_header)
         )
+        assert httpauth.header
+        if not httpauth.header.authorization:
+            raise auth_errors.InvalidRequestError(
+                "Missing Authorization property in HTTP header"
+            )
+        auth = httpauth.header.authorization
         match auth.scheme:
             case "basic":
                 client_id, client_secret = auth.credentials()
@@ -54,12 +59,12 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
                     auth_errors.raise_from_json(auth_json)
                 flask.g.current_client = vault.client.get(client_id)
             case "bearer":
-                access_token = auth.value
+                access_token = auth.token
                 # raises UnauthorizedError for invalid access_token
                 token = tokens.get(access_token)
                 flask.g.current_user = users.get(token.user_id)
                 flask.g.current_client = vault.client.get(token.client_id)
-    
+
     app.register_blueprint(bp)
 
     if isinstance(app, flask.Flask):
