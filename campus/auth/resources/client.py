@@ -7,15 +7,13 @@ __all__ = []
 
 import typing
 
-import flask
-
 from campus.common import env, schema
 from campus.common.errors import auth_errors
 from campus.common.utils import secret, uid
 import campus.model
 import campus.storage
 
-client_storage = campus.storage.get_table("clients")
+client_storage = campus.storage.get_table("vault_clients")
 access_storage = campus.storage.get_table("vault_access")
 
 
@@ -25,8 +23,12 @@ def _from_record(
 ) -> campus.model.Client:
     """Convert a storage record to a Client model instance."""
     return campus.model.Client(
-        id=schema.CampusID(record['id']),
-        created_at=schema.DateTime(record['created_at']),
+        id=schema.CampusID(
+            record.get("id", uid.generate_category_uid("client"))
+        ),
+        created_at=schema.DateTime(
+            record.get("created_at", schema.DateTime.utcnow())
+        ),
         name=record['name'],
         description=record['description'],
         permissions=permissions or {}

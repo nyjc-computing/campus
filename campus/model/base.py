@@ -59,7 +59,10 @@ class Model(typing.Protocol):
                 raise ValueError(f"Field '{field_name}' is not mutable")
 
     @classmethod
-    def from_resource(cls, resource: dict[str, typing.Any]) -> "Model":
+    def from_resource(
+            cls: type[typing.Self],
+            resource: dict[str, typing.Any]
+    ) -> typing.Self:
         """Create a model instance from a resource dictionary."""
         return cls(
             **{
