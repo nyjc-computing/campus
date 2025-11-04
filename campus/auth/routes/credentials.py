@@ -34,13 +34,13 @@ def get_by_token(
         *,
         provider: str,
         token_id: str | None = None,
-        user_id: schema.UserID | None = None,
 ) -> campus_flask.JsonResponse:
-    """Get credentials for a specific token.
+    """Get credentials for a specific token, or list all credentials for
+    a provider.
 
     GET /credentials/{provider}
     Query Params: {
-        "token_id": token_id
+        "token_id": token_id (optional)
     }
     Returns: {
         "credentials": { ... }
@@ -49,12 +49,6 @@ def get_by_token(
     if token_id:
         credentials = creds_resource[provider].get(token_id)
         return credentials.to_resource(), 200
-    elif user_id:
-        credentials = creds_resource[provider].list_all(user_id)
-        return {
-            "user_id": str(user_id),
-            "credentials": [c.to_resource() for c in credentials]
-        }, 200
     else:
         # list all
         credentials_list = creds_resource[provider].list_all()
@@ -63,8 +57,6 @@ def get_by_token(
                 cred.to_resource() for cred in credentials_list
             ]
         }, 200
-
-
 
 @bp.delete("/<provider>/<user_id>")
 @campus_flask.unpack_request
