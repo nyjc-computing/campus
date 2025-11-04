@@ -9,7 +9,7 @@ __all__ = [
 
 from typing import Protocol, Type, TypeVar
 
-S = TypeVar("S", bound="SecurityScheme")
+S = TypeVar("S", bound="SecurityScheme", covariant=True)
 
 SECURITY_PREFERENCE = ("openIdConnect", "oauth2")
 
@@ -20,7 +20,6 @@ class SecurityScheme(Protocol[S]):
     Each authentication method and flow should inherit this subclass and
     implement its own required methods.
     """
-    _scheme_map: dict[str, Type[S]] = {}
     provider: str
     security_scheme: str
 
