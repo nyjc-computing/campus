@@ -203,6 +203,10 @@ class UserCredentialsResource:
     ) -> None:
         """Update access token.
 
+        Checks for existing credentials for this user-client pair and
+        updates the token ID if it has changed. Also stores/updates
+        the token itself.
+
         Args:
             client_id: The client identifier
             **token: Token fields to update
