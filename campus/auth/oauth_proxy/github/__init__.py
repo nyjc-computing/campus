@@ -25,7 +25,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 @bp.before_request
 def before_request() -> None:
-    flask.g.provider = proxy.get_proxy()
+    flask.g.proxy = proxy.get_proxy()
 
 
 @bp.get('/authorize')
@@ -35,7 +35,7 @@ def authorize(
         prompt: Literal["select_account"] | None = None
 ) -> werkzeug.Response:
     """Redirect to GitHub OAuth authorization endpoint."""
-    return flask.g.provider.redirect_for_authorization(target, prompt)
+    return flask.g.proxy.redirect_for_authorization(target, prompt)
 
 
 @bp.get('/callback')
@@ -56,7 +56,7 @@ def success_callback(
         **kwargs: str
 ) -> werkzeug.Response:
     """Handle a Github OAuth callback request."""
-    return flask.g.provider.handle_callback(
+    return flask.g.proxy.handle_callback(
         state,
         code,
         scope,
