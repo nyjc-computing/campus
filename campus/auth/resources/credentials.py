@@ -200,7 +200,7 @@ class UserCredentialsResource:
             self,
             client_id: str,
             token: campus.model.OAuthToken
-    ) -> None:
+    ) -> campus.model.UserCredentials:
         """Update access token.
 
         Checks for existing credentials for this user-client pair and
@@ -217,12 +217,14 @@ class UserCredentialsResource:
             "client_id": client_id
         })
         if not records:  # No existing credentials
-            cred_storage.insert_one({
-                "provider": self.parent.provider,
-                "user_id": str(self.user_id),
-                "client_id": client_id,
-                "token_id": token.id,
-            })
+            credentials = campus.model.UserCredentials(
+                id=uid.generate_category_uid("user_credentials"),
+                provider=self.parent.provider,
+                user_id=self.user_id,
+                client_id=client_id,
+                token=token
+            )
+            cred_storage.insert_one(credentials.to_storage())
         else:  # Check if token_id changed
             credentials = campus.model.UserCredentials.from_storage(
                 records[0]
@@ -238,3 +240,5 @@ class UserCredentialsResource:
             token_storage.update_by_id(token.id, token.to_storage())
         else:
             token_storage.insert_one(token.to_storage())
+        credentials.token = token
+        return credentials
