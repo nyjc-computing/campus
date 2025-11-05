@@ -97,6 +97,7 @@ class GoogleAuthProxy(base.AuthProxy):
         authorization_url = self._oauth2.get_authorization_url(
             access_type="offline",
             include_granted_scopes="true",
+            **{"hd": hd} if hd else {},
             **{"login_hint": login_hint} if login_hint else {},
             **{"prompt": prompt} if prompt else {}
         )
