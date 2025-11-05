@@ -155,7 +155,6 @@ class AuthSessionResource:
 
     def delete(self) -> None:
         """Delete this auth session."""
-        provider = self.parent.provider
         try:
             session_storage.delete_by_id(self.session_id)
         except campus.storage.errors.NotFoundError:
