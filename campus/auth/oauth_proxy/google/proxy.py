@@ -12,6 +12,7 @@ import werkzeug
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors, token_errors
+import campus.model
 
 from .. import base
 from ... import resources, webauth
@@ -103,13 +104,22 @@ class GoogleAuthProxy(base.AuthProxy):
         )
         return flask.redirect(authorization_url)
 
-    def handle_callback(
+    def handle_auth_callback(
             self,
             state: str,
             code: str,
             scope: str,
-    ) -> werkzeug.Response:
-        assert self._oauth2 is not None
+    ) -> campus.model.UserCredentials:
+        """Handles Google OAuth callback for a consent flow
+
+        Args:
+            user_id: The user identifier
+            client_id: The OAuth client ID
+            token: The OAuthToken instance
+        
+        Returns:
+            Updated UserCredentials instance
+        """
         self._oauth2.validate_callback(state=state)
         # Retrieve access token from Google
         token = self._oauth2.exchange_code_for_token(
@@ -133,9 +143,20 @@ class GoogleAuthProxy(base.AuthProxy):
                 domain=user_id.domain
             )
         # Store/update token
-        resources.credentials[PROVIDER][user_id].update(
+        credentials = resources.credentials[PROVIDER][user_id].update(
             client_id=self._CLIENT_ID,
             token=token,
         )
+        self._oauth2.finalize_session()
+        return credentials
+
+    def handle_consent_callback(
+            self,
+            state: str,
+            code: str,
+            scope: str,
+    ) -> werkzeug.Response:
+        """Handles Google OAuth callback for a consent flow."""
+        self.handle_auth_callback(state, code, scope)
         target = self._oauth2.finalize_session()
         return flask.redirect(target or flask.request.host_url)
