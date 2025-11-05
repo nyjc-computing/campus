@@ -12,11 +12,12 @@ __all__ = [
     "HttpScheme",
 ]
 
-from typing import Literal, Mapping
+from typing import Literal
 
 from campus.common.errors import api_errors, token_errors
-from . import header
+
 from .. import base
+from . import header
 
 HttpScheme = Literal["basic", "bearer"]
 
