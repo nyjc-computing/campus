@@ -73,7 +73,7 @@ def main():
     # Development server configuration
 
     # Create app instance for development server
-    app = create_app("campus.auth")
+    app = create_app("campus.api")
     devops.deploy.configure_for_development(app)
 
     print("📝 For production deployment, use wsgi.py with Gunicorn")

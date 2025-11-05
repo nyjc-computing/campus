@@ -16,20 +16,26 @@ kept out of models.
 
 __all__ = [
     "AuthSession",
+    "Circle",
     "Client",
     "ClientAccess",
+    "EmailOTP",
     "LoginSession",
     "Model",
     "OAuthToken",
+    "Token",
     "User",
     "UserCredentials",
     "Vault",
 ]
 
 from .base import Model
+from .circle import Circle
 from .client import Client, ClientAccess
 from .credentials import OAuthToken, UserCredentials
+from .emailotp import EmailOTP
 from .login import LoginSession
 from .session import AuthSession
+from .token import Token
 from .user import User
 from .vault import Vault

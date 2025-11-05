@@ -5,14 +5,12 @@ API routes for the users resource.
 
 import flask
 
-from campus.common import flask as campus_flask
+from campus.common import flask as campus_flask, schema
 from campus.common.errors import api_errors
-from campus.models import user
 import campus.yapper
 
 bp = flask.Blueprint('users', __name__, url_prefix='/users')
 
-users = user.User()
 yapper = campus.yapper.create()
 
 
@@ -126,14 +124,18 @@ def new_user(email: str, name: str) -> campus_flask.JsonResponse:
                 "error": str
             }
     """
-    resource = users.new(email=email, name=name)
+    from campus.api import resources
+
+    user = resources.user.new(email=email, name=name)
+    resource = user.to_resource()
     campus_flask.validate_json_response(
-        user.UserResourceDict.__annotations__,
         resource,
+        {"id": str, "email": str, "name": str,
+            "created_at": str, "activated_at": str | None},
         on_error=api_errors.raise_api_error,
     )
     yapper.emit('campus.users.new')
-    return dict(resource), 201
+    return resource, 201
 
 
 @bp.delete('/<string:user_id>')
@@ -171,7 +173,9 @@ def delete_user(user_id: str) -> campus_flask.JsonResponse:
                 "error": str
             }
     """
-    users.delete(user_id)
+    from campus.api import resources
+
+    resources.user[schema.UserID(user_id)].delete()
     yapper.emit('campus.users.delete')
     return {}, 200
 
@@ -220,12 +224,14 @@ def get_user(user_id: str) -> campus_flask.JsonResponse:
                 "error": str
             }
     """
+    from campus.api import resources
+
     summary = {}
     record, _ = get_user_profile(user_id)
     summary['profile'] = record
     campus_flask.validate_json_response(
         summary,
-        user.UserResourceDict.__annotations__,
+        {"profile": dict},
         on_error=api_errors.raise_api_error
     )
     # future calls for other user info go here
@@ -276,11 +282,13 @@ def patch_user_profile(user_id: str) -> campus_flask.JsonResponse:
                 "error": str
             }
     """
+    from campus.api import resources
+
     payload = campus_flask.validate_request_and_extract_json(
-        user.UserUpdate.__annotations__,
+        {},  # Empty update schema for now
         on_error=api_errors.raise_api_error,
     )
-    users.update(user_id, **payload)
+    resources.user[schema.UserID(user_id)].update(**payload)
     yapper.emit('campus.users.update')
     return {}, 200
 
@@ -327,10 +335,14 @@ def get_user_profile(user_id: str) -> campus_flask.JsonResponse:
                 "error": str
             }
     """
-    resource = users.get(user_id)
+    from campus.api import resources
+
+    user = resources.user[schema.UserID(user_id)].get()
+    resource = user.to_resource()
     campus_flask.validate_json_response(
-        user.UserResourceDict.__annotations__,
         resource,
+        {"id": str, "email": str, "name": str,
+            "created_at": str, "activated_at": str | None},
         on_error=api_errors.raise_api_error,
     )
-    return dict(resource), 200
+    return resource, 200
