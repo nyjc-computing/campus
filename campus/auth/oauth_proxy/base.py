@@ -15,7 +15,7 @@ import werkzeug
 from campus.auth import resources
 from campus.client.vault import get_vault
 from campus.common import schema
-from campus.models import token, webauth
+import campus.model
 
 HttpScheme = Literal["basic", "bearer"]
 OAuth2Flow = Literal[
@@ -30,8 +30,6 @@ Security = Literal[
     "oauth2",
     "openIdConnect"
 ]
-
-tokens = token.Tokens()
 
 
 class AuthProxy(ABC):
@@ -48,10 +46,7 @@ class AuthProxy(ABC):
     description: str
     version: str
     openapi_version: str
-    authorization_url: schema.Url
-    token_url: schema.Url
-    _headers: dict[str, str]
-    _token: token.TokenRecord | None = None
+    _token: campus.model.OAuthToken | None = None
     _CLIENT_ID: str
     _CLIENT_SECRET: str
 
@@ -60,14 +55,38 @@ class AuthProxy(ABC):
         self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
         self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
 
-    def with_token(self, token: token.TokenRecord) -> Self:
+    @property
+    @abstractmethod
+    def authorization_url(self) -> schema.Url: ...
+
+    @property
+    @abstractmethod
+    def token_url(self) -> schema.Url: ...
+
+    @property
+    @abstractmethod
+    def user_info_url(self) -> schema.Url | None: ...
+
+    @property
+    @abstractmethod
+    def headers(self) -> dict[str, str]: ...
+
+    @property
+    @abstractmethod
+    def scopes(self) -> list[str]: ...
+
+    def with_token(self, token: campus.model.OAuthToken) -> Self:
         """A chainable method for passing a token to the instance."""
         self._token = token
         return self
 
-    def release_token(self) -> token.TokenRecord | None:
+    def release_token(self) -> campus.model.OAuthToken:
         """Release the token held by the provider, if any."""
+        token = self._token
+        if token is None:
+            raise RuntimeError("No token loaded.")
         self._token = None
+        return token
 
     @abstractmethod
     def redirect_for_authorization(
@@ -84,10 +103,9 @@ class AuthProxy(ABC):
             user_id: schema.UserID
     ) -> Iterator[Self]:
         """Context manager to authorize a user API use."""
-        credentials = resources.credentials.find_credentials(
-            self.provider,
-            user_id
-        )  # type: ignore[var-annotated]
+        credentials = (
+            resources.credentials[self.provider][user_id].get(self._CLIENT_ID)
+        )
         token = credentials.token
         try:
             yield self.with_token(token)

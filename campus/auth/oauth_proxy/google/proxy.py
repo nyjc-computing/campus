@@ -12,10 +12,9 @@ import werkzeug
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors, token_errors
-from campus.models import webauth
 
 from .. import base
-from ... import resources
+from ... import resources, webauth
 
 PROVIDER = "google"
 REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
@@ -34,15 +33,21 @@ class GoogleAuthProxy(base.AuthProxy):
     description = "OAuth2 authentication endpoints for Google integration with Campus"
     version = "2022-11-28"
     openapi_version = "3.0.3"
-    authorization_url = schema.Url(
-        "https://accounts.google.com/o/oauth2/v2/auth"
+    _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+        provider=PROVIDER,
+        authorization_url=schema.Url(
+            "https://accounts.google.com/o/oauth2/v2/auth"
+        ),
+        token_url=schema.Url("https://oauth2.googleapis.com/token"),
+        user_info_url=schema.Url(
+            "https://www.googleapis.com/oauth2/v3/userinfo"
+        ),
+        scopes=[
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile"
+        ],
+        headers={"Accept": "application/json"},
     )
-    token_url = schema.Url("https://oauth2.googleapis.com/token")
-    user_info_url = schema.Url(
-        "https://www.googleapis.com/oauth2/v3/userinfo"
-    )
-    _headers = {"Accept": "application/json"}
-    _oauth2: webauth.oauth2.OAuth2AuthorizationCodeFlowScheme
     _PROMPT_OPTIONS = Literal[
         "consent",
         "login",
@@ -52,17 +57,26 @@ class GoogleAuthProxy(base.AuthProxy):
 
     def __init__(self) -> None:
         super().__init__()
-        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-            provider=PROVIDER,
-            authorization_url=self.authorization_url,
-            token_url=self.token_url,
-            user_info_url=self.user_info_url,
-            scopes=[
-                "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile"
-            ],
-            headers=self._headers,
-        )
+
+    @property
+    def authorization_url(self) -> schema.Url:
+        return self._oauth2.authorization_url
+
+    @property
+    def token_url(self) -> schema.Url:
+        return self._oauth2.token_url
+
+    @property
+    def user_info_url(self) -> schema.Url | None:
+        return self._oauth2.user_info_url
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return self._oauth2.headers
+
+    @property
+    def scopes(self) -> list[str]:
+        return self._oauth2.scopes
 
     def redirect_for_authorization(
             self,
@@ -122,6 +136,5 @@ class GoogleAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             token=token,
         )
-        target = self._oauth2.auth_session.target
-        self._oauth2.end_session()
+        target = self._oauth2.finalize_session()
         return flask.redirect(target or flask.request.host_url)
