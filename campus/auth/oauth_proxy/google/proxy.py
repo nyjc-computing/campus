@@ -86,7 +86,7 @@ class GoogleAuthProxy(base.AuthProxy):
             login_hint: schema.Email | None = None,  # email hint
             prompt: _PROMPT_OPTIONS = None,
     ) -> werkzeug.Response:
-        """Redirect to GitHub OAuth2 authorization endpoint."""
+        """Redirect to Google OAuth2 authorization endpoint."""
 
         self._oauth2.init_session(
             redirect_uri=REDIRECT_URI,
@@ -110,8 +110,7 @@ class GoogleAuthProxy(base.AuthProxy):
     ) -> werkzeug.Response:
         assert self._oauth2 is not None
         self._oauth2.validate_callback(state=state)
-        # Retrieve access token from GitHub
-        # Fill in user info from userinfo endpoint
+        # Retrieve access token from Google
         token = self._oauth2.exchange_code_for_token(
             code=code,
             client_id=self._CLIENT_ID,
@@ -123,6 +122,7 @@ class GoogleAuthProxy(base.AuthProxy):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
+        # Fill in user info from userinfo endpoint
         userinfo = self._oauth2.get_user_info(token.access_token)
         user_id = schema.Email(userinfo["email"])
         # Verify domain is permitted
