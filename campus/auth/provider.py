@@ -41,7 +41,7 @@ from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url, utc_time
 import campus.config
 
-from . import resources
+from . import oauth_proxy, resources
 
 PROVIDER = "campus"
 
@@ -53,6 +53,11 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     app.register_blueprint(bp)
 
 
+def _session_key() -> str:
+    """Get the session key for Campus auth sessions."""
+    return f"{PROVIDER}_session_id"
+
+
 # OAuth2 endpoints
 @bp.get('/authorize')
 @campus_flask.unpack_request
@@ -62,6 +67,8 @@ def authorize(
         redirect_uri: str,
         scope: str | None = None,
         state: str | None = None,
+        *,
+        hd: str | None = None,  # hosted domain (for Google)
 ) -> werkzeug.Response:
     """Follows RFC 6749 Section 4.1.1
     https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
@@ -106,6 +113,7 @@ def authorize(
         raise auth_errors.UnsupportedResponseTypeError(
             f"Unsupported response_type: {response_type}"
         )
+    # Check if client exists
     client = resources.client[client_id].get()
     # TODO: Validate redirect_uri; must be absolute URL
     authsession = resources.session[PROVIDER].new(
@@ -115,17 +123,25 @@ def authorize(
         scopes=scope.split(" ") if scope else [],
         state=state
     )
+    flask.session[_session_key()] = authsession.id
     # Scope verification is not handled here.
     # The issued token will contain only the scopes allowed for the
     # client and consented by user.
     # The client app should handle insufficient scope errors.
 
     # Redirect to Google for OAuth
+    params = {
+        "target": flask.url_for('.callback', _external=True)
+    }
+    if hd:
+        params["hd"] = hd
     oauth_authorize_url = flask.url_for(
         'oauth.google.authorize',
-        target=flask.url_for('.callback', _external=True),
+        _external=True,
+        **params
     )
     return flask.redirect(oauth_authorize_url)
+
 
 
 @bp.get('/callback')
@@ -134,10 +150,11 @@ def callback(
         code: str,
         state: str,
 ) -> werkzeug.Response:
-    """OAuth2 callback endpoint after user authenticates with Google.
+    """Handle the OAuth2 callback response from Google for Campus
+    authentication flows.
 
     Method:
-        GET /oauth2/callback
+        GET /auth/callback
 
     Path Parameters:
         None
@@ -154,27 +171,61 @@ def callback(
           appending the authorization code and state if provided.
           e.g. /client/callback?code=abc123&state=xyz
     """
-    # TODO: Check validity of Google OAuth token and identity
-    # TODO: Get user_id from Google token
+
+
+    # The authorization flow (from /auth/authorize) is expected to have
+    # gone through Google OAuth.
+    # This means there are two session keys, one for Google OAuth
+    # and one for Campus OAuth.
+    callback_payload = campus_flask.get_request_payload()
+    if "error" in callback_payload:
+        auth_errors.raise_from_json(callback_payload)
+    else:
+        return campus_flask.unpack_into(success_callback,
+                                        **callback_payload)
+
+
+def success_callback(
+        state: str,
+        code: str,
+        scope: str,
+        **kwargs: str
+) -> werkzeug.Response:
+    """Handle a Google OAuth callback request."""
+    # Handle Google OAuth callback, get google credentials
+    google_proxy = oauth_proxy.google.proxy.get_proxy()
+    google_credentials = google_proxy.handle_auth_callback(
+        state,
+        code,
+        scope,
+    )
+    # Check Campus session validity
     session_id = state
     authsession = resources.session[PROVIDER][session_id].get()
-    redirect_uri: str = (
-        authsession.redirect_uri
-        if authsession and authsession.redirect_uri
-        else flask.request.base_url
-    )
     if authsession is None:
         raise token_errors.InvalidRequestError("Auth session not found")
+    if authsession.is_expired():
+        raise token_errors.InvalidRequestError("Auth session expired")
+    # Update auth session with user ID from Google credentials
+    authsession = resources.session[PROVIDER][session_id].update(
+        session_id=session_id,
+        user_id=schema.UserID(google_credentials.user_id)
+    )
+    # Finalize session and redirect to client
+    del flask.session[_session_key()]
+    redirect_uri = authsession.redirect_uri
     if authsession.state:
         redirect_url = url.with_params(
             redirect_uri,
             code=authsession.authorization_code,
-            state=authsession.state
+            state=authsession.state,
+            scope=scope,
         )
     else:
         redirect_url = url.with_params(
             redirect_uri,
-            code=authsession.authorization_code
+            code=authsession.authorization_code,
+            scope=scope,
         )
     return flask.redirect(redirect_url)
 
@@ -213,8 +264,6 @@ def token(
             Secret key for the OAuth client.
 
     Responses:
-        501 Not Implemented: None
-        - Returned as token issuance is not implemented yet, as well as completing the OAuth2 flow and revoking the session.
         400 Invalid authorization code: None
         - Returned when the authorization code in the json does not match the one used in the session.
         400 Invalid redirect_uri: None
@@ -241,6 +290,8 @@ def token(
     resources.client.raise_for_authentication(client_id, client_secret)
     # OAuth2 flow complete, revoke session
     resources.session[PROVIDER][authsession.id].delete()
+    del flask.session[_session_key()]
+
     if not authsession.user_id:
         raise auth_errors.InvalidRequestError(
             "User ID not found in auth session"
@@ -254,6 +305,7 @@ def token(
         token = credentials.token
     else:
         token = user_credentials_resource.new(
+            client_id=flask.g.current_client.id,
             scopes=authsession.scopes,
             expiry_seconds=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
