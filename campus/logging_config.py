@@ -40,7 +40,6 @@ def configure_logging(log_level: int = DEFAULT_LOG_LEVEL, enable_oauth_debug: bo
             'campus.apps.oauth.github',
             'campus.apps.oauth.discord',
             'campus.apps.campusauth.routes',
-            'campus.models.webauth.oauth2.authorization_code',
         ]
 
         for logger_name in oauth_loggers:
