@@ -122,10 +122,10 @@ def delete_provider_session(
 
     DELETE /sessions/{provider}/{session_id}
     Returns: {
-        "redirect_uri": <url>
+        "target": <url>
     }
     """
-    redirect_uri = session_resource[provider][session_id].finalize()
+    target = session_resource[provider][session_id].finalize()
     get_yapper().emit(
         'campus.sessions.finalize',
         {
@@ -133,7 +133,7 @@ def delete_provider_session(
             "session_id": str(session_id)
         }
     )
-    return {"redirect_uri": redirect_uri}, 200
+    return {"target": target}, 200
 
 @bp.get("/<provider>/<session_id>")
 def get_provider_session(
