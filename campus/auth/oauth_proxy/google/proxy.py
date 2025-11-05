@@ -103,23 +103,23 @@ class GoogleAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
         )
-        userinfo = self._oauth2.get_user_info(token.access_token)
-        # Verify domain is permitted
-        if not userinfo["email"].domain == env.WORKSPACE_DOMAIN:
-            raise token_errors.InvalidGrantError(
-                f"Domain not allowed",
-                domain=userinfo["email"].domain
-            )
         # Verify requested scopes were granted
         scopes = scope.split(SCOPE_SEP)
         if missing_scopes := token.validate_scope(scopes):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
-        # Store token
-        resources.credentials.store(
-            provider=PROVIDER,
-            user_id=userinfo["email"],
+        userinfo = self._oauth2.get_user_info(token.access_token)
+        user_id = schema.Email(userinfo["email"])
+        # Verify domain is permitted
+        if not user_id.domain == env.WORKSPACE_DOMAIN:
+            raise token_errors.InvalidGrantError(
+                f"Domain not allowed",
+                domain=user_id.domain
+            )
+        # Store/update token
+        resources.credentials[PROVIDER][user_id].update(
+            client_id=self._CLIENT_ID,
             token=token,
         )
         target = self._oauth2.auth_session.target

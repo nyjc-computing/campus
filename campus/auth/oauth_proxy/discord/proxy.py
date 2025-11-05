@@ -12,6 +12,7 @@ import werkzeug
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors
+import campus.config
 from campus.models import webauth
 
 from .. import base
@@ -60,19 +61,26 @@ class DiscordAuthPoxy(base.AuthProxy):
             self,
             target: schema.Url,
             *,
-            prompt: _PROMPT_OPTIONS = None,
+            prompt: _PROMPT_OPTIONS = None,  # common option for providers
     ) -> werkzeug.Response:
         """Redirect to GitHub OAuth2 authorization endpoint."""
-
-        self._oauth2.init_session(
-            redirect_uri=REDIRECT_URI,
+        authsession = resources.session[PROVIDER].new(
+            expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
             client_id=self._CLIENT_ID,
+            redirect_uri=REDIRECT_URI,
             scopes=self._oauth2.scopes,
             target=target
         )
-        authorization_url = self._oauth2.get_authorization_url(
-            **{"prompt": prompt} if prompt else {}
-        )
+        # self._oauth2.init_session(
+        #     redirect_uri=REDIRECT_URI,
+        #     client_id=self._CLIENT_ID,
+        #     scopes=self._oauth2.scopes,
+        #     target=target
+        # )
+        url_params = {}
+        if prompt:
+            url_params["prompt"] = prompt
+        authorization_url = self._oauth2.get_authorization_url(**url_params)
         return flask.redirect(authorization_url)
 
     def handle_callback(
@@ -91,17 +99,17 @@ class DiscordAuthPoxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
         )
-        userinfo = self._oauth2.get_user_info(token.access_token)
         # Verify requested scopes were granted
         scopes = scope.split(SCOPE_SEP)
         if missing_scopes := token.validate_scope(scopes):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
-        # Store token
-        resources.credentials.store(
-            provider=PROVIDER,
-            user_id=userinfo["email"],
+        userinfo = self._oauth2.get_user_info(token.access_token)
+        user_id = schema.Email(userinfo["email"])
+        # Store/update token
+        resources.credentials[PROVIDER][user_id].update(
+            client_id=self._CLIENT_ID,
             token=token,
         )
         target = self._oauth2.auth_session.target
