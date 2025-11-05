@@ -8,23 +8,15 @@ import unittest
 from unittest.mock import patch, Mock
 
 # TODO: Add unit tests for:
-# - campus.apps.api.routes.admin
-# - campus.apps.api.routes.circles  
+# - campus.apps.api.routes.circles
 # - campus.apps.api.routes.users
 # - campus.apps.api.routes.emailotp
-
-
-class TestAdminRoutes(unittest.TestCase):
-    """Unit tests for admin routes."""
-    
-    def test_placeholder(self):
-        """Placeholder test - implement route logic tests."""
-        self.assertTrue(True)
+# - campus.apps.api.routes.session
 
 
 class TestCirclesRoutes(unittest.TestCase):
     """Unit tests for circles routes."""
-    
+
     def test_placeholder(self):
         """Placeholder test - implement route logic tests."""
         self.assertTrue(True)
@@ -32,7 +24,7 @@ class TestCirclesRoutes(unittest.TestCase):
 
 class TestUsersRoutes(unittest.TestCase):
     """Unit tests for users routes."""
-    
+
     def test_placeholder(self):
         """Placeholder test - implement route logic tests."""
         self.assertTrue(True)
