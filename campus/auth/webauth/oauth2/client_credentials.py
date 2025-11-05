@@ -11,14 +11,12 @@ import requests
 
 from campus.common import schema
 from campus.common.errors import token_errors
-from campus.models import token
+import campus.model
 
 from . import base
 
 # Default timeout for requests in seconds
 TIMEOUT = 10
-
-tokens = token.Tokens()
 
 
 class OAuth2ClientCredentialsFlowScheme(base.OAuth2FlowScheme):
@@ -50,7 +48,7 @@ class OAuth2ClientCredentialsFlowScheme(base.OAuth2FlowScheme):
             auth: tuple[str, str] | None = None,
             client_id: str | None = None,
             client_secret: str | None = None
-    ) -> token.TokenRecord:
+    ) -> campus.model.OAuthToken:
         """Retrieve access token using client credentials.
 
         Args:
@@ -93,4 +91,5 @@ class OAuth2ClientCredentialsFlowScheme(base.OAuth2FlowScheme):
         token_payload = resp.json()
         if "error" in token_payload:
             token_errors.raise_from_json(token_payload)
-        return token.TokenRecord.from_dict(token_payload)
+        token = campus.model.OAuthToken.from_resource(token_payload)
+        return token
