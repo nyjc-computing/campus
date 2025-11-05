@@ -9,7 +9,7 @@ Credentials link an issued token to a provider, client, and user.
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import secret, uid, utc_time
 import campus.config
 import campus.model
 import campus.storage
@@ -171,7 +171,7 @@ class UserCredentialsResource:
         assert self.parent.provider == "campus", (
             f"Unable to issue token for provider {self.parent.provider!r}"
         )
-        token_id = uid.generate_uid()
+        token_id = secret.generate_access_token()
         token = campus.model.OAuthToken(
             id=token_id,
             expiry_seconds=expiry_seconds,
