@@ -23,6 +23,7 @@ from werkzeug import Response as FlaskResponse
 
 from campus.common.errors import api_errors
 from campus.common.validation import record
+from campus.model import HttpHeader
 
 from . import parameter
 
@@ -67,6 +68,13 @@ def get_user_agent() -> str:
     if not flask.has_request_context():
         raise RuntimeError("No Flask request context available")
     return flask.request.headers.get("User-Agent", "Unknown")
+
+
+def get_request_headers() -> HttpHeader:
+    """Get the headers from the Flask request as a dictionary."""
+    if not flask.has_request_context():
+        raise RuntimeError("No Flask request context available")
+    return HttpHeader(flask.request.headers.items())
 
 
 def get_request_payload() -> dict[str, typing.Any]:
