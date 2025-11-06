@@ -78,6 +78,31 @@ class ClientsResource:
         """
         return ClientResource(client_id)
 
+    def is_valid_credentials(
+            self,
+            client_id: schema.CampusID,
+            client_secret: str
+    ) -> bool:
+        """Check if client credentials are valid.
+
+        Args:
+            client_id: The client identifier
+            client_secret: The client secret
+        Returns:
+            True if credentials are valid, False otherwise
+        """
+        client = self[client_id].get()
+        if not client.secret_hash:
+            raise auth_errors.ServerError(
+                "Invalid configuration",
+                client_id=client_id
+            )
+        expected_hash = secret.hash_client_secret(
+            client_secret,
+            env.getsecret("SECRET_KEY", env.DEPLOY)
+        )
+        return client.secret_hash == expected_hash
+
     def raise_for_authentication(
             self,
             client_id: schema.CampusID,
@@ -94,17 +119,7 @@ class ClientsResource:
         Raises:
             UnauthorizedError: If client not found or client secret is invalid
         """
-        client = self[client_id].get()
-        if not client.secret_hash:
-            raise auth_errors.ServerError(
-                "Invalid configuration",
-                client_id=client_id
-            )
-        expected_hash = secret.hash_client_secret(
-            client_secret,
-            env.getsecret("SECRET_KEY", env.DEPLOY)
-        )
-        if client.secret_hash != expected_hash:
+        if not self.is_valid_credentials(client_id, client_secret):
             raise auth_errors.UnauthorizedClientError(
                 "Invalid credentials",
                 client_id=client_id
