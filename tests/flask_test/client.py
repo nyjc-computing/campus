@@ -10,7 +10,7 @@ import flask
 
 from campus.common.http.interface import JsonDict, JsonResponse
 from campus.common.http.errors import AuthenticationError
-from campus.models.webauth.header import HttpHeaderDict
+from campus.model import HttpHeader
 from campus.common import env
 
 from .response import FlaskTestResponse
@@ -56,13 +56,13 @@ class FlaskTestClient:
         # Try ACCESS_TOKEN first (Bearer auth)
         access_token = env.ACCESS_TOKEN
         if access_token:
-            return HttpHeaderDict.from_bearer_token(access_token)
+            return HttpHeader.from_bearer_token(access_token)
 
         # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
         client_id = env.CLIENT_ID
         client_secret = env.CLIENT_SECRET
         if client_id and client_secret:
-            return HttpHeaderDict.from_credentials(client_id, client_secret)
+            return HttpHeader.from_credentials(client_id, client_secret)
 
         # No credentials found - unauthenticated requests are not yet supported
         raise AuthenticationError(

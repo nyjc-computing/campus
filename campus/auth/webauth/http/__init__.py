@@ -15,9 +15,9 @@ __all__ = [
 from typing import Literal
 
 from campus.common.errors import api_errors, token_errors
+import campus.model
 
 from .. import base
-from . import header
 
 HttpScheme = Literal["basic", "bearer"]
 
@@ -37,7 +37,7 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             provider: str,
             scheme: HttpScheme,
             *,
-            header: header.HttpHeader | None = None
+            header: campus.model.HttpHeader | None = None
     ):
         super().__init__(provider)
         self.scheme = scheme  # type: ignore[assignment]
@@ -51,7 +51,7 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             http_header: dict
     ) -> "HttpAuthenticationScheme":
         """Create an HTTP authentication scheme from an HTTP header."""
-        header_ = header.HttpHeader(http_header)
+        header_ = campus.model.HttpHeader(http_header)
         if header_.authorization is None:
             api_errors.raise_api_error(401)
         match header_.authorization.scheme:

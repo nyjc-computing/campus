@@ -1,10 +1,9 @@
-"""campus.auth.webauth.header
+"""campus.model.http.header
 
-Utility functions and classes for handling HTTP headers
+Campus model representation of HTTP headers.
 """
 
 __all__ = [
-    "HttpAuthProperty",
     "HttpHeader",
 ]
 
