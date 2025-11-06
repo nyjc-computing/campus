@@ -9,7 +9,6 @@ __all__ = ["OAuth2AuthorizationCodeFlowScheme"]
 
 from typing import Any
 
-import flask
 import requests
 
 from campus.common import schema
@@ -38,40 +37,44 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
     redirect_uri: schema.Url
     headers: dict[str, str]
     user_info_url: schema.Url | None
-    extra_params: dict[str, str]
-    token_params: dict[str, str]
-    user_info_params: dict[str, str]
+    # extra_params: dict[str, str]
+    # token_params: dict[str, str]
+    # user_info_params: dict[str, str]
     scopes: list[str]
-    _auth_session: campus.model.AuthSession | None
+    # _auth_session: campus.model.AuthSession | None
 
     def __init__(
             self,
             provider: str,
+            client_id: str,
+            redirect_uri: schema.Url,
             authorization_url: schema.Url,
             token_url: schema.Url,
             scopes: list[str],
             headers: dict[str, str] | None = None,
             user_info_url: schema.Url | None = None,
-            extra_params: dict[str, str] | None = None,
-            token_params: dict[str, str] | None = None,
-            user_info_params: dict[str, str] | None = None,
+            # extra_params: dict[str, str] | None = None,
+            # token_params: dict[str, str] | None = None,
+            # user_info_params: dict[str, str] | None = None,
     ):
         super().__init__(provider)
+        self.client_id = client_id
+        self.redirect_uri = redirect_uri
         self.authorization_url = authorization_url
         self.token_url = token_url
         self.scopes = scopes
         self.headers = headers or {}
         self.user_info_url = user_info_url
-        self.extra_params = extra_params or {}
-        self.token_params = token_params or {}
-        self.user_info_params = user_info_params or {}
-        self._auth_session = None
+        # self.extra_params = extra_params or {}
+        # self.token_params = token_params or {}
+        # self.user_info_params = user_info_params or {}
+        # self._auth_session = None
 
-    @property
-    def auth_session(self) -> campus.model.AuthSession:
-        if self._auth_session is None:
-            raise RuntimeError("Session not initialized")
-        return self._auth_session
+    # @property
+    # def auth_session(self) -> campus.model.AuthSession:
+    #     if self._auth_session is None:
+    #         raise RuntimeError("Session not initialized")
+    #     return self._auth_session
     
     @property
     def _session_key(self) -> str:
@@ -84,7 +87,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         headers = {
             **self.headers,
             "Authorization": f"Bearer {access_token}",
-            **self.user_info_params
+            # **self.user_info_params
         }
         resp = requests.get(
             self.user_info_url,
@@ -96,58 +99,53 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             auth_errors.raise_from_json(userinfo_payload)
         return userinfo_payload
 
-    def validate_callback(self, state: str) -> None:
-        error_description = None
-        if not self._auth_session:
-            error_description = "No active OAuth session found."
-        elif self._auth_session.is_expired():
-            error_description = "OAuth session has expired."
-        elif self._auth_session.id != state:
-            error_description = "Session state mismatch."
-        if error_description:
-            raise auth_errors.InvalidRequestError(error_description)
+    # def validate_callback(self, state: str) -> None:
+    #     error_description = None
+    #     if not self._auth_session:
+    #         error_description = "No active OAuth session found."
+    #     elif self._auth_session.is_expired():
+    #         error_description = "OAuth session has expired."
+    #     elif self._auth_session.id != state:
+    #         error_description = "Session state mismatch."
+    #     if error_description:
+    #         raise auth_errors.InvalidRequestError(error_description)
 
-    def init_session(
-            self,
-            *,
-            redirect_uri: schema.Url,
-            user_id: schema.UserID | None = None,
-            client_id: str,
-            scopes: list[str],
-            target: schema.Url | None = None,
-    ) -> None:
-        """Create a new OAuth2 Authorization Code flow session.
-        Revokes any existing session for the user.
-        Note that this sets session_id in client-side cookie.
+    # def init_session(
+    #         self,
+    #         *,
+    #         redirect_uri: schema.Url,
+    #         user_id: schema.UserID | None = None,
+    #         client_id: str,
+    #         scopes: list[str],
+    #         target: schema.Url | None = None,
+    # ) -> None:
+    #     """Create a new OAuth2 Authorization Code flow session.
+    #     Revokes any existing session for the user.
+    #     Note that this sets session_id in client-side cookie.
 
-        Returns the session.
-        """
-        self._auth_session = resources.session[self.provider].new(
-            expiry_seconds=OAUTH_EXPIRY_MINUTES * 60,
-            redirect_uri=redirect_uri,
-            client_id=client_id,
-            user_id=user_id,
-            scopes=scopes,
-            target=target,
-        )
-        flask.session[self._session_key] = str(self._auth_session.id)
+    #     Returns the session.
+    #     """
+    #     self._auth_session = resources.session[self.provider].new(
+    #         expiry_seconds=OAUTH_EXPIRY_MINUTES * 60,
+    #         redirect_uri=redirect_uri,
+    #         client_id=client_id,
+    #         user_id=user_id,
+    #         scopes=scopes,
+    #         target=target,
+    #     )
+    #     flask.session[self._session_key] = str(self.auth_session.id)
 
-    def finalize_session(self) -> schema.Url:
-        """Finalize the current OAuth2 Authorization Code flow session.
+    # def finalize_session(self) -> schema.Url:
+    #     """Finalize the current OAuth2 Authorization Code flow session.
         
-        Returns the target URL to redirect to.
-        """
-        if not self._auth_session:
-            raise auth_errors.InvalidRequestError(
-                "No active OAuth session found."
-            )
-        authsession = (
-            resources.session[self.provider][self.auth_session.id].get()
-        )
-        resources.session[self.provider][self.auth_session.id].delete()
-        del flask.session[self._session_key]
-        assert authsession.target
-        return schema.Url(authsession.target)
+    #     Returns the target URL to redirect to.
+    #     """
+    #     # Raises RuntimeError if auth session not initialized
+    #     auth_session = self.auth_session
+    #     resources.session[self.provider][auth_session.id].delete()
+    #     del flask.session[self._session_key]
+    #     assert auth_session.target
+    #     return schema.Url(auth_session.target)
 
     def exchange_code_for_token(
             self,
@@ -200,7 +198,11 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             scopes=token_payload["scope"].split(" "),
         )
 
-    def get_authorization_url(self, **add_params: str) -> schema.Url:
+    def get_authorization_url(
+            self,
+            state: str,
+            **add_params: str
+    ) -> schema.Url:
         """Return the authorization URL for redirect, with
         provider-specific params.
 
@@ -209,12 +211,12 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         parameters.
         """
         params = {
-            "client_id": self.auth_session.client_id,
-            "redirect_uri": self.auth_session.redirect_uri,
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
             "response_type": "code",
             "scope": " ".join(self.scopes),
-            "state": self.auth_session.id,
-            **self.extra_params,
+            "state": state,
+            # **self.extra_params,
             **add_params
         }
         authorization_url = url.create_url(

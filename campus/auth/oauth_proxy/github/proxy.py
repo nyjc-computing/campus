@@ -12,6 +12,7 @@ import werkzeug
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors
+import campus.config
 
 from .. import base
 from ... import resources, webauth
@@ -35,15 +36,17 @@ class GitHubAuthProxy(base.AuthProxy):
     version = "2022-11-28"
     openapi_version = "3.0.3"
     _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-            provider=PROVIDER,
-            authorization_url=schema.Url(
-                "https://github.com/login/oauth/authorize"),
-            token_url=schema.Url(
-                "https://github.com/login/oauth/access_token"),
-            user_info_url=schema.Url("https://api.github.com/user"),
-            scopes=["read:user", "read:email"],
-            headers={"Accept": "application/json"},
-        )
+        provider=PROVIDER,
+        client_id=env.CLIENT_ID,
+        redirect_uri=REDIRECT_URI,
+        authorization_url=schema.Url(
+            "https://github.com/login/oauth/authorize"),
+        token_url=schema.Url(
+            "https://github.com/login/oauth/access_token"),
+        user_info_url=schema.Url("https://api.github.com/user"),
+        scopes=["read:user", "read:email"],
+        headers={"Accept": "application/json"},
+    )
     _PROMPT_OPTIONS = Literal["select_account"] | None
 
     def __init__(self) -> None:
@@ -75,21 +78,14 @@ class GitHubAuthProxy(base.AuthProxy):
             prompt: _PROMPT_OPTIONS = None,
     ) -> werkzeug.Response:
         """Redirect to GitHub OAuth2 authorization endpoint."""
-        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-            provider=PROVIDER,
-            authorization_url=self.authorization_url,
-            token_url=self.token_url,
-            user_info_url=self.user_info_url,
-            scopes=["read:user", "read:email"],
-            headers=self.headers,
-        )
-        self._oauth2.init_session(
+        authsession = self.init_authsession(
+            expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
             redirect_uri=REDIRECT_URI,
-            client_id=self._CLIENT_ID,
             scopes=self._oauth2.scopes,
             target=target
         )
         authorization_url = self._oauth2.get_authorization_url(
+            state=authsession.id,
             **{"prompt": prompt} if prompt else {}
         )
         return flask.redirect(authorization_url)
@@ -100,8 +96,8 @@ class GitHubAuthProxy(base.AuthProxy):
             code: str,
             scope: str,
     ) -> werkzeug.Response:
-        assert self._oauth2 is not None
-        self._oauth2.validate_callback(state=state)
+        authsession = self.get_authsession()
+        self.validate_authsession(authsession, state)
         # Retrieve access token from GitHub
         # Fill in user info from userinfo endpoint
         token = self._oauth2.exchange_code_for_token(
@@ -122,5 +118,5 @@ class GitHubAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             token=token,
         )
-        target = self._oauth2.finalize_session()
-        return flask.redirect(target or flask.request.host_url)
+        self.finalize_authsession(authsession)
+        return flask.redirect(authsession.target or flask.request.host_url)

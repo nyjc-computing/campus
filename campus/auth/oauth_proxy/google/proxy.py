@@ -12,6 +12,7 @@ import werkzeug
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors, token_errors
+import campus.config
 import campus.model
 
 from .. import base
@@ -36,6 +37,8 @@ class GoogleAuthProxy(base.AuthProxy):
     openapi_version = "3.0.3"
     _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
         provider=PROVIDER,
+        client_id=env.CLIENT_ID,
+        redirect_uri=REDIRECT_URI,
         authorization_url=schema.Url(
             "https://accounts.google.com/o/oauth2/v2/auth"
         ),
@@ -88,14 +91,14 @@ class GoogleAuthProxy(base.AuthProxy):
             prompt: _PROMPT_OPTIONS = None,
     ) -> werkzeug.Response:
         """Redirect to Google OAuth2 authorization endpoint."""
-
-        self._oauth2.init_session(
+        authsession = self.init_authsession(
+            expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
             redirect_uri=REDIRECT_URI,
-            client_id=self._CLIENT_ID,
             scopes=self._oauth2.scopes,
             target=target
         )
         authorization_url = self._oauth2.get_authorization_url(
+            state=authsession.id,
             access_type="offline",
             include_granted_scopes="true",
             **{"hd": hd} if hd else {},
@@ -116,11 +119,12 @@ class GoogleAuthProxy(base.AuthProxy):
             user_id: The user identifier
             client_id: The OAuth client ID
             token: The OAuthToken instance
-        
+
         Returns:
             Updated UserCredentials instance
         """
-        self._oauth2.validate_callback(state=state)
+        authsession = self.get_authsession()
+        self.validate_authsession(authsession, state)
         # Retrieve access token from Google
         token = self._oauth2.exchange_code_for_token(
             code=code,
@@ -147,7 +151,7 @@ class GoogleAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             token=token,
         )
-        self._oauth2.finalize_session()
+        self.finalize_authsession(authsession)
         return credentials
 
     def handle_consent_callback(
@@ -157,6 +161,10 @@ class GoogleAuthProxy(base.AuthProxy):
             scope: str,
     ) -> werkzeug.Response:
         """Handles Google OAuth callback for a consent flow."""
+        # handle_auth_callback() also retrieves authsession
+        # Unfortunately this duplication of code is necessary because
+        # handle_auth_callback will finalize the authsession, deleting
+        # it from the store. So we get it here before that happens.
+        authsession = self.get_authsession()
         self.handle_auth_callback(state, code, scope)
-        target = self._oauth2.finalize_session()
-        return flask.redirect(target or flask.request.host_url)
+        return flask.redirect(authsession.target or flask.request.host_url)
