@@ -5,8 +5,6 @@ Campus OAuth2 proxy implementation.
 
 __all__ = ["CampusAuthProxy", "get_proxy"]
 
-from typing import Literal
-
 import flask
 import werkzeug
 
