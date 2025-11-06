@@ -56,7 +56,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 @bp.before_request
 def before_request() -> None:
-    flask.g.provider = proxy.get_proxy()
+    flask.g.proxy = proxy.get_proxy()
 
 
 @bp.get('/authorize')
@@ -69,7 +69,7 @@ def authorize(
 ) -> werkzeug.Response:
     """Prepares the Google OAuth authorization URL and redirects to it.
     """
-    return flask.g.provider.redirect_for_authorization(
+    return flask.g.proxy.redirect_for_authorization(
         target,
         hd=hd,
         login_hint=login_hint,
@@ -98,7 +98,7 @@ def success_callback(
         **kwargs: str
 ) -> werkzeug.Response:
     """Handle a Google OAuth callback request."""
-    return flask.g.provider.handle_callback(
+    return flask.g.proxy.handle_consent_callback(
         state,
         code,
         scope,

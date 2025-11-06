@@ -13,9 +13,6 @@ __all__ = ["init_app"]
 
 import flask
 
-from campus.common import devops, env
-from campus.models import session
-
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
 
@@ -39,37 +36,6 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     bp = provider.bp
     oauth_proxy.init_app(bp)
     routes.init_app(bp)
-
-    if devops.ENV == devops.DEVELOPMENT:
-        # Add test login and logout endpoints in development environment
-        auth_sessions = session.AuthSessions("campus")
-        @bp.get("/test-login")
-        def test_login():
-            """Test login endpoint."""
-            return flask.redirect(
-                flask.url_for(
-                    ".authorize",
-                    client_id=env.CLIENT_ID,
-                    response_type="code",
-                    redirect_uri=flask.url_for(
-                        ".callback",
-                        _external=True,
-                    ),
-                    scope="profile email",
-                    state="teststate",
-                )
-            )
-
-        @bp.get("/success")
-        def success():
-            """Login success endpoint."""
-            return "Login successful! <a href='/auth/logout'>Logout</a>"
-
-        @bp.get("/logout")
-        def logout():
-            """Logout endpoint."""
-            auth_sessions.delete()
-            return flask.redirect("/auth/test-login")
 
     if isinstance(app, flask.Flask):
         from campus.client.vault import get_vault

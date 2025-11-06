@@ -1,4 +1,4 @@
-"""campus.models.webauth.oauth2.authorization_code
+"""campus.auth.webauth.oauth2.authorization_code
 
 OAuth2 Authorization Code flow schemas and models.
 
@@ -9,22 +9,21 @@ __all__ = ["OAuth2AuthorizationCodeFlowScheme"]
 
 from typing import Any
 
+import flask
 import requests
 
 from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
 import campus.model
-from campus.models import session, token
 
 from . import base
+from ... import resources
 
 # Default expiry time for OAuth2 sessions in minutes
 OAUTH_EXPIRY_MINUTES = 10
 # Default timeout for requests in seconds
 TIMEOUT = 10
-
-tokens = token.Tokens()
 
 
 class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
@@ -43,7 +42,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
     token_params: dict[str, str]
     user_info_params: dict[str, str]
     scopes: list[str]
-    _session: session.AuthSessionRecord | None
+    _auth_session: campus.model.AuthSession | None
 
     def __init__(
             self,
@@ -66,14 +65,17 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         self.extra_params = extra_params or {}
         self.token_params = token_params or {}
         self.user_info_params = user_info_params or {}
-        self._auth = session.AuthSessions(self.provider)
-        self._session: session.AuthSessionRecord | None = None
+        self._auth_session = None
 
     @property
-    def auth_session(self) -> session.AuthSessionRecord:
-        if self._session is None:
-            raise ValueError("Session not initialized")
-        return self._session
+    def auth_session(self) -> campus.model.AuthSession:
+        if self._auth_session is None:
+            raise RuntimeError("Session not initialized")
+        return self._auth_session
+    
+    @property
+    def _session_key(self) -> str:
+        return f"oauth2_{self.provider}_session_id"
 
     def get_user_info(self, access_token: str) -> dict[str, Any]:
         """Fetch user info from the provider's user info endpoint."""
@@ -96,11 +98,11 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
 
     def validate_callback(self, state: str) -> None:
         error_description = None
-        if not self._session:
+        if not self._auth_session:
             error_description = "No active OAuth session found."
-        elif self._session.is_expired():
+        elif self._auth_session.is_expired():
             error_description = "OAuth session has expired."
-        elif self._session.id != state:
+        elif self._auth_session.id != state:
             error_description = "Session state mismatch."
         if error_description:
             raise auth_errors.InvalidRequestError(error_description)
@@ -120,7 +122,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
 
         Returns the session.
         """
-        self._session = self._auth.new(
+        self._auth_session = resources.session[self.provider].new(
             expiry_seconds=OAUTH_EXPIRY_MINUTES * 60,
             redirect_uri=redirect_uri,
             client_id=client_id,
@@ -128,25 +130,24 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             scopes=scopes,
             target=target,
         )
+        flask.session[self._session_key] = str(self._auth_session.id)
 
-    def end_session(self) -> None:
-        """End the current OAuth2 Authorization Code flow session."""
-        if not self._session:
+    def finalize_session(self) -> schema.Url:
+        """Finalize the current OAuth2 Authorization Code flow session.
+        
+        Returns the target URL to redirect to.
+        """
+        if not self._auth_session:
             raise auth_errors.InvalidRequestError(
                 "No active OAuth session found."
             )
-        self._auth.delete(self.auth_session.id)
-        self._session = None
-
-    def load_session(self) -> None:
-        """Retrieve an existing OAuth2 Authorization Code flow session.
-
-        Args:
-            session_id: The session ID to retrieve.
-            override: If True, override any existing session.
-        """
-        auth_session = self._auth.get()
-        self._session = auth_session
+        authsession = (
+            resources.session[self.provider][self.auth_session.id].get()
+        )
+        resources.session[self.provider][self.auth_session.id].delete()
+        del flask.session[self._session_key]
+        assert authsession.target
+        return schema.Url(authsession.target)
 
     def exchange_code_for_token(
             self,
@@ -155,10 +156,23 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             client_secret: str,
     ) -> campus.model.OAuthToken:
         """Exchange authorization code for access token."""
+        authsession = resources.session[self.provider].get(code)
+        if authsession.provider != self.provider:
+            raise auth_errors.ServerError(
+                "Provider mismatch",
+                session_provider=authsession.provider,
+                host_provider=self.provider
+            )
+        if authsession.client_id != client_id:
+            raise auth_errors.ServerError(
+                "Client ID mismatch during token exchange.",
+                session_client_id=authsession.client_id,
+                provided_client_id=client_id
+            )
         params = {
             "grant_type": "authorization_code",
-            "redirect_uri": self.auth_session.redirect_uri,
-            "client_id": self.auth_session.client_id,
+            "redirect_uri": authsession.redirect_uri,
+            "client_id": authsession.client_id,
             "code": code,
             "client_secret": client_secret,
         }
@@ -211,13 +225,13 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
 
     def refresh_token(
             self,
-            auth_token: token.TokenRecord,
+            auth_token: campus.model.OAuthToken,
             *,
             auth: tuple[str, str] | None = None,
-            client_id: str | None = None,
+            client_id: str,
             client_secret: str | None = None,
             force=False
-    ) -> token.TokenRecord:
+    ) -> campus.model.OAuthToken:
         """Refresh the access token using the refresh token if present,
         otherwise retrieve a new token.
 
@@ -260,13 +274,24 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             )
         if "error" in token_payload:
             token_errors.raise_from_json(token_payload)
-        auth_token = token.TokenRecord.from_dict(token_payload)
-        tokens.update(auth_token)
+        auth_token = campus.model.OAuthToken.from_resource(token_payload)
+        # auth_token = token.TokenRecord.from_dict(token_payload)
+        credentials = resources.credentials[self.provider].get(auth_token.id)
+        if credentials.client_id != client_id:
+            raise token_errors.InvalidClientError(
+                "Client ID mismatch during token refresh.",
+                credential_client_id=credentials.client_id,
+                provided_client_id=client_id
+            )
+        resources.credentials[self.provider][credentials.user_id].update(
+            client_id=client_id,
+            token=auth_token
+        )
         return auth_token
 
     def _post_with_auth(
             self,
-            auth_token: token.TokenRecord,
+            auth_token: campus.model.OAuthToken,
             *,
             auth: tuple[str, str]
     ) -> dict[str, Any]:
@@ -286,7 +311,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
 
     def _post_with_credentials(
             self,
-            auth_token: token.TokenRecord,
+            auth_token: campus.model.OAuthToken,
             *,
             client_id: str,
             client_secret: str

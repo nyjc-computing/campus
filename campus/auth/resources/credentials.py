@@ -9,7 +9,7 @@ Credentials link an issued token to a provider, client, and user.
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid, utc_time
+from campus.common.utils import secret, uid, utc_time
 import campus.config
 import campus.model
 import campus.storage
@@ -171,7 +171,7 @@ class UserCredentialsResource:
         assert self.parent.provider == "campus", (
             f"Unable to issue token for provider {self.parent.provider!r}"
         )
-        token_id = uid.generate_uid()
+        token_id = secret.generate_access_token()
         token = campus.model.OAuthToken(
             id=token_id,
             expiry_seconds=expiry_seconds,
@@ -200,8 +200,12 @@ class UserCredentialsResource:
             self,
             client_id: str,
             token: campus.model.OAuthToken
-    ) -> None:
+    ) -> campus.model.UserCredentials:
         """Update access token.
+
+        Checks for existing credentials for this user-client pair and
+        updates the token ID if it has changed. Also stores/updates
+        the token itself.
 
         Args:
             client_id: The client identifier
@@ -213,12 +217,14 @@ class UserCredentialsResource:
             "client_id": client_id
         })
         if not records:  # No existing credentials
-            cred_storage.insert_one({
-                "provider": self.parent.provider,
-                "user_id": str(self.user_id),
-                "client_id": client_id,
-                "token_id": token.id,
-            })
+            credentials = campus.model.UserCredentials(
+                id=uid.generate_category_uid("user_credentials"),
+                provider=self.parent.provider,
+                user_id=self.user_id,
+                client_id=client_id,
+                token=token
+            )
+            cred_storage.insert_one(credentials.to_storage())
         else:  # Check if token_id changed
             credentials = campus.model.UserCredentials.from_storage(
                 records[0]
@@ -234,3 +240,5 @@ class UserCredentialsResource:
             token_storage.update_by_id(token.id, token.to_storage())
         else:
             token_storage.insert_one(token.to_storage())
+        credentials.token = token
+        return credentials

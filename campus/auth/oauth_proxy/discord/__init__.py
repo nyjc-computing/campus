@@ -50,7 +50,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 @bp.before_request
 def before_request() -> None:
-    flask.g.provider = proxy.get_proxy()
+    flask.g.proxy = proxy.get_proxy()
 
 
 @bp.get("/authorize")
@@ -59,7 +59,7 @@ def authorize(
         prompt: Literal["consent", "none"] | None = None
 ) -> werkzeug.Response:
     """Prepares the Discord OAuth authorization URL and redirects to it."""
-    return flask.g.provider.redirect_for_authorization(
+    return flask.g.proxy.redirect_for_authorization(
         target,
         prompt=prompt
     )
@@ -86,7 +86,7 @@ def success_callback(
         **kwargs: str
 ) -> werkzeug.Response:
     """Handle a Discord OAuth callback request."""
-    return flask.g.provider.handle_callback(
+    return flask.g.proxy.handle_callback(
         state,
         code,
         scope,

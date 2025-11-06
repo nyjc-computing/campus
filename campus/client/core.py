@@ -8,7 +8,7 @@ import os
 from typing import Mapping
 
 from campus import config
-from campus.client.apps import AdminResource, CirclesResource, UsersResource
+from campus.client.apps import CirclesResource, UsersResource
 from campus.client.vault import VaultResource
 from campus.common.http import JsonClient, get_client
 
@@ -29,7 +29,6 @@ class Campus:
     vault: VaultResource
     users: UsersResource
     circles: CirclesResource
-    admin: AdminResource
 
     def __init__(
         self,
@@ -72,7 +71,6 @@ class Campus:
                 for app_name in app_names
             }
         self.vault = VaultResource(clients["campus.vault"], raw=raw)
-        self.admin = AdminResource(clients["campus.apps"], raw=raw)
         self.circles = CirclesResource(clients["campus.apps"], raw=raw)
         self.users = UsersResource(clients["campus.apps"], raw=raw)
         logging.debug(
@@ -82,4 +80,3 @@ class Campus:
         logging.debug('Vault base_url: %s', self.vault.client.base_url)
         logging.debug('Users base_url: %s', self.users.client.base_url)
         logging.debug('Circles base_url: %s', self.circles.client.base_url)
-        logging.debug('Admin base_url: %s', self.admin.client.base_url)

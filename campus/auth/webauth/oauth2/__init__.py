@@ -1,4 +1,4 @@
-"""campus.models.webauth.oauth2
+"""campus.auth.webauth.oauth2
 
 OAuth2 security scheme configs and models.
 

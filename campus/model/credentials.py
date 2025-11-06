@@ -16,6 +16,7 @@ class OAuthToken(Model):
     """Dataclass representation of a token record."""
     # access_token is stored in id
     id: str = field(default_factory=secret.generate_access_code)
+    # created_at inherited from Model
     # expires_at is generated in __post_init__ if not provided
     expires_at: schema.DateTime = None  # type: ignore
     expiry_seconds: InitVar[int]
@@ -69,6 +70,8 @@ class OAuthToken(Model):
 @dataclass(eq=False, kw_only=True)
 class UserCredentials(Model):
     __constraints__ = constraints.Unique("provider", "user_id")
+    id: schema.CampusID
+    # created_at inherited from Model
     provider: str
     client_id: str
     user_id: schema.UserID

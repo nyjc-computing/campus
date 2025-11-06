@@ -1,7 +1,6 @@
 """tests/test_client_apps
 
 Comprehensive black-box unit tests for campus.client.apps:
-- **AdminResource**: System administration operations (database management, status monitoring)
 - **CirclesResource**: Circle/group management with CRUD operations
 - **UsersResource**: User management and profile operations  
 
@@ -23,64 +22,7 @@ import unittest
 from unittest.mock import Mock
 
 from campus.common.http import JsonClient
-from campus.client.apps import AdminResource, CirclesResource, UsersResource
-
-
-class TestAdminResource(unittest.TestCase):
-    """Test cases for AdminResource class."""
-
-    def setUp(self):
-        """Set up test fixtures."""
-        self.mock_client = Mock(spec=JsonClient)
-        self.mock_client.base_url = "https://apps.example.com"
-        self.admin_resource = AdminResource(self.mock_client)
-
-    def test_init(self):
-        """Test AdminResource initialization."""
-        self.assertEqual(self.admin_resource.client, self.mock_client)
-        self.assertEqual(self.admin_resource.path, "admin")
-
-    def test_status(self):
-        """Test getting admin status."""
-        self.mock_client.get.return_value.json.return_value = {
-            "status": "healthy",
-            "database": "connected",
-            "version": "1.0.0"
-        }
-        result = self.admin_resource.status()
-        self.assertEqual(result, {
-            "status": "healthy",
-            "database": "connected",
-            "version": "1.0.0"
-        })
-
-    def test_init_db(self):
-        """Test database initialization."""
-        self.mock_client.post.return_value.json.return_value = {
-            "action": "init_db",
-            "status": "success",
-            "message": "Database initialized"
-        }
-        result = self.admin_resource.init_db()
-        self.assertEqual(result, {
-            "action": "init_db",
-            "status": "success",
-            "message": "Database initialized"
-        })
-
-    def test_purge_db(self):
-        """Test database purging."""
-        self.mock_client.post.return_value.json.return_value = {
-            "action": "purge_db",
-            "status": "success",
-            "message": "Database purged"
-        }
-        result = self.admin_resource.purge_db()
-        self.assertEqual(result, {
-            "action": "purge_db",
-            "status": "success",
-            "message": "Database purged"
-        })
+from campus.client.apps import CirclesResource, UsersResource
 
 
 class TestCirclesResource(unittest.TestCase):
@@ -116,11 +58,6 @@ class TestUsersResource(unittest.TestCase):
 class TestAppsResourceInterfaces(unittest.TestCase):
     """Test cases for apps resource interfaces and consistency."""
 
-    def test_admin_resource_import(self):
-        """Test that AdminResource can be imported."""
-        from campus.client.apps import AdminResource
-        self.assertTrue(callable(AdminResource))
-
     def test_circles_resource_import(self):
         """Test that CirclesResource can be imported."""
         from campus.client.apps import CirclesResource
@@ -135,8 +72,7 @@ class TestAppsResourceInterfaces(unittest.TestCase):
         """Test that apps module exports expected classes."""
         import campus.client.apps as apps_module
 
-        expected_exports = ['AdminResource',
-                            'CirclesResource', 'UsersResource']
+        expected_exports = ['CirclesResource', 'UsersResource']
         for export in expected_exports:
             self.assertTrue(hasattr(apps_module, export),
                             f"{export} should be exported")
@@ -145,13 +81,6 @@ class TestAppsResourceInterfaces(unittest.TestCase):
         """Test that all apps resources follow consistent patterns."""
         mock_client = Mock(spec=JsonClient)
         mock_client.base_url = "https://apps.example.com"
-
-        # Test AdminResource uses Resource pattern
-        admin = AdminResource(mock_client)
-        self.assertTrue(hasattr(admin, 'client'),
-                        "AdminResource should have client attribute")
-        self.assertTrue(hasattr(admin, 'path'),
-                        "AdminResource should have path attribute")
 
         # Test CirclesResource uses Resource pattern
         circles = CirclesResource(mock_client)

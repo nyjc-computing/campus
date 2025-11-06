@@ -6,11 +6,9 @@ These routes are used by clients to facilitate login sessions.
 
 import flask
 
-from campus.common import flask as campus_flask
-from campus.models import session
+from campus.common import flask as campus_flask, schema
 
 bp = flask.Blueprint("session", __name__, url_prefix="/session")
-sessions = session.LoginSessions()
 
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
@@ -43,14 +41,18 @@ def authorization_url(
 @bp.get("/<session_id>")
 def get_session(session_id: str):
     """Get the current user's session."""
-    session = sessions.get_by_id(session_id)
+    from campus.api import resources
+
+    session = resources.session[schema.CampusID(session_id)].get()
     if not session:
         return {"error": "Session not found."}, 404
-    return session.to_dict()
+    return session.to_resource()
 
 
 @bp.post("/<session_id>/revoke")
 def revoke(session_id: str):
     """Revoke the user's login session."""
-    sessions.delete(session_id)
+    from campus.api import resources
+
+    resources.session[schema.CampusID(session_id)].delete()
     return {"status": "ok", "message": "Session revoked."}

@@ -12,13 +12,9 @@ from typing import Callable
 
 import flask
 
-from campus.client.vault import get_vault
-from campus.models import token, webauth
+from campus.common.errors import auth_errors
 
-from . import resources
-
-tokens = token.Tokens()
-vault = get_vault()
+from . import resources, webauth
 
 
 def authenticate_client_from_request() -> tuple[dict[str, str], int] | None:
@@ -34,28 +30,34 @@ def authenticate_client_from_request() -> tuple[dict[str, str], int] | None:
     See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
     """
     req_header = dict(flask.request.headers)
-    auth = (
+    httpauth = (
         webauth.http.HttpAuthenticationScheme
         .from_header(provider="campus", http_header=req_header)
-        .get_auth(http_header=req_header)
     )
-    match auth.scheme:
+    assert httpauth.header
+    if not httpauth.header.authorization:
+        raise auth_errors.InvalidRequestError(
+            "Missing Authorization property in HTTP header"
+        )
+    match httpauth.scheme:
         case "basic":
-            client_id, client_secret = auth.credentials()
+            client_id, client_secret = (
+                httpauth.header.authorization.credentials()
+            )
             # Raises auth errors if auth fails
             resources.client.raise_for_authentication(client_id, client_secret)
             flask.g.current_client = resources.client[client_id].get()
         case "bearer":
-            access_token = auth.value
+            access_token = httpauth.header.authorization.token
             # raises UnauthorizedError for invalid access_token
             # TODO: use campus.auth.resources to retrieve token,
             # retrieve credentials
             credentials = resources.credentials["campus"].get(
                 token_id=access_token
             )
-            flask.g.current_user = resources.user[
-                credentials.user_id
-            ].get()
+            flask.g.current_user = (
+                resources.user[credentials.user_id].get()
+            )
             flask.g.current_client = (
                 resources.client[credentials.client_id].get()
             )

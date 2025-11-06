@@ -1,9 +1,11 @@
-"""campus.auth.routes.github
+"""campus.auth.routes.campus
 
-Proxy and callback routes for GitHub OAuth2 authentication.
+Routes for Campus OAuth2.
+
+While Campus supports the full OAuth2 flow (e.g. for third-party
+clients), first-party clients may use this module so they don't have to
+implement server-side storage for session management.
 """
-
-from typing import Literal
 
 import flask
 import werkzeug
@@ -13,7 +15,7 @@ from campus.common.errors import auth_errors
 
 from . import proxy
 
-PROVIDER = 'github'
+PROVIDER = 'campus'
 
 bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f'/{PROVIDER}')
 
@@ -32,15 +34,22 @@ def before_request() -> None:
 @campus_flask.unpack_request
 def authorize(
         target: schema.Url,
-        prompt: Literal["select_account"] | None = None
+        login_hint: schema.Email | None = None,
 ) -> werkzeug.Response:
-    """Redirect to GitHub OAuth authorization endpoint."""
-    return flask.g.proxy.redirect_for_authorization(target, prompt)
+    """Prepares the Campus OAuth authorization URL and redirects to it.
+    """
+    return flask.g.proxy.redirect_for_authorization(
+        target,
+        login_hint=login_hint,
+    )
 
 
 @bp.get('/callback')
 def callback() -> werkzeug.Response:
-    """Handle a GitHub OAuth callback request."""
+    """Handles the Campus OAuth callback request.
+
+    Dispatches to success or error handlers based on payload type.
+    """
     callback_payload = campus_flask.get_request_payload()
     if "error" in callback_payload:
         auth_errors.raise_from_json(callback_payload)
@@ -55,7 +64,9 @@ def success_callback(
         scope: str,
         **kwargs: str
 ) -> werkzeug.Response:
-    """Handle a Github OAuth callback request."""
+    """Campus uses Google SSO for authentication. This function handles
+    the Google OAuth callback request for an auth flow.
+    """
     return flask.g.proxy.handle_callback(
         state,
         code,

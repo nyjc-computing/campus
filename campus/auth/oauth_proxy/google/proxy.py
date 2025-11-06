@@ -12,10 +12,10 @@ import werkzeug
 
 from campus.common import env, schema
 from campus.common.errors import auth_errors, token_errors
-from campus.models import webauth
+import campus.model
 
 from .. import base
-from ... import resources
+from ... import resources, webauth
 
 PROVIDER = "google"
 REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
@@ -34,15 +34,21 @@ class GoogleAuthProxy(base.AuthProxy):
     description = "OAuth2 authentication endpoints for Google integration with Campus"
     version = "2022-11-28"
     openapi_version = "3.0.3"
-    authorization_url = schema.Url(
-        "https://accounts.google.com/o/oauth2/v2/auth"
+    _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+        provider=PROVIDER,
+        authorization_url=schema.Url(
+            "https://accounts.google.com/o/oauth2/v2/auth"
+        ),
+        token_url=schema.Url("https://oauth2.googleapis.com/token"),
+        user_info_url=schema.Url(
+            "https://www.googleapis.com/oauth2/v3/userinfo"
+        ),
+        scopes=[
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile"
+        ],
+        headers={"Accept": "application/json"},
     )
-    token_url = schema.Url("https://oauth2.googleapis.com/token")
-    user_info_url = schema.Url(
-        "https://www.googleapis.com/oauth2/v3/userinfo"
-    )
-    _headers = {"Accept": "application/json"}
-    _oauth2: webauth.oauth2.OAuth2AuthorizationCodeFlowScheme
     _PROMPT_OPTIONS = Literal[
         "consent",
         "login",
@@ -52,17 +58,26 @@ class GoogleAuthProxy(base.AuthProxy):
 
     def __init__(self) -> None:
         super().__init__()
-        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-            provider=PROVIDER,
-            authorization_url=self.authorization_url,
-            token_url=self.token_url,
-            user_info_url=self.user_info_url,
-            scopes=[
-                "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile"
-            ],
-            headers=self._headers,
-        )
+
+    @property
+    def authorization_url(self) -> schema.Url:
+        return self._oauth2.authorization_url
+
+    @property
+    def token_url(self) -> schema.Url:
+        return self._oauth2.token_url
+
+    @property
+    def user_info_url(self) -> schema.Url | None:
+        return self._oauth2.user_info_url
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return self._oauth2.headers
+
+    @property
+    def scopes(self) -> list[str]:
+        return self._oauth2.scopes
 
     def redirect_for_authorization(
             self,
@@ -72,7 +87,7 @@ class GoogleAuthProxy(base.AuthProxy):
             login_hint: schema.Email | None = None,  # email hint
             prompt: _PROMPT_OPTIONS = None,
     ) -> werkzeug.Response:
-        """Redirect to GitHub OAuth2 authorization endpoint."""
+        """Redirect to Google OAuth2 authorization endpoint."""
 
         self._oauth2.init_session(
             redirect_uri=REDIRECT_URI,
@@ -83,45 +98,65 @@ class GoogleAuthProxy(base.AuthProxy):
         authorization_url = self._oauth2.get_authorization_url(
             access_type="offline",
             include_granted_scopes="true",
+            **{"hd": hd} if hd else {},
             **{"login_hint": login_hint} if login_hint else {},
             **{"prompt": prompt} if prompt else {}
         )
         return flask.redirect(authorization_url)
 
-    def handle_callback(
+    def handle_auth_callback(
             self,
             state: str,
             code: str,
             scope: str,
-    ) -> werkzeug.Response:
-        assert self._oauth2 is not None
+    ) -> campus.model.UserCredentials:
+        """Handles Google OAuth callback for a consent flow
+
+        Args:
+            user_id: The user identifier
+            client_id: The OAuth client ID
+            token: The OAuthToken instance
+        
+        Returns:
+            Updated UserCredentials instance
+        """
         self._oauth2.validate_callback(state=state)
-        # Retrieve access token from GitHub
-        # Fill in user info from userinfo endpoint
+        # Retrieve access token from Google
         token = self._oauth2.exchange_code_for_token(
             code=code,
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
         )
-        userinfo = self._oauth2.get_user_info(token.access_token)
-        # Verify domain is permitted
-        if not userinfo["email"].domain == env.WORKSPACE_DOMAIN:
-            raise token_errors.InvalidGrantError(
-                f"Domain not allowed",
-                domain=userinfo["email"].domain
-            )
         # Verify requested scopes were granted
         scopes = scope.split(SCOPE_SEP)
         if missing_scopes := token.validate_scope(scopes):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
-        # Store token
-        resources.credentials.store(
-            provider=PROVIDER,
-            user_id=userinfo["email"],
+        # Fill in user info from userinfo endpoint
+        userinfo = self._oauth2.get_user_info(token.access_token)
+        user_id = schema.Email(userinfo["email"])
+        # Verify domain is permitted
+        if not user_id.domain == env.WORKSPACE_DOMAIN:
+            raise token_errors.InvalidGrantError(
+                f"Domain not allowed",
+                domain=user_id.domain
+            )
+        # Store/update token
+        credentials = resources.credentials[PROVIDER][user_id].update(
+            client_id=self._CLIENT_ID,
             token=token,
         )
-        target = self._oauth2.auth_session.target
-        self._oauth2.end_session()
+        self._oauth2.finalize_session()
+        return credentials
+
+    def handle_consent_callback(
+            self,
+            state: str,
+            code: str,
+            scope: str,
+    ) -> werkzeug.Response:
+        """Handles Google OAuth callback for a consent flow."""
+        self.handle_auth_callback(state, code, scope)
+        target = self._oauth2.finalize_session()
         return flask.redirect(target or flask.request.host_url)

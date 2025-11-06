@@ -1,50 +1,48 @@
-"""campus.auth.oauth_proxy.github.proxy
+"""campus.auth.oauth_proxy.campus.proxy
 
-GitHub OAuth2 proxy implementation.
+Campus OAuth2 proxy implementation.
 """
 
-__all__ = ["GitHubAuthProxy", "get_proxy"]
-
-from typing import Literal
+__all__ = ["CampusAuthProxy", "get_proxy"]
 
 import flask
 import werkzeug
 
 from campus.common import env, schema
-from campus.common.errors import auth_errors
+from campus.common.errors import auth_errors, token_errors
 
 from .. import base
 from ... import resources, webauth
 
-PROVIDER = "github"
-REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
+PROVIDER = "campus"
+# Assume campus proxy is hosted on same server as campus.auth
+REDIRECT_URI = schema.Url(flask.url_for("auth.callback"))
 SCOPE_SEP = " "
 
 
-def get_proxy() -> "GitHubAuthProxy":
-    """Get an instance of the GitHubAuthProxy."""
-    return GitHubAuthProxy()
+def get_proxy() -> "CampusAuthProxy":
+    """Get an instance of the CampusAuthProxy."""
+    return CampusAuthProxy()
 
 
-class GitHubAuthProxy(base.AuthProxy):
-    """GitHub OAuth2 provider implementation."""
+class CampusAuthProxy(base.AuthProxy):
+    """Campus OAuth2 provider implementation."""
     provider = PROVIDER
-    title = "GitHub OAuth2 Authentication API"
-    description = (
-        "OAuth2 authentication endpoints for GitHub integration with Campus")
-    version = "2022-11-28"
+    title = "Campus OAuth2 Authentication API"
+    description = "OAuth2 authentication endpoints for Campus integration"
+    version = "2025-11-05"
     openapi_version = "3.0.3"
     _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-            provider=PROVIDER,
-            authorization_url=schema.Url(
-                "https://github.com/login/oauth/authorize"),
-            token_url=schema.Url(
-                "https://github.com/login/oauth/access_token"),
-            user_info_url=schema.Url("https://api.github.com/user"),
-            scopes=["read:user", "read:email"],
-            headers={"Accept": "application/json"},
-        )
-    _PROMPT_OPTIONS = Literal["select_account"] | None
+        provider=PROVIDER,
+        authorization_url=schema.Url("/auth/authorize"),
+        token_url=schema.Url("/auth/token"),
+        user_info_url=None,
+        scopes=[
+            "campus.profile",
+            "campus.email",
+        ],
+        headers={"Accept": "application/json"},
+    )
 
     def __init__(self) -> None:
         super().__init__()
@@ -72,17 +70,11 @@ class GitHubAuthProxy(base.AuthProxy):
     def redirect_for_authorization(
             self,
             target: schema.Url,
-            prompt: _PROMPT_OPTIONS = None,
+            *,
+            login_hint: schema.Email | None = None,  # email hint
     ) -> werkzeug.Response:
-        """Redirect to GitHub OAuth2 authorization endpoint."""
-        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-            provider=PROVIDER,
-            authorization_url=self.authorization_url,
-            token_url=self.token_url,
-            user_info_url=self.user_info_url,
-            scopes=["read:user", "read:email"],
-            headers=self.headers,
-        )
+        """Redirect to Campus OAuth2 authorization endpoint."""
+
         self._oauth2.init_session(
             redirect_uri=REDIRECT_URI,
             client_id=self._CLIENT_ID,
@@ -90,7 +82,7 @@ class GitHubAuthProxy(base.AuthProxy):
             target=target
         )
         authorization_url = self._oauth2.get_authorization_url(
-            **{"prompt": prompt} if prompt else {}
+            **{"login_hint": login_hint} if login_hint else {},
         )
         return flask.redirect(authorization_url)
 
@@ -102,8 +94,14 @@ class GitHubAuthProxy(base.AuthProxy):
     ) -> werkzeug.Response:
         assert self._oauth2 is not None
         self._oauth2.validate_callback(state=state)
-        # Retrieve access token from GitHub
-        # Fill in user info from userinfo endpoint
+        # auth_session user_id should have been updated by
+        # auth.provider.callback
+        auth_session = resources.session[PROVIDER].get(code)
+        if not auth_session.user_id:
+            raise auth_errors.InvalidRequestError(
+                "User ID not found in auth session"
+            )
+        # Exchange code for token; this will finalize auth_session
         token = self._oauth2.exchange_code_for_token(
             code=code,
             client_id=self._CLIENT_ID,
@@ -115,10 +113,14 @@ class GitHubAuthProxy(base.AuthProxy):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
-        userinfo = self._oauth2.get_user_info(token.access_token)
-        user_id = schema.Email(userinfo["email"])
+        # Verify domain is permitted
+        if not auth_session.user_id.domain == env.WORKSPACE_DOMAIN:
+            raise token_errors.InvalidGrantError(
+                f"Domain not allowed",
+                domain=auth_session.user_id.domain
+            )
         # Store/update token
-        resources.credentials[PROVIDER][user_id].update(
+        resources.credentials[PROVIDER][auth_session.user_id].update(
             client_id=self._CLIENT_ID,
             token=token,
         )
