@@ -290,7 +290,7 @@ class CircleMembersResource:
         self._parent = parent
         self._circle_id: schema.CampusID | None = None
 
-    def list(self, circle_id: schema.CampusID) -> dict:
+    def list(self, circle_id: schema.CampusID) -> dict[str, int]:
         """List all members of a circle.
 
         Args:
