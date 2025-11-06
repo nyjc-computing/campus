@@ -12,10 +12,10 @@ from typing import Iterator, Literal, Self
 
 import werkzeug
 
-from campus.auth import resources
-from campus.client.vault import get_vault
 from campus.common import schema
 import campus.model
+
+from .. import resources
 
 HttpScheme = Literal["basic", "bearer"]
 OAuth2Flow = Literal[
@@ -51,9 +51,8 @@ class AuthProxy(ABC):
     _CLIENT_SECRET: str
 
     def __init__(self) -> None:
-        vault = get_vault()[self.provider]
-        self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
-        self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
+        self._CLIENT_ID = resources.vault[self.provider]["CLIENT_ID"]
+        self._CLIENT_SECRET = resources.vault[self.provider]["CLIENT_SECRET"]
 
     @property
     @abstractmethod
