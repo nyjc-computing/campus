@@ -5,16 +5,69 @@ API routes for the circles resource.
 
 import flask
 
-import campus.yapper
+import campus_python
 
 from campus.common import flask as campus_flask, schema
-from campus.common.errors import api_errors
+from campus.common.errors import api_errors, auth_errors
+import campus.model
+import campus.yapper
 
 from .. import resources
 
 bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
 yapper = campus.yapper.create()
+
+# auth.root does not exist yet, will be added soon
+auth_root = campus_python.Campus().auth.root  # type: ignore
+
+
+def authenticate() -> None:
+    # Get token or credentials from header
+    req_headers = campus_flask.get_request_headers()
+    if (
+            req_headers.authorization is None
+            or req_headers.authorization.scheme is None
+    ):
+        raise api_errors.UnauthorizedError("Missing Authorization header.")
+    match req_headers.authorization.scheme:
+        case "basic":
+            client_id, client_secret = req_headers.authorization.credentials()
+            resp_json = auth_root.authenticate(
+                client_id=client_id,
+                client_secret=client_secret
+            )
+        case "bearer":
+            token = req_headers.authorization.token
+            resp_json = auth_root.authenticate(token=token)
+        case _:
+            raise api_errors.UnauthorizedError(
+                "Unsupported authorization scheme.",
+                scheme=req_headers.authorization.scheme,
+            )
+    match resp_json:
+        case {"error": _}:
+            auth_errors.raise_from_json(resp_json)
+        case {"client": client_json, "user": user_json}:
+            flask.g.current_client = campus.model.Client.from_resource(
+                client_json
+            )
+            flask.g.current_user = campus.model.User.from_resource(user_json)
+        case {"client": client_json}:
+            flask.g.current_client = campus.model.Client.from_resource(
+                client_json
+            )
+        case _:
+            raise api_errors.InternalError(
+                "Invalid response from authentication service.",
+                resp_json=resp_json
+            )
+
+
+def auth_required(func):
+    """Decorator to require authentication for a route."""
+    authenticate()
+    return func
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
@@ -23,6 +76,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 
 @bp.get('/')
+@auth_required
 @campus_flask.unpack_request
 def list_circles(tag: str | None = None) -> campus_flask.JsonResponse:
     """List all circles matching filter requirements."""
@@ -31,6 +85,7 @@ def list_circles(tag: str | None = None) -> campus_flask.JsonResponse:
 
 
 @bp.post('/')
+@auth_required
 @campus_flask.unpack_request
 def new_circle(
         name: str,
@@ -100,6 +155,7 @@ def new_circle(
 
 
 @bp.delete('/<string:circle_id>')
+@auth_required
 def delete_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Delete a circle by its unique ID.
@@ -140,6 +196,7 @@ def delete_circle(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.get('/<string:circle_id>')
+@auth_required
 def get_circle_details(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve detailed information about a specific circle.
@@ -195,6 +252,7 @@ def get_circle_details(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.patch('/<string:circle_id>')
+@auth_required
 def edit_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Update the name and/or description of an existing circle.
@@ -242,12 +300,14 @@ def edit_circle(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.post('/<string:circle_id>/move')
+@auth_required
 def move_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Move a circle to a new parent."""
     return {"message": "Not implemented"}, 501
 
 
 @bp.get('/<string:circle_id>/members')
+@auth_required
 def get_circle_members(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve the member IDs of a circle along with their access values.
@@ -291,6 +351,7 @@ def get_circle_members(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.post('/<string:circle_id>/members/add')
+@auth_required
 def add_circle_member(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Add a member to a circle with a specified access level.
@@ -343,6 +404,7 @@ def add_circle_member(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.delete('/<string:circle_id>/members/remove')
+@auth_required
 def remove_circle_member(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Remove a member from a circle.
@@ -397,6 +459,7 @@ def remove_circle_member(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
+@auth_required
 def patch_circle_member(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Update the access level of a member within a circle.
@@ -452,6 +515,7 @@ def patch_circle_member(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.get('/<string:circle_id>/users')
+@auth_required
 def get_circle_users(circle_id: str) -> campus_flask.JsonResponse:
     # TODO: validate request
     """Get users in a circle."""
