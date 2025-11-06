@@ -27,7 +27,6 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # rely on user table
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
-    routes.session.init_app(bp)
     routes.users.init_app(bp)
 
     @bp.before_request
