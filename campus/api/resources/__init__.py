@@ -10,20 +10,11 @@ External clients should access resources via API endpoints.
 __all__ = [
     "circle",
     "emailotp",
-    "session",
-    "token",
-    "user",
 ]
 
-from .circle import CirclesResource, CircleMembersResource
+from .circle import CirclesResource
 from .emailotp import EmailOTPResource
-from .session import SessionsResource
-from .token import TokensResource
-from .user import UsersResource
 
 # Initialize resource instances for internal use
 circle = CirclesResource()
 emailotp = EmailOTPResource()
-session = SessionsResource()
-token = TokensResource()
-user = UsersResource()

@@ -27,7 +27,6 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # rely on user table
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
-    routes.users.init_app(bp)
 
     @bp.before_request
     def authorize_api_request():
@@ -36,6 +35,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         Push credential information to flask.g for use in route
         handlers.
         """
+        # TODO: Use campus-api-python
         from campus.client.vault import get_vault
         vault = get_vault()
 
