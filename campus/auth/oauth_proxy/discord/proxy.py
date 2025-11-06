@@ -86,12 +86,6 @@ class DiscordAuthPoxy(base.AuthProxy):
             scopes=self._oauth2.scopes,
             target=target
         )
-        # self._oauth2.init_session(
-        #     redirect_uri=REDIRECT_URI,
-        #     client_id=self._CLIENT_ID,
-        #     scopes=self._oauth2.scopes,
-        #     target=target
-        # )
         url_params = {}
         if prompt:
             url_params["prompt"] = prompt
