@@ -58,24 +58,6 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         self.scopes = scopes
         self.headers = headers or {}
         self.user_info_url = user_info_url
-    
-    def get_user_info(self, access_token: str) -> dict[str, Any]:
-        """Fetch user info from the provider's user info endpoint."""
-        if not self.user_info_url:
-            return {}
-        headers = {
-            **self.headers,
-            "Authorization": f"Bearer {access_token}",
-        }
-        resp = requests.get(
-            self.user_info_url,
-            headers=headers,
-            timeout=TIMEOUT
-        )
-        userinfo_payload = resp.json()
-        if "error" in userinfo_payload:
-            auth_errors.raise_from_json(userinfo_payload)
-        return userinfo_payload
 
     def exchange_code_for_token(
             self,
@@ -153,6 +135,24 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             params=params
         )
         return schema.Url(authorization_url)
+
+    def get_user_info(self, access_token: str) -> dict[str, Any]:
+        """Fetch user info from the provider's user info endpoint."""
+        if not self.user_info_url:
+            return {}
+        headers = {
+            **self.headers,
+            "Authorization": f"Bearer {access_token}",
+        }
+        resp = requests.get(
+            self.user_info_url,
+            headers=headers,
+            timeout=TIMEOUT
+        )
+        userinfo_payload = resp.json()
+        if "error" in userinfo_payload:
+            auth_errors.raise_from_json(userinfo_payload)
+        return userinfo_payload
 
     def refresh_token(
             self,
