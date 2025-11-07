@@ -206,18 +206,6 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         if "error" in token_payload:
             token_errors.raise_from_json(token_payload)
         auth_token = campus.model.OAuthToken.from_resource(token_payload)
-        # auth_token = token.TokenRecord.from_dict(token_payload)
-        credentials = resources.credentials[self.provider].get(auth_token.id)
-        if credentials.client_id != client_id:
-            raise token_errors.InvalidClientError(
-                "Client ID mismatch during token refresh.",
-                credential_client_id=credentials.client_id,
-                provided_client_id=client_id
-            )
-        resources.credentials[self.provider][credentials.user_id].update(
-            client_id=client_id,
-            token=auth_token
-        )
         return auth_token
 
     def _refresh_with_auth(
