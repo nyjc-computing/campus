@@ -5,11 +5,17 @@ Email OTP model for the Campus API.
 This module defines one-time password records for email authentication.
 """
 
+__all__ = (
+    "EmailOTP",
+    "template",
+)
+
 from dataclasses import dataclass
 
 from campus.common import schema
 
-from .base import Model
+from . import template
+from ..base import Model
 
 
 @dataclass(eq=False, kw_only=True)
