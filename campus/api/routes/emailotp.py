@@ -39,10 +39,9 @@ def request_otp(email: str) -> campus_flask.JsonResponse:
         html_body=template.html_body("Campus", otp_code)
     )
     if error:
-        api_errors.raise_api_error(
-            error["message"],
-            status_code=500,
-            error_message=str(error)
+        raise api_errors.InternalError(
+            message=error["message"],
+            error_message=str(error),
         )
     return {"message": "OTP sent"}, 200
 
