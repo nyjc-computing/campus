@@ -49,11 +49,13 @@ poetry run python main.py
 Campus follows a **modular monolith** architecture with clear service boundaries. Services can be deployed together or separately, each with well-defined responsibilities and clean interfaces.
 
 **Key Components:**
-- **Apps**: Web APIs and authentication
-- **Vault**: Secure secrets management  
+- **Auth**: Authentication and OAuth services (with `.resources` for business logic)
+- **API**: RESTful API resources (with `.resources` for business logic)
+- **Model**: Entity representation (dataclasses for data structures)
 - **Storage**: Multi-backend data persistence
-- **Client**: HTTP interfaces for external integration
-- **Models**: Business logic and data models
+- **Services**: Supporting services (email, integrations)
+
+Services are accessed through the `campus_python` client library for clean API interactions.
 
 For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
 
@@ -64,31 +66,31 @@ Campus uses environment variables for configuration:
 ```bash
 # Environment Configuration
 ENV="development"  # or "staging", "production"
+DEPLOY="campus.auth"  # Deployment mode: campus.auth, campus.api, etc.
 
-# Client Authentication (Required for campus.client)
+# Client Authentication (Required for campus_python client)
 CLIENT_ID="your-client-id"
 CLIENT_SECRET="your-client-secret"
 
-# Vault Database (Only required when using campus.vault service)
+# Authentication Service Database
 VAULTDB_URI="postgresql://user:pass@localhost/vault"
 
-All other configuration (storage, OAuth, email, etc.) is managed through campus.vault
-and should not be set as environment variables. Use the vault service to manage these
-secrets securely.
+Configuration and secrets are managed through the campus.auth service and accessed
+via the campus_python client library.
 ```
 
 ## 📚 Documentation
 
-- **[� Getting Started](docs/GETTING-STARTED.md)** - New user guide and navigation
+- **[📖 Getting Started](docs/GETTING-STARTED.md)** - New user guide and navigation
 - **[🏗️ Architecture](docs/architecture.md)** - Detailed architecture overview and design principles  
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Development workflow and guidelines
 - **[🧪 Testing](docs/testing-strategies.md)** - Testing approaches and strategies
 - **[📦 Packaging](docs/PACKAGING.md)** - Monorepo structure and distribution
 
 **Service Documentation:**
-- **[� Vault Service](campus/vault/README.md)** - Secrets management and authentication
-- **[🔌 Client Interfaces](campus/client/README.md)** - HTTP APIs and usage patterns  
 - **[💾 Storage Documentation](campus/storage/README.md)** - Data persistence and backends
+
+**Note:** The `campus_python` client library is used to interact with Campus services. See the [campus-api-python repository](https://github.com/nyjc-computing/campus-api-python) for client documentation.
 
 ## 🚀 Deployment
 

@@ -4,28 +4,35 @@ This document outlines key architectural patterns and development practices for 
 
 ## Core Abstractions
 
-### Campus Vault (`campus.vault`)
+### Campus Authentication (`campus.auth`)
 
-**Purpose**: Centralized secrets management for all Campus services.
+**Purpose**: Authentication, OAuth, and credential management for all Campus services.
 
 **Key Principles**:
-- All configuration secrets must go through vault (never use `os.getenv()` directly)
-- Vault service is independent - imports only from `campus.common`
-- Other services depend on vault for database credentials and API keys
+- Handles user authentication and session management
+- OAuth proxy for external providers (Google, GitHub, Discord)
+- Client authentication via CLIENT_ID/CLIENT_SECRET
+- Business logic resides in `.resources` submodule
 
 **Usage Pattern**:
 ```python
-from campus.vault import get_vault
+import campus_python
 
-# Get secrets for your service
-vault = get_vault("service_name")
-database_url = vault.get("DATABASE_URL")
-api_key = vault.get("EXTERNAL_API_KEY")
+campus = campus_python.Campus()
+
+# Authenticate client
+auth_result = campus.auth.root.authenticate(
+    client_id="your_client_id",
+    client_secret="your_client_secret"
+)
+
+# Access vault secrets
+secret = campus.auth.vaults["service"]["DATABASE_URL"]
 ```
 
 **Implementation Requirements**:
-- Handle vault unavailability gracefully
-- Never cache vault credentials in class variables
+- Handle authentication failures gracefully
+- Never cache credentials in class variables
 
 ### Campus Storage (`campus.storage`)
 
@@ -71,23 +78,33 @@ class MongoDBStorage(StorageInterface):
         return self.collection.insert_one(data)
 ```
 
-### Storage-Model-Views Pattern
+### Storage-Model-Resources Pattern
 
-**Architecture**: Separate data persistence, business logic, and presentation layers.
+**Architecture**: Separate data persistence, entity representation, and business logic layers.
 
 ```
-Views (apps/) → Models (models/) → Storage (storage/)
+Routes (auth/, api/) → Resources (.resources/) → Storage (storage/) → Model (model/)
 ```
 
 **Implementation**:
 ```python
+# Model layer - entity representation only (campus.model)
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    id: str
+    name: str
+    email: str
+    created_at: str
+
 # Storage layer - data persistence
 class UserStorage:
     def create_user(self, data: dict) -> dict:
         return self.collection.insert_one(data)
 
-# Model layer - business logic
-class User:
+# Resources layer - business logic (in .resources submodule)
+class UserResource:
     def __init__(self, storage: UserStorage):
         self.storage = storage
     
@@ -95,11 +112,11 @@ class User:
         self.validate_email(data['email'])
         return self.storage.create_user(data)
 
-# View layer - HTTP endpoints
+# Routes layer - HTTP endpoints
 @app.route('/users', methods=['POST'])
 def create_user():
-    user_model = User(get_user_storage())
-    return user_model.create_with_validation(request.json)
+    user_resource = UserResource(get_user_storage())
+    return user_resource.create_with_validation(request.json)
 ```
 
 ### Campus Common (`campus.common`)
@@ -120,13 +137,34 @@ import campus.common.devops
 # Use through module namespaces
 user_id = campus.common.utils.uid()
 timestamp = campus.common.utils.utc_time()
-env = campus.common.devops.get_environment()
+env = campus.common.devops.ENV
 ```
 
 **Benefits**:
 - Consistent behavior across services
 - Centralized utilities reduce code duplication
 - Module namespacing prevents naming conflicts
+
+### Entity Models (`campus.model`)
+
+**Purpose**: Entity representation only - no business logic.
+
+**Key Principles**:
+- Dataclass definitions for entities (User, Circle, Client, etc.)
+- Keyword-only init parameters
+- No business logic or data processing
+- Minimal dependencies
+
+**Usage Pattern**:
+```python
+from campus.model import User, Circle
+
+# Use for type hints and data structures
+def process_user(user: User) -> dict:
+    return {"id": user.id, "name": user.name}
+```
+
+**Important**: Business logic belongs in `.resources` submodules, not in `campus.model`.
 
 ## Development Patterns
 
@@ -189,9 +227,13 @@ create_app()  # Unclear which create_app this is
 - **Standard library shadowing**: Avoid directory names like `collections/`, `json/`
 
 ### Configuration Errors
-- **Never use `os.getenv()`**: All configuration must go through `campus.vault`
-- **Environment variables**: Use only for deployment settings (ENV, CLIENT_ID, etc.)
-- **Secrets management**: Store all API keys, database URLs in vault
+- **Use campus_python client**: Access config through `campus.auth.vaults` via the client library
+- **Environment variables**: Use only for deployment settings (ENV, DEPLOY, CLIENT_ID, etc.)
+- **Secrets management**: All secrets should be accessed via `campus_python.Campus().auth.vaults`
+
+### Architecture Violations
+- **Business logic in models**: Keep `campus.model` as pure data structures; put logic in `.resources`
+- **Missing .resources**: Each service (auth, api) should have its business logic in `.resources` submodule
 
 ### Testing Issues
 - **Use appropriate strategy**: See [Testing Strategies](testing-strategies.md)

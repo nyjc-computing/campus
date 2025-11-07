@@ -42,27 +42,24 @@ poetry run python -m unittest tests.unit.apps.test_client -v
 ```
 tests/
   unit/                 # Unit tests (no external dependencies)
-    apps/
-      test_client.py    # Client interface tests
-      test_models.py    # Model logic tests  
+    auth/
+      test_resources.py # Business logic tests
       test_routes.py    # Route logic tests
-    vault/
-      test_client.py    # Client interface tests
-      test_models.py    # Model logic tests
+    api/
+      test_resources.py # Business logic tests
       test_routes.py    # Route logic tests
+    storage/
+      test_tables.py    # Storage layer tests
     yapper/
-      test_models.py    # Model logic tests
+      test_logging.py   # Logging tests
     common/             # Tests for campus.common
       test_introspect.py
       test_validation.py
-    client/             # Tests for campus.client
-      test_base.py      # HttpClient base functionality
   integration/          # Integration tests (require environment setup)
-    apps/
-      test_models_users.py
-      test_models_circles.py
-    vault/
-      test_vault_integration.py
+    auth/
+      test_auth_integration.py
+    api/
+      test_api_integration.py
     yapper/
       test_yapper.py
 ```
@@ -79,20 +76,20 @@ poetry run python tests/run_tests.py unit
 
 ### Running Package-Specific Unit Tests
 ```bash
-# Test only campus.apps unit tests
-poetry run python tests/run_tests.py unit --module apps
+# Test only campus.auth unit tests
+poetry run python tests/run_tests.py unit --module auth
 
-# Test only campus.vault unit tests  
-poetry run python tests/run_tests.py unit --module vault
+# Test only campus.api unit tests
+poetry run python tests/run_tests.py unit --module api
+
+# Test only campus.storage unit tests
+poetry run python tests/run_tests.py unit --module storage
 
 # Test only campus.yapper unit tests
 poetry run python tests/run_tests.py unit --module yapper
 
 # Test only campus.common unit tests
 poetry run python tests/run_tests.py unit --module common
-
-# Test only campus.client unit tests
-poetry run python tests/run_tests.py unit --module client
 ```
 
 
@@ -102,20 +99,21 @@ poetry run python tests/run_tests.py unit --module client
 poetry run python tests/run_tests.py integration
 
 # Run integration tests for specific package
-poetry run python tests/run_tests.py integration --module apps
+poetry run python tests/run_tests.py integration --module auth
+poetry run python tests/run_tests.py integration --module api
 ```
 
 
 ### Running Specific Test Files
 ```bash
 # Run a specific test file
-poetry run python -m unittest tests.unit.apps.test_client -v
+poetry run python -m unittest tests.unit.auth.test_resources -v
 
 # Run a specific test class
-poetry run python -m unittest tests.unit.apps.test_client.TestAdminClient -v
+poetry run python -m unittest tests.unit.auth.test_resources.TestAuthResource -v
 
 # Run a specific test method
-poetry run python -m unittest tests.unit.apps.test_client.TestAdminClient.test_init_default_base_url -v
+poetry run python -m unittest tests.unit.auth.test_resources.TestAuthResource.test_authenticate -v
 ```
 
 
@@ -154,10 +152,10 @@ python tests/run_tests.py integration
 python tests/run_tests.py all
 
 # Test specific modules
-python tests/run_tests.py unit --module apps
-python tests/run_tests.py unit --module vault
+python tests/run_tests.py unit --module auth
+python tests/run_tests.py unit --module api
 python tests/run_tests.py unit --module common
-python tests/run_tests.py integration --module apps
+python tests/run_tests.py integration --module auth
 
 # Verbose output
 python tests/run_tests.py unit -v
