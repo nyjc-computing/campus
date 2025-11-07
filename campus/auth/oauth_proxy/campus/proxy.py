@@ -17,7 +17,7 @@ from ... import resources
 
 PROVIDER = "campus"
 # Assume campus proxy is hosted on same server as campus.auth
-REDIRECT_URI = schema.Url(flask.url_for("auth.callback"))
+REDIRECT_URI = schema.Url("/auth/campus/callback")
 SCOPE_SEP = " "
 
 
