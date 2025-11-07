@@ -40,7 +40,7 @@ def get_yapper():
     return _yapper_instance
 
 
-@bp.get("/authenticate")
+@bp.post("/authenticate")
 @campus_flask.unpack_request
 def authenticate(
         *,
