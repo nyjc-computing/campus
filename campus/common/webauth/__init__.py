@@ -1,4 +1,4 @@
-"""campus.auth.webauth
+"""campus.common.webauth
 
 Web authentication models for Campus Auth.
 
@@ -6,7 +6,7 @@ This module contains classes and functions for handling web-based
 authentication schemes, including HTTP Basic and Bearer authentication,
 as well as OAuth2 flows.
 
-Secure cookies are used client-side to maintain session state.
+Session state is not handled.
 """
 
 __all__ = [

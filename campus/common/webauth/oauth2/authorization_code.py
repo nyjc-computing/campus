@@ -1,4 +1,4 @@
-"""campus.auth.webauth.oauth2.authorization_code
+"""campus.common.webauth.oauth2.authorization_code
 
 OAuth2 Authorization Code flow schemas and models.
 
@@ -17,7 +17,6 @@ from campus.common.utils import url
 import campus.model
 
 from . import base
-from ... import resources
 
 # Default expiry time for OAuth2 sessions in minutes
 OAUTH_EXPIRY_MINUTES = 10

@@ -10,12 +10,12 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.common import env, schema
+from campus.common import env, schema, webauth
 from campus.common.errors import auth_errors
 import campus.config
 
 from .. import base
-from ... import resources, webauth
+from ... import resources
 
 PROVIDER = "github"
 REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")

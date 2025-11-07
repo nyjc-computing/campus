@@ -1,4 +1,4 @@
-"""campus.auth.webauth.oauth2.client_credentials
+"""campus.common.webauth.oauth2.client_credentials
 
 OAuth2 Client Credentials flow schemas and models.
 

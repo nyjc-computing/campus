@@ -8,12 +8,12 @@ __all__ = ["CampusAuthProxy", "get_proxy"]
 import flask
 import werkzeug
 
-from campus.common import env, schema
+from campus.common import env, schema, webauth
 from campus.common.errors import auth_errors, token_errors
 import campus.config
 
 from .. import base
-from ... import resources, webauth
+from ... import resources
 
 PROVIDER = "campus"
 # Assume campus proxy is hosted on same server as campus.auth

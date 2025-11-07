@@ -1,4 +1,4 @@
-"""campus.auth.webauth.base
+"""campus.common.webauth.base
 
 Base configs and models for authentication flows.
 """

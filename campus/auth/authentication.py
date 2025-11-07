@@ -12,9 +12,10 @@ from typing import Callable
 
 import flask
 
+from campus.common import webauth
 from campus.common.errors import auth_errors
 
-from . import resources, webauth
+from . import resources
 
 
 def authenticate_client_from_request() -> tuple[dict[str, str], int] | None:
