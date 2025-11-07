@@ -13,9 +13,6 @@ __all__ = ["init_app"]
 
 import flask
 
-# Other local imports are intentionally omitted to avoid circular
-# dependencies.
-
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Initialize the Campus app with all modules.
@@ -41,5 +38,5 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
         from campus.client.vault import get_vault
         vault = get_vault()
         app.secret_key = vault["campus.auth"]["SECRET_KEY"].get()["value"]
-
+    
     app.register_blueprint(bp)
