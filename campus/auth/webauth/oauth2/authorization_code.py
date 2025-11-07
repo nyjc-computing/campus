@@ -189,7 +189,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
                 "No refresh token available; cannot refresh token"
             )
         if auth:
-            token_payload = self._post_with_auth(
+            token_payload = self._refresh_with_auth(
                 auth_token,
                 auth=auth
             )
@@ -198,7 +198,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
                 raise ValueError(
                     "client_id and client_secret must be provided"
                 )
-            token_payload = self._post_with_credentials(
+            token_payload = self._refresh_with_credentials(
                 auth_token,
                 client_id=client_id,
                 client_secret=client_secret
@@ -220,7 +220,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         )
         return auth_token
 
-    def _post_with_auth(
+    def _refresh_with_auth(
             self,
             auth_token: campus.model.OAuthToken,
             *,
@@ -240,7 +240,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         token_payload = resp.json()
         return token_payload
 
-    def _post_with_credentials(
+    def _refresh_with_credentials(
             self,
             auth_token: campus.model.OAuthToken,
             *,
