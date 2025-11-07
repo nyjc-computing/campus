@@ -8,7 +8,7 @@ import flask
 import campus_python
 
 from campus.common import flask as campus_flask, schema
-from campus.common.errors import api_errors, auth_errors
+from campus.common.errors import api_errors
 import campus.model
 import campus.yapper
 
@@ -22,61 +22,12 @@ yapper = campus.yapper.create()
 auth_root = campus_python.Campus().auth.root  # type: ignore
 
 
-def authenticate() -> None:
-    # Get token or credentials from header
-    req_headers = campus_flask.get_request_headers()
-    if (
-            req_headers.authorization is None
-            or req_headers.authorization.scheme is None
-    ):
-        raise api_errors.UnauthorizedError("Missing Authorization header.")
-    match req_headers.authorization.scheme:
-        case "basic":
-            client_id, client_secret = req_headers.authorization.credentials()
-            resp_json = auth_root.authenticate(
-                client_id=client_id,
-                client_secret=client_secret
-            )
-        case "bearer":
-            token = req_headers.authorization.token
-            resp_json = auth_root.authenticate(token=token)
-        case _:
-            raise api_errors.UnauthorizedError(
-                "Unsupported authorization scheme.",
-                scheme=req_headers.authorization.scheme,
-            )
-    match resp_json:
-        case {"error": _}:
-            auth_errors.raise_from_json(resp_json)
-        case {"client": client_json, "user": user_json}:
-            flask.g.current_client = campus.model.Client.from_resource(
-                client_json
-            )
-            flask.g.current_user = campus.model.User.from_resource(user_json)
-        case {"client": client_json}:
-            flask.g.current_client = campus.model.Client.from_resource(
-                client_json
-            )
-        case _:
-            raise api_errors.InternalError(
-                "Invalid response from authentication service.",
-                resp_json=resp_json
-            )
-
-
-def auth_required(func):
-    """Decorator to require authentication for a route."""
-    authenticate()
-    return func
-
-
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
 
 
 @bp.get('/')
-@auth_required
 @campus_flask.unpack_request
 def list_circles(tag: str | None = None) -> campus_flask.JsonResponse:
     """List all circles matching filter requirements."""
@@ -85,7 +36,6 @@ def list_circles(tag: str | None = None) -> campus_flask.JsonResponse:
 
 
 @bp.post('/')
-@auth_required
 @campus_flask.unpack_request
 def new_circle(
         name: str,
@@ -144,18 +94,11 @@ def new_circle(
         **{"parents": parents} if parents else {},
     )
     resource = circle.to_resource()
-    campus_flask.validate_json_response(
-        resource,
-        {"id": str, "name": str, "description": str,
-            "tag": str, "members": dict, "sources": dict},
-        on_error=api_errors.raise_api_error,
-    )
     yapper.emit('campus.circles.new')
     return resource, 201
 
 
 @bp.delete('/<string:circle_id>')
-@auth_required
 def delete_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Delete a circle by its unique ID.
@@ -196,7 +139,6 @@ def delete_circle(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.get('/<string:circle_id>')
-@auth_required
 def get_circle_details(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve detailed information about a specific circle.
@@ -242,18 +184,17 @@ def get_circle_details(circle_id: str) -> campus_flask.JsonResponse:
     """
     circle = resources.circle[schema.CampusID(circle_id)].get()
     resource = circle.to_resource()
-    campus_flask.validate_json_response(
-        resource,
-        {"id": str, "name": str, "description": str,
-            "tag": str, "members": dict, "sources": dict},
-        on_error=api_errors.raise_api_error,
-    )
     return resource, 200
 
 
 @bp.patch('/<string:circle_id>')
-@auth_required
-def edit_circle(circle_id: str) -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def edit_circle(
+        *,
+        circle_id: str,
+        name: str,
+        description: str
+) -> campus_flask.JsonResponse:
     """Summary:
         Update the name and/or description of an existing circle.
 
@@ -290,24 +231,25 @@ def edit_circle(circle_id: str) -> campus_flask.JsonResponse:
         - If no changes are detected, the request is treated as a no-op (200 OK, no error).
         - Emits the event: `campus.circles.update`.
     """
-    params = campus_flask.validate_request_and_extract_json(
-        {"name": str, "description": str},  # CircleUpdate fields
-        on_error=api_errors.raise_api_error,
-    )
-    resources.circle[schema.CampusID(circle_id)].update(**params)
+    updates = {}
+    if name:
+        updates["name"] = name
+    if description:
+        updates["description"] = description
+    if not updates:
+        raise api_errors.InvalidRequestError("Empty request body")
+    resources.circle[schema.CampusID(circle_id)].update(**updates)
     yapper.emit('campus.circles.update')
     return {}, 200
 
 
 @bp.post('/<string:circle_id>/move')
-@auth_required
 def move_circle(circle_id: str) -> campus_flask.JsonResponse:
     """Move a circle to a new parent."""
     return {"message": "Not implemented"}, 501
 
 
 @bp.get('/<string:circle_id>/members')
-@auth_required
 def get_circle_members(circle_id: str) -> campus_flask.JsonResponse:
     """Summary:
         Retrieve the member IDs of a circle along with their access values.
@@ -351,8 +293,13 @@ def get_circle_members(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.post('/<string:circle_id>/members/add')
-@auth_required
-def add_circle_member(circle_id: str) -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def add_circle_member(
+        *,
+        circle_id: str,
+        member_id: str,
+        access_value: int,
+) -> campus_flask.JsonResponse:
     """Summary:
         Add a member to a circle with a specified access level.
 
@@ -390,22 +337,22 @@ def add_circle_member(circle_id: str) -> campus_flask.JsonResponse:
         - This operation directly updates a nested field (`members.{member_id}`) in storage.
         - Only circle IDs can be added as members — not users or arbitrary entities.
     """
-    params = campus_flask.validate_request_and_extract_json(
-        {"member_id": str, "access_value": int},  # CircleMemberAdd fields
-        on_error=api_errors.raise_api_error,
-    )
     resources.circle.members.add(
         schema.CampusID(circle_id),
-        member_id=schema.CampusID(params["member_id"]),
-        access_value=params["access_value"]
+        member_id=schema.CampusID(member_id),
+        access_value=access_value
     )
     yapper.emit('campus.circles.members.add')
     return {}, 200
 
 
 @bp.delete('/<string:circle_id>/members/remove')
-@auth_required
-def remove_circle_member(circle_id: str) -> campus_flask.JsonResponse:
+@campus_flask.unpack_request
+def remove_circle_member(
+        *,
+        circle_id: str,
+        member_id: str,
+) -> campus_flask.JsonResponse:
     """Summary:
         Remove a member from a circle.
 
@@ -415,9 +362,6 @@ def remove_circle_member(circle_id: str) -> campus_flask.JsonResponse:
     Path Parameters:
         circle_id: str (required)
             The ID of the circle from which the member will be removed.
-
-    Query Parameters:
-        None
 
     Request Body (application/json):
         member_id: str (required)
@@ -443,24 +387,24 @@ def remove_circle_member(circle_id: str) -> campus_flask.JsonResponse:
         - Only direct member circles can be removed this way.
         - The response is not currently validated.
     """
-    params = campus_flask.validate_request_and_extract_json(
-        {"member_id": str},  # CircleMemberRemove fields
-        on_error=api_errors.raise_api_error,
-    )
     resources.circle.members.remove(
         schema.CampusID(circle_id),
-        member_id=schema.CampusID(params["member_id"])
+        member_id=schema.CampusID(member_id)
     )
-    # TODO: validate response
     yapper.emit('campus.circles.members.remove')
     return {}, 200
 
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
 
 
-@bp.patch('/<string:circle_id>/members/<string:member_circle_id>')
-@auth_required
-def patch_circle_member(circle_id: str) -> campus_flask.JsonResponse:
+@bp.patch('/<string:circle_id>/members')
+@campus_flask.unpack_request
+def patch_circle_member(
+        *,
+        circle_id: str,
+        member_id: str,
+        access_value: int
+) -> campus_flask.JsonResponse:
     """Summary:
         Update the access level of a member within a circle.
 
@@ -500,22 +444,16 @@ def patch_circle_member(circle_id: str) -> campus_flask.JsonResponse:
         - Emits the event: `campus.circles.members.set`.
         - No validation is currently performed to compare existing access.
     """
-    params = campus_flask.validate_request_and_extract_json(
-        {"member_id": str, "access_value": int},  # CircleMemberSet fields
-        on_error=api_errors.raise_api_error,
-    )
     resources.circle.members.set(
         schema.CampusID(circle_id),
-        member_id=schema.CampusID(params["member_id"]),
-        access_value=params["access_value"]
+        member_id=schema.CampusID(member_id),
+        access_value=access_value
     )
-    # TODO: validate response
     yapper.emit('campus.circles.members.set')
     return {}, 200
 
 
 @bp.get('/<string:circle_id>/users')
-@auth_required
 def get_circle_users(circle_id: str) -> campus_flask.JsonResponse:
     # TODO: validate request
     """Get users in a circle."""
