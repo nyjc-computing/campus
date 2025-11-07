@@ -7,19 +7,22 @@ Web API for Campus services.
 # use within campus.api only.
 __all__ = ["init_app"]
 
+import campus_python
 import flask
 
-from campus.common import env
+from campus.common import env, flask as campus_flask
 from campus.common.errors import auth_errors
 
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
 
+auth_root = campus_python.Campus().auth.root
+
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
     from . import resources, routes
-    from campus.auth import webauth
+    from campus.common import webauth
 
     # Organise API routes under api blueprint
     bp = flask.Blueprint('api_v1', __name__, url_prefix='/api/v1')
@@ -29,44 +32,43 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     routes.emailotp.init_app(bp)
 
     @bp.before_request
-    def authorize_api_request():
+    def authenticate():
         """Check request header for authorization credentials.
 
         Push credential information to flask.g for use in route
         handlers.
         """
-        # TODO: Use campus-api-python
-        from campus.client.vault import get_vault
-        vault = get_vault()
-
-        req_header = dict(flask.request.headers)
-        httpauth = (
-            webauth.http.HttpAuthenticationScheme
-            .from_header(provider="campus", http_header=req_header)
+        httpauth = webauth.http.HttpAuthenticationScheme.with_header(
+            provider="campus",
+            http_header=campus_flask.get_request_headers()
         )
-        assert httpauth.header
-        if not httpauth.header.authorization:
-            raise auth_errors.InvalidRequestError(
-                "Missing Authorization property in HTTP header"
-            )
-        auth = httpauth.header.authorization
-        match auth.scheme:
+        match httpauth.header.authorization.scheme:
             case "basic":
-                client_id, client_secret = auth.credentials()
-                # Raises API errors if auth fails
-                auth_json = vault.clients.authenticate(
-                    client_id,
-                    client_secret
+                client_id, client_secret = (
+                    httpauth.header.authorization.credentials()
                 )
-                if "error" in auth_json:
-                    auth_errors.raise_from_json(auth_json)
-                flask.g.current_client = vault.client.get(client_id)
+                try:
+                    auth_result = auth_root.authenticate(
+                        client_id=client_id,
+                        client_secret=client_secret
+                    )
+                except campus_python.errors.AuthenticationError:
+                    auth_errors.UnauthorizedClientError(
+                        "No Authorization header present"
+                    )
+                else:
+                    flask.g.current_client = auth_result["client"]
             case "bearer":
-                access_token = auth.token
-                # raises UnauthorizedError for invalid access_token
-                token = resources.token[access_token].get()
-                flask.g.current_user = resources.user[token.user_id].get()
-                flask.g.current_client = vault.client.get(token.client_id)
+                access_token = httpauth.header.authorization.token
+                try:
+                    auth_result = auth_root.authenticate(token=access_token)
+                except campus_python.errors.AuthenticationError:
+                    auth_errors.UnauthorizedClientError(
+                        "No Authorization header present"
+                    )
+                else:
+                    flask.g.current_client = auth_result["client"]
+                    flask.g.current_user = auth_result["user"]
 
     app.register_blueprint(bp)
 
