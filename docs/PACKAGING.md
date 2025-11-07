@@ -30,16 +30,17 @@ weekly → staging → main
 
 Services follow a clear hierarchy:
 ```
-apps → services, storage → vault → common
-     ↘         ↙
-      vault (for secrets)
+auth, api → services, storage → common
+     ↘                       ↙
+       model (entity representation)
 ```
 
-**Key Constraints:**
-- `campus.vault` imports only from `campus.common` (must be independent)
-- `campus.storage` can use vault for database secrets
-- `campus.apps` can import from any other package
+**Key Constraints**:
+- `campus.auth` and `campus.api` can import from other packages
+- `campus.model` should have minimal dependencies (entity representation only)
+- `campus.storage` provides backend-agnostic persistence
 - `campus.common` should be self-contained
+- Business logic resides in `.resources` submodules within each service
 
 ## Installation
 
@@ -67,6 +68,12 @@ poetry add git+https://github.com/nyjc-computing/campus.git@weekly --group dev
 poetry add git+https://github.com/nyjc-computing/campus.git@abc123def456
 ```
 
+### Client Library Installation
+```bash
+# Add campus_python client library
+poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
+```
+
 ## Development Workflow
 
 ### Contributing to Campus
@@ -90,8 +97,11 @@ git checkout -b feature/new-feature
 # Add Campus as dependency
 poetry add git+https://github.com/nyjc-computing/campus.git@main
 
+# Add campus_python client library
+poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
+
 # Import and use
-python -c "from campus.vault import get_vault"
+python -c "import campus_python; campus = campus_python.Campus()"
 ```
 
 ## Building and Distribution
@@ -102,10 +112,10 @@ python -c "from campus.vault import get_vault"
 poetry install
 
 # Test package integrity  
-poetry run python -c "import campus.vault, campus.storage, campus.apps"
+poetry run python -c "import campus.auth, campus.api, campus.storage, campus.model"
 
 # Run tests
-python run_tests.py
+poetry run python tests/run_tests.py unit
 ```
 
 ### Release Process

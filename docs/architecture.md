@@ -8,14 +8,18 @@ Campus is structured as a **modular monolith** with clear service boundaries tha
 
 ```
 campus/
-├── apps/           # Web applications and API services
-├── client/         # Client interfaces for accessing Campus services  
+├── auth/           # Authentication and OAuth services
+│   ├── resources/  # Business logic
+│   └── routes/     # HTTP endpoints
+├── api/            # RESTful API resources  
+│   ├── resources/  # Business logic
+│   └── routes/     # HTTP endpoints
 ├── common/         # Shared utilities and schemas
-├── models/         # Data models and business logic
+├── model/          # Entity representation (dataclasses)
 ├── services/       # Business services (email, etc.)
 ├── storage/        # Data persistence layer
-├── vault/          # Secrets management service
-└── workspace/      # Development workspace utilities
+├── integrations/   # External service integrations
+└── yapper/         # Logging framework
 ```
 
 ## Core Principles
@@ -29,8 +33,9 @@ campus/
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   🌐 Apps       │    │   🔌 Client     │    │   🛠️ Common     │
-│   Web APIs      │    │   Interfaces    │    │   Utilities     │
+│   🔐 Auth       │    │   🌐 API        │    │   🛠️ Common     │
+│   OAuth &       │    │   RESTful       │    │   Utilities     │
+│   Credentials   │    │   Resources     │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          └───────────────────────┼───────────────────────┘
@@ -38,9 +43,9 @@ campus/
          ┌───────────────────────┼───────────────────────┐
          │                       │                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   🏛️ Models     │    │   🔐 Vault      │    │   📧 Services   │
-│   Business      │    │   Secrets       │    │   Email, etc.   │
-│   Logic         │    │   Management    │    │                 │
+│   🏛️ Model      │    │   � Services   │    │   � Integr.    │
+│   Entities      │    │   Email, etc.   │    │   External      │
+│   (dataclasses) │    │                 │    │   APIs          │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
          │                       │                       │
          └───────────────────────┼───────────────────────┘
@@ -51,56 +56,39 @@ campus/
                     └─────────────────┘
 ```
 
+**Client Access:** All services are accessed through the external `campus_python` client library.
+
 ## Package Responsibilities
 
-### `campus.apps`
-Web applications and API endpoints:
-- Flask applications with route definitions
-- Authentication and authorization middleware
-- OAuth integrations
-- API request/response handling
+### `campus.auth`
+Authentication and OAuth services:
+- User authentication and session management
+- OAuth proxy for external providers (Google, GitHub, Discord)
+- Client credential management
+- Token generation and validation
+- Business logic in `.resources` submodule
 
-### `campus.client`
-Client interfaces for accessing Campus services:
-- HTTP client libraries
-- Service discovery and configuration
-- Authentication token management
-- Clean Python APIs for external integration
+### `campus.api`
+RESTful API resources:
+- Circle (group) management endpoints
+- Email OTP verification
+- Resource-based routing and handlers
+- Business logic in `.resources` submodule
+- Authentication via `campus_python` client
 
-### `campus.common`
-Shared utilities and schemas:
-- Common data structures and validation
-- Utility functions used across services
-- Configuration management helpers
-- Error handling and logging utilities
-
-### `campus.models`
-Data models and business logic:
-- Core business entities (User, Circle, etc.)
-- Domain-specific logic and validation
-- Model relationships and constraints
-- Data transformation utilities
-
-### `campus.services`
-Supporting business services:
-- Email service for notifications
-- External integrations
-- Background job processing
-- Service-to-service communication
+### `campus.model`
+Entity representation only (no business logic):
+- Dataclass definitions for entities (User, Circle, Client, etc.)
+- Session and token structures
+- HTTP headers and credentials
+- Pure data structures with keyword-only init
 
 ### `campus.storage`
 Data persistence interfaces:
 - Backend-agnostic storage abstractions
-- Alignment with Campus API schema
 - Database connection management
 - Multi-backend support (PostgreSQL, MongoDB)
-
-### `campus.vault`
-Secure secrets management:
-- Credential storage and retrieval
-- Access control and permissions
-- Encryption and key management
-- Configuration secrets management
+- Consistent CRUD operations
 
 ## Design Patterns
 
@@ -115,41 +103,44 @@ Higher-level modules depend on abstractions, not concrete implementations.
 
 ## Deployment Models
 
-### Monolithic Deployment
-Single application instance with all services:
+### Service Deployment
+Individual services can be deployed independently:
 ```bash
-export DEPLOY=apps
+export DEPLOY=campus.auth
 poetry run python main.py
 ```
 
-### Vault-Only Deployment
-Lightweight secrets management service:
+or
+
 ```bash
-export DEPLOY=vault  
+export DEPLOY=campus.api
 poetry run python main.py
 ```
 
 ### Client Library Usage
-Independent client for external integration:
+External projects use the `campus_python` client library:
 ```python
-from campus.client import Campus
-client = Campus()
+import campus_python
+campus = campus_python.Campus()
 ```
+
+See the [campus-api-python repository](https://github.com/nyjc-computing/campus-api-python) for client documentation.
 
 ## Configuration
 
-Campus uses environment variables for core configuration and the vault service for all other secrets:
+Campus uses environment variables for core configuration:
 
 ### Environment Variables
 ```bash
-ENV="development"           # deployment environment
-CLIENT_ID="your-client-id"  # OAuth client credentials  
-CLIENT_SECRET="your-secret"
-VAULTDB_URI="postgresql://user:pass@localhost/vault"  # vault database
+ENV="development"              # deployment environment
+DEPLOY="campus.auth"           # deployment mode (campus.auth, campus.api, etc.)
+CLIENT_ID="your-client-id"     # Client authentication
+CLIENT_SECRET="your-secret"    # Client authentication
+VAULTDB_URI="postgresql://..." # Authentication service database
 ```
 
-### Vault-Managed Secrets
-All other configuration (storage connections, email settings, API keys) is managed through the vault service for enhanced security.
+### Secrets Management
+Configuration and secrets are managed through `campus.auth` and accessed via the `campus_python` client library.
 
 ## Security Architecture
 

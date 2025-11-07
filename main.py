@@ -6,13 +6,13 @@ Development and testing entry point for Campus services.
 For production deployment, use wsgi.py with Gunicorn or other WSGI servers.
 
 Deployment mode is determined by the DEPLOY environment variable:
-- DEPLOY=vault: Deploys the vault service only  
-- DEPLOY=apps: Deploys the full apps service (default)
+- DEPLOY=campus.auth: Deploys the authentication service
+- DEPLOY=campus.api: Deploys the API service
 
 Usage:
-    DEPLOY=vault python main.py     # Start vault development server
-    DEPLOY=apps python main.py      # Start apps development server
-    gunicorn wsgi:app               # Production deployment
+    DEPLOY=campus.auth python main.py     # Start auth development server
+    DEPLOY=campus.api python main.py      # Start API development server
+    gunicorn wsgi:app                     # Production deployment
 """
 
 import logging
