@@ -24,7 +24,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 def request_otp(email: str) -> campus_flask.JsonResponse:
     """Request a new OTP for email authentication."""
     from campus.api import resources
-    from campus.models.emailotp import template
+    from campus.model.emailotp import template
 
     # TODO: Validate email format
     # TODO: Check if email is already registered
