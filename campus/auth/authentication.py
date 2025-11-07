@@ -32,7 +32,7 @@ def authenticate_client_from_request() -> tuple[dict[str, str], int] | None:
     req_header = dict(flask.request.headers)
     httpauth = (
         webauth.http.HttpAuthenticationScheme
-        .from_header(provider="campus", http_header=req_header)
+        .with_header(provider="campus", http_header=req_header)
     )
     assert httpauth.header
     if not httpauth.header.authorization:

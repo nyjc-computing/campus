@@ -37,14 +37,14 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             provider: str,
             scheme: HttpScheme,
             *,
-            header: campus.model.HttpHeaderWithAuth | None = None
+            header: campus.model.HttpHeaderWithAuth
     ):
         super().__init__(provider)
         self.scheme = scheme  # type: ignore[assignment]
         self.header = header
 
     @classmethod
-    def from_header(
+    def with_header(
             cls,
             *,
             provider: str,
