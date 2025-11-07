@@ -35,8 +35,11 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     routes.init_app(bp)
 
     if isinstance(app, flask.Flask):
-        from campus.client.vault import get_vault
-        vault = get_vault()
-        app.secret_key = vault["campus.auth"]["SECRET_KEY"].get()["value"]
+        import campus_python
+        from campus.common import env
+        app.secret_key = (
+            campus_python.Campus()
+            .auth.vaults[env.DEPLOY]["SECRET_KEY"]
+    )
     
     app.register_blueprint(bp)
