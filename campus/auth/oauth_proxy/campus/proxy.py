@@ -106,6 +106,7 @@ class CampusAuthProxy(base.AuthProxy):
             )
         # Exchange code for token; this will finalize auth_session
         token = self._oauth2.exchange_code_for_token(
+            authsession=authsession,
             code=code,
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,

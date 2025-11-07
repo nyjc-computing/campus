@@ -61,12 +61,12 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
 
     def exchange_code_for_token(
             self,
+            authsession: campus.model.AuthSession,
             code: str,
             client_id: schema.CampusID,
             client_secret: str,
     ) -> campus.model.OAuthToken:
         """Exchange authorization code for access token."""
-        authsession = resources.session[self.provider].get(code)
         if authsession.provider != self.provider:
             raise auth_errors.ServerError(
                 "Provider mismatch",

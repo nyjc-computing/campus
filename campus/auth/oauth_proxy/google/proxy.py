@@ -127,6 +127,7 @@ class GoogleAuthProxy(base.AuthProxy):
         self.validate_authsession(authsession, state)
         # Retrieve access token from Google
         token = self._oauth2.exchange_code_for_token(
+            authsession=authsession,
             code=code,
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
