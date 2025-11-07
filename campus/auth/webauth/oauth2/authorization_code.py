@@ -37,11 +37,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
     redirect_uri: schema.Url
     headers: dict[str, str]
     user_info_url: schema.Url | None
-    # extra_params: dict[str, str]
-    # token_params: dict[str, str]
-    # user_info_params: dict[str, str]
     scopes: list[str]
-    # _auth_session: campus.model.AuthSession | None
 
     def __init__(
             self,
@@ -53,9 +49,6 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             scopes: list[str],
             headers: dict[str, str] | None = None,
             user_info_url: schema.Url | None = None,
-            # extra_params: dict[str, str] | None = None,
-            # token_params: dict[str, str] | None = None,
-            # user_info_params: dict[str, str] | None = None,
     ):
         super().__init__(provider)
         self.client_id = client_id
@@ -65,21 +58,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         self.scopes = scopes
         self.headers = headers or {}
         self.user_info_url = user_info_url
-        # self.extra_params = extra_params or {}
-        # self.token_params = token_params or {}
-        # self.user_info_params = user_info_params or {}
-        # self._auth_session = None
-
-    # @property
-    # def auth_session(self) -> campus.model.AuthSession:
-    #     if self._auth_session is None:
-    #         raise RuntimeError("Session not initialized")
-    #     return self._auth_session
     
-    @property
-    def _session_key(self) -> str:
-        return f"oauth2_{self.provider}_session_id"
-
     def get_user_info(self, access_token: str) -> dict[str, Any]:
         """Fetch user info from the provider's user info endpoint."""
         if not self.user_info_url:
@@ -87,7 +66,6 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         headers = {
             **self.headers,
             "Authorization": f"Bearer {access_token}",
-            # **self.user_info_params
         }
         resp = requests.get(
             self.user_info_url,
@@ -98,54 +76,6 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         if "error" in userinfo_payload:
             auth_errors.raise_from_json(userinfo_payload)
         return userinfo_payload
-
-    # def validate_callback(self, state: str) -> None:
-    #     error_description = None
-    #     if not self._auth_session:
-    #         error_description = "No active OAuth session found."
-    #     elif self._auth_session.is_expired():
-    #         error_description = "OAuth session has expired."
-    #     elif self._auth_session.id != state:
-    #         error_description = "Session state mismatch."
-    #     if error_description:
-    #         raise auth_errors.InvalidRequestError(error_description)
-
-    # def init_session(
-    #         self,
-    #         *,
-    #         redirect_uri: schema.Url,
-    #         user_id: schema.UserID | None = None,
-    #         client_id: str,
-    #         scopes: list[str],
-    #         target: schema.Url | None = None,
-    # ) -> None:
-    #     """Create a new OAuth2 Authorization Code flow session.
-    #     Revokes any existing session for the user.
-    #     Note that this sets session_id in client-side cookie.
-
-    #     Returns the session.
-    #     """
-    #     self._auth_session = resources.session[self.provider].new(
-    #         expiry_seconds=OAUTH_EXPIRY_MINUTES * 60,
-    #         redirect_uri=redirect_uri,
-    #         client_id=client_id,
-    #         user_id=user_id,
-    #         scopes=scopes,
-    #         target=target,
-    #     )
-    #     flask.session[self._session_key] = str(self.auth_session.id)
-
-    # def finalize_session(self) -> schema.Url:
-    #     """Finalize the current OAuth2 Authorization Code flow session.
-        
-    #     Returns the target URL to redirect to.
-    #     """
-    #     # Raises RuntimeError if auth session not initialized
-    #     auth_session = self.auth_session
-    #     resources.session[self.provider][auth_session.id].delete()
-    #     del flask.session[self._session_key]
-    #     assert auth_session.target
-    #     return schema.Url(auth_session.target)
 
     def exchange_code_for_token(
             self,
@@ -216,7 +146,6 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             "response_type": "code",
             "scope": " ".join(self.scopes),
             "state": state,
-            # **self.extra_params,
             **add_params
         }
         authorization_url = url.create_url(
