@@ -5,6 +5,7 @@ Campus model representation of HTTP headers.
 
 __all__ = [
     "HttpHeader",
+    "HttpHeaderWithAuth",
 ]
 
 from base64 import b64decode, b64encode
@@ -66,26 +67,40 @@ class HttpAuthProperty(str):
 class HttpHeader(dict):
     """HTTP header representation as a dictionary."""
 
-    @property
-    def authorization(self) -> HttpAuthProperty | None:
-        """Get the authorization property from the header."""
-        auth_header = self.get("Authorization")
-        if auth_header:
-            return HttpAuthProperty(auth_header)
-        return None
-
     @classmethod
-    def from_credentials(cls, c_id: str, c_secret: str) -> "HttpHeader":
-        """Create an HTTP header dictionary from client credentials."""
-        auth_property = HttpAuthProperty.for_basic(c_id, c_secret)
-        return cls({"Authorization": auth_property})
-
-    @classmethod
-    def from_bearer_token(cls, token: str) -> "HttpHeader":
+    def from_bearer_token(cls, token: str) -> "HttpHeaderWithAuth":
         """Create an HTTP header dictionary from a bearer token."""
         auth_property = HttpAuthProperty.for_bearer(token)
-        return cls({"Authorization": auth_property})
+        return HttpHeaderWithAuth({"Authorization": auth_property})
+
+    @classmethod
+    def from_credentials(cls, c_id: str, c_secret: str) -> "HttpHeaderWithAuth":
+        """Create an HTTP header dictionary from client credentials."""
+        auth_property = HttpAuthProperty.for_basic(c_id, c_secret)
+        return HttpHeaderWithAuth({"Authorization": auth_property})
+
+    @classmethod
+    def from_header(
+            cls,
+            header: dict[str, str]
+    ) -> "HttpHeader":
+        """Create an HTTP header dictionary from a raw header
+        dictionary.
+        """
+        if "Authorization" in header:
+            return HttpHeaderWithAuth(header)
+        else:
+            return HttpHeader(header)
 
     def user_agent(self) -> str | None:
         """Get the User-Agent header value."""
         return self.get("User-Agent", "Unknown")
+
+
+class HttpHeaderWithAuth(HttpHeader):
+    """HTTP header with Authorization property."""
+
+    @property
+    def authorization(self) -> HttpAuthProperty:
+        """Get the authorization property from the header."""
+        return HttpAuthProperty(self["Authorization"])
