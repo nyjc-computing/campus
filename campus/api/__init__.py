@@ -16,6 +16,7 @@ from campus.common.errors import auth_errors
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
 
+campus_auth = campus_python.Campus().auth
 auth_root = campus_python.Campus().auth.root
 
 
@@ -48,7 +49,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
                     httpauth.header.authorization.credentials()
                 )
                 try:
-                    auth_result = auth_root.authenticate(
+                    auth_result = campus_auth.root.authenticate(
                         client_id=client_id,
                         client_secret=client_secret
                     )
@@ -61,7 +62,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             case "bearer":
                 access_token = httpauth.header.authorization.token
                 try:
-                    auth_result = auth_root.authenticate(token=access_token)
+                    auth_result = campus_auth.root.authenticate(token=access_token)
                 except campus_python.errors.AuthenticationError:
                     auth_errors.UnauthorizedClientError(
                         "No Authorization header present"
@@ -73,6 +74,4 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(bp)
 
     if isinstance(app, flask.Flask):
-        from campus.client.vault import get_vault
-        vault = get_vault()
-        app.secret_key = vault[env.DEPLOY]["SECRET_KEY"].get()["value"]
+        app.secret_key = campus_auth.vaults[env.DEPLOY]["SECRET_KEY"]
