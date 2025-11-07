@@ -10,12 +10,15 @@ from abc import ABC, abstractmethod
 import contextlib
 from typing import Iterator, Literal, Self
 
+import flask
 import werkzeug
 
-from campus.auth import resources
-from campus.client.vault import get_vault
 from campus.common import schema
+from campus.common.errors import auth_errors
+import campus.config
 import campus.model
+
+from .. import resources
 
 HttpScheme = Literal["basic", "bearer"]
 OAuth2Flow = Literal[
@@ -51,9 +54,8 @@ class AuthProxy(ABC):
     _CLIENT_SECRET: str
 
     def __init__(self) -> None:
-        vault = get_vault()[self.provider]
-        self._CLIENT_ID = vault["CLIENT_ID"].get()['value']
-        self._CLIENT_SECRET = vault["CLIENT_SECRET"].get()['value']
+        self._CLIENT_ID = resources.vault[self.provider]["CLIENT_ID"]
+        self._CLIENT_SECRET = resources.vault[self.provider]["CLIENT_SECRET"]
 
     @property
     @abstractmethod
@@ -74,6 +76,63 @@ class AuthProxy(ABC):
     @property
     @abstractmethod
     def scopes(self) -> list[str]: ...
+
+    @property
+    def _session_key(self) -> str:
+        return f"oauth2_{self.provider}_session_id"
+
+    def finalize_authsession(
+            self,
+            authsession: campus.model.AuthSession
+    ) -> schema.Url | None:
+        """Finalize the OAuth2 authorization flow and
+        return a redirect_uri to the target.
+        """
+        resources.session[self.provider][authsession.id].delete()
+        flask.session.pop(self._session_key, None)
+        return authsession.target
+
+    def get_authsession(self) -> campus.model.AuthSession:
+        """Retrieve and validate an AuthSession by state."""
+        session_id = flask.session.get(self._session_key)
+        if session_id is None:
+            raise auth_errors.InvalidRequestError("No OAuth session found.")
+        authsession = resources.session[self.provider].get(session_id)
+        return authsession
+
+    def init_authsession(
+            self,
+            *,
+            expiry_seconds: int = (
+                campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60
+            ),
+            redirect_uri: schema.Url,
+            scopes: list[str],
+            target: schema.Url,
+    ) -> campus.model.AuthSession:
+        """Initialize and return a new AuthSession for the OAuth2 flow."""
+        authsession = resources.session[self.provider].new(
+            expiry_seconds=expiry_seconds,
+            client_id=self._CLIENT_ID,
+            redirect_uri=redirect_uri,
+            scopes=scopes,
+            target=target
+        )
+        flask.session[self._session_key] = str(authsession.id)
+        return authsession
+
+    @staticmethod
+    def validate_authsession(
+            authsession: campus.model.AuthSession,
+            state: str,
+    ) -> None:
+        """Validate the AuthSession against the provided state."""
+        if authsession.is_expired():
+            raise auth_errors.InvalidRequestError("OAuth session has expired.")
+        if authsession.id != state:
+            raise auth_errors.InvalidRequestError(
+                "Invalid OAuth state parameter."
+            )
 
     def with_token(self, token: campus.model.OAuthToken) -> Self:
         """A chainable method for passing a token to the instance."""

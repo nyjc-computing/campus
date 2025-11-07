@@ -68,12 +68,18 @@ def create_app(mode: str | None = None) -> flask.Flask:
     return app
 
 
-def main():
+def main(deployment: str | None = None):
     """Development server entry point for testing Campus services locally"""
+    from campus.common import devops
+    assert env.ENV == devops.DEVELOPMENT, (
+        "main() should only be called in development environment for "
+        "testing purposes"
+    )
     # Development server configuration
-
+    if not env.get("DEPLOY"):
+        env.DEPLOY = deployment
     # Create app instance for development server
-    app = create_app("campus.api")
+    app = create_app(deployment)
     devops.deploy.configure_for_development(app)
 
     print("📝 For production deployment, use wsgi.py with Gunicorn")
@@ -83,4 +89,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    deployment = sys.argv[1] if len(sys.argv) >= 2 else None
+    main(deployment=deployment)

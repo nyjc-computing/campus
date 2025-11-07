@@ -49,7 +49,7 @@ def create(**kwargs) -> YapperInterface:
     # Lazy-import locally to avoid polluting global namespace
     import os
 
-    from campus.client.vault import get_vault
+    import campus_python
 
     from .backends.sqlite import SQLiteYapper
     from .backends.postgres import PostgreSQLYapper
@@ -73,8 +73,8 @@ def create(**kwargs) -> YapperInterface:
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
             try:
-                vault = get_vault()
-                yapperdb_uri = vault["campus.yapper"]["YAPPERDB_URI"].get()["value"]
+                vault = campus_python.Campus().auth.vaults["yapper"]
+                yapperdb_uri = vault["YAPPERDB_URI"]
             except Exception as e:
                 raise ValueError(
                     f"Failed to retrieve YAPPERDB_URI from vault service for {env} environment. "

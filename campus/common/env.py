@@ -20,6 +20,7 @@ GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str  # domain for port forwarding in C
 CLIENT_ID: str
 CLIENT_SECRET: str
 DEPLOY: str
+ENV: str  # deployment environment (development, staging, production)
 HOSTNAME: str  # used for generating redirect_uris
 PORT: str  # port for running development server
 SECRET_KEY: str  # secret key for signing sessions and tokens

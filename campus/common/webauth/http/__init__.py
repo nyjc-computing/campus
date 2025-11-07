@@ -15,9 +15,9 @@ __all__ = [
 from typing import Literal
 
 from campus.common.errors import api_errors, token_errors
+import campus.model
 
 from .. import base
-from . import header
 
 HttpScheme = Literal["basic", "bearer"]
 
@@ -37,30 +37,30 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             provider: str,
             scheme: HttpScheme,
             *,
-            header: header.HttpHeader | None = None
+            header: campus.model.HttpHeaderWithAuth
     ):
         super().__init__(provider)
         self.scheme = scheme  # type: ignore[assignment]
         self.header = header
 
     @classmethod
-    def from_header(
+    def with_header(
             cls,
             *,
             provider: str,
-            http_header: dict
+            http_header: campus.model.HttpHeaderWithAuth | dict[str, str]
     ) -> "HttpAuthenticationScheme":
         """Create an HTTP authentication scheme from an HTTP header."""
-        header_ = header.HttpHeader(http_header)
-        if header_.authorization is None:
+        header = campus.model.HttpHeader.from_header(http_header)
+        if not isinstance(header, campus.model.HttpHeaderWithAuth):
             api_errors.raise_api_error(401)
-        match header_.authorization.scheme:
+        match header.authorization.scheme:
             case "basic":
-                return cls(provider, scheme="basic", header=header_)
+                return cls(provider, scheme="basic", header=header)
             case "bearer":
-                return cls(provider, scheme="bearer", header=header_)
+                return cls(provider, scheme="bearer", header=header)
         raise token_errors.InvalidClientError(
-            f"Unsupported HTTP scheme: {header_.authorization.scheme}"
+            f"Unsupported HTTP scheme: {header.authorization.scheme}"
         )
 
     def verify_credentials(

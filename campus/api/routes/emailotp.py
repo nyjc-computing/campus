@@ -24,7 +24,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 def request_otp(email: str) -> campus_flask.JsonResponse:
     """Request a new OTP for email authentication."""
     from campus.api import resources
-    from campus.models.emailotp import template
+    from campus.model.emailotp import template
 
     # TODO: Validate email format
     # TODO: Check if email is already registered
@@ -39,10 +39,9 @@ def request_otp(email: str) -> campus_flask.JsonResponse:
         html_body=template.html_body("Campus", otp_code)
     )
     if error:
-        api_errors.raise_api_error(
-            error["message"],
-            status_code=500,
-            error_message=str(error)
+        raise api_errors.InternalError(
+            message=error["message"],
+            error_message=str(error),
         )
     return {"message": "OTP sent"}, 200
 

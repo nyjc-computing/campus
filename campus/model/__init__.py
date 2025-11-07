@@ -20,6 +20,8 @@ __all__ = [
     "Client",
     "ClientAccess",
     "EmailOTP",
+    "HttpHeader",
+    "HttpHeaderWithAuth",
     "LoginSession",
     "Model",
     "OAuthToken",
@@ -33,6 +35,7 @@ from .base import Model
 from .circle import Circle
 from .client import Client, ClientAccess
 from .credentials import OAuthToken, UserCredentials
+from .http.header import HttpHeader, HttpHeaderWithAuth
 from .emailotp import EmailOTP
 from .login import LoginSession
 from .session import AuthSession

@@ -116,14 +116,9 @@ def authorize(
     # Check if client exists
     client = resources.client[client_id].get()
     # TODO: Validate redirect_uri; must be absolute URL
-    authsession = resources.session[PROVIDER].new(
-        expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-        client_id=schema.CampusID(client_id),
-        redirect_uri=schema.Url(redirect_uri),
-        scopes=scope.split(" ") if scope else [],
-        state=state
-    )
-    flask.session[_session_key()] = authsession.id
+    # Auth session is not handled here; use oauth_proxy.campus for
+    # Campus first-party apps, or handle client-side for third-party app
+
     # Scope verification is not handled here.
     # The issued token will contain only the scopes allowed for the
     # client and consented by user.
@@ -144,90 +139,90 @@ def authorize(
 
 
 
-@bp.get('/callback')
-@campus_flask.unpack_request
-def callback(
-        code: str,
-        state: str,
-) -> werkzeug.Response:
-    """Handle the OAuth2 callback response from Google for Campus
-    authentication flows.
+# @bp.get('/callback')
+# @campus_flask.unpack_request
+# def callback(
+#         code: str,
+#         state: str,
+# ) -> werkzeug.Response:
+#     """Handle the OAuth2 callback response from Google for Campus
+#     authentication flows.
 
-    Method:
-        GET /auth/callback
+#     Method:
+#         GET /auth/callback
 
-    Path Parameters:
-        None
+#     Path Parameters:
+#         None
 
-    Query Parameters:
-        - code: str (required)
-            Authorization code returned by Google after user consent.
-        - state: str (optional)
-            Opaque value used by the client to maintain state between request and callback.
+#     Query Parameters:
+#         - code: str (required)
+#             Authorization code returned by Google after user consent.
+#         - state: str (optional)
+#             Opaque value used by the client to maintain state between request and callback.
 
-    Responses:
-        302 Found: Redirect
-        - Redirects to the original redirect_uri specified in /authorize,
-          appending the authorization code and state if provided.
-          e.g. /client/callback?code=abc123&state=xyz
-    """
-
-
-    # The authorization flow (from /auth/authorize) is expected to have
-    # gone through Google OAuth.
-    # This means there are two session keys, one for Google OAuth
-    # and one for Campus OAuth.
-    callback_payload = campus_flask.get_request_payload()
-    if "error" in callback_payload:
-        auth_errors.raise_from_json(callback_payload)
-    else:
-        return campus_flask.unpack_into(success_callback,
-                                        **callback_payload)
+#     Responses:
+#         302 Found: Redirect
+#         - Redirects to the original redirect_uri specified in /authorize,
+#           appending the authorization code and state if provided.
+#           e.g. /client/callback?code=abc123&state=xyz
+#     """
 
 
-def success_callback(
-        state: str,
-        code: str,
-        scope: str,
-        **kwargs: str
-) -> werkzeug.Response:
-    """Handle a Google OAuth callback request."""
-    # Handle Google OAuth callback, get google credentials
-    google_proxy = oauth_proxy.google.proxy.get_proxy()
-    google_credentials = google_proxy.handle_auth_callback(
-        state,
-        code,
-        scope,
-    )
-    # Check Campus session validity
-    session_id = state
-    authsession = resources.session[PROVIDER][session_id].get()
-    if authsession is None:
-        raise token_errors.InvalidRequestError("Auth session not found")
-    if authsession.is_expired():
-        raise token_errors.InvalidRequestError("Auth session expired")
-    # Update auth session with user ID from Google credentials
-    authsession = resources.session[PROVIDER][session_id].update(
-        session_id=session_id,
-        user_id=schema.UserID(google_credentials.user_id)
-    )
-    # Finalize session and redirect to client
-    del flask.session[_session_key()]
-    redirect_uri = authsession.redirect_uri
-    if authsession.state:
-        redirect_url = url.with_params(
-            redirect_uri,
-            code=authsession.authorization_code,
-            state=authsession.state,
-            scope=scope,
-        )
-    else:
-        redirect_url = url.with_params(
-            redirect_uri,
-            code=authsession.authorization_code,
-            scope=scope,
-        )
-    return flask.redirect(redirect_url)
+#     # The authorization flow (from /auth/authorize) is expected to have
+#     # gone through Google OAuth.
+#     # This means there are two session keys, one for Google OAuth
+#     # and one for Campus OAuth.
+#     callback_payload = campus_flask.get_request_payload()
+#     if "error" in callback_payload:
+#         auth_errors.raise_from_json(callback_payload)
+#     else:
+#         return campus_flask.unpack_into(success_callback,
+#                                         **callback_payload)
+
+
+# def success_callback(
+#         state: str,
+#         code: str,
+#         scope: str,
+#         **kwargs: str
+# ) -> werkzeug.Response:
+#     """Handle a Google OAuth callback request."""
+#     # Handle Google OAuth callback, get google credentials
+#     google_proxy = oauth_proxy.google.proxy.get_proxy()
+#     google_credentials = google_proxy.handle_auth_callback(
+#         state,
+#         code,
+#         scope,
+#     )
+#     # Check Campus session validity
+#     session_id = state
+#     authsession = resources.session[PROVIDER][session_id].get()
+#     if authsession is None:
+#         raise token_errors.InvalidRequestError("Auth session not found")
+#     if authsession.is_expired():
+#         raise token_errors.InvalidRequestError("Auth session expired")
+#     # Update auth session with user ID from Google credentials
+#     authsession = resources.session[PROVIDER][session_id].update(
+#         session_id=session_id,
+#         user_id=schema.UserID(google_credentials.user_id)
+#     )
+#     # Finalize session and redirect to client
+#     del flask.session[_session_key()]
+#     redirect_uri = authsession.redirect_uri
+#     if authsession.state:
+#         redirect_url = url.with_params(
+#             redirect_uri,
+#             code=authsession.authorization_code,
+#             state=authsession.state,
+#             scope=scope,
+#         )
+#     else:
+#         redirect_url = url.with_params(
+#             redirect_uri,
+#             code=authsession.authorization_code,
+#             scope=scope,
+#         )
+#     return flask.redirect(redirect_url)
 
 
 @bp.post('/token')

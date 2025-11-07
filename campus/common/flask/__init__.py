@@ -23,13 +23,16 @@ from werkzeug import Response as FlaskResponse
 
 from campus.common.errors import api_errors
 from campus.common.validation import record
+import campus.model
 
 from . import parameter
 
 R = TypeVar("R", covariant=True)
+
 # Only expecting strings or dicts
 JsonObject = dict[str, Any]
 StatusCode = int
+
 ViewFunctionDecorator = Callable[["ViewFunction"], "ViewFunction"]
 # Actually, view functions may return a variety of return values which Flask is
 # able to handle
@@ -67,6 +70,13 @@ def get_user_agent() -> str:
     if not flask.has_request_context():
         raise RuntimeError("No Flask request context available")
     return flask.request.headers.get("User-Agent", "Unknown")
+
+
+def get_request_headers() -> campus.model.HttpHeader:
+    """Get the headers from the Flask request as a dictionary."""
+    if not flask.has_request_context():
+        raise RuntimeError("No Flask request context available")
+    return campus.model.HttpHeader(flask.request.headers.items())
 
 
 def get_request_payload() -> dict[str, typing.Any]:

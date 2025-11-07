@@ -7,11 +7,11 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from campus.client.vault import get_vault
+import campus_python
 
 from .base import EmailSenderInterface
 
-vault = get_vault()["smtp"]
+email_vault = campus_python.Campus().auth.vaults["smtp"]
 
 
 class SMTPEmailSender(EmailSenderInterface):
@@ -46,17 +46,17 @@ class SMTPEmailSender(EmailSenderInterface):
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-    username = vault["SMTP_USERNAME"].get()["value"]
-    password = vault["SMTP_PASSWORD"].get()["value"]
-    host = vault["SMTP_HOST"].get()["value"]
+        username = email_vault["SMTP_USERNAME"]
+        password = email_vault["SMTP_PASSWORD"]
+        host = email_vault["SMTP_HOST"]
 
-    msg = EmailMessage()
-    msg['Subject'] = subject
-    msg['From'] = username
-     msg['To'] = recipient
-      msg.set_content(body)
+        msg = EmailMessage()
+        msg['Subject'] = subject
+        msg['From'] = username
+        msg['To'] = recipient
+        msg.set_content(body)
 
-       if html_body:
+        if html_body:
             msg.add_alternative(html_body, subtype='html')
 
         try:

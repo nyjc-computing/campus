@@ -1,4 +1,4 @@
-"""campus.models.emailotp.template
+"""campus.model.emailotp.template
 
 Email templates for OTP authentication.
 """

@@ -10,12 +10,12 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.common import env, schema
+from campus.common import env, schema, webauth
 from campus.common.errors import auth_errors
 import campus.config
 
 from .. import base
-from ... import resources, webauth
+from ... import resources
 
 PROVIDER = "discord"
 REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
@@ -37,6 +37,8 @@ class DiscordAuthPoxy(base.AuthProxy):
     _headers = {"Accept": "application/json"}
     _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
         provider=PROVIDER,
+        client_id=env.CLIENT_ID,
+        redirect_uri=REDIRECT_URI,
         authorization_url=schema.Url(
             "https://discord.com/oauth2/authorize"
         ),
@@ -59,15 +61,15 @@ class DiscordAuthPoxy(base.AuthProxy):
     @property
     def token_url(self) -> schema.Url:
         return self._oauth2.token_url
-    
+
     @property
     def user_info_url(self) -> schema.Url | None:
         return self._oauth2.user_info_url
-    
+
     @property
     def headers(self) -> dict[str, str]:
         return self._oauth2.headers
-    
+
     @property
     def scopes(self) -> list[str]:
         return self._oauth2.scopes
@@ -79,9 +81,8 @@ class DiscordAuthPoxy(base.AuthProxy):
             prompt: _PROMPT_OPTIONS = None,  # common option for providers
     ) -> werkzeug.Response:
         """Redirect to GitHub OAuth2 authorization endpoint."""
-        authsession = resources.session[PROVIDER].new(
+        authsession = self.init_authsession(
             expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-            client_id=self._CLIENT_ID,
             redirect_uri=REDIRECT_URI,
             scopes=self._oauth2.scopes,
             target=target
@@ -89,7 +90,10 @@ class DiscordAuthPoxy(base.AuthProxy):
         url_params = {}
         if prompt:
             url_params["prompt"] = prompt
-        authorization_url = self._oauth2.get_authorization_url(**url_params)
+        authorization_url = self._oauth2.get_authorization_url(
+            state=authsession.id,
+            **url_params
+        )
         return flask.redirect(authorization_url)
 
     def handle_callback(
@@ -99,11 +103,12 @@ class DiscordAuthPoxy(base.AuthProxy):
             scope: str,
             **kwargs: str
     ) -> werkzeug.Response:
-        assert self._oauth2 is not None
-        self._oauth2.validate_callback(state=state)
+        authsession = self.get_authsession()
+        self.validate_authsession(authsession, state)
         # Retrieve access token from GitHub
         # Fill in user info from userinfo endpoint
         token = self._oauth2.exchange_code_for_token(
+            authsession=authsession,
             code=code,
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
@@ -121,5 +126,5 @@ class DiscordAuthPoxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             token=token,
         )
-        target = self._oauth2.finalize_session()
-        return flask.redirect(target or flask.request.host_url)
+        self.finalize_authsession(authsession)
+        return flask.redirect(authsession.target or flask.request.host_url)

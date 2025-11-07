@@ -8,15 +8,16 @@ __all__ = ["CampusAuthProxy", "get_proxy"]
 import flask
 import werkzeug
 
-from campus.common import env, schema
+from campus.common import env, schema, webauth
 from campus.common.errors import auth_errors, token_errors
+import campus.config
 
 from .. import base
-from ... import resources, webauth
+from ... import resources
 
 PROVIDER = "campus"
 # Assume campus proxy is hosted on same server as campus.auth
-REDIRECT_URI = schema.Url(flask.url_for("auth.callback"))
+REDIRECT_URI = schema.Url("/auth/campus/callback")
 SCOPE_SEP = " "
 
 
@@ -33,6 +34,8 @@ class CampusAuthProxy(base.AuthProxy):
     version = "2025-11-05"
     openapi_version = "3.0.3"
     _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+        client_id=env.CLIENT_ID,
+        redirect_uri=REDIRECT_URI,
         provider=PROVIDER,
         authorization_url=schema.Url("/auth/authorize"),
         token_url=schema.Url("/auth/token"),
@@ -74,14 +77,14 @@ class CampusAuthProxy(base.AuthProxy):
             login_hint: schema.Email | None = None,  # email hint
     ) -> werkzeug.Response:
         """Redirect to Campus OAuth2 authorization endpoint."""
-
-        self._oauth2.init_session(
+        authsession = self.init_authsession(
+            expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
             redirect_uri=REDIRECT_URI,
-            client_id=self._CLIENT_ID,
             scopes=self._oauth2.scopes,
             target=target
         )
         authorization_url = self._oauth2.get_authorization_url(
+            state=authsession.id,
             **{"login_hint": login_hint} if login_hint else {},
         )
         return flask.redirect(authorization_url)
@@ -92,8 +95,8 @@ class CampusAuthProxy(base.AuthProxy):
             code: str,
             scope: str,
     ) -> werkzeug.Response:
-        assert self._oauth2 is not None
-        self._oauth2.validate_callback(state=state)
+        authsession = self.get_authsession()
+        self.validate_authsession(authsession, state)
         # auth_session user_id should have been updated by
         # auth.provider.callback
         auth_session = resources.session[PROVIDER].get(code)
@@ -103,6 +106,7 @@ class CampusAuthProxy(base.AuthProxy):
             )
         # Exchange code for token; this will finalize auth_session
         token = self._oauth2.exchange_code_for_token(
+            authsession=authsession,
             code=code,
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
@@ -124,5 +128,5 @@ class CampusAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             token=token,
         )
-        target = self._oauth2.finalize_session()
-        return flask.redirect(target or flask.request.host_url)
+        self.finalize_authsession(authsession)
+        return flask.redirect(authsession.target or flask.request.host_url)
