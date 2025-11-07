@@ -21,7 +21,7 @@ auth_root = campus_python.Campus().auth.root
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
-    from . import resources, routes
+    from . import routes
     from campus.common import webauth
 
     # Organise API routes under api blueprint
