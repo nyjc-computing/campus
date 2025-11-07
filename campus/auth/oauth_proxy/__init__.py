@@ -5,7 +5,7 @@ OAuth2 authentication.
 """
 
 __all__ = [
-    # "campus",
+    "campus",
     "discord",
     "github",
     "google",
@@ -14,7 +14,7 @@ __all__ = [
 import flask
 
 from . import (
-    # campus,
+    campus,
     discord,
     github,
     google,
@@ -23,7 +23,7 @@ from . import (
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Initialize the OAuth routes with the given Flask app/blueprint."""
-    # campus.init_app(app)
+    campus.init_app(app)
     discord.init_app(app)
     github.init_app(app)
     google.init_app(app)
