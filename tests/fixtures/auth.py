@@ -18,50 +18,61 @@ from campus.common import env
 def init():
     """Initialize auth service infrastructure for testing.
 
-    This function:
-    - Initializes storage tables (vaults, clients)
-    - Creates test client and sets CLIENT_ID/CLIENT_SECRET env vars
-    - Sets up vault's own SECRET_KEY in 'vault' vault
-    - Gives client access to 'vault' label
+    This function sets up the storage-backed resources and credentials needed
+    for campus.auth service testing. It creates storage tables, generates test
+    client credentials, and configures vault secrets.
 
-    ENV must be 'testing' and postgres env vars must be set before calling.
+    Steps performed:
+    1. Initialize storage tables (vaults, clients) using model schemas
+    2. Create a test client with generated credentials
+    3. Set up the 'vault' vault's SECRET_KEY for client secret hashing
+    4. Grant the test client full access to the 'vault' label
+
+    Environment variables set:
+    - SECRET_KEY: The vault service's secret key
+    - CLIENT_ID: Test client identifier
+    - CLIENT_SECRET: Test client secret for authentication
+
+    Prerequisites:
+    - ENV must be 'testing'
+    - PostgreSQL environment variables must be configured
     """
     require.env("testing")
 
-    # Initialize storage-backed vault and client resources for testing.
-    # The project now uses resource-backed storage (campus.auth.resources).
+    # Initialize storage-backed resources for the auth service
     from campus.auth.resources import vault as auth_vault
     from campus.auth.resources import client as auth_client
     from campus.model.client import Client as ModelClient
 
-    # Initialize storage tables for vaults and clients using the proper
-    # init_from_model method which uses _model_to_sql_schema internally
+    # Initialize storage tables using model schemas
+    # This creates the database tables with proper column definitions
     auth_vault.init_storage()
     auth_client.init_storage()
 
-    # Set up vault's own SECRET_KEY (for client secret hashing)
-    # Store in the "vault" label (the vault service's own secrets)
+    # Configure the vault service's own SECRET_KEY
+    # This key is used for hashing client secrets
+    # Store in the "vault" label (the auth service's internal vault)
     vault_res = auth_vault["vault"]
     vault_res["SECRET_KEY"] = "vault-secret-key"
-
-    # Set in environment for code that reads env.SECRET_KEY directly
+    
+    # Also set in environment for code that reads env.SECRET_KEY directly
     env.SECRET_KEY = "vault-secret-key"
 
-    # Create client for testing (use consistent name) using ClientsResource
+    # Create a test client for authentication in tests
     client_name = "test-client"
     client_obj = auth_client.new(
         name=client_name, description="Campus test client")
 
-    # Generate and store a secret for the client (ClientResource.revoke sets a new secret)
+    # Generate a client secret (ClientResource.revoke() generates a new secret)
     client_id = client_obj.id
     client_res = auth_client[client_id]
     secret = client_res.revoke()
 
-    # Set client credentials in environment
+    # Set client credentials in environment for test authentication
     env.CLIENT_ID = client_id
     env.CLIENT_SECRET = secret
 
-    # Give client access to vault label
+    # Grant the test client full access to the 'vault' label
     client_res.access.grant("vault", ModelClient.access.ALL)
 
 
@@ -74,19 +85,41 @@ def give_vault_access(
         delete: bool | None = None,
         all: bool | None = None
 ):
-    """Give the configured client access to the labelled vault."""
+    """Grant the test client access to a specific vault label.
+    
+    This function configures access permissions for the test client to access
+    a vault with the given label. Access can be granted at different levels:
+    read, create, update, delete, or all (full access).
+    
+    Args:
+        label: The vault label to grant access to
+        read: Grant read access (optional)
+        create: Grant create access (optional)
+        update: Grant update access (optional)
+        delete: Grant delete access (optional)
+        all: Grant full access - cannot be combined with other access levels
+        
+    Raises:
+        ValueError: If 'all' is specified along with other access levels
+        
+    Prerequisites:
+        - ENV must be 'testing'
+        - CLIENT_ID environment variable must be set
+    """
     require.env("testing")
     client_id = require.envvar("CLIENT_ID")
 
-    # all cannot be specified with the other access levels
+    # Validate that 'all' is not combined with specific access levels
     if all and (read or create or update or delete):
         raise ValueError("Cannot specify 'all' with other access values")
 
-    # Use the new auth resources instead of deprecated campus.vault
+    # Use auth resources to configure client access permissions
     from campus.auth.resources import client as auth_client
     from campus.model.client import Client as ModelClient
 
     client_res = auth_client[client_id]
+    
+    # Build access value from specified permissions
     access_value = 0
     if all:
         access_value = ModelClient.access.ALL

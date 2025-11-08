@@ -1,38 +1,37 @@
 """tests.fixtures.api
 
-Functions for initialising campus.api for testing use
+Functions for initializing campus.api service fixtures for testing.
+
+This module sets up vault secrets needed by campus.api service:
+- SECRET_KEY for Flask session management
+- Client access permissions for the api vault
 """
 
-from . import require
+from . import auth, postgres, require
 
 
 def init():
-    """Initialize API fixtures for testing.
-
-    This function:
-    - Sets up campus.api SECRET_KEY in 'campus.api' vault
-    - Gives client access to 'campus.api' label
-
-    ENV must be 'testing' and client credentials must be set before calling.
-    This should be called after vault fixtures are initialized.
-
-    Note: campus.api is a separate deployment that accesses campus.auth via campus_python.
-    However, for testing purposes, we directly manipulate the auth resources to set up
-    the necessary vault data without needing to make HTTP calls.
+    """Initialize API service fixtures for testing.
+    
+    This function configures the vault infrastructure needed for campus.api
+    service testing. It creates a vault labeled 'campus.api' with the necessary
+    secrets and grants the test client access to it.
+    
+    Steps performed:
+    1. Set SECRET_KEY in the 'campus.api' vault for Flask session management
+    2. Grant the test client full access to the 'campus.api' vault
+    
+    Prerequisites:
+    - ENV must be 'testing'
+    - Auth fixtures must be initialized (CLIENT_ID must be set)
     """
     require.env("testing")
-    client_id = require.envvar("CLIENT_ID")
-    require.envvar("CLIENT_SECRET")
 
-    # Set up campus.api SECRET_KEY in the "campus.api" vault using auth resources
-    # This is acceptable in tests since we're testing both services in the same process
+    # Set up the 'campus.api' vault with its SECRET_KEY for Flask sessions
     from campus.auth.resources import vault as auth_vault
-    from campus.auth.resources import client as auth_client
-    from campus.model.client import Client as ModelClient
 
-    api_vault = auth_vault["campus.api"]
-    api_vault["SECRET_KEY"] = "campus-api-secret-key"
+    vault_res = auth_vault["campus.api"]
+    vault_res["SECRET_KEY"] = "api-secret-key"
 
-    # Give test client access to campus.api vault
-    client_res = auth_client[client_id]
-    client_res.access.grant("campus.api", ModelClient.access.ALL)
+    # Grant the test client full access to the campus.api vault
+    auth.give_vault_access("campus.api", all=True)
