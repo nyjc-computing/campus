@@ -18,6 +18,10 @@ class TestYapper(unittest.TestCase):
         if hasattr(cls, 'service_manager'):
             cls.service_manager.close()
 
+        # Reset test storage to clear SQLite in-memory database
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
     def test_setup_vars(self):
         # After service setup, VAULTDB_URI should be available
         self.assertIsNotNone(env.VAULTDB_URI)
