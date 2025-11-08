@@ -4,6 +4,7 @@ Utilities for working with Python dataclasses and type signatures.
 """
 
 import dataclasses
+import types
 import typing
 
 
@@ -29,14 +30,16 @@ def is_optional(field: dataclasses.Field) -> bool:
     """Check if a dataclass field is Optional.
 
     A field is optional if:
-    - field.type annotation is of the form Optional[T] or Union[T, None]
+    - field.type annotation is of the form Optional[T], Union[T, None], or T | None
     - It has a field.default value
     """
-    t = field.type
-    origin = typing.get_origin(t)
-    if origin is not typing.Union:
+    field_type = field.type
+    origin = typing.get_origin(field_type)
+    # Check for both typing.Union (Optional[T]) and types.UnionType (T | None)
+    is_union = origin is typing.Union or isinstance(field_type, types.UnionType)    
+    if not is_union:
         return False
-    args = typing.get_args(t)
+    args = typing.get_args(field_type)
     if type(None) not in args:
         return False
     if not has_default(field):
