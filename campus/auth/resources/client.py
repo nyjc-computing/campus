@@ -59,7 +59,7 @@ class ClientsResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for client authentication."""
-        client_storage.init_from_model("clients", campus.model.Client)
+        client_storage.init_from_model("vault_clients", campus.model.Client)
         access_storage.init_from_model(
             "vault_access", campus.model.ClientAccess
         )
