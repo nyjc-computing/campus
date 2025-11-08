@@ -12,7 +12,7 @@ Test Principles:
 """
 
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from campus.common.utils import utc_time
 
@@ -52,8 +52,6 @@ class TestUTCTimeAfter(unittest.TestCase):
         """Test that after() without time parameter adds to current time."""
         before = utc_time.now()
         result = utc_time.after(hours=1)
-        after = utc_time.now()
-
         # Should be approximately 1 hour from before
         delta = result - before
         self.assertAlmostEqual(delta.total_seconds(), 3600, delta=5)

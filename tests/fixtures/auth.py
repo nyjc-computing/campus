@@ -9,10 +9,9 @@ This module sets up the backend resources needed by campus.auth:
 - Access permissions
 """
 
-import time
-
-from . import postgres, require, setup
 from campus.common import env
+
+from . import require
 
 
 def init():

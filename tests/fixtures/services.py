@@ -78,8 +78,8 @@ class ServiceManager:
         # This uses the helper in campus.storage.testing which sets
         # env.STORAGE_MODE = "1".
         try:
-            import campus.storage.testing as storage_testing
-            storage_testing.configure_test_storage()
+            import campus.storage.testing
+            campus.storage.testing.configure_test_storage()
         except Exception:
             # If for some reason the testing helper can't be imported,
             # continue; downstream storage.init() may still handle test mode.
@@ -176,8 +176,8 @@ class ServiceManager:
             delattr(env, "CLIENT_SECRET")
 
         # Reset test storage
-        from campus.storage.testing import reset_test_storage
-        reset_test_storage()
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
 
     def __enter__(self):
         """Context manager entry."""
