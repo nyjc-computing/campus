@@ -9,6 +9,9 @@ from campus.common import env
 def set_test_env_vars():
     """Set basic testing environment variables."""
     env.ENV = "testing"
+    # Note: env.DEPLOY is intentionally NOT set here.
+    # DEPLOY should only be set for specific deployment contexts.
+    # Tests that require a specific deployment should set DEPLOY themselves.
 
 
 def set_postgres_env_vars():
