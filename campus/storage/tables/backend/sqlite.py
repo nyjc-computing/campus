@@ -113,14 +113,15 @@ class SQLiteTable(TableInterface):
 
     def _get_table_columns(self) -> List[str]:
         """Get the list of column names for this table.
-        
+
         Returns an empty list if the table doesn't exist yet.
         """
         assert self._connection is not None, "Database connection not initialized"
         cursor = self._connection.cursor()
         try:
             cursor.execute(f"PRAGMA table_info({self.name})")
-            columns = [row[1] for row in cursor.fetchall()]  # row[1] is the column name
+            # row[1] is the column name
+            columns = [row[1] for row in cursor.fetchall()]
             return columns
         except sqlite3.OperationalError:
             # Table doesn't exist yet
@@ -128,7 +129,7 @@ class SQLiteTable(TableInterface):
 
     def _serialize_row(self, row: Dict[str, Any]) -> tuple:
         """Serialize a row for storage using actual table columns.
-        
+
         This method gets the actual columns from the table and creates a tuple
         with values in the correct order, using None for missing values.
         """
@@ -198,15 +199,16 @@ class SQLiteTable(TableInterface):
     def insert_one(self, row: Dict[str, Any]):
         """Insert a row into the table using actual table columns."""
         assert self._connection is not None, "Database connection not initialized"
-        
+
         columns = self._get_table_columns()
         if not columns:
-            raise RuntimeError(f"Table '{self.name}' does not exist. Call init_from_model() or init_from_schema() first.")
-        
+            raise RuntimeError(
+                f"Table '{self.name}' does not exist. Call init_from_model() or init_from_schema() first.")
+
         placeholders = ", ".join(["?" for _ in columns])
         columns_sql = ", ".join([f'"{col}"' for col in columns])
         values = []
-        
+
         for col in columns:
             value = row.get(col)
             # Convert complex types to JSON strings for storage
@@ -235,7 +237,7 @@ class SQLiteTable(TableInterface):
         # Build UPDATE statement for only the columns being updated
         assert self._connection is not None, "Database connection not initialized"
         columns = self._get_table_columns()
-        
+
         # Filter to only columns that exist in the table and are in the updated row
         set_clauses = []
         values = []
@@ -247,10 +249,10 @@ class SQLiteTable(TableInterface):
                 if value is not None and not isinstance(value, (str, int, float, bool, type(None))):
                     value = json.dumps(value)
                 values.append(value)
-        
+
         if not set_clauses:
             return  # Nothing to update
-        
+
         values.append(row_id)  # For the WHERE clause
         set_sql = ", ".join(set_clauses)
 
