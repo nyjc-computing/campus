@@ -36,7 +36,11 @@ def is_expired(ts: datetime | float, *, at_time: datetime | None = None, thresho
     # Convert to float timestamp
     ts = ts.timestamp() if isinstance(ts, datetime) else ts
     at_ts = (at_time or now()).timestamp()
-    return (at_ts - ts) > -threshold
+    # A timestamp is considered expired when the difference between the
+    # reference time (`at_time` or now) and the timestamp is greater
+    # than the provided threshold (i.e. more than `threshold` seconds in
+    # the past).
+    return (at_ts - ts) > threshold
 
 
 def from_rfc3339(dtstr: str) -> datetime:

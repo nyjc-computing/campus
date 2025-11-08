@@ -88,7 +88,18 @@ def _model_to_sql_schema(name: str, model: type[Model]) -> str:
 
 
 class SQLiteTable(TableInterface):
-    """SQLite implementation of the table storage interface."""
+    """SQLite implementation of the table storage interface.
+
+    TODO: Current implementation has a mismatch between table creation and CRUD operations.
+    - init_from_model() creates tables with full schema (e.g., id, created_at, label, key, value)
+    - CRUD operations (_serialize_row, _deserialize_row, insert_one, etc.) expect simplified 
+      schema (id, created_at, data) with JSON serialization.
+
+    INTENDED BEHAVIOR (Option B): Tables should use full schema with proper columns per model field.
+    This allows SQLite to enforce constraints properly during testing.
+    - init_from_model() is correct as-is
+    - CRUD operations need refactoring to serialize/deserialize based on actual table columns
+    """
 
     # Class-level connection to ensure all tables share the same in-memory database
     _connection: Optional[sqlite3.Connection] = None

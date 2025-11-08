@@ -15,8 +15,8 @@ from pathlib import Path
 
 import tests.fixtures.storage as storage_fixtures
 import tests.fixtures.yapper as yapper_fixtures
-import tests.fixtures.vault as vault_fixtures
-import tests.fixtures.apps as apps_fixtures
+import tests.fixtures.auth as auth_fixtures
+import tests.fixtures.api as api_fixtures
 import tests.fixtures.setup as setup
 from campus.common import env
 
@@ -330,10 +330,10 @@ def main():
         # Skip PostgreSQL/MongoDB check for now
         print("🔍 Skipping PostgreSQL/MongoDB connectivity check (assume working)")
 
-        # Initialize vault fixtures only (creates test client)
-        print("🔐 Initializing vault fixtures...")
-        vault_fixtures.init()
-        print("✅ Vault fixtures initialized")
+        # Initialize auth fixtures only (creates test client)
+        print("🔐 Initializing auth fixtures...")
+        auth_fixtures.init()
+        print("✅ Auth fixtures initialized")
 
         # Initialize storage fixtures (independent of other services)
         print("🗃️  Initializing storage fixtures...")
@@ -374,12 +374,12 @@ def main():
         print("⏳ Allowing database changes to fully commit...")
         time.sleep(2)
 
-        # Initialize apps fixtures (requires vault to be running)
-        print("🏫 Initializing apps fixtures (requires vault to be running)...")
-        apps_fixtures.init()
-        print("✅ Apps fixtures initialized")
+        # Initialize API fixtures (requires vault to be running)
+        print("🏫 Initializing API fixtures (requires vault to be running)...")
+        api_fixtures.init()
+        print("✅ API fixtures initialized")
 
-        # Start apps service (requires yapper database to be initialized)
+        # Start API service (requires yapper database to be initialized)
         service_manager.start_apps()
         if not service_manager.wait_for_health('Campus Apps', config.apps_health_url):
             return False

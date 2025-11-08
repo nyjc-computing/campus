@@ -13,7 +13,7 @@ import sys
 # General fixtures
 from tests.fixtures import require, setup
 # Service-specific fixtures
-from tests.fixtures import storage, vault, yapper
+from tests.fixtures import storage, auth, yapper
 from campus.common import env
 
 # Add the project root to Python path so we can import from tests
@@ -94,10 +94,10 @@ def main():
     print("")
 
     try:
-        # Initialize vault first (creates CLIENT_ID/CLIENT_SECRET)
-        print("🔐 Initializing vault fixtures...")
-        vault.init()
-        print("✅ Vault fixtures initialized")
+        # Initialize auth first (creates CLIENT_ID/CLIENT_SECRET)
+        print("🔐 Initializing auth fixtures...")
+        auth.init()
+        print("✅ Auth fixtures initialized")
         print("")
 
         # Initialize yapper (creates yapperdb + vault secrets, no service)

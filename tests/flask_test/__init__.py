@@ -19,12 +19,10 @@ __all__ = [
     "FlaskTestResponse",
     "configure_for_testing",
     "create_test_app",
-    "create_test_client",
-    "create_test_client_from_manager",
 ]
 
 from .client import FlaskTestClient
 from .response import FlaskTestResponse
-from .factory import create_test_client, create_test_client_from_manager, create_test_app
+from .factory import create_test_app
 from .configure import configure_for_testing
 

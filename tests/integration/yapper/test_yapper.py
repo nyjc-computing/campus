@@ -29,10 +29,12 @@ class TestYapper(unittest.TestCase):
 
     def test_yapper_vars(self):
         # The yapper database URI should be stored in the vault after service setup
-        # We can test this by trying to get the vault value
-        import campus.vault
-        vault = campus.vault.get_vault("yapper")
-        yapperdb_uri = vault.get("YAPPERDB_URI")
+        # Test that yapper can access its vault data through the proper service boundary
+        import campus_python
+
+        campus = campus_python.Campus()
+        yapper_vault = campus.auth.vaults["yapper"]
+        yapperdb_uri = yapper_vault["YAPPERDB_URI"]
         self.assertIsNotNone(yapperdb_uri)
 
     def test_yapper_init(self):

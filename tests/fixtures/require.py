@@ -1,4 +1,4 @@
-"""tests.fixtures.vault
+"""tests.fixtures.require
 
 Functions for asserting the existence of test prerequisites.
 """
