@@ -48,7 +48,8 @@ def encode_http_basic_auth(username: str, password: str) -> str:
 def generate_api_key(length: int = 32) -> str:
     """Generate a secure random API key.
 
-    The API key is URL-safe, unique, and uses a cryptographically secure random number generator.
+    The API key is URL-safe, unique, and uses a cryptographically secure
+    random number generator.
 
     Args:
         length: Length of the API key (default: 32).
@@ -73,7 +74,8 @@ def generate_authorization_code() -> str:
 def generate_client_secret(length: int = 64) -> str:
     """Generate a secure random client secret.
 
-    The secret is URL-safe and uses a cryptographically secure random number generator.
+    The secret is URL-safe and uses a cryptographically secure random
+    number generator.
 
     Args:
         length: Length of the client secret (default: 64).
@@ -84,7 +86,8 @@ def generate_client_secret(length: int = 64) -> str:
     return secrets.token_urlsafe(length)
 
 def generate_otp(length: int = 6) -> str:
-    """Generate a secure random OTP of specified length (default: 6 digits).
+    """Generate a secure random OTP of specified length
+    (default: 6 digits).
 
     Args:
         length: Length of the OTP (default: 6).
@@ -104,7 +107,8 @@ def hash_client_secret(secret: str, key: str) -> str:
 
     Args:
         secret: The client secret to hash.
-        key: The HMAC key used for hashing (default: "default_hmac_key").
+        key: The HMAC key used for hashing
+            (default: "default_hmac_key").
 
     Returns:
         A base64-encoded HMAC hash of the client secret.
@@ -133,7 +137,8 @@ def verify_otp(plain_otp: str, hashed_otp: str) -> bool:
         hashed_otp: The hashed OTP to compare against.
 
     Returns:
-        True if the plaintext OTP matches the hashed OTP, False otherwise.
+        True if the plaintext OTP matches the hashed OTP,
+        False otherwise.
     """
     plain_bytes = plain_otp.encode('utf-8')
     hashed_bytes = hashed_otp.encode('utf-8')
