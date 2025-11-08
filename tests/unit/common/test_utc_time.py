@@ -234,12 +234,12 @@ class TestUTCTimeTimestamp(unittest.TestCase):
         epoch = datetime(1970, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         result = utc_time.to_timestamp(epoch)
         self.assertEqual(result, 0)
-        
         # Known timestamp: 2025-01-01 00:00:00 UTC
         dt = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         result = utc_time.to_timestamp(dt)
-        # This should be a positive number greater than 2024
-        self.assertGreater(result, 1735689600)  # 2025-01-01 in seconds
+        # This should be a positive number greater than or equal to the
+        # known timestamp for 2025-01-01 00:00:00 UTC
+        self.assertGreaterEqual(result, 1735689600)  # 2025-01-01 in seconds
     
     def test_from_timestamp_returns_datetime(self):
         """Test that from_timestamp() returns datetime with UTC timezone."""
