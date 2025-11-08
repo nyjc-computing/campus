@@ -36,7 +36,7 @@ def is_optional(field: dataclasses.Field) -> bool:
     field_type = field.type
     origin = typing.get_origin(field_type)
     # Check for both typing.Union (Optional[T]) and types.UnionType (T | None)
-    is_union = origin is typing.Union or isinstance(field_type, types.UnionType)    
+    is_union = origin is typing.Union or isinstance(field_type, types.UnionType)
     if not is_union:
         return False
     args = typing.get_args(field_type)

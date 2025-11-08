@@ -37,5 +37,5 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     if isinstance(app, flask.Flask):
         from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)
-    
+
     app.register_blueprint(bp)
