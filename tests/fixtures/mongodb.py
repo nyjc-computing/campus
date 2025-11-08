@@ -95,17 +95,23 @@ def ensure_database_exists(database_name: str) -> None:
         database_name: Name of the database to ensure exists
 
     Raises:
+        RuntimeError: If MongoDB connection fails or database cannot be ensured
         ServerSelectionTimeoutError: If MongoDB connection fails
         OperationFailure: If authentication fails
     """
     print(f"🗃️  Ensuring MongoDB database '{database_name}' exists...")
 
-    if database_exists(database_name):
-        print(f"✅ MongoDB database '{database_name}' already exists")
-    else:
-        print(f"📝 Creating MongoDB database '{database_name}'...")
-        create_database(database_name)
-        print(f"✅ MongoDB database '{database_name}' created successfully")
+    try:
+        if database_exists(database_name):
+            print(f"✅ MongoDB database '{database_name}' already exists")
+        else:
+            print(f"📝 Creating MongoDB database '{database_name}'...")
+            create_database(database_name)
+            print(f"✅ MongoDB database '{database_name}' created successfully")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to ensure MongoDB database '{database_name}' exists: {e}"
+        ) from e
 
 
 @devops.require_env(devops.TESTING)
