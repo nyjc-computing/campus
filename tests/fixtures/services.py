@@ -67,10 +67,9 @@ class ServiceManager:
             ServiceManager: Self for method chaining
         """
         # Ensure we're running in the testing environment for safety.
-        # If devops.ENV is not TESTING, override it for the duration of tests.
-        # This fixture is only used by the test suite and must run in testing mode.
-        if devops.ENV != devops.TESTING:
-            devops.ENV = devops.TESTING
+        # The env module is where ENV should be set during tests.
+        # We check devops.ENV (read-only module constant) and set env.ENV if needed.
+        if env.ENV != devops.TESTING:
             env.ENV = devops.TESTING
 
         if self._setup_done:
