@@ -42,11 +42,38 @@ _TYPEMAP = {
 }
 
 
+def _get_base_type(field_type):
+    """Get the base Python type for a field type.
+
+    Returns one of: bool, int, float, str (or None if not a recognized type).
+    Handles both built-in types and schema types (which are subclasses).
+    """
+    # If it's already a base type, return it directly
+    if field_type in (bool, int, float, str):
+        return field_type
+
+    try:
+        # Check in order: bool, int, float, str (bool is subclass of int)
+        if issubclass(field_type, bool):
+            return bool
+        if issubclass(field_type, int):
+            return int
+        if issubclass(field_type, float):
+            return float
+        if issubclass(field_type, str):
+            return str
+    except TypeError:
+        # issubclass() raises TypeError if field_type is not a class
+        pass
+    return None
+
+
 def _field_to_sql_schema(field: dataclasses.Field) -> str:
     """Convert a dataclass field to a SQL column definition."""
     field_name = field.name
     field_type = field.type
-    sql_type = _TYPEMAP.get(field_type, "TEXT")
+    base_type = _get_base_type(field_type) or str
+    sql_type = _TYPEMAP[base_type]
     sql_field_constraints = []
 
     if field_name == "__constraints__":
@@ -144,7 +171,13 @@ class SQLiteTable(TableInterface):
         return tuple(values)
 
     def _deserialize_row(self, sqlite_row) -> Dict[str, Any]:
-        """Deserialize a row from storage using actual table columns."""
+        """Deserialize a row from storage using actual table columns.
+
+        TODO: Type conversion issue - SQLite returns all values as strings in row_factory mode.
+        Need to use PRAGMA table_info to get column types and cast values appropriately.
+        For example, INTEGER columns should return int, REAL should return float, etc.
+        Currently this causes issues with bitwise operations on integer fields like 'access'.
+        """
         if sqlite_row is None:
             return {}
 
