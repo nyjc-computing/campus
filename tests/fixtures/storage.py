@@ -10,8 +10,8 @@ def init():
     """Initialize storage fixtures for testing.
 
     This function:
-    - Ensures PostgreSQL storagedb database exists
-    - Ensures MongoDB storagedb database exists  
+    - Ensures PostgreSQL storagedb database exists (skipped in SQLite test mode)
+    - Ensures MongoDB storagedb database exists (skipped in SQLite test mode)
     - Initializes 'storage' vault label
     - Sets POSTGRESDB_URI and MONGODB_URI as vault secrets
     - Sets MONGODB_NAME as vault secret
@@ -23,8 +23,11 @@ def init():
     client_id = require.envvar("CLIENT_ID")
     require.envvar("CLIENT_SECRET")
 
-    postgres.ensure_database_exists("storagedb")
-    mongodb.ensure_database_exists("storagedb")
+    # Skip database setup if using in-memory SQLite for testing
+    import campus.storage.testing
+    if not campus.storage.testing.is_test_mode():
+        postgres.ensure_database_exists("storagedb")
+        mongodb.ensure_database_exists("storagedb")
 
     # Use the new auth resources instead of deprecated campus.vault
     from campus.auth.resources import vault as auth_vault
@@ -38,11 +41,17 @@ def init():
     # Set up storage vault with database URIs as secrets
     storage_vault = auth_vault["campus.api"]
 
-    # PostgreSQL URI
-    postgres_uri = setup.get_db_uri("storagedb")
-    storage_vault["POSTGRESDB_URI"] = postgres_uri
+    # In test mode, use dummy URIs since we're using SQLite
+    if campus.storage.testing.is_test_mode():
+        storage_vault["POSTGRESDB_URI"] = "sqlite:///:memory:"
+        storage_vault["MONGODB_URI"] = "mongodb://localhost:27017"
+        storage_vault["MONGODB_NAME"] = "storagedb"
+    else:
+        # PostgreSQL URI
+        postgres_uri = setup.get_db_uri("storagedb")
+        storage_vault["POSTGRESDB_URI"] = postgres_uri
 
-    # MongoDB URI and database name
-    mongodb_uri = mongodb.get_mongodb_uri("storagedb")
-    storage_vault["MONGODB_URI"] = mongodb_uri
-    storage_vault["MONGODB_NAME"] = "storagedb"
+        # MongoDB URI and database name
+        mongodb_uri = mongodb.get_mongodb_uri("storagedb")
+        storage_vault["MONGODB_URI"] = mongodb_uri
+        storage_vault["MONGODB_NAME"] = "storagedb"
