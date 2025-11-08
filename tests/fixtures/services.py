@@ -157,7 +157,6 @@ class ServiceManager:
             auth_client[client_id].delete()
         except Exception:
             pass
-            pass
 
     @classmethod
     def cleanup_shared(cls):
