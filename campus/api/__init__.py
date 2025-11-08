@@ -74,4 +74,4 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(bp)
 
     if isinstance(app, flask.Flask):
-        app.secret_key = campus_auth.vaults[env.DEPLOY]["SECRET_KEY"]
+        app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)

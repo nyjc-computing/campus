@@ -19,6 +19,10 @@ class TestWSGI(unittest.TestCase):
         if hasattr(cls, 'service_manager'):
             cls.service_manager.close()
 
+        # Reset test storage to clear SQLite in-memory database
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
     def setUp(self):
         # Clean up wsgi module imports at start of each test
         if 'wsgi' in sys.modules:
