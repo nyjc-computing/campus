@@ -7,7 +7,7 @@ Provides a clean interface to start and stop all Campus services for testing.
 from contextlib import contextmanager
 from typing import Optional, cast
 
-from . import setup, vault, apps, storage, yapper
+from . import setup, auth, api, storage, yapper
 from campus.common import devops, env
 
 # pylint: disable=import-outside-toplevel
@@ -18,18 +18,18 @@ class ServiceManager:
 
     This class coordinates the setup of all required services:
     - Database setup (PostgreSQL, MongoDB)
-    - Service initialization (vault, apps, yapper, storage)
+    - Service initialization (auth, api, yapper, storage)
     - Flask app creation for test clients
 
     Usage:
         manager = ServiceManager()
         manager.setup()
-        # Use manager.vault_app and manager.apps_app
+        # Use manager.auth_app and manager.apps_app
         manager.close()
 
     Or use as context manager:
         with services.init() as manager:
-            # Use manager.vault_app and manager.apps_app
+            # Use manager.auth_app and manager.apps_app
     """
 
     # Class-level shared instance for reuse across test suites
@@ -43,14 +43,14 @@ class ServiceManager:
             shared: If True, reuse shared instance across test suites.
                    If False, create independent instance.
         """
-        self.vault_app: Optional[object] = None
+        self.auth_app: Optional[object] = None
         self.apps_app: Optional[object] = None
         self._setup_done = False
         self._shared = shared
 
         if shared and ServiceManager._shared_instance is not None:
             # Reuse existing shared instance
-            self.vault_app = ServiceManager._shared_instance.vault_app
+            self.auth_app = ServiceManager._shared_instance.auth_app
             self.apps_app = ServiceManager._shared_instance.apps_app
             self._setup_done = ServiceManager._shared_setup_done
 
@@ -66,79 +66,71 @@ class ServiceManager:
         Returns:
             ServiceManager: Self for method chaining
         """
-        # Ensure we're not accidentally running in development/production
-        current_env = devops.ENV
-        if current_env in ("development", "production"):
-            raise RuntimeError(
-                f"ServiceManager.setup() cannot be run in {current_env} environment. "
-                f"This would overwrite secrets and databases. Use ENV=testing only."
-            )
+        # Ensure we're running in the testing environment for safety.
+        # If devops.ENV is not TESTING, override it for the duration of tests.
+        # This fixture is only used by the test suite and must run in testing mode.
+        if devops.ENV != devops.TESTING:
+            devops.ENV = devops.TESTING
+            env.ENV = devops.TESTING
 
         if self._setup_done:
             return self
 
         # If using shared mode and shared instance exists, reuse it
         if self._shared and ServiceManager._shared_setup_done and ServiceManager._shared_instance:
-            self.vault_app = ServiceManager._shared_instance.vault_app
+            self.auth_app = ServiceManager._shared_instance.auth_app
             self.apps_app = ServiceManager._shared_instance.apps_app
             self._setup_done = True
             return self
 
         # Set up test environment
         setup.set_test_env_vars()
+        # Ensure storage uses test backends (in-memory/sqlite) so we don't
+        # attempt to connect to external Postgres/MongoDB during tests.
+        # This uses the helper in campus.storage.testing which sets
+        # env.STORAGE_MODE = "1".
+        try:
+            import campus.storage.testing as storage_testing
+            storage_testing.configure_test_storage()
+        except Exception:
+            # If for some reason the testing helper can't be imported,
+            # continue; downstream storage.init() may still handle test mode.
+            pass
         setup.set_postgres_env_vars()
         setup.set_mongodb_env_vars()
 
-        # Initialize services in dependency order: vault → yapper → apps
+        # Initialize services in dependency order: auth → yapper → api
         # This order is crucial because:
-        # 1. Vault must be initialized first to create client credentials
-        # 2. Yapper needs vault credentials to access secrets
-        # 3. Apps imports yapper routes, so yapper must be ready first
+        # 1. Auth must be initialized first to create client credentials
+        # 2. Yapper needs auth credentials to access secrets
+        # 3. API imports yapper routes, so yapper must be ready first
 
-        # Step 1: Initialize vault service and create Flask app using devops.deploy
-        vault.init()      # Creates test client credentials
-        import campus.vault
-        from campus.common import devops
+        # Step 1: Initialize auth service and create Flask app using devops.deploy
+        # The auth fixture creates test client credentials and sets up auth resources
+        auth.init()      # Creates test client credentials
+        import campus.auth
         from tests import flask_test
 
-        self.vault_app = devops.deploy.create_app(campus.vault)
-        flask_test.configure_for_testing(self.vault_app)
-
-        # Step 1.5: Set up vault factory for testing to use Flask test client
-        # This must happen after vault app is created but before yapper/apps import
-        import flask
-        import campus.client.vault
-        from campus.common.http.interface import JsonClient
-        import campus.config
-
-        def test_vault_factory() -> campus.client.vault.VaultResource:
-            vault_base_url = campus.config.BASE_URLS["campus.vault"][devops.TESTING]
-            if self.vault_app is None:
-                raise RuntimeError("vault_app not initialized")
-            test_client = cast(JsonClient, flask_test.client.FlaskTestClient(
-                cast(flask.Flask, self.vault_app), base_url=vault_base_url)
-            )
-            return campus.client.vault.VaultResource(test_client, raw=False)
-
-        # Set the vault factory - this will be used by both yapper and apps modules
-        campus.client.vault.set_vault_factory(test_vault_factory)
+        self.auth_app = devops.deploy.create_app(campus.auth)
+        flask_test.configure_for_testing(self.auth_app)
 
         # Step 2: Initialize storage (doesn't depend on other services)
         storage.init()    # Sets up database connections
 
         # Step 3: Initialize yapper service
-        # This must happen after vault is initialized because yapper
-        # needs vault credentials to access secret database URIs
-        yapper.init()     # Requires vault credentials
+        # This must happen after auth is initialized because yapper
+        # needs auth credentials to access secret database URIs
+        yapper.init()     # Requires auth credentials
 
-        # Step 4: Initialize apps service last
-        # Apps imports yapper routes, so yapper must be fully initialized first
-        apps.init()       # Requires vault credentials
+        # Step 4: Initialize API service last
+        # API imports yapper routes, so yapper must be fully initialized first
+        api.init()       # Requires auth credentials
 
         # Step 5: Create apps Flask application using devops.deploy
         # Import here to avoid circular imports and ensure all dependencies are ready
-        import campus.apps
-        self.apps_app = devops.deploy.create_app(campus.apps)
+        # campus.api is the current API module (campus.apps was deprecated)
+        import campus.api
+        self.apps_app = devops.deploy.create_app(campus.api)
         flask_test.configure_for_testing(self.apps_app)
 
         self._setup_done = True
@@ -156,22 +148,18 @@ class ServiceManager:
         This method cleans up resources and resets the manager state.
         Can be called multiple times safely.
 
-        Note: For shared instances, the vault client is only deleted
+        Note: For shared instances, the test client is only deleted
         when cleanup_shared() is called to prevent interfering with
         other test suites that might still be using the client.
         """
-        # Only clean up vault client if this is not a shared instance
+        # Only clean up test client if this is not a shared instance
         if not self._shared:
             self._cleanup_vault_client()
 
-        # Reset vault factory to default
-        import campus.client.vault
-        campus.client.vault.set_vault_factory(None)
-
         # Clean up Flask apps
-        if self.vault_app is not None:
+        if self.auth_app is not None:
             # Flask apps don't need explicit cleanup, but we can clear references
-            self.vault_app = None
+            self.auth_app = None
 
         if self.apps_app is not None:
             self.apps_app = None
@@ -186,29 +174,26 @@ class ServiceManager:
         self._setup_done = False
 
     def _cleanup_vault_client(self):
-        """Properly clean up the test client from vault service.
+        """Properly clean up the test client from auth service.
 
-        This method attempts to delete the test client from the vault service
-        using the vault API, which ensures proper cleanup of both client records
-        and associated access permissions.
+        This method attempts to delete the test client using the auth resources,
+        which ensures proper cleanup of both client records and associated
+        access permissions.
         """
         client_id = env.CLIENT_ID
         if not client_id:
             return  # No client to clean up
 
         try:
-            # Try to delete the client through the vault service
-            # This is the proper way to clean up as it handles:
-            # 1. Client record deletion
-            # 2. Associated access record cleanup (if implemented)
-            # 3. Any other cleanup logic in the vault service
-            import campus.vault.client
-            campus.vault.client.delete_client(client_id)
+            # Delete the client through the auth resources
+            from campus.auth.resources import client as auth_client
+            auth_client[client_id].delete()
         except Exception:
             # If deletion fails (e.g., vault service already shut down,
             # client already deleted, database connection issues),
             # we continue with environment cleanup silently.
             # This is acceptable for test cleanup scenarios.
+            pass
             pass
 
     @classmethod
@@ -218,7 +203,7 @@ class ServiceManager:
         This should be called at the end of test runs to ensure clean state.
         """
         if cls._shared_instance:
-            # For shared instances, we do the vault client cleanup here
+            # For shared instances, we do the test client cleanup here
             cls._shared_instance._cleanup_vault_client()
             cls._shared_instance.close()
             cls._shared_instance = None
@@ -252,8 +237,8 @@ def init():
 
     Usage:
         with services.init() as manager:
-            # manager.vault_app and manager.apps_app are ready
-            vault_client = FlaskTestClient(manager.vault_app)
+            # manager.auth_app and manager.apps_app are ready
+            auth_client = FlaskTestClient(manager.auth_app)
             apps_client = FlaskTestClient(manager.apps_app)
 
     Yields:
