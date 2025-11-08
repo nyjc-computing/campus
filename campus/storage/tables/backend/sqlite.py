@@ -90,15 +90,9 @@ def _model_to_sql_schema(name: str, model: type[Model]) -> str:
 class SQLiteTable(TableInterface):
     """SQLite implementation of the table storage interface.
 
-    TODO: Current implementation has a mismatch between table creation and CRUD operations.
-    - init_from_model() creates tables with full schema (e.g., id, created_at, label, key, value)
-    - CRUD operations (_serialize_row, _deserialize_row, insert_one, etc.) expect simplified 
-      schema (id, created_at, data) with JSON serialization.
-
-    INTENDED BEHAVIOR (Option B): Tables should use full schema with proper columns per model field.
-    This allows SQLite to enforce constraints properly during testing.
-    - init_from_model() is correct as-is
-    - CRUD operations need refactoring to serialize/deserialize based on actual table columns
+    This implementation uses the full schema defined by the model, storing each
+    field as a separate column in the SQLite table. This allows SQLite to enforce
+    constraints properly during testing.
     """
 
     # Class-level connection to ensure all tables share the same in-memory database
@@ -117,30 +111,52 @@ class SQLiteTable(TableInterface):
                 ":memory:", check_same_thread=False)
             cls._connection.row_factory = sqlite3.Row
 
+    def _get_table_columns(self) -> List[str]:
+        """Get the list of column names for this table.
+        
+        Returns an empty list if the table doesn't exist yet.
+        """
+        assert self._connection is not None, "Database connection not initialized"
+        cursor = self._connection.cursor()
+        try:
+            cursor.execute(f"PRAGMA table_info({self.name})")
+            columns = [row[1] for row in cursor.fetchall()]  # row[1] is the column name
+            return columns
+        except sqlite3.OperationalError:
+            # Table doesn't exist yet
+            return []
+
     def _serialize_row(self, row: Dict[str, Any]) -> tuple:
-        """Serialize a row for storage."""
-        row_id = row.get(PK)
-        created_at = row.get("created_at")
-
-        # Store all other fields as JSON in the data column
-        data = {k: v for k, v in row.items() if k not in [PK, "created_at"]}
-        data_json = json.dumps(data) if data else "{}"
-
-        return (row_id, created_at, data_json)
+        """Serialize a row for storage using actual table columns.
+        
+        This method gets the actual columns from the table and creates a tuple
+        with values in the correct order, using None for missing values.
+        """
+        columns = self._get_table_columns()
+        values = []
+        for col in columns:
+            value = row.get(col)
+            # Convert complex types to JSON strings for storage
+            if value is not None and not isinstance(value, (str, int, float, bool, type(None))):
+                value = json.dumps(value)
+            values.append(value)
+        return tuple(values)
 
     def _deserialize_row(self, sqlite_row) -> Dict[str, Any]:
-        """Deserialize a row from storage."""
+        """Deserialize a row from storage using actual table columns."""
         if sqlite_row is None:
             return {}
 
-        row = {PK: sqlite_row[PK]}
-        if sqlite_row["created_at"]:
-            row["created_at"] = sqlite_row["created_at"]
-
-        # Parse the JSON data
-        if sqlite_row["data"]:
-            data = json.loads(sqlite_row["data"])
-            row.update(data)
+        row = {}
+        for key in sqlite_row.keys():
+            value = sqlite_row[key]
+            # Try to parse JSON strings back to objects
+            if isinstance(value, str) and value and (value.startswith('{') or value.startswith('[')):
+                try:
+                    value = json.loads(value)
+                except (json.JSONDecodeError, ValueError):
+                    pass  # Keep as string if not valid JSON
+            row[key] = value
 
         return row
 
@@ -180,19 +196,33 @@ class SQLiteTable(TableInterface):
         return True
 
     def insert_one(self, row: Dict[str, Any]):
-        """Insert a row into the table."""
+        """Insert a row into the table using actual table columns."""
         assert self._connection is not None, "Database connection not initialized"
-        row_id, created_at, data_json = self._serialize_row(row)
+        
+        columns = self._get_table_columns()
+        if not columns:
+            raise RuntimeError(f"Table '{self.name}' does not exist. Call init_from_model() or init_from_schema() first.")
+        
+        placeholders = ", ".join(["?" for _ in columns])
+        columns_sql = ", ".join([f'"{col}"' for col in columns])
+        values = []
+        
+        for col in columns:
+            value = row.get(col)
+            # Convert complex types to JSON strings for storage
+            if value is not None and not isinstance(value, (str, int, float, bool, type(None))):
+                value = json.dumps(value)
+            values.append(value)
 
         cursor = self._connection.cursor()
         cursor.execute(
-            f"INSERT INTO {self.name} (id, created_at, data) VALUES (?, ?, ?)",
-            (row_id, created_at, data_json)
+            f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
+            tuple(values)
         )
         self._connection.commit()
 
     def update_by_id(self, row_id: str, update: Dict[str, Any]):
-        """Update a row by its ID."""
+        """Update a row by its ID using actual table columns."""
         # Get the existing row
         existing_row = self.get_by_id(row_id)
         if not existing_row:  # Empty dict means not found
@@ -202,14 +232,32 @@ class SQLiteTable(TableInterface):
         updated_row = existing_row.copy()
         updated_row.update(update)
 
-        # Store the updated row
+        # Build UPDATE statement for only the columns being updated
         assert self._connection is not None, "Database connection not initialized"
-        row_id_new, created_at, data_json = self._serialize_row(updated_row)
+        columns = self._get_table_columns()
+        
+        # Filter to only columns that exist in the table and are in the updated row
+        set_clauses = []
+        values = []
+        for col in columns:
+            if col != PK and col in updated_row:  # Don't update the primary key
+                set_clauses.append(f'"{col}" = ?')
+                value = updated_row[col]
+                # Convert complex types to JSON strings for storage
+                if value is not None and not isinstance(value, (str, int, float, bool, type(None))):
+                    value = json.dumps(value)
+                values.append(value)
+        
+        if not set_clauses:
+            return  # Nothing to update
+        
+        values.append(row_id)  # For the WHERE clause
+        set_sql = ", ".join(set_clauses)
 
         cursor = self._connection.cursor()
         cursor.execute(
-            f"UPDATE {self.name} SET created_at = ?, data = ? WHERE id = ?",
-            (created_at, data_json, row_id)
+            f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
+            tuple(values)
         )
         self._connection.commit()
 
