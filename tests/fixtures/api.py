@@ -7,7 +7,7 @@ This module sets up vault secrets needed by campus.api service:
 - Client access permissions for the api vault
 """
 
-from . import auth, postgres, require
+from . import auth, require
 
 
 def init():
