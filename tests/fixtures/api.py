@@ -12,15 +12,15 @@ from . import auth, postgres, require
 
 def init():
     """Initialize API service fixtures for testing.
-    
+
     This function configures the vault infrastructure needed for campus.api
     service testing. It creates a vault labeled 'campus.api' with the necessary
     secrets and grants the test client access to it.
-    
+
     Steps performed:
     1. Set SECRET_KEY in the 'campus.api' vault for Flask session management
     2. Grant the test client full access to the 'campus.api' vault
-    
+
     Prerequisites:
     - ENV must be 'testing'
     - Auth fixtures must be initialized (CLIENT_ID must be set)

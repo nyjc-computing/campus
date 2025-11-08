@@ -16,10 +16,10 @@ from campus.common import devops, env
 
 class ServiceManager:
     """Manages Campus service instances for integration testing.
-    
+
     Coordinates initialization of campus.auth, campus.api, and related services
     with proper test fixtures and environment configuration.
-    
+
     Attributes:
         auth_app: Flask application for campus.auth service
         apps_app: Flask application for campus.api service
@@ -32,7 +32,7 @@ class ServiceManager:
 
     def __init__(self, shared=True):
         """Initialize ServiceManager.
-        
+
         Args:
             shared: Whether to reuse shared instance across test suites
         """
@@ -49,10 +49,10 @@ class ServiceManager:
 
     def setup(self):
         """Initialize all Campus services for integration testing.
-        
+
         Performs environment setup, database configuration, and service
         initialization in proper dependency order: auth → storage → yapper → api.
-        
+
         Returns:
             ServiceManager: Self for method chaining
         """
@@ -121,7 +121,7 @@ class ServiceManager:
 
     def close(self):
         """Clean up service instances and resources.
-        
+
         Resets manager state and cleans up resources. For shared instances,
         full cleanup occurs when cleanup_shared() is called.
         """
@@ -144,7 +144,7 @@ class ServiceManager:
 
     def _cleanup_auth_client(self):
         """Clean up the test client from auth service.
-        
+
         Deletes the test client to ensure proper cleanup of client records
         and associated access permissions.
         """
@@ -162,7 +162,7 @@ class ServiceManager:
     @classmethod
     def cleanup_shared(cls):
         """Clean up shared service instances and reset storage.
-        
+
         Should be called at the end of test runs to ensure clean state.
         """
         if cls._shared_instance:
@@ -192,15 +192,15 @@ class ServiceManager:
 @contextmanager
 def init():
     """Context manager for Campus service initialization and cleanup.
-    
+
     Provides convenient setup and teardown of services for integration testing.
     Ensures proper cleanup even if exceptions occur.
-    
+
     Usage:
         with services.init() as manager:
             auth_client = manager.auth_app.test_client()
             api_client = manager.apps_app.test_client()
-    
+
     Yields:
         ServiceManager: Configured service manager with Flask applications
     """
