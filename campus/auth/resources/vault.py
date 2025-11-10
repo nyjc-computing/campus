@@ -67,7 +67,6 @@ class VaultResource:
             value: The secret value to store
         """
         rows = vault_storage.get_matching({"key": key, "label": self.label})
-        # breakpoint()
         if not rows:
             vault_storage.insert_one({
                 "id": uid.generate_category_uid("vault"),

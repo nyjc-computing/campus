@@ -30,7 +30,8 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """
     from . import oauth_proxy, provider, routes
 
-    bp = provider.bp
+    bp = flask.Blueprint("auth", __name__, url_prefix="/auth/v1")
+    provider.init_app(bp)
     oauth_proxy.init_app(bp)
     routes.init_app(bp)
 
