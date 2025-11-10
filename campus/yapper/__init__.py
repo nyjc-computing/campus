@@ -73,7 +73,7 @@ def create(**kwargs) -> YapperInterface:
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
             try:
-                vault = campus_python.Campus().auth.vaults["yapper"]
+                vault = campus_python.Campus().auth.vaults["campus.yapper"]
                 yapperdb_uri = vault["YAPPERDB_URI"]
             except Exception as e:
                 raise ValueError(

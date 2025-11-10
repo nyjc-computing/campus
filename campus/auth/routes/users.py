@@ -1,4 +1,4 @@
-"""campus.vault.routes.users
+"""campus.auth.routes.users
 
 Flask routes for Campus user management.
 
