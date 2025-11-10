@@ -138,17 +138,43 @@ class EnvironmentProxy:
         # deployment.
         # So we import campus.auth here only within the campus.auth
         # deployment.
-        from campus.auth import resources
+        from campus.common import env
         from campus.model import ClientAccess
-        client_resource = resources.client[self.CLIENT_ID]
-        if not client_resource.access.check(
-                vault_label=vault_label,
-                permission=ClientAccess.READ,
-        ):
-            raise api_errors.ForbiddenError(
-                f"Access denied to vault label '{vault_label}'"
-            )
-        return resources.vault[vault_label][name]
+        deployment = env.get("DEPLOY")
+        if deployment is None:
+            raise OSError(f"Environment variable '{name}' required")
+        # If within a deployment, fall back on campus.auth vault access
+        if deployment == "campus.auth":
+            # campus.auth cannot rely on campus_python for vault access
+            # otherwise we create a circular dependency.
+            # Use internal resources access instead.
+            from campus.auth import resources
+            client_resource = resources.client[self.CLIENT_ID]
+            if not client_resource.access.check(
+                    vault_label=vault_label,
+                    permission=ClientAccess.READ,
+            ):
+                raise api_errors.ForbiddenError(
+                    f"Access denied to vault label '{vault_label}'"
+                )
+            try:
+                return resources.vault[vault_label][name]
+            except KeyError:
+                raise api_errors.InternalError(
+                    f"Vault secret '{name}' not found in label "
+                    f"'{vault_label}'"
+                )
+        else:
+            import campus_python
+            campus_auth = campus_python.Campus().auth
+            try:
+                return campus_auth.vaults[vault_label][name]
+            except KeyError:
+                breakpoint()
+                raise api_errors.InternalError(
+                    f"Vault secret '{name}' not found in label "
+                    f"'{vault_label}'")
+
 
     def keys(self) -> list[str]:
         """Get a list of all environment variable names.
