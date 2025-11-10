@@ -29,15 +29,14 @@ def init():
         postgres.ensure_database_exists("storagedb")
         mongodb.ensure_database_exists("storagedb")
 
-    # Use the new auth resources instead of deprecated campus.vault
     from campus.auth import resources as auth_resources
     from campus.model.client import ClientAccess
 
-    # Give test client access to storage vault
+    # Give test client access to vault
     client_resource = auth_resources.client[client_id]
     client_resource.access.grant("campus.api", ClientAccess.ALL)
 
-    # Set up storage vault with database URIs as secrets
+    # Set up vault with database URIs as secrets
     storage_vault = auth_resources.vault["campus.api"]
 
     # In test mode, use dummy URIs since we're using SQLite
