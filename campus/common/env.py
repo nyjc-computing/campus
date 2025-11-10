@@ -10,6 +10,8 @@ import os
 import sys
 from typing import Iterator
 
+from campus.common.errors import api_errors
+
 # Expected environment variables (for type checking)
 
 # Codespaces environment variables
@@ -114,7 +116,7 @@ class EnvironmentProxy:
 
     def getsecret(self, name: str, vault_label: str) -> str:
         """Get environment variable by name, falling back to retrieval
-        from campus.vault if not set.
+        from campus.auth if not set.
 
         Args:
             name (str): Name of the environment variable.
@@ -131,14 +133,22 @@ class EnvironmentProxy:
         """
         if name in self:
             return getattr(self, name)
-        from campus.vault import access, get_vault
-        access.raise_for_access(
-            self.CLIENT_ID,
-            vault_label,
-            access.READ
-        )
-        vault = get_vault(vault_label)
-        return vault.get(name)
+        # To facilitate deployment abstraction, env needs to be useable
+        # in campus.auth without campus.auth being imported in any other
+        # deployment.
+        # So we import campus.auth here only within the campus.auth
+        # deployment.
+        from campus.auth import resources
+        from campus.model import ClientAccess
+        client_resource = resources.client[self.CLIENT_ID]
+        if not client_resource.access.check(
+                vault_label=vault_label,
+                permission=ClientAccess.READ,
+        ):
+            raise api_errors.ForbiddenError(
+                f"Access denied to vault label '{vault_label}'"
+            )
+        return resources.vault[vault_label][name]
 
     def keys(self) -> list[str]:
         """Get a list of all environment variable names.
