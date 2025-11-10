@@ -56,7 +56,7 @@ def delete(label: str, key: str) -> campus_flask.JsonResponse:
     Returns: {}
     """
     del vault_resource[label][key]
-    get_yapper().emit('campus.vaults.delete')
+    get_yapper().emit('campus.vaults.key.delete', {"label": label, "key": key})
     return {}, 200
 
 @bp.get("/<label>/<key>")
@@ -91,5 +91,5 @@ def set(label: str, key: str, value: str) -> campus_flask.JsonResponse:
     }
     """
     vault_resource[label][key] = value
-    get_yapper().emit('campus.vaults.replace')
+    get_yapper().emit('campus.vaults.key.update', {"label": label, "key": key})
     return {"key": value}, 200
