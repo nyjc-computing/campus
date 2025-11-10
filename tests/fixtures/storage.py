@@ -32,11 +32,11 @@ def init():
     # Use the new auth resources instead of deprecated campus.vault
     from campus.auth.resources import vault as auth_vault
     from campus.auth.resources import client as auth_client
-    from campus.model.client import Client as ModelClient
+    from campus.model.client import ClientAccess
 
     # Give test client access to storage vault
     client_res = auth_client[client_id]
-    client_res.access.grant("campus.api", ModelClient.access.ALL)
+    client_res.access.grant("campus.api", ClientAccess.ALL)
 
     # Set up storage vault with database URIs as secrets
     storage_vault = auth_vault["campus.api"]

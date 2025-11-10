@@ -41,7 +41,7 @@ def init():
     # Initialize storage-backed resources for the auth service
     from campus.auth.resources import vault as auth_vault
     from campus.auth.resources import client as auth_client
-    from campus.model.client import Client as ModelClient
+    from campus.model.client import ClientAccess
 
     # Initialize storage tables using model schemas
     # This creates the database tables with proper column definitions
@@ -72,7 +72,7 @@ def init():
     env.CLIENT_SECRET = secret
 
     # Grant the test client full access to the 'vault' label
-    client_res.access.grant("vault", ModelClient.access.ALL)
+    client_res.access.grant("vault", ClientAccess.ALL)
 
 
 def give_vault_access(
@@ -114,22 +114,22 @@ def give_vault_access(
 
     # Use auth resources to configure client access permissions
     from campus.auth.resources import client as auth_client
-    from campus.model.client import Client as ModelClient
+    from campus.model.client import ClientAccess
 
     client_res = auth_client[client_id]
 
     # Build access value from specified permissions
     access_value = 0
     if all:
-        access_value = ModelClient.access.ALL
+        access_value = ClientAccess.ALL
     else:
         if read:
-            access_value += ModelClient.access.READ
+            access_value += ClientAccess.READ
         if create:
-            access_value += ModelClient.access.CREATE
+            access_value += ClientAccess.CREATE
         if update:
-            access_value += ModelClient.access.UPDATE
+            access_value += ClientAccess.UPDATE
         if delete:
-            access_value += ModelClient.access.DELETE
+            access_value += ClientAccess.DELETE
 
     client_res.access.grant(label, access_value)

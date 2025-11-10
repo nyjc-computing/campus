@@ -29,11 +29,11 @@ def init():
     # Use the new auth resources instead of deprecated campus.vault
     from campus.auth.resources import vault as auth_vault
     from campus.auth.resources import client as auth_client
-    from campus.model.client import Client as ModelClient
+    from campus.model.client import ClientAccess
 
     # Give test client access to yapper vault
     client_res = auth_client[client_id]
-    client_res.access.grant("yapper", ModelClient.access.ALL)
+    client_res.access.grant("yapper", ClientAccess.ALL)
 
     # Set up yapper vault with database URI as a secret
     yapper_vault = auth_vault["yapper"]
