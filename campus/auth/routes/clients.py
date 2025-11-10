@@ -93,7 +93,7 @@ def delete_client(client_id: schema.CampusID) -> campus_flask.JsonResponse:
     """
     client_resource[client_id].delete()
     get_yapper().emit('campus.clients.delete')
-    return {"client_id": client_id, "action": "deleted"}, 200
+    return {}, 200
 
 @bp.get("/<client_id>")
 @campus_flask.unpack_request

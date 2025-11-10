@@ -23,15 +23,14 @@ def _from_record(
 ) -> campus.model.Client:
     """Convert a storage record to a Client model instance."""
     return campus.model.Client(
-        id=schema.CampusID(
-            record.get("id", uid.generate_category_uid("client"))
-        ),
+        id=schema.CampusID(record["id"]),
         created_at=schema.DateTime(
             record.get("created_at", schema.DateTime.utcnow())
         ),
-        name=record['name'],
-        description=record['description'],
-        permissions=permissions or {}
+        name=record["name"],
+        description=record["description"],
+        permissions=permissions or {},
+        secret_hash=record["secret_hash"],
     )
 
 
@@ -47,8 +46,8 @@ def _get_client_permissions(client_id: schema.CampusID) -> dict[str, int]:
     access_records = access_storage.get_matching({"client_id": client_id})
     permissions: dict[str, int] = {}
     for record in access_records:
-        label = schema.String(record['label'])
-        access_flag = schema.Integer(record['access'])
+        label = schema.String(record["label"])
+        access_flag = schema.Integer(record["access"])
         permissions[label] = access_flag
     return permissions
 
@@ -134,12 +133,7 @@ class ClientsResource:
         records = client_storage.get_matching({})
         clients = []
         for record in records:
-            client_id = schema.CampusID(record['id'])
-            permissions = _get_client_permissions(client_id)
-            client = _from_record(
-                record=record,
-                permissions=permissions
-            )
+            client = campus.model.Client.from_storage(record)
             clients.append(client)
         return clients
 
@@ -155,7 +149,7 @@ class ClientsResource:
         Returns:
             Client instance
         """
-        client = _from_record(kwargs)
+        client = campus.model.Client(**kwargs)
         client_storage.insert_one(client.to_storage())
         return client
 
@@ -284,10 +278,10 @@ class ClientAccessResource:
             "label": vault_label,
         })
         if records:
-            current_access = records[0]['access']
+            current_access = records[0]["access"]
             new_access = current_access | permission
             access_storage.update_by_id(
-                records[0]['id'],
+                records[0]["id"],
                 {"access": new_access}
             )
         else:
@@ -311,8 +305,8 @@ class ClientAccessResource:
         )
         permissions: dict[str, int] = {}
         for record in access_records:
-            label = record['label']
-            access_flag = record['access']
+            label = record["label"]
+            access_flag = record["access"]
             permissions[label] = access_flag
         return permissions
 
@@ -334,12 +328,12 @@ class ClientAccessResource:
         })
         if not records:
             return
-        current_access = records[0]['access']
+        current_access = records[0]["access"]
         new_access = current_access & ~permission
         if new_access == 0:
-            access_storage.delete_by_id(records[0]['id'])
+            access_storage.delete_by_id(records[0]["id"])
         else:
             access_storage.update_by_id(
-                records[0]['id'],
+                records[0]["id"],
                 {"access": new_access}
             )
