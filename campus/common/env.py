@@ -170,7 +170,6 @@ class EnvironmentProxy:
             try:
                 return campus_auth.vaults[vault_label][name]
             except KeyError:
-                breakpoint()
                 raise api_errors.InternalError(
                     f"Vault secret '{name}' not found in label "
                     f"'{vault_label}'")
