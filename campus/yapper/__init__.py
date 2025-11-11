@@ -77,6 +77,7 @@ def create(**kwargs) -> YapperInterface:
                     campus_python.Campus()
                     .auth.vaults["campus.yapper"]
                 )
+                breakpoint()
                 yapperdb_uri = yapper_vault["YAPPERDB_URI"]
             except Exception as e:
                 raise ValueError(

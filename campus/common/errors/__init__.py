@@ -128,7 +128,9 @@ def init_app(app: flask.Flask) -> None:
     app.register_error_handler(
         auth_errors.AuthorizationError, handle_authorization_error
     )
-    app.register_error_handler(api_errors.APIError, handle_api_error)
+    app.register_error_handler(
+        api_errors.APIError, handle_api_error
+    )
     app.register_error_handler(
         token_errors.TokenError, handle_token_error
     )
