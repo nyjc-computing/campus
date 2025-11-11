@@ -118,6 +118,7 @@ class AuthProxy(ABC):
             scopes=scopes,
             target=target
         )
+        # Session id used as state parameter for CSRF protection
         flask.session[self._session_key] = str(authsession.id)
         return authsession
 

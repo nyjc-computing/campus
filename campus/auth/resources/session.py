@@ -120,8 +120,9 @@ class ProviderAuthSessionResource:
         target: schema.Url | None = None,
     ) -> campus.model.AuthSession:
         """Create a new session."""
+        session_id = uid.generate_category_uid(f"{self.provider}_session")
         session = _from_record({
-            "id": uid.generate_category_uid(f"{self.provider}-session"),
+            "id": session_id,
             "expiry_seconds": expiry_seconds,
             "client_id": client_id,
             "user_id": user_id,
@@ -131,7 +132,7 @@ class ProviderAuthSessionResource:
                 authorization_code
                 or secret.generate_authorization_code()
             ),
-            "state": state,
+            "state": state or session_id,
             "target": target,
         })
         try:
@@ -235,6 +236,8 @@ def _from_record(
         args["scopes"] = record["scopes"]
     if "authorization_code" in record:
         args["authorization_code"] = record["authorization_code"]
+    if "state" in record:
+        args["state"] = record["state"]
     if "target" in record and record["target"] is not None:
         args["target"] = schema.Url(record["target"])
     return campus.model.AuthSession(**args)
