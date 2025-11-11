@@ -25,7 +25,6 @@ __all__ = [
     "LoginSession",
     "Model",
     "OAuthToken",
-    "Token",
     "User",
     "UserCredentials",
     "Vault",
@@ -39,6 +38,5 @@ from .http.header import HttpHeader, HttpHeaderWithAuth
 from .emailotp import EmailOTP
 from .login import LoginSession
 from .session import AuthSession
-from .token import Token
 from .user import User
 from .vault import Vault
