@@ -13,7 +13,7 @@ from campus.apps.campusauth import authenticate_client
 from campus.common.errors import api_errors
 from campus.models import event  # Event model to be implemented
 from campus.common.utils import utc_time
-import campus.yapper as campus_yapper
+import campus.yapper as campus_yapper # TODO: IMPORTANT: Add event_id context when yapper emits
 
 bp = Blueprint('events', __name__, url_prefix='/events')
 bp.before_request(authenticate_client)
@@ -69,6 +69,7 @@ def get_event_details(event_id: str) -> flask_validation.JsonResponse:
     return record.to_dict(), 200
 
 
+# TODO: Refactor to not make all fields required (:cry:)
 @bp.patch('/<string:event_id>')
 def update_event(event_id: str) -> flask_validation.JsonResponse:
     """Edit an event occurrence."""
@@ -103,4 +104,4 @@ def delete_event(event_id: str) -> flask_validation.JsonResponse:
     events.delete(event_id, event.EventDelete.from_dict(payload))
 
     yapper.emit('campus.events.delete')
-    return {}, 200
+    return {}, 204 # 204 right now because no content lol.
