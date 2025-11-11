@@ -9,20 +9,18 @@ Main operations:
 - CRUD
 """
 
-from typing import TypedDict, Unpack
+from typing import Unpack, Any, Self, Type
+from dataclasses import dataclass, asdict
 
 from campus.common import schema
 from campus.common.utils import uid
 from campus.common.errors import api_errors
-# from campus.common.schema import CampusID
+from campus.common.schema import CampusID
 from campus.storage import get_table, errors as storage_errors
 from campus.common import devops
 from campus.models.base import BaseRecord
 
-# Create a new EventID with CampusID(uid.generate_category_uid("event", length=8))
-EventID = schema.CampusID
-
-# Database-related code
+### Database-related code
 
 """
 Database schema:
@@ -36,10 +34,9 @@ start_time: TEXT - time that event starts.
 duration: INTEGER - duration of event in seconds
 """
 
-# TODO: Implement some location validation through some master list?
+# TODO: Implement description.
 
 TABLE = "events"
-
 
 @devops.block_env(devops.PRODUCTION)
 def init_db():
@@ -57,57 +54,66 @@ def init_db():
             name TEXT,
             location TEXT,
             start_time TEXT,
+            location_url TEXT,
             duration INTEGER
         )
     """
     storage.init_table(schema)
 
 
-
-# TODO: Update to dataclass (https://docs.python.org/3.11/library/dataclasses.html)
 class EventRecord(BaseRecord):
     """The event record stored in the events table."""
-    id: EventID
     name: str
     location: str
     location_url: str
-    start_time: str  # rfc3339 string
-    duration: int  # time in minutes
-    # Also has created_at from BaseRecord.
+    start_time: schema.DateTime  
+    duration: int
+    # Also has created_at & ID from BaseRecord.
 
-# Request body schemas
+### Request body schemas
+@dataclass
+class BaseRequest:
+    """A dataclass with to_dict and from_dict, similar to a 
+    BaseRecord."""
+    @classmethod
+    def from_dict(cls: Type[Self], data: dict) -> Self:
+        """Create a record from a dictionary."""
+        return cls(**data)
 
+    def to_dict(self) -> dict[str, Any]:
+        """Convert the record to a dictionary."""
+        return asdict(self)
 
-class RequestEventInfo(TypedDict):
+@dataclass
+class EventGet(BaseRequest):
     """Request body schema for a request with event info as parameters."""
+    id: CampusID
+
+@dataclass
+class EventNew(BaseRequest):
+    """Request body schema for a events.new operation."""
     name: str
     location: str
     location_url: str
-    start_time: str  # rfc3339 string
-    duration: int  # time in minutes
+    start_time: schema.DateTime   
+    duration: int 
 
+@dataclass
+class EventDelete(BaseRequest):
+    """Request body schema for a deletion request."""
+    id: CampusID
 
-class EventNew(RequestEventInfo, total=True):
-    """Request body schema for a events.new operation."""
-    pass
-
-# total = False as all params are optional.
-
-
-class EventUpdate(RequestEventInfo, total=False):
+@dataclass
+class EventUpdate(BaseRequest):
     """Request body schema for a events.update operation."""
-    pass
+    id: CampusID
+    name: str
+    location: str
+    location_url: str
+    start_time: schema.DateTime    
+    duration: int  
 
-# events.delete and events.get do not need a request body schema as it takes no params.
-
-# Response body schemas
-
-
-# Response body schema representing the result of a events.get, events.update and events.new operation.
-EventResource = EventRecord
-
-# Model classes.
-
+### Model classes.
 
 class Event:
     """Event model for handling database operations related to events."""
@@ -116,21 +122,21 @@ class Event:
         """Initialize the User model with a table storage interface."""
         self.storage = get_table(TABLE)
 
-    def new(self, **fields: Unpack[EventNew]) -> EventRecord:
+    def new(self, fields: EventNew) -> EventRecord:
         """Create a new event."""
-        event_id = EventID(uid.generate_category_uid("event", length=16))
+        event_id = CampusID(uid.generate_category_uid("event", length=16))
 
         # Least ugly solution due to type gymnastics.
         dtnow = schema.DateTime.utcnow()
-        record = EventRecord(
-            id=event_id,
-            created_at=dtnow,
-            name=fields["name"],
-            location=fields["location"],
-            location_url=fields["location_url"],
-            duration=fields["duration"],
-            start_time=schema.DateTime(fields["start_time"])
-        )
+        record = EventRecord.from_dict({
+            "id": event_id,
+            "created_at": dtnow,
+            "name": fields.name,
+            "location": fields.location,
+            "location_url": fields.location_url,
+            "duration": fields.duration,
+            "start_time": fields.start_time
+        })
 
         try:
             self.storage.insert_one(record.to_dict())
@@ -143,8 +149,9 @@ class Event:
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e) from e
 
-    def _try_get(self, event_id: EventID) -> EventRecord:
-        """Tries to get event by event_id
+    def _try_get(self, event_id: CampusID) -> EventRecord:
+        """Private method.
+        Tries to get event by event_id
         Raises InternalError upon other errors."""
         try:
             event = self.storage.get_by_id(event_id)
@@ -161,24 +168,24 @@ class Event:
 
         return event
 
-    def delete(self, event_id: EventID) -> None:
+    def delete(self, fields: EventDelete) -> None:
         """Delete an event by id."""
-        self._try_get(event_id)  # Make sure it exists.
+        self._try_get(fields.id)  # Make sure it exists.
         try:
-            self.storage.delete_by_id(event_id)
+            self.storage.delete_by_id(fields.id)
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
-    def get(self, event_id: EventID) -> EventResource:
+    def get(self, fields: EventGet) -> EventRecord:
         """Get an event by id."""
-        return self._try_get(event_id)
+        return self._try_get(fields.id)
 
-    def update(self, event_id: EventID, **updates: Unpack[EventUpdate]) -> None:
+    def update(self, fields: EventUpdate) -> None:
         """Update an event by id."""
         # Check if user exists first
 
-        self._try_get(event_id)  # Make sure it exists.
+        self._try_get(fields.id)  # Make sure it exists.
         try:
-            self.storage.update_by_id(event_id, dict(updates))
+            self.storage.update_by_id(fields.id, fields.to_dict())
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
