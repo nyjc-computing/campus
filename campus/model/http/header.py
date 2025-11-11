@@ -9,6 +9,7 @@ __all__ = [
 ]
 
 from base64 import b64decode, b64encode
+from typing import Mapping
 
 
 class HttpAuthProperty(str):
@@ -80,10 +81,7 @@ class HttpHeader(dict):
         return HttpHeaderWithAuth({"Authorization": auth_property})
 
     @classmethod
-    def from_header(
-            cls,
-            header: dict[str, str]
-    ) -> "HttpHeader":
+    def from_header(cls, header: Mapping[str, str]) -> "HttpHeader":
         """Create an HTTP header dictionary from a raw header
         dictionary.
         """
@@ -92,6 +90,10 @@ class HttpHeader(dict):
         else:
             return HttpHeader(header)
 
+    def is_authorized(self) -> bool:
+        """Check if the header contains an Authorization property."""
+        return "Authorization" in self
+
     def user_agent(self) -> str | None:
         """Get the User-Agent header value."""
         return self.get("User-Agent", "Unknown")
@@ -99,6 +101,9 @@ class HttpHeader(dict):
 
 class HttpHeaderWithAuth(HttpHeader):
     """HTTP header with Authorization property."""
+
+    def is_authorized(self) -> bool:
+        return True
 
     @property
     def authorization(self) -> HttpAuthProperty:
