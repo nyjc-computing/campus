@@ -8,6 +8,7 @@ __all__ = [
     "circles",
     "emailotp",
     "users",
+    "events"
 ]
 
-from . import circles, emailotp, users, admin
+from . import circles, emailotp, users, admin, events
