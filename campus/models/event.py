@@ -71,6 +71,9 @@ class EventRecord(BaseRecord):
     # Also has created_at & ID from BaseRecord.
 
 ### Request body schemas
+# If a request requires the event id, it is passed as a seperate argument.
+# This is due to flask endpoint design.
+
 @dataclass
 class BaseRequest:
     """A dataclass with to_dict and from_dict, similar to a 
@@ -85,11 +88,6 @@ class BaseRequest:
         return asdict(self)
 
 @dataclass
-class EventGet(BaseRequest):
-    """Request body schema for a request with event info as parameters."""
-    id: CampusID
-
-@dataclass
 class EventNew(BaseRequest):
     """Request body schema for a events.new operation."""
     name: str
@@ -99,19 +97,24 @@ class EventNew(BaseRequest):
     duration: int 
 
 @dataclass
-class EventDelete(BaseRequest):
-    """Request body schema for a deletion request."""
-    id: CampusID
-
-@dataclass
 class EventUpdate(BaseRequest):
     """Request body schema for a events.update operation."""
-    id: CampusID
+    # The event ID is passed seperately.
     name: str
     location: str
     location_url: str
     start_time: schema.DateTime    
     duration: int  
+
+@dataclass
+class EventDelete(BaseRequest):
+    """Request body schema for a deletion request."""
+    # The event ID is passed seperately.
+
+@dataclass
+class EventGet(BaseRequest):
+    """Request body schema for a request with event info as parameters."""
+    # The event ID is passed seperately.
 
 ### Model classes.
 
@@ -168,24 +171,25 @@ class Event:
 
         return event
 
-    def delete(self, fields: EventDelete) -> None:
+    def delete(self, id: CampusID, fields: EventDelete) -> None:
         """Delete an event by id."""
-        self._try_get(fields.id)  # Make sure it exists.
+        self._try_get(id)  # Make sure it exists.
         try:
-            self.storage.delete_by_id(fields.id)
+            self.storage.delete_by_id(id)
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)
 
-    def get(self, fields: EventGet) -> EventRecord:
+    def get(self, id: CampusID, fields: EventGet) -> EventRecord:
         """Get an event by id."""
-        return self._try_get(fields.id)
+        return self._try_get(id)
 
-    def update(self, fields: EventUpdate) -> None:
+    def update(self, id: CampusID, fields: EventUpdate) -> EventRecord:
         """Update an event by id."""
         # Check if user exists first
 
-        self._try_get(fields.id)  # Make sure it exists.
+        self._try_get(id)  # Make sure it exists.
         try:
-            self.storage.update_by_id(fields.id, fields.to_dict())
+            self.storage.update_by_id(id, fields.to_dict())
+            return self._try_get(id)
         except Exception as e:
             raise api_errors.InternalError(message=str(e), error=e)

@@ -25,37 +25,7 @@ def init_app(app: Flask | Blueprint) -> None:
     """Initialise event routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
 
-# NOTE: AS THE MODEL ONLY DEALS IN DATETIMES, ALL STR <-> DATETIME CONVERSION IS HANDLED HERE!
-# TODO: This is probably an antipattern. The best solution would be for validate_request_and_extract_json and validate_json_response
-#       to do the type conversion, as it already has the templates anyway.
-
-DATETIME_PARAMS = ["event_time"]
-DATETIME_RETURNS = ["event_time", "created_at"]
-# Datetime returns can be inferred from type.
-def datetime_wrapper(func: Callable) -> Callable:
-    """Wraps a flask route to transform input datetimes to python datetimes
-    and output datetimes to rfc3339 strings."""
-    def datetime_wrapped(*args, **kwargs):
-        """Wrapped function produced by datetime_wrapper."""
-        raw_payload = flask_request.get_raw_json(on_error=api_errors.raise_api_error)
-
-        # Request body str -> datetime
-        for param in DATETIME_PARAMS:
-            if param in raw_payload:
-                raw_payload[param] = utc_time.from_rfc3339(raw_payload[param])
-        
-        data, status_code = func(*args, **kwargs)
-
-        # Reply datetime -> str
-        for param in DATETIME_RETURNS:
-            if param in data:
-                data[param] = utc_time.to_rfc3339(data[param])
-
-        return data, status_code
-    return datetime_wrapped
-
 @bp.post('/')
-@datetime_wrapper
 def new_event(*_: str) -> flask_validation.JsonResponse:
     """Create a new event."""
 
@@ -63,40 +33,74 @@ def new_event(*_: str) -> flask_validation.JsonResponse:
         event.EventNew.__annotations__,
         on_error=api_errors.raise_api_error,
     )
-    resource = events.new(**payload)
+
+    record = events.new(event.EventNew.from_dict(payload))
+
     flask_validation.validate_json_response(
-        event.EventResource.__annotations__,
-        resource.to_dict(),
+        event.EventRecord.__annotations__,
+        record.to_dict(),
         on_error=api_errors.raise_api_error,
     )
 
     yapper.emit('campus.events.new')
-    return resource.to_dict(), 200
+    return record.to_dict(), 200
 
 
 @bp.get('/<string:event_id>')
 def get_event_details(event_id: str) -> flask_validation.JsonResponse:
     """Get details of an event occurrence."""
-    # Abstract: fetch event details
-    return {"message": "Not implemented"}, 501
+
+    # Parse payload even though empty expected.
+    # To allow for future additions.
+    payload = flask_validation.validate_request_and_extract_json(
+        event.EventGet.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+
+    record = events.get(event_id, event.EventGet.from_dict(payload))
+
+    flask_validation.validate_json_response(
+        event.EventRecord.__annotations__,
+        record.to_dict(),
+        on_error=api_errors.raise_api_error,
+    )
+
+    # No event emitted.
+    return record.to_dict(), 200
 
 
 @bp.patch('/<string:event_id>')
-def edit_event(event_id: str) -> flask_validation.JsonResponse:
+def update_event(event_id: str) -> flask_validation.JsonResponse:
     """Edit an event occurrence."""
-    # Abstract: update event
-    return {"message": "Not implemented"}, 501
+
+    payload = flask_validation.validate_request_and_extract_json(
+        event.EventUpdate.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
+
+    record = events.update(event_id, event.EventUpdate.from_dict(payload))
+
+    flask_validation.validate_json_response(
+        event.EventRecord.__annotations__,
+        record.to_dict(),
+        on_error=api_errors.raise_api_error,
+    )
+
+    yapper.emit('campus.events.update')
+    return record.to_dict(), 200
 
 
 @bp.delete('/<string:event_id>')
 def delete_event(event_id: str) -> flask_validation.JsonResponse:
     """Delete an event occurrence."""
-    # Abstract: delete event
-    return {"message": "Not implemented"}, 501
+    # Parse payload even though empty expected.
+    # To allow for future additions.
+    payload = flask_validation.validate_request_and_extract_json(
+        event.EventDelete.__annotations__,
+        on_error=api_errors.raise_api_error,
+    )
 
+    events.delete(event_id, event.EventDelete.from_dict(payload))
 
-@bp.get('/')
-def list_events() -> flask_validation.JsonResponse:
-    """List event occurrences (with optional filters)."""
-    # Abstract: list events
-    return {"message": "Not implemented"}, 501
+    yapper.emit('campus.events.delete')
+    return {}, 200
