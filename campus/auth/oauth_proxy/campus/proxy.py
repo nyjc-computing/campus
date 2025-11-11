@@ -129,4 +129,5 @@ class CampusAuthProxy(base.AuthProxy):
             token=token,
         )
         self.finalize_authsession(authsession)
+        # TODO: Expand target URL to include hostname if relative
         return flask.redirect(authsession.target or flask.request.host_url)
