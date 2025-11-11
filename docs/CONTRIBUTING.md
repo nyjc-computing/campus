@@ -69,19 +69,25 @@ See [Testing Strategies](testing-strategies.md) for comprehensive approaches.
 
 ```
 campus/
-├── common/     # Shared utilities (no dependencies)
-├── vault/      # Secrets management (depends on common)
-├── storage/    # Data persistence (depends on common + vault)
-├── models/     # Business logic (depends on common)
-├── apps/       # Web applications (depends on all others)
-└── client/     # HTTP client library
+├── auth/       # Authentication and OAuth services
+│   ├── oauth_proxy/
+│   ├── resources/
+│   └── routes/
+├── api/        # RESTful API resources
+│   ├── resources/
+│   └── routes/
+├── common/     # Shared utilities
+├── model/      # Entity representation (dataclasses)
+├── services/   # Business services (email, etc.)
+├── storage/    # Data persistence layer
+├── integrations/# External service integrations
+└── yapper/     # Logging framework
 ```
 
 ### Key Rules
 
-- `vault` imports only from `common`
-- `storage` can use `vault` for secrets
-- `apps` can import from any package
+- `auth` and `api` contain business logic in `.resources` submodules
+- `model` contains only entity definitions (no business logic)
 - Use `poetry run python` for consistency
 - Follow [Style Guide](STYLE-GUIDE.md) for imports and coding standards
 
@@ -95,9 +101,9 @@ campus/
 
 ### Commit Messages
 ```bash
-feat(vault): add encrypted secret storage
+feat(auth): add OAuth provider support
 fix(storage): resolve PostgreSQL connection timeout
-docs(api): update authentication examples
+docs(api): update circle management examples
 ```
 
 ### Common Pitfalls

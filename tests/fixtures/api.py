@@ -28,10 +28,9 @@ def init():
     require.env("testing")
 
     # Set up the 'campus.api' vault with its SECRET_KEY for Flask sessions
-    from campus.auth.resources import vault as auth_vault
+    from campus.auth import resources as auth_resources
 
-    vault_res = auth_vault["campus.api"]
-    vault_res["SECRET_KEY"] = "api-secret-key"
+    auth_resources.vault["campus.api"]["SECRET_KEY"] = "api-secret-key"
 
     # Grant the test client full access to the campus.api vault
     auth.give_vault_access("campus.api", all=True)

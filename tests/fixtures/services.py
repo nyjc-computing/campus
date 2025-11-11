@@ -153,8 +153,8 @@ class ServiceManager:
             return
 
         try:
-            from campus.auth.resources import client as auth_client
-            auth_client[client_id].delete()
+            from campus.auth import resources as auth_resources
+            auth_resources.client[client_id].delete()
         except Exception:
             pass
 

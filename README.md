@@ -38,46 +38,39 @@ cd campus
 # Install dependencies
 poetry install
 
-# Run the application
-poetry run python main.py
+# Run the deployment
+poetry run python main.py campus.auth  # or
+poetry run python main.py campus.api
 ```
 
 > **Note**: Configuration is managed through environment variables and the vault service. See [Configuration](#-configuration) section below for details.
 
 ## 🏗️ Architecture
 
-Campus follows a **modular monolith** architecture with clear service boundaries. Services can be deployed together or separately, each with well-defined responsibilities and clean interfaces.
+Campus follows a **modular monolith** architecture with clear service boundaries.
 
 **Key Components:**
-- **Auth**: Authentication and OAuth services (with `.resources` for business logic)
-- **API**: RESTful API resources (with `.resources` for business logic)
-- **Model**: Entity representation (dataclasses for data structures)
-- **Storage**: Multi-backend data persistence
-- **Services**: Supporting services (email, integrations)
+- **Auth**: Authentication and OAuth (business logic in `.resources`)
+- **API**: RESTful resources for circles, email OTP (business logic in `.resources`)
+- **Model**: Entity representation (dataclasses only, no business logic)
+- **Storage**: Backend-agnostic data persistence
+- **Services**: Email, integrations
 
-Services are accessed through the `campus_python` client library for clean API interactions.
-
-For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
+Access via `campus_python` client library. See [docs/architecture.md](docs/architecture.md).
 
 ## 🔧 Configuration
 
 Campus uses environment variables for configuration:
 
 ```bash
-# Environment Configuration
-ENV="development"  # or "staging", "production"
-DEPLOY="campus.auth"  # Deployment mode: campus.auth, campus.api, etc.
-
-# Client Authentication (Required for campus_python client)
-CLIENT_ID="your-client-id"
+ENV="development"                     # or "staging", "production"
+DEPLOY="campus.auth"                  # campus.auth, campus.api, etc.
+CLIENT_ID="your-client-id"           # Required for campus_python
 CLIENT_SECRET="your-client-secret"
-
-# Authentication Service Database
-VAULTDB_URI="postgresql://user:pass@localhost/vault"
-
-Configuration and secrets are managed through the campus.auth service and accessed
-via the campus_python client library.
+POSTGRESDB_URI="postgresql://..."    # Auth service database
 ```
+
+Secrets managed via `campus.auth.vaults`, accessed through `campus_python` client.
 
 ## 📚 Documentation
 
@@ -88,9 +81,10 @@ via the campus_python client library.
 - **[📦 Packaging](docs/PACKAGING.md)** - Monorepo structure and distribution
 
 **Service Documentation:**
-- **[💾 Storage Documentation](campus/storage/README.md)** - Data persistence and backends
+- **[💾 Storage](campus/storage/README.md)** - Data persistence
+- **[🛠️ Common](campus/common/README.md)** - Shared utilities
 
-**Note:** The `campus_python` client library is used to interact with Campus services. See the [campus-api-python repository](https://github.com/nyjc-computing/campus-api-python) for client documentation.
+**Client**: See [campus-api-python](https://github.com/nyjc-computing/campus-api-python) for `campus_python` client docs.
 
 ## 🚀 Deployment
 
@@ -106,11 +100,11 @@ We welcome contributions! Please see our [contributing guidelines](docs/CONTRIBU
 
 ### Guidelines
 
-- **Architecture**: Follow established patterns in [campus/README.md](campus/README.md)
-- **Testing**: Maintain high test coverage (>90%)
-- **Documentation**: Update READMEs and docstrings
-- **Security**: Never commit secrets or credentials
-- **Modularity**: Keep services independent and loosely coupled
+- Follow patterns in [campus/README.md](campus/README.md)
+- Test coverage >90%
+- Update docs and docstrings
+- Never commit secrets
+- Keep services independent
 
 ## 🏫 About
 
