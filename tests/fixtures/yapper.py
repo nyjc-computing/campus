@@ -26,17 +26,15 @@ def init():
     if not campus.storage.testing.is_test_mode():
         postgres.ensure_database_exists("yapperdb")
 
-    # Use the new auth resources instead of deprecated campus.vault
-    from campus.auth.resources import vault as auth_vault
-    from campus.auth.resources import client as auth_client
+    from campus.auth import resources as auth_resources
     from campus.model.client import ClientAccess
 
-    # Give test client access to yapper vault
-    client_res = auth_client[client_id]
-    client_res.access.grant("yapper", ClientAccess.ALL)
+    # Give test client access to vault
+    client_resource = auth_resources.client[client_id]
+    client_resource.access.grant("yapper", ClientAccess.ALL)
 
-    # Set up yapper vault with database URI as a secret
-    yapper_vault = auth_vault["yapper"]
+    # Set up vault with database URI as a secret
+    yapper_vault = auth_resources.vault["yapper"]
 
     # In test mode, use a dummy URI since we're using SQLite
     if campus.storage.testing.is_test_mode():

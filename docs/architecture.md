@@ -9,6 +9,7 @@ Campus is structured as a **modular monolith** with clear service boundaries tha
 ```
 campus/
 ├── auth/           # Authentication and OAuth services
+│   ├── oauth_proxy/# OAuth provider integrations
 │   ├── resources/  # Business logic
 │   └── routes/     # HTTP endpoints
 ├── api/            # RESTful API resources  
@@ -56,7 +57,7 @@ campus/
                     └─────────────────┘
 ```
 
-**Client Access:** All services are accessed through the external `campus_python` client library.
+**Client Access:** Services accessed via external `campus_python` client library.
 
 ## Package Responsibilities
 
@@ -70,23 +71,20 @@ Authentication and OAuth services:
 
 ### `campus.api`
 RESTful API resources:
-- Circle (group) management endpoints
+- Circle (group) management
 - Email OTP verification
-- Resource-based routing and handlers
+- Resource handlers and routing
 - Business logic in `.resources` submodule
-- Authentication via `campus_python` client
 
 ### `campus.model`
-Entity representation only (no business logic):
-- Dataclass definitions for entities (User, Circle, Client, etc.)
-- Session and token structures
+Entity representation (no business logic):
+- Dataclass definitions (User, Circle, Client, Session, Token, etc.)
 - HTTP headers and credentials
 - Pure data structures with keyword-only init
 
 ### `campus.storage`
 Data persistence interfaces:
 - Backend-agnostic storage abstractions
-- Database connection management
 - Multi-backend support (PostgreSQL, MongoDB)
 - Consistent CRUD operations
 
@@ -132,15 +130,21 @@ Campus uses environment variables for core configuration:
 
 ### Environment Variables
 ```bash
-ENV="development"              # deployment environment
-DEPLOY="campus.auth"           # deployment mode (campus.auth, campus.api, etc.)
-CLIENT_ID="your-client-id"     # Client authentication
-CLIENT_SECRET="your-secret"    # Client authentication
-VAULTDB_URI="postgresql://..." # Authentication service database
+ENV="development"                # deployment environment
+DEPLOY="campus.auth"             # deployment mode (campus.auth, campus.api, etc.)
+CLIENT_ID="your-client-id"       # client authentication
+CLIENT_SECRET="your-secret"      # client authentication
+POSTGRESDB_URI="postgresql://..."# auth service database
 ```
 
 ### Secrets Management
-Configuration and secrets are managed through `campus.auth` and accessed via the `campus_python` client library.
+Secrets managed via `campus.auth.vaults` and accessed through `campus_python` client:
+
+```python
+import campus_python
+campus = campus_python.Campus()
+secret = campus.auth.vaults["deployment"]["key"]
+```
 
 ## Security Architecture
 
