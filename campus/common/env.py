@@ -183,5 +183,21 @@ class EnvironmentProxy:
         """
         return list(os.environ.keys())
 
+    def require(self, *envvars: str) -> None:
+        """Require that specified environment variables are set.
+
+        Args:
+            *envvars (str): Names of required environment variables.
+
+        Raises:
+            OSError: If any required environment variable is not set.
+        """
+        missing = [var for var in envvars if var not in self]
+        if missing:
+            raise OSError(
+                f"Missing required environment variables: "
+                f"{', '.join(missing)}"
+            )
+
 
 sys.modules[__name__] = EnvironmentProxy()  # type: ignore
