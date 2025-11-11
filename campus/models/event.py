@@ -34,8 +34,6 @@ start_time: TEXT - time that event starts.
 duration: INTEGER - duration of event in seconds
 """
 
-# TODO: Implement description.
-
 TABLE = "events"
 
 @devops.block_env(devops.PRODUCTION)
@@ -54,21 +52,29 @@ def init_db():
             name TEXT,
             location TEXT,
             start_time TEXT,
+            description TEXT,
             location_url TEXT,
             duration INTEGER
         )
     """
     storage.init_table(schema)
 
-
-class EventRecord(BaseRecord):
-    """The event record stored in the events table."""
+@dataclass
+class EventData:
+    """
+    This class contains all information associated to an event, 
+    except database-related information (no ID, no created_at).
+    Inherited by various event classes.
+    """
     name: str
     location: str
     location_url: str
     start_time: schema.DateTime  
     duration: int
-    # Also has created_at & ID from BaseRecord.
+    description: str
+
+class EventRecord(BaseRecord, EventData):
+    """The event record stored in the events table."""
 
 ### Request body schemas
 # If a request requires the event id, it is passed as a seperate argument.
@@ -88,23 +94,13 @@ class BaseRequest:
         return asdict(self)
 
 @dataclass
-class EventNew(BaseRequest):
+class EventNew(BaseRequest, EventData):
     """Request body schema for a events.new operation."""
-    name: str
-    location: str
-    location_url: str
-    start_time: schema.DateTime   
-    duration: int 
 
 @dataclass
-class EventUpdate(BaseRequest):
+class EventUpdate(BaseRequest, EventData):
     """Request body schema for a events.update operation."""
     # The event ID is passed seperately.
-    name: str
-    location: str
-    location_url: str
-    start_time: schema.DateTime    
-    duration: int  
 
 @dataclass
 class EventDelete(BaseRequest):
