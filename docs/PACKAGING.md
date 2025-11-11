@@ -28,19 +28,17 @@ weekly → staging → main
 
 ## Dependency Rules
 
-Services follow a clear hierarchy:
 ```
-auth, api → services, storage → common
-     ↘                       ↙
-       model (entity representation)
+auth, api → services, storage, model, common
+storage → common
+model → common
 ```
 
 **Key Constraints**:
-- `campus.auth` and `campus.api` can import from other packages
-- `campus.model` should have minimal dependencies (entity representation only)
-- `campus.storage` provides backend-agnostic persistence
-- `campus.common` should be self-contained
-- Business logic resides in `.resources` submodules within each service
+- `auth` and `api` contain business logic in `.resources` submodules
+- `model` contains only entity definitions (minimal dependencies)
+- `storage` provides backend-agnostic persistence
+- `common` is self-contained
 
 ## Installation
 
@@ -108,10 +106,10 @@ python -c "import campus_python; campus = campus_python.Campus()"
 
 ### Local Development
 ```bash
-# Install all dependencies
+# Install dependencies
 poetry install
 
-# Test package integrity  
+# Test imports
 poetry run python -c "import campus.auth, campus.api, campus.storage, campus.model"
 
 # Run tests
@@ -161,8 +159,8 @@ poetry env info
 # Test installation
 poetry run python -c "import campus"
 
-# Test all modules
-for module in vault storage apps common; do
+# Test modules
+for module in auth api storage model common; do
     poetry run python -c "import campus.$module"
 done
 ```

@@ -53,53 +53,57 @@ from .utils import validate_input
 
 ### Package Import Requirements
 
-Organise imports in ascending order by name, uppercase followed by lowercase.
+Organize imports in ascending order by name, uppercase then lowercase.
 
-**Critical**: Campus core packages must be imported at package level:
+**Preferred**: Module-level imports
 
 ```python
-# Required - import packages, not individual functions
-import campus.vault
+# Within same service
+from campus.auth import resources
+
+# Cross-service (e.g., from campus.api)
+from campus.auth import resources as auth_resources
+from campus.api import resources
+
+# Common utilities
+from campus.common import utils, devops
 import campus.storage
+from campus import model
 
-# Modules and submodules may be imported from packages
-from campus.common import devops
-from campus.common.utils import utc_time
-from campus.storage import get_collection, get_table
-
-# Then call functions through modules
-vault = campus.vault.get_vault()
-storage = campus.storage.create_storage()
-campus.common.devops.deploy.create_app()
+# Use through module namespaces
+user_id = utils.uid()
+timestamp = utils.utc_time()
+users = campus.storage.get_collection("users")
 ```
 
-**Avoid** importing individual functions from modules:
+**Avoid** importing individual functions:
 ```python
-# Don't do this - breaks polymorphism and modularity
-from campus.common.devops.deploy import create_app
-from campus.common.utils.utc_time import now
+# Don't do this - loses context
+from campus.common.utils import uid, utc_time
+from campus.auth.resources import create_user
 ```
 
-**Rationale**: Some modules intentionally have similarly named functions for polymorphism. Importing through modules maintains clear namespacing and prevents naming conflicts.
+Rationale: Module namespacing maintains clarity and prevents conflicts.
 
 ### Function Calling Conventions
 
-**Prefer** calling functions through their modules:
+Call functions through module namespaces:
 ```python
-# Good - clear module context
-.deploy.create_app()
-campus.vault.access.check_permission()
-
-# Acceptable for frequently used utilities
+# Good
 from campus.common import utils
-result = utils.validate_email(email)
+from campus.auth import resources
+
+user_id = utils.uid()
+user = resources.create_user(data)
 ```
 
-**Avoid** importing functions directly when modules provide context:
+Avoid direct function imports:
 ```python
-# Avoid - loses module context
-from campus.common.devops.deploy import create_app
-create_app()  # Unclear which create_app this is
+# Avoid - loses context
+from campus.common.utils import uid
+from campus.auth.resources import create_user
+
+uid()  # Unclear origin
 ```
 
 ### Docstrings
@@ -176,8 +180,8 @@ def validate_user_data(data: Dict) -> None:
 - **Test edge cases**: Include error conditions and boundary values
 
 ### Configuration
-- **Never commit secrets**: Use vault service for all sensitive configuration
-- **Document configuration**: Update docs when adding new config options
+- **Never commit secrets**: Use `campus.auth.vaults` for sensitive data
+- **Document configuration**: Update docs for new config options
 
 ## Code Review Guidelines
 
