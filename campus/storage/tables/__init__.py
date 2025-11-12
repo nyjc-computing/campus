@@ -29,11 +29,6 @@ def get_db(name: str):
         from .backend.postgres import PostgreSQLTable
         return PostgreSQLTable(name)
     else:
-        # Use SQLite for development when test backends are available
-        try:
-            from .backend.sqlite import SQLiteTable
-            return SQLiteTable(name)
-        except ImportError:
-            # Fall back to PostgreSQL if SQLite backend is not available
-            from .backend.postgres import PostgreSQLTable
-            return PostgreSQLTable(name)
+        # Use PostgreSQL table in development
+        from .backend.postgres import PostgreSQLTable
+        return PostgreSQLTable(name)

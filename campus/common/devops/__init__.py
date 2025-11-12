@@ -12,6 +12,8 @@ from typing import Literal
 from warnings import warn
 
 # Namespace exports
+from campus.common import env
+
 from . import deploy
 
 # typing stub
@@ -88,7 +90,7 @@ def load_dotenv() -> bool:
                     key, value = line.split("=", 1)
                     key = key.strip()
                     value = value.strip(" \"\'")
-                    os.environ.setdefault(key, value)
+                    setattr(env, key, value)
         return True
     return False
 

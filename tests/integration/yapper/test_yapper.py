@@ -1,6 +1,7 @@
 import unittest
 
 from tests.fixtures import services
+from campus.common import env
 
 
 class TestYapper(unittest.TestCase):
@@ -17,23 +18,27 @@ class TestYapper(unittest.TestCase):
         if hasattr(cls, 'service_manager'):
             cls.service_manager.close()
 
+        # Reset test storage to clear SQLite in-memory database
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
     def test_setup_vars(self):
-        import os
         # After service setup, VAULTDB_URI should be available
-        self.assertIsNotNone(os.environ.get("VAULTDB_URI"))
+        self.assertIsNotNone(env.VAULTDB_URI)
 
     def test_vault_vars_and_access(self):
-        import os
         # After service setup, vault credentials should be available
-        self.assertIsNotNone(os.environ.get("CLIENT_SECRET"))
-        self.assertIsNotNone(os.environ.get("CLIENT_ID"))
+        self.assertIsNotNone(env.CLIENT_SECRET)
+        self.assertIsNotNone(env.CLIENT_ID)
 
     def test_yapper_vars(self):
         # The yapper database URI should be stored in the vault after service setup
-        # We can test this by trying to get the vault value
-        import campus.vault
-        vault = campus.vault.get_vault("yapper")
-        yapperdb_uri = vault.get("YAPPERDB_URI")
+        # Test that yapper can access its vault data through the proper service boundary
+        import campus_python
+
+        campus = campus_python.Campus()
+        yapper_vault = campus.auth.vaults["yapper"]
+        yapperdb_uri = yapper_vault["YAPPERDB_URI"]
         self.assertIsNotNone(yapperdb_uri)
 
     def test_yapper_init(self):

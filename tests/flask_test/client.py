@@ -3,15 +3,15 @@
 FlaskTestClient adapter for Campus JsonClient protocol.
 """
 
-import os
 from typing import Any, Iterable, Mapping, Self
 from urllib.parse import urljoin
 
-from flask import Flask
+import flask
 
 from campus.common.http.interface import JsonDict, JsonResponse
 from campus.common.http.errors import AuthenticationError
-from campus.common.webauth.header import HttpHeaderDict
+from campus.model import HttpHeader
+from campus.common import env
 
 from .response import FlaskTestResponse
 
@@ -25,7 +25,7 @@ class FlaskTestClient:
 
     def __init__(
             self,
-            app: Flask,
+            app: flask.Flask,
             base_url: str | None = None,
             *,
             auth: Iterable[str] | str | None = None,
@@ -54,15 +54,15 @@ class FlaskTestClient:
     def _load_auth_headers(self) -> dict[str, str]:
         """Load authentication headers from environment variables."""
         # Try ACCESS_TOKEN first (Bearer auth)
-        access_token = os.getenv("ACCESS_TOKEN")
+        access_token = env.ACCESS_TOKEN
         if access_token:
-            return HttpHeaderDict.from_bearer_token(access_token)
+            return HttpHeader.from_bearer_token(access_token)
 
         # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
-        client_id = os.getenv("CLIENT_ID")
-        client_secret = os.getenv("CLIENT_SECRET")
+        client_id = env.CLIENT_ID
+        client_secret = env.CLIENT_SECRET
         if client_id and client_secret:
-            return HttpHeaderDict.from_credentials(client_id, client_secret)
+            return HttpHeader.from_credentials(client_id, client_secret)
 
         # No credentials found - unauthenticated requests are not yet supported
         raise AuthenticationError(

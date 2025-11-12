@@ -24,8 +24,10 @@ collection.delete_by_id("123")
 """
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
+from campus.common import devops
+from campus.model import Model
 from campus.storage.documents.interface import CollectionInterface, PK
 
 
@@ -130,6 +132,13 @@ class MemoryCollection(CollectionInterface):
         automatically created when accessed.
         """
         # No-op for memory collections - they're created automatically
+        pass
+
+    def init_from_model(self, name: str, model: type[Model]) -> None:
+        """Initialize the table from a Campus model definition."""
+        # Document stores do not need any initialization from model
+        # definitions as yet.
+        # This method is added for future use
         pass
 
     @classmethod

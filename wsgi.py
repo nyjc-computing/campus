@@ -6,8 +6,8 @@ Production deployment entry point for Gunicorn and other WSGI servers.
 This module provides the WSGI application instance that deployment platforms expect.
 
 Usage with Gunicorn:
-    DEPLOY=vault gunicorn --bind "0.0.0.0:$PORT" wsgi:app
-    DEPLOY=apps gunicorn --bind "0.0.0.0:$PORT" wsgi:app
+    DEPLOY=campus.auth gunicorn --bind "0.0.0.0:$PORT" wsgi:app
+    DEPLOY=campus.api gunicorn --bind "0.0.0.0:$PORT" wsgi:app
 
 The deployment mode is determined by the DEPLOY environment variable.
 """

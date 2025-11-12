@@ -2,16 +2,16 @@
 """Test Flask test client strategy with storage backends"""
 
 from tests.flask_test import FlaskTestClient, create_test_app
-import campus.vault
+import campus.auth
 
 
-def test_vault_with_storage():
-    """Test that vault works with test storage configuration."""
-    print("Testing vault service with test storage...")
+def test_auth_with_storage():
+    """Test that auth service works with test storage configuration."""
+    print("Testing auth service with test storage...")
 
-    # Create vault app using proper factory function
+    # Create auth app using proper factory function
     # This handles ENV, STORAGE_MODE, and test configuration automatically
-    app = create_test_app(campus.vault)
+    app = create_test_app(campus.auth)
 
     # Debug: Print all registered routes
     print("Registered routes:")
@@ -26,10 +26,10 @@ def test_vault_with_storage():
         print(f"Response: {response.json()}")
 
         if response.status_code == 200:
-            print("✅ Vault with test storage works! (Health check passed)")
+            print("✅ Auth service with test storage works! (Health check passed)")
         else:
             print(f"❌ Unexpected status code: {response.status_code}")
 
 
 if __name__ == "__main__":
-    test_vault_with_storage()
+    test_auth_with_storage()

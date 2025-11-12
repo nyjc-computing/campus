@@ -5,15 +5,17 @@ Schema definitions, enums, and constants for Campus.
 
 __all__ = [
     "CAMPUS_KEY",
-    "CampusID",
-    "UserID",
     "Array",
     "Boolean",
+    "CampusID",
     "DateTime",
+    "Email",
     "Integer",
     "Number",
     "Object",
     "String",
+    "Url",
+    "UserID",
 ]
 
 from .base import (
@@ -25,13 +27,12 @@ from .openapi import (
     Array,
     Boolean,
     DateTime,
+    Email,
     Integer,
     Number,
     Object,
     String,
+    Url,
 )
-
-
-from .base import CampusID, UserID
 
 CAMPUS_KEY = "id"

@@ -4,28 +4,41 @@ This document outlines key architectural patterns and development practices for 
 
 ## Core Abstractions
 
-### Campus Vault (`campus.vault`)
+### Campus Authentication (`campus.auth`)
 
-**Purpose**: Centralized secrets management for all Campus services.
+**Purpose**: Authentication, OAuth, and credential management.
 
 **Key Principles**:
-- All configuration secrets must go through vault (never use `os.getenv()` directly)
-- Vault service is independent - imports only from `campus.common`
-- Other services depend on vault for database credentials and API keys
+- User authentication and session management
+- OAuth proxy (Google, GitHub, Discord)
+- Client authentication via CLIENT_ID/CLIENT_SECRET
+- Business logic in `.resources` submodule
 
 **Usage Pattern**:
 ```python
-from campus.vault import get_vault
+import campus_python
 
-# Get secrets for your service
-vault = get_vault("service_name")
-database_url = vault.get("DATABASE_URL")
-api_key = vault.get("EXTERNAL_API_KEY")
+campus = campus_python.Campus()
+
+# Authenticate
+auth_result = campus.auth.root.authenticate(
+    client_id="your_client_id",
+    client_secret="your_client_secret"
+)
+
+# Access secrets
+secret = campus.auth.vaults["deployment"]["DATABASE_URL"]
 ```
 
-**Implementation Requirements**:
-- Handle vault unavailability gracefully
-- Never cache vault credentials in class variables
+**Implementation**:
+```python
+# Within campus.auth
+from campus.auth import resources
+from campus import model
+
+# Cross-service (e.g., in campus.api)
+from campus.auth import resources as auth_resources
+```
 
 ### Campus Storage (`campus.storage`)
 
@@ -40,20 +53,21 @@ All storage implementations must provide:
 
 **Usage Pattern**:
 ```python
-from campus.storage import get_collection, get_table
+import campus.storage
 
 # Document storage (MongoDB-style)
-users = get_collection("users", User)
+users = campus.storage.get_collection("users")
 user = users.create({"name": "John", "email": "john@example.com"})
 
 # Table storage (SQL-style)  
-sessions = get_table("sessions", Session)
+sessions = campus.storage.get_table("sessions")
 session = sessions.find_by_id("session_123")
 ```
 
 **Backend Abstraction**:
 ```python
-# Define interface first
+from abc import ABC, abstractmethod
+
 class StorageInterface(ABC):
     @abstractmethod
     def create(self, data: dict) -> dict:
@@ -63,70 +77,86 @@ class StorageInterface(ABC):
     def find_by_id(self, doc_id: str) -> dict:
         pass
 
-# Implement for specific backends
 class MongoDBStorage(StorageInterface):
     def create(self, data: dict) -> dict:
-        data['id'] = generate_id()
-        data['created_at'] = utc_time()
-        return self.collection.insert_one(data)
+        # Implementation
+        pass
 ```
 
-### Storage-Model-Views Pattern
+### Storage-Model-Resources Pattern
 
-**Architecture**: Separate data persistence, business logic, and presentation layers.
+**Architecture**: Separate data persistence, entity representation, and business logic.
 
 ```
-Views (apps/) → Models (models/) → Storage (storage/)
+Routes → Resources (.resources/) → Storage → Model
 ```
 
 **Implementation**:
 ```python
-# Storage layer - data persistence
-class UserStorage:
-    def create_user(self, data: dict) -> dict:
-        return self.collection.insert_one(data)
+# Model layer - entity representation (campus.model)
+from dataclasses import dataclass
 
-# Model layer - business logic
+@dataclass
 class User:
-    def __init__(self, storage: UserStorage):
-        self.storage = storage
-    
-    def create_with_validation(self, data: dict) -> dict:
-        self.validate_email(data['email'])
-        return self.storage.create_user(data)
+    id: str
+    name: str
+    email: str
+    created_at: str
 
-# View layer - HTTP endpoints
+# Resources layer - business logic (campus.auth.resources)
+from campus.auth import resources
+import campus.storage
+
+def create_user(data: dict) -> dict:
+    # Validation logic
+    users = campus.storage.get_collection("users")
+    return users.create(data)
+
+# Routes layer - HTTP endpoints
+from campus.auth import resources
+
 @app.route('/users', methods=['POST'])
 def create_user():
-    user_model = User(get_user_storage())
-    return user_model.create_with_validation(request.json)
+    return resources.create_user(request.json)
 ```
 
 ### Campus Common (`campus.common`)
 
-**Purpose**: Standardized utilities and patterns used across all services.
+**Purpose**: Shared utilities used across services.
 
 **Key Modules**:
-- `campus.common.utils` - ID generation, time handling, validation
-- `campus.common.devops` - Environment detection, configuration
-- `campus.common.errors` - Standardized error types
-- `campus.common.http` - HTTP utilities and middleware
+- `utils` - ID generation, time handling
+- `devops` - Environment detection
+- `errors` - Standardized error types
+- `http` - HTTP utilities
 
 **Usage Pattern**:
 ```python
-import campus.common.utils
-import campus.common.devops
+from campus.common import utils, devops, errors
 
-# Use through module namespaces
-user_id = campus.common.utils.uid()
-timestamp = campus.common.utils.utc_time()
-env = campus.common.devops.get_environment()
+user_id = utils.uid()
+timestamp = utils.utc_time()
+env = devops.ENV
 ```
 
-**Benefits**:
-- Consistent behavior across services
-- Centralized utilities reduce code duplication
-- Module namespacing prevents naming conflicts
+### Entity Models (`campus.model`)
+
+**Purpose**: Entity representation only - no business logic.
+
+**Key Principles**:
+- Dataclass definitions (User, Circle, Client, Session, Token, etc.)
+- Keyword-only init
+- No business logic
+
+**Usage Pattern**:
+```python
+from campus import model
+
+def process_user(user: model.User) -> dict:
+    return {"id": user.id, "name": user.name}
+```
+
+Business logic belongs in `.resources` submodules, not `campus.model`.
 
 ## Development Patterns
 
@@ -155,26 +185,27 @@ class SMTPSender(EmailSender):
 
 ### Function Calling Conventions
 
-**Prefer calling functions through modules**:
+**Prefer module-level imports**:
 ```python
-# Good - clear module context
-import campus.common.devops
-import campus.vault
+# Within same service
+from campus.auth import resources
 
-app = campus.common.devops.deploy.create_app()
-vault = campus.vault.get_vault("service_name")
+# Cross-service (e.g., from campus.api)
+from campus.auth import resources as auth_resources
+from campus.api import resources
+
+# Common utilities
+from campus.common import utils, devops
 ```
 
 **Avoid importing individual functions**:
 ```python
-# Avoid - loses module context and creates naming conflicts
-from campus.common.devops.deploy import create_app
-from campus.vault import get_vault
+# Avoid - loses context
+from campus.common.utils import uid, utc_time
+from campus.auth.resources import create_user
 
-create_app()  # Unclear which create_app this is
+uid()  # Unclear origin
 ```
-
-**Rationale**: Some modules have similarly named functions for polymorphism. Module namespacing maintains clarity and prevents conflicts.
 
 ## Common Pitfalls
 
@@ -189,9 +220,13 @@ create_app()  # Unclear which create_app this is
 - **Standard library shadowing**: Avoid directory names like `collections/`, `json/`
 
 ### Configuration Errors
-- **Never use `os.getenv()`**: All configuration must go through `campus.vault`
-- **Environment variables**: Use only for deployment settings (ENV, CLIENT_ID, etc.)
-- **Secrets management**: Store all API keys, database URLs in vault
+- **Use campus_python client**: Access config via `campus.auth.vaults`
+- **Environment variables**: Only for deployment (ENV, DEPLOY, CLIENT_ID, CLIENT_SECRET, POSTGRESDB_URI)
+- **Secrets management**: Access via `campus_python.Campus().auth.vaults[deployment][key]`
+
+### Architecture Violations
+- **Business logic in models**: Keep `campus.model` as pure data structures; put logic in `.resources`
+- **Missing .resources**: Each service (auth, api) should have its business logic in `.resources` submodule
 
 ### Testing Issues
 - **Use appropriate strategy**: See [Testing Strategies](testing-strategies.md)
@@ -219,17 +254,15 @@ create_app()  # Unclear which create_app this is
 3. **Test backwards compatibility** - Ensure existing code still works
 4. **Update all implementations** - If changing interfaces, update all backends
 
-## Testing and CI/CD
+### Testing and CI/CD
 
-### Testing Strategies
+Campus provides three testing strategies:
 
-Campus provides **three distinct testing strategies** for different use cases:
+1. **Development Server Testing** - Live Railway services
+2. **Local Service Testing** - Local background services (currently broken)
+3. **Flask Test Client Testing** - In-process, no network (fastest)
 
-1. **Development Server Testing** - Test against live Railway services with simulated data
-2. **Local Service Testing** - Run services locally in background for integration testing  
-3. **Flask Test Client Testing** - In-process testing with no network calls (fastest)
-
-**📖 See [Testing Strategies](testing-strategies.md) for comprehensive documentation and examples.**
+See [Testing Strategies](testing-strategies.md) for details.
 
 ### Import Shadowing Prevention
 

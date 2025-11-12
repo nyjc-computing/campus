@@ -44,12 +44,12 @@ def _validate_key_names(
     if required:
         missing_keys = valid_set - record_set
         if missing_keys:
-            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}")
+            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}") from None
     # all required keys are present
     if not ignore_extra:
         extra_keys = record_set - valid_set
         if extra_keys:
-            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}")
+            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}") from None
     # all keys are valid
 
 def get_requiredness_type(typ: type) -> tuple[Requiredness, type]:
@@ -102,7 +102,7 @@ def unpack_required_optional(
             case _:
                 raise AssertionError(
                     f"Unexpected state: requiredness={requiredness}, total={total}"
-                )
+                ) from None
     return factory(required), factory(optional)
 
 def _validate_key_names_types(
@@ -131,12 +131,12 @@ def _validate_key_names_types(
     if required:
         missing_keys = required_keys - record_set
         if missing_keys:
-            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}")
+            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}") from None
     # all required keys are present
     if not ignore_extra:
         extra_keys = record_set - required_keys - optional_keys
         if extra_keys:
-            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}")
+            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}") from None
     # all record keys are valid
     # Only validate keys that exist in the schema
     keys_to_validate = record_set if not ignore_extra else (record_set & (required_keys | optional_keys))
@@ -147,7 +147,7 @@ def _validate_key_names_types(
             raise TypeError(
                 f"Invalid type for key '{key}': expected {valid_keys[key].__name__}, "
                 f"got {type(record[key]).__name__}"
-            )
+            ) from None
 
 
 def validate_keys(

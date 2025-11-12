@@ -4,243 +4,202 @@ A modular Python application framework for educational institution management, b
 
 ## Overview
 
-Campus is organized as a collection of independent, loosely-coupled services that can be deployed together or separately. Each service follows the same architectural patterns while maintaining clear boundaries and avoiding circular dependencies.
+Campus is a modular monolith - services can deploy together or separately.
 
 ## Architecture
 
-### Package Structure
-
 ```
 campus/
-├── apps/           # Web applications and API services
-├── client/         # Client interfaces for accessing Campus services
+├── auth/           # Authentication and OAuth
+│   ├── oauth_proxy/
+│   ├── resources/  # Business logic
+│   └── routes/     # HTTP endpoints
+├── api/            # RESTful API resources
+│   ├── resources/  # Business logic
+│   └── routes/     # HTTP endpoints
 ├── common/         # Shared utilities and schemas
-├── models/         # Data models and business logic
-├── services/       # Business services (email, etc.)
-├── storage/        # Data persistence layer
-├── vault/          # Secrets management service
-└── workspace/      # Development workspace utilities
+├── model/          # Entity representation (dataclasses)
+├── services/       # Email, etc.
+├── storage/        # Data persistence
+├── integrations/   # External service configurations
+└── yapper/         # Logging framework
 ```
 
 ### Design Principles
 
-1. **Separation of Concerns**: Each package has a single, well-defined responsibility
-2. **Dependency Inversion**: Higher-level modules don't depend on lower-level modules
-3. **Interface Segregation**: Clients depend only on interfaces they actually use
-4. **Single Responsibility**: Each module has one reason to change
-5. **Open/Closed**: Open for extension, closed for modification
-6. **Circular Import Avoidance**: Clear dependency hierarchy prevents import cycles
+1. Separation of Concerns
+2. Dependency Inversion
+3. Interface Segregation
+4. Single Responsibility
+5. Open/Closed
+6. No Circular Imports
 
-### Service Independence
+### Services
 
-Each major service (`vault`, `storage`, `models`) is designed to be independently deployable:
-
-- **campus.vault**: Secrets management with its own database and authentication
-- **campus.storage**: Data persistence layer with flexible backend support
-- **campus.models**: Business logic and domain models
-- **campus.apps**: Web applications and API endpoints
-- **campus.services**: Supporting services (email, notifications, etc.)
+- **campus.auth**: Authentication, OAuth, credentials (`.resources` for business logic)
+- **campus.api**: Circles, email OTP (`.resources` for business logic)
+- **campus.storage**: Backend-agnostic data persistence
+- **campus.model**: Entity dataclasses (no business logic)
+- **campus.services**: Email, notifications
 
 ## Key Components
 
-### 🔐 Vault (`campus.vault`)
+### 🔐 Auth (`campus.auth`)
 
-Secure secrets management service with:
-- Independent PostgreSQL database (no circular dependencies)
-- Client authentication with CLIENT_ID/CLIENT_SECRET
-- Bitflag permission system (READ, CREATE, UPDATE, DELETE)
-- RESTful API with three blueprints:
-  - `/vault/*` - Secret operations
-  - `/access/*` - Permission management
-  - `/client/*` - Client management
+- PostgreSQL database (POSTGRESDB_URI)
+- Client authentication (CLIENT_ID/CLIENT_SECRET)
+- OAuth proxy (Google, GitHub, Discord)
+- Session/token handling
+
+### 🌐 API (`campus.api`)
+
+- Circle (group) management
+- Email OTP verification
+- Resource-based routing
 
 ### 💾 Storage (`campus.storage`)
 
-Abstract data persistence layer supporting:
-- Multiple backends (PostgreSQL, MongoDB, etc.)
+- Multiple backends (PostgreSQL, MongoDB)
 - Table/collection abstraction
 - Query builder interface
-- Connection pooling and transaction management
 
-### 🏛️ Models (`campus.models`)
+### 🏛️ Model (`campus.model`)
 
-Domain models and business logic:
-- User management and authentication
-- Circle (group) management and permissions
-- Session handling and state management
-- Email OTP verification
-- Source attribution and tracking
+Entity dataclasses:
+- User, Circle, Client, Session, Token
+- EmailOTP, HTTP headers, credentials
+- No business logic
 
-### 🌐 Apps (`campus.apps`)
+Business logic in `.resources` submodules (e.g., `campus.auth.resources`).
 
-Web applications and API services:
-- Flask applications with blueprint architecture
-- RESTful API endpoints
-- Authentication and authorization middleware
-- Health checks and monitoring
+### 📦 Services (`campus.services`)
 
-### 🔌 Client (`campus.client`)
+- Email notifications
+- External integrations
 
-HTTP-like interfaces for accessing Campus services:
-- Namespace-based imports to avoid circular dependencies
-- RESTful conventions (`users["id"].get()`, `vault["label"].set()`)
-- Automatic authentication and error handling
-- Individual service clients (`vault`, `users`, `circles`)
+### 🔌 Client Access
+
+Use `campus_python` client library:
+```python
+import campus_python
+campus = campus_python.Campus()
+secret = campus.auth.vaults["deployment"]["key"]
+```
+
+See [campus-api-python](https://github.com/nyjc-computing/campus-api-python).
 
 ### 🛠️ Common (`campus.common`)
 
-Shared utilities and schemas:
-- Configuration management and feature flags
-- Validation utilities (Flask integration, naming, records)
-- Schema definitions and data structures
-- Time utilities and UID generation
-- Secret management utilities
+- Configuration and feature flags
+- Validation utilities
+- Schema definitions
+- Time and UID utilities
 
 ## Usage Patterns
 
 ### Service Access
 
-Instead of direct imports that can create circular dependencies:
-
 ```python
-# ❌ Avoid - can create circular imports
-from campus.vault.model import Vault
-from campus.models.user import User
+import campus_python
 
-# ✅ Use - namespace clients prevent circular imports
-import campus.client.vault as vault
-import campus.client.users as users
+campus = campus_python.Campus()
 
-secret = vault["apps"].get("DATABASE_URL")
-user = users["user123"]
+# Authenticate
+campus.auth.root.authenticate(client_id="...", client_secret="...")
+
+# Access secrets
+secret = campus.auth.vaults["deployment"]["DATABASE_URL"]
+
+# Type hints
+from campus import model
+def process(user: model.User): ...
 ```
 
 ### Configuration
 
-Services use environment variables for configuration:
-
 ```bash
-# Vault service
-export VAULTDB_URI="postgresql://..."
+export POSTGRESDB_URI="postgresql://..."
 export CLIENT_ID="your_client_id"
 export CLIENT_SECRET="your_client_secret"
-
-# Storage service  
-export STORAGE_URI="postgresql://..."
-
-# Application secrets - SECRET_KEY now stored in vault under 'campus' label
-# No SECRET_KEY environment variable needed
+export DEPLOY="campus.auth"  # or "campus.api"
+export ENV="development"     # or "staging", "production"
 ```
 
 ### Development
 
-Each service can be developed and tested independently:
-
 ```bash
-# Test vault service
-cd campus/vault && python -m unittest
+# Auth service
+export DEPLOY=campus.auth
+poetry run python main.py
 
-# Run vault standalone
-python -c "from campus.vault import create_app; create_app().run()"
+# API service
+export DEPLOY=campus.api
+poetry run python main.py
 
-# Test client interfaces
-python -c "import campus.client.vault as vault; print(vault.list_vaults())"
+# Tests
+poetry run python tests/run_tests.py unit
 ```
 
 ## Deployment
 
-### Standalone Services
+```bash
+# Auth
+export DEPLOY=campus.auth
+gunicorn --bind "0.0.0.0:$PORT" wsgi:app
 
-Each service can be deployed independently:
-
-```python
-# Deploy vault service
-from campus.vault import create_app
-app = create_app()
-
-# Deploy main application
-from campus.apps import create_app  
-app = create_app()
+# API
+export DEPLOY=campus.api
+gunicorn --bind "0.0.0.0:$PORT" wsgi:app
 ```
 
-### Integrated Application
+See [DEPLOY.md](../DEPLOY.md).
 
-All services can be combined in a single deployment:
-
-```python
-from flask import Flask
-from campus import vault, apps, services
-
-app = Flask(__name__)
-vault.init_app(app)
-apps.init_app(app)
-services.init_app(app)
-```
-
-## Authentication & Security
-
-### Client Authentication
-
-Services use CLIENT_ID/CLIENT_SECRET for inter-service communication:
+## Authentication
 
 ```python
-# Automatic authentication via environment
-import campus.client.vault as vault
-secret = vault["apps"].get("key")  # Uses CLIENT_ID/CLIENT_SECRET
+import campus_python
 
-# Explicit authentication for scripts
-vault.set_credentials("client_id", "client_secret")
-```
+campus = campus_python.Campus()
 
-### Permission System
+# With credentials
+campus.auth.root.authenticate(
+    client_id="your_client_id",
+    client_secret="your_client_secret"
+)
 
-Vault uses bitflag permissions for fine-grained access control:
-
-```python
-from campus.vault import access
-
-# Grant specific permissions
-access.grant_access("client_id", "apps", access.READ | access.CREATE)
-
-# Check permissions
-has_read = access.has_access("client_id", "apps", access.READ)
+# With token
+campus.auth.root.authenticate(token="access_token")
 ```
 
 ## Development Guidelines
 
-### Adding New Services
+### Adding Services
 
-1. Create service package under `campus/`
-2. Follow the established patterns:
-   - `__init__.py` - Main module with `create_app()` and `init_app()`
-   - `model.py` - Data access layer
-   - `routes.py` - HTTP API endpoints
-   - `db.py` - Database utilities (if needed)
-3. Add client interface in `campus.client.{service}`
-4. Update main application integration
+1. Create package under `campus/`
+2. Structure:
+   - `resources/` - Business logic
+   - `routes/` - HTTP endpoints
+   - Entity models in `campus.model`
+3. Update `main.py` deployment config
+4. Add methods to `campus_python` client
 
 ### Avoiding Circular Imports
 
-1. Use `campus.client.*` for cross-service communication
-2. Import dependencies at function level when needed
-3. Keep clear dependency hierarchy: apps → client → models → storage
-4. Services should be independently importable
+1. Use `campus_python` for cross-service calls
+2. Hierarchy: auth/api → model → storage → common
+3. Business logic in `.resources`, not `campus.model`
 
 ### Testing
 
-1. Each service should have comprehensive unit tests
-2. Use mocking for cross-service dependencies
-3. Integration tests should test the full stack
-4. Client interfaces should be tested separately
+1. Unit tests for each service
+2. Mock cross-service dependencies
+3. Test `.resources` separately from routes
 
 ## Contributing
 
-1. Follow the established architectural patterns
+1. Follow architectural patterns
 2. Maintain service independence
-3. Add comprehensive tests for new functionality
-4. Update client interfaces when adding new service methods
-5. Document configuration requirements and deployment steps
-
-## License
-
-[License information would go here]
+3. Test new functionality
+4. Business logic in `.resources`, not `campus.model`
+5. Update `campus_python` client for new APIs
+6. Document config and deployment

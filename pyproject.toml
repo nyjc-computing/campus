@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "campus-suite"
-version = "0.1.0"
+version = "0.1.4"
 description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
@@ -12,6 +12,9 @@ packages = [{include = "campus"}]
 
 [tool.poetry.dependencies]
 python = ">=3.11.0,<3.12"
+
+# Campus internal dependencies
+campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
 
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^4.2.1"

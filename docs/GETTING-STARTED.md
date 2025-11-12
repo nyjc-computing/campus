@@ -29,9 +29,9 @@ Welcome to Campus! This guide helps you navigate the documentation based on your
 - **[Development Guidelines](development-guidelines.md)** — Advanced patterns and abstractions
 
 ### 🚀 DevOps/Infrastructure
-- **[Deployment Guide](../DEPLOY.md)** — Production deployment options
-- **[Packaging Guide](PACKAGING.md)** — Build and distribution processes
-- **Testing Infrastructure** — See [testing-strategies.md](testing-strategies.md)
+- **[Deployment Guide](../DEPLOY.md)** — Deployment options
+- **[Packaging Guide](PACKAGING.md)** — Build and distribution
+- **[Testing Strategies](testing-strategies.md)** — Testing infrastructure
 
 ## 🛠️ Installation
 
@@ -55,16 +55,14 @@ poetry run python main.py
 ```
 
 ### Environment Configuration
-Campus uses environment variables for core settings:
-
 ```bash
-ENV="development"                    # deployment environment
-CLIENT_ID="your-client-id"          # OAuth credentials
+ENV="development"                     # deployment environment
+CLIENT_ID="your-client-id"           # OAuth credentials
 CLIENT_SECRET="your-client-secret"   
-VAULTDB_URI="postgresql://user:pass@localhost/vault"  # vault database
+POSTGRESDB_URI="postgresql://..."    # auth service database
 ```
 
-All other configuration is managed securely through the vault service.
+Other configuration managed via `campus.auth.vaults`.
 
 ## 📖 Documentation Index
 
@@ -77,9 +75,8 @@ All other configuration is managed securely through the vault service.
 - **[Packaging](PACKAGING.md)** — Monorepo structure and distribution
 
 ### Service-Specific Documentation
-- **[Vault Service](../campus/vault/README.md)** — Secrets management
-- **[Client Library](../campus/client/README.md)** — HTTP API interfaces
 - **[Storage Layer](../campus/storage/README.md)** — Data persistence
+- **[Common Utilities](../campus/common/README.md)** — Shared utilities
 
 ## 🆘 Need Help?
 

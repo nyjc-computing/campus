@@ -38,57 +38,53 @@ cd campus
 # Install dependencies
 poetry install
 
-# Run the application
-poetry run python main.py
+# Run the deployment
+poetry run python main.py campus.auth  # or
+poetry run python main.py campus.api
 ```
 
 > **Note**: Configuration is managed through environment variables and the vault service. See [Configuration](#-configuration) section below for details.
 
 ## 🏗️ Architecture
 
-Campus follows a **modular monolith** architecture with clear service boundaries. Services can be deployed together or separately, each with well-defined responsibilities and clean interfaces.
+Campus follows a **modular monolith** architecture with clear service boundaries.
 
 **Key Components:**
-- **Apps**: Web APIs and authentication
-- **Vault**: Secure secrets management  
-- **Storage**: Multi-backend data persistence
-- **Client**: HTTP interfaces for external integration
-- **Models**: Business logic and data models
+- **Auth**: Authentication and OAuth (business logic in `.resources`)
+- **API**: RESTful resources for circles, email OTP (business logic in `.resources`)
+- **Model**: Entity representation (dataclasses only, no business logic)
+- **Storage**: Backend-agnostic data persistence
+- **Services**: Email, integrations
 
-For detailed architecture documentation, see [docs/architecture.md](docs/architecture.md).
+Access via `campus_python` client library. See [docs/architecture.md](docs/architecture.md).
 
 ## 🔧 Configuration
 
 Campus uses environment variables for configuration:
 
 ```bash
-# Environment Configuration
-ENV="development"  # or "staging", "production"
-
-# Client Authentication (Required for campus.client)
-CLIENT_ID="your-client-id"
+ENV="development"                     # or "staging", "production"
+DEPLOY="campus.auth"                  # campus.auth, campus.api, etc.
+CLIENT_ID="your-client-id"           # Required for campus_python
 CLIENT_SECRET="your-client-secret"
-
-# Vault Database (Only required when using campus.vault service)
-VAULTDB_URI="postgresql://user:pass@localhost/vault"
-
-All other configuration (storage, OAuth, email, etc.) is managed through campus.vault
-and should not be set as environment variables. Use the vault service to manage these
-secrets securely.
+POSTGRESDB_URI="postgresql://..."    # Auth service database
 ```
+
+Secrets managed via `campus.auth.vaults`, accessed through `campus_python` client.
 
 ## 📚 Documentation
 
-- **[� Getting Started](docs/GETTING-STARTED.md)** - New user guide and navigation
+- **[📖 Getting Started](docs/GETTING-STARTED.md)** - New user guide and navigation
 - **[🏗️ Architecture](docs/architecture.md)** - Detailed architecture overview and design principles  
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Development workflow and guidelines
 - **[🧪 Testing](docs/testing-strategies.md)** - Testing approaches and strategies
 - **[📦 Packaging](docs/PACKAGING.md)** - Monorepo structure and distribution
 
 **Service Documentation:**
-- **[� Vault Service](campus/vault/README.md)** - Secrets management and authentication
-- **[🔌 Client Interfaces](campus/client/README.md)** - HTTP APIs and usage patterns  
-- **[💾 Storage Documentation](campus/storage/README.md)** - Data persistence and backends
+- **[💾 Storage](campus/storage/README.md)** - Data persistence
+- **[🛠️ Common](campus/common/README.md)** - Shared utilities
+
+**Client**: See [campus-api-python](https://github.com/nyjc-computing/campus-api-python) for `campus_python` client docs.
 
 ## 🚀 Deployment
 
@@ -104,11 +100,11 @@ We welcome contributions! Please see our [contributing guidelines](docs/CONTRIBU
 
 ### Guidelines
 
-- **Architecture**: Follow established patterns in [campus/README.md](campus/README.md)
-- **Testing**: Maintain high test coverage (>90%)
-- **Documentation**: Update READMEs and docstrings
-- **Security**: Never commit secrets or credentials
-- **Modularity**: Keep services independent and loosely coupled
+- Follow patterns in [campus/README.md](campus/README.md)
+- Test coverage >90%
+- Update docs and docstrings
+- Never commit secrets
+- Keep services independent
 
 ## 🏫 About
 

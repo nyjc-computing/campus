@@ -1,8 +1,8 @@
 import unittest
-import os
 import sys
 
 from tests.fixtures import services
+from campus.common import env
 
 
 class TestWSGI(unittest.TestCase):
@@ -19,6 +19,10 @@ class TestWSGI(unittest.TestCase):
         if hasattr(cls, 'service_manager'):
             cls.service_manager.close()
 
+        # Reset test storage to clear SQLite in-memory database
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
     def setUp(self):
         # Clean up wsgi module imports at start of each test
         if 'wsgi' in sys.modules:
@@ -31,7 +35,7 @@ class TestWSGI(unittest.TestCase):
 
     def test_wsgi_import(self):
         for deploy_mode in ("apps", "vault"):
-            os.environ["DEPLOY"] = deploy_mode
+            env.DEPLOY = deploy_mode
 
             # Import wsgi after service setup to avoid connection issues
             import wsgi

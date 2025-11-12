@@ -26,11 +26,12 @@ collection.delete_by_id("123")
 """
 
 from pymongo import MongoClient
+from pymongo.database import Database
 from pymongo.collection import Collection
 from pymongo.errors import DuplicateKeyError
 
-from campus.client.vault import get_vault
-from campus.common import devops
+from campus.common import devops, env
+from campus.model.base import Model
 from campus.storage.documents.interface import CollectionInterface, PK
 from campus.storage.errors import (
     ConflictError,
@@ -41,8 +42,6 @@ from campus.storage.errors import (
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
-vault = get_vault()["storage"]
-
 
 class MongoCollectionError(StorageError):
     """Custom error class for MongoDB collection operations."""
@@ -51,22 +50,18 @@ class MongoCollectionError(StorageError):
 
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
-    try:
-        return vault["MONGODB_URI"].get()["value"]
-    except Exception as e:
-        raise MongoCollectionError(
-            f"Failed to retrieve MONGODB_URI from 'storage' vault: {e}"
-        ) from e
+    db_uri = env.getsecret("MONGODB_URI", env.DEPLOY)
+    return db_uri
 
 
 def _get_mongodb_name() -> str:
     """Get the MongoDB database name from the vault using the core client API."""
     try:
-        return vault["MONGODB_NAME"].get()["value"]
+        return env.getsecret("MONGODB_NAME", env.DEPLOY)
     except Exception as e:
         raise MongoCollectionError(
             f"Failed to retrieve MONGODB_NAME from 'storage' vault: {e}"
-        ) from e
+        ) from None
 
 
 class MongoRecord(dict):
@@ -127,9 +122,9 @@ class MongoDBCollection(CollectionInterface):
         Connection is established lazily on first database operation.
         """
         super().__init__(name)
-        self._client = None
-        self._db = None
-        self._collection = None
+        self._client: MongoClient | None = None
+        self._db: Database | None = None
+        self._collection: Collection | None = None
 
     def _ensure_connection(self):
         """Ensure MongoDB connection is established.
@@ -145,12 +140,13 @@ class MongoDBCollection(CollectionInterface):
             mongodb_name = _get_mongodb_name()
             self._client = MongoClient(mongodb_uri)
             self._db = self._client[mongodb_name]
-            self._collection: Collection = self._db[self.name]
+            self._collection = self._db[self.name]
 
     @property
     def collection(self) -> Collection:
         """Get the MongoDB collection, establishing connection if needed."""
         self._ensure_connection()
+        assert self._collection is not None
         return self._collection
 
     def get_by_id(self, doc_id: str) -> dict:
@@ -159,25 +155,27 @@ class MongoDBCollection(CollectionInterface):
             mongo_doc = self.collection.find_one({MONGO_PK: doc_id})
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to retrieve document by id: {e}") from e
+                f"Failed to retrieve document by id: {e}"
+            ) from None
         if mongo_doc:
             return MongoRecord.from_mongo(mongo_doc).to_record()
         return {}
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve documents matching a query."""
-        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
+        assert 'id' not in query, "Matching by 'id' is not allowed"
         try:
             cursor = self.collection.find(query)
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to retrieve documents matching query: {e}") from e
+                f"Failed to retrieve documents matching query: {e}"
+            ) from None
         return [
             MongoRecord.from_mongo(mongo_doc).to_record()
             for mongo_doc in cursor
         ]
 
-    def insert_one(self, record: dict) -> None:
+    def insert_one(self, record: dict) -> None:  # type: ignore
         """Insert a document into the collection."""
         mongo_doc = MongoRecord.from_record(record).to_mongo()
         try:
@@ -190,7 +188,7 @@ class MongoDBCollection(CollectionInterface):
                     message="Conflict occurred during insert",
                     collection_name=self.name,
                     details={"row": record, "error": str(e)}
-                ) from e
+                ) from None
             raise
 
     def update_by_id(self, doc_id: str, update: dict) -> None:
@@ -213,13 +211,14 @@ class MongoDBCollection(CollectionInterface):
             )
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to update document by id: {e}") from e
+                f"Failed to update document by id: {e}"
+            ) from None
         if result.matched_count == 0:
-            raise NotFoundError(doc_id, self.name)
+            raise NotFoundError(doc_id, self.name) from None
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
-        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
+        assert 'id' not in query, "Matching by 'id' is not allowed"
         if not update:
             return
         try:
@@ -236,7 +235,8 @@ class MongoDBCollection(CollectionInterface):
             )
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to update documents matching query: {e}") from e
+                f"Failed to update documents matching query: {e}"
+            ) from None
         if result.matched_count == 0:
             raise NoChangesAppliedError("update", query, self.name)
 
@@ -246,18 +246,20 @@ class MongoDBCollection(CollectionInterface):
             result = self.collection.delete_one({MONGO_PK: doc_id})
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to delete document by id: {e}") from e
+                f"Failed to delete document by id: {e}"
+            ) from None
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
-        assert schema.CAMPUS_KEY not in query, "Matching by 'id' is not allowed"
+        assert 'id' not in query, "Matching by 'id' is not allowed"
         try:
             result = self.collection.delete_many(query)
         except Exception as e:
             raise MongoCollectionError(
-                f"Failed to delete documents matching query: {e}") from e
+                f"Failed to delete documents matching query: {e}"
+            ) from None
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
@@ -282,6 +284,14 @@ class MongoDBCollection(CollectionInterface):
             self._client = None
             self._db = None
             self._collection = None
+    
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(self, name: str, model: type[Model]) -> None:
+        """Initialize the table from a Campus model definition."""
+        # Document stores do not need any initialization from model
+        # definitions as yet.
+        # This method is added for future use
+        pass
 
 
 @devops.block_env(devops.PRODUCTION)
@@ -309,4 +319,5 @@ def purge_collections() -> None:
 
     except Exception as e:
         raise MongoCollectionError(
-            f"Failed to purge MongoDB collections: {e}") from e
+            f"Failed to purge MongoDB collections: {e}"
+        ) from None

@@ -7,16 +7,17 @@ This script sets up a complete testing environment by:
 2. Checking PostgreSQL connectivity
 3. Initializing all fixtures (vault, yapper, storage)
 """
-import os
 import subprocess
 import sys
 
 # General fixtures
 from tests.fixtures import require, setup
 # Service-specific fixtures
-from tests.fixtures import storage, vault, yapper
+from tests.fixtures import storage, auth, yapper
+from campus.common import env
 
 # Add the project root to Python path so we can import from tests
+import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -93,10 +94,10 @@ def main():
     print("")
 
     try:
-        # Initialize vault first (creates CLIENT_ID/CLIENT_SECRET)
-        print("🔐 Initializing vault fixtures...")
-        vault.init()
-        print("✅ Vault fixtures initialized")
+        # Initialize auth first (creates CLIENT_ID/CLIENT_SECRET)
+        print("🔐 Initializing auth fixtures...")
+        auth.init()
+        print("✅ Auth fixtures initialized")
         print("")
 
         # Initialize yapper (creates yapperdb + vault secrets, no service)
@@ -118,8 +119,8 @@ def main():
     print("🎉 Complete testing environment setup finished!")
     print("")
     print("📊 Environment variables set:")
-    print(f"   CLIENT_ID={os.environ.get('CLIENT_ID', 'not set')}")
-    print(f"   CLIENT_SECRET={os.environ.get('CLIENT_SECRET', 'not set')}")
+    print(f"   CLIENT_ID={env.CLIENT_ID or 'not set'}")
+    print(f"   CLIENT_SECRET={env.CLIENT_SECRET or 'not set'}")
     print("")
     print("🚀 Next step:")
     print("   Run: ./start_testing.py   (starts vault + apps services)")

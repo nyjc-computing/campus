@@ -1,85 +1,86 @@
 # Campus Deployment - Ultra Simple
 
-One codebase, one `main.py`, two deployment modes. 
-Clients use `campus.client` library to communicate with deployments via HTTP API.
+One codebase, one `main.py`, multiple deployment modes. 
+Clients use the `campus_python` library to communicate with deployments via HTTP API.
 
-## 🔐 Deploy Vault Service
+## 🔐 Deploy Auth Service
 
 ```bash
-# Install with vault dependencies
-poetry install --extras vault
+# Install with dependencies
+poetry install
 
 # Configure deployment mode
-export DEPLOY=vault
+export DEPLOY=campus.auth
 python main.py
 ```
 
 **What you get:**
-- Vault API: `/health`, `/vaults`, `/vault/<label>/<key>`
-- Minimal service for credential management
-- Lightweight deployment with only vault dependencies
+- Authentication API: OAuth, session management, credentials
+- Client authentication and authorization
+- Minimal service for auth operations
 
-## 🚀 Deploy Full Apps
+## 🌐 Deploy API Service
 
 ```bash  
-# Install with apps dependencies
-poetry install --extras apps
+# Install with dependencies
+poetry install
 
 # Configure deployment mode  
-export DEPLOY=apps
+export DEPLOY=campus.api
 python main.py
 ```
 
 **What you get:**
-- Complete Campus web application
-- All features and API endpoints
-- Full deployment with all app dependencies
+- RESTful API endpoints for Campus resources
+- Circle management, Email OTP, etc.
+- Full API deployment
 
 ## 📚 Client Library Usage
 
-The `campus.client` library can be installed independently:
+The `campus_python` client library is installed separately:
 
 ```bash
-# Minimal installation for client usage only
-poetry install  # Only installs requests + client code
+# Install campus_python client
+poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
 
 # Use in your code
-from campus.client.vault import VaultClient
-from campus.client.users import UsersClient
+import campus_python
+campus = campus_python.Campus()
 ```
+
+See the [campus-api-python repository](https://github.com/nyjc-computing/campus-api-python) for documentation.
 
 ## 🎯 Platform Instructions
 
 ### Railway
 Set environment variable in Railway dashboard:
-- `DEPLOY=vault` or `DEPLOY=apps`
+- `DEPLOY=campus.auth` or `DEPLOY=campus.api`
 - Start command: `gunicorn --bind "0.0.0.0:$PORT" wsgi:app`
 
 ### Replit
 In Secrets tab, add:
 - Key: `DEPLOY`
-- Value: `vault` or `apps`
+- Value: `campus.auth` or `campus.api`
 
 Then click Run button (or `python main.py`)
 
 ### Local Development
 ```bash
-# Vault mode
-export DEPLOY=vault
+# Auth service
+export DEPLOY=campus.auth
 python main.py
 
-# Apps mode  
-export DEPLOY=apps
+# API service  
+export DEPLOY=campus.api
 python main.py
 ```
 
 ## 📁 How It Works
 
-- `DEPLOY` environment variable contains either "vault" or "apps"
+- `DEPLOY` environment variable specifies the service module to deploy (e.g., `campus.auth`, `campus.api`)
 - `main.py` reads the environment variable and starts the appropriate service
-- Missing `DEPLOY` variable defaults to "apps"
-- For production, use `wsgi.py` with Gunicorn
+- For production, use `wsgi.py` with Gunicorn or other WSGI servers
 
-**Valid deploy modes:** `vault`, `apps`
+**Valid deploy modes:** `campus.auth`, `campus.api`, or any module with `init_app()`
 
 That's it!

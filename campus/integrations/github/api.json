@@ -1,0 +1,45 @@
+{
+  "provider": "github",
+  "description": "GitHub API platform integration for Campus. Provides access to GitHub services via OAuth2.",
+  "servers": {
+    "development": "https://api.github.com",
+    "production": "https://api.github.com",
+    "staging": "https://api.github.com",
+    "testing": "https://api.github.com"
+  },
+  "api_doc": "https://docs.github.com/en/rest",
+  "discovery_url": "https://github.com/github/rest-api-description/releases/download/v2.1.0/descriptions.zip",
+  "security": {
+    "oauth2": {
+      "security_scheme": "oauth2",
+      "flow": "authorizationCode",
+      "headers": {
+        "Accept": "application/json"
+      },
+      "scopes": [
+        "read:user",
+        "user:email"
+      ],
+      "authorization_url": "https://github.com/login/oauth/authorize",
+      "token_url": "https://github.com/login/oauth/access_token",
+      "user_info_url": "https://api.github.com/user",
+      "extra_params": {
+        "allow_signup": "true"
+      }
+    }
+  },
+  "capabilities": {
+    "polling": {
+      "supported": true,
+      "default_poll_interval": 300
+    },
+    "webhooks": {
+      "supported": true,
+      "events": [
+        "push",
+        "pull_request",
+        "issues"
+      ]
+    }
+  }
+}

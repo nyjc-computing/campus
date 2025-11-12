@@ -2,11 +2,11 @@
 """Test the new storage backends for Flask test client strategy."""
 
 from campus.storage import get_table, get_collection
-import os
+from campus.common import env
 import sys
 
 # Configure test storage before importing storage modules
-os.environ["STORAGE_MODE"] = "1"
+env.STORAGE_MODE = "1"
 
 
 def test_sqlite_backend():
@@ -90,14 +90,13 @@ def test_apps_service_import():
 
     try:
         # This should work now with test storage backends
-        import campus.apps
-        print("Successfully imported campus.apps!")
+        import campus.api
+        print("Successfully imported campus.api!")
 
         # Try to create an app (this might still fail due to other dependencies)
         try:
             from campus.common.devops.deploy import create_app
-            import campus.apps.api as api_module
-            app = create_app(api_module)
+            app = create_app(campus.api)
             app.config['TESTING'] = True
             print(f"Successfully created test app: {app.name}")
         except Exception as e:
@@ -105,7 +104,7 @@ def test_apps_service_import():
             print("This is likely due to other dependencies, not storage")
 
     except Exception as e:
-        print(f"Apps import failed: {e}")
+        print(f"API import failed: {e}")
         return False
 
     return True

@@ -3,10 +3,10 @@
 Functions for MongoDB database management during testing.
 """
 
-import os
 from pymongo import MongoClient
 
 from campus.common import devops
+from campus.common import env
 
 
 def get_mongodb_uri(database_name: str | None = None) -> str:
@@ -27,10 +27,10 @@ def get_mongodb_uri(database_name: str | None = None) -> str:
     Raises:
         OSError: If required environment variables are not set
     """
-    host = os.environ["MONGODB_HOST"]
-    port = os.environ["MONGODB_PORT"]
-    username = os.environ["MONGO_INITDB_ROOT_USERNAME"]
-    password = os.environ["MONGO_INITDB_ROOT_PASSWORD"]
+    host = env.MONGODB_HOST
+    port = env.MONGODB_PORT
+    username = env.MONGO_INITDB_ROOT_USERNAME
+    password = env.MONGO_INITDB_ROOT_PASSWORD
 
     if database_name:
         return f"mongodb://{username}:{password}@{host}:{port}/{database_name}?authSource=admin"
@@ -95,17 +95,23 @@ def ensure_database_exists(database_name: str) -> None:
         database_name: Name of the database to ensure exists
 
     Raises:
+        RuntimeError: If MongoDB connection fails or database cannot be ensured
         ServerSelectionTimeoutError: If MongoDB connection fails
         OperationFailure: If authentication fails
     """
     print(f"🗃️  Ensuring MongoDB database '{database_name}' exists...")
 
-    if database_exists(database_name):
-        print(f"✅ MongoDB database '{database_name}' already exists")
-    else:
-        print(f"📝 Creating MongoDB database '{database_name}'...")
-        create_database(database_name)
-        print(f"✅ MongoDB database '{database_name}' created successfully")
+    try:
+        if database_exists(database_name):
+            print(f"✅ MongoDB database '{database_name}' already exists")
+        else:
+            print(f"📝 Creating MongoDB database '{database_name}'...")
+            create_database(database_name)
+            print(f"✅ MongoDB database '{database_name}' created successfully")
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to ensure MongoDB database '{database_name}' exists: {e}"
+        ) from e
 
 
 @devops.require_env(devops.TESTING)
