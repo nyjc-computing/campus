@@ -36,7 +36,7 @@ Legend:
 import flask
 import werkzeug
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import utc_time
 import campus.config
@@ -60,7 +60,7 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
 
 
 # OAuth2 endpoints
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def authorize(
         client_id: schema.CampusID,
         response_type: str,
@@ -138,14 +138,14 @@ def authorize(
     return flask.redirect(oauth_authorize_url)
 
 
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def token(
         grant_type: str,  # required
         code: str,  # required
         redirect_uri: str,  # required if used in /authorize
         client_id: str,  # required
         client_secret: str,  # required
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Summary:
         OAuth2 token endpoint for exchanging authorization code for access token.
 

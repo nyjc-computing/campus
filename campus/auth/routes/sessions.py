@@ -9,7 +9,7 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 import campus.yapper
 
 from ..resources import session as session_resource
@@ -31,7 +31,7 @@ def get_yapper():
 
 
 @bp.post("/sweep")
-def sweep(at_time: schema.DateTime | None = None) -> campus_flask.JsonResponse:
+def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
     """Sweep expired sessions.
 
     POST /sessions/sweep
@@ -46,12 +46,13 @@ def sweep(at_time: schema.DateTime | None = None) -> campus_flask.JsonResponse:
     get_yapper().emit('campus.sessions.sweep')
     return {"swept_count": swept_count}, 200
 
+
 @bp.post("/<provider>/")
 def get_by_authorization_code(
         *,
         provider: str,
         code: str,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Get a session for a specific authentication provider by
     authorization code.
 
@@ -68,6 +69,7 @@ def get_by_authorization_code(
     authsession = session_resource[provider].get(code)
     return authsession.to_resource(), 200
 
+
 @bp.post("/<provider>/")
 def new_provider_session(
         *,
@@ -79,7 +81,7 @@ def new_provider_session(
         authorization_code: str | None = None,
         state: str | None = None,
         target: schema.Url | None = None,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Create a new session for a specific authentication provider.
 
     POST /sessions/{provider}/
@@ -111,11 +113,12 @@ def new_provider_session(
     get_yapper().emit('campus.sessions.new', {"provider": provider})
     return authsession.to_resource(), 200
 
+
 @bp.delete("/<provider>/<session_id>")
 def delete_provider_session(
         provider: str,
         session_id: schema.CampusID,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Finalize a session for a specific authentication provider.
 
     This marks the session as finalized after successful authentication.
@@ -135,11 +138,12 @@ def delete_provider_session(
     )
     return {"target": target}, 200
 
+
 @bp.get("/<provider>/<session_id>")
 def get_provider_session(
         provider: str,
         session_id: schema.CampusID,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Get a session for a specific authentication provider.
 
     GET /sessions/{provider}/{session_id}
@@ -159,13 +163,14 @@ def get_provider_session(
     )
     return authsession.to_resource(), 200
 
+
 @bp.patch("/<provider>/<session_id>")
 def update_provider_session(
         provider: str,
         session_id: schema.CampusID,
         user_id: schema.UserID | None = None,
         authorization_code: str | None = None,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Update a session for a specific authentication provider.
 
     Only user_id and authorization_code can be updated.

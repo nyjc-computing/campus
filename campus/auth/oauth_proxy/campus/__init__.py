@@ -10,7 +10,7 @@ implement server-side storage for session management.
 import flask
 import werkzeug
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 from campus.common.errors import auth_errors
 
 from . import proxy
@@ -31,7 +31,7 @@ def before_request() -> None:
 
 
 @bp.get('/authorize')
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def authorize(
         target: schema.Url,
         login_hint: schema.Email | None = None,
@@ -50,11 +50,11 @@ def callback() -> werkzeug.Response:
 
     Dispatches to success or error handlers based on payload type.
     """
-    callback_payload = campus_flask.get_request_payload()
+    callback_payload = flask_campus.get_request_payload()
     if "error" in callback_payload:
         auth_errors.raise_from_json(callback_payload)
     else:
-        return campus_flask.unpack_into(success_callback,
+        return flask_campus.unpack_into(success_callback,
                                         **callback_payload)
 
 

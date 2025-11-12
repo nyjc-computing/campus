@@ -10,7 +10,7 @@ All access must be carefully authenticated and authorized.
 
 import flask
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 from campus.common.errors import api_errors
 import campus.yapper
 
@@ -41,13 +41,13 @@ def get_yapper():
 
 
 @bp.post("/authenticate")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def authenticate(
         *,
         token: str | None = None,
         client_id: schema.CampusID | None = None,
         client_secret: str | None = None,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Authenticate a service client using token or client credentials.
 
     GET /root/authenticate
@@ -73,10 +73,11 @@ def authenticate(
             "error": "Missing authentication credentials."
         }, 400
 
+
 def authenticate_credentials(
         client_id: schema.CampusID,
         client_secret: str
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Authenticate using client credentials."""
     if client_resource.is_valid_credentials(client_id, client_secret):
         resp_json = {
@@ -98,7 +99,7 @@ def authenticate_credentials(
     return resp_json, status_code
 
 
-def authenticate_token(token: str) -> campus_flask.JsonResponse:
+def authenticate_token(token: str) -> flask_campus.JsonResponse:
     """Authenticate using a token."""
     try:
         user_creds = creds_resource["campus"].get(token)

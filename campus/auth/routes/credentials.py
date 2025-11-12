@@ -7,7 +7,7 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 import campus.model
 import campus.yapper
 
@@ -28,13 +28,14 @@ def get_yapper():
         _yapper_instance = campus.yapper.create()
     return _yapper_instance
 
+
 @bp.get("/<provider>/")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def get_by_token(
         *,
         provider: str,
         token_id: str | None = None,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Get credentials for a specific token, or list all credentials for
     a provider.
 
@@ -58,12 +59,13 @@ def get_by_token(
             ]
         }, 200
 
+
 @bp.delete("/<provider>/<user_id>")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def delete_by_user(
         provider: str,
         user_id: schema.UserID,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Delete credentials for a specific provider and user ID.
 
     DELETE /credentials/{provider}/{user_id}
@@ -75,12 +77,13 @@ def delete_by_user(
     creds_resource[provider][user_id].delete(client_id)
     return {}, 200
 
+
 @bp.get("/<provider>/<user_id>")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def get_by_user(
         provider: str,
         user_id: schema.UserID,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Get credentials for a specific provider and user ID.
 
     GET /credentials/{provider}/{user_id}
@@ -95,13 +98,14 @@ def get_by_user(
     credentials = creds_resource[provider][user_id].get(client_id)
     return credentials.to_resource(), 200
 
+
 @bp.patch("/<provider>/<user_id>")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def update_credentials(
         provider: str,
         user_id: schema.UserID,
         token: campus.model.OAuthToken,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Update credentials for a specific provider and user ID.
 
     PATCH /credentials/{provider}/{user_id}
@@ -118,14 +122,15 @@ def update_credentials(
     )
     return {}, 200
 
+
 @bp.post("/<provider>/<user_id>")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def new_credentials(
         provider: str,
         user_id: schema.UserID,
         scopes: list[str],
         expiry_seconds: int,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Issue new credentials for a specific provider and user ID.
 
     POST /credentials/{provider}/{user_id}

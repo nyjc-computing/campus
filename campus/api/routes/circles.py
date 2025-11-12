@@ -7,7 +7,7 @@ import flask
 
 import campus_python
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 from campus.common.errors import api_errors
 import campus.model
 import campus.yapper
@@ -28,21 +28,21 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 
 @bp.get('/')
-@campus_flask.unpack_request
-def list_circles(tag: str | None = None) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def list_circles(tag: str | None = None) -> flask_campus.JsonResponse:
     """List all circles matching filter requirements."""
     result = resources.circle.list(**{"tag": tag} if tag else {})
     return {"data": [circle.to_resource() for circle in result]}, 200
 
 
 @bp.post('/')
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def new_circle(
         name: str,
         description: str,
         tag: str,
         parents: dict[str, int] | None = None,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Summary:
         Create a new circle.
 
@@ -99,7 +99,7 @@ def new_circle(
 
 
 @bp.delete('/<string:circle_id>')
-def delete_circle(circle_id: str) -> campus_flask.JsonResponse:
+def delete_circle(circle_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Delete a circle by its unique ID.
 
@@ -139,7 +139,7 @@ def delete_circle(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.get('/<string:circle_id>')
-def get_circle_details(circle_id: str) -> campus_flask.JsonResponse:
+def get_circle_details(circle_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Retrieve detailed information about a specific circle.
 
@@ -188,13 +188,13 @@ def get_circle_details(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.patch('/<string:circle_id>')
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def edit_circle(
         *,
         circle_id: str,
         name: str,
         description: str
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Summary:
         Update the name and/or description of an existing circle.
 
@@ -244,13 +244,13 @@ def edit_circle(
 
 
 @bp.post('/<string:circle_id>/move')
-def move_circle(circle_id: str) -> campus_flask.JsonResponse:
+def move_circle(circle_id: str) -> flask_campus.JsonResponse:
     """Move a circle to a new parent."""
     return {"message": "Not implemented"}, 501
 
 
 @bp.get('/<string:circle_id>/members')
-def get_circle_members(circle_id: str) -> campus_flask.JsonResponse:
+def get_circle_members(circle_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Retrieve the member IDs of a circle along with their access values.
 
@@ -293,13 +293,13 @@ def get_circle_members(circle_id: str) -> campus_flask.JsonResponse:
 
 
 @bp.post('/<string:circle_id>/members/add')
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def add_circle_member(
         *,
         circle_id: str,
         member_id: str,
         access_value: int,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Summary:
         Add a member to a circle with a specified access level.
 
@@ -347,12 +347,12 @@ def add_circle_member(
 
 
 @bp.delete('/<string:circle_id>/members/remove')
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def remove_circle_member(
         *,
         circle_id: str,
         member_id: str,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Summary:
         Remove a member from a circle.
 
@@ -398,13 +398,13 @@ def remove_circle_member(
 
 
 @bp.patch('/<string:circle_id>/members')
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def patch_circle_member(
         *,
         circle_id: str,
         member_id: str,
         access_value: int
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Summary:
         Update the access level of a member within a circle.
 
@@ -454,7 +454,7 @@ def patch_circle_member(
 
 
 @bp.get('/<string:circle_id>/users')
-def get_circle_users(circle_id: str) -> campus_flask.JsonResponse:
+def get_circle_users(circle_id: str) -> flask_campus.JsonResponse:
     # TODO: validate request
     """Get users in a circle."""
     return {"message": "Not implemented"}, 501

@@ -128,12 +128,16 @@ def unpack_request(
     """
     # Validate func annotations
     if not func.__annotations__:
-        raise ValueError(f"{func.__name__} missing type annotations")
-    for param in inspect.signature(func).parameters.values():
-        if not parameter.is_keyword_supported(param):
-            raise ValueError(
-                f"Parameter {param.name!r} must be keyword-argument-compatible"
-            )
+        raise ValueError(f"Function {func.__name__} missing type annotations")
+    incompatible_params = [
+        param for param in inspect.signature(func).parameters.values()
+        if not parameter.is_keyword_supported(param)
+    ]
+    if incompatible_params:
+        raise ValueError(
+            f"Parameters {incompatible_params} must be "
+            "keyword-argument-compatible"
+        )
 
     @wraps(func)
     def wrappervf(*args, **kwargs) -> typing.Any:

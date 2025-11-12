@@ -10,7 +10,7 @@ __all__ = ["init_app"]
 import campus_python
 import flask
 
-from campus.common import env, flask as campus_flask
+from campus.common import env, flask_campus
 from campus.common.errors import auth_errors
 
 # Other local imports are intentionally omitted to avoid circular
@@ -41,7 +41,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         """
         httpauth = webauth.http.HttpAuthenticationScheme.with_header(
             provider="campus",
-            http_header=campus_flask.get_request_headers()
+            http_header=flask_campus.get_request_headers()
         )
         match httpauth.header.authorization.scheme:
             case "basic":

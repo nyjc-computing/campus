@@ -10,7 +10,7 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask as campus_flask
+from campus.common import flask_campus
 import campus.yapper
 
 from ..resources import vault as vault_resource
@@ -32,8 +32,8 @@ def get_yapper():
 
 
 @bp.get("/<label>/")
-@campus_flask.unpack_request
-def keys(label: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def keys(label: str) -> flask_campus.JsonResponse:
     """Get the keys for a specific vault.
 
     GET /vaults/{label}/
@@ -47,9 +47,10 @@ def keys(label: str) -> campus_flask.JsonResponse:
     keys = vault_resource[label].keys()
     return {"keys": keys}, 200
 
+
 @bp.delete("/<label>/<key>")
-@campus_flask.unpack_request
-def delete(label: str, key: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def delete(label: str, key: str) -> flask_campus.JsonResponse:
     """Delete a key from a vault.
 
     DELETE /vaults/{label}/{key}
@@ -59,9 +60,10 @@ def delete(label: str, key: str) -> campus_flask.JsonResponse:
     get_yapper().emit('campus.vaults.key.delete', {"label": label, "key": key})
     return {}, 200
 
+
 @bp.get("/<label>/<key>")
-@campus_flask.unpack_request
-def get(label: str, key: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def get(label: str, key: str) -> flask_campus.JsonResponse:
     """Get a specific key from a vault.
 
     GET /vaults/{label}/{key}
@@ -78,8 +80,8 @@ def get(label: str, key: str) -> campus_flask.JsonResponse:
 
 
 @bp.post("/<label>/<key>")
-@campus_flask.unpack_request
-def set(label: str, key: str, value: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
     """Set a specific key in a vault.
 
     POST /vaults/{label}/{key}

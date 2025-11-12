@@ -10,7 +10,7 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 import campus.yapper
 
 from ..resources import user as user_resource
@@ -32,8 +32,8 @@ def get_yapper():
 
 
 @bp.get("/")
-@campus_flask.unpack_request
-def get_all() -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def get_all() -> flask_campus.JsonResponse:
     """Get all users.
 
     GET /users
@@ -42,9 +42,10 @@ def get_all() -> campus_flask.JsonResponse:
     users = user_resource.list()
     return {"users": [user.to_resource() for user in users]}, 200
 
+
 @bp.post("/")
-@campus_flask.unpack_request
-def new(email: schema.Email, name: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
     """Create a new Campus user.
 
     POST /users
@@ -61,8 +62,9 @@ def new(email: schema.Email, name: str) -> campus_flask.JsonResponse:
     get_yapper().emit('campus.users.create')
     return user.to_resource(), 201
 
+
 @bp.post("/<user_id>/activate")
-def activate(user_id: schema.UserID) -> campus_flask.JsonResponse:
+def activate(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Activate a user
 
     POST /users/{user_id}/activate
@@ -73,9 +75,10 @@ def activate(user_id: schema.UserID) -> campus_flask.JsonResponse:
     get_yapper().emit('campus.users.activate', {"user_id": str(user_id)})
     return activated_user.to_resource(), 200
 
+
 @bp.delete("/<user_id>")
-@campus_flask.unpack_request
-def delete_user(user_id: schema.UserID) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Delete a user
 
     DELETE /users/{user_id}
@@ -85,9 +88,10 @@ def delete_user(user_id: schema.UserID) -> campus_flask.JsonResponse:
     get_yapper().emit('campus.users.delete', {"user_id": str(user_id)})
     return {}, 200
 
+
 @bp.get("/<user_id>")
-@campus_flask.unpack_request
-def get(user_id: schema.UserID) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Get details of a specific user
 
     GET /users/{user_id}
@@ -96,9 +100,10 @@ def get(user_id: schema.UserID) -> campus_flask.JsonResponse:
     user = user_resource[user_id].get()
     return user.to_resource(), 200
 
+
 @bp.patch("/<user_id>")
-@campus_flask.unpack_request
-def update() -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def update() -> flask_campus.JsonResponse:
     """Update a user
 
     PATCH /users/{user_id}

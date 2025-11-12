@@ -9,7 +9,7 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask as campus_flask, schema
+from campus.common import flask_campus, schema
 import campus.yapper
 
 from ..resources import login as login_resource
@@ -38,7 +38,7 @@ def new(
         user_id: schema.UserID,
         device_id: str | None = None,
         agent_string: str,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Get a session for a specific authentication provider by
     authorization code.
 
@@ -70,8 +70,9 @@ def new(
     )
     return loginsession.to_resource(), 200
 
+
 @bp.delete("/<session_id>/")
-def delete(session_id: schema.CampusID) -> campus_flask.JsonResponse:
+def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Delete a login session.
 
     DELETE /logins/<session_id>/
@@ -80,8 +81,9 @@ def delete(session_id: schema.CampusID) -> campus_flask.JsonResponse:
     get_yapper().emit('campus.logins.delete', {"id": str(session_id)})
     return {}, 200
 
+
 @bp.get("/<session_id>/")
-def get(session_id: schema.CampusID) -> campus_flask.JsonResponse:
+def get(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Get a login session.
 
     GET /logins/<session_id>/
@@ -89,12 +91,13 @@ def get(session_id: schema.CampusID) -> campus_flask.JsonResponse:
     loginsession = login_resource[session_id].get()
     return loginsession.to_resource(), 200
 
+
 @bp.patch("/<session_id>/")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def update(
         session_id: schema.CampusID,
         expiry_seconds: int
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Update a login session.
 
     PATCH /logins/<session_id>/
