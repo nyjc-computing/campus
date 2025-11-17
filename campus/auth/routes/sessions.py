@@ -47,7 +47,7 @@ def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
     return {"swept_count": swept_count}, 200
 
 
-@bp.post("/<provider>/")
+@bp.post("/<provider>/authorization_code")
 def get_by_authorization_code(
         *,
         provider: str,
