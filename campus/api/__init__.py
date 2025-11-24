@@ -16,8 +16,9 @@ from campus.common.errors import auth_errors
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
 
-campus_auth = campus_python.Campus().auth
-auth_root = campus_python.Campus().auth.root
+campus = campus_python.Campus(timeout=60)
+campus_auth = campus.auth
+auth_root = campus.auth.root
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:

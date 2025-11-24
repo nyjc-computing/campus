@@ -167,7 +167,7 @@ class EnvironmentProxy:
                 )
         else:
             import campus_python
-            campus_auth = campus_python.Campus().auth
+            campus_auth = campus_python.Campus(timeout=60).auth
             try:
                 return campus_auth.vaults[vault_label][name]
             except KeyError:

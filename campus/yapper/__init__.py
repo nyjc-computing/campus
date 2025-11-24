@@ -58,6 +58,9 @@ def create(**kwargs) -> YapperInterface:
     client_secret = os.getenv("CLIENT_SECRET")
     env = os.getenv("ENV", "development").lower()
 
+    campus = campus_python.Campus(timeout=60)
+    breakpoint()
+
     if not client_id:
         raise ValueError("CLIENT_ID environment variable is required")
     if not client_secret:
@@ -73,14 +76,11 @@ def create(**kwargs) -> YapperInterface:
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
             try:
-                yapper_vault = (
-                    campus_python.Campus()
-                    .auth.vaults["campus.yapper"]
-                )
+                yapper_vault = campus.auth.vaults["campus.yapper"]
                 yapperdb_uri = yapper_vault["YAPPERDB_URI"]
             except Exception as e:
                 raise ValueError(
-                    f"Failed to retrieve YAPPERDB_URI from vault service for {env} environment. "
+                    f"Failed to retrieve YAPPERDB_URI from vault 'campus.yapper' for {env} environment. "
                     f"Vault error: {e}. "
                     f"This could indicate vault service connectivity issues or authentication problems."
                 ) from e

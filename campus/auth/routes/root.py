@@ -28,7 +28,7 @@ bp = flask.Blueprint('root', __name__, url_prefix='/root')
 # Lazy-loaded yapper instance to avoid circular dependencies
 _yapper_instance = None
 
-campus_auth = campus_python.Campus().auth
+campus_auth = campus_python.Campus(timeout=60).auth
 
 
 def get_yapper():
