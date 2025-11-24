@@ -60,7 +60,7 @@ def _get_mongodb_name() -> str:
         return env.getsecret("MONGODB_NAME", env.DEPLOY)
     except Exception as e:
         raise MongoCollectionError(
-            f"Failed to retrieve MONGODB_NAME from 'storage' vault: {e}"
+            f"Failed to retrieve MONGODB_NAME from '{env.DEPLOY}' vault: {e}"
         ) from None
 
 
