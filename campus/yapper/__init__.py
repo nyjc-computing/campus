@@ -59,7 +59,6 @@ def create(**kwargs) -> YapperInterface:
     env = os.getenv("ENV", "development").lower()
 
     campus = campus_python.Campus(timeout=60)
-    breakpoint()
 
     if not client_id:
         raise ValueError("CLIENT_ID environment variable is required")
