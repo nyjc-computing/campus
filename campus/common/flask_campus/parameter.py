@@ -22,21 +22,10 @@ def is_keyword_supported(parameter: inspect.Parameter) -> bool:
 
 
 def is_optional(parameter: inspect.Parameter) -> bool:
-    """Check if a parameter is Optional.
+    """Check if a parameter is optional.
 
-    A parameter is optional if:
-    - Its annotation is of the form Optional[T] or Union[T, None]
-    - It has a default value
-    """
-    origin = typing.get_origin(parameter.annotation)
-    if not origin is typing.Union:
-        return False
-    args = typing.get_args(parameter.annotation)
-    if not type(None) in args:
-        return False
-    if not has_default(parameter):
-        return False
-    return True
+    A parameter is considered optional if it has a default value."""
+    return has_default(parameter)
 
 
 def reconcile(
