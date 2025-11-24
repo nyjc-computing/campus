@@ -70,7 +70,7 @@ def get_by_authorization_code(
     return authsession.to_resource(), 200
 
 
-@bp.post("/<provider>/")
+@bp.post("/<provider>")
 def new_provider_session(
         *,
         provider: str,
