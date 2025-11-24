@@ -11,7 +11,7 @@ import campus_python
 
 from .base import EmailSenderInterface
 
-email_vault = campus_python.Campus().auth.vaults["smtp"]
+email_vault = campus_python.Campus(timeout=60).auth.vaults["smtp"]
 
 
 class SMTPEmailSender(EmailSenderInterface):

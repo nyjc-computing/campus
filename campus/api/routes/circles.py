@@ -19,7 +19,7 @@ bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 yapper = campus.yapper.create()
 
 # auth.root does not exist yet, will be added soon
-auth_root = campus_python.Campus().auth.root  # type: ignore
+auth_root = campus_python.Campus(timeout=60).auth.root  # type: ignore
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
