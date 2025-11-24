@@ -229,6 +229,7 @@ def _from_record(
         args["created_at"] = schema.DateTime(record["created_at"])
     if "expires_at" in record:
         args["expires_at"] = schema.DateTime(record["expires_at"])
+    args["provider"] = record["provider"]
     args["client_id"] = schema.CampusID(record["client_id"])
     if "user_id" in record:
         args["user_id"] = schema.UserID(record["user_id"])
