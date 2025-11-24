@@ -78,6 +78,7 @@ def get_by_authorization_code(
 def new_provider_session(
         *,
         provider: str,
+        client_id: schema.CampusID,
         # expiry_seconds: int,
         user_id: schema.UserID | None = None,
         redirect_uri: schema.Url,
@@ -103,7 +104,6 @@ def new_provider_session(
         "expires_at": "2024-01-01T00:00:00Z"
     }
     """
-    client_id = flask.g.current_client.id
     expiry_seconds = campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60
     authsession = session_resource[provider].new(
         expiry_seconds=expiry_seconds,
