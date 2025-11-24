@@ -32,6 +32,7 @@ def get_yapper():
 
 
 @bp.post("/sweep")
+@flask_campus.unpack_request
 def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
     """Sweep expired sessions.
 
@@ -49,6 +50,7 @@ def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
 
 
 @bp.post("/<provider>/authorization_code")
+@flask_campus.unpack_request
 def get_by_authorization_code(
         *,
         provider: str,
@@ -72,6 +74,7 @@ def get_by_authorization_code(
 
 
 @bp.post("/<provider>")
+@flask_campus.unpack_request
 def new_provider_session(
         *,
         provider: str,
@@ -167,6 +170,7 @@ def get_provider_session(
 
 
 @bp.patch("/<provider>/<session_id>")
+@flask_campus.unpack_request
 def update_provider_session(
         provider: str,
         session_id: schema.CampusID,
