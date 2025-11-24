@@ -10,6 +10,7 @@ Authentication is handled in a global routes.before_request hook.
 import flask
 
 from campus.common import flask_campus, schema
+import campus.config
 import campus.yapper
 
 from ..resources import session as session_resource
@@ -74,7 +75,7 @@ def get_by_authorization_code(
 def new_provider_session(
         *,
         provider: str,
-        expiry_seconds: int,
+        # expiry_seconds: int,
         user_id: schema.UserID | None = None,
         redirect_uri: schema.Url,
         scopes: list[str] | None = None,
@@ -100,6 +101,7 @@ def new_provider_session(
     }
     """
     client_id = flask.g.current_client.id
+    expiry_seconds = campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60
     authsession = session_resource[provider].new(
         expiry_seconds=expiry_seconds,
         client_id=client_id,
