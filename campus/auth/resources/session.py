@@ -124,6 +124,7 @@ class ProviderAuthSessionResource:
         session = _from_record({
             "id": session_id,
             "expiry_seconds": expiry_seconds,
+            "provider": self.provider,
             "client_id": client_id,
             "user_id": user_id,
             "redirect_uri": redirect_uri,
