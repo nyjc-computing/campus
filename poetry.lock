@@ -107,7 +107,7 @@ flask = "^3.0.0"
 type = "git"
 url = "https://github.com/nyjc-computing/campus-api-python.git"
 reference = "main"
-resolved_reference = "f18f406eee8e16b2553ff491be3968a25150c998"
+resolved_reference = "2f0a8bd9f863a53dc9e87ac02badf3f89dfca1a3"
 
 [[package]]
 name = "certifi"
