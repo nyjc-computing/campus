@@ -133,7 +133,8 @@ class EnvironmentProxy:
             denied.
         """
         if name in self:
-            return getattr(self, name)
+            # Cannot use __getattr__: infinite recursion
+            return os.environ[name]
         # To facilitate deployment abstraction, env needs to be useable
         # in campus.auth without campus.auth being imported in any other
         # deployment.
