@@ -71,9 +71,7 @@ def create(**kwargs) -> YapperInterface:
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
             try:
-                # Access vault directly from internal resources (no HTTP call)
-                import campus.auth.resources.vault as vault_resource
-                yapper_vault = vault_resource.VaultsResource()["campus.yapper"]
+                yapper_vault = campus.auth.vaults["campus.yapper"]
                 yapperdb_uri = yapper_vault["YAPPERDB_URI"]
             except Exception as e:
                 raise ValueError(

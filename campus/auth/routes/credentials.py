@@ -7,10 +7,10 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask_campus, schema
 import campus.model
-from .. import get_yapper
+from campus.common import flask_campus, schema
 
+from .. import get_yapper
 from ..resources import credentials as creds_resource
 
 # Create blueprint for session management routes
