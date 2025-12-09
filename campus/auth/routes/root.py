@@ -12,7 +12,7 @@ import flask
 
 from campus.common import flask_campus, schema
 from campus.common.errors import api_errors
-from .. import _yapper
+from .. import get_yapper
 
 import campus_python
 
@@ -25,18 +25,7 @@ from ..resources import (
 # Create blueprint for session management routes
 bp = flask.Blueprint('root', __name__, url_prefix='/root')
 
-# Lazy-loaded yapper instance to avoid circular dependencies
-
 campus_auth = campus_python.Campus(timeout=60).auth
-
-
-def _yapper.get():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
 
 
 @bp.post("/authenticate")
