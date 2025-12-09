@@ -48,7 +48,8 @@ class CampusAuthProxy(base.AuthProxy):
     )
 
     def __init__(self) -> None:
-        super().__init__()
+        self._CLIENT_ID = env.CLIENT_ID
+        self._CLIENT_SECRET = env.CLIENT_SECRET
 
     @property
     def authorization_url(self) -> schema.Url:
