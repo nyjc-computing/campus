@@ -49,16 +49,12 @@ def create(**kwargs) -> YapperInterface:
     # Lazy-import locally to avoid polluting global namespace
     import os
 
-    import campus_python
-
     from .backends.sqlite import SQLiteYapper
     from .backends.postgres import PostgreSQLYapper
 
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
     env = os.getenv("ENV", "development").lower()
-
-    campus = campus_python.Campus(timeout=60)
 
     if not client_id:
         raise ValueError("CLIENT_ID environment variable is required")
@@ -75,7 +71,9 @@ def create(**kwargs) -> YapperInterface:
         # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
             try:
-                yapper_vault = campus.auth.vaults["campus.yapper"]
+                # Access vault directly from internal resources (no HTTP call)
+                import campus.auth.resources.vault as vault_resource
+                yapper_vault = vault_resource.VaultsResource()["campus.yapper"]
                 yapperdb_uri = yapper_vault["YAPPERDB_URI"]
             except Exception as e:
                 raise ValueError(

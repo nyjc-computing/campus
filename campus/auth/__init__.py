@@ -9,9 +9,26 @@ integrations.
 
 # Note: do not expose .resources directly here. It is meant for internal
 # use within campus.auth only.
-__all__ = ["init_app"]
+__all__ = ["init_app", "get_yapper"]
 
 import flask
+
+# Module-level yapper instance shared across all routes
+_yapper_instance = None
+
+
+def get_yapper():
+    """Get the module-wide yapper instance.
+    
+    Initializes yapper lazily if not already initialized.
+    This should be called at app startup to avoid circular dependencies
+    during request handling.
+    """
+    global _yapper_instance
+    if _yapper_instance is None:
+        import campus.yapper
+        _yapper_instance = campus.yapper.create()
+    return _yapper_instance
 
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
@@ -41,12 +58,13 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
         
         # Initialize yapper at startup to avoid circular dependency
         # during request handling (when yapper tries to access vaults)
-        import campus.yapper
         try:
-            campus.yapper.create()
-        except Exception as e:
-            # Log but don't fail startup if yapper init fails
+            get_yapper()
             import logging
-            logging.warning(f"Failed to initialize yapper at startup: {e}")
+            logging.info("Yapper initialized successfully at startup")
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to initialize yapper at startup: {e}")
+            # Don't fail startup - let requests fail if yapper is needed
 
     app.register_blueprint(bp)

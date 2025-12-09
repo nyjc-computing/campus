@@ -11,24 +11,12 @@ Authentication is handled in a global routes.before_request hook.
 import flask
 
 from campus.common import flask_campus, schema
-import campus.yapper
+from .. import get_yapper
 
 from ..resources import user as user_resource
 
 # Create blueprint for user management routes
 bp = flask.Blueprint('users', __name__, url_prefix='/users')
-
-# Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
-
-
-def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
 
 
 @bp.get("/")
@@ -59,7 +47,7 @@ def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
     # Note that no client_secret is generated here
     # Apps are expected to generate the secret separately
     user = user_resource.new(email=email, name=name)
-    get_yapper().emit('campus.users.create')
+    _yapper.get().emit('campus.users.create')
     return user.to_resource(), 201
 
 
@@ -72,7 +60,7 @@ def activate(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """
     user_resource[user_id].activate()
     activated_user = user_resource[user_id].get()
-    get_yapper().emit('campus.users.activate', {"user_id": str(user_id)})
+    _yapper.get().emit('campus.users.activate', {"user_id": str(user_id)})
     return activated_user.to_resource(), 200
 
 
@@ -85,7 +73,7 @@ def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
     Returns: {}
     """
     user_resource[user_id].delete()
-    get_yapper().emit('campus.users.delete', {"user_id": str(user_id)})
+    _yapper.get().emit('campus.users.delete', {"user_id": str(user_id)})
     return {}, 200
 
 

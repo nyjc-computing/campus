@@ -10,24 +10,12 @@ Authentication is handled in a global routes.before_request hook.
 import flask
 
 from campus.common import flask_campus, schema
-import campus.yapper
+from .. import get_yapper
 
 from ..resources import login as login_resource
 
 # Create blueprint for login management routes
 bp = flask.Blueprint('logins', __name__, url_prefix='/logins')
-
-# Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
-
-
-def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
 
 
 @bp.post("/")
@@ -59,7 +47,7 @@ def new(
         device_id=device_id,
         agent_string=agent_string,
     )
-    get_yapper().emit(
+    _yapper.get().emit(
         'campus.logins.new',
         {
             "id": str(loginsession.id),
@@ -78,7 +66,7 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     DELETE /logins/<session_id>/
     """
     login_resource[session_id].delete()
-    get_yapper().emit('campus.logins.delete', {"id": str(session_id)})
+    _yapper.get().emit('campus.logins.delete', {"id": str(session_id)})
     return {}, 200
 
 
@@ -108,7 +96,7 @@ def update(
     loginsession = login_resource[session_id].update(
         expiry_seconds=expiry_seconds
     )
-    get_yapper().emit(
+    _yapper.get().emit(
         'campus.logins.update',
         {"id": str(session_id), "expiry_seconds": expiry_seconds}
     )

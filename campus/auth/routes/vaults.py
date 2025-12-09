@@ -11,24 +11,12 @@ Authentication is handled in a global routes.before_request hook.
 import flask
 
 from campus.common import flask_campus
-import campus.yapper
+from .. import get_yapper
 
 from ..resources import vault as vault_resource
 
 # Create blueprint for vault management routes
 bp = flask.Blueprint('vaults', __name__, url_prefix='/vaults')
-
-# Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
-
-
-def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
 
 
 @bp.get("/<label>/")
@@ -57,7 +45,7 @@ def delete(label: str, key: str) -> flask_campus.JsonResponse:
     Returns: {}
     """
     del vault_resource[label][key]
-    get_yapper().emit('campus.vaults.key.delete', {"label": label, "key": key})
+    _yapper.get().emit('campus.vaults.key.delete', {"label": label, "key": key})
     return {}, 200
 
 
@@ -93,5 +81,5 @@ def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
     }
     """
     vault_resource[label][key] = value
-    get_yapper().emit('campus.vaults.key.update', {"label": label, "key": key})
+    _yapper.get().emit('campus.vaults.key.update', {"label": label, "key": key})
     return {"key": value}, 200

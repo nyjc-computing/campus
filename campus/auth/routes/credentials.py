@@ -9,24 +9,12 @@ import flask
 
 from campus.common import flask_campus, schema
 import campus.model
-import campus.yapper
+from .. import get_yapper
 
 from ..resources import credentials as creds_resource
 
 # Create blueprint for session management routes
 bp = flask.Blueprint('credentials', __name__, url_prefix='/credentials')
-
-# Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
-
-
-def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
 
 
 @bp.get("/<provider>/")

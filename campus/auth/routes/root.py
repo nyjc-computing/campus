@@ -12,7 +12,7 @@ import flask
 
 from campus.common import flask_campus, schema
 from campus.common.errors import api_errors
-import campus.yapper
+from .. import _yapper
 
 import campus_python
 
@@ -26,12 +26,11 @@ from ..resources import (
 bp = flask.Blueprint('root', __name__, url_prefix='/root')
 
 # Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
 
 campus_auth = campus_python.Campus(timeout=60).auth
 
 
-def get_yapper():
+def _yapper.get():
     """Get yapper instance, creating it lazily to avoid circular
     dependencies."""
     global _yapper_instance
@@ -89,7 +88,7 @@ def authenticate_credentials(
             "error": "Invalid client credentials."
         }
         status_code = 401
-    get_yapper().emit(
+    _yapper.get().emit(
         "campus.root.authenticate",
         {
             "client_id": client_id,
@@ -114,7 +113,7 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
             "user": user_resource[user_creds.user_id].get().to_resource(),
         }
         status_code = 200
-    yapper = get_yapper().emit(
+    yapper = _yapper.get().emit(
         "campus.root.authenticate",
         {
             "token_id": token,
