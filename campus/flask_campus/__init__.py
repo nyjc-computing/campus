@@ -1,9 +1,8 @@
-"""campus.common.validation.flask
+"""campus.flask_campus
 
 Common utility functions for validation of flask requests and responses.
 """
 
-import typing
 import inspect
 from functools import wraps
 from json import JSONDecodeError
@@ -15,15 +14,15 @@ from typing import (
     NoReturn,
     Protocol,
     Type,
-    TypeVar
+    TypeVar,
 )
 
 import flask
 from werkzeug import Response as FlaskResponse
 
+import campus.model
 from campus.common.errors import api_errors
 from campus.common.validation import record
-import campus.model
 
 from . import parameter
 
@@ -33,7 +32,16 @@ R = TypeVar("R", covariant=True)
 JsonObject = dict[str, Any]
 StatusCode = int
 
-ViewFunctionDecorator = Callable[["ViewFunction"], "ViewFunction"]
+
+class ViewFunction(Protocol, Generic[R]):
+    """A view function that takes arbitrary arguments and returns a response.
+    """
+
+    def __call__(self, *args: str, **kwargs) -> R:
+        ...
+
+
+ViewFunctionDecorator = Callable[[ViewFunction], ViewFunction]
 # Actually, view functions may return a variety of return values which Flask is
 # able to handle
 # But Campus API sticks to JSON-serializable return values, with a status code
@@ -50,14 +58,6 @@ class ErrorHandler(Protocol):
 
     def __call__(self, status: StatusCode, **body) -> NoReturn:
         """An error handler returns None"""
-        ...
-
-
-class ViewFunction(Protocol, Generic[R]):
-    """A view function that takes arbitrary arguments and returns a response.
-    """
-
-    def __call__(self, *args: str, **kwargs) -> R:
         ...
 
 
@@ -79,7 +79,7 @@ def get_request_headers() -> campus.model.HttpHeader:
     return campus.model.HttpHeader(flask.request.headers.items())
 
 
-def get_request_payload() -> dict[str, typing.Any]:
+def get_request_payload() -> dict[str, Any]:
     """Get the JSON payload from the Flask request."""
     if not flask.has_request_context():
         raise RuntimeError("No Flask request context available")
@@ -102,9 +102,9 @@ def get_request_payload() -> dict[str, typing.Any]:
 
 
 def unpack_into(
-        func: typing.Callable[..., typing.Any],
-        **request_args: typing.Any,
-) -> typing.Any:
+        func: Callable[..., Any],
+        **request_args: Any,
+) -> Any:
     """Unpack request arguments into the given function's arguments,
     based on its signature.
     """
@@ -119,8 +119,8 @@ def unpack_into(
 
 
 def unpack_request(
-        func: typing.Callable[..., typing.Any]
-) -> typing.Callable[[], typing.Any]:
+        func: Callable[..., Any]
+) -> Callable[[], Any]:
     """Decorator that unpacks Flask request into the decorated function's
     arguments, based on its signature.
 
@@ -140,7 +140,7 @@ def unpack_request(
         )
 
     @wraps(func)
-    def wrappervf(*args, **kwargs) -> typing.Any:
+    def wrappervf(*args, **kwargs) -> Any:
         """The view function presented to Flask"""
         assert not args, f"Positional arguments not supported: {args}"
         request_args = get_request_payload()

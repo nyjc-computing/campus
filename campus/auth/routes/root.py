@@ -8,17 +8,21 @@ backend services (e.g. campus.api), not by other clients.
 All access must be carefully authenticated and authorized.
 """
 
+import campus_python
 import flask
 
-from campus.common import flask_campus, schema
+from campus import flask_campus
+from campus.common import schema
 from campus.common.errors import api_errors
+
 from .. import get_yapper
-
-import campus_python
-
 from ..resources import (
     client as client_resource,
+)
+from ..resources import (
     credentials as creds_resource,
+)
+from ..resources import (
     user as user_resource,
 )
 
@@ -77,7 +81,7 @@ def authenticate_credentials(
             "error": "Invalid client credentials."
         }
         status_code = 401
-    _yapper.get().emit(
+    get_yapper().emit(
         "campus.root.authenticate",
         {
             "client_id": client_id,
@@ -102,7 +106,7 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
             "user": user_resource[user_creds.user_id].get().to_resource(),
         }
         status_code = 200
-    yapper = _yapper.get().emit(
+    get_yapper().emit(
         "campus.root.authenticate",
         {
             "token_id": token,

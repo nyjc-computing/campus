@@ -3,14 +3,14 @@
 API routes for the circles resource.
 """
 
+import campus_python
 import flask
 
-import campus_python
-
-from campus.common import flask_campus, schema
-from campus.common.errors import api_errors
 import campus.model
 import campus.yapper
+from campus import flask_campus
+from campus.common import schema
+from campus.common.errors import api_errors
 
 from .. import resources
 

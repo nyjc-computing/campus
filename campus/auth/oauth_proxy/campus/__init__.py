@@ -10,7 +10,8 @@ implement server-side storage for session management.
 import flask
 import werkzeug
 
-from campus.common import flask_campus, schema
+from campus import flask_campus
+from campus.common import schema
 from campus.common.errors import auth_errors
 
 from . import proxy

@@ -48,10 +48,11 @@ def create(**kwargs) -> YapperInterface:
     """
     # Lazy-import locally to avoid polluting global namespace
     import os
+
     import campus_python
 
-    from .backends.sqlite import SQLiteYapper
     from .backends.postgres import PostgreSQLYapper
+    from .backends.sqlite import SQLiteYapper
 
     # Create Campus client for vault access (only used if needed)
     campus = campus_python.Campus(timeout=60)

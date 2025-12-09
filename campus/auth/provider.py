@@ -36,10 +36,11 @@ Legend:
 import flask
 import werkzeug
 
-from campus.common import flask_campus, schema
+import campus.config
+from campus import flask_campus
+from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import utc_time
-import campus.config
 
 from . import resources
 

@@ -10,7 +10,8 @@ __all__ = ["init_app"]
 import campus_python
 import flask
 
-from campus.common import env, flask_campus
+from campus import flask_campus
+from campus.common import env
 from campus.common.errors import auth_errors
 
 # Other local imports are intentionally omitted to avoid circular
@@ -23,8 +24,9 @@ auth_root = campus.auth.root
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
-    from . import routes
     from campus.common import webauth
+
+    from . import routes
 
     # Organise API routes under api blueprint
     bp = flask.Blueprint('api_v1', __name__, url_prefix='/api/v1')

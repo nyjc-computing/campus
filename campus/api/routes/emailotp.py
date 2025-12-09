@@ -5,7 +5,7 @@ API routes for the emailotp resource.
 
 import flask
 
-from campus.common import flask_campus
+from campus import flask_campus
 from campus.common.errors import api_errors
 from campus.services.email import create_email_sender
 

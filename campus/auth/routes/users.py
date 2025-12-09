@@ -10,7 +10,8 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask_campus, schema
+from campus import flask_campus
+from campus.common import schema
 
 from .. import get_yapper
 from ..resources import user as user_resource
@@ -47,7 +48,7 @@ def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
     # Note that no client_secret is generated here
     # Apps are expected to generate the secret separately
     user = user_resource.new(email=email, name=name)
-    _yapper.get().emit('campus.users.create')
+    get_yapper().emit('campus.users.create')
     return user.to_resource(), 201
 
 
@@ -60,7 +61,7 @@ def activate(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """
     user_resource[user_id].activate()
     activated_user = user_resource[user_id].get()
-    _yapper.get().emit('campus.users.activate', {"user_id": str(user_id)})
+    get_yapper().emit('campus.users.activate', {"user_id": str(user_id)})
     return activated_user.to_resource(), 200
 
 
@@ -73,7 +74,7 @@ def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
     Returns: {}
     """
     user_resource[user_id].delete()
-    _yapper.get().emit('campus.users.delete', {"user_id": str(user_id)})
+    get_yapper().emit('campus.users.delete', {"user_id": str(user_id)})
     return {}, 200
 
 

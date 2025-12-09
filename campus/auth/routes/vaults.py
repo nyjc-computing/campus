@@ -10,7 +10,7 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask_campus
+from campus import flask_campus
 
 from .. import get_yapper
 from ..resources import vault as vault_resource
