@@ -51,13 +51,21 @@ class VaultResource:
         Args:
             key: The vault key (e.g., "apps", "storage", "oauth")
         """
-        rec = vault_storage.get_matching(
+        records = vault_storage.get_matching(
             {"key": key, "label": self.label}
         )
-        if rec is None:
+        if records is None or len(records) == 0:
             raise KeyError(f"{key!r} not found in {self.label!r}")
-        assert len(rec) == 1
-        return rec[0]["value"]
+        
+        if len(records) != 1:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Expected 1 record for key={key!r} label={self.label!r}, "
+                f"got {len(records)} records: {records}"
+            )
+        
+        return records[0]["value"]
 
     def __setitem__(self, key: str, value: str) -> None:
         """Set a vault item by key.
