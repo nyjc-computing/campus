@@ -120,7 +120,12 @@ class ProviderAuthSessionResource:
         target: schema.Url | None = None,
     ) -> campus.model.AuthSession:
         """Create a new session."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SESSION] Creating new session for provider={self.provider}, client_id={client_id}")
+        
         session_id = uid.generate_category_uid(f"{self.provider}_session")
+        logger.info(f"[SESSION] Generated session_id={session_id}")
         session = _from_record({
             "id": session_id,
             "expiry_seconds": expiry_seconds,
@@ -136,9 +141,12 @@ class ProviderAuthSessionResource:
             "state": state or session_id,
             "target": target,
         })
+        logger.info(f"[SESSION] Inserting session into storage...")
         try:
             session_storage.insert_one(session.to_storage())
+            logger.info(f"[SESSION] Successfully inserted session {session_id}")
         except Exception as e:
+            logger.error(f"[SESSION] Failed to insert session: {e}")
             raise api_errors.InternalError.from_exception(e)
         else:
             return session

@@ -88,7 +88,11 @@ def _model_to_sql_schema(name: str, model: type[Model]) -> str:
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("[DB] Fetching POSTGRESDB_URI...")
     db_uri = env.getsecret("POSTGRESDB_URI", env.DEPLOY)
+    logger.info("[DB] Got POSTGRESDB_URI")
     return db_uri
 
 
@@ -112,8 +116,14 @@ class PostgreSQLTable(TableInterface):
             RuntimeError: If vault secret retrieval fails
             psycopg2.Error: If database connection fails
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info("[DB] Getting database connection...")
         db_uri = _get_db_uri()
-        return psycopg2.connect(db_uri)
+        logger.info("[DB] Connecting to PostgreSQL...")
+        conn = psycopg2.connect(db_uri)
+        logger.info("[DB] Connected successfully")
+        return conn
 
     @staticmethod
     def _build_where_clause(query: dict) -> tuple[str, list]:
