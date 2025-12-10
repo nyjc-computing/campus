@@ -142,8 +142,14 @@ def unpack_request(
     @wraps(func)
     def wrappervf(*args, **kwargs) -> Any:
         """The view function presented to Flask"""
+        import logging
+        logging.info(
+            f"[DEBUG] unpack_request for {func.__name__}: "
+            f"kwargs={kwargs} args={args}"
+        )
         assert not args, f"Positional arguments not supported: {args}"
         request_args = get_request_payload()
+        logging.info(f"[DEBUG] request_args={request_args}")
         return unpack_into(func, **kwargs, **request_args)
 
     return wrappervf
