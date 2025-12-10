@@ -103,10 +103,13 @@ class GoogleAuthProxy(base.AuthProxy):
         )
         
         # Build params dict
-        params = {
-            "access_type": "offline",
-            "include_granted_scopes": "true",
-        }
+        # NOTE: Temporarily removed access_type and include_granted_scopes
+        # as they may be triggering Google's v3 signin flow which returns 500 errors
+        params = {}
+        # params = {
+        #     "access_type": "offline",
+        #     "include_granted_scopes": "true",
+        # }
         if hd:
             params["hd"] = hd
         if login_hint:
