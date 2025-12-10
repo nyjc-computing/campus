@@ -107,6 +107,8 @@ class GoogleAuthProxy(base.AuthProxy):
             "access_type": "offline",
             "include_granted_scopes": "true",
         }
+        if hd:
+            params["hd"] = hd
         if login_hint:
             params["login_hint"] = login_hint
         if prompt:
