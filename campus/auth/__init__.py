@@ -55,16 +55,5 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     if isinstance(app, flask.Flask):
         from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)
-        
-        # Initialize yapper at startup to avoid circular dependency
-        # during request handling (when yapper tries to access vaults)
-        try:
-            get_yapper()
-            import logging
-            logging.info("Yapper initialized successfully at startup")
-        except Exception as e:
-            import logging
-            logging.error(f"Failed to initialize yapper at startup: {e}")
-            # Don't fail startup - let requests fail if yapper is needed
 
     app.register_blueprint(bp)
