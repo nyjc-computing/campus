@@ -19,7 +19,7 @@ from .. import base
 from ... import resources
 
 PROVIDER = "google"
-REDIRECT_URI = schema.Url(f"https://{env.HOSTNAME}/auth/{PROVIDER}/callback")
+REDIRECT_URI = schema.Url(f"https://{env.HOSTNAME}/auth/v1/{PROVIDER}/callback")
 SCOPE_SEP = " "
 
 

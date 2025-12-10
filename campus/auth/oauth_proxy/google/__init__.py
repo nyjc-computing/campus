@@ -84,12 +84,20 @@ def callback() -> werkzeug.Response:
 
     Dispatches to success or error handlers based on payload type.
     """
+    logger.info("[GOOGLE_CALLBACK] Received callback request")
+    logger.info(f"[GOOGLE_CALLBACK] Request args: {dict(flask.request.args)}")
     callback_payload = flask_campus.get_request_payload()
+    logger.info(f"[GOOGLE_CALLBACK] Parsed payload: {callback_payload}")
     if "error" in callback_payload:
+        logger.error(f"[GOOGLE_CALLBACK] Error in callback: {callback_payload}")
         auth_errors.raise_from_json(callback_payload)
     else:
-        return flask_campus.unpack_into(success_callback,
+        logger.info("[GOOGLE_CALLBACK] Calling success_callback")
+        result = flask_campus.unpack_into(success_callback,
                                         **callback_payload)
+        logger.info(f"[GOOGLE_CALLBACK] Success callback returned: {result}")
+        logger.info(f"[GOOGLE_CALLBACK] Result type: {type(result)}")
+        return result
 
 
 def success_callback(
