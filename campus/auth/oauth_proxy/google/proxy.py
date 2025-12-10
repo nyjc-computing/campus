@@ -103,26 +103,29 @@ class GoogleAuthProxy(base.AuthProxy):
         )
         
         # Build params dict
-        params = {
-            "access_type": "offline",
-            "include_granted_scopes": "true",
-        }
-        if hd:
-            params["hd"] = hd
-        if login_hint:
-            params["login_hint"] = login_hint
-        if prompt:
-            params["prompt"] = prompt
+        # NOTE: Testing with MINIMAL parameters only
+        # All optional parameters commented out to isolate 500 error
+        params = {}
+        # params = {
+        #     "access_type": "offline",
+        #     "include_granted_scopes": "true",
+        # }
+        # if hd:
+        #     params["hd"] = hd
+        # if login_hint:
+        #     params["login_hint"] = login_hint
+        # if prompt:
+        #     params["prompt"] = prompt
             
         logger.info(f"[GOOGLE_OAUTH] Building authorization URL with params: {params}")
         logger.info(f"[GOOGLE_OAUTH] Session ID: {authsession.id}")
         logger.info(f"[GOOGLE_OAUTH] Redirect URI: {REDIRECT_URI}")
         logger.info(f"[GOOGLE_OAUTH] Scopes: {self._oauth2.scopes}")
         
-        # TEST: Remove state parameter entirely to see if that's causing 500
-        logger.info("[GOOGLE_OAUTH] TEST: Generating URL WITHOUT state parameter")
+        # TEST: Using simple static state to isolate issue
+        logger.info("[GOOGLE_OAUTH] TEST: Using static state value")
         authorization_url = self._oauth2.get_authorization_url(
-            state="test-static-state",  # Use simple static string
+            state="test-static-state",
             **params
         )
         logger.info(f"[GOOGLE_OAUTH] Generated authorization URL: {authorization_url}")
