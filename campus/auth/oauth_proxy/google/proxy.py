@@ -92,20 +92,38 @@ class GoogleAuthProxy(base.AuthProxy):
             prompt: _PROMPT_OPTIONS = None,
     ) -> werkzeug.Response:
         """Redirect to Google OAuth2 authorization endpoint."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         authsession = self.init_authsession(
             expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
             redirect_uri=REDIRECT_URI,
             scopes=self._oauth2.scopes,
             target=target
         )
+        
+        # Build params dict
+        params = {
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+        }
+        if hd:
+            params["hd"] = hd
+        if login_hint:
+            params["login_hint"] = login_hint
+        if prompt:
+            params["prompt"] = prompt
+            
+        logger.info(f"[GOOGLE_OAUTH] Building authorization URL with params: {params}")
+        logger.info(f"[GOOGLE_OAUTH] Session ID: {authsession.id}")
+        logger.info(f"[GOOGLE_OAUTH] Redirect URI: {REDIRECT_URI}")
+        logger.info(f"[GOOGLE_OAUTH] Scopes: {self._oauth2.scopes}")
+        
         authorization_url = self._oauth2.get_authorization_url(
             state=authsession.id,
-            access_type="offline",
-            include_granted_scopes="true",
-            **{"hd": hd} if hd else {},
-            **{"login_hint": login_hint} if login_hint else {},
-            **{"prompt": prompt} if prompt else {}
+            **params
         )
+        logger.info(f"[GOOGLE_OAUTH] Generated authorization URL: {authorization_url}")
         return flask.redirect(authorization_url)
 
     def handle_auth_callback(
