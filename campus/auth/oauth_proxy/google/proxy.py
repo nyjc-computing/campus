@@ -103,13 +103,10 @@ class GoogleAuthProxy(base.AuthProxy):
         )
         
         # Build params dict
-        # NOTE: Adding parameters back incrementally after fixing user-agent issue
         params = {
-            "include_granted_scopes": "true",  # Step 1: Add incremental auth
+            "access_type": "offline",
+            "include_granted_scopes": "true",
         }
-        # params = {
-        #     "access_type": "offline",  # TODO: Add back in step 2
-        # }
         # if hd:
         #     params["hd"] = hd  # TODO: Add back for domain restriction
         # if login_hint:
