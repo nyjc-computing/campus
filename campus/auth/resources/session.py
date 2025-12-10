@@ -217,7 +217,7 @@ class AuthSessionResource:
         try:
             session_storage.update_by_id(
                 session_id,
-                {"user_id": str(user_id)}
+                {"user_id": user_id}
             )
         except campus.storage.errors.NotFoundError as e:
             raise api_errors.ConflictError(
