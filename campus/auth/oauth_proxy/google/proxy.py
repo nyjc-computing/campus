@@ -129,7 +129,18 @@ class GoogleAuthProxy(base.AuthProxy):
             **params
         )
         logger.info(f"[GOOGLE_OAUTH] Generated authorization URL: {authorization_url}")
-        return flask.redirect(authorization_url)
+        
+        # Log incoming request headers from the client
+        logger.info("[GOOGLE_OAUTH] Incoming request headers:")
+        for header, value in flask.request.headers:
+            logger.info(f"[GOOGLE_OAUTH]   {header}: {value}")
+        logger.info(f"[GOOGLE_OAUTH] Request referrer: {flask.request.referrer}")
+        logger.info(f"[GOOGLE_OAUTH] Request user_agent: {flask.request.user_agent}")
+        
+        response = flask.redirect(authorization_url)
+        logger.info(f"[GOOGLE_OAUTH] Redirect response status: {response.status_code}")
+        logger.info(f"[GOOGLE_OAUTH] Redirect response Location: {response.location}")
+        return response
 
     def handle_auth_callback(
             self,
