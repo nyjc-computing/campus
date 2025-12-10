@@ -238,9 +238,9 @@ def _from_record(
     args: dict[str, typing.Any] = {}
     if "id" in record:
         args["id"] = schema.CampusID(record["id"])
-    if "created_at" in record:
+    if "created_at" in record and record["created_at"] is not None:
         args["created_at"] = schema.DateTime(record["created_at"])
-    if "expires_at" in record:
+    if "expires_at" in record and record["expires_at"] is not None:
         args["expires_at"] = schema.DateTime(record["expires_at"])
     args["provider"] = record["provider"]
     args["client_id"] = schema.CampusID(record["client_id"])
