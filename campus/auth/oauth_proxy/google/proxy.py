@@ -107,12 +107,12 @@ class GoogleAuthProxy(base.AuthProxy):
             "access_type": "offline",
             "include_granted_scopes": "true",
         }
-        # if hd:
-        #     params["hd"] = hd  # TODO: Add back for domain restriction
-        # if login_hint:
-        #     params["login_hint"] = login_hint
-        # if prompt:
-        #     params["prompt"] = prompt
+        if hd:
+            params["hd"] = hd
+        if login_hint:
+            params["login_hint"] = login_hint
+        if prompt:
+            params["prompt"] = prompt
             
         logger.info(f"[GOOGLE_OAUTH] Building authorization URL with params: {params}")
         logger.info(f"[GOOGLE_OAUTH] Session ID: {authsession.id}")
