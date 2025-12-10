@@ -127,7 +127,7 @@ def authorize(
 
     # Redirect to Google for OAuth
     params = {
-        "target": flask.url_for('.callback', _external=True)
+        "target": flask.url_for('auth.google.callback', _external=True)
     }
     if hd:
         params["hd"] = hd
