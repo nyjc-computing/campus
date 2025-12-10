@@ -57,8 +57,8 @@ class GoogleAuthProxy(base.AuthProxy):
                 "https://www.googleapis.com/oauth2/v3/userinfo"
             ),
             scopes=[
-                "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile"
+                "email",
+                "profile"
             ],
             headers={"Accept": "application/json"},
         )
