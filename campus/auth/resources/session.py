@@ -208,6 +208,11 @@ class AuthSessionResource:
         Only user_id can be updated, since it will only be known after
         user has authenticated.
         """
+        if user_id is None:
+            raise api_errors.InvalidRequestError(
+                "user_id cannot be None for session update",
+                session_id=session_id
+            )
         provider = self.parent.provider
         try:
             session_storage.update_by_id(
