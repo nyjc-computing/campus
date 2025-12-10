@@ -37,8 +37,8 @@ class CampusAuthProxy(base.AuthProxy):
         client_id=env.CLIENT_ID,
         redirect_uri=REDIRECT_URI,
         provider=PROVIDER,
-        authorization_url=schema.Url(f"https://{env.HOSTNAME}/authorize"),
-        token_url=schema.Url(f"https://{env.HOSTNAME}/token"),
+        authorization_url=schema.Url(f"https://{env.HOSTNAME}/auth/v1/authorize"),
+        token_url=schema.Url(f"https://{env.HOSTNAME}/auth/v1/token"),
         user_info_url=None,
         scopes=[
             "campus.profile",
