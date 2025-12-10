@@ -177,7 +177,7 @@ def update_provider_session(
     """
     updates = {}
     if user_id is not None:
-        updates["user_id"] = str(user_id)
+        updates["user_id"] = user_id
     if authorization_code is not None:
         updates["authorization_code"] = authorization_code
     session_resource[provider][session_id].update(**updates)
