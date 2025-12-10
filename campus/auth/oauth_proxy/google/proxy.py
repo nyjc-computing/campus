@@ -153,6 +153,11 @@ class GoogleAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             token=token,
         )
+        # Update authsession with user_id before finalizing
+        resources.session[PROVIDER][authsession.id].update(
+            session_id=authsession.id,
+            user_id=user_id
+        )
         self.finalize_authsession(authsession)
         return credentials
 
