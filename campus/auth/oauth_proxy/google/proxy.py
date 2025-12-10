@@ -103,31 +103,47 @@ class GoogleAuthProxy(base.AuthProxy):
         )
         
         # Build params dict
-        # NOTE: Temporarily removed access_type and include_granted_scopes
-        # as they may be triggering Google's v3 signin flow which returns 500 errors
+        # NOTE: Testing with MINIMAL parameters only
+        # Starting with just what worked in manual test:
+        # client_id, redirect_uri, response_type, scope, state
+        # These are added automatically by get_authorization_url()
         params = {}
+        
+        # Commented out ALL optional parameters for testing
         # params = {
         #     "access_type": "offline",
         #     "include_granted_scopes": "true",
         # }
-        # NOTE: Temporarily commenting out hd to test with personal Google account
         # if hd:
         #     params["hd"] = hd
-        if login_hint:
-            params["login_hint"] = login_hint
-        if prompt:
-            params["prompt"] = prompt
+        # if login_hint:
+        #     params["login_hint"] = login_hint
+        # if prompt:
+        #     params["prompt"] = prompt
             
         logger.info(f"[GOOGLE_OAUTH] Building authorization URL with params: {params}")
         logger.info(f"[GOOGLE_OAUTH] Session ID: {authsession.id}")
         logger.info(f"[GOOGLE_OAUTH] Redirect URI: {REDIRECT_URI}")
         logger.info(f"[GOOGLE_OAUTH] Scopes: {self._oauth2.scopes}")
+        logger.info(f"[GOOGLE_OAUTH] Client ID: {self._CLIENT_ID}")
+        logger.info(f"[GOOGLE_OAUTH] Authorization endpoint: {self._oauth2.authorization_url}")
         
         authorization_url = self._oauth2.get_authorization_url(
             state=authsession.id,
             **params
         )
         logger.info(f"[GOOGLE_OAUTH] Generated authorization URL: {authorization_url}")
+        logger.info(f"[GOOGLE_OAUTH] URL length: {len(authorization_url)} characters")
+        
+        # Parse and log URL components for debugging
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(authorization_url)
+        query_params = parse_qs(parsed.query)
+        logger.info(f"[GOOGLE_OAUTH] URL scheme: {parsed.scheme}")
+        logger.info(f"[GOOGLE_OAUTH] URL netloc: {parsed.netloc}")
+        logger.info(f"[GOOGLE_OAUTH] URL path: {parsed.path}")
+        logger.info(f"[GOOGLE_OAUTH] Query params: {query_params}")
+        
         return flask.redirect(authorization_url)
 
     def handle_auth_callback(
