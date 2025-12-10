@@ -119,25 +119,12 @@ class GoogleAuthProxy(base.AuthProxy):
         logger.info(f"[GOOGLE_OAUTH] Redirect URI: {REDIRECT_URI}")
         logger.info(f"[GOOGLE_OAUTH] Scopes: {self._oauth2.scopes}")
         
-        # TEST: Using simple static state to isolate issue
-        logger.info("[GOOGLE_OAUTH] TEST: Using static state value")
         authorization_url = self._oauth2.get_authorization_url(
-            state="test-static-state",
+            state=authsession.id,
             **params
         )
         logger.info(f"[GOOGLE_OAUTH] Generated authorization URL: {authorization_url}")
-        
-        # Log incoming request headers from the client
-        logger.info("[GOOGLE_OAUTH] Incoming request headers:")
-        for header, value in flask.request.headers:
-            logger.info(f"[GOOGLE_OAUTH]   {header}: {value}")
-        logger.info(f"[GOOGLE_OAUTH] Request referrer: {flask.request.referrer}")
-        logger.info(f"[GOOGLE_OAUTH] Request user_agent: {flask.request.user_agent}")
-        
-        response = flask.redirect(authorization_url)
-        logger.info(f"[GOOGLE_OAUTH] Redirect response status: {response.status_code}")
-        logger.info(f"[GOOGLE_OAUTH] Redirect response Location: {response.location}")
-        return response
+        return flask.redirect(authorization_url)
 
     def handle_auth_callback(
             self,
