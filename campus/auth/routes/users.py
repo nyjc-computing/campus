@@ -12,6 +12,7 @@ import flask
 
 from campus import flask_campus
 from campus.common import schema
+from campus.common.errors import api_errors
 
 from .. import get_yapper
 from ..resources import user as user_resource
@@ -86,6 +87,10 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
     GET /users/{user_id}
     Returns: User
     """
+    if user_id is None:
+        raise api_errors.InvalidRequestError("user_id is None - check URL path")
+    if not user_id:
+        raise api_errors.InvalidRequestError(f"user_id is empty: {user_id!r}")
     user = user_resource[user_id].get()
     return user.to_resource(), 200
 
