@@ -203,7 +203,7 @@ class PostgreSQLTable(TableInterface):
                     conn.rollback()
                     raise errors.ConflictError(
                         message="Conflict occurred during insert",
-                        collection_name=self.name,
+                        group_name=self.name,
                         details={"row": row, "error": str(e)}
                     ) from e
                 except psycopg2.Error as e:
