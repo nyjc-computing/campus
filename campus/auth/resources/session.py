@@ -244,7 +244,7 @@ def _from_record(
         args["expires_at"] = schema.DateTime(record["expires_at"])
     args["provider"] = record["provider"]
     args["client_id"] = schema.CampusID(record["client_id"])
-    if "user_id" in record:
+    if "user_id" in record and record["user_id"] is not None:
         args["user_id"] = schema.UserID(record["user_id"])
     args["redirect_uri"] = schema.Url(record["redirect_uri"])
     if "scopes" in record:

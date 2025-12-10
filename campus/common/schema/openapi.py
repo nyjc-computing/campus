@@ -68,6 +68,8 @@ class String(str):
     """Emulates Python str behavior."""
 
     def __new__(cls, value: str):
+        if value in (None,):
+            raise ValueError("value cannot be None")
         return super().__new__(cls, value)
 
 
