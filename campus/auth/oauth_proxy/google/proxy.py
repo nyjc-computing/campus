@@ -35,32 +35,33 @@ class GoogleAuthProxy(base.AuthProxy):
     description = "OAuth2 authentication endpoints for Google integration with Campus"
     version = "2022-11-28"
     openapi_version = "3.0.3"
-    _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-        provider=PROVIDER,
-        client_id=env.CLIENT_ID,
-        redirect_uri=REDIRECT_URI,
-        authorization_url=schema.Url(
-            "https://accounts.google.com/o/oauth2/v2/auth"
-        ),
-        token_url=schema.Url("https://oauth2.googleapis.com/token"),
-        user_info_url=schema.Url(
-            "https://www.googleapis.com/oauth2/v3/userinfo"
-        ),
-        scopes=[
-            "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/userinfo.profile"
-        ],
-        headers={"Accept": "application/json"},
-    )
     _PROMPT_OPTIONS = Literal[
         "consent",
         "login",
         "none",
         "select_account"
     ] | None
-
+    
     def __init__(self) -> None:
         super().__init__()
+        # Set OAuth2 scheme with credentials from vault (loaded in super().__init__)
+        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+            provider=PROVIDER,
+            client_id=self._CLIENT_ID,
+            redirect_uri=REDIRECT_URI,
+            authorization_url=schema.Url(
+                "https://accounts.google.com/o/oauth2/v2/auth"
+            ),
+            token_url=schema.Url("https://oauth2.googleapis.com/token"),
+            user_info_url=schema.Url(
+                "https://www.googleapis.com/oauth2/v3/userinfo"
+            ),
+            scopes=[
+                "https://www.googleapis.com/auth/userinfo.email",
+                "https://www.googleapis.com/auth/userinfo.profile"
+            ],
+            headers={"Accept": "application/json"},
+        )
 
     @property
     def authorization_url(self) -> schema.Url:
