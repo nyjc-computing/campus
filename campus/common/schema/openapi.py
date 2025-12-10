@@ -179,10 +179,10 @@ class Url(String):
         return super().__new__(cls, str(value))
 
     def __repr__(self) -> str:
-        return f"Url({str(self)})"
+        return f"Url({super().__str__()})"
 
     def __str__(self) -> str:
-        return str(self)
+        return super().__str__()
 
     @property
     def scheme(self) -> str:
