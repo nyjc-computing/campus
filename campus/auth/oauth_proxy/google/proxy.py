@@ -57,8 +57,8 @@ class GoogleAuthProxy(base.AuthProxy):
                 "https://www.googleapis.com/oauth2/v3/userinfo"
             ),
             scopes=[
-                "email",
-                "profile"
+                "https://www.googleapis.com/auth/userinfo.email",
+                "https://www.googleapis.com/auth/userinfo.profile"
             ],
             headers={"Accept": "application/json"},
         )
@@ -103,47 +103,29 @@ class GoogleAuthProxy(base.AuthProxy):
         )
         
         # Build params dict
-        # NOTE: Testing with MINIMAL parameters only
-        # Starting with just what worked in manual test:
-        # client_id, redirect_uri, response_type, scope, state
-        # These are added automatically by get_authorization_url()
-        params = {}
-        
-        # Commented out ALL optional parameters for testing
-        # params = {
-        #     "access_type": "offline",
-        #     "include_granted_scopes": "true",
-        # }
-        # if hd:
-        #     params["hd"] = hd
-        # if login_hint:
-        #     params["login_hint"] = login_hint
-        # if prompt:
-        #     params["prompt"] = prompt
+        params = {
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+        }
+        if hd:
+            params["hd"] = hd
+        if login_hint:
+            params["login_hint"] = login_hint
+        if prompt:
+            params["prompt"] = prompt
             
         logger.info(f"[GOOGLE_OAUTH] Building authorization URL with params: {params}")
         logger.info(f"[GOOGLE_OAUTH] Session ID: {authsession.id}")
         logger.info(f"[GOOGLE_OAUTH] Redirect URI: {REDIRECT_URI}")
         logger.info(f"[GOOGLE_OAUTH] Scopes: {self._oauth2.scopes}")
-        logger.info(f"[GOOGLE_OAUTH] Client ID: {self._CLIENT_ID}")
-        logger.info(f"[GOOGLE_OAUTH] Authorization endpoint: {self._oauth2.authorization_url}")
         
+        # TEST: Remove state parameter entirely to see if that's causing 500
+        logger.info("[GOOGLE_OAUTH] TEST: Generating URL WITHOUT state parameter")
         authorization_url = self._oauth2.get_authorization_url(
-            state=authsession.id,
+            state="test-static-state",  # Use simple static string
             **params
         )
         logger.info(f"[GOOGLE_OAUTH] Generated authorization URL: {authorization_url}")
-        logger.info(f"[GOOGLE_OAUTH] URL length: {len(authorization_url)} characters")
-        
-        # Parse and log URL components for debugging
-        from urllib.parse import urlparse, parse_qs
-        parsed = urlparse(authorization_url)
-        query_params = parse_qs(parsed.query)
-        logger.info(f"[GOOGLE_OAUTH] URL scheme: {parsed.scheme}")
-        logger.info(f"[GOOGLE_OAUTH] URL netloc: {parsed.netloc}")
-        logger.info(f"[GOOGLE_OAUTH] URL path: {parsed.path}")
-        logger.info(f"[GOOGLE_OAUTH] Query params: {query_params}")
-        
         return flask.redirect(authorization_url)
 
     def handle_auth_callback(
