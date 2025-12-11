@@ -157,7 +157,7 @@ class GoogleAuthProxy(base.AuthProxy):
         logger.info(f"Token scopes: {token.scopes}")
         # Verify requested scopes were granted
         scopes = scope.split(SCOPE_SEP)
-        logger.info(f"Required scopes: {token.scopes}")
+        logger.info(f"Required scopes: {scopes}")
         if missing_scopes := token.validate_scope(scopes):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
