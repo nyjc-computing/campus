@@ -53,6 +53,15 @@ def callback() -> werkzeug.Response:
     """
     callback_payload = flask_campus.get_request_payload()
     if "error" in callback_payload:
+        # Get redirect target before raising error to avoid infinite loop
+        try:
+            authsession = flask.g.proxy.get_authsession()
+            redirect_uri = authsession.target
+        except Exception:
+            # If we can't get authsession, redirect to base URL instead of callback
+            redirect_uri = flask.request.host_url
+        # Pass redirect_uri to the error so it doesn't redirect back to callback
+        callback_payload['redirect_uri'] = redirect_uri
         auth_errors.raise_from_json(callback_payload)
     else:
         return flask_campus.unpack_into(success_callback,
