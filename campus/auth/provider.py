@@ -96,8 +96,11 @@ def authorize(
             URI to redirect the user to after authentication
         - scope: str (optional)
             Space-separated list of scopes requested by the client.
-        - state: str (optional)
-            Opaque value used by the client to maintain state between request and callback.
+        - state: str
+            Opaque value used by the client to maintain state between
+            request and callback.
+            Typically used to pass a session ID or target; Campus uses
+            it as session ID
 
     Responses:
         501 Not Implemented: None
@@ -122,17 +125,16 @@ def authorize(
     # e.g. using campus_python
     # Provider should not create a new session, only update it.
     # Session ID should be passed as state parameter
-    if state:
-        try:
-            app_session = resources.session[PROVIDER][state].get()
-        except api_errors.NotFoundError:
-            # TODO: Handle invalid state error by redirecting back to app
-            raise auth_errors.AuthorizationError(f"Invalid state: {state}") \
-                from None
-        if client_id != app_session.client_id:
-            raise auth_errors.UnauthorizedClientError(
-                f"Unauthorized client: {client_id}"
-            )
+    try:
+        app_session = resources.session[PROVIDER][state].get()
+    except api_errors.NotFoundError:
+        # TODO: Handle invalid state error by redirecting back to app
+        raise auth_errors.AuthorizationError(f"Invalid state: {state}") \
+            from None
+    if client_id != app_session.client_id:
+        raise auth_errors.UnauthorizedClientError(
+            f"Unauthorized client: {client_id}"
+        )
 
     # Scope verification not yet handled here.
     # TODO: Create consent screen for user scope consent
