@@ -152,9 +152,12 @@ class AuthProxy(ABC):
     def redirect_for_authorization(
             self,
             target: schema.Url,
+            **kwargs
     ) -> werkzeug.Response:
         """Return a 302 Redirect response to the provider's
         authorization URL.
+
+        Providers may accept additional parameters via kwargs.
         """
 
     @contextlib.contextmanager
