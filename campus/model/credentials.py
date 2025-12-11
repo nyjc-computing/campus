@@ -54,16 +54,16 @@ class OAuthToken(Model):
             at_time=at_time.to_datetime()
         )
 
-    def validate_scope(self, scopes: str | list[str]) -> list[str]:
+    def validate_scope(self, requested_scopes: str | list[str]) -> list[str]:
         """Validate the requested scopes against the session's granted
         scopes.
         Returns the missing scopes.
         """
-        if isinstance(scopes, str):
-            scopes = scopes.split(" ")
+        if isinstance(requested_scopes, str):
+            requested_scopes = requested_scopes.split(" ")
         return [
-            scope for scope in scopes
-            if scope not in self.scopes
+            scope for scope in self.scopes
+            if scope not in requested_scopes
         ]
 
 
