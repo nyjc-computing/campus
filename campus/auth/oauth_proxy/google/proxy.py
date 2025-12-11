@@ -184,6 +184,7 @@ class GoogleAuthProxy(base.AuthProxy):
             state: str,
             code: str,
             scope: str,
+            **kwargs: str,
     ) -> werkzeug.Response:
         """Handles Google OAuth callback for a consent flow."""
         # handle_auth_callback() also retrieves authsession
