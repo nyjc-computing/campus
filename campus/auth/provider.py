@@ -131,9 +131,19 @@ def authorize(
         # TODO: Handle invalid state error by redirecting back to app
         raise auth_errors.AuthorizationError(f"Invalid state: {state}") \
             from None
+
+    # Validate client_id
     if client_id != app_session.client_id:
         raise auth_errors.UnauthorizedClientError(
             f"Unauthorized client: {client_id}"
+        )
+
+    # Update authorization code if not set (for idempotency)
+    if app_session.authorization_code is None:
+        authorization_code = secret.generate_authorization_code()
+        resources.session[PROVIDER][state].update(
+            state,
+            authorization_code=authorization_code
         )
 
     # Scope verification not yet handled here.
@@ -141,13 +151,6 @@ def authorize(
     # The issued token will contain only the scopes allowed for the
     # client and consented by user.
     # The client app should handle insufficient scope errors.
-
-    # Update authorization code
-    authorization_code = secret.generate_authorization_code()
-    resources.session[PROVIDER][state].update(
-        state,
-        authorization_code=authorization_code
-    )
 
     # Redirect to Google for OAuth
     params = {"target": redirect_uri}
