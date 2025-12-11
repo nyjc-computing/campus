@@ -87,7 +87,7 @@ class CampusAuthProxy(base.AuthProxy):
         #     target=target
         # )
         authorization_url = self._oauth2.get_authorization_url(
-            redirect_uri=flask.url_for(".handle_callback"),
+            redirect_uri=flask.url_for(".callback"),
             state=state,
             **{"login_hint": login_hint} if login_hint else {},
         )
