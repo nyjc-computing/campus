@@ -29,8 +29,8 @@ Legend:
 (A) User sends auth request to Campus
 (B) User is redirected to Google for authentication and consent.
 (C) Google redirects the user back to Campus with an authorization code.
-(D) Campus backend exchanges the authorization code directly with Google's
-    token endpoint for user profile.
+(D) Campus backend exchanges the authorization code directly with
+    Google's token endpoint for user profile.
 """
 
 import flask
@@ -106,11 +106,14 @@ def authorize(
         501 Not Implemented: None
         - Returned when missing scopes as this is not implemented yet.
         404 Session not found: None
-        - Returned when the user session is not found and user needs to log in.
+        - Returned when the user session is not found and user needs to
+          log in.
         401 Invalid client_id/user_id: None
-        - Returned when the client_id or user_id in the session does not match the request.
+        - Returned when the client_id or user_id in the session does not
+          match the request.
         302 Found: Redirect
-        - Redirects to the specified redirect URI with the authorization code, as well as state if provided.
+        - Redirects to the specified redirect URI with the
+          authorization code, as well as state if provided.
           e.g. /oauth2/authorize?code=abc123&state=xyz
     """
     if response_type not in campus.config.SUPPORTED_OAUTH2_GRANT_TYPES:
@@ -173,7 +176,8 @@ def token(
         client_secret: str,  # required
 ) -> flask_campus.JsonResponse:
     """Summary:
-        OAuth2 token endpoint for exchanging authorization code for access token.
+        OAuth2 token endpoint for exchanging authorization code for
+        access token.
 
     Method:
         POST /oauth2/token
@@ -198,9 +202,11 @@ def token(
 
     Responses:
         400 Invalid authorization code: None
-        - Returned when the authorization code in the json does not match the one used in the session.
+        - Returned when the authorization code in the json does not
+          match the one used in the session.
         400 Invalid redirect_uri: None
-        - Returned when the redirect_uri does not match the one used in the authorization request.
+        - Returned when the redirect_uri does not match the one used in
+          the authorization request.
         400 Invalid grant_type: None
         - Returned when grant_type is not "authorization_code"
         401 Not authenticated: None
