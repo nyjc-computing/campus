@@ -28,8 +28,14 @@ def is_optional(parameter: inspect.Parameter) -> bool:
     or if it's a *args or **kwargs parameter."""
     return (
         has_default(parameter)
-        or parameter.kind == inspect.Parameter.VAR_KEYWORD
-        or parameter.kind == inspect.Parameter.VAR_POSITIONAL
+        or is_variadic(parameter)
+    )
+
+def is_variadic(parameter: inspect.Parameter) -> bool:
+    """Check if a parameter is variadic (*args or **kwargs)."""
+    return parameter.kind in (
+        inspect.Parameter.VAR_POSITIONAL,
+        inspect.Parameter.VAR_KEYWORD,
     )
 
 
@@ -58,10 +64,12 @@ def reconcile(
     missing_params: list[str] = []
     for name, param in func_params.items():
         arg = request_args.get(name, MISSING)
-        if not is_optional(param) and arg is MISSING:
-            missing_params.append(name)
-        else:
+        if is_variadic(param) and (arg != {} and arg != ()):
+            reconciled[name] = arg
+        elif is_optional(param):
             reconciled[name] = param.default if arg is MISSING else arg
+        else:
+            missing_params.append(name)
     extra_args = {k: v for k, v in request_args.items()
                   if k not in func_params}
     if allow_extra:
