@@ -232,9 +232,8 @@ class UserCredentialsResource:
                 cred_record['id'],
                 {"token_id": token.id}
             )
-            # UserCredentials.from_storage requires token, not token_id
+            # UserCredentials.from_storage requires token
             cred_record["token"] = token
-            del cred_record["token_id"]
             credentials = campus.model.UserCredentials.from_storage(
                 cred_record
             )
