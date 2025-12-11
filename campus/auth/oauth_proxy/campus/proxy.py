@@ -100,8 +100,8 @@ class CampusAuthProxy(base.AuthProxy):
         self.validate_authsession(authsession, state)
         # auth_session user_id should have been updated by
         # auth.provider.callback
-        auth_session = resources.session[PROVIDER].get(code)
-        if not auth_session.user_id:
+        # Use the authsession we already have, don't try to get by code
+        if not authsession.user_id:
             raise auth_errors.InvalidRequestError(
                 "User ID not found in auth session"
             )
@@ -119,13 +119,13 @@ class CampusAuthProxy(base.AuthProxy):
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
         # Verify domain is permitted
-        if not auth_session.user_id.domain == env.WORKSPACE_DOMAIN:
+        if not authsession.user_id.domain == env.WORKSPACE_DOMAIN:
             raise token_errors.InvalidGrantError(
                 f"Domain not allowed",
-                domain=auth_session.user_id.domain
+                domain=authsession.user_id.domain
             )
         # Store/update token
-        resources.credentials[PROVIDER][auth_session.user_id].update(
+        resources.credentials[PROVIDER][authsession.user_id].update(
             client_id=self._CLIENT_ID,
             token=token,
         )
