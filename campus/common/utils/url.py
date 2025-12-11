@@ -3,7 +3,7 @@
 This module provides utility functions for URL manipulation and validation.
 """
 
-from typing import Any
+import typing
 from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
 
 import flask
@@ -17,7 +17,7 @@ def create_url(
         domain: str = '',
         protocol: str = "https",
         path: str = '/',
-        params: dict[str, Any] | None = None
+        params: dict[str, typing.Any] | None = None
 ) -> str:
     """Create a URL from the given components."""
     query_string = urlencode(params or {})
@@ -54,9 +54,9 @@ def full_url_for(
     return full_url
 
 
-def with_params(
+def add_query(
         url: str,
-        **params: Any
+        **additional_queries: str
 ) -> str:
     """Add query parameters to the given URL."""
     # Verify that url does not have params and is an absolute URL
@@ -65,6 +65,11 @@ def with_params(
         raise ValueError("URL must be absolute with scheme and domain.")
     if parse_result.params != '':
         raise ValueError("URL must not contain params component.")
-    new_query = urlencode(params, doseq=True)
-    new_parse_result = parse_result._replace(query=new_query)
+    # https://docs.python.org/3/library/urllib.parse.html#urllib.parse.parse_qs
+    # query is a dict[str, list[str]]
+    query = parse_qs(parse_result.query, strict_parsing=True)
+    for k, v in additional_queries.items():
+        query[k] = [v]
+    new_qs = urlencode(query, doseq=True)
+    new_parse_result = parse_result._replace(query=new_qs)
     return urlunparse(new_parse_result)
