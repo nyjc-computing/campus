@@ -10,8 +10,7 @@ import werkzeug
 
 from campus.common import env, schema, webauth
 from campus.common.errors import api_errors, auth_errors, token_errors
-
-from campus.campus.common.utils import url
+from campus.common.utils import url
 
 from .. import base
 from ... import resources
