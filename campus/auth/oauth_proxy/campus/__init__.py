@@ -41,8 +41,8 @@ def authorize(
     """Prepares the Campus OAuth authorization URL and redirects to it.
     """
     return flask.g.proxy.redirect_for_authorization(
-        state,
         target,
+        state=state,
         login_hint=login_hint,
     )
 

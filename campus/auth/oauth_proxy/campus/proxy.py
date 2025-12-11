@@ -73,9 +73,9 @@ class CampusAuthProxy(base.AuthProxy):
 
     def redirect_for_authorization(
             self,
-            state: str,  # auth session ID
             target: schema.Url,
             *,
+            state: str,  # auth session ID
             login_hint: schema.Email | None = None,  # email hint
     ) -> werkzeug.Response:
         """Redirect to Campus OAuth2 authorization endpoint."""
