@@ -72,6 +72,9 @@ class String(str):
             raise ValueError("value cannot be None")
         return super().__new__(cls, value)
 
+    def __str__(self) -> str:
+        return super().__str__()
+
 
 class DateTime(String):
     """Emulates Python datetime behavior.
@@ -85,7 +88,7 @@ class DateTime(String):
         return super().__new__(cls, value)
 
     def __repr__(self) -> str:
-        return f"DateTime({str(self)})"
+        return f"DateTime({self})"
 
     @classmethod
     def from_datetime(cls: Type[Self], dt: utc_time.datetime) -> Self:
@@ -158,10 +161,7 @@ class Email(String):
         return super().__new__(cls, str(value))
 
     def __repr__(self) -> str:
-        return f"Email({str(self)})"
-
-    def __str__(self) -> str:
-        return str(self)
+        return f"Email({self})"
 
     @property
     def user(self) -> str:
