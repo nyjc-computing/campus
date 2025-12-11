@@ -222,7 +222,7 @@ class AuthSessionResource:
                 session_id=self.session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e) from None
+            raise api_errors.InternalError.from_exception(e) from e
         session = self.get()
         assert session
         return session
