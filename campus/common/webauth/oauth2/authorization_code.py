@@ -105,8 +105,12 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             id=token_payload["access_token"],
             created_at=request_time,
             expiry_seconds=token_payload["expires_in"],
-            refresh_token=token_payload["refresh_token"],
             scopes=token_payload["scope"].split(" "),
+            **(
+                {"refresh_token": token_payload["refresh_token"]}
+                if "refresh_token" in token_payload
+                else {}
+            )
         )
 
     def get_authorization_url(
