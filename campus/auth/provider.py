@@ -138,7 +138,7 @@ def authorize(
     # Validate client_id
     if client_id != app_session.client_id:
         raise auth_errors.UnauthorizedClientError(
-            f"Unauthorized client: {client_id}"
+            f"Client mismatch: {client_id}"
         )
 
     # Update authorization code if not set (for idempotency)
