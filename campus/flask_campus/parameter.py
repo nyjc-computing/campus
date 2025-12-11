@@ -64,12 +64,21 @@ def reconcile(
     missing_params: list[str] = []
     for name, param in func_params.items():
         arg = request_args.get(name, MISSING)
-        if is_variadic(param) and (arg != {} and arg != ()):
-            reconciled[name] = arg
+        if is_variadic(param):
+            # Variadic parameter (*args, **kwargs): only include if
+            # present and non-empty
+            if arg is not MISSING and arg != {} and arg != ():
+                reconciled[name] = arg
         elif is_optional(param):
+            # Optional parameter: use default if missing, otherwise use
+            # provided value
             reconciled[name] = param.default if arg is MISSING else arg
         else:
-            missing_params.append(name)
+            # Required parameter: must be present in request_args
+            if arg is MISSING:
+                missing_params.append(name)
+            else:
+                reconciled[name] = arg
     extra_args = {k: v for k, v in request_args.items()
                   if k not in func_params}
     if allow_extra:
