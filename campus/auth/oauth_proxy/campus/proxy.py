@@ -121,7 +121,7 @@ class CampusAuthProxy(base.AuthProxy):
         # Verify domain is permitted
         if not authsession.user_id.domain == env.WORKSPACE_DOMAIN:
             raise token_errors.InvalidGrantError(
-                f"Domain not allowed",
+                "Domain not allowed",
                 domain=authsession.user_id.domain
             )
         # Store/update token
