@@ -24,8 +24,13 @@ def is_keyword_supported(parameter: inspect.Parameter) -> bool:
 def is_optional(parameter: inspect.Parameter) -> bool:
     """Check if a parameter is optional.
 
-    A parameter is considered optional if it has a default value."""
-    return has_default(parameter)
+    A parameter is considered optional if it has a default value,
+    or if it's a *args or **kwargs parameter."""
+    return (
+        has_default(parameter)
+        or parameter.kind == inspect.Parameter.VAR_KEYWORD
+        or parameter.kind == inspect.Parameter.VAR_POSITIONAL
+    )
 
 
 def reconcile(
