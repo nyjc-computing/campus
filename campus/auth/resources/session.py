@@ -199,7 +199,6 @@ class AuthSessionResource:
 
     def update(
             self,
-            session_id: schema.CampusID,
             *,
             user_id: schema.UserID | None = None,
             authorization_code: str | None = None,
@@ -216,11 +215,11 @@ class AuthSessionResource:
         if authorization_code is not None:
             update["authorization_code"] = authorization_code
         try:
-            session_storage.update_by_id(session_id, update)
+            session_storage.update_by_id(self.session_id, update)
         except campus.storage.errors.NotFoundError as e:
             raise api_errors.ConflictError(
                 message="Session not found",
-                session_id=session_id
+                session_id=self.session_id
             ) from e
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from None

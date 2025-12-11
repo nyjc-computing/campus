@@ -145,7 +145,6 @@ def authorize(
     if app_session.authorization_code is None:
         authorization_code = secret.generate_authorization_code()
         resources.session[PROVIDER][state].update(
-            state,
             authorization_code=authorization_code
         )
 
