@@ -11,6 +11,8 @@ import werkzeug
 from campus.common import env, schema, webauth
 from campus.common.errors import api_errors, auth_errors, token_errors
 
+from campus.campus.common.utils import url
+
 from .. import base
 from ... import resources
 
@@ -104,6 +106,7 @@ class CampusAuthProxy(base.AuthProxy):
             state: str,
             code: str,
             scope: str,
+            **kwargs
     ) -> werkzeug.Response:
         authsession = self.get_authsession()
         assert authsession.user_id  # Updated by Campus OAuth provider
@@ -127,4 +130,8 @@ class CampusAuthProxy(base.AuthProxy):
         )
         self.finalize_authsession(authsession)
         # TODO: Expand target URL to include hostname if relative
-        return flask.redirect(authsession.target or flask.request.host_url)
+        full_redirect_url = url.add_query(
+            authsession.target or flask.request.host_url,
+            **kwargs
+        )
+        return flask.redirect(full_redirect_url)
