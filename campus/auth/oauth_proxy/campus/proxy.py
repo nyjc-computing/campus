@@ -73,19 +73,22 @@ class CampusAuthProxy(base.AuthProxy):
 
     def redirect_for_authorization(
             self,
+            state: str,  # auth session ID
             target: schema.Url,
             *,
             login_hint: schema.Email | None = None,  # email hint
     ) -> werkzeug.Response:
         """Redirect to Campus OAuth2 authorization endpoint."""
-        authsession = self.init_authsession(
-            expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-            redirect_uri=REDIRECT_URI,
-            scopes=self._oauth2.scopes,
-            target=target
-        )
+        # REMOVE: auth session already created in campus_python auth,authorize
+        # authsession = self.init_authsession(
+        #     expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
+        #     redirect_uri=REDIRECT_URI,
+        #     scopes=self._oauth2.scopes,
+        #     target=target
+        # )
         authorization_url = self._oauth2.get_authorization_url(
-            state=authsession.id,
+            redirect_uri=flask.url_for(".handle_callback"),
+            state=state,
             **{"login_hint": login_hint} if login_hint else {},
         )
         return flask.redirect(authorization_url)

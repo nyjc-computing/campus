@@ -34,12 +34,14 @@ def before_request() -> None:
 @bp.get('/authorize')
 @flask_campus.unpack_request
 def authorize(
+        state: schema.CampusID,  # auth session ID
         target: schema.Url,
         login_hint: schema.Email | None = None,
 ) -> werkzeug.Response:
     """Prepares the Campus OAuth authorization URL and redirects to it.
     """
     return flask.g.proxy.redirect_for_authorization(
+        state,
         target,
         login_hint=login_hint,
     )

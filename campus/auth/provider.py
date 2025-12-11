@@ -39,8 +39,8 @@ import werkzeug
 import campus.config
 from campus import flask_campus
 from campus.common import schema
-from campus.common.errors import auth_errors, token_errors
-from campus.common.utils import utc_time
+from campus.common.errors import api_errors, auth_errors, token_errors
+from campus.common.utils import secret, utc_time
 
 from . import resources
 
@@ -66,8 +66,8 @@ def authorize(
         client_id: schema.CampusID,
         response_type: str,
         redirect_uri: str,
+        state: str,
         scope: str | None = None,
-        state: str | None = None,
         *,
         hd: str | None = None,  # hosted domain (for Google)
 ) -> werkzeug.Response:
@@ -114,21 +114,41 @@ def authorize(
         raise auth_errors.UnsupportedResponseTypeError(
             f"Unsupported response_type: {response_type}"
         )
-    # Check if client exists
-    client = resources.client[client_id].get()
-    # TODO: Validate redirect_uri; must be absolute URL
-    # Auth session is not handled here; use oauth_proxy.campus for
-    # Campus first-party apps, or handle client-side for third-party app
 
-    # Scope verification is not handled here.
+    # Check if client exists
+    resources.client[client_id].get()
+
+    # ASSUME: app has already created a session via auth.sessions,
+    # e.g. using campus_python
+    # Provider should not create a new session, only update it.
+    # Session ID should be passed as state parameter
+    if state:
+        try:
+            app_session = resources.session[PROVIDER][state].get()
+        except api_errors.NotFoundError:
+            # TODO: Handle invalid state error by redirecting back to app
+            raise auth_errors.AuthorizationError(f"Invalid state: {state}") \
+                from None
+        if client_id != app_session.client_id:
+            raise auth_errors.UnauthorizedClientError(
+                f"Unauthorized client: {client_id}"
+            )
+
+    # Scope verification not yet handled here.
+    # TODO: Create consent screen for user scoep consent
     # The issued token will contain only the scopes allowed for the
     # client and consented by user.
     # The client app should handle insufficient scope errors.
 
+    # Update authorization code
+    authorization_code = secret.generate_authorization_code()
+    resources.session[PROVIDER][state].update(
+        state,
+        authorization_code=authorization_code
+    )
+
     # Redirect to Google for OAuth
-    params = {
-        "target": flask.url_for('auth.google.callback', _external=True)
-    }
+    params = {"target": redirect_uri}
     if hd:
         params["hd"] = hd
     oauth_authorize_url = flask.url_for(
