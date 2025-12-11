@@ -151,8 +151,13 @@ class GoogleAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,
             client_secret=self._CLIENT_SECRET,
         )
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[GOOGLE_OAUTH] Retrieved token: {token}")
+        logger.info(f"Token scopes: {token.scopes}")
         # Verify requested scopes were granted
         scopes = scope.split(SCOPE_SEP)
+        logger.info(f"Required scopes: {token.scopes}")
         if missing_scopes := token.validate_scope(scopes):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
