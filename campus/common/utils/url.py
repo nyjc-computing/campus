@@ -61,8 +61,8 @@ def add_query(
     """Add query parameters to the given URL."""
     # Verify that url does not have params and is an absolute URL
     parse_result = urlparse(url)
-    if parse_result.scheme == '' or parse_result.netloc == '':
-        raise ValueError("URL must be absolute with scheme and domain.")
+    # if parse_result.scheme == '' or parse_result.netloc == '':
+    #     raise ValueError("URL must be absolute with scheme and domain.")
     if parse_result.params != '':
         raise ValueError("URL must not contain params component.")
     # https://docs.python.org/3/library/urllib.parse.html#urllib.parse.parse_qs
