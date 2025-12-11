@@ -79,18 +79,11 @@ def callback() -> werkzeug.Response:
                                         **callback_payload)
 
 
-def success_callback(
-        state: str,
-        code: str,
-        scope: str,
-        **kwargs: str
-) -> werkzeug.Response:
-    """Campus uses Google SSO for authentication. This function handles
-    the Google OAuth callback request for an auth flow.
+def success_callback(**kwargs: str) -> werkzeug.Response:
+    """Campus uses Google SSO for authentication.
+    The Google OAuth callback redirects here after successful
+    authentication.
+    No data is passed from the Google auth session to here; instead
+    check for a valid Google credential.
     """
-    return flask.g.proxy.handle_callback(
-        state,
-        code,
-        scope,
-        **kwargs
-    )
+    return flask.g.proxy.handle_callback(**kwargs)

@@ -9,8 +9,7 @@ import flask
 import werkzeug
 
 from campus.common import env, schema, webauth
-from campus.common.errors import auth_errors, token_errors
-import campus.config
+from campus.common.errors import api_errors, auth_errors, token_errors
 
 from .. import base
 from ... import resources
@@ -19,6 +18,9 @@ PROVIDER = "campus"
 # Assume campus proxy is hosted on same server as campus.auth
 REDIRECT_URI = schema.Url("/auth/campus/callback")
 SCOPE_SEP = " "
+
+campus_cred_resource = resources.credentials[PROVIDER]
+google_cred_resource = resources.credentials["google"]
 
 
 def get_proxy() -> "CampusAuthProxy":
@@ -88,13 +90,15 @@ class CampusAuthProxy(base.AuthProxy):
         #     target=target
         # )
         authorization_url = self._oauth2.get_authorization_url(
-            redirect_uri=flask.url_for(".callback"),
+            # Ensure authsession ID is passed as state to callback
+            redirect_uri=flask.url_for(".callback", state=state),
             client_id=client_id,
             state=state,
             **{"login_hint": login_hint} if login_hint else {},
         )
         return flask.redirect(authorization_url)
 
+    # Is this necessary? Campus apps should handle callback from provider
     def handle_callback(
             self,
             state: str,
@@ -102,14 +106,8 @@ class CampusAuthProxy(base.AuthProxy):
             scope: str,
     ) -> werkzeug.Response:
         authsession = self.get_authsession()
-        self.validate_authsession(authsession, state)
-        # auth_session user_id should have been updated by
-        # auth.provider.callback
-        # Use the authsession we already have, don't try to get by code
-        if not authsession.user_id:
-            raise auth_errors.InvalidRequestError(
-                "User ID not found in auth session"
-            )
+        assert authsession.user_id  # Updated by Campus OAuth provider
+        requested_scopes = authsession.scopes
         # Exchange code for token; this will finalize auth_session
         token = self._oauth2.exchange_code_for_token(
             authsession=authsession,
@@ -118,19 +116,12 @@ class CampusAuthProxy(base.AuthProxy):
             client_secret=self._CLIENT_SECRET,
         )
         # Verify requested scopes were granted
-        scopes = scope.split(SCOPE_SEP)
-        if missing_scopes := token.validate_scope(scopes):
+        if missing_scopes := token.validate_scope(requested_scopes):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
             )
-        # Verify domain is permitted
-        if not authsession.user_id.domain == env.WORKSPACE_DOMAIN:
-            raise token_errors.InvalidGrantError(
-                "Domain not allowed",
-                domain=authsession.user_id.domain
-            )
         # Store/update token
-        resources.credentials[PROVIDER][authsession.user_id].update(
+        campus_cred_resource[authsession.user_id].update(
             client_id=self._CLIENT_ID,
             token=token,
         )
