@@ -222,21 +222,20 @@ class UserCredentialsResource:
                 provider=self.parent.provider,
                 user_id=self.user_id,
                 client_id=client_id,
-                token=token
+                token_id=token.id
             )
-            credentials.token = token
             cred_storage.insert_one(credentials.to_storage())
         elif records[0]['token_id'] != token.id:  # token_id changed
             cred_record = records[0]
-            cred_storage.update_by_id(
-                cred_record['id'],
-                {"token_id": token.id}
-            )
             # UserCredentials.from_storage requires token
-            cred_record["token"] = token
             credentials = campus.model.UserCredentials.from_storage(
                 cred_record
             )
+            cred_storage.update_by_id(
+                credentials.id,
+                {"token_id": token.id}
+            )
+        credentials.token = token
 
         # Store/update token
         if token_storage.get_by_id(token.id):

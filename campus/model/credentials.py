@@ -49,6 +49,7 @@ class OAuthToken(Model):
     def is_expired(self, *, at_time: schema.DateTime | None = None) -> bool:
         """Check if the token is expired at the given time (or now)."""
         at_time = at_time or schema.DateTime.utcnow()
+        assert at_time
         return utc_time.is_expired(
             self.expires_at.to_datetime(),
             at_time=at_time.to_datetime()
@@ -75,17 +76,26 @@ class UserCredentials(Model):
     provider: str
     client_id: str
     user_id: schema.UserID
-    # storage will hold token_id, while resource will hold the token
-    token: OAuthToken = field(metadata={
-        "storage": False,
-        "resource": True,
-    })
-    token_id: schema.CampusID = field(init=False, metadata={
-        "storage": True,
-        "resource": False,
-        "constraints": constraints.UNIQUE
-    })
+    # storage will hold token_id
+    # user expected to set token manually after initialization
+    token_id: schema.CampusID = field(  # type: ignore
+        default=None,
+        metadata={
+            "storage": True,
+            "resource": False,
+            "constraints": constraints.UNIQUE
+        }
+    )
+    token: OAuthToken = field(  # type: ignore
+        default=None,
+        init=False,
+        metadata={
+            "storage": False,
+            "resource": True,
+        }
+    )
 
     def __post_init__(self):
         """Set token_id from token.id after initialization."""
-        self.token_id = self.token.id
+        if self.token is not None:
+            self.token_id = self.token.id
