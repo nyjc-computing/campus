@@ -8,6 +8,7 @@ e.g. through campus-api-python
 
 import typing
 
+from campus import config
 from campus.common import schema
 from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import uid, secret
@@ -239,6 +240,10 @@ def _from_record(
         args["created_at"] = schema.DateTime(record["created_at"])
     if "expires_at" in record and record["expires_at"] is not None:
         args["expires_at"] = schema.DateTime(record["expires_at"])
+    elif "expiry_seconds" in record and "expires_at" not in record:
+        args["expires_at"] = schema.DateTime.utcafter(
+            minutes=config.DEFAULT_OAUTH_EXPIRY_MINUTES
+        )
     args["provider"] = record["provider"]
     args["client_id"] = schema.CampusID(record["client_id"])
     if "user_id" in record and record["user_id"] is not None:
