@@ -163,7 +163,7 @@ class GoogleAuthProxy(base.AuthProxy):
         # Verify domain is permitted
         if not user_id.domain == env.WORKSPACE_DOMAIN:
             raise token_errors.InvalidGrantError(
-                f"Domain not allowed",
+                "Domain not allowed",
                 domain=user_id.domain
             )
         # Store/update token
