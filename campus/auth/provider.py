@@ -38,13 +38,16 @@ import werkzeug
 
 import campus.config
 from campus import flask_campus
-from campus.common import schema
+from campus.common import env, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
-from campus.common.utils import secret, utc_time
+from campus.common.utils import secret, url, utc_time
 
 from . import resources
 
 PROVIDER = "campus"
+
+campus_cred_resource = resources.credentials[PROVIDER]
+google_cred_resource = resources.credentials["google"]
 
 
 def _session_key() -> str:
@@ -58,6 +61,11 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """
     app.add_url_rule("authorize", view_func=authorize, methods=["GET"])
     app.add_url_rule("token", view_func=token, methods=["POST"])
+    app.add_url_rule(
+        "verify_login",
+        view_func=verify_login_and_redirect,
+        methods=["POST"]
+    )
 
 
 # OAuth2 endpoints
@@ -83,7 +91,7 @@ def authorize(
         5. Redirects user to the specified redirect URI
 
     Method:
-        GET /oauth2/authorize
+        GET /authorize
 
     Path Parameters:
         None
@@ -179,7 +187,7 @@ def token(
         access token.
 
     Method:
-        POST /oauth2/token
+        POST /token
 
     Path Parameters:
         None
@@ -235,7 +243,7 @@ def token(
             "User ID not found in auth session"
         )
     user_credentials_resource = (
-        resources.credentials[PROVIDER][authsession.user_id]
+        campus_cred_resource[authsession.user_id]
     )
     credentials = user_credentials_resource.get(authsession.client_id)
     # Create token if not existing
@@ -244,6 +252,7 @@ def token(
     else:
         token = user_credentials_resource.new(
             client_id=flask.g.current_client.id,
+            # TODO: user consent screen for scope grant
             scopes=authsession.scopes,
             expiry_seconds=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
@@ -255,3 +264,61 @@ def token(
             token=token
         )
     return token.to_resource(), 200
+
+
+# Proxy endpoint for login verification
+@flask_campus.unpack_request
+def verify_login_and_redirect(
+        session_id: schema.CampusID,
+        user: schema.UserID
+) -> werkzeug.Response:
+    """Verify if the user is logged in. Default callback handler after
+    Google auth
+
+    Method:
+        POST /verify
+
+    Path Parameters:
+        None
+
+    Request Body:
+        user: UserID of the user to verify login for.
+
+    Responses:
+        302 Found: Redirect to app target
+        401 Not authenticated: 
+    """
+    google_client_id = resources.vault["google"]["CLIENT_ID"]
+    try:
+        google_cred_resource[user].get(google_client_id)
+    except api_errors.NotFoundError:
+        # User does not have a valid Google credential/sign-in
+        # TODO: Display error page
+        raise auth_errors.AuthorizationError(
+            "No valid Google credential found for user",
+            user_id=user
+        ) from None
+
+    # Verify domain is permitted
+    if not user.domain == env.WORKSPACE_DOMAIN:
+        raise token_errors.InvalidGrantError(
+            "Domain not allowed",
+            domain=user.domain
+        )
+    authsession = resources.session[PROVIDER][session_id].update(
+        user_id=user
+    )
+    # Pass 
+    code = authsession.authorization_code
+    state = authsession.state
+    # TODO: user consent screen for scope grant
+    # For now, grant all scopes
+    scopes = authsession.scopes
+    redirect_url = authsession.target or flask.request.host_url
+    full_redirect_url = url.with_params(
+        redirect_url,
+        code=code,
+        state=state,
+        scope=" ".join(scopes)
+    )
+    return flask.redirect(full_redirect_url)
