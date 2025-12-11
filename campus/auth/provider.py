@@ -269,7 +269,7 @@ def token(
 # Proxy endpoint for login verification
 @flask_campus.unpack_request
 def verify_login_and_redirect(
-        session_id: schema.CampusID,
+        state: schema.CampusID,  # session id
         user: schema.UserID
 ) -> werkzeug.Response:
     """Verify if the user is logged in. Default callback handler after
@@ -288,6 +288,14 @@ def verify_login_and_redirect(
         302 Found: Redirect to app target
         401 Not authenticated: 
     """
+    # Verify domain is permitted
+    if not user.domain == env.WORKSPACE_DOMAIN:
+        raise token_errors.InvalidGrantError(
+            "Domain not allowed",
+            domain=user.domain
+        )
+
+    # Verify user has valid Google credential
     google_client_id = resources.vault["google"]["CLIENT_ID"]
     try:
         google_cred_resource[user].get(google_client_id)
@@ -299,26 +307,16 @@ def verify_login_and_redirect(
             user_id=user
         ) from None
 
-    # Verify domain is permitted
-    if not user.domain == env.WORKSPACE_DOMAIN:
-        raise token_errors.InvalidGrantError(
-            "Domain not allowed",
-            domain=user.domain
-        )
-    authsession = resources.session[PROVIDER][session_id].update(
-        user_id=user
-    )
-    # Pass 
-    code = authsession.authorization_code
-    state = authsession.state
-    # TODO: user consent screen for scope grant
-    # For now, grant all scopes
-    scopes = authsession.scopes
-    redirect_url = authsession.target or flask.request.host_url
-    full_redirect_url = url.with_params(
-        redirect_url,
-        code=code,
-        state=state,
-        scope=" ".join(scopes)
+    # Update user_id for app login
+    authsession = resources.session[PROVIDER][state].update(user_id=user)
+    # Redirect to app callback
+    assert authsession.state and authsession.authorization_code
+    full_redirect_url = url.add_query(
+        authsession.target or flask.request.host_url,
+        # TODO: user consent screen for scope grant
+        # For now, grant all scopes
+        code=authsession.authorization_code,
+        state=authsession.state,
+        scope=" ".join(authsession.scopes)
     )
     return flask.redirect(full_redirect_url)

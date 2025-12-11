@@ -12,6 +12,7 @@ import werkzeug
 
 from campus.common import env, schema, webauth
 from campus.common.errors import auth_errors, token_errors
+from campus.common.utils import url
 import campus.config
 import campus.model
 
@@ -191,5 +192,12 @@ class GoogleAuthProxy(base.AuthProxy):
         # handle_auth_callback will finalize the authsession, deleting
         # it from the store. So we get it here before that happens.
         authsession = self.get_authsession()
-        self.handle_auth_callback(state, code, scope)
-        return flask.redirect(authsession.target or flask.request.host_url)
+        # Finalize authsession and get credentials
+        credentials = self.handle_auth_callback(state, code, scope)
+        # Pass authenticated user_id to target URL
+        # Target app is expected to verify valid Google credential
+        redirect_url = url.add_query(
+            authsession.target or flask.request.host_url,
+            user=credentials.user_id
+        )
+        return flask.redirect(redirect_url)
