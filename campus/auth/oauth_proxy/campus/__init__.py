@@ -53,16 +53,23 @@ def callback() -> werkzeug.Response:
     """
     callback_payload = flask_campus.get_request_payload()
     if "error" in callback_payload:
-        # Get redirect target before raising error to avoid infinite loop
-        try:
-            authsession = flask.g.proxy.get_authsession()
-            redirect_uri = authsession.target
-        except Exception:
-            # If we can't get authsession, redirect to base URL instead of callback
-            redirect_uri = flask.request.host_url
-        # Pass redirect_uri to the error so it doesn't redirect back to callback
-        callback_payload['redirect_uri'] = redirect_uri
-        auth_errors.raise_from_json(callback_payload)
+        # TODO: For testing - display error instead of redirecting
+        # This should be replaced with proper error handling that redirects to target
+        error_html = f"""
+        <html>
+        <head><title>OAuth Error</title></head>
+        <body>
+            <h1>OAuth Error</h1>
+            <p><strong>Error:</strong> {callback_payload.get('error')}</p>
+            <p><strong>Description:</strong> {callback_payload.get('error_description', 'N/A')}</p>
+            <p><strong>Error URI:</strong> {callback_payload.get('error_uri', 'N/A')}</p>
+            <hr>
+            <p><strong>All callback parameters:</strong></p>
+            <pre>{callback_payload}</pre>
+        </body>
+        </html>
+        """
+        return flask.Response(error_html, status=400, mimetype='text/html')
     else:
         return flask_campus.unpack_into(success_callback,
                                         **callback_payload)
