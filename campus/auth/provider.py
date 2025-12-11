@@ -135,7 +135,7 @@ def authorize(
             )
 
     # Scope verification not yet handled here.
-    # TODO: Create consent screen for user scoep consent
+    # TODO: Create consent screen for user scope consent
     # The issued token will contain only the scopes allowed for the
     # client and consented by user.
     # The client app should handle insufficient scope errors.
