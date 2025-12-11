@@ -75,6 +75,7 @@ class CampusAuthProxy(base.AuthProxy):
             self,
             target: schema.Url,
             *,
+            client_id: schema.CampusID,  # override
             state: str,  # auth session ID
             login_hint: schema.Email | None = None,  # email hint
     ) -> werkzeug.Response:
@@ -88,6 +89,7 @@ class CampusAuthProxy(base.AuthProxy):
         # )
         authorization_url = self._oauth2.get_authorization_url(
             redirect_uri=flask.url_for(".callback"),
+            client_id=client_id,
             state=state,
             **{"login_hint": login_hint} if login_hint else {},
         )
