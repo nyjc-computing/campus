@@ -9,7 +9,6 @@ import flask
 import werkzeug
 
 from campus.common import env, schema, webauth
-from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import url
 
 from .. import base
@@ -99,7 +98,7 @@ class CampusAuthProxy(base.AuthProxy):
         )
         return flask.redirect(authorization_url)
 
-    # Is this necessary? Campus apps should handle callback from provider
+    # Campus apps handle their own token exchange (unlike external OAuth providers)
     def handle_callback(
             self,
             state: str,
@@ -111,28 +110,18 @@ class CampusAuthProxy(base.AuthProxy):
         # Campus session created by campus_python, not stored in Flask session
         authsession = resources.session[PROVIDER][state].get()
         assert authsession.user_id  # Updated by Campus OAuth provider
-        requested_scopes = authsession.scopes
-        # Exchange code for token; this will finalize auth_session
-        token = self._oauth2.exchange_code_for_token(
-            authsession=authsession,
-            code=code,
-            client_id=self._CLIENT_ID,
-            client_secret=self._CLIENT_SECRET,
-        )
-        # Verify requested scopes were granted
-        if missing_scopes := token.validate_scope(requested_scopes):
-            raise auth_errors.InvalidScopeError(
-                f"Missing required scopes: {', '.join(missing_scopes)}"
-            )
-        # Store/update token
-        campus_cred_resource[authsession.user_id].update(
-            client_id=self._CLIENT_ID,
-            token=token,
-        )
-        self.finalize_authsession(authsession)
-        # TODO: Expand target URL to include hostname if relative
+
+        # NOTE: Do NOT exchange code for token here!
+        # App (campus_python) exchanges code using its own credentials
+        # We just redirect back to the app with code/state/scope
+
+        # Redirect to app's target with authorization code
+        # App will exchange code for token using its own client_id/secret
         full_redirect_url = url.add_query(
             authsession.target or flask.request.host_url,
+            code=code,
+            state=state,
+            scope=scope,
             **kwargs
         )
         return flask.redirect(full_redirect_url)
