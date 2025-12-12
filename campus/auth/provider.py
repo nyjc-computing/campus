@@ -270,7 +270,7 @@ def token(
 @flask_campus.unpack_request
 def verify_login_and_redirect(
         state: schema.CampusID,  # session id
-        user: schema.UserID
+        user: schema.UserID | str  # May come as string from query param
 ) -> werkzeug.Response:
     """Verify if the user is logged in. Default callback handler after
     Google auth
@@ -289,6 +289,10 @@ def verify_login_and_redirect(
         302 Found: Redirect to app callback (redirect_uri) with authorization code
         401 Not authenticated: User domain not allowed or no valid Google credential
     """
+    # Ensure user is a UserID object (convert from string if needed)
+    if isinstance(user, str):
+        user = schema.UserID(user)
+
     # Verify domain is permitted
     if not user.domain == env.WORKSPACE_DOMAIN:
         raise token_errors.InvalidGrantError(
