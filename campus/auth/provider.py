@@ -315,10 +315,10 @@ def verify_login_and_redirect(
         user_id=user,
         authorization_code=authorization_code
     )
-    # Redirect to app callback
+    # Redirect to app callback (redirect_uri, not final target)
     assert authsession.state and authsession.authorization_code
     full_redirect_url = url.add_query(
-        authsession.target or flask.request.host_url,
+        authsession.redirect_uri or flask.request.host_url,
         # TODO: user consent screen for scope grant
         # For now, grant all scopes
         code=authsession.authorization_code,
