@@ -157,7 +157,7 @@ def authorize(
 
     # Build verify_login callback URL with Campus session state
     verify_callback_url = flask.url_for(
-        'auth.verify_login',
+        'auth.verify_login_and_redirect',
         _external=True,
         state=state  # Preserve Campus session ID through Google OAuth flow
     )
