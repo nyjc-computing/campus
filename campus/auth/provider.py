@@ -149,21 +149,21 @@ def authorize(
             f"Client mismatch: {client_id}"
         )
 
-    # Update authorization code if not set (for idempotency)
-    if app_session.authorization_code is None:
-        authorization_code = secret.generate_authorization_code()
-        resources.session[PROVIDER][state].update(
-            authorization_code=authorization_code
-        )
-
     # Scope verification not yet handled here.
     # TODO: Create consent screen for user scope consent
     # The issued token will contain only the scopes allowed for the
     # client and consented by user.
     # The client app should handle insufficient scope errors.
 
-    # Redirect to Google for OAuth
-    params = {"target": redirect_uri}
+    # Build verify_login callback URL with Campus session state
+    verify_callback_url = flask.url_for(
+        'auth.verify_login',
+        _external=True,
+        state=state  # Preserve Campus session ID through Google OAuth flow
+    )
+
+    # Redirect to Google for OAuth with callback to verify_login
+    params = {"target": verify_callback_url}
     if hd:
         params["hd"] = hd
     oauth_authorize_url = flask.url_for(
@@ -307,8 +307,14 @@ def verify_login_and_redirect(
             user_id=user
         ) from None
 
-    # Update user_id for app login
-    authsession = resources.session[PROVIDER][state].update(user_id=user)
+    # Generate authorization code AFTER successful Google authentication
+    authorization_code = secret.generate_authorization_code()
+
+    # Update user_id AND authorization_code for app login
+    authsession = resources.session[PROVIDER][state].update(
+        user_id=user,
+        authorization_code=authorization_code
+    )
     # Redirect to app callback
     assert authsession.state and authsession.authorization_code
     full_redirect_url = url.add_query(

@@ -194,10 +194,21 @@ class GoogleAuthProxy(base.AuthProxy):
         authsession = self.get_authsession()
         # Finalize authsession and get credentials
         credentials = self.handle_auth_callback(state, code, scope)
+
+        # Parse target URL and preserve existing query params (like state)
+        from urllib.parse import urlparse, parse_qs
+        target_url = authsession.target or flask.request.host_url
+        parsed = urlparse(target_url)
+        existing_params = parse_qs(parsed.query)
+
+        # Merge existing params with new user param
+        redirect_params = {**{k: v[0] for k, v in existing_params.items()}}
+        redirect_params['user'] = credentials.user_id
+
         # Pass authenticated user_id to target URL
         # Target app is expected to verify valid Google credential
         redirect_url = url.add_query(
-            authsession.target or flask.request.host_url,
-            user=credentials.user_id
+            f"{parsed.scheme}://{parsed.netloc}{parsed.path}",
+            **redirect_params
         )
         return flask.redirect(redirect_url)
