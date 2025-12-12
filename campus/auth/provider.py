@@ -64,7 +64,7 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     app.add_url_rule(
         "verify_login",
         view_func=verify_login_and_redirect,
-        methods=["POST"]
+        methods=["GET"]  # Changed from POST - called via redirect from Google callback
     )
 
 
@@ -276,17 +276,18 @@ def verify_login_and_redirect(
     Google auth
 
     Method:
-        POST /verify
+        GET /verify_login
 
     Path Parameters:
         None
 
-    Request Body:
-        user: UserID of the user to verify login for.
+    Query Parameters:
+        state: CampusID - Campus session ID (preserved through Google flow)
+        user: UserID - User ID from Google authentication
 
     Responses:
-        302 Found: Redirect to app target
-        401 Not authenticated: 
+        302 Found: Redirect to app callback (redirect_uri) with authorization code
+        401 Not authenticated: User domain not allowed or no valid Google credential
     """
     # Verify domain is permitted
     if not user.domain == env.WORKSPACE_DOMAIN:
