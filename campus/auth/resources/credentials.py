@@ -237,6 +237,10 @@ class UserCredentialsResource:
                 credentials.id,
                 {"token_id": token.id}
             )
+        else:  # token_id unchanged, just load existing credentials
+            credentials = campus.model.UserCredentials.from_storage(
+                records[0]
+            )
         credentials.token = token
 
         # Store/update token
