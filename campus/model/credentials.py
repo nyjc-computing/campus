@@ -24,7 +24,7 @@ class OAuthToken(Model):
     refresh_token_expires_at: schema.DateTime | None = None
     scopes: list[str] = field(default_factory=list)
 
-    def __post_init__(self, expiry_seconds: int):
+    def __post_init__(self, expiry_seconds: int | None = None):
         """Set expiry time based on creation timestamp."""
         if self.expires_at is None and expiry_seconds is None:
             raise ValueError(
