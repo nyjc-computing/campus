@@ -244,7 +244,6 @@ def token(
     resources.client.raise_for_authentication(client_id, client_secret)
     # OAuth2 flow complete, revoke session
     resources.session[PROVIDER][authsession.id].delete()
-    del flask.session[_session_key()]
 
     if not authsession.user_id:
         raise auth_errors.InvalidRequestError(
