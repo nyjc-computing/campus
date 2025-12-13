@@ -20,6 +20,7 @@ bp = flask.Blueprint('logins', __name__, url_prefix='/logins')
 
 
 @bp.post("/")
+@flask_campus.unpack_request
 def new(
         *,
         expiry_seconds: int,
@@ -48,7 +49,7 @@ def new(
         device_id=device_id,
         agent_string=agent_string,
     )
-    _yapper.get().emit(
+    get_yapper().emit(
         'campus.logins.new',
         {
             "id": str(loginsession.id),
@@ -67,7 +68,7 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     DELETE /logins/<session_id>/
     """
     login_resource[session_id].delete()
-    _yapper.get().emit('campus.logins.delete', {"id": str(session_id)})
+    get_yapper().emit('campus.logins.delete', {"id": str(session_id)})
     return {}, 200
 
 
@@ -97,7 +98,7 @@ def update(
     loginsession = login_resource[session_id].update(
         expiry_seconds=expiry_seconds
     )
-    _yapper.get().emit(
+    get_yapper().emit(
         'campus.logins.update',
         {"id": str(session_id), "expiry_seconds": expiry_seconds}
     )
