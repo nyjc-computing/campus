@@ -327,6 +327,18 @@ def verify_login_and_redirect(
         user_id=user,
         authorization_code=authorization_code
     )
+
+    # Issue Campus token and update credentials
+    # Token will be exchanged by app with auth code thru /token endpoint
+    resources.credentials[PROVIDER][user].new(
+        client_id=authsession.client_id,
+        scopes=authsession.scopes,
+        expiry_seconds=(
+            campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
+            * utc_time.DAY_SECONDS
+        ),
+    )
+    
     # Redirect to app callback (redirect_uri, not final target)
     assert authsession.state and authsession.authorization_code
     full_redirect_url = url.add_query(
