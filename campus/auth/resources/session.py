@@ -195,7 +195,7 @@ class AuthSessionResource:
         logger.info(f"[SESSION GET] Querying session: {self.session_id}")
 
         record = session_storage.get_by_id(self.session_id)
-        logger.info(f"[SESSION GET] DB query complete, found: {record is not None}")
+        logger.info(f"[SESSION GET] DB query complete, found: {bool(record)}")
 
         if not record:
             logger.warning(f"[SESSION GET] Session not found: {self.session_id}")
