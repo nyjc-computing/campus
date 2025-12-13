@@ -219,6 +219,14 @@ def token(
         401 Not authenticated: None
         - Returned when the session ID is not in the Flask session
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    code_preview = code[:20] if code else None
+    logger.info(
+        f"[TOKEN] Token endpoint called! "
+        f"grant_type={grant_type}, code={code_preview}..."
+    )
+
     if grant_type != "authorization_code":
         raise token_errors.UnsupportedGrantTypeError(
             f"Unsupported grant_type: {grant_type}"
