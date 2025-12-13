@@ -190,13 +190,24 @@ class AuthSessionResource:
         Returns:
             AuthSession instance
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[SESSION GET] Querying session: {self.session_id}")
+
         record = session_storage.get_by_id(self.session_id)
+        logger.info(f"[SESSION GET] DB query complete, found: {record is not None}")
+
         if not record:
+            logger.warning(f"[SESSION GET] Session not found: {self.session_id}")
             raise api_errors.NotFoundError(
                 f"Session '{self.session_id}' not found",
                 session_id=self.session_id
             )
-        return _from_record(record)
+
+        logger.info(f"[SESSION GET] Converting record to model")
+        result = _from_record(record)
+        logger.info(f"[SESSION GET] Conversion successful, returning session")
+        return result
 
     def update(
             self,
@@ -233,6 +244,10 @@ def _from_record(
         record: dict[str, typing.Any],
 ) -> campus.model.AuthSession:
     """Convert a storage record to an AuthSession model instance."""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[FROM_RECORD] Starting conversion, record keys: {list(record.keys())}")
+
     args: dict[str, typing.Any] = {}
     if "id" in record:
         args["id"] = schema.CampusID(record["id"])
@@ -257,4 +272,9 @@ def _from_record(
         args["state"] = record["state"]
     if "target" in record and record["target"] is not None:
         args["target"] = schema.Url(record["target"])
-    return campus.model.AuthSession(**args)
+
+    logger.info(f"[FROM_RECORD] Constructed args with keys: {list(args.keys())}")
+    logger.info(f"[FROM_RECORD] Creating AuthSession instance")
+    result = campus.model.AuthSession(**args)
+    logger.info(f"[FROM_RECORD] AuthSession created successfully")
+    return result
