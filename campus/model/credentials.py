@@ -19,14 +19,18 @@ class OAuthToken(Model):
     # created_at inherited from Model
     # expires_at is generated in __post_init__ if not provided
     expires_at: schema.DateTime = None  # type: ignore
-    expiry_seconds: InitVar[int]
+    expiry_seconds: InitVar[int] = None  # type: ignore
     refresh_token: str | None = None
     refresh_token_expires_at: schema.DateTime | None = None
     scopes: list[str] = field(default_factory=list)
 
     def __post_init__(self, expiry_seconds: int):
         """Set expiry time based on creation timestamp."""
-        if self.expires_at is None:
+        if self.expires_at is None and expiry_seconds is None:
+            raise ValueError(
+                "Either expires_at or expiry_seconds must be provided."
+            )
+        if self.expires_at is None and expiry_seconds is not None:
             self.expires_at = schema.DateTime.utcafter(
                 self.created_at,
                 seconds=expiry_seconds
