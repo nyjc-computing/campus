@@ -188,12 +188,14 @@ class UserCredentialsResource:
                 {"token_id": token_id}
             )
         else:  # New credentials
-            cred_storage.insert_one({
-                "provider": self.parent.provider,
-                "user_id": str(self.user_id),
-                "client_id": client_id,
-                "token_id": token_id,
-            })
+            credential = campus.model.UserCredentials(
+                id=uid.generate_category_uid("user_credentials"),
+                provider=self.parent.provider,
+                user_id=self.user_id,
+                client_id=client_id,
+                token_id=token_id
+            )
+            cred_storage.insert_one(credential.to_storage())
         return token
 
     def update(
