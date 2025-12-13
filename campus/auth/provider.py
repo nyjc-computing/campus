@@ -258,7 +258,7 @@ def token(
         token = credentials.token
     else:
         token = user_credentials_resource.new(
-            client_id=flask.g.current_client.id,
+            client_id=client_id,
             # TODO: user consent screen for scope grant
             scopes=authsession.scopes,
             expiry_seconds=(
