@@ -45,6 +45,7 @@ from campus.common.utils import secret, url, utc_time
 from . import resources
 
 PROVIDER = "campus"
+INVALIDATED = "INVALIDATED"  # Marker for used authorization codes
 
 campus_cred_resource = resources.credentials[PROVIDER]
 google_cred_resource = resources.credentials["google"]
@@ -242,8 +243,12 @@ def token(
         )
     # Raises auth errors if auth fails
     resources.client.raise_for_authentication(client_id, client_secret)
-    # OAuth2 flow complete, revoke session
-    resources.session[PROVIDER][authsession.id].delete()
+
+    # Invalidate authorization code to prevent reuse (single-use guarantee)
+    # Session remains alive for finalization to retrieve target URL
+    resources.session[PROVIDER][authsession.id].update(
+        authorization_code=INVALIDATED
+    )
 
     if not authsession.user_id:
         raise auth_errors.InvalidRequestError(
