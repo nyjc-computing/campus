@@ -53,7 +53,9 @@ class HttpAuthenticationScheme(base.SecurityScheme):
         """Create an HTTP authentication scheme from an HTTP header."""
         header = campus.model.HttpHeader.from_header(http_header)
         if not isinstance(header, campus.model.HttpHeaderWithAuth):
-            api_errors.raise_api_error(401)
+            raise api_errors.UnauthorizedError(
+                "Missing Authorization header."
+            )
         match header.authorization.scheme:
             case "basic":
                 return cls(provider, scheme="basic", header=header)
