@@ -138,7 +138,10 @@ def authorize(
     # Provider should not create a new session, only update it.
     # Session ID should be passed as state parameter
     try:
-        app_session = resources.session[PROVIDER][state].get()
+        app_session = (
+            resources.session[PROVIDER][schema.CampusID(state)]
+            .get()
+        )
     except api_errors.NotFoundError:
         # TODO: Handle invalid state error by redirecting back to app
         raise auth_errors.AuthorizationError(f"Invalid state: {state}") \
@@ -220,6 +223,9 @@ def token(
         401 Not authenticated: None
         - Returned when the session ID is not in the Flask session
     """
+    # HACK: ensure client_id is CampusID type
+    # TODO: improve unpack_into() to support openapi schemas
+    client_id = schema.CampusID(client_id)
     if grant_type != "authorization_code":
         raise token_errors.UnsupportedGrantTypeError(
             f"Unsupported grant_type: {grant_type}"

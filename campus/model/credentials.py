@@ -82,7 +82,7 @@ class UserCredentials(Model):
     user_id: schema.UserID
     # storage will hold token_id
     # user expected to set token manually after initialization
-    token_id: schema.CampusID = field(  # type: ignore
+    token_id: str = field(  # type: ignore
         default=None,
         metadata={
             "storage": True,
@@ -102,4 +102,4 @@ class UserCredentials(Model):
     def __post_init__(self):
         """Set token_id from token.id after initialization."""
         if self.token is not None:
-            self.token_id = self.token.id
+            self.token_id = schema.CampusID(self.token.id)
