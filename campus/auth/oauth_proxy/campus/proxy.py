@@ -108,7 +108,10 @@ class CampusAuthProxy(base.AuthProxy):
     ) -> werkzeug.Response:
         # Retrieve session using state parameter (not Flask session)
         # Campus session created by campus_python, not stored in Flask session
-        authsession = resources.session[PROVIDER][state].get()
+        authsession = (
+            resources.session[PROVIDER][schema.CampusID(state)]
+            .get()
+        )
         assert authsession.user_id  # Updated by Campus OAuth provider
 
         # NOTE: Do NOT exchange code for token here!

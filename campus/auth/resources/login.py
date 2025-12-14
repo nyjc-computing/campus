@@ -58,7 +58,8 @@ class LoginSessionsResource:
         Any existing session will be revoked.
         """
         login_expiry_seconds = (
-            campus.config.DEFAULT_LOGIN_EXPIRY_DAYS * utc_time.DAY_SECONDS
+            campus.config.DEFAULT_LOGIN_EXPIRY_DAYS
+            * utc_time.DAY_SECONDS
         )
         # Delete any existing session
         if (existing_session_id := _check_existing_id()):
