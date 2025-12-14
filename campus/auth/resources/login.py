@@ -41,7 +41,7 @@ class LoginSessionsResource:
         Returns:
             LoginSessionResource instance
         """
-        return LoginSessionResource()
+        return LoginSessionResource(session_id)
 
     def new(
             self,
