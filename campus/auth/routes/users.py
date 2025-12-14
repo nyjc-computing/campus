@@ -87,10 +87,6 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
     GET /users/{user_id}
     Returns: User
     """
-    import logging
-    logging.info(
-        f"[DEBUG] get user route: user_id={user_id!r} type={type(user_id)}"
-    )
     if user_id is None:
         raise api_errors.InvalidRequestError("user_id is None - check URL path")
     if not user_id:
