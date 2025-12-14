@@ -23,7 +23,6 @@ bp = flask.Blueprint('logins', __name__, url_prefix='/logins')
 @flask_campus.unpack_request
 def new(
         *,
-        expiry_seconds: int,
         client_id: schema.CampusID,
         user_id: schema.UserID,
         device_id: str | None = None,
@@ -43,7 +42,6 @@ def new(
     }
     """
     loginsession = login_resource.new(
-        expiry_seconds=expiry_seconds,
         client_id=client_id,
         user_id=user_id,
         device_id=device_id,
