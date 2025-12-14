@@ -123,10 +123,8 @@ class ProviderAuthSessionResource:
         """Create a new session."""
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"[SESSION] Creating new session for provider={self.provider}, client_id={client_id}")
-        
+
         session_id = uid.generate_category_uid(f"{self.provider}_session")
-        logger.info(f"[SESSION] Generated session_id={session_id}")
         session = _from_record({
             "id": session_id,
             "expiry_seconds": expiry_seconds,
@@ -142,10 +140,8 @@ class ProviderAuthSessionResource:
             "state": state or session_id,
             "target": target,
         })
-        logger.info(f"[SESSION] Inserting session into storage...")
         try:
             session_storage.insert_one(session.to_storage())
-            logger.info(f"[SESSION] Successfully inserted session {session_id}")
         except Exception as e:
             logger.error(f"[SESSION] Failed to insert session: {e}")
             raise api_errors.InternalError.from_exception(e)
@@ -192,10 +188,8 @@ class AuthSessionResource:
         """
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"[SESSION GET] Querying session: {self.session_id}")
 
         record = session_storage.get_by_id(self.session_id)
-        logger.info(f"[SESSION GET] DB query complete, found: {bool(record)}")
 
         if not record:
             logger.warning(f"[SESSION GET] Session not found: {self.session_id}")
@@ -204,9 +198,7 @@ class AuthSessionResource:
                 session_id=self.session_id
             )
 
-        logger.info(f"[SESSION GET] Converting record to model")
         result = _from_record(record)
-        logger.info(f"[SESSION GET] Conversion successful, returning session")
         return result
 
     def update(
@@ -244,10 +236,6 @@ def _from_record(
         record: dict[str, typing.Any],
 ) -> campus.model.AuthSession:
     """Convert a storage record to an AuthSession model instance."""
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"[FROM_RECORD] Starting conversion, record keys: {list(record.keys())}")
-
     args: dict[str, typing.Any] = {}
     if "id" in record:
         args["id"] = schema.CampusID(record["id"])
@@ -273,8 +261,5 @@ def _from_record(
     if "target" in record and record["target"] is not None:
         args["target"] = schema.Url(record["target"])
 
-    logger.info(f"[FROM_RECORD] Constructed args with keys: {list(args.keys())}")
-    logger.info(f"[FROM_RECORD] Creating AuthSession instance")
     result = campus.model.AuthSession(**args)
-    logger.info(f"[FROM_RECORD] AuthSession created successfully")
     return result

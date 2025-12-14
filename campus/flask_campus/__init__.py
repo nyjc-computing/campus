@@ -74,23 +74,11 @@ def get_user_agent() -> str:
 
 def get_request_headers() -> campus.model.HttpHeader:
     """Get the headers from the Flask request as a dictionary."""
-    import logging
-    logger = logging.getLogger(__name__)
-
     if not flask.has_request_context():
         raise RuntimeError("No Flask request context available")
 
     headers_items = list(flask.request.headers.items())
-    logger.info(f"Flask request headers count: {len(headers_items)}")
-    # Log first few headers (avoid logging sensitive data in full)
-    header_keys = [k for k, v in headers_items]
-    logger.info(f"Header keys: {header_keys}")
-
     result = campus.model.HttpHeader(headers_items)
-    logger.info(
-        f"Created HttpHeader: type={type(result).__name__}, "
-        f"has_Authorization={'Authorization' in result}"
-    )
     return result
 
 
@@ -157,14 +145,8 @@ def unpack_request(
     @wraps(func)
     def wrappervf(*args, **kwargs) -> Any:
         """The view function presented to Flask"""
-        import logging
-        logging.info(
-            f"[DEBUG] unpack_request for {func.__name__}: "
-            f"kwargs={kwargs} args={args}"
-        )
         assert not args, f"Positional arguments not supported: {args}"
         request_args = get_request_payload()
-        logging.info(f"[DEBUG] request_args={request_args}")
         return unpack_into(func, **kwargs, **request_args)
 
     return wrappervf
