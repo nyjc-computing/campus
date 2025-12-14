@@ -74,9 +74,24 @@ def get_user_agent() -> str:
 
 def get_request_headers() -> campus.model.HttpHeader:
     """Get the headers from the Flask request as a dictionary."""
+    import logging
+    logger = logging.getLogger(__name__)
+
     if not flask.has_request_context():
         raise RuntimeError("No Flask request context available")
-    return campus.model.HttpHeader(flask.request.headers.items())
+
+    headers_items = list(flask.request.headers.items())
+    logger.info(f"Flask request headers count: {len(headers_items)}")
+    # Log first few headers (avoid logging sensitive data in full)
+    header_keys = [k for k, v in headers_items]
+    logger.info(f"Header keys: {header_keys}")
+
+    result = campus.model.HttpHeader(headers_items)
+    logger.info(
+        f"Created HttpHeader: type={type(result).__name__}, "
+        f"has_Authorization={'Authorization' in result}"
+    )
+    return result
 
 
 def get_request_payload() -> dict[str, Any]:

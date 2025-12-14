@@ -85,9 +85,19 @@ class HttpHeader(dict):
         """Create an HTTP header dictionary from a raw header
         dictionary.
         """
-        if "Authorization" in header:
+        import logging
+        logger = logging.getLogger(__name__)
+
+        has_auth = "Authorization" in header
+        logger.info(
+            f"HttpHeader.from_header: type={type(header).__name__}, "
+            f"has_Authorization={has_auth}"
+        )
+        if has_auth:
+            logger.info("Returning HttpHeaderWithAuth")
             return HttpHeaderWithAuth(header)
         else:
+            logger.info("Returning HttpHeader (no auth)")
             return HttpHeader(header)
 
     def is_authorized(self) -> bool:

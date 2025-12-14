@@ -51,8 +51,34 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             http_header: campus.model.HttpHeaderWithAuth | dict[str, str]
     ) -> "HttpAuthenticationScheme":
         """Create an HTTP authentication scheme from an HTTP header."""
+        import logging
+        logger = logging.getLogger(__name__)
+        has_auth = (
+            'Authorization' in http_header
+            if hasattr(http_header, '__contains__')
+            else 'N/A'
+        )
+        logger.info(
+            f"with_header called with type={type(http_header).__name__}, "
+            f"has_auth={has_auth}"
+        )
+        if isinstance(http_header, dict):
+            logger.info(f"http_header keys: {list(http_header.keys())}")
+
         header = campus.model.HttpHeader.from_header(http_header)
+        is_with_auth = isinstance(header, campus.model.HttpHeaderWithAuth)
+        logger.info(
+            f"After from_header: type={type(header).__name__}, "
+            f"is_HttpHeaderWithAuth={is_with_auth}"
+        )
+
         if not isinstance(header, campus.model.HttpHeaderWithAuth):
+            header_keys = (
+                list(header.keys()) if isinstance(header, dict) else 'N/A'
+            )
+            logger.warning(
+                f"Missing Authorization header. Header keys: {header_keys}"
+            )
             raise api_errors.UnauthorizedError(
                 "Missing Authorization header."
             )
