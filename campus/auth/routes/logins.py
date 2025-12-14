@@ -68,7 +68,7 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     DELETE /logins/<session_id>/
     """
     login_resource[session_id].delete()
-    _yapper.get().emit('campus.logins.delete', {"id": str(session_id)})
+    get_yapper().emit('campus.logins.delete', {"id": str(session_id)})
     return {}, 200
 
 
