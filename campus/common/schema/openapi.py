@@ -47,7 +47,9 @@ class Boolean(int, metaclass=BooleanMeta):
                 return True if bool(self) == bool(other) else False
             case bool():
                 return True if bool(self) == other else False
-        raise TypeError(f"__eq__ not implemented for {type(other)}")
+        raise (
+            TypeError(f"__eq__ not implemented for {type(other)}")
+        ) from None
 
 
 class Integer(int):
@@ -69,7 +71,9 @@ class String(str):
 
     def __new__(cls, value: str):
         if value in (None,):
-            raise ValueError("value cannot be None")
+            raise ValueError(
+                f"{cls.__name__} cannot be initialized with {value}"
+            ) from None
         return super().__new__(cls, value)
 
     def __str__(self) -> str:
