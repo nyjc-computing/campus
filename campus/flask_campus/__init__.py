@@ -68,14 +68,18 @@ FlaskViewFunction = ViewFunction[FlaskResponse]
 def get_user_agent() -> str:
     """Get the User-Agent from the Flask request."""
     if not flask.has_request_context():
-        raise RuntimeError("No Flask request context available")
+        raise (
+            RuntimeError("No Flask request context available")
+        ) from None
     return flask.request.headers.get("User-Agent", "Unknown")
 
 
 def get_request_headers() -> campus.model.HttpHeader:
     """Get the headers from the Flask request as a dictionary."""
     if not flask.has_request_context():
-        raise RuntimeError("No Flask request context available")
+        raise (
+            RuntimeError("No Flask request context available")
+        ) from None
 
     headers_items = list(flask.request.headers.items())
     result = campus.model.HttpHeader(headers_items)
@@ -85,7 +89,9 @@ def get_request_headers() -> campus.model.HttpHeader:
 def get_request_payload() -> dict[str, Any]:
     """Get the JSON payload from the Flask request."""
     if not flask.has_request_context():
-        raise RuntimeError("No Flask request context available")
+        raise (
+            RuntimeError("No Flask request context available")
+        ) from None
     if flask.request.method == "GET":
         return dict(flask.request.args)
 
@@ -95,12 +101,12 @@ def get_request_payload() -> dict[str, Any]:
             message="Malformed JSON payload",
             error_code="MALFORMED_REQUEST",
             body=flask.request.data,
-        )
+        ) from None
     if not isinstance(json_payload, dict):
         raise api_errors.InvalidRequestError(
             message="Expected object in JSON payload",
             body=json_payload,
-        )
+        ) from None
     return json_payload
 
 
@@ -116,7 +122,9 @@ def unpack_into(
         func
     )
     if missing_params:
-        raise KeyError(f"Missing required parameters: {missing_params}")
+        raise (
+            KeyError(f"Missing required parameters: {missing_params}")
+        ) from None
     # Call the original function with unpacked arguments
     return func(**reconciled, **extra_args)
 
@@ -131,7 +139,9 @@ def unpack_request(
     """
     # Validate func annotations
     if not func.__annotations__:
-        raise ValueError(f"Function {func.__name__} missing type annotations")
+        raise (
+            ValueError(f"Function {func.__name__} missing type annotations")
+        ) from None
     incompatible_params = [
         param for param in inspect.signature(func).parameters.values()
         if not parameter.is_keyword_supported(param)
@@ -140,7 +150,7 @@ def unpack_request(
         raise ValueError(
             f"Parameters {incompatible_params} must be "
             "keyword-argument-compatible"
-        )
+        ) from None
 
     @wraps(func)
     def wrappervf(*args, **kwargs) -> Any:
