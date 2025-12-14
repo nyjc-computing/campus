@@ -7,9 +7,10 @@ import typing
 
 import flask
 
+import campus.config
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid
+from campus.common.utils import uid, utc_time
 import campus.model
 import campus.storage
 
@@ -46,7 +47,7 @@ class LoginSessionsResource:
     def new(
             self,
             *,
-            expiry_seconds: int,
+            # expiry_seconds: int,
             client_id: schema.CampusID,
             user_id: schema.UserID | None = None,
             device_id: str | None = None,
@@ -56,12 +57,15 @@ class LoginSessionsResource:
 
         Any existing session will be revoked.
         """
+        login_expiry_seconds = (
+            campus.config.DEFAULT_LOGIN_EXPIRY_DAYS * utc_time.DAY_SECONDS
+        )
         # Delete any existing session
         if (existing_session_id := _check_existing_id()):
             self[existing_session_id].delete()
         session = _from_record({
             "id": uid.generate_category_uid(f"{PROVIDER}-login_session"),
-            "expiry_seconds": expiry_seconds,
+            "expiry_seconds": login_expiry_seconds,
             "client_id": str(client_id),
             "user_id": str(user_id) if user_id else None,
             "device_id": device_id,
