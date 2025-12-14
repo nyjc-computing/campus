@@ -45,7 +45,7 @@ def delete(label: str, key: str) -> flask_campus.JsonResponse:
     Returns: {}
     """
     del vault_resource[label][key]
-    _yapper.get().emit('campus.vaults.key.delete', {"label": label, "key": key})
+    get_yapper().emit('campus.vaults.key.delete', {"label": label, "key": key})
     return {}, 200
 
 
@@ -81,5 +81,5 @@ def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
     }
     """
     vault_resource[label][key] = value
-    _yapper.get().emit('campus.vaults.key.update', {"label": label, "key": key})
+    get_yapper().emit('campus.vaults.key.update', {"label": label, "key": key})
     return {"key": value}, 200
