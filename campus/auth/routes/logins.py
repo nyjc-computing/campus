@@ -59,7 +59,7 @@ def new(
     return loginsession.to_resource(), 200
 
 
-@bp.delete("/<session_id>")
+@bp.delete("/<session_id>/")
 def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Delete a login session.
 
@@ -70,7 +70,7 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     return {}, 200
 
 
-@bp.get("/<session_id>")
+@bp.get("/<session_id>/")
 def get(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Get a login session.
 
@@ -80,7 +80,7 @@ def get(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     return loginsession.to_resource(), 200
 
 
-@bp.patch("/<session_id>")
+@bp.patch("/<session_id>/")
 @flask_campus.unpack_request
 def update(
         session_id: schema.CampusID,
