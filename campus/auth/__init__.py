@@ -60,8 +60,9 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
 
     # Miscellaneous fixes
 
-    # Disable strict slashes globally for this app
-    # Strict slashes can cause 308 redirects which will strip headers,
+    # Enable strict slashes globally for this app
+    # If disabled, routes not ending in slash are 308-redirected to
+    # slash-ending routes, which results in stripped headers,
     # causing confusing 401 errors on authenticated endpoints.
     if isinstance(app, flask.Flask):
-        app.url_map.strict_slashes = False
+        app.url_map.strict_slashes = True
