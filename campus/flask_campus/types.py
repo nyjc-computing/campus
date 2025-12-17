@@ -26,7 +26,7 @@ class ViewFunction(Protocol, Generic[R]):
     """A view function that takes arbitrary arguments and returns a response.
     """
 
-    def __call__(self, *args: str, **kwargs) -> R:
+    def __call__(self, **kwargs) -> R:
         ...
 
 

@@ -9,6 +9,8 @@ import werkzeug
 import campus_python
 from campus import flask_campus
 
+from . import types
+
 
 def _is_safe_redirect(url: str) -> bool:
     """Ensure URL is safe for redirect (prevents open redirect attacks)."""
@@ -79,6 +81,7 @@ def _create_bp(
         """
         # Complete the OAuth flow (creates login session)
         campus.auth.finalize(state=state, code=code, scope=scope)
+        campus.auth.push_context()
 
         # Redirect to the original destination
         next_url = flask.session.pop('login_next', '/')
@@ -116,3 +119,20 @@ class OAuthLoginManager:
         """Initialize the login manager with the Flask app."""
         bp = _create_bp(self.campus, self.default_endpoint)
         app.register_blueprint(bp)
+        if isinstance(app, flask.Flask):
+            app.before_request(self.campus.auth.push_context)
+        elif isinstance(app, flask.Blueprint):
+            app.before_app_request(self.campus.auth.push_context)
+
+    def login_required(
+            self,
+            view: types.ViewFunction[werkzeug.Response | str]
+    ) -> types.ViewFunction[werkzeug.Response | str]:
+        """Decorator to protect routes that require authentication."""
+        def wrapped_view(**kwargs):
+            if not hasattr(flask.g, "user") or flask.g.user is None:
+                return flask.redirect(
+                    flask.url_for('auth.login', next=flask.request.path)
+                )
+            return view(**kwargs)
+        return wrapped_view
