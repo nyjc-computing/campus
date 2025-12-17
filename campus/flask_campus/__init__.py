@@ -3,220 +3,26 @@
 Common utility functions for validation of flask requests and responses.
 """
 
-import inspect
-from functools import wraps
-from json import JSONDecodeError
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Mapping,
-    NoReturn,
-    Protocol,
-    Type,
-    TypeVar,
+from .login_manager import OAuthLoginManager
+from .utils import (
+    get_request_headers,
+    get_request_payload,
+    get_user_agent,
+    unpack_into,
+    unpack_request,
+    validate_json_response,
+    validate_request_and_extract_json,
+    validate_request_and_extract_urlparams,
 )
 
-import flask
-from werkzeug import Response as FlaskResponse
-
-import campus.model
-from campus.common.errors import api_errors
-from campus.common.validation import record
-
-from . import parameter
-
-R = TypeVar("R", covariant=True)
-
-# Only expecting strings or dicts
-JsonObject = dict[str, Any]
-StatusCode = int
-
-
-class ViewFunction(Protocol, Generic[R]):
-    """A view function that takes arbitrary arguments and returns a response.
-    """
-
-    def __call__(self, *args: str, **kwargs) -> R:
-        ...
-
-
-ViewFunctionDecorator = Callable[[ViewFunction], ViewFunction]
-# Actually, view functions may return a variety of return values which Flask is
-# able to handle
-# But Campus API sticks to JSON-serializable return values, with a status code
-JsonResponse = tuple[dict[str, Any], StatusCode]
-HtmlResponse = tuple[str, StatusCode]
-
-
-class ErrorHandler(Protocol):
-    """Define an ErrorHandler as a function that takes a status code and
-    optional keyword arguments.
-
-    Error Handlers must raise an exception.
-    """
-
-    def __call__(self, status: StatusCode, **body) -> NoReturn:
-        """An error handler returns None"""
-        ...
-
-
-JsonViewFunction = ViewFunction[JsonResponse]
-FlaskViewFunction = ViewFunction[FlaskResponse]
-
-
-def get_user_agent() -> str:
-    """Get the User-Agent from the Flask request."""
-    if not flask.has_request_context():
-        raise (
-            RuntimeError("No Flask request context available")
-        ) from None
-    return flask.request.headers.get("User-Agent", "Unknown")
-
-
-def get_request_headers() -> campus.model.HttpHeader:
-    """Get the headers from the Flask request as a dictionary."""
-    if not flask.has_request_context():
-        raise (
-            RuntimeError("No Flask request context available")
-        ) from None
-
-    headers_items = list(flask.request.headers.items())
-    result = campus.model.HttpHeader(headers_items)
-    return result
-
-
-def get_request_payload() -> dict[str, Any]:
-    """Get the JSON payload from the Flask request."""
-    if not flask.has_request_context():
-        raise (
-            RuntimeError("No Flask request context available")
-        ) from None
-    if flask.request.method == "GET":
-        return dict(flask.request.args)
-
-    json_payload = flask.request.get_json(silent=True)
-    if json_payload is None:
-        raise api_errors.InvalidRequestError(
-            message="Malformed JSON payload",
-            error_code="MALFORMED_REQUEST",
-            body=flask.request.data,
-        ) from None
-    if not isinstance(json_payload, dict):
-        raise api_errors.InvalidRequestError(
-            message="Expected object in JSON payload",
-            body=json_payload,
-        ) from None
-    return json_payload
-
-
-def unpack_into(
-        func: Callable[..., Any],
-        **request_args: Any,
-) -> Any:
-    """Unpack request arguments into the given function's arguments,
-    based on its signature.
-    """
-    reconciled, extra_args, missing_params = parameter.reconcile(
-        request_args,
-        func
-    )
-    if missing_params:
-        raise (
-            KeyError(f"Missing required parameters: {missing_params}")
-        ) from None
-    # Call the original function with unpacked arguments
-    return func(**reconciled, **extra_args)
-
-
-def unpack_request(
-        func: Callable[..., Any]
-) -> Callable[[], Any]:
-    """Decorator that unpacks Flask request into the decorated function's
-    arguments, based on its signature.
-
-    GET requests will use URL parameters, POST/PUT requests will use JSON body.
-    """
-    # Validate func annotations
-    if not func.__annotations__:
-        raise (
-            ValueError(f"Function {func.__name__} missing type annotations")
-        ) from None
-    incompatible_params = [
-        param for param in inspect.signature(func).parameters.values()
-        if not parameter.is_keyword_supported(param)
-    ]
-    if incompatible_params:
-        raise ValueError(
-            f"Parameters {incompatible_params} must be "
-            "keyword-argument-compatible"
-        ) from None
-
-    @wraps(func)
-    def wrappervf(*args, **kwargs) -> Any:
-        """The view function presented to Flask"""
-        assert not args, f"Positional arguments not supported: {args}"
-        request_args = get_request_payload()
-        return unpack_into(func, **kwargs, **request_args)
-
-    return wrappervf
-
-
-def validate_request_and_extract_json(
-        schema: Mapping[str, Type], *,
-        on_error: ErrorHandler,
-) -> JsonObject:
-    """Validate the request JSON body against the provided schema before
-    returning the payload.
-    """
-    try:
-        payload = get_request_payload()
-        record.validate_keys(
-            payload,
-            schema,
-        )
-    except (KeyError, TypeError, JSONDecodeError) as err:
-        on_error(400, message=err.args[0])
-    else:
-        return payload
-
-
-def validate_request_and_extract_urlparams(
-        schema: Mapping[str, Type], *,
-        on_error: ErrorHandler,
-        ignore_extra: bool = False,
-        strict: bool = False,
-) -> JsonObject:
-    """Validate the request URL parameters against the provided schema before
-    returning the parameters.
-    """
-    try:
-        params = get_request_payload()
-        record.validate_keys(
-            params,
-            schema,
-            ignore_extra=ignore_extra,
-            required=strict  # If strict, all schema keys are required
-        )
-    except (KeyError, TypeError) as err:
-        on_error(400, message=err.args[0])
-    else:
-        return params
-
-
-def validate_json_response(
-        schema: Mapping[str, Type],
-        resp_json: Mapping[str, Any], *,
-        on_error: ErrorHandler,
-        ignore_extra: bool = True,
-        error_status_code: StatusCode = 500,
-        error_message: str | None = None,
-) -> None:
-    """Validate the response JSON body against the provided schema."""
-    if resp_json is None:
-        on_error(500, message="Response body must be a JSON object")
-        return
-    try:
-        record.validate_keys(resp_json, schema, ignore_extra=ignore_extra)
-    except (KeyError, TypeError) as err:
-        on_error(error_status_code, message=error_message or err.args[0])
+__all__ = [
+    "OAuthLoginManager",
+    "get_user_agent",
+    "get_request_headers",
+    "get_request_payload",
+    "unpack_into",
+    "unpack_request",
+    "validate_request_and_extract_json",
+    "validate_request_and_extract_urlparams",
+    "validate_json_response",
+]
