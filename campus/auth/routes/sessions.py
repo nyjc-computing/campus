@@ -62,7 +62,7 @@ def get_by_authorization_code(
     return authsession.to_resource(), 200
 
 
-@bp.post("/<provider>")
+@bp.post("/<provider>/")
 @flask_campus.unpack_request
 def new_provider_session(
         *,
@@ -108,7 +108,7 @@ def new_provider_session(
     return authsession.to_resource(), 200
 
 
-@bp.delete("/<provider>/<session_id>")
+@bp.delete("/<provider>/<session_id>/")
 def delete_provider_session(
         provider: str,
         session_id: schema.CampusID,
@@ -133,7 +133,7 @@ def delete_provider_session(
     return {"target": target}, 200
 
 
-@bp.get("/<provider>/<session_id>")
+@bp.get("/<provider>/<session_id>/")
 def get_provider_session(
         provider: str,
         session_id: schema.CampusID,
@@ -158,7 +158,7 @@ def get_provider_session(
     return authsession.to_resource(), 200
 
 
-@bp.patch("/<provider>/<session_id>")
+@bp.patch("/<provider>/<session_id>/")
 @flask_campus.unpack_request
 def update_provider_session(
         provider: str,
