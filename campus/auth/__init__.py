@@ -57,3 +57,11 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
         app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)
 
     app.register_blueprint(bp)
+
+    # Miscellaneous fixes
+
+    # Disable strict slashes globally for this app
+    # Strict slashes can cause 308 redirects which will strip headers,
+    # causing confusing 401 errors on authenticated endpoints.
+    if isinstance(app, flask.Flask):
+        app.url_map.strict_slashes = False
