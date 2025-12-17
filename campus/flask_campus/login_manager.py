@@ -3,6 +3,8 @@
 OAuth Login Manager for Flask integration.
 """
 
+from functools import wraps
+
 import flask
 import werkzeug
 
@@ -129,6 +131,7 @@ class OAuthLoginManager:
             view: types.ViewFunction[werkzeug.Response | str]
     ) -> types.ViewFunction[werkzeug.Response | str]:
         """Decorator to protect routes that require authentication."""
+        @wraps(view)
         def wrapped_view(**kwargs):
             if not hasattr(flask.g, "user") or flask.g.user is None:
                 return flask.redirect(
