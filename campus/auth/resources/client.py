@@ -52,6 +52,27 @@ def _get_client_permissions(client_id: schema.CampusID) -> dict[str, int]:
     return permissions
 
 
+def _get_all_client_permissions() -> dict[str, dict[str, int]]:
+    """Get all clients' vault access permissions.
+
+    Args:
+        None
+
+    Returns:
+        Dictionary mapping vault labels to permission bitflags
+    """
+    access_records = access_storage.get_matching({})
+    permissions: dict[str, dict[str, int]] = {}
+    for record in access_records:
+        label = schema.String(record["label"])
+        access_flag = schema.Integer(record["access"])
+        client_id = record["client_id"]
+        if client_id not in permissions:
+            permissions[client_id] = {}
+        permissions[client_id][label] = access_flag
+    return permissions
+
+
 class ClientsResource:
     """Represents the clients resource in Campus API Schema."""
 
@@ -131,9 +152,11 @@ class ClientsResource:
             List of Client instances
         """
         records = client_storage.get_matching({})
+        access = _get_all_client_permissions()
         clients = []
         for record in records:
             client = campus.model.Client.from_storage(record)
+            client.permissions = access.get(client.id, {})
             clients.append(client)
         return clients
 
