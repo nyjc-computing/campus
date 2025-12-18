@@ -70,7 +70,7 @@ def list_all() -> flask_campus.JsonResponse:
     return {"clients": clients}, 200
 
 
-@bp.delete("/<client_id>")
+@bp.delete("/<client_id>/")
 @flask_campus.unpack_request
 def delete_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Delete a vault client
@@ -87,7 +87,7 @@ def delete_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     return {}, 200
 
 
-@bp.get("/<client_id>")
+@bp.get("/<client_id>/")
 @flask_campus.unpack_request
 def get_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Get details of a specific client
@@ -118,7 +118,7 @@ def revoke_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     return {"secret": new_secret}, 200
 
 
-@bp.patch("/<client_id>")
+@bp.patch("/<client_id>/")
 @flask_campus.unpack_request
 def update_client(
         client_id: schema.CampusID,
@@ -154,7 +154,7 @@ def update_client(
     return updated_client.to_resource(), 200
 
 
-@bp.get("/<client_id>/access")
+@bp.get("/<client_id>/access/")
 @flask_campus.unpack_request
 def get_client_access(
         client_id: schema.CampusID,
@@ -247,6 +247,34 @@ def revoke_client_access(
     }
     """
     client_resource[client_id].access.revoke(
+        vault_label=vault,
+        permission=permission
+    )
+    updated_permission = client_resource[client_id].access.get(vault)
+    return {"vault": vault, "permission": updated_permission}, 200
+
+
+@bp.patch("/<client_id>/access/")
+@flask_campus.unpack_request
+def update_client_access(
+        client_id: schema.CampusID,
+        vault: str,
+        permission: int
+) -> flask_campus.JsonResponse:
+    """Update (replace) a client's access permissions for a vault.
+
+    PATCH /clients/{client_id}/access/
+    Body: {
+        "vault": "vault_label",
+        "permission": new_permission[int]
+    }
+
+    Returns: {
+        "vault": "vault_label",
+        "permission": updated_permission[int]
+    }
+    """
+    client_resource[client_id].access.update(
         vault_label=vault,
         permission=permission
     )

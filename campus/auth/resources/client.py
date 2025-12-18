@@ -360,3 +360,39 @@ class ClientAccessResource:
                 records[0]["id"],
                 {"access": new_access}
             )
+
+    def update(
+            self,
+            vault_label: str,
+            permission: int
+    ) -> None:
+        """Update (replace) the client access permission for a vault label.
+
+        Args:
+            vault_label: The vault label to update access for
+            permission: The permission bitflag to set (replaces existing)
+        """
+        client_id = self._parent.client_id
+        records = access_storage.get_matching({
+            "client_id": client_id,
+            "label": vault_label,
+        })
+        if permission == 0:
+            # If permission is 0, delete the access record if it exists
+            if records:
+                access_storage.delete_by_id(records[0]["id"])
+        elif records:
+            # Update existing record with new permission
+            access_storage.update_by_id(
+                records[0]["id"],
+                {"access": permission}
+            )
+        else:
+            # Create new record with the permission
+            access_storage.insert_one({
+                "id": uid.generate_category_uid("vault_access"),
+                "created_at": schema.DateTime.utcnow(),
+                "client_id": client_id,
+                "label": vault_label,
+                "access": permission,
+            })
