@@ -4,14 +4,13 @@ OAuth Login Manager for Flask integration.
 """
 
 from functools import wraps
+from typing import Callable
 
 import flask
 import werkzeug
 
 import campus_python
 from campus import flask_campus
-
-from . import types
 
 
 def _is_safe_redirect(url: str) -> bool:
@@ -126,10 +125,7 @@ class OAuthLoginManager:
         elif isinstance(app, flask.Blueprint):
             app.before_app_request(self.campus.auth.push_context)
 
-    def login_required(
-            self,
-            view: types.ViewFunction[werkzeug.Response | str]
-    ) -> types.ViewFunction[werkzeug.Response | str]:
+    def login_required(self, view: Callable) -> Callable:
         """Decorator to protect routes that require authentication."""
         @wraps(view)
         def wrapped_view(**kwargs):
