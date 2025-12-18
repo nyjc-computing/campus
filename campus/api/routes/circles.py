@@ -134,7 +134,7 @@ def delete_circle(circle_id: str) -> flask_campus.JsonResponse:
         - Emits the event: `campus.circles.delete`
     """
     resources.circle[schema.CampusID(circle_id)].delete()
-    yapper.emit('campus.circles.delete')
+    yapper.emit('campus.circles.delete', {"circle_id": circle_id})
     return {}, 200
 
 
@@ -239,7 +239,7 @@ def edit_circle(
     if not updates:
         raise api_errors.InvalidRequestError("Empty request body")
     resources.circle[schema.CampusID(circle_id)].update(**updates)
-    yapper.emit('campus.circles.update')
+    yapper.emit('campus.circles.update', {"circle_id": circle_id})
     return {}, 200
 
 
@@ -342,7 +342,7 @@ def add_circle_member(
         member_id=schema.CampusID(member_id),
         access_value=access_value
     )
-    yapper.emit('campus.circles.members.add')
+    yapper.emit('campus.circles.members.add', {"circle_id": circle_id})
     return {}, 200
 
 
@@ -391,7 +391,7 @@ def remove_circle_member(
         schema.CampusID(circle_id),
         member_id=schema.CampusID(member_id)
     )
-    yapper.emit('campus.circles.members.remove')
+    yapper.emit('campus.circles.members.remove', {"circle_id": circle_id, "member_id": member_id})
     return {}, 200
 
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
@@ -449,7 +449,7 @@ def patch_circle_member(
         member_id=schema.CampusID(member_id),
         access_value=access_value
     )
-    yapper.emit('campus.circles.members.set')
+    yapper.emit('campus.circles.members.set', {"circle_id": circle_id, "member_id": member_id})
     return {}, 200
 
 

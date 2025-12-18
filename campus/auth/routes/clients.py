@@ -42,7 +42,7 @@ def new(name: str, description: str) -> flask_campus.JsonResponse:
     # Note that no client_secret is generated here
     # Apps are expected to generate the secret separately
     client = client_resource.new(name=name, description=description)
-    get_yapper().emit('campus.clients.create')
+    get_yapper().emit('campus.clients.create', {"client_id": client.id})
     return client.to_resource(), 200
 
 
@@ -83,7 +83,7 @@ def delete_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     }
     """
     client_resource[client_id].delete()
-    get_yapper().emit('campus.clients.delete')
+    get_yapper().emit('campus.clients.delete', {"client_id": client_id})
     return {}, 200
 
 
@@ -115,6 +115,7 @@ def revoke_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     Returns: {"secret": new_secret}
     """
     new_secret = client_resource[client_id].revoke()
+    get_yapper().emit("campus.clients.revoke", {"client_id": client_id})
     return {"secret": new_secret}, 200
 
 
@@ -151,6 +152,7 @@ def update_client(
         )
     client_resource[client_id].update(**updates)
     updated_client = client_resource[client_id].get()
+    get_yapper().emit("campus.clients.update", {"client_id": client_id})
     return updated_client.to_resource(), 200
 
 
@@ -223,6 +225,7 @@ def grant_client_access(
         permission=permission
     )
     updated_permission = client_resource[client_id].access.get(vault)
+    get_yapper().emit("campus.clients.access.update", {"client_id": client_id})
     return {"vault": vault, "permission": updated_permission}, 200
 
 
@@ -251,6 +254,7 @@ def revoke_client_access(
         permission=permission
     )
     updated_permission = client_resource[client_id].access.get(vault)
+    get_yapper().emit("campus.clients.access.update", {"client_id": client_id})
     return {"vault": vault, "permission": updated_permission}, 200
 
 
@@ -279,4 +283,5 @@ def update_client_access(
         permission=permission
     )
     updated_permission = client_resource[client_id].access.get(vault)
+    get_yapper().emit("campus.clients.access.update", {"client_id": client_id})
     return {"vault": vault, "permission": updated_permission}, 200

@@ -47,15 +47,7 @@ def new(
         device_id=device_id,
         agent_string=agent_string,
     )
-    get_yapper().emit(
-        'campus.logins.new',
-        {
-            "id": str(loginsession.id),
-            "client_id": str(client_id),
-            "user_id": str(user_id),
-            "device_id": device_id,
-        }
-    )
+    get_yapper().emit('campus.logins.new')
     return loginsession.to_resource(), 200
 
 
@@ -66,7 +58,7 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     DELETE /logins/<session_id>/
     """
     login_resource[session_id].delete()
-    get_yapper().emit('campus.logins.delete', {"id": str(session_id)})
+    get_yapper().emit('campus.logins.delete', {"session_id": session_id})
     return {}, 200
 
 
@@ -96,8 +88,5 @@ def update(
     loginsession = login_resource[session_id].update(
         expiry_seconds=expiry_seconds
     )
-    get_yapper().emit(
-        'campus.logins.update',
-        {"id": str(session_id), "expiry_seconds": expiry_seconds}
-    )
+    get_yapper().emit('campus.logins.update', {"session_id": session_id})
     return loginsession.to_resource(), 200

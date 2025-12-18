@@ -57,13 +57,15 @@ def authenticate(
     }
     """
     if token:
-        return authenticate_token(token)
+        result = authenticate_token(token)
     elif client_id and client_secret:
-        return authenticate_credentials(client_id, client_secret)
+        result = authenticate_credentials(client_id, client_secret)
     else:
-        return {
+        result = {
             "error": "Missing authentication credentials."
         }, 400
+    get_yapper().emit('campus.root.authenticate')
+    return result
 
 
 def authenticate_credentials(
@@ -81,13 +83,6 @@ def authenticate_credentials(
             "error": "Invalid client credentials."
         }
         status_code = 401
-    get_yapper().emit(
-        "campus.root.authenticate",
-        {
-            "client_id": client_id,
-            "status_code": status_code,
-        }
-    )
     return resp_json, status_code
 
 
@@ -106,11 +101,4 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
             "user": user_resource[user_creds.user_id].get().to_resource(),
         }
         status_code = 200
-    get_yapper().emit(
-        "campus.root.authenticate",
-        {
-            "token_id": token,
-            "status_code": status_code,
-        }
-    )
     return resp_json, status_code
