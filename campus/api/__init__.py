@@ -10,20 +10,23 @@ __all__ = ["init_app"]
 import campus_python
 import flask
 
-from campus.common import env, flask as campus_flask
+from campus import flask_campus
+from campus.common import env
 from campus.common.errors import auth_errors
 
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
 
-campus_auth = campus_python.Campus().auth
-auth_root = campus_python.Campus().auth.root
+campus = campus_python.Campus(timeout=60)
+campus_auth = campus.auth
+auth_root = campus.auth.root
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
-    from . import routes
     from campus.common import webauth
+
+    from . import routes
 
     # Organise API routes under api blueprint
     bp = flask.Blueprint('api_v1', __name__, url_prefix='/api/v1')
@@ -41,7 +44,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         """
         httpauth = webauth.http.HttpAuthenticationScheme.with_header(
             provider="campus",
-            http_header=campus_flask.get_request_headers()
+            http_header=flask_campus.get_request_headers()
         )
         match httpauth.header.authorization.scheme:
             case "basic":

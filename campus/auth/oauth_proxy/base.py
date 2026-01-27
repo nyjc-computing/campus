@@ -97,7 +97,7 @@ class AuthProxy(ABC):
         session_id = flask.session.get(self._session_key)
         if session_id is None:
             raise auth_errors.InvalidRequestError("No OAuth session found.")
-        authsession = resources.session[self.provider].get(session_id)
+        authsession = resources.session[self.provider][session_id].get()
         return authsession
 
     def init_authsession(
@@ -152,9 +152,12 @@ class AuthProxy(ABC):
     def redirect_for_authorization(
             self,
             target: schema.Url,
+            **kwargs
     ) -> werkzeug.Response:
         """Return a 302 Redirect response to the provider's
         authorization URL.
+
+        Providers may accept additional parameters via kwargs.
         """
 
     @contextlib.contextmanager

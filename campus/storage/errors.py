@@ -24,13 +24,18 @@ class ConflictError(StorageError):
     such as attempting to insert a duplicate record or violating a unique constraint.
     """
 
-    def __init__(self, message: str = "A conflict occurred in storage.", collection_name: Optional[str] = None, details: Optional[dict] = None):
-        self.collection_name = collection_name
-        self.details = details
+    def __init__(
+            self,
+            message: str = "A conflict occurred in storage.",
+            group_name: Optional[str] = None,
+            details: Optional[dict] = None
+    ):
         full_message = message
-        if collection_name:
-            full_message += f" in collection '{collection_name}'"
+        if group_name:
+            full_message += f" in group '{group_name}'"
+            self.group_name = group_name
         if details:
+            self.details = details
             full_message += f". Details: {details}"
         super().__init__(full_message)
 
@@ -42,29 +47,34 @@ class NoChangesAppliedError(StorageError):
     with a query that matches no documents in the storage backend.
     """
 
-    def __init__(self, operation: str, query: Optional[dict] = None, collection_name: Optional[str] = None):
+    def __init__(
+            self,
+            operation: str,
+            query: Optional[dict] = None,
+            group_name: Optional[str] = None
+    ):
         self.operation = operation
-        self.query = query
-        self.collection_name = collection_name
         message = f"No documents were affected by {operation} operation"
-        if collection_name:
-            message += f" in collection '{collection_name}'"
+        if group_name:
+            message += f" in group '{group_name}'"
+            self.group_name = group_name
         if query:
+            self.query = query
             message += f" with query: {query}"
         super().__init__(message)
 
 
 class NotFoundError(StorageError):
-    """Error raised when a document is not found in storage.
+    """Error raised when a document/row is not found in storage.
 
-    This error is raised when attempting to update or delete a document
-    that does not exist in the storage backend.
+    This error is raised when attempting to update or delete a
+    document/row that does not exist in the storage backend.
     """
 
-    def __init__(self, doc_id: str, collection_name: Optional[str] = None):
+    def __init__(self, doc_id: str, name: Optional[str] = None):
         self.doc_id = doc_id
-        self.collection_name = collection_name
-        message = f"Document with id '{doc_id}' not found"
-        if collection_name:
-            message += f" in collection '{collection_name}'"
+        message = f"Document/row with id '{doc_id}' not found"
+        if name:
+            message += f" in collection/table '{name}'"
+            self.group_name = name
         super().__init__(message)

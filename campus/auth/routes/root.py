@@ -8,46 +8,38 @@ backend services (e.g. campus.api), not by other clients.
 All access must be carefully authenticated and authorized.
 """
 
+import campus_python
 import flask
 
-from campus.common import flask as campus_flask, schema
+from campus import flask_campus
+from campus.common import schema
 from campus.common.errors import api_errors
-import campus.yapper
 
-import campus_python
-
+from .. import get_yapper
 from ..resources import (
     client as client_resource,
+)
+from ..resources import (
     credentials as creds_resource,
+)
+from ..resources import (
     user as user_resource,
 )
 
 # Create blueprint for session management routes
 bp = flask.Blueprint('root', __name__, url_prefix='/root')
 
-# Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
-
-campus_auth = campus_python.Campus().auth
-
-
-def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
+campus_auth = campus_python.Campus(timeout=60).auth
 
 
 @bp.post("/authenticate")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def authenticate(
         *,
         token: str | None = None,
         client_id: schema.CampusID | None = None,
         client_secret: str | None = None,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Authenticate a service client using token or client credentials.
 
     GET /root/authenticate
@@ -65,18 +57,21 @@ def authenticate(
     }
     """
     if token:
-        return authenticate_token(token)
+        result = authenticate_token(token)
     elif client_id and client_secret:
-        return authenticate_credentials(client_id, client_secret)
+        result = authenticate_credentials(client_id, client_secret)
     else:
-        return {
+        result = {
             "error": "Missing authentication credentials."
         }, 400
+    get_yapper().emit('campus.root.authenticate')
+    return result
+
 
 def authenticate_credentials(
         client_id: schema.CampusID,
         client_secret: str
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Authenticate using client credentials."""
     if client_resource.is_valid_credentials(client_id, client_secret):
         resp_json = {
@@ -88,17 +83,10 @@ def authenticate_credentials(
             "error": "Invalid client credentials."
         }
         status_code = 401
-    get_yapper().emit(
-        "campus.root.authenticate",
-        {
-            "client_id": client_id,
-            "status_code": status_code,
-        }
-    )
     return resp_json, status_code
 
 
-def authenticate_token(token: str) -> campus_flask.JsonResponse:
+def authenticate_token(token: str) -> flask_campus.JsonResponse:
     """Authenticate using a token."""
     try:
         user_creds = creds_resource["campus"].get(token)
@@ -113,11 +101,4 @@ def authenticate_token(token: str) -> campus_flask.JsonResponse:
             "user": user_resource[user_creds.user_id].get().to_resource(),
         }
         status_code = 200
-    yapper = get_yapper().emit(
-        "campus.root.authenticate",
-        {
-            "token_id": token,
-            "status_code": status_code,
-        }
-    )
     return resp_json, status_code

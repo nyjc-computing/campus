@@ -47,7 +47,9 @@ class Boolean(int, metaclass=BooleanMeta):
                 return True if bool(self) == bool(other) else False
             case bool():
                 return True if bool(self) == other else False
-        raise TypeError(f"__eq__ not implemented for {type(other)}")
+        raise (
+            TypeError(f"__eq__ not implemented for {type(other)}")
+        ) from None
 
 
 class Integer(int):
@@ -68,7 +70,14 @@ class String(str):
     """Emulates Python str behavior."""
 
     def __new__(cls, value: str):
+        if value in (None,):
+            raise ValueError(
+                f"{cls.__name__} cannot be initialized with {value}"
+            ) from None
         return super().__new__(cls, value)
+
+    def __str__(self) -> str:
+        return super().__str__()
 
 
 class DateTime(String):
@@ -83,7 +92,7 @@ class DateTime(String):
         return super().__new__(cls, value)
 
     def __repr__(self) -> str:
-        return f"DateTime({str(self)})"
+        return f"DateTime({self})"
 
     @classmethod
     def from_datetime(cls: Type[Self], dt: utc_time.datetime) -> Self:
@@ -156,10 +165,7 @@ class Email(String):
         return super().__new__(cls, str(value))
 
     def __repr__(self) -> str:
-        return f"Email({str(self)})"
-
-    def __str__(self) -> str:
-        return str(self)
+        return f"Email({self})"
 
     @property
     def user(self) -> str:
@@ -179,10 +185,10 @@ class Url(String):
         return super().__new__(cls, str(value))
 
     def __repr__(self) -> str:
-        return f"Url({str(self)})"
+        return f"Url({super().__str__()})"
 
     def __str__(self) -> str:
-        return str(self)
+        return super().__str__()
 
     @property
     def scheme(self) -> str:

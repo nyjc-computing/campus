@@ -5,7 +5,7 @@ API routes for the emailotp resource.
 
 import flask
 
-from campus.common import flask as campus_flask
+from campus import flask_campus
 from campus.common.errors import api_errors
 from campus.services.email import create_email_sender
 
@@ -20,8 +20,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
 
 @bp.post('/request')
-@campus_flask.unpack_request
-def request_otp(email: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def request_otp(email: str) -> flask_campus.JsonResponse:
     """Request a new OTP for email authentication."""
     from campus.api import resources
     from campus.model.emailotp import template
@@ -47,8 +47,8 @@ def request_otp(email: str) -> campus_flask.JsonResponse:
 
 
 @bp.post('/verify')
-@campus_flask.unpack_request
-def verify_otp(email: str, otp: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def verify_otp(email: str, otp: str) -> flask_campus.JsonResponse:
     """Verify an OTP for email authentication."""
     from campus.api import resources
 

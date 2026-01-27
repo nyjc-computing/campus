@@ -44,7 +44,7 @@ def handle_authorization_error(
         del err_dict["details"]
         del err_dict["traceback"]
     return flask.redirect(
-        url.with_params(
+        url.add_query(
             err.redirect_uri or flask.request.base_url,
             **err_dict
         )

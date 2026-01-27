@@ -9,36 +9,25 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask as campus_flask, schema
-import campus.yapper
+from campus import flask_campus
+from campus.common import schema
 
+from .. import get_yapper
 from ..resources import login as login_resource
 
 # Create blueprint for login management routes
 bp = flask.Blueprint('logins', __name__, url_prefix='/logins')
 
-# Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
-
-
-def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
-
 
 @bp.post("/")
+@flask_campus.unpack_request
 def new(
         *,
-        expiry_seconds: int,
         client_id: schema.CampusID,
         user_id: schema.UserID,
         device_id: str | None = None,
         agent_string: str,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Get a session for a specific authentication provider by
     authorization code.
 
@@ -53,35 +42,28 @@ def new(
     }
     """
     loginsession = login_resource.new(
-        expiry_seconds=expiry_seconds,
         client_id=client_id,
         user_id=user_id,
         device_id=device_id,
         agent_string=agent_string,
     )
-    get_yapper().emit(
-        'campus.logins.new',
-        {
-            "id": str(loginsession.id),
-            "client_id": str(client_id),
-            "user_id": str(user_id),
-            "device_id": device_id,
-        }
-    )
+    get_yapper().emit('campus.logins.new')
     return loginsession.to_resource(), 200
 
+
 @bp.delete("/<session_id>/")
-def delete(session_id: schema.CampusID) -> campus_flask.JsonResponse:
+def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Delete a login session.
 
     DELETE /logins/<session_id>/
     """
     login_resource[session_id].delete()
-    get_yapper().emit('campus.logins.delete', {"id": str(session_id)})
+    get_yapper().emit('campus.logins.delete', {"session_id": session_id})
     return {}, 200
 
+
 @bp.get("/<session_id>/")
-def get(session_id: schema.CampusID) -> campus_flask.JsonResponse:
+def get(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Get a login session.
 
     GET /logins/<session_id>/
@@ -89,12 +71,13 @@ def get(session_id: schema.CampusID) -> campus_flask.JsonResponse:
     loginsession = login_resource[session_id].get()
     return loginsession.to_resource(), 200
 
+
 @bp.patch("/<session_id>/")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def update(
         session_id: schema.CampusID,
         expiry_seconds: int
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Update a login session.
 
     PATCH /logins/<session_id>/
@@ -105,8 +88,5 @@ def update(
     loginsession = login_resource[session_id].update(
         expiry_seconds=expiry_seconds
     )
-    get_yapper().emit(
-        'campus.logins.update',
-        {"id": str(session_id), "expiry_seconds": expiry_seconds}
-    )
+    get_yapper().emit('campus.logins.update', {"session_id": session_id})
     return loginsession.to_resource(), 200

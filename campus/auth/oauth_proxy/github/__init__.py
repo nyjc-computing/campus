@@ -8,7 +8,8 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.common import flask as campus_flask, schema
+from campus import flask_campus
+from campus.common import schema
 from campus.common.errors import auth_errors
 
 from . import proxy
@@ -29,7 +30,7 @@ def before_request() -> None:
 
 
 @bp.get('/authorize')
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def authorize(
         target: schema.Url,
         prompt: Literal["select_account"] | None = None
@@ -41,11 +42,27 @@ def authorize(
 @bp.get('/callback')
 def callback() -> werkzeug.Response:
     """Handle a GitHub OAuth callback request."""
-    callback_payload = campus_flask.get_request_payload()
+    callback_payload = flask_campus.get_request_payload()
     if "error" in callback_payload:
-        auth_errors.raise_from_json(callback_payload)
+        # TODO: For testing - display error instead of redirecting
+        # This should be replaced with proper error handling that redirects to target
+        error_html = f"""
+        <html>
+        <head><title>OAuth Error</title></head>
+        <body>
+            <h1>OAuth Error</h1>
+            <p><strong>Error:</strong> {callback_payload.get('error')}</p>
+            <p><strong>Description:</strong> {callback_payload.get('error_description', 'N/A')}</p>
+            <p><strong>Error URI:</strong> {callback_payload.get('error_uri', 'N/A')}</p>
+            <hr>
+            <p><strong>All callback parameters:</strong></p>
+            <pre>{callback_payload}</pre>
+        </body>
+        </html>
+        """
+        return flask.Response(error_html, status=400, mimetype='text/html')
     else:
-        return campus_flask.unpack_into(success_callback,
+        return flask_campus.unpack_into(success_callback,
                                         **callback_payload)
 
 

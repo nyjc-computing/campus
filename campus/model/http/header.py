@@ -85,7 +85,8 @@ class HttpHeader(dict):
         """Create an HTTP header dictionary from a raw header
         dictionary.
         """
-        if "Authorization" in header:
+        has_auth = "Authorization" in header
+        if has_auth:
             return HttpHeaderWithAuth(header)
         else:
             return HttpHeader(header)

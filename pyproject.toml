@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "campus-suite"
-version = "0.1.4"
+version = "0.1.14"
 description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"

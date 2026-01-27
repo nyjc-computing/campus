@@ -4,7 +4,8 @@ This module provides the PostgreSQL backend for the Tables storage interface.
 
 Vault Integration:
 The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the
-'storage' vault. The storage system depends on the vault service for database credentials.
+'storage' vault. The storage system depends on the vault service for database
+credentials.
 
 Implementation:
 Uses direct column mapping where record keys correspond to table column names.
@@ -33,8 +34,7 @@ from campus.common.utils import datacls
 from campus.model import Model, constraints
 from campus.storage import errors
 
-from ..interface import TableInterface, PK
-
+from ..interface import PK, TableInterface
 
 _TYPEMAP = {
     str: "TEXT",
@@ -99,7 +99,9 @@ class PostgreSQLTable(TableInterface):
 
     Example:
         table = PostgreSQLTable("users")
-        table.insert_one({PK: "123", "created_at": "2023-01-01T00:00:00Z", "name": "John"})
+        table.insert_one(
+            {PK: "123", "created_at": "2023-01-01T00:00:00Z", "name": "John"}
+        )
         user = table.get_by_id("123")
     """
 
@@ -113,7 +115,8 @@ class PostgreSQLTable(TableInterface):
             psycopg2.Error: If database connection fails
         """
         db_uri = _get_db_uri()
-        return psycopg2.connect(db_uri)
+        conn = psycopg2.connect(db_uri)
+        return conn
 
     @staticmethod
     def _build_where_clause(query: dict) -> tuple[str, list]:
@@ -191,7 +194,7 @@ class PostgreSQLTable(TableInterface):
                     conn.rollback()
                     raise errors.ConflictError(
                         message="Conflict occurred during insert",
-                        collection_name=self.name,
+                        group_name=self.name,
                         details={"row": row, "error": str(e)}
                     ) from e
                 except psycopg2.Error as e:
@@ -286,12 +289,11 @@ class PostgreSQLTable(TableInterface):
     def init_from_model(self, name: str, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
         create_table_sql = _model_to_sql_schema(name, model)
+        # Ensure connection is properly closed after operation
         with self._get_connection() as conn:
-            try:
-                with conn.cursor() as cursor:
-                    cursor.execute(create_table_sql)
-            finally:
-                conn.close()
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_sql)
+                conn.commit()
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:
@@ -303,6 +305,7 @@ class PostgreSQLTable(TableInterface):
         Args:
             schema: SQL CREATE TABLE statement defining the table structure.
         """
+        # Ensure connection is properly closed after operation
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(schema)

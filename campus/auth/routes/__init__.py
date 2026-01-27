@@ -24,8 +24,8 @@ import flask
 from campus.common import webauth
 from campus.common.errors import auth_errors
 
-from . import clients, credentials, logins, root, sessions, users, vaults
 from .. import resources
+from . import clients, credentials, logins, root, sessions, users, vaults
 
 
 def authenticate() -> tuple[dict[str, str], int] | None:
@@ -76,7 +76,19 @@ def authenticate() -> tuple[dict[str, str], int] | None:
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialize the auth routes with the given Flask app or
     blueprint.
+    
+    Authentication is applied to each blueprint individually to avoid
+    affecting OAuth proxy routes which should be publicly accessible.
     """
+    # Apply authentication to each blueprint that requires it
+    clients.bp.before_request(authenticate)
+    credentials.bp.before_request(authenticate)
+    logins.bp.before_request(authenticate)
+    root.bp.before_request(authenticate)
+    sessions.bp.before_request(authenticate)
+    users.bp.before_request(authenticate)
+    vaults.bp.before_request(authenticate)
+    
     app.register_blueprint(clients.bp)
     app.register_blueprint(credentials.bp)
     app.register_blueprint(logins.bp)
@@ -84,4 +96,3 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(sessions.bp)
     app.register_blueprint(users.bp)
     app.register_blueprint(vaults.bp)
-    app.before_request(authenticate)

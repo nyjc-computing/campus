@@ -29,21 +29,26 @@ Legend:
 (A) User sends auth request to Campus
 (B) User is redirected to Google for authentication and consent.
 (C) Google redirects the user back to Campus with an authorization code.
-(D) Campus backend exchanges the authorization code directly with Google's
-    token endpoint for user profile.
+(D) Campus backend exchanges the authorization code directly with
+    Google's token endpoint for user profile.
 """
 
 import flask
 import werkzeug
 
-from campus.common import flask as campus_flask, schema
-from campus.common.errors import auth_errors, token_errors
-from campus.common.utils import utc_time
 import campus.config
+from campus import flask_campus
+from campus.common import env, schema
+from campus.common.errors import api_errors, auth_errors, token_errors
+from campus.common.utils import secret, url, utc_time
 
 from . import resources
 
 PROVIDER = "campus"
+INVALIDATED = "INVALIDATED"  # Marker for used authorization codes
+
+campus_cred_resource = resources.credentials[PROVIDER]
+google_cred_resource = resources.credentials["google"]
 
 
 def _session_key() -> str:
@@ -57,16 +62,21 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """
     app.add_url_rule("authorize", view_func=authorize, methods=["GET"])
     app.add_url_rule("token", view_func=token, methods=["POST"])
+    app.add_url_rule(
+        "verify_login",
+        view_func=verify_login_and_redirect,
+        methods=["GET"]  # Changed from POST - called via redirect from Google callback
+    )
 
 
 # OAuth2 endpoints
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def authorize(
         client_id: schema.CampusID,
         response_type: str,
         redirect_uri: str,
+        state: str,
         scope: str | None = None,
-        state: str | None = None,
         *,
         hd: str | None = None,  # hosted domain (for Google)
 ) -> werkzeug.Response:
@@ -82,7 +92,7 @@ def authorize(
         5. Redirects user to the specified redirect URI
 
     Method:
-        GET /oauth2/authorize
+        GET /authorize
 
     Path Parameters:
         None
@@ -95,39 +105,69 @@ def authorize(
             URI to redirect the user to after authentication
         - scope: str (optional)
             Space-separated list of scopes requested by the client.
-        - state: str (optional)
-            Opaque value used by the client to maintain state between request and callback.
+        - state: str
+            Opaque value used by the client to maintain state between
+            request and callback.
+            Typically used to pass a session ID or target; Campus uses
+            it as session ID
 
     Responses:
         501 Not Implemented: None
         - Returned when missing scopes as this is not implemented yet.
         404 Session not found: None
-        - Returned when the user session is not found and user needs to log in.
+        - Returned when the user session is not found and user needs to
+          log in.
         401 Invalid client_id/user_id: None
-        - Returned when the client_id or user_id in the session does not match the request.
+        - Returned when the client_id or user_id in the session does not
+          match the request.
         302 Found: Redirect
-        - Redirects to the specified redirect URI with the authorization code, as well as state if provided.
+        - Redirects to the specified redirect URI with the
+          authorization code, as well as state if provided.
           e.g. /oauth2/authorize?code=abc123&state=xyz
     """
     if response_type not in campus.config.SUPPORTED_OAUTH2_GRANT_TYPES:
         raise auth_errors.UnsupportedResponseTypeError(
             f"Unsupported response_type: {response_type}"
         )
-    # Check if client exists
-    client = resources.client[client_id].get()
-    # TODO: Validate redirect_uri; must be absolute URL
-    # Auth session is not handled here; use oauth_proxy.campus for
-    # Campus first-party apps, or handle client-side for third-party app
 
-    # Scope verification is not handled here.
+    # Check if client exists
+    resources.client[client_id].get()
+
+    # ASSUME: app has already created a session via auth.sessions,
+    # e.g. using campus_python
+    # Provider should not create a new session, only update it.
+    # Session ID should be passed as state parameter
+    try:
+        app_session = (
+            resources.session[PROVIDER][schema.CampusID(state)]
+            .get()
+        )
+    except api_errors.NotFoundError:
+        # TODO: Handle invalid state error by redirecting back to app
+        raise auth_errors.AuthorizationError(f"Invalid state: {state}") \
+            from None
+
+    # Validate client_id
+    if client_id != app_session.client_id:
+        raise auth_errors.UnauthorizedClientError(
+            f"Client mismatch: {client_id}"
+        )
+
+    # Scope verification not yet handled here.
+    # TODO: Create consent screen for user scope consent
     # The issued token will contain only the scopes allowed for the
     # client and consented by user.
     # The client app should handle insufficient scope errors.
 
-    # Redirect to Google for OAuth
-    params = {
-        "target": flask.url_for('.callback', _external=True)
-    }
+    # Build verify_login callback URL with Campus session state
+    verify_callback_url = flask.url_for(
+        'auth.verify_login_and_redirect',
+        _external=True,
+        state=state  # Preserve Campus session ID through Google OAuth flow
+    )
+
+    # Redirect to Google for OAuth with callback to verify_login
+    params = {"target": verify_callback_url}
     if hd:
         params["hd"] = hd
     oauth_authorize_url = flask.url_for(
@@ -138,19 +178,20 @@ def authorize(
     return flask.redirect(oauth_authorize_url)
 
 
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def token(
         grant_type: str,  # required
         code: str,  # required
         redirect_uri: str,  # required if used in /authorize
         client_id: str,  # required
         client_secret: str,  # required
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Summary:
-        OAuth2 token endpoint for exchanging authorization code for access token.
+        OAuth2 token endpoint for exchanging authorization code for
+        access token.
 
     Method:
-        POST /oauth2/token
+        POST /token
 
     Path Parameters:
         None
@@ -172,14 +213,19 @@ def token(
 
     Responses:
         400 Invalid authorization code: None
-        - Returned when the authorization code in the json does not match the one used in the session.
+        - Returned when the authorization code in the json does not
+          match the one used in the session.
         400 Invalid redirect_uri: None
-        - Returned when the redirect_uri does not match the one used in the authorization request.
+        - Returned when the redirect_uri does not match the one used in
+          the authorization request.
         400 Invalid grant_type: None
         - Returned when grant_type is not "authorization_code"
         401 Not authenticated: None
         - Returned when the session ID is not in the Flask session
     """
+    # HACK: ensure client_id is CampusID type
+    # TODO: improve unpack_into() to support openapi schemas
+    client_id = schema.CampusID(client_id)
     if grant_type != "authorization_code":
         raise token_errors.UnsupportedGrantTypeError(
             f"Unsupported grant_type: {grant_type}"
@@ -195,16 +241,19 @@ def token(
         )
     # Raises auth errors if auth fails
     resources.client.raise_for_authentication(client_id, client_secret)
-    # OAuth2 flow complete, revoke session
-    resources.session[PROVIDER][authsession.id].delete()
-    del flask.session[_session_key()]
+
+    # Invalidate authorization code to prevent reuse (single-use guarantee)
+    # Session remains alive for finalization to retrieve target URL
+    resources.session[PROVIDER][authsession.id].update(
+        authorization_code=INVALIDATED
+    )
 
     if not authsession.user_id:
         raise auth_errors.InvalidRequestError(
             "User ID not found in auth session"
         )
     user_credentials_resource = (
-        resources.credentials[PROVIDER][authsession.user_id]
+        campus_cred_resource[authsession.user_id]
     )
     credentials = user_credentials_resource.get(authsession.client_id)
     # Create token if not existing
@@ -212,7 +261,8 @@ def token(
         token = credentials.token
     else:
         token = user_credentials_resource.new(
-            client_id=flask.g.current_client.id,
+            client_id=client_id,
+            # TODO: user consent screen for scope grant
             scopes=authsession.scopes,
             expiry_seconds=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
@@ -224,3 +274,82 @@ def token(
             token=token
         )
     return token.to_resource(), 200
+
+
+# Proxy endpoint for login verification
+@flask_campus.unpack_request
+def verify_login_and_redirect(
+        state: schema.CampusID,  # session id
+        user: schema.UserID | str  # May come as string from query param
+) -> werkzeug.Response:
+    """Verify if the user is logged in. Default callback handler after
+    Google auth
+
+    Method:
+        GET /verify_login
+
+    Path Parameters:
+        None
+
+    Query Parameters:
+        state: CampusID - Campus session ID (preserved through Google flow)
+        user: UserID - User ID from Google authentication
+
+    Responses:
+        302 Found: Redirect to app callback (redirect_uri) with authorization code
+        401 Not authenticated: User domain not allowed or no valid Google credential
+    """
+    # Ensure user is a UserID object (convert from string if needed)
+    if isinstance(user, str):
+        user = schema.UserID(user)
+
+    # Verify domain is permitted
+    if not user.domain == env.WORKSPACE_DOMAIN:
+        raise token_errors.InvalidGrantError(
+            "Domain not allowed",
+            domain=user.domain
+        )
+
+    # Verify user has valid Google credential
+    google_client_id = resources.vault["google"]["CLIENT_ID"]
+    try:
+        google_cred_resource[user].get(google_client_id)
+    except api_errors.NotFoundError:
+        # User does not have a valid Google credential/sign-in
+        # TODO: Display error page
+        raise auth_errors.AuthorizationError(
+            "No valid Google credential found for user",
+            user_id=user
+        ) from None
+
+    # Generate authorization code AFTER successful Google authentication
+    authorization_code = secret.generate_authorization_code()
+
+    # Update user_id AND authorization_code for app login
+    authsession = resources.session[PROVIDER][state].update(
+        user_id=user,
+        authorization_code=authorization_code
+    )
+
+    # Issue Campus token and update credentials
+    # Token will be exchanged by app with auth code thru /token endpoint
+    resources.credentials[PROVIDER][user].new(
+        client_id=authsession.client_id,
+        scopes=authsession.scopes,
+        expiry_seconds=(
+            campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
+            * utc_time.DAY_SECONDS
+        ),
+    )
+    
+    # Redirect to app callback (redirect_uri, not final target)
+    assert authsession.state and authsession.authorization_code
+    full_redirect_url = url.add_query(
+        authsession.redirect_uri or flask.request.host_url,
+        # TODO: user consent screen for scope grant
+        # For now, grant all scopes
+        code=authsession.authorization_code,
+        state=authsession.state,
+        scope=" ".join(authsession.scopes)
+    )
+    return flask.redirect(full_redirect_url)

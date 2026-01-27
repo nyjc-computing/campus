@@ -9,9 +9,26 @@ integrations.
 
 # Note: do not expose .resources directly here. It is meant for internal
 # use within campus.auth only.
-__all__ = ["init_app"]
+__all__ = ["init_app", "get_yapper"]
 
 import flask
+
+# Module-level yapper instance shared across all routes
+_yapper_instance = None
+
+
+def get_yapper():
+    """Get the module-wide yapper instance.
+    
+    Initializes yapper lazily if not already initialized.
+    This should be called at app startup to avoid circular dependencies
+    during request handling.
+    """
+    global _yapper_instance
+    if _yapper_instance is None:
+        import campus.yapper
+        _yapper_instance = campus.yapper.create()
+    return _yapper_instance
 
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
@@ -40,3 +57,12 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
         app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)
 
     app.register_blueprint(bp)
+
+    # Miscellaneous fixes
+
+    # Enable strict slashes globally for this app
+    # If disabled, routes not ending in slash are 308-redirected to
+    # slash-ending routes, which results in stripped headers,
+    # causing confusing 401 errors on authenticated endpoints.
+    if isinstance(app, flask.Flask):
+        app.url_map.strict_slashes = True

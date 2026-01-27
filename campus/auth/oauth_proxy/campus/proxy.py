@@ -9,8 +9,7 @@ import flask
 import werkzeug
 
 from campus.common import env, schema, webauth
-from campus.common.errors import auth_errors, token_errors
-import campus.config
+from campus.common.utils import url
 
 from .. import base
 from ... import resources
@@ -19,6 +18,9 @@ PROVIDER = "campus"
 # Assume campus proxy is hosted on same server as campus.auth
 REDIRECT_URI = schema.Url("/auth/campus/callback")
 SCOPE_SEP = " "
+
+campus_cred_resource = resources.credentials[PROVIDER]
+google_cred_resource = resources.credentials["google"]
 
 
 def get_proxy() -> "CampusAuthProxy":
@@ -37,8 +39,8 @@ class CampusAuthProxy(base.AuthProxy):
         client_id=env.CLIENT_ID,
         redirect_uri=REDIRECT_URI,
         provider=PROVIDER,
-        authorization_url=schema.Url("/auth/authorize"),
-        token_url=schema.Url("/auth/token"),
+        authorization_url=schema.Url(f"https://{env.HOSTNAME}/auth/v1/authorize"),
+        token_url=schema.Url(f"https://{env.HOSTNAME}/auth/v1/token"),
         user_info_url=None,
         scopes=[
             "campus.profile",
@@ -48,7 +50,8 @@ class CampusAuthProxy(base.AuthProxy):
     )
 
     def __init__(self) -> None:
-        super().__init__()
+        self._CLIENT_ID = env.CLIENT_ID
+        self._CLIENT_SECRET = env.CLIENT_SECRET
 
     @property
     def authorization_url(self) -> schema.Url:
@@ -74,60 +77,54 @@ class CampusAuthProxy(base.AuthProxy):
             self,
             target: schema.Url,
             *,
+            client_id: schema.CampusID,  # override
+            state: str,  # auth session ID
             login_hint: schema.Email | None = None,  # email hint
     ) -> werkzeug.Response:
         """Redirect to Campus OAuth2 authorization endpoint."""
-        authsession = self.init_authsession(
-            expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-            redirect_uri=REDIRECT_URI,
-            scopes=self._oauth2.scopes,
-            target=target
-        )
+        # REMOVE: auth session already created in campus_python auth,authorize
+        # authsession = self.init_authsession(
+        #     expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
+        #     redirect_uri=REDIRECT_URI,
+        #     scopes=self._oauth2.scopes,
+        #     target=target
+        # )
         authorization_url = self._oauth2.get_authorization_url(
-            state=authsession.id,
+            # Ensure authsession ID is passed as state to callback
+            redirect_uri=flask.url_for(".callback", state=state),
+            client_id=client_id,
+            state=state,
             **{"login_hint": login_hint} if login_hint else {},
         )
         return flask.redirect(authorization_url)
 
+    # Campus apps handle their own token exchange (unlike external OAuth providers)
     def handle_callback(
             self,
             state: str,
             code: str,
             scope: str,
+            **kwargs
     ) -> werkzeug.Response:
-        authsession = self.get_authsession()
-        self.validate_authsession(authsession, state)
-        # auth_session user_id should have been updated by
-        # auth.provider.callback
-        auth_session = resources.session[PROVIDER].get(code)
-        if not auth_session.user_id:
-            raise auth_errors.InvalidRequestError(
-                "User ID not found in auth session"
-            )
-        # Exchange code for token; this will finalize auth_session
-        token = self._oauth2.exchange_code_for_token(
-            authsession=authsession,
+        # Retrieve session using state parameter (not Flask session)
+        # Campus session created by campus_python, not stored in Flask session
+        authsession = (
+            resources.session[PROVIDER][schema.CampusID(state)]
+            .get()
+        )
+        assert authsession.user_id  # Updated by Campus OAuth provider
+
+        # NOTE: Do NOT exchange code for token here!
+        # App (campus_python) exchanges code using its own credentials
+        # We just redirect back to the app with code/state/scope
+
+        # Redirect to app's target with authorization code
+        # App will exchange code for token using its own client_id/secret
+        full_redirect_url = url.add_query(
+            authsession.target or flask.request.host_url,
             code=code,
-            client_id=self._CLIENT_ID,
-            client_secret=self._CLIENT_SECRET,
+            state=state,
+            scope=scope,
+            **kwargs
         )
-        # Verify requested scopes were granted
-        scopes = scope.split(SCOPE_SEP)
-        if missing_scopes := token.validate_scope(scopes):
-            raise auth_errors.InvalidScopeError(
-                f"Missing required scopes: {', '.join(missing_scopes)}"
-            )
-        # Verify domain is permitted
-        if not auth_session.user_id.domain == env.WORKSPACE_DOMAIN:
-            raise token_errors.InvalidGrantError(
-                f"Domain not allowed",
-                domain=auth_session.user_id.domain
-            )
-        # Store/update token
-        resources.credentials[PROVIDER][auth_session.user_id].update(
-            client_id=self._CLIENT_ID,
-            token=token,
-        )
-        self.finalize_authsession(authsession)
-        # TODO: Expand target URL to include hostname if relative
-        return flask.redirect(authsession.target or flask.request.host_url)
+        return flask.redirect(full_redirect_url)

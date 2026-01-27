@@ -36,7 +36,7 @@ class TestYapper(unittest.TestCase):
         # Test that yapper can access its vault data through the proper service boundary
         import campus_python
 
-        campus = campus_python.Campus()
+        campus = campus_python.Campus(timeout=60)
         yapper_vault = campus.auth.vaults["yapper"]
         yapperdb_uri = yapper_vault["YAPPERDB_URI"]
         self.assertIsNotNone(yapperdb_uri)

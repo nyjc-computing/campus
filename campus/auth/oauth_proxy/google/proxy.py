@@ -12,6 +12,7 @@ import werkzeug
 
 from campus.common import env, schema, webauth
 from campus.common.errors import auth_errors, token_errors
+from campus.common.utils import url
 import campus.config
 import campus.model
 
@@ -19,7 +20,7 @@ from .. import base
 from ... import resources
 
 PROVIDER = "google"
-REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
+REDIRECT_URI = schema.Url(f"https://{env.HOSTNAME}/auth/v1/{PROVIDER}/callback")
 SCOPE_SEP = " "
 
 
@@ -35,32 +36,33 @@ class GoogleAuthProxy(base.AuthProxy):
     description = "OAuth2 authentication endpoints for Google integration with Campus"
     version = "2022-11-28"
     openapi_version = "3.0.3"
-    _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-        provider=PROVIDER,
-        client_id=env.CLIENT_ID,
-        redirect_uri=REDIRECT_URI,
-        authorization_url=schema.Url(
-            "https://accounts.google.com/o/oauth2/v2/auth"
-        ),
-        token_url=schema.Url("https://oauth2.googleapis.com/token"),
-        user_info_url=schema.Url(
-            "https://www.googleapis.com/oauth2/v3/userinfo"
-        ),
-        scopes=[
-            "https://www.googleapis.com/auth/userinfo.email",
-            "https://www.googleapis.com/auth/userinfo.profile"
-        ],
-        headers={"Accept": "application/json"},
-    )
     _PROMPT_OPTIONS = Literal[
         "consent",
         "login",
         "none",
         "select_account"
     ] | None
-
+    
     def __init__(self) -> None:
         super().__init__()
+        # Set OAuth2 scheme with credentials from vault (loaded in super().__init__)
+        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+            provider=PROVIDER,
+            client_id=self._CLIENT_ID,
+            redirect_uri=REDIRECT_URI,
+            authorization_url=schema.Url(
+                "https://accounts.google.com/o/oauth2/v2/auth"
+            ),
+            token_url=schema.Url("https://oauth2.googleapis.com/token"),
+            user_info_url=schema.Url(
+                "https://www.googleapis.com/oauth2/v3/userinfo"
+            ),
+            scopes=[
+                "email",
+                "profile"
+            ],
+            headers={"Accept": "application/json"},
+        )
 
     @property
     def authorization_url(self) -> schema.Url:
@@ -97,13 +99,22 @@ class GoogleAuthProxy(base.AuthProxy):
             scopes=self._oauth2.scopes,
             target=target
         )
+        
+        # Build params dict
+        params = {
+            "access_type": "offline",
+            "include_granted_scopes": "true",
+        }
+        if hd:
+            params["hd"] = hd
+        if login_hint:
+            params["login_hint"] = login_hint
+        if prompt:
+            params["prompt"] = prompt
+
         authorization_url = self._oauth2.get_authorization_url(
             state=authsession.id,
-            access_type="offline",
-            include_granted_scopes="true",
-            **{"hd": hd} if hd else {},
-            **{"login_hint": login_hint} if login_hint else {},
-            **{"prompt": prompt} if prompt else {}
+            **params
         )
         return flask.redirect(authorization_url)
 
@@ -144,13 +155,17 @@ class GoogleAuthProxy(base.AuthProxy):
         # Verify domain is permitted
         if not user_id.domain == env.WORKSPACE_DOMAIN:
             raise token_errors.InvalidGrantError(
-                f"Domain not allowed",
+                "Domain not allowed",
                 domain=user_id.domain
             )
         # Store/update token
         credentials = resources.credentials[PROVIDER][user_id].update(
             client_id=self._CLIENT_ID,
             token=token,
+        )
+        # Update authsession with user_id before finalizing
+        resources.session[PROVIDER][authsession.id].update(
+            user_id=user_id
         )
         self.finalize_authsession(authsession)
         return credentials
@@ -160,6 +175,7 @@ class GoogleAuthProxy(base.AuthProxy):
             state: str,
             code: str,
             scope: str,
+            **kwargs: str,
     ) -> werkzeug.Response:
         """Handles Google OAuth callback for a consent flow."""
         # handle_auth_callback() also retrieves authsession
@@ -167,5 +183,23 @@ class GoogleAuthProxy(base.AuthProxy):
         # handle_auth_callback will finalize the authsession, deleting
         # it from the store. So we get it here before that happens.
         authsession = self.get_authsession()
-        self.handle_auth_callback(state, code, scope)
-        return flask.redirect(authsession.target or flask.request.host_url)
+        # Finalize authsession and get credentials
+        credentials = self.handle_auth_callback(state, code, scope)
+
+        # Parse target URL and preserve existing query params (like state)
+        from urllib.parse import urlparse, parse_qs
+        target_url = authsession.target or flask.request.host_url
+        parsed = urlparse(target_url)
+        existing_params = parse_qs(parsed.query)
+
+        # Merge existing params with new user param
+        redirect_params = {**{k: v[0] for k, v in existing_params.items()}}
+        redirect_params['user'] = credentials.user_id
+
+        # Pass authenticated user_id to target URL
+        # Target app is expected to verify valid Google credential
+        redirect_url = url.add_query(
+            f"{parsed.scheme}://{parsed.netloc}{parsed.path}",
+            **redirect_params
+        )
+        return flask.redirect(redirect_url)

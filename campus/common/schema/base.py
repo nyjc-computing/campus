@@ -10,5 +10,5 @@ from . import openapi
 ResponseStatus = Literal["ok", "error"]
 
 # Campus types
-CampusID = str
+CampusID = openapi.String
 UserID = openapi.Email

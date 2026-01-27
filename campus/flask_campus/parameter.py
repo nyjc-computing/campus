@@ -22,21 +22,21 @@ def is_keyword_supported(parameter: inspect.Parameter) -> bool:
 
 
 def is_optional(parameter: inspect.Parameter) -> bool:
-    """Check if a parameter is Optional.
+    """Check if a parameter is optional.
 
-    A parameter is optional if:
-    - Its annotation is of the form Optional[T] or Union[T, None]
-    - It has a default value
-    """
-    origin = typing.get_origin(parameter.annotation)
-    if not origin is typing.Union:
-        return False
-    args = typing.get_args(parameter.annotation)
-    if not type(None) in args:
-        return False
-    if not has_default(parameter):
-        return False
-    return True
+    A parameter is considered optional if it has a default value,
+    or if it's a *args or **kwargs parameter."""
+    return (
+        has_default(parameter)
+        or is_variadic(parameter)
+    )
+
+def is_variadic(parameter: inspect.Parameter) -> bool:
+    """Check if a parameter is variadic (*args or **kwargs)."""
+    return parameter.kind in (
+        inspect.Parameter.VAR_POSITIONAL,
+        inspect.Parameter.VAR_KEYWORD,
+    )
 
 
 def reconcile(
@@ -64,10 +64,21 @@ def reconcile(
     missing_params: list[str] = []
     for name, param in func_params.items():
         arg = request_args.get(name, MISSING)
-        if not is_optional(param) and arg is MISSING:
-            missing_params.append(name)
-        else:
+        if is_variadic(param):
+            # Variadic parameter (*args, **kwargs): only include if
+            # present and non-empty
+            if arg is not MISSING and arg != {} and arg != ():
+                reconciled[name] = arg
+        elif is_optional(param):
+            # Optional parameter: use default if missing, otherwise use
+            # provided value
             reconciled[name] = param.default if arg is MISSING else arg
+        else:
+            # Required parameter: must be present in request_args
+            if arg is MISSING:
+                missing_params.append(name)
+            else:
+                reconciled[name] = arg
     extra_args = {k: v for k, v in request_args.items()
                   if k not in func_params}
     if allow_extra:

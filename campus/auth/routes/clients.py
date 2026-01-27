@@ -10,31 +10,20 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus.common import flask as campus_flask, schema
+from campus import flask_campus
+from campus.common import schema
 from campus.common.errors import api_errors
-import campus.yapper
 
+from .. import get_yapper
 from ..resources import client as client_resource
 
 # Create blueprint for client management routes
 bp = flask.Blueprint('clients', __name__, url_prefix='/clients')
 
-# Lazy-loaded yapper instance to avoid circular dependencies
-_yapper_instance = None
-
-
-def get_yapper():
-    """Get yapper instance, creating it lazily to avoid circular
-    dependencies."""
-    global _yapper_instance
-    if _yapper_instance is None:
-        _yapper_instance = campus.yapper.create()
-    return _yapper_instance
-
 
 @bp.post("/")
-@campus_flask.unpack_request
-def new(name: str, description: str) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def new(name: str, description: str) -> flask_campus.JsonResponse:
     """Create a new vault client.
 
     POST /client
@@ -53,12 +42,13 @@ def new(name: str, description: str) -> campus_flask.JsonResponse:
     # Note that no client_secret is generated here
     # Apps are expected to generate the secret separately
     client = client_resource.new(name=name, description=description)
-    get_yapper().emit('campus.clients.create')
+    get_yapper().emit('campus.clients.create', {"client_id": client.id})
     return client.to_resource(), 200
 
+
 @bp.get("/")
-@campus_flask.unpack_request
-def list_all() -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def list_all() -> flask_campus.JsonResponse:
     """List all clients
 
     GET /clients
@@ -79,9 +69,10 @@ def list_all() -> campus_flask.JsonResponse:
     ]
     return {"clients": clients}, 200
 
-@bp.delete("/<client_id>")
-@campus_flask.unpack_request
-def delete_client(client_id: schema.CampusID) -> campus_flask.JsonResponse:
+
+@bp.delete("/<client_id>/")
+@flask_campus.unpack_request
+def delete_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Delete a vault client
 
     DELETE /client/{client_id}
@@ -92,12 +83,13 @@ def delete_client(client_id: schema.CampusID) -> campus_flask.JsonResponse:
     }
     """
     client_resource[client_id].delete()
-    get_yapper().emit('campus.clients.delete')
+    get_yapper().emit('campus.clients.delete', {"client_id": client_id})
     return {}, 200
 
-@bp.get("/<client_id>")
-@campus_flask.unpack_request
-def get_client(client_id: schema.CampusID) -> campus_flask.JsonResponse:
+
+@bp.get("/<client_id>/")
+@flask_campus.unpack_request
+def get_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Get details of a specific client
 
     GET /clients/{client_id}
@@ -113,24 +105,27 @@ def get_client(client_id: schema.CampusID) -> campus_flask.JsonResponse:
     client = client_resource[client_id].get()
     return client.to_resource(), 200
 
+
 @bp.post("/<client_id>/revoke")
-@campus_flask.unpack_request
-def revoke_client(client_id: schema.CampusID) -> campus_flask.JsonResponse:
+@flask_campus.unpack_request
+def revoke_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Revoke a client's secret and generate a new one.
-    
+
     POST /clients/{client_id}/revoke
     Returns: {"secret": new_secret}
     """
     new_secret = client_resource[client_id].revoke()
+    get_yapper().emit("campus.clients.revoke", {"client_id": client_id})
     return {"secret": new_secret}, 200
 
-@bp.patch("/<client_id>")
-@campus_flask.unpack_request
+
+@bp.patch("/<client_id>/")
+@flask_campus.unpack_request
 def update_client(
         client_id: schema.CampusID,
         name: str | None = None,
         description: str | None = None
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Update a client's details.
 
     PATCH /clients/{client_id}
@@ -157,14 +152,16 @@ def update_client(
         )
     client_resource[client_id].update(**updates)
     updated_client = client_resource[client_id].get()
+    get_yapper().emit("campus.clients.update", {"client_id": client_id})
     return updated_client.to_resource(), 200
 
-@bp.get("/<client_id>/access")
-@campus_flask.unpack_request
+
+@bp.get("/<client_id>/access/")
+@flask_campus.unpack_request
 def get_client_access(
         client_id: schema.CampusID,
         vault: str | None = None,
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Check a client's access.
 
     GET /clients/{client_id}/access
@@ -180,13 +177,14 @@ def get_client_access(
         access_list = client_resource[client_id].access.list()
         return {"access": access_list}, 200
 
+
 @bp.get("/<client_id>/access/check")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def check_client_access(
         client_id: schema.CampusID,
         vault: str,
         permission: int
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Check a client's access.
 
     GET /clients/{client_id}/access/check
@@ -201,13 +199,14 @@ def check_client_access(
     )
     return {"vault": vault, "permission": has_access}, 200
 
+
 @bp.post("/<client_id>/access/grant")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def grant_client_access(
         client_id: schema.CampusID,
         vault: str,
         permission: int
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Grant a client access to a vault.
 
     POST /clients/{client_id}/access/grant
@@ -226,15 +225,17 @@ def grant_client_access(
         permission=permission
     )
     updated_permission = client_resource[client_id].access.get(vault)
+    get_yapper().emit("campus.clients.access.update", {"client_id": client_id})
     return {"vault": vault, "permission": updated_permission}, 200
 
+
 @bp.post("/<client_id>/access/revoke")
-@campus_flask.unpack_request
+@flask_campus.unpack_request
 def revoke_client_access(
         client_id: schema.CampusID,
         vault: str,
         permission: int
-) -> campus_flask.JsonResponse:
+) -> flask_campus.JsonResponse:
     """Revoke a client's access to a vault.
 
     POST /clients/{client_id}/access/revoke
@@ -253,4 +254,34 @@ def revoke_client_access(
         permission=permission
     )
     updated_permission = client_resource[client_id].access.get(vault)
+    get_yapper().emit("campus.clients.access.update", {"client_id": client_id})
+    return {"vault": vault, "permission": updated_permission}, 200
+
+
+@bp.patch("/<client_id>/access/")
+@flask_campus.unpack_request
+def update_client_access(
+        client_id: schema.CampusID,
+        vault: str,
+        permission: int
+) -> flask_campus.JsonResponse:
+    """Update (replace) a client's access permissions for a vault.
+
+    PATCH /clients/{client_id}/access/
+    Body: {
+        "vault": "vault_label",
+        "permission": new_permission[int]
+    }
+
+    Returns: {
+        "vault": "vault_label",
+        "permission": updated_permission[int]
+    }
+    """
+    client_resource[client_id].access.update(
+        vault_label=vault,
+        permission=permission
+    )
+    updated_permission = client_resource[client_id].access.get(vault)
+    get_yapper().emit("campus.clients.access.update", {"client_id": client_id})
     return {"vault": vault, "permission": updated_permission}, 200

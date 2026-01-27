@@ -188,12 +188,14 @@ class UserCredentialsResource:
                 {"token_id": token_id}
             )
         else:  # New credentials
-            cred_storage.insert_one({
-                "provider": self.parent.provider,
-                "user_id": str(self.user_id),
-                "client_id": client_id,
-                "token_id": token_id,
-            })
+            credential = campus.model.UserCredentials(
+                id=uid.generate_category_uid("user_credentials"),
+                provider=self.parent.provider,
+                user_id=self.user_id,
+                client_id=client_id,
+                token_id=token_id
+            )
+            cred_storage.insert_one(credential.to_storage())
         return token
 
     def update(
@@ -222,23 +224,28 @@ class UserCredentialsResource:
                 provider=self.parent.provider,
                 user_id=self.user_id,
                 client_id=client_id,
-                token=token
+                token_id=token.id
             )
             cred_storage.insert_one(credentials.to_storage())
-        else:  # Check if token_id changed
+        elif records[0]['token_id'] != token.id:  # token_id changed
+            cred_record = records[0]
+            # UserCredentials.from_storage requires token
+            credentials = campus.model.UserCredentials.from_storage(
+                cred_record
+            )
+            cred_storage.update_by_id(
+                credentials.id,
+                {"token_id": token.id}
+            )
+        else:  # token_id unchanged, just load existing credentials
             credentials = campus.model.UserCredentials.from_storage(
                 records[0]
             )
-            if credentials.token.id != token.id:
-                cred_storage.update_by_id(
-                    credentials.id,
-                    {"token_id": token.id}
-                )
+        credentials.token = token
+
         # Store/update token
-        record = token_storage.get_by_id(token.id)
-        if record:
+        if token_storage.get_by_id(token.id):
             token_storage.update_by_id(token.id, token.to_storage())
         else:
             token_storage.insert_one(token.to_storage())
-        credentials.token = token
         return credentials

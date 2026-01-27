@@ -7,9 +7,10 @@ import typing
 
 import flask
 
+import campus.config
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid
+from campus.common.utils import uid, utc_time
 import campus.model
 import campus.storage
 
@@ -41,12 +42,12 @@ class LoginSessionsResource:
         Returns:
             LoginSessionResource instance
         """
-        return LoginSessionResource()
+        return LoginSessionResource(session_id)
 
     def new(
             self,
             *,
-            expiry_seconds: int,
+            # expiry_seconds: int,
             client_id: schema.CampusID,
             user_id: schema.UserID | None = None,
             device_id: str | None = None,
@@ -56,12 +57,16 @@ class LoginSessionsResource:
 
         Any existing session will be revoked.
         """
+        login_expiry_seconds = (
+            campus.config.DEFAULT_LOGIN_EXPIRY_DAYS
+            * utc_time.DAY_SECONDS
+        )
         # Delete any existing session
         if (existing_session_id := _check_existing_id()):
             self[existing_session_id].delete()
         session = _from_record({
             "id": uid.generate_category_uid(f"{PROVIDER}-login_session"),
-            "expiry_seconds": expiry_seconds,
+            "expiry_seconds": login_expiry_seconds,
             "client_id": str(client_id),
             "user_id": str(user_id) if user_id else None,
             "device_id": device_id,
@@ -164,10 +169,12 @@ def _from_record(
     args: dict[str, typing.Any] = {}
     if "id" in record:
         args["id"] = schema.CampusID(record["id"])
-    if "created_at" in record:
+    if "created_at" in record and record["created_at"] is not None:
         args["created_at"] = schema.DateTime(record["created_at"])
-    if "expires_at" in record:
+    if "expires_at" in record and record["expires_at"] is not None:
         args["expires_at"] = schema.DateTime(record["expires_at"])
+    if "expiry_seconds" in record and record["expiry_seconds"] is not None:
+        args["expiry_seconds"] = record["expiry_seconds"]
     args["client_id"] = schema.CampusID(record["client_id"])
     if "user_id" in record:
         args["user_id"] = schema.UserID(record["user_id"])

@@ -1,0 +1,220 @@
+"""Integration tests for login routes with and without trailing slashes.
+
+This test suite ensures that login routes work correctly regardless of
+whether they are accessed with or without trailing slashes, preventing
+308 Permanent Redirect responses that strip Authorization headers.
+"""
+
+import unittest
+
+from tests.fixtures import services
+
+
+class TestLoginRoutesTrailingSlash(unittest.TestCase):
+    """Test login routes handle trailing slashes correctly."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up local services once for the entire test class."""
+        cls.service_manager = services.create_service_manager()
+        cls.service_manager.setup()
+
+        # Get the apps (auth) app from the service manager
+        import flask
+        apps_app = cls.service_manager.apps_app
+        if not isinstance(apps_app, flask.Flask):
+            raise RuntimeError("Expected Flask app from service manager")
+
+        cls.app = apps_app
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up services after all tests in the class."""
+        if hasattr(cls, 'service_manager'):
+            cls.service_manager.close()
+
+        # Reset test storage to clear SQLite in-memory database
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
+    def setUp(self):
+        """Set up test environment before each test."""
+        self.client = self.app.test_client()
+
+        # Set up test context
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+
+    def tearDown(self):
+        """Clean up after each test."""
+        self.app_context.pop()
+
+    def test_post_logins_without_trailing_slash(self):
+        """Test POST /auth/v1/logins without trailing slash works."""
+        response = self.client.post(
+            "/auth/v1/logins",
+            json={
+                "client_id": "test-client",
+                "user_id": "test@example.com",
+                "agent_string": "test-agent"
+            }
+        )
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"POST /auth/v1/logins returned 308 redirect. Response: {response.data}"
+        )
+
+        # Should return 200 or an auth error (401/403), but not 404
+        self.assertNotEqual(
+            response.status_code, 404,
+            f"POST /auth/v1/logins returned 404. Response: {response.data}"
+        )
+
+    def test_post_logins_with_trailing_slash(self):
+        """Test POST /auth/v1/logins/ with trailing slash works."""
+        response = self.client.post(
+            "/auth/v1/logins/",
+            json={
+                "client_id": "test-client",
+                "user_id": "test@example.com",
+                "agent_string": "test-agent"
+            }
+        )
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"POST /auth/v1/logins/ returned 308 redirect. Response: {response.data}"
+        )
+
+        # Should return 200 or an auth error (401/403), but not 404
+        self.assertNotEqual(
+            response.status_code, 404,
+            f"POST /auth/v1/logins/ returned 404. Response: {response.data}"
+        )
+
+    def test_get_login_without_trailing_slash(self):
+        """Test GET /auth/v1/logins/<id> without trailing slash works."""
+        session_id = "uid-campus-login_session-test-123"
+        response = self.client.get(f"/auth/v1/logins/{session_id}")
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"GET /auth/v1/logins/{session_id} returned 308 redirect. "
+            f"Response: {response.data}"
+        )
+
+        # Should return 200, 404, or an auth error (401/403)
+        self.assertIn(
+            response.status_code, [200, 401, 403, 404],
+            f"GET /auth/v1/logins/{session_id} returned unexpected status "
+            f"{response.status_code}. Response: {response.data}"
+        )
+
+    def test_get_login_with_trailing_slash(self):
+        """Test GET /auth/v1/logins/<id>/ with trailing slash works."""
+        session_id = "uid-campus-login_session-test-123"
+        response = self.client.get(f"/auth/v1/logins/{session_id}/")
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"GET /auth/v1/logins/{session_id}/ returned 308 redirect. "
+            f"Response: {response.data}"
+        )
+
+        # Should return 200, 404, or an auth error (401/403)
+        self.assertIn(
+            response.status_code, [200, 401, 403, 404],
+            f"GET /auth/v1/logins/{session_id}/ returned unexpected status "
+            f"{response.status_code}. Response: {response.data}"
+        )
+
+    def test_delete_login_without_trailing_slash(self):
+        """Test DELETE /auth/v1/logins/<id> without trailing slash works."""
+        session_id = "uid-campus-login_session-test-123"
+        response = self.client.delete(f"/auth/v1/logins/{session_id}")
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"DELETE /auth/v1/logins/{session_id} returned 308 redirect. "
+            f"Response: {response.data}"
+        )
+
+        # Should return 200, 404, or an auth error (401/403)
+        self.assertIn(
+            response.status_code, [200, 401, 403, 404],
+            f"DELETE /auth/v1/logins/{session_id} returned unexpected status "
+            f"{response.status_code}. Response: {response.data}"
+        )
+
+    def test_delete_login_with_trailing_slash(self):
+        """Test DELETE /auth/v1/logins/<id>/ with trailing slash works."""
+        session_id = "uid-campus-login_session-test-123"
+        response = self.client.delete(f"/auth/v1/logins/{session_id}/")
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"DELETE /auth/v1/logins/{session_id}/ returned 308 redirect. "
+            f"Response: {response.data}"
+        )
+
+        # Should return 200, 404, or an auth error (401/403)
+        self.assertIn(
+            response.status_code, [200, 401, 403, 404],
+            f"DELETE /auth/v1/logins/{session_id}/ returned unexpected status "
+            f"{response.status_code}. Response: {response.data}"
+        )
+
+    def test_patch_login_without_trailing_slash(self):
+        """Test PATCH /auth/v1/logins/<id> without trailing slash works."""
+        session_id = "uid-campus-login_session-test-123"
+        response = self.client.patch(
+            f"/auth/v1/logins/{session_id}",
+            json={"expiry_seconds": 3600}
+        )
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"PATCH /auth/v1/logins/{session_id} returned 308 redirect. "
+            f"Response: {response.data}"
+        )
+
+        # Should return 200, 404, or an auth error (401/403)
+        self.assertIn(
+            response.status_code, [200, 401, 403, 404],
+            f"PATCH /auth/v1/logins/{session_id} returned unexpected status "
+            f"{response.status_code}. Response: {response.data}"
+        )
+
+    def test_patch_login_with_trailing_slash(self):
+        """Test PATCH /auth/v1/logins/<id>/ with trailing slash works."""
+        session_id = "uid-campus-login_session-test-123"
+        response = self.client.patch(
+            f"/auth/v1/logins/{session_id}/",
+            json={"expiry_seconds": 3600}
+        )
+
+        # Should not redirect (308)
+        self.assertNotEqual(
+            response.status_code, 308,
+            f"PATCH /auth/v1/logins/{session_id}/ returned 308 redirect. "
+            f"Response: {response.data}"
+        )
+
+        # Should return 200, 404, or an auth error (401/403)
+        self.assertIn(
+            response.status_code, [200, 401, 403, 404],
+            f"PATCH /auth/v1/logins/{session_id}/ returned unexpected status "
+            f"{response.status_code}. Response: {response.data}"
+        )
+
+
+if __name__ == '__main__':
+    unittest.main()

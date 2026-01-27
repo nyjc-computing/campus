@@ -55,7 +55,9 @@ See the [campus-api-python repository](https://github.com/nyjc-computing/campus-
 ### Railway
 Set environment variable in Railway dashboard:
 - `DEPLOY=campus.auth` or `DEPLOY=campus.api`
-- Start command: `gunicorn --bind "0.0.0.0:$PORT" wsgi:app`
+- Start command: `gunicorn --bind "0.0.0.0:$PORT" --timeout 120 wsgi:app`
+
+**Note:** The `--timeout 120` flag sets a 2-minute timeout (vs default 30s) to handle OAuth flows and external API calls.
 
 ### Replit
 In Secrets tab, add:
