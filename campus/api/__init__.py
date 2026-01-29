@@ -35,6 +35,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
     routes.assignments.init_app(bp)
+    routes.submissions.init_app(bp)
 
     @bp.before_request
     def authenticate():
@@ -66,7 +67,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             case "bearer":
                 access_token = httpauth.header.authorization.token
                 try:
-                    auth_result = campus_auth.root.authenticate(token=access_token)
+                    auth_result = campus_auth.root.authenticate(
+                        token=access_token)
                 except campus_python.errors.AuthenticationError:
                     auth_errors.UnauthorizedClientError(
                         "No Authorization header present"
