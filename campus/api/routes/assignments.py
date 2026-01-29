@@ -3,7 +3,8 @@
 API routes for the assignments resource.
 """
 
-import campus_python
+from dataclasses import asdict
+
 import flask
 
 import campus.model
@@ -73,7 +74,12 @@ def create_assignment(
             Assignment resource
     """
     # Get created_by from authenticated user
-    created_by = flask.g.get('current_user', {}).get('id', 'unknown')
+    current_user = flask.g.get('current_user')
+    if not current_user or not current_user.get('id'):
+        raise api_errors.UnauthorizedError(
+            "User must be authenticated to create assignments"
+        )
+    created_by = current_user.get('id')
 
     assignment = resources.assignment.new(
         title=title,
