@@ -11,13 +11,16 @@ __all__ = [
     "assignment",
     "circle",
     "emailotp",
+    "submission",
 ]
 
 from .assignment import AssignmentsResource
 from .circle import CirclesResource
 from .emailotp import EmailOTPResource
+from .submission import SubmissionsResource
 
 # Initialize resource instances for internal use
 assignment = AssignmentsResource()
 circle = CirclesResource()
 emailotp = EmailOTPResource()
+submission = SubmissionsResource()
