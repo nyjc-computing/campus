@@ -87,14 +87,27 @@ class ServiceManager:
         setup.set_postgres_env_vars()
         setup.set_mongodb_env_vars()
 
+        # Set HOSTNAME for test mode - campus_python uses this to build base_url
+        # When DEPLOY="campus.auth", it uses base_url = f"https://{env.HOSTNAME}"
+        # We use a fake hostname that we'll map to Flask test apps
+        env.HOSTNAME = "campus.test"
+
+        # Patch campus_python to use TestCampusRequest (Flask test client)
+        # This must be done before any campus_python.Campus instances are created
+        from tests import flask_test
+        flask_test.patch_campus_python()
+
         # Initialize auth service infrastructure
         # Creates storage tables, test client credentials, vault secrets
         auth.init()
         import campus.auth
-        from tests import flask_test
 
         self.auth_app = devops.deploy.create_app(campus.auth)
         flask_test.configure_for_testing(self.auth_app)
+
+        # Register auth app with its base URL for test routing
+        # campus_python will use base_url = f"https://{env.HOSTNAME}" = "https://campus.test"
+        flask_test.register_test_app("https://campus.test", self.auth_app)
 
         # Initialize storage connections
         storage.init()
@@ -109,6 +122,10 @@ class ServiceManager:
         import campus.api
         self.apps_app = devops.deploy.create_app(campus.api)
         flask_test.configure_for_testing(self.apps_app)
+
+        # Note: api app doesn't need separate registration since campus_python
+        # determines base_url based on DEPLOY env var, and we set DEPLOY="campus.auth"
+        # So api calls from campus_python will also use "https://campus.test"
 
         self._setup_done = True
 
@@ -164,6 +181,11 @@ class ServiceManager:
 
         Should be called at the end of test runs to ensure clean state.
         """
+        # Unpatch campus_python and clear test apps
+        from tests import flask_test
+        flask_test.unpatch_campus_python()
+        flask_test.clear_test_apps()
+
         if cls._shared_instance:
             cls._shared_instance._cleanup_auth_client()
             cls._shared_instance.close()

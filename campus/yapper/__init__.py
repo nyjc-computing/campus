@@ -33,6 +33,7 @@ def create(**kwargs) -> YapperInterface:
              - "development" or "testing": SQLiteYapper
              - "staging" or "production": PostgreSQLYapper
         YAPPERDB_URI: PostgreSQL connection URI (required for staging/production)
+        STORAGE_MODE: If "1", use local resources for testing (no external services)
 
     Args:
         **kwargs: Backend-specific arguments:
@@ -54,26 +55,32 @@ def create(**kwargs) -> YapperInterface:
     from .backends.postgres import PostgreSQLYapper
     from .backends.sqlite import SQLiteYapper
 
-    # Create Campus client for vault access (only used if needed)
-    campus = campus_python.Campus(timeout=60)
-
     client_id = os.getenv("CLIENT_ID")
     client_secret = os.getenv("CLIENT_SECRET")
     env = os.getenv("ENV", "development").lower()
+    storage_mode = os.getenv("STORAGE_MODE", "0")
 
     if not client_id:
         raise ValueError("CLIENT_ID environment variable is required")
     if not client_secret:
         raise ValueError("CLIENT_SECRET environment variable is required")
 
+    # In test mode (STORAGE_MODE=1), use local auth resources directly
+    # to avoid connecting to external services
+    if storage_mode == "1":
+        from campus.auth import resources as auth_resources
+        yapper_vault = auth_resources.vault["yapper"]
+        yapperdb_uri = yapper_vault["YAPPERDB_URI"]
+        yapper = SQLiteYapper(db=yapperdb_uri, **kwargs)
+        yapper._init_db()
+        return yapper
+
+    # For production/staging, use campus_python to connect to remote vault
+    # Create Campus client for vault access
+    campus = campus_python.Campus(timeout=60)
+
     # Determine backend based on environment
     match env:
-        # case "development" | "testing":
-        #     yapper = SQLiteYapper(client_id, **kwargs)
-        #     yapper._init_db()
-        #     return yapper
-        # For now, use the development branch of the yapper db for testing
-        # YAPPERDB_URI must be appropriately configured for each environment using yapper.
         case  "development" | "testing" | "staging" | "production":
             try:
                 yapper_vault = campus.auth.vaults["campus.yapper"]
@@ -84,7 +91,7 @@ def create(**kwargs) -> YapperInterface:
                     f"Vault error: {e}. "
                     f"This could indicate vault service connectivity issues or authentication problems."
                 ) from e
-                
+
             if not yapperdb_uri:
                 raise ValueError(
                     f"YAPPERDB_URI environment variable is required for {env} environment. "

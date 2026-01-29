@@ -36,9 +36,9 @@ def init():
     # Set up vault with database URI as a secret
     yapper_vault = auth_resources.vault["yapper"]
 
-    # In test mode, use a dummy URI since we're using SQLite
+    # In test mode, use :memory: for SQLite in-memory database
     if campus.storage.testing.is_test_mode():
-        db_uri = "sqlite:///:memory:"
+        db_uri = ":memory:"
     else:
         db_uri = setup.get_db_uri("yapperdb")
     yapper_vault["YAPPERDB_URI"] = db_uri
