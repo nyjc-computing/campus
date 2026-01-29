@@ -58,7 +58,7 @@ class ServiceManager:
         """
         # Ensure we're running in testing mode
         # env.ENV is mutable and can be set for testing purposes
-        if env.ENV != devops.TESTING:
+        if env.get("ENV") != devops.TESTING:
             env.ENV = devops.TESTING
 
         if self._setup_done:
