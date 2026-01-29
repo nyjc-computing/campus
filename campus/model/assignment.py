@@ -25,8 +25,8 @@ class Question:
 
     def __post_init__(self) -> None:
         """Validate question ID format."""
-        # Validate hierarchical dot notation: alphanumeric with dots
-        if not re.match(r'^[a-zA-Z0-9]+([._][a-zA-Z0-9]+)*$', self.id):
+        # Validate hierarchical dot notation: alphanumeric with dots only
+        if not re.match(r'^[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*$', self.id):
             raise ValueError(
                 f"Invalid question ID format: {self.id}. "
                 "Must use hierarchical dot notation (e.g., q1, q1.a, q1.a.i)"
@@ -101,7 +101,12 @@ class Assignment(Model):
             for q in resource.get("questions", [])
         ]
         classroom_links = [
-            ClassroomLink(**l) if isinstance(l, dict) else l
+            ClassroomLink(
+                course_id=l["course_id"],
+                coursework_id=l["coursework_id"],
+                attachment_id=l.get("attachment_id"),
+                linked_at=schema.DateTime(l["linked_at"]) if "linked_at" in l else None
+            ) if isinstance(l, dict) else l
             for l in resource.get("classroom_links", [])
         ]
 
@@ -150,18 +155,24 @@ class Assignment(Model):
 
     def get_question_tree(self) -> dict:
         """Return questions as a nested tree structure."""
-        tree: dict = {}
+        # First pass: create all nodes
+        nodes = {}
         for q in self.questions:
-            node = {
+            nodes[q.id] = {
                 "id": q.id,
                 "prompt": q.prompt,
                 "question": q.question,
                 "children": []
             }
+
+        # Second pass: build tree structure
+        tree: dict = {}
+        for q in self.questions:
+            node = nodes[q.id]
             if q.level == 1:
                 tree[q.id] = node
-            elif q.parent_id in tree:
-                tree[q.parent_id]["children"].append(node)
+            elif q.parent_id in nodes:
+                nodes[q.parent_id]["children"].append(node)
         return tree
 
     def get_question(self, question_id: str) -> Question | None:
