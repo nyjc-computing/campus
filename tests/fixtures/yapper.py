@@ -36,9 +36,19 @@ def init():
     # Set up vault with database URI as a secret
     yapper_vault = auth_resources.vault["yapper"]
 
-    # In test mode, use :memory: for SQLite in-memory database
+    # In test mode, use file-based SQLite database for testing
+    # Note: :memory: doesn't work because each connection creates a new empty DB
     if campus.storage.testing.is_test_mode():
-        db_uri = ":memory:"
+        # Use a temp file for the database
+        import tempfile
+        fd, db_path = tempfile.mkstemp(suffix='.sqlite', prefix='yapperdb_')
+        # Note: We keep the file open to maintain the connection
+        # The file will be cleaned up on test teardown
+        import os
+        os.close(fd)
+        db_uri = db_path
+        # Store path for cleanup
+        yapper_vault["YAPPERDB_PATH"] = db_path
     else:
         db_uri = setup.get_db_uri("yapperdb")
     yapper_vault["YAPPERDB_URI"] = db_uri

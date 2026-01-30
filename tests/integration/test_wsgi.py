@@ -38,8 +38,6 @@ class TestWSGI(unittest.TestCase):
         due to blueprint re-registration. We verify the deployment module can be
         imported instead.
         """
-        # Note: 'apps' and 'vault' modes were referenced but never implemented
-        # Testing actual deployment modes that exist as modules
         env.DEPLOY = "campus.auth"
         try:
             import campus.auth

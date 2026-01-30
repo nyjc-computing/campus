@@ -105,9 +105,10 @@ class ServiceManager:
         self.auth_app = devops.deploy.create_app(campus.auth)
         flask_test.configure_for_testing(self.auth_app)
 
-        # Register auth app with its base URL for test routing
+        # Register auth app with its base URL and path prefix for test routing
         # campus_python will use base_url = f"https://{env.HOSTNAME}" = "https://campus.test"
-        flask_test.register_test_app("https://campus.test", self.auth_app)
+        # Auth routes are at /auth/v1/*
+        flask_test.register_test_app("https://campus.test", self.auth_app, path_prefix="/auth")
 
         # Initialize storage connections
         storage.init()
@@ -123,9 +124,9 @@ class ServiceManager:
         self.apps_app = devops.deploy.create_app(campus.api)
         flask_test.configure_for_testing(self.apps_app)
 
-        # Note: api app doesn't need separate registration since campus_python
-        # determines base_url based on DEPLOY env var, and we set DEPLOY="campus.auth"
-        # So api calls from campus_python will also use "https://campus.test"
+        # Register api app with path prefix for test routing
+        # API routes are at /api/v1/*
+        flask_test.register_test_app("https://campus.test", self.apps_app, path_prefix="/api")
 
         self._setup_done = True
 
