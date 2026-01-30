@@ -61,7 +61,11 @@ class ServiceManager:
         if env.get("ENV") != devops.TESTING:
             env.ENV = devops.TESTING
 
+        # Always re-init auth and yapper services if already setup,
+        # in case storage was reset. These are idempotent.
         if self._setup_done:
+            auth.init()
+            yapper.init()
             return self
 
         # If using shared mode and shared instance exists, reuse it
@@ -69,6 +73,9 @@ class ServiceManager:
             self.auth_app = ServiceManager._shared_instance.auth_app
             self.apps_app = ServiceManager._shared_instance.apps_app
             self._setup_done = True
+            # Re-init auth and yapper in case storage was reset
+            auth.init()
+            yapper.init()
             return self
 
         # Set up test environment
@@ -99,6 +106,7 @@ class ServiceManager:
 
         # Initialize auth service infrastructure
         # Creates storage tables, test client credentials, vault secrets
+        # This is safe to call multiple times as it's idempotent
         auth.init()
         import campus.auth
 

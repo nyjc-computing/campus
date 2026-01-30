@@ -128,23 +128,22 @@ class SQLiteTable(TableInterface):
     def __init__(self, name: str):
         """Initialize the SQLite table interface."""
         super().__init__(name)
-        self._ensure_connection()
 
     @classmethod
-    def _ensure_connection(cls):
-        """Ensure we have a database connection."""
+    def get_connection(cls) -> sqlite3.Connection:
+        """Get the database connection, establishing it if needed."""
         if cls._connection is None:
             cls._connection = sqlite3.connect(
                 ":memory:", check_same_thread=False)
             cls._connection.row_factory = sqlite3.Row
+        return cls._connection
 
     def _get_table_columns(self) -> List[str]:
         """Get the list of column names for this table.
 
         Returns an empty list if the table doesn't exist yet.
         """
-        assert self._connection is not None, "Database connection not initialized"
-        cursor = self._connection.cursor()
+        cursor = self.get_connection().cursor()
         try:
             cursor.execute(f"PRAGMA table_info({self.name})")
             # row[1] is the column name
@@ -196,16 +195,14 @@ class SQLiteTable(TableInterface):
 
     def get_by_id(self, row_id: str) -> Dict[str, Any]:
         """Retrieve a row by its ID."""
-        assert self._connection is not None, "Database connection not initialized"
-        cursor = self._connection.cursor()
+        cursor = self.get_connection().cursor()
         cursor.execute(f"SELECT * FROM {self.name} WHERE id = ?", (row_id,))
         sqlite_row = cursor.fetchone()
         return self._deserialize_row(sqlite_row)
 
     def get_matching(self, query: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Retrieve rows matching a query."""
-        assert self._connection is not None, "Database connection not initialized"
-        cursor = self._connection.cursor()
+        cursor = self.get_connection().cursor()
 
         if not query:
             # Return all rows if no query
@@ -231,8 +228,7 @@ class SQLiteTable(TableInterface):
 
     def insert_one(self, row: Dict[str, Any]):
         """Insert a row into the table using actual table columns."""
-        assert self._connection is not None, "Database connection not initialized"
-
+        conn = self.get_connection()
         columns = self._get_table_columns()
         if not columns:
             raise RuntimeError(
@@ -249,12 +245,12 @@ class SQLiteTable(TableInterface):
                 value = json.dumps(value)
             values.append(value)
 
-        cursor = self._connection.cursor()
+        cursor = conn.cursor()
         cursor.execute(
             f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
             tuple(values)
         )
-        self._connection.commit()
+        conn.commit()
 
     def update_by_id(self, row_id: str, update: Dict[str, Any]):
         """Update a row by its ID using actual table columns."""
@@ -268,7 +264,7 @@ class SQLiteTable(TableInterface):
         updated_row.update(update)
 
         # Build UPDATE statement for only the columns being updated
-        assert self._connection is not None, "Database connection not initialized"
+        conn = self.get_connection()
         columns = self._get_table_columns()
 
         # Filter to only columns that exist in the table and are in the updated row
@@ -289,12 +285,12 @@ class SQLiteTable(TableInterface):
         values.append(row_id)  # For the WHERE clause
         set_sql = ", ".join(set_clauses)
 
-        cursor = self._connection.cursor()
+        cursor = conn.cursor()
         cursor.execute(
             f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
             tuple(values)
         )
-        self._connection.commit()
+        conn.commit()
 
     def update_matching(self, query: Dict[str, Any], update: Dict[str, Any]):
         """Update rows matching a query."""
@@ -304,10 +300,10 @@ class SQLiteTable(TableInterface):
 
     def delete_by_id(self, row_id: str):
         """Delete a row by its ID."""
-        assert self._connection is not None, "Database connection not initialized"
-        cursor = self._connection.cursor()
+        conn = self.get_connection()
+        cursor = conn.cursor()
         cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
-        self._connection.commit()
+        conn.commit()
 
     def delete_matching(self, query: Dict[str, Any]):
         """Delete rows matching a query."""
@@ -318,16 +314,15 @@ class SQLiteTable(TableInterface):
     @devops.block_env(devops.PRODUCTION)
     def init_from_model(self, name: str, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
-        self._ensure_connection()
-        assert self._connection is not None, "Database connection not initialized"
+        conn = self.get_connection()
         create_table_sql = _model_to_sql_schema(name, model)
-        cursor = self._connection.cursor()
+        cursor = conn.cursor()
         try:
             cursor.execute(create_table_sql)
         except Exception as e:
             raise
         else:
-            self._connection.commit()
+            conn.commit()
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:
@@ -339,11 +334,10 @@ class SQLiteTable(TableInterface):
         Args:
             schema: SQL CREATE TABLE statement defining the table structure.
         """
-        self._ensure_connection()
-        assert self._connection is not None, "Database connection not initialized"
-        cursor = self._connection.cursor()
+        conn = self.get_connection()
+        cursor = conn.cursor()
         cursor.execute(schema)
-        self._connection.commit()
+        conn.commit()
 
     @classmethod
     def reset_database(cls):

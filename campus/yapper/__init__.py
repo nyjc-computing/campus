@@ -71,7 +71,7 @@ def create(**kwargs) -> YapperInterface:
         from campus.auth import resources as auth_resources
         yapper_vault = auth_resources.vault["yapper"]
         yapperdb_uri = yapper_vault["YAPPERDB_URI"]
-        yapper = SQLiteYapper(db=yapperdb_uri, **kwargs)
+        yapper = SQLiteYapper(db=yapperdb_uri, client_id=client_id, **kwargs)
         yapper._init_db()
         return yapper
 
