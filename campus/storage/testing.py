@@ -16,6 +16,8 @@ from campus.storage.documents.interface import CollectionInterface
 def is_test_mode() -> bool:
     """Check if storage should use test backends based on STORAGE_MODE."""
     storage_mode = env.get("STORAGE_MODE", "0")
+    if storage_mode is None:
+        return False
     try:
         return int(storage_mode) != 0
     except ValueError:
@@ -25,7 +27,7 @@ def is_test_mode() -> bool:
 def configure_test_storage():
     """Configure storage to use test backends."""
     # Set environment variable to indicate test mode
-    env.STORAGE_MODE = "1"
+    env.STORAGE_MODE = "1"  # type: ignore[attr-defined]
 
 
 def get_table_backend() -> Type[TableInterface]:

@@ -105,7 +105,7 @@ class Assignment(Model):
                 course_id=l["course_id"],
                 coursework_id=l["coursework_id"],
                 attachment_id=l.get("attachment_id"),
-                linked_at=schema.DateTime(l["linked_at"]) if "linked_at" in l else None
+                **({"linked_at": schema.DateTime(l["linked_at"])} if "linked_at" in l else {})
             ) if isinstance(l, dict) else l
             for l in resource.get("classroom_links", [])
         ]

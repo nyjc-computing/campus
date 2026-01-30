@@ -90,7 +90,7 @@ def create(**kwargs) -> YapperInterface:
                     f"YAPPERDB_URI environment variable is required for {env} environment. "
                     "Please provide a PostgreSQL connection URI via YAPPERDB_URI."
                 )
-            yapper = PostgreSQLYapper(db_uri=yapperdb_uri, **kwargs)
+            yapper = PostgreSQLYapper(db_uri=yapperdb_uri, client_id=client_id, **kwargs)
             yapper._init_db()
             return yapper
 
