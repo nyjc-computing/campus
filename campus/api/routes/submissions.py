@@ -292,11 +292,11 @@ def add_feedback(
     """
     # Get teacher_id from authenticated user
     current_user = flask.g.get('current_user')
-    if not current_user or not current_user.get('id'):
+    if not current_user or not getattr(current_user, 'id', None):
         raise api_errors.UnauthorizedError(
             "User must be authenticated to add feedback"
         )
-    teacher_id = current_user.get('id')
+    teacher_id = current_user.id
 
     submission = resources.submission[schema.CampusID(submission_id)].get()
 
