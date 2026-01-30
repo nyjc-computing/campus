@@ -33,6 +33,20 @@
   - `reset_test_storage()` between classes doesn't fully isolate
   - Will be addressed in Phase 2 (ServiceManager refactoring)
 
+### Lessons Learned 💡
+
+**From Phase 1 Implementation:**
+
+1. **Lazy imports are critical** - `tests/fixtures/tokens.py` must import `campus.auth` modules inside functions, not at module level. Otherwise `vault_storage` is created before `configure_test_storage()` is called, causing it to use PostgreSQL instead of SQLite.
+
+2. **Credentials and User storage needed** - `auth.init()` only initialized vault and client storage. We added `credentials.init_storage()` and `user.init_storage()` to support bearer token tests.
+
+3. **DELETE requires JSON body** - Vault DELETE endpoint has `@flask_campus.unpack_request` decorator which expects a JSON payload. Tests must pass `json={}` or the request fails with 400.
+
+4. **Route paths need trailing slashes** - Flask blueprint `url_prefix='/assignments'` with `@bp.get('/')` means the full path is `/api/v1/assignments/` (with trailing slash), not `/api/v1/assignments`.
+
+5. **Blueprint re-registration blocks isolation** - Using `shared=False` causes "blueprint already registered" errors because Flask doesn't allow re-registering the same blueprints. Phase 2 needs a different approach.
+
 ### Next Steps 🚀
 
 **Phase 2: Test Isolation** (Next Session)
@@ -561,104 +575,76 @@ class TestAuthVaultContract(unittest.TestCase):
 
 ### Phase 2: Test Isolation (2-3 days)
 
-#### 2.1 Eliminate Shared ServiceManager
+**⚠️ Phase 1 Discovery:** The original plan's `shared=False` approach causes Flask blueprint re-registration errors. We need a different strategy.
 
-**Problem:** `_shared_instance` causes state pollution between test classes.
+#### 2.1 Revised Strategy: Proper Reset Between Tests
 
-**Solution:** Each test class gets its own ServiceManager instance.
+**Problem:**
+- `_shared_instance` pattern causes state pollution
+- Using `shared=False` causes "blueprint already registered" errors
+- Flask blueprints can only be registered once per app
+
+**Solution:** Keep shared mode but ensure proper storage reset between test classes.
 
 **File:** [tests/fixtures/services.py](../tests/fixtures/services.py)
 
+**Changes needed:**
+1. Add explicit `reset_test_storage()` call at start of `setup()` method
+2. Make `_cleanup_auth_client()` always run (not just for non-shared)
+3. Update `close()` to always clean up resources
+
 ```python
-# Changes to make:
+def setup(self):
+    # Reset storage at start of setup to ensure clean state
+    import campus.storage.testing
+    campus.storage.testing.reset_test_storage()
 
-class ServiceManager:
-    # Remove these class variables
-    # _shared_instance = None
-    # _shared_setup_done = False
+    # Ensure we're running in testing mode
+    if env.get("ENV") != devops.TESTING:
+        env.ENV = devops.TESTING
 
-    def __init__(self, shared=False):  # Keep shared param temporarily for compatibility
-        # ... but deprecate it
-        if shared:
-            import warnings
-            warnings.warn(
-                "shared=True is deprecated. Each test should use its own ServiceManager.",
-                DeprecationWarning,
-                stacklevel=2
-            )
+    # ... rest of setup continues
+
+def close(self):
+    # Always clean up auth client
+    self._cleanup_auth_client()
+
+    # Always clear app references
+    if self.auth_app is not None:
         self.auth_app = None
+    if self.apps_app is not None:
         self.apps_app = None
-        self._setup_done = False
-        # Remove: self._shared = shared
 
-    def setup(self):
-        # Remove shared instance logic
-        # ... rest of setup remains the same
-        return self
-
-    def close(self):
-        # Always clean up, not just for non-shared
-        self._cleanup_auth_client()
-        # ... rest of cleanup
-
-    # Remove cleanup_shared() classmethod
+    self._setup_done = False
 ```
 
-**Trade-off:** Tests run slower (more setup/teardown) but are more reliable.
+#### 2.2 Fix Storage Initialization Order
 
-#### 2.2 Proper Test Database Isolation Strategy
+**Problem:** After `reset_test_storage()`, storage tables need to be re-initialized.
 
-**Two approaches:**
+**Solution:** Call `auth.init()` which re-initializes all storage tables.
 
-**Option A: Fresh database per test class** (slower, truly isolated)
+**File:** [tests/fixtures/auth.py](../tests/fixtures/auth.py)
+
+The existing `init()` function is already idempotent (checks if client exists before creating), so it can be called multiple times safely.
+
+#### 2.3 Ensure Each Test Class Re-initializes Storage
+
+**File:** Update test classes to ensure storage is initialized after any resets.
+
 ```python
-# In test class setUpClass
-import tempfile
-import os
+@classmethod
+def setUpClass(cls):
+    cls.service_manager = services.create_service_manager()
+    cls.service_manager.setup()  # This now calls reset_test_storage() first
 
-class MyTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        # Create unique database file for this test class
-        cls.db_fd, cls.db_path = tempfile.mkstemp(suffix='.sqlite')
-
-        # Set environment before service setup
-        env.TEST_DB_PATH = cls.db_path
-
-        cls.manager = services.create_service_manager()
-        cls.manager.setup()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.manager.close()
-        os.close(cls.db_fd)
-        os.unlink(cls.db_path)
+    # Re-initialize auth resources that may have been cleared
+    from campus.auth import resources as auth_resources
+    auth_resources.credentials.init_storage()
+    auth_resources.user.init_storage()
 ```
 
-**Option B: Reset between tests** (faster, shared state)
-```python
-# Current approach - use reset_test_storage()
-import campus.storage.testing
-
-class MyTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.manager = services.create_service_manager()
-        cls.manager.setup()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.manager.close()
-        campus.storage.testing.reset_test_storage()
-
-    def tearDown(self):
-        # Optional: reset after each test for more isolation
-        campus.storage.testing.reset_test_storage()
-        # Re-initialize services
-        self.manager.setup()
-```
-
-**Recommendation:** Use Option B for now, consider Option A if state pollution issues persist.
+**Alternative:** Move these initializations into `ServiceManager.setup()` itself.
 
 ### Phase 3: Contract Tests Directory (3-4 days)
 
