@@ -27,12 +27,6 @@ pymongo = {extras = ["srv"], version = "^4.13.2"}
 gunicorn = "^21.2.0"
 werkzeug = "^3.0.0"
 
-[tool.poetry.extras]
-# Optional dependency groups for deployment modes
-vault = []
-apps = ["pymongo"]
-full = ["pymongo"]
-
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
 
