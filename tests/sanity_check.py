@@ -18,6 +18,10 @@ import sys
 import unittest
 from pathlib import Path
 
+# Add project root to path for imports (needed for `from tests.fixtures import ...`)
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
 
 class TestLockfileSync(unittest.TestCase):
     """Test that lockfile is in sync with dependencies."""

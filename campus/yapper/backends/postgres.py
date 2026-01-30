@@ -45,10 +45,12 @@ class PostgreSQLYapper(YapperInterface):
     def __init__(
             self,
             *,
-            db_uri: str
+            db_uri: str,
+            client_id: ClientId
     ) -> None:
         super().__init__()
         self.db_uri = db_uri
+        self.client_id = client_id
 
     @contextmanager
     def _get_conn(self) -> Generator[psycopg2.extensions.connection, None, None]:

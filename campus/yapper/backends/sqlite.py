@@ -36,9 +36,10 @@ def cursor_to_dict(cursor: sqlite3.Cursor) -> SQLiteResult:
 
 class SQLiteYapper(YapperInterface):
 
-    def __init__(self, *, db: str = ":memory:") -> None:
+    def __init__(self, *, db: str = ":memory:", client_id: ClientId) -> None:
         super().__init__()
         self.db_uri = db
+        self.client_id = client_id
 
     @contextmanager
     def _get_conn(self) -> Generator[sqlite3.Connection, None, None]:

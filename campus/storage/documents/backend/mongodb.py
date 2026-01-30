@@ -186,7 +186,7 @@ class MongoDBCollection(CollectionInterface):
             if isinstance(e, DuplicateKeyError) or 'duplicate key' in str(e).lower():
                 raise ConflictError(
                     message="Conflict occurred during insert",
-                    collection_name=self.name,
+                    group_name=self.name,
                     details={"row": record, "error": str(e)}
                 ) from None
             raise

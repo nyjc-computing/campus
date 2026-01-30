@@ -37,6 +37,7 @@ campus = "main:main"
 [tool.pyright]
 useLibraryCodeForTypes = true
 exclude = [".cache"]
+reportIncompatibleMethodOverride = "none"
 
 [tool.ruff]
 select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']

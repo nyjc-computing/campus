@@ -15,7 +15,7 @@ from .base import Model
 class OAuthToken(Model):
     """Dataclass representation of a token record."""
     # access_token is stored in id
-    id: str = field(default_factory=secret.generate_access_code)
+    id: str = field(default_factory=secret.generate_access_code)  # type: ignore[assignment]
     # created_at inherited from Model
     # expires_at is generated in __post_init__ if not provided
     expires_at: schema.DateTime = None  # type: ignore
