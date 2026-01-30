@@ -141,8 +141,9 @@ class TestAuthDeployment(unittest.TestCase):
         try:
             # Import provider module to verify it can be loaded
             from campus.auth import provider
-            self.assertTrue(hasattr(provider, 'bp'),
-                            "provider module missing bp (blueprint)")
+            # Note: provider.py doesn't export a 'bp' attribute like oauth_proxy modules.
+            # It uses app.add_url_rule() directly in init_app() instead of registering
+            # a blueprint. We only verify successful import here.
         except ImportError as e:
             self.fail(f"Failed to import campus.auth.provider: {e}")
 
