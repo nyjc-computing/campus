@@ -34,7 +34,7 @@ class TestWSGI(unittest.TestCase):
             del sys.modules['wsgi']
 
     def test_wsgi_import(self):
-        for deploy_mode in ("apps", "vault"):
+        for deploy_mode in ("campus.api", "campus.auth"):
             env.DEPLOY = deploy_mode
 
             # Import wsgi after service setup to avoid connection issues
