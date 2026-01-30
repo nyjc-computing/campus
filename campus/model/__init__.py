@@ -22,12 +22,15 @@ __all__ = [
     "Client",
     "ClientAccess",
     "EmailOTP",
+    "Feedback",
     "HttpHeader",
     "HttpHeaderWithAuth",
     "LoginSession",
     "Model",
     "Question",
     "OAuthToken",
+    "Response",
+    "Submission",
     "User",
     "UserCredentials",
     "Vault",
@@ -42,5 +45,6 @@ from .http.header import HttpHeader, HttpHeaderWithAuth
 from .emailotp import EmailOTP
 from .login import LoginSession
 from .session import AuthSession
+from .submission import Feedback, Response, Submission
 from .user import User
 from .vault import Vault
