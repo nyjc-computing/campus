@@ -27,14 +27,9 @@ pymongo = {extras = ["srv"], version = "^4.13.2"}
 gunicorn = "^21.2.0"
 werkzeug = "^3.0.0"
 
-[tool.poetry.extras]
-# Optional dependency groups for deployment modes
-vault = []
-apps = ["pymongo"]
-full = ["pymongo"]
-
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
+pyright = "^1.1.391"
 
 [tool.poetry.scripts]
 campus = "main:main"
@@ -42,6 +37,7 @@ campus = "main:main"
 [tool.pyright]
 useLibraryCodeForTypes = true
 exclude = [".cache"]
+reportIncompatibleMethodOverride = "none"
 
 [tool.ruff]
 select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']

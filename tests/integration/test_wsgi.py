@@ -27,39 +27,22 @@ class TestWSGI(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def tearDown(self):
-        # Restore environment after each test
-        os.environ.clear()
-        os.environ.update(self._original_env)
+        # Clean up wsgi module imports
+        if 'wsgi' in sys.modules:
+            del sys.modules['wsgi']
 
-    def test_wsgi_import_auth(self):
-        """Test campus.auth module can be imported for WSGI deployment.
+    def test_wsgi_import(self):
+        for deploy_mode in ("campus.api", "campus.auth"):
+            env.DEPLOY = deploy_mode
 
-        Note: Full WSGI import (import wsgi) conflicts with service_manager setup
-        due to blueprint re-registration. We verify the deployment module can be
-        imported instead.
-        """
-        env.DEPLOY = "campus.auth"
-        try:
-            import campus.auth
-            self.assertTrue(hasattr(campus.auth, 'init_app'))
-        except ImportError as e:
-            self.fail(f"Failed to import campus.auth: {e}")
+            # Import wsgi after service setup to avoid connection issues
+            import wsgi
+            from wsgi import app
+            self.assertIsNotNone(app, "App should not be None")
 
-    def test_wsgi_import_api(self):
-        """Test campus.api module can be imported for WSGI deployment.
-
-        Note: Full WSGI import conflicts with service_manager setup due to
-        shared dependencies on campus.auth (blueprint re-registration).
-
-        TODO: campus-python library doesn't accept "testing" ENV value.
-        When campus-api-python adds "testing" case, we can test full WSGI import.
-        """
-        env.DEPLOY = "campus.api"
-        try:
-            import campus.api
-            self.assertTrue(hasattr(campus.api, 'init_app'))
-        except ImportError as e:
-            self.fail(f"Failed to import campus.api: {e}")
+            # Clean up for next iteration
+            if 'wsgi' in sys.modules:
+                del sys.modules['wsgi']
 
 
 if __name__ == "__main__":

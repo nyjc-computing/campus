@@ -1,7 +1,9 @@
 version: '3.8'
 services:
   app:
-    image: mcr.microsoft.com/devcontainers/python:3.11
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
     volumes:
       - ..:/workspaces/campus:cached
     command: sleep infinity

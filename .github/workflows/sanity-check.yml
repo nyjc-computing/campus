@@ -1,0 +1,32 @@
+name: Sanity Check
+
+on:
+  push:
+    branches: [main, staging, weekly]
+  pull_request:
+    branches: [main, staging, weekly]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+env:
+  ENV: testing
+
+jobs:
+  sanity-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite
+        run: poetry install --no-root
+      - name: Run Sanity Checks
+        run: poetry run python tests/sanity_check.py

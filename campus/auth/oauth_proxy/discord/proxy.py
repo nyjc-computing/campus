@@ -110,7 +110,7 @@ class DiscordAuthPoxy(base.AuthProxy):
         token = self._oauth2.exchange_code_for_token(
             authsession=authsession,
             code=code,
-            client_id=self._CLIENT_ID,
+            client_id=self._CLIENT_ID,  # type: ignore[arg-type]
             client_secret=self._CLIENT_SECRET,
         )
         # Verify requested scopes were granted

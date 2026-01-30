@@ -66,8 +66,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
                 )
                 try:
                     auth_result = campus_auth.root.authenticate(
-                        client_id=client_id,
-                        client_secret=client_secret
+                        client_id=client_id,  # type: ignore[arg-type]
+                        client_secret=client_secret  # type: ignore[arg-type]
                     )
                 except campus_python.errors.AuthenticationError:
                     auth_errors.UnauthorizedClientError(

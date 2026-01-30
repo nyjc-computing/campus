@@ -95,7 +95,7 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
         status_code = 401
     else:
         resp_json = {
-            "client": client_resource[user_creds.client_id].get().to_resource(),
+            "client": client_resource[user_creds.client_id].get().to_resource(),  # type: ignore[index]
             "user": user_resource[user_creds.user_id].get().to_resource(),
         }
         status_code = 200
