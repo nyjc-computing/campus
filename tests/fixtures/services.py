@@ -145,11 +145,12 @@ class ServiceManager:
         if not self._shared:
             self._cleanup_auth_client()
 
-        if self.auth_app is not None:
-            self.auth_app = None
-
-        if self.apps_app is not None:
-            self.apps_app = None
+        # For shared instances, preserve apps for subsequent test classes
+        if not self._shared:
+            if self.auth_app is not None:
+                self.auth_app = None
+            if self.apps_app is not None:
+                self.apps_app = None
 
         if not self._shared:
             if env.CLIENT_ID is not None:
