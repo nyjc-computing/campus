@@ -12,12 +12,16 @@ integrations.
 __all__ = ["init_app", "get_yapper"]
 
 import flask
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from campus.yapper.base import YapperInterface
 
 # Module-level yapper instance shared across all routes
-_yapper_instance = None
+_yapper_instance: "YapperInterface | None" = None
 
 
-def get_yapper():
+def get_yapper() -> "YapperInterface":
     """Get the module-wide yapper instance.
     
     Initializes yapper lazily if not already initialized.

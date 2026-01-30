@@ -20,8 +20,9 @@ bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
 # Lazily initialized yapper and auth_root - set in init_app() after test fixtures are ready
 # This prevents connection to external services during module import in tests
-yapper: campus.yapper.YapperInterface | None = None
-auth_root: Any | None = None  # type: ignore
+# Type: ignore because we initialize these in init_app() before first use
+yapper: campus.yapper.YapperInterface = None  # type: ignore
+auth_root: Any = None  # type: ignore
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:

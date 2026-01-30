@@ -19,7 +19,8 @@ bp = flask.Blueprint('submissions', __name__, url_prefix='/submissions')
 
 # Lazily initialized yapper - set in init_app() after test fixtures are ready
 # This prevents connection to external services during module import in tests
-yapper: campus.yapper.YapperInterface | None = None
+# Type: ignore because we initialize this in init_app() before first use
+yapper: campus.yapper.YapperInterface = None  # type: ignore
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:

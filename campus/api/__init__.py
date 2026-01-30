@@ -21,9 +21,10 @@ from campus.common.errors import auth_errors
 
 # Lazily initialized campus client - set in init_app() after test fixtures are ready
 # This prevents connection to external services during module import in tests
-campus: campus_python.Campus | None = None
-campus_auth: Any | None = None  # type: ignore
-auth_root: Any | None = None  # type: ignore
+# Type: ignore because we initialize these in init_app() before first use
+campus: campus_python.Campus = None  # type: ignore
+campus_auth: Any = None  # type: ignore
+auth_root: Any = None  # type: ignore
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
