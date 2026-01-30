@@ -23,7 +23,12 @@ git clone https://github.com/nyjc-computing/campus.git
 cd campus
 git checkout weekly
 poetry install
+
+# Set up pre-push hook to catch sanity check failures early
+git config core.hooksPath .githooks
 ```
+
+The pre-push hook will run sanity checks before allowing pushes to GitHub. This saves time by catching issues locally before CI/CD runs. To bypass the hook (not recommended): `git push --no-verify`
 
 ### 2. Create Feature
 

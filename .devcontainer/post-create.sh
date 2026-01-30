@@ -3,6 +3,9 @@
 # Configure Git to use fast-forward pulls
 git config pull.ff true
 
+# Set up pre-push hook to catch sanity check failures early
+git config core.hooksPath .githooks
+
 # Install Poetry and project dependencies
 pip install poetry
 poetry install --no-root  # don't install campus package
