@@ -14,7 +14,6 @@ Test Principles:
 import unittest
 import flask
 
-from campus.common.devops.deploy import create_app
 from tests.fixtures import services
 
 
@@ -67,26 +66,21 @@ class TestAuthDeployment(unittest.TestCase):
         - Configuration errors
         - Blueprint registration errors
         """
-        import campus.auth
+        # Use the app created by service_manager instead of calling create_app() again
+        # This avoids blueprint re-registration errors when init_app is called multiple times
+        app = self.service_manager.auth_app
 
-        try:
-            app = create_app(campus.auth)
-
-            # Basic sanity checks - not testing functionality
-            self.assertIsNotNone(app, "create_app returned None")
-            self.assertIsInstance(app, flask.Flask,
-                                  "create_app did not return Flask instance")
-
-        except Exception as e:
-            self.fail(f"Failed to create auth app: {e}")
+        # Basic sanity checks - not testing functionality
+        self.assertIsNotNone(app, "auth_app is None")
+        self.assertIsInstance(app, flask.Flask,
+                                  "auth_app is not a Flask instance")
 
     def test_auth_app_has_secret_key(self):
         """Test that auth app has a secret key configured.
 
         This catches missing SECRET_KEY in vault configuration.
         """
-        import campus.auth
-        app = create_app(campus.auth)
+        app = self.service_manager.auth_app
 
         self.assertIsNotNone(app.secret_key,
                              "App secret_key is None")
@@ -101,8 +95,7 @@ class TestAuthDeployment(unittest.TestCase):
         This is a loose check - we just verify that SOME blueprints
         are registered, not specific ones (which may change).
         """
-        import campus.auth
-        app = create_app(campus.auth)
+        app = self.service_manager.auth_app
 
         # Should have at least one blueprint registered
         self.assertGreater(len(app.blueprints), 0,
@@ -115,8 +108,7 @@ class TestAuthDeployment(unittest.TestCase):
         under /auth/, not that specific routes are present.
         This survives API changes while catching complete failures.
         """
-        import campus.auth
-        app = create_app(campus.auth)
+        app = self.service_manager.auth_app
 
         # Get all registered routes
         routes = [rule.rule for rule in app.url_map.iter_rules()]
@@ -131,8 +123,7 @@ class TestAuthDeployment(unittest.TestCase):
 
         Verifies that oauth_proxy.init_app was called successfully.
         """
-        import campus.auth
-        app = create_app(campus.auth)
+        app = self.service_manager.auth_app
 
         # Get all registered routes
         routes = [rule.rule for rule in app.url_map.iter_rules()]
@@ -147,8 +138,6 @@ class TestAuthDeployment(unittest.TestCase):
 
         Verifies that provider module was initialized successfully.
         """
-        import campus.auth
-
         try:
             # Import provider module to verify it can be loaded
             from campus.auth import provider
@@ -162,8 +151,7 @@ class TestAuthDeployment(unittest.TestCase):
 
         This verifies that campus.common.errors.init_app was called.
         """
-        import campus.auth
-        app = create_app(campus.auth)
+        app = self.service_manager.auth_app
 
         # Should have error handlers registered
         self.assertTrue(hasattr(app, 'error_handler_spec'),
