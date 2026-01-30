@@ -1,9 +1,44 @@
 # Integration Test Refactor Plan
 
-**Status:** Draft
+**Status:** In Progress (Phase 1 Complete)
 **Created:** 2025-01-30
 **Updated:** 2025-01-30
 **Context:** Refactoring integration tests to follow coherent testing principles
+
+## Progress Summary
+
+### Completed ✅
+
+**Phase 1: Quick Wins (2025-01-30)**
+- ✅ Created `tests/fixtures/tokens.py` with token creation utilities
+  - `create_test_token()` - Creates bearer tokens for user context
+  - `create_test_client_credentials()` - Creates test clients with Basic Auth
+  - `get_basic_auth_headers()` - Helper for Basic Auth headers
+  - `get_bearer_auth_headers()` - Helper for Bearer Auth headers
+- ✅ Re-enabled `test_assignments.py` with Bearer Auth
+  - Removed `@unittest.skip` decorator
+  - Updated to use Bearer Auth instead of Basic Auth
+  - Fixed route paths to include trailing slashes
+- ✅ Added `tests/contract/test_auth_vault.py` with HTTP contract tests
+  - 5 tests covering vault endpoint contracts
+  - Tests for 401 unauthorized, 404 not found, round-trip, list, delete
+
+### Known Issues 📝
+
+**Phase 1 Limitations:**
+- `test_assignments.py` tests 2-12 fail due to pre-existing API bugs:
+  - `assignments.py:85` expects `current_user.get('id')` but `current_user` is a User object
+  - This is an API implementation bug, not a test issue
+- Running multiple test classes in sequence causes storage pollution
+  - `reset_test_storage()` between classes doesn't fully isolate
+  - Will be addressed in Phase 2 (ServiceManager refactoring)
+
+### Next Steps 🚀
+
+**Phase 2: Test Isolation** (Next Session)
+- Eliminate shared ServiceManager pattern
+- Each test class gets its own ServiceManager instance
+- Add deprecation warnings for `shared=True`
 
 ## Executive Summary
 

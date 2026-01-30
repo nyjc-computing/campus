@@ -48,6 +48,8 @@ def init():
     # This creates the database tables with proper column definitions
     auth_resources.vault.init_storage()
     auth_resources.client.init_storage()
+    auth_resources.credentials.init_storage()
+    auth_resources.user.init_storage()
 
     # Configure the vault service's own SECRET_KEY
     # This key is used for hashing client secrets
