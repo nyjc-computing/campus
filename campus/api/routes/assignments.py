@@ -16,11 +16,18 @@ from campus.common.errors import api_errors
 from .. import resources
 
 bp = flask.Blueprint('assignments', __name__, url_prefix='/assignments')
-yapper = campus.yapper.create()
+
+# Lazily initialized yapper - set in init_app() after test fixtures are ready
+# This prevents connection to external services during module import in tests
+# Type: ignore because we initialize this in init_app() before first use
+yapper: campus.yapper.YapperInterface = None  # type: ignore
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise assignment routes with the given Flask app/blueprint."""
+    global yapper
+    # Initialize yapper after test fixtures have set up the vault
+    yapper = campus.yapper.create()
     app.register_blueprint(bp)
 
 

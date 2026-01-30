@@ -5,6 +5,9 @@ Functions for initialising campus.yapper for testing use
 
 from . import postgres, require, setup
 
+# Module-level variable to track if yapper was initialized
+_yapper_db_path = None
+
 
 def init():
     """Initialize yapper fixtures for testing.
@@ -16,7 +19,11 @@ def init():
     - Gives client access to 'yapper' label
 
     ENV must be 'testing' and client credentials must be set before calling.
+
+    This function is idempotent - calling it multiple times will reuse the
+    same database file.
     """
+    global _yapper_db_path
     require.env("testing")
     client_id = require.envvar("CLIENT_ID")
     require.envvar("CLIENT_SECRET")
@@ -36,9 +43,20 @@ def init():
     # Set up vault with database URI as a secret
     yapper_vault = auth_resources.vault["yapper"]
 
-    # In test mode, use a dummy URI since we're using SQLite
-    if campus.storage.testing.is_test_mode():
-        db_uri = "sqlite:///:memory:"
+    # Check if already initialized (idempotent)
+    if _yapper_db_path is not None:
+        db_uri = _yapper_db_path
+    elif campus.storage.testing.is_test_mode():
+        # Use a temp file for the database
+        # Note: :memory: doesn't work because each connection creates a new empty DB
+        import tempfile
+        import os
+        fd, db_path = tempfile.mkstemp(suffix='.sqlite', prefix='yapperdb_')
+        os.close(fd)
+        db_uri = db_path
+        _yapper_db_path = db_path
+        # Store path for cleanup
+        yapper_vault["YAPPERDB_PATH"] = db_path
     else:
         db_uri = setup.get_db_uri("yapperdb")
     yapper_vault["YAPPERDB_URI"] = db_uri

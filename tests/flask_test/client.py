@@ -54,13 +54,13 @@ class FlaskTestClient:
     def _load_auth_headers(self) -> dict[str, str]:
         """Load authentication headers from environment variables."""
         # Try ACCESS_TOKEN first (Bearer auth)
-        access_token = env.ACCESS_TOKEN
+        access_token = env.get("ACCESS_TOKEN")
         if access_token:
             return HttpHeader.from_bearer_token(access_token)
 
         # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
-        client_id = env.CLIENT_ID
-        client_secret = env.CLIENT_SECRET
+        client_id = env.get("CLIENT_ID")
+        client_secret = env.get("CLIENT_SECRET")
         if client_id and client_secret:
             return HttpHeader.from_credentials(client_id, client_secret)
 
