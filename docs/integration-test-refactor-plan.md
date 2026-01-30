@@ -1,6 +1,6 @@
 # Integration Test Refactor Plan
 
-**Status:** In Progress (Phase 1 Complete)
+**Status:** In Progress (Phase 2 Complete)
 **Created:** 2025-01-30
 **Updated:** 2025-01-30
 **Context:** Refactoring integration tests to follow coherent testing principles
@@ -23,15 +23,28 @@
   - 5 tests covering vault endpoint contracts
   - Tests for 401 unauthorized, 404 not found, round-trip, list, delete
 
+**Phase 2: Test Isolation (2025-01-30)**
+- ✅ Fixed storage reset between test classes
+  - Added `reset_test_storage()` call at start of `ServiceManager.setup()`
+  - Updated `close()` to always clean up resources and credentials
+- ✅ Fixed dynamic credential loading in test clients
+  - Made `_auth_headers` a property that loads from environment dynamically
+  - This allows CLIENT_ID/CLIENT_SECRET changes between test classes to work correctly
+- ✅ Fixed MemoryCollection to handle reset storage gracefully
+  - Updated `_get_collection()` to re-create collections after reset
+- ✅ Fixed TestCampusRequest credential caching
+  - Added `_override_auth_headers` for explicit token auth
+  - Falls back to dynamic environment loading when no override is set
+- ✅ Verified test isolation with multiple test runs
+  - test_auth_vault (5 tests) + test_assignments.test_list_assignments_empty pass together
+  - Verified with 3 consecutive runs - all pass consistently
+
 ### Known Issues 📝
 
-**Phase 1 Limitations:**
+**Pre-existing API Bugs (not test issues):**
 - `test_assignments.py` tests 2-12 fail due to pre-existing API bugs:
   - `assignments.py:85` expects `current_user.get('id')` but `current_user` is a User object
   - This is an API implementation bug, not a test issue
-- Running multiple test classes in sequence causes storage pollution
-  - `reset_test_storage()` between classes doesn't fully isolate
-  - Will be addressed in Phase 2 (ServiceManager refactoring)
 
 ### Lessons Learned 💡
 
@@ -45,14 +58,21 @@
 
 4. **Route paths need trailing slashes** - Flask blueprint `url_prefix='/assignments'` with `@bp.get('/')` means the full path is `/api/v1/assignments/` (with trailing slash), not `/api/v1/assignments`.
 
-5. **Blueprint re-registration blocks isolation** - Using `shared=False` causes "blueprint already registered" errors because Flask doesn't allow re-registering the same blueprints. Phase 2 needs a different approach.
+**From Phase 2 Implementation:**
+
+5. **Credential caching breaks test isolation** - FlaskTestClient was caching `_auth_headers` at initialization. When CLIENT_ID changed between test classes (due to storage reset creating a new test client), the old credentials were still being used, causing "Client not found" errors. Fixed by making `_auth_headers` a property that loads dynamically from environment.
+
+6. **MemoryCollection reset needs to handle missing collections** - After `reset_storage()` clears the storage dict, accessing a collection via `_get_collection()` would raise KeyError. Fixed by checking if the collection exists and recreating it if missing.
+
+7. **Module-level globals persist across test classes** - `campus_api.campus` and `campus_api.campus_auth` are module-level globals created when Flask apps are initialized. With shared Flask apps (to avoid blueprint re-registration), these persist. The fix was to make the underlying test client load credentials dynamically rather than caching them at initialization.
 
 ### Next Steps 🚀
 
-**Phase 2: Test Isolation** (Next Session)
-- Eliminate shared ServiceManager pattern
-- Each test class gets its own ServiceManager instance
-- Add deprecation warnings for `shared=True`
+**Phase 3: Contract Tests Directory** (Future Session)
+- Expand HTTP contract test coverage
+- Add contract tests for clients endpoint
+- Add contract tests for credentials endpoint
+- Document all HTTP contracts explicitly
 
 ## Executive Summary
 

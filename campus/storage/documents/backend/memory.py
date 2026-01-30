@@ -45,6 +45,9 @@ class MemoryCollection(CollectionInterface):
 
     def _get_collection(self) -> Dict[str, Dict[str, Any]]:
         """Get the collection storage."""
+        # Re-create collection if it was cleared by reset_storage()
+        if self.name not in self._storage:
+            self._storage[self.name] = {}
         return self._storage[self.name]
 
     def _ensure_id(self, doc: Dict[str, Any]) -> Dict[str, Any]:

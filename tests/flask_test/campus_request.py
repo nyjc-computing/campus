@@ -101,6 +101,10 @@ class TestCampusRequest(FlaskTestClient):
         self.base_url = base_url or ""
         self._timeout = kwargs.get("timeout", 10)
 
+        # Override auth headers - if set, these take precedence over env vars
+        # This allows set_bearer_authorization() to work for explicit token auth
+        self._override_auth_headers: dict[str, str] | None = None
+
         # Don't look up app at init time - we'll determine it per-request
         # based on the path prefix
         # Get a default app for initialization
@@ -119,6 +123,24 @@ class TestCampusRequest(FlaskTestClient):
         # Initialize parent FlaskTestClient with a default app
         # We'll use the correct app per-request
         super().__init__(app, base_url=self.base_url)
+
+    @property
+    def _auth_headers(self) -> dict[str, str]:
+        """Get authentication headers for requests.
+
+        Returns override headers if set (via set_bearer_authorization etc.),
+        otherwise loads dynamically from environment variables.
+
+        This ensures test isolation - when env.CLIENT_ID changes between
+        test classes, the new credentials are used automatically.
+
+        Returns:
+            Dictionary of HTTP headers for authentication
+        """
+        if self._override_auth_headers is not None:
+            return self._override_auth_headers
+        # Fall back to parent's dynamic loading from environment
+        return super()._auth_headers  # type: ignore[bad-property-access]
 
     def _get_app_for_base_url(self, base_url: str, path: str = "") -> flask.Flask | None:
         """Get the Flask app for a given base URL and path.
@@ -164,7 +186,10 @@ class TestCampusRequest(FlaskTestClient):
         Returns the headers that would be sent with requests.
         """
         # Reconstruct HttpHeader from current auth headers
-        return campus.model.HttpHeader(**self._auth_headers)
+        headers_dict = self._auth_headers
+        if isinstance(headers_dict, dict):
+            return campus.model.HttpHeader(**headers_dict)
+        return headers_dict
 
     def set_basic_authorization(self, client_id: str, secret: str) -> None:
         """Set Basic Authorization header.
@@ -173,9 +198,9 @@ class TestCampusRequest(FlaskTestClient):
             client_id: Client ID for basic auth
             secret: Client secret for basic auth
         """
-        self._auth_headers = campus.model.HttpHeader.from_credentials(
+        self._override_auth_headers = campus.model.HttpHeader.from_credentials(
             client_id, secret
-        )
+        )  # HttpHeader is a dict
 
     def set_bearer_authorization(self, token: str) -> None:
         """Set Bearer Authorization header.
@@ -183,21 +208,20 @@ class TestCampusRequest(FlaskTestClient):
         Args:
             token: Bearer token
         """
-        self._auth_headers = campus.model.HttpHeader.from_bearer_token(token)
+        self._override_auth_headers = campus.model.HttpHeader.from_bearer_token(
+            token
+        )  # HttpHeader is a dict
 
     def reset_authorization(self) -> None:
         """Reset authorization back to client credentials from environment.
 
         This matches CampusRequest behavior - it resets to using the
         CLIENT_ID and CLIENT_SECRET from environment variables.
-        """
-        from campus.common import env
 
-        env.require("CLIENT_ID", "CLIENT_SECRET")
-        self._auth_headers = campus.model.HttpHeader.from_credentials(
-            env.CLIENT_ID,
-            env.CLIENT_SECRET
-        )
+        After calling this, headers will be loaded dynamically from env,
+        allowing tests to change credentials between test classes.
+        """
+        self._override_auth_headers = None  # Clear override, use env vars
 
     def get(self: Self, path: str, query: dict[str, Any] | None = None) -> FlaskTestResponse:
         """Sends a GET request.
