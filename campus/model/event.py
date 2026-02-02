@@ -3,22 +3,36 @@
 Event model definitions for Campus.
 """
 
+from typing import ClassVar
 from dataclasses import dataclass, field
 
 from campus.common import schema
-from campus.common.utils import secret
+from campus.common.schema.openapi import String, DateTime
+from campus.common.utils import uid
 
 from .base import Model
-
+from . import constraints
 
 @dataclass(eq=False, kw_only=True)
 class Event(Model):
-    """Dataclass representation of a event record."""
-    id: str = field(default_factory=secret.generate_access_code)
-    # created_at inherited from Model
-    name: str
-    location: str | None = None
-    location_url: str | None = None
-    start_time: schema.DateTime | None = None
-    duration: int | None = None
-    description: str
+    """
+    Represents a single instance of an event.
+    """
+    id: schema.CampusID = field(default_factory=(
+        lambda: uid.generate_category_uid("event", length=8)
+    ))
+
+    # Cosmetic fields
+    name: String
+    description: String
+    location: String
+
+    # Data fields
+    location_url: String | None = None # Optional, online events only
+    start_time: DateTime
+    end_time: DateTime
+
+    # No duplicate events allowed
+    __constraints__ = constraints.Unique(
+        "name", "description", "location", "location_url", "start_time", "end_time"
+    )
