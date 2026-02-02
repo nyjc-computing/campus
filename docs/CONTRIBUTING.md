@@ -60,13 +60,20 @@ git push origin feature/your-feature-name
 
 ## 🧪 Testing
 
-```bash
-# Quick validation
-poetry run python run_tests.py unit
+**⚠️ IMPORTANT: Always use `run_tests.py` as the entrypoint for running tests.**
 
-# Full testing
+```bash
+# Run all tests (sanity, type, unit, integration)
 poetry run python run_tests.py
+
+# Run specific test categories
+poetry run python run_tests.py unit        # Unit tests only
+poetry run python run_tests.py integration # Integration tests only
+poetry run python run_tests.py sanity      # Sanity checks only
+poetry run python run_tests.py type        # Type checks only
 ```
+
+**Do NOT run tests directly with `unittest` or `pytest`** - the test entrypoint handles proper environment setup, cleanup, and isolation between test classes. Running tests directly may produce false positives or miss failures.
 
 See [Testing Strategies](testing-strategies.md) for comprehensive approaches.
 
