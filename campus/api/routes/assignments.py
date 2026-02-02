@@ -82,11 +82,11 @@ def create_assignment(
     """
     # Get created_by from authenticated user
     current_user = flask.g.get('current_user')
-    if not current_user or not current_user.get('id'):
+    if not current_user or not getattr(current_user, 'id', None):
         raise api_errors.UnauthorizedError(
             "User must be authenticated to create assignments"
         )
-    created_by = current_user.get('id')
+    created_by = current_user.id
 
     assignment = resources.assignment.new(
         title=title,
