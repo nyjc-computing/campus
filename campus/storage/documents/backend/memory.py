@@ -11,6 +11,10 @@ Uses Python dictionaries to simulate MongoDB collections in memory.
 All data is stored in RAM and will be lost when the process exits.
 Document IDs are automatically generated if not provided.
 
+Supports MongoDB-style dot notation for nested field updates:
+- {"a.b.c": value} sets doc["a"]["b"]["c"] = value
+- {"a.b.c": None} removes doc["a"]["b"]["c"]
+
 Usage Example:
 ```python
 from campus.storage.documents.backend.memory import MemoryCollection
@@ -19,6 +23,7 @@ collection = MemoryCollection("users")
 collection.insert_one({"id": "123", "name": "John"})
 user = collection.get_by_id("123")
 collection.update_by_id("123", {"name": "Jane"})
+collection.update_by_id("123", {"metadata.count": 5})  # Dot notation
 collection.delete_by_id("123")
 ```
 """
@@ -93,7 +98,12 @@ class MemoryCollection(CollectionInterface):
         collection[doc_id] = doc.copy()
 
     def update_by_id(self, doc_id: str, update: Dict[str, Any]):
-        """Update a document by its ID."""
+        """Update a document by its ID.
+
+        Supports MongoDB-style dot notation for nested field updates:
+        - {"a.b.c": 1} sets doc["a"]["b"]["c"] = 1
+        - {"a.b.c": None} removes doc["a"]["b"]["c"]
+        """
         collection = self._get_collection()
         if doc_id not in collection:
             return
@@ -101,14 +111,63 @@ class MemoryCollection(CollectionInterface):
         # Merge the update (MongoDB-style update)
         doc = collection[doc_id].copy()
 
-        # Handle $unset operations (None values)
+        # Handle $unset operations (None values) and nested updates
         for key, value in update.items():
-            if value is None:
+            if '.' in key:
+                # Handle dot notation for nested fields
+                if value is None:
+                    self._unset_nested_value(doc, key)
+                else:
+                    self._set_nested_value(doc, key, value)
+            elif value is None:
                 doc.pop(key, None)  # Remove the key if it exists
             else:
                 doc[key] = value
 
         collection[doc_id] = doc
+
+    def _set_nested_value(self, doc: Dict[str, Any], key_path: str, value: Any) -> None:
+        """Set a nested value in a dictionary using dot notation.
+
+        Args:
+            doc: The document to modify
+            key_path: Dot-separated path (e.g., "members.abc123" or "a.b.c")
+            value: The value to set
+        """
+        keys = key_path.split('.')
+        current = doc
+
+        # Navigate to the parent of the target key, creating nested dicts as needed
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            elif not isinstance(current[key], dict):
+                # If the intermediate value is not a dict, replace it
+                current[key] = {}
+            current = current[key]
+
+        # Set the final value
+        current[keys[-1]] = value
+
+    def _unset_nested_value(self, doc: Dict[str, Any], key_path: str) -> None:
+        """Remove a nested value from a dictionary using dot notation.
+
+        Args:
+            doc: The document to modify
+            key_path: Dot-separated path (e.g., "members.abc123" or "a.b.c")
+        """
+        keys = key_path.split('.')
+        current = doc
+
+        # Navigate to the parent of the target key
+        for key in keys[:-1]:
+            if key not in current or not isinstance(current[key], dict):
+                # Path doesn't exist, nothing to unset
+                return
+            current = current[key]
+
+        # Remove the final key if it exists
+        current.pop(keys[-1], None)
 
     def update_matching(self, query: Dict[str, Any], update: Dict[str, Any]):
         """Update documents matching a query."""
