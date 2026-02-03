@@ -90,3 +90,20 @@ def update(
     )
     get_yapper().emit('campus.logins.update', {"session_id": session_id})
     return loginsession.to_resource(), 200
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('logins', __name__, url_prefix='/logins')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "new", new, methods=["POST"])
+    new_bp.add_url_rule("/<session_id>/", "delete", delete, methods=["DELETE"])
+    new_bp.add_url_rule("/<session_id>/", "get", get, methods=["GET"])
+    new_bp.add_url_rule("/<session_id>/", "update", update, methods=["PATCH"])
+
+    return new_bp

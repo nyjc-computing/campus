@@ -100,3 +100,17 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
         }
         status_code = 200
     return resp_json, status_code
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('root', __name__, url_prefix='/root')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "authenticate", authenticate, methods=["POST"])
+
+    return new_bp

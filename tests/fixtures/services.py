@@ -30,11 +30,13 @@ class ServiceManager:
     _shared_instance = None
     _shared_setup_done = False
 
-    def __init__(self, shared=True):
+    def __init__(self, shared=False):
         """Initialize ServiceManager.
 
         Args:
-            shared: Whether to reuse shared instance across test suites
+            shared: Whether to reuse shared instance across test suites.
+                    Defaults to False to create fresh Flask apps per test class
+                    for better test isolation.
         """
         self.auth_app: Optional[object] = None
         self.apps_app: Optional[object] = None
@@ -54,9 +56,9 @@ class ServiceManager:
         initialization in proper dependency order: auth → storage → yapper → api.
 
         Note:
-            Resetting test storage at the start ensures each test class gets
-            a clean storage slate. Flask apps remain shared to avoid blueprint
-            re-registration errors, but storage is fully reset.
+            With shared=False (the default), creates fresh Flask apps with
+            fresh blueprints for each test class. This ensures full test
+            isolation at the cost of slightly slower test execution.
 
         Returns:
             ServiceManager: Self for method chaining
@@ -158,8 +160,8 @@ class ServiceManager:
     def close(self):
         """Clean up service instances and resources.
 
-        Always cleans up auth client and credentials. For shared instances,
-        the Flask apps are preserved to avoid blueprint re-registration errors.
+        Always cleans up auth client and credentials. With shared=False,
+        also cleans up Flask apps for full isolation.
         """
         # Always clean up auth client regardless of shared mode
         self._cleanup_auth_client()
@@ -170,8 +172,8 @@ class ServiceManager:
         if env.CLIENT_SECRET is not None:
             delattr(env, "CLIENT_SECRET")
 
-        # For shared instances, preserve apps for subsequent test classes
-        # to avoid "blueprint already registered" errors
+        # For non-shared instances, clean up apps for full isolation
+        # This is now the default behavior
         if not self._shared:
             if self.auth_app is not None:
                 self.auth_app = None
@@ -253,12 +255,13 @@ def init():
         manager.close()
 
 
-def create_service_manager(shared=True):
+def create_service_manager(shared=False):
     """Factory function to create a new ServiceManager.
 
     Args:
-        shared: If True, reuse shared instance across test suites.
-               If False, create independent instance.
+        shared: If True, reuse shared instance across test suites (faster).
+               If False (default), create independent instance with fresh
+               Flask apps for each test class (better isolation).
 
     Returns:
         ServiceManager: New or shared service manager
