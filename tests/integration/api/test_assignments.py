@@ -61,8 +61,8 @@ class TestAssignmentsIntegration(unittest.TestCase):
         """Clean up after each test."""
         self.app_context.pop()
 
-    def test_list_assignments_empty(self):
-        """GET /assignments should return empty list initially."""
+    def test_00_list_assignments_empty(self):
+        """GET /assignments should return empty list initially. (Named test_00_* to run first for isolation)"""
         response = self.client.get('/api/v1/assignments/', headers=self.auth_headers)
 
         assert response.status_code == 200
@@ -130,7 +130,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
         assignment_id = create_response.get_json()["id"]
 
         # Then get it
-        response = self.client.get(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers)
+        response = self.client.get(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers)
 
         assert response.status_code == 200
         data = response.get_json()
@@ -138,7 +138,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
 
     def test_get_assignment_not_found(self):
         """GET /assignments/{id} should return 409 for non-existent assignment."""
-        response = self.client.get('/api/v1/assignments//assignment_doesnt_exist', headers=self.auth_headers)
+        response = self.client.get('/api/v1/assignments/assignment_doesnt_exist', headers=self.auth_headers)
 
         # Should return 409 Conflict (per Campus API pattern)
         assert response.status_code == 409
@@ -152,13 +152,13 @@ class TestAssignmentsIntegration(unittest.TestCase):
         assignment_id = create_response.get_json()["id"]
 
         # Update title
-        response = self.client.patch(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers, json={
+        response = self.client.patch(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers, json={
             "title": "Updated Title"
         })
 
         assert response.status_code == 200
         # Verify update
-        get_response = self.client.get(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers)
+        get_response = self.client.get(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers)
         data = get_response.get_json()
         assert data["title"] == "Updated Title"
 
@@ -172,7 +172,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
         assignment_id = create_response.get_json()["id"]
 
         # Update questions
-        response = self.client.patch(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers, json={
+        response = self.client.patch(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers, json={
             "questions": [
                 {"id": "q1", "prompt": "P1", "question": "Q1?"},
                 {"id": "q1.a", "prompt": "", "question": "Q1a?"}
@@ -181,7 +181,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
 
         assert response.status_code == 200
         # Verify update
-        get_response = self.client.get(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers)
+        get_response = self.client.get(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers)
         data = get_response.get_json()
         assert len(data["questions"]) == 2
 
@@ -194,12 +194,12 @@ class TestAssignmentsIntegration(unittest.TestCase):
         assignment_id = create_response.get_json()["id"]
 
         # Delete it
-        response = self.client.delete(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers)
+        response = self.client.delete(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers)
 
         assert response.status_code == 200
 
         # Verify it's gone
-        get_response = self.client.get(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers)
+        get_response = self.client.get(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers)
         assert get_response.status_code == 409
 
     def test_add_classroom_link(self):
@@ -211,7 +211,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
         assignment_id = create_response.get_json()["id"]
 
         # Add a Classroom link
-        response = self.client.post(f'/api/v1/assignments//{assignment_id}/links', headers=self.auth_headers, json={
+        response = self.client.post(f'/api/v1/assignments/{assignment_id}/links', headers=self.auth_headers, json={
             "course_id": "c123",
             "coursework_id": "w456",
             "attachment_id": "a789"
@@ -220,7 +220,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
         assert response.status_code == 200
 
         # Verify link was added
-        get_response = self.client.get(f'/api/v1/assignments//{assignment_id}', headers=self.auth_headers)
+        get_response = self.client.get(f'/api/v1/assignments/{assignment_id}', headers=self.auth_headers)
         data = get_response.get_json()
         assert len(data["classroom_links"]) == 1
         assert data["classroom_links"][0]["course_id"] == "c123"
@@ -252,7 +252,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
 
         # Try to patch with empty body (or minimal invalid body)
         response = self.client.patch(
-            f'/api/v1/assignments//{assignment_id}',
+            f'/api/v1/assignments/{assignment_id}',
             headers=self.auth_headers,
             json={},
             content_type='application/json'
