@@ -137,3 +137,21 @@ def new_credentials(
         expiry_seconds=expiry_seconds
     )
     return credentials.to_resource(), 201
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('credentials', __name__, url_prefix='/credentials')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/<provider>/", "get_by_token", get_by_token, methods=["GET"])
+    new_bp.add_url_rule("/<provider>/<user_id>", "delete_by_user", delete_by_user, methods=["DELETE"])
+    new_bp.add_url_rule("/<provider>/<user_id>", "get_by_user", get_by_user, methods=["GET"])
+    new_bp.add_url_rule("/<provider>/<user_id>", "update_credentials", update_credentials, methods=["PATCH"])
+    new_bp.add_url_rule("/<provider>/<user_id>", "new_credentials", new_credentials, methods=["POST"])
+
+    return new_bp
