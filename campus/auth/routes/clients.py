@@ -200,6 +200,30 @@ def check_client_access(
     return {"vault": vault, "permission": has_access}, 200
 
 
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('clients', __name__, url_prefix='/clients')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "new", new, methods=["POST"])
+    new_bp.add_url_rule("/", "list_all", list_all, methods=["GET"])
+    new_bp.add_url_rule("/<client_id>/", "delete_client", delete_client, methods=["DELETE"])
+    new_bp.add_url_rule("/<client_id>/", "get_client", get_client, methods=["GET"])
+    new_bp.add_url_rule("/<client_id>/revoke", "revoke_client", revoke_client, methods=["POST"])
+    new_bp.add_url_rule("/<client_id>/", "update_client", update_client, methods=["PATCH"])
+    new_bp.add_url_rule("/<client_id>/access/", "get_client_access", get_client_access, methods=["GET"])
+    new_bp.add_url_rule("/<client_id>/access/check", "check_client_access", check_client_access, methods=["GET"])
+    new_bp.add_url_rule("/<client_id>/access/grant", "grant_client_access", grant_client_access, methods=["POST"])
+    new_bp.add_url_rule("/<client_id>/access/revoke", "revoke_client_access", revoke_client_access, methods=["POST"])
+    new_bp.add_url_rule("/<client_id>/access/", "update_client_access", update_client_access, methods=["PATCH"])
+
+    return new_bp
+
+
 @bp.post("/<client_id>/access/grant")
 @flask_campus.unpack_request
 def grant_client_access(

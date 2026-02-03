@@ -83,3 +83,20 @@ def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
     vault_resource[label][key] = value
     get_yapper().emit('campus.vaults.key.update', {"label": label, "key": key})
     return {"key": value}, 200
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('vaults', __name__, url_prefix='/vaults')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/<label>/", "keys", keys, methods=["GET"])
+    new_bp.add_url_rule("/<label>/<key>", "delete", delete, methods=["DELETE"])
+    new_bp.add_url_rule("/<label>/<key>", "get", get, methods=["GET"])
+    new_bp.add_url_rule("/<label>/<key>", "set", set, methods=["POST"])
+
+    return new_bp
