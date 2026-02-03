@@ -105,3 +105,22 @@ def update() -> flask_campus.JsonResponse:
     Returns: User
     """
     return {}, 501
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('users', __name__, url_prefix='/users')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "get_all", get_all, methods=["GET"])
+    new_bp.add_url_rule("/", "new", new, methods=["POST"])
+    new_bp.add_url_rule("/<user_id>/activate", "activate", activate, methods=["POST"])
+    new_bp.add_url_rule("/<user_id>", "delete_user", delete_user, methods=["DELETE"])
+    new_bp.add_url_rule("/<user_id>", "get", get, methods=["GET"])
+    new_bp.add_url_rule("/<user_id>", "update", update, methods=["PATCH"])
+
+    return new_bp
