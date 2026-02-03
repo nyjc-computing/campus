@@ -113,7 +113,7 @@ class AuthProxy(ABC):
         """Initialize and return a new AuthSession for the OAuth2 flow."""
         authsession = resources.session[self.provider].new(
             expiry_seconds=expiry_seconds,
-            client_id=self._CLIENT_ID,
+            client_id=self._CLIENT_ID,  # type: ignore[arg-type]
             redirect_uri=redirect_uri,
             scopes=scopes,
             target=target

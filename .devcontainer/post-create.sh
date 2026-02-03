@@ -3,12 +3,11 @@
 # Configure Git to use fast-forward pulls
 git config pull.ff true
 
-# Install Poetry and project dependencies
-pip install poetry
-poetry install --no-root  # don't install campus package
+# Set up pre-push hook to catch sanity check failures early
+git config core.hooksPath .githooks
 
-# Install poetry-shell plugin
-poetry self add poetry-plugin-shell
+# Install project dependencies (gh and poetry already in image)
+poetry install --no-root  # don't install campus package
 
 # Activate poetry venv (for pylance auto-import)
 poetry shell

@@ -4,6 +4,7 @@ Assignment model for Campus API.
 """
 
 from dataclasses import dataclass, field
+import re
 
 from campus.common import schema
 from campus.common.utils import uid
@@ -21,6 +22,15 @@ class Question:
     id: str  # e.g., "q1", "q1.a", "q1.a.i"
     prompt: str  # Context/passage (may be empty)
     question: str  # The actual question/task
+
+    def __post_init__(self) -> None:
+        """Validate question ID format."""
+        # Validate hierarchical dot notation: alphanumeric with dots only
+        if not re.match(r'^[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*$', self.id):
+            raise ValueError(
+                f"Invalid question ID format: {self.id}. "
+                "Must use hierarchical dot notation (e.g., q1, q1.a, q1.a.i)"
+            )
 
     @property
     def level(self) -> int:
@@ -91,7 +101,12 @@ class Assignment(Model):
             for q in resource.get("questions", [])
         ]
         classroom_links = [
-            ClassroomLink(**l) if isinstance(l, dict) else l
+            ClassroomLink(
+                course_id=l["course_id"],
+                coursework_id=l["coursework_id"],
+                attachment_id=l.get("attachment_id"),
+                **({"linked_at": schema.DateTime(l["linked_at"])} if "linked_at" in l else {})
+            ) if isinstance(l, dict) else l
             for l in resource.get("classroom_links", [])
         ]
 
@@ -125,20 +140,39 @@ class Assignment(Model):
             "classroom_links": [asdict(l) for l in self.classroom_links],
         }
 
+    def to_storage(self) -> dict:
+        """Convert the Assignment to storage format.
+
+        Handles serialization of nested dataclasses to dicts.
+        """
+        from dataclasses import asdict
+        
+        data = super().to_storage()
+        # Convert nested dataclasses to dicts for storage
+        data['questions'] = [asdict(q) for q in self.questions]
+        data['classroom_links'] = [asdict(l) for l in self.classroom_links]
+        return data
+
     def get_question_tree(self) -> dict:
         """Return questions as a nested tree structure."""
-        tree: dict = {}
+        # First pass: create all nodes
+        nodes = {}
         for q in self.questions:
-            node = {
+            nodes[q.id] = {
                 "id": q.id,
                 "prompt": q.prompt,
                 "question": q.question,
                 "children": []
             }
+
+        # Second pass: build tree structure
+        tree: dict = {}
+        for q in self.questions:
+            node = nodes[q.id]
             if q.level == 1:
                 tree[q.id] = node
-            elif q.parent_id in tree:
-                tree[q.parent_id]["children"].append(node)
+            elif q.parent_id in nodes:
+                nodes[q.parent_id]["children"].append(node)
         return tree
 
     def get_question(self, question_id: str) -> Question | None:

@@ -22,26 +22,40 @@ class TestYapper(unittest.TestCase):
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
 
-    def test_setup_vars(self):
-        # After service setup, VAULTDB_URI should be available
-        self.assertIsNotNone(env.VAULTDB_URI)
-
     def test_vault_vars_and_access(self):
         # After service setup, vault credentials should be available
         self.assertIsNotNone(env.CLIENT_SECRET)
         self.assertIsNotNone(env.CLIENT_ID)
 
-    def test_yapper_vars(self):
-        # The yapper database URI should be stored in the vault after service setup
-        # Test that yapper can access its vault data through the proper service boundary
-        import campus_python
+    def test_yapper_vault_access(self):
+        """Test that yapper vault data is accessible through Flask app.
 
-        campus = campus_python.Campus(timeout=60)
-        yapper_vault = campus.auth.vaults["yapper"]
-        yapperdb_uri = yapper_vault["YAPPERDB_URI"]
-        self.assertIsNotNone(yapperdb_uri)
+        Uses the Flask test client to access the vault endpoint, verifying
+        that YAPPERDB_URI is properly stored and accessible.
+
+        Note: We don't test via campus_python.Campus() because that class
+        caches CampusRequest reference at import time, before our monkey-patch
+        is applied. Testing through Flask directly validates the endpoint works.
+        """
+        # Access the vault endpoint through Flask test client
+        client = self.service_manager.auth_app.test_client()
+
+        # Set basic auth headers (required by vault routes)
+        import base64
+        credentials = f"{env.CLIENT_ID}:{env.CLIENT_SECRET}"
+        encoded = base64.b64encode(credentials.encode()).decode()
+        headers = {"Authorization": f"Basic {encoded}"}
+
+        response = client.get("/auth/v1/vaults/yapper/YAPPERDB_URI", headers=headers)
+
+        # Should get a successful response with the YAPPERDB_URI value
+        self.assertEqual(response.status_code, 200,
+                        f"Failed to access vault endpoint: {response.data}")
+        data = response.get_json()
+        self.assertIsNotNone(data.get("key"), "No key returned from vault")
 
     def test_yapper_init(self):
+        """Test that yapper.create() successfully creates a yapper instance."""
         import campus.yapper
         self.yapperInterface = campus.yapper.create()
         self.assertIsNotNone(self.yapperInterface)

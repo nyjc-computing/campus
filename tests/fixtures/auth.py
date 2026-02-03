@@ -40,12 +40,16 @@ def init():
 
     # Initialize storage-backed resources for the auth service
     from campus.auth import resources as auth_resources
+    from campus.auth.resources.client import client_storage
+    from campus.common import schema
     from campus.model.client import ClientAccess
 
     # Initialize storage tables using model schemas
     # This creates the database tables with proper column definitions
     auth_resources.vault.init_storage()
     auth_resources.client.init_storage()
+    auth_resources.credentials.init_storage()
+    auth_resources.user.init_storage()
 
     # Configure the vault service's own SECRET_KEY
     # This key is used for hashing client secrets
@@ -56,14 +60,23 @@ def init():
     env.SECRET_KEY = "vault-secret-key"
 
     # Create a test client for authentication in tests
+    # Check if client already exists to make this function idempotent
     client_name = "test-client"
-    client_obj = auth_resources.client.new(
-        name=client_name, description="Campus test client")
-
-    # Generate a client secret (ClientResource.revoke() generates a new secret)
-    client_id = client_obj.id
-    client_resource = auth_resources.client[client_id]
-    secret = client_resource.revoke()
+    existing = client_storage.get_matching({"name": client_name})
+    if existing:
+        # Client already exists, reuse it
+        client_id = schema.CampusID(existing[0]["id"])
+        client_resource = auth_resources.client[client_id]
+        # Generate a new secret for this test run
+        secret = client_resource.revoke()
+    else:
+        # Create new client
+        client_obj = auth_resources.client.new(
+            name=client_name, description="Campus test client")
+        # Generate a client secret (ClientResource.revoke() generates a new secret)
+        client_id = client_obj.id
+        client_resource = auth_resources.client[client_id]
+        secret = client_resource.revoke()
 
     # Set client credentials in environment for test authentication
     env.CLIENT_ID = client_id

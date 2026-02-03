@@ -149,6 +149,13 @@ class AssignmentResource:
     def delete(self) -> None:
         """Delete the assignment."""
         try:
+            # Verify assignment exists before deleting
+            record = assignment_storage.get_by_id(self.assignment_id)
+            if record is None:
+                raise api_errors.ConflictError(
+                    "Assignment not found",
+                    id=self.assignment_id
+                )
             assignment_storage.delete_by_id(self.assignment_id)
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(

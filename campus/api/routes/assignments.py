@@ -3,7 +3,8 @@
 API routes for the assignments resource.
 """
 
-import campus_python
+from dataclasses import asdict
+
 import flask
 
 import campus.model
@@ -15,11 +16,18 @@ from campus.common.errors import api_errors
 from .. import resources
 
 bp = flask.Blueprint('assignments', __name__, url_prefix='/assignments')
-yapper = campus.yapper.create()
+
+# Lazily initialized yapper - set in init_app() after test fixtures are ready
+# This prevents connection to external services during module import in tests
+# Type: ignore because we initialize this in init_app() before first use
+yapper: campus.yapper.YapperInterface = None  # type: ignore
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise assignment routes with the given Flask app/blueprint."""
+    global yapper
+    # Initialize yapper after test fixtures have set up the vault
+    yapper = campus.yapper.create()
     app.register_blueprint(bp)
 
 
@@ -73,7 +81,12 @@ def create_assignment(
             Assignment resource
     """
     # Get created_by from authenticated user
-    created_by = flask.g.get('current_user', {}).get('id', 'unknown')
+    current_user = flask.g.get('current_user')
+    if not current_user or not getattr(current_user, 'id', None):
+        raise api_errors.UnauthorizedError(
+            "User must be authenticated to create assignments"
+        )
+    created_by = current_user.id
 
     assignment = resources.assignment.new(
         title=title,

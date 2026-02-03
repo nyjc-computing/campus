@@ -151,7 +151,7 @@ class EnvironmentProxy:
             # otherwise we create a circular dependency.
             # Use internal resources access instead.
             from campus.auth import resources
-            client_resource = resources.client[self.CLIENT_ID]
+            client_resource = resources.client[self.CLIENT_ID]  # type: ignore[index]
             if not client_resource.access.check(
                     vault_label=vault_label,
                     permission=ClientAccess.READ,

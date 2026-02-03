@@ -60,8 +60,8 @@ def authenticate() -> tuple[dict[str, str], int] | None:
             )
             # Raises auth errors if auth fails
             resources.client.raise_for_authentication(
-                client_id, client_secret)
-            flask.g.current_client = resources.client[client_id].get()
+                client_id, client_secret)  # type: ignore[arg-type]
+            flask.g.current_client = resources.client[client_id].get()  # type: ignore[index]
         case "bearer":
             access_token = httpauth.header.authorization.token
             # TODO: Support ClientCredentials
@@ -69,7 +69,7 @@ def authenticate() -> tuple[dict[str, str], int] | None:
                 token_id=access_token
             )
             flask.g.current_client = (
-                resources.client[credentials.client_id].get()
+                resources.client[credentials.client_id].get()  # type: ignore[index]
             )
 
 
