@@ -29,10 +29,8 @@ from ..resources import (
 # Create blueprint for session management routes
 bp = flask.Blueprint('root', __name__, url_prefix='/root')
 
-campus_auth = campus_python.Campus(timeout=60).auth
 
-
-@bp.post("/authenticate")
+@bp.post("/")
 @flask_campus.unpack_request
 def authenticate(
         *,
@@ -97,7 +95,7 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
         status_code = 401
     else:
         resp_json = {
-            "client": client_resource[user_creds.client_id].get().to_resource(),
+            "client": client_resource[user_creds.client_id].get().to_resource(),  # type: ignore[index]
             "user": user_resource[user_creds.user_id].get().to_resource(),
         }
         status_code = 200

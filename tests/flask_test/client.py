@@ -45,24 +45,43 @@ class FlaskTestClient:
         self.base_url = base_url
         self._test_client = app.test_client()
 
-        # Load authentication from environment variables
-        self._auth_headers = self._load_auth_headers()
+        # Authentication headers are loaded dynamically from environment
+        # This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes
+        # while ensuring FlaskTestClient always uses current credentials
+        self.__auth_headers = None  # Cached, will be reloaded if env changes
 
         # Store app context for proper request handling
         self._app_context = None
 
+    @property
+    def _auth_headers(self) -> dict[str, str]:
+        """Get authentication headers, loading fresh from environment.
+
+        This property ensures that credentials are always current, allowing
+        tests to change CLIENT_ID/CLIENT_SECRET between test classes.
+
+        Returns:
+            Dictionary of HTTP headers for authentication
+        """
+        # Reload from environment each time to get current credentials
+        return self._load_auth_headers()
+
     def _load_auth_headers(self) -> dict[str, str]:
-        """Load authentication headers from environment variables."""
+        """Load authentication headers from environment variables.
+
+        Note: Headers are loaded fresh on each access to ensure test isolation.
+        This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes.
+        """
         # Try ACCESS_TOKEN first (Bearer auth)
-        access_token = env.ACCESS_TOKEN
+        access_token = env.get("ACCESS_TOKEN")
         if access_token:
-            return HttpHeader.from_bearer_token(access_token)
+            return HttpHeader.from_bearer_token(access_token)  # HttpHeader is a dict
 
         # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
-        client_id = env.CLIENT_ID
-        client_secret = env.CLIENT_SECRET
+        client_id = env.get("CLIENT_ID")
+        client_secret = env.get("CLIENT_SECRET")
         if client_id and client_secret:
-            return HttpHeader.from_credentials(client_id, client_secret)
+            return HttpHeader.from_credentials(client_id, client_secret)  # HttpHeader is a dict
 
         # No credentials found - unauthenticated requests are not yet supported
         raise AuthenticationError(

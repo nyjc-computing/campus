@@ -3,6 +3,8 @@
 API routes for the circles resource.
 """
 
+from typing import Any
+
 import campus_python
 import flask
 
@@ -16,14 +18,20 @@ from .. import resources
 
 bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
-yapper = campus.yapper.create()
-
-# auth.root does not exist yet, will be added soon
-auth_root = campus_python.Campus(timeout=60).auth.root  # type: ignore
+# Lazily initialized yapper and auth_root - set in init_app() after test fixtures are ready
+# This prevents connection to external services during module import in tests
+# Type: ignore because we initialize these in init_app() before first use
+yapper: campus.yapper.YapperInterface = None  # type: ignore
+auth_root: Any = None  # type: ignore
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise circle routes with the given Flask app/blueprint."""
+    global yapper, auth_root
+    # Initialize yapper after test fixtures have set up the vault
+    yapper = campus.yapper.create()
+    # Initialize auth_root after test fixtures have set up the auth service
+    auth_root = campus_python.Campus(timeout=60).auth.root  # type: ignore
     app.register_blueprint(bp)
 
 

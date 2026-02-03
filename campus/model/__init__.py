@@ -15,22 +15,28 @@ kept out of models.
 """
 
 __all__ = [
+    "Assignment",
     "AuthSession",
     "Circle",
+    "ClassroomLink",
     "Client",
     "ClientAccess",
     "EmailOTP",
-    "Event",
+    "Feedback",
     "HttpHeader",
     "HttpHeaderWithAuth",
     "LoginSession",
     "Model",
+    "Question",
     "OAuthToken",
+    "Response",
+    "Submission",
     "User",
     "UserCredentials",
     "Vault",
 ]
 
+from .assignment import Assignment, ClassroomLink, Question
 from .base import Model
 from .circle import Circle
 from .client import Client, ClientAccess
@@ -40,5 +46,6 @@ from .emailotp import EmailOTP
 from .event import Event
 from .login import LoginSession
 from .session import AuthSession
+from .submission import Feedback, Response, Submission
 from .user import User
 from .vault import Vault

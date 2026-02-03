@@ -53,15 +53,29 @@ class ServiceManager:
         Performs environment setup, database configuration, and service
         initialization in proper dependency order: auth → storage → yapper → api.
 
+        Note:
+            Resetting test storage at the start ensures each test class gets
+            a clean storage slate. Flask apps remain shared to avoid blueprint
+            re-registration errors, but storage is fully reset.
+
         Returns:
             ServiceManager: Self for method chaining
         """
+        # Reset test storage at start of setup for clean state
+        # This ensures test classes don't pollute each other's storage
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
         # Ensure we're running in testing mode
         # env.ENV is mutable and can be set for testing purposes
-        if env.ENV != devops.TESTING:
+        if env.get("ENV") != devops.TESTING:
             env.ENV = devops.TESTING
 
+        # Always re-init auth and yapper services if already setup,
+        # in case storage was reset. These are idempotent.
         if self._setup_done:
+            auth.init()
+            yapper.init()
             return self
 
         # If using shared mode and shared instance exists, reuse it
@@ -69,6 +83,9 @@ class ServiceManager:
             self.auth_app = ServiceManager._shared_instance.auth_app
             self.apps_app = ServiceManager._shared_instance.apps_app
             self._setup_done = True
+            # Re-init auth and yapper in case storage was reset
+            auth.init()
+            yapper.init()
             return self
 
         # Set up test environment
@@ -87,14 +104,29 @@ class ServiceManager:
         setup.set_postgres_env_vars()
         setup.set_mongodb_env_vars()
 
+        # Set HOSTNAME for test mode - campus_python uses this to build base_url
+        # When DEPLOY="campus.auth", it uses base_url = f"https://{env.HOSTNAME}"
+        # We use a fake hostname that we'll map to Flask test apps
+        env.HOSTNAME = "campus.test"
+
+        # Patch campus_python to use TestCampusRequest (Flask test client)
+        # This must be done before any campus_python.Campus instances are created
+        from tests import flask_test
+        flask_test.patch_campus_python()
+
         # Initialize auth service infrastructure
         # Creates storage tables, test client credentials, vault secrets
+        # This is safe to call multiple times as it's idempotent
         auth.init()
         import campus.auth
-        from tests import flask_test
 
         self.auth_app = devops.deploy.create_app(campus.auth)
         flask_test.configure_for_testing(self.auth_app)
+
+        # Register auth app with its base URL and path prefix for test routing
+        # campus_python will use base_url = f"https://{env.HOSTNAME}" = "https://campus.test"
+        # Auth routes are at /auth/v1/*
+        flask_test.register_test_app("https://campus.test", self.auth_app, path_prefix="/auth")
 
         # Initialize storage connections
         storage.init()
@@ -110,6 +142,10 @@ class ServiceManager:
         self.apps_app = devops.deploy.create_app(campus.api)
         flask_test.configure_for_testing(self.apps_app)
 
+        # Register api app with path prefix for test routing
+        # API routes are at /api/v1/*
+        flask_test.register_test_app("https://campus.test", self.apps_app, path_prefix="/api")
+
         self._setup_done = True
 
         # Store as shared instance if using shared mode
@@ -122,23 +158,25 @@ class ServiceManager:
     def close(self):
         """Clean up service instances and resources.
 
-        Resets manager state and cleans up resources. For shared instances,
-        full cleanup occurs when cleanup_shared() is called.
+        Always cleans up auth client and credentials. For shared instances,
+        the Flask apps are preserved to avoid blueprint re-registration errors.
         """
+        # Always clean up auth client regardless of shared mode
+        self._cleanup_auth_client()
+
+        # Always clear credentials from environment
+        if env.CLIENT_ID is not None:
+            delattr(env, "CLIENT_ID")
+        if env.CLIENT_SECRET is not None:
+            delattr(env, "CLIENT_SECRET")
+
+        # For shared instances, preserve apps for subsequent test classes
+        # to avoid "blueprint already registered" errors
         if not self._shared:
-            self._cleanup_auth_client()
-
-        if self.auth_app is not None:
-            self.auth_app = None
-
-        if self.apps_app is not None:
-            self.apps_app = None
-
-        if not self._shared:
-            if env.CLIENT_ID is not None:
-                delattr(env, "CLIENT_ID")
-            if env.CLIENT_SECRET is not None:
-                delattr(env, "CLIENT_SECRET")
+            if self.auth_app is not None:
+                self.auth_app = None
+            if self.apps_app is not None:
+                self.apps_app = None
 
         self._setup_done = False
 
@@ -164,6 +202,11 @@ class ServiceManager:
 
         Should be called at the end of test runs to ensure clean state.
         """
+        # Unpatch campus_python and clear test apps
+        from tests import flask_test
+        flask_test.unpatch_campus_python()
+        flask_test.clear_test_apps()
+
         if cls._shared_instance:
             cls._shared_instance._cleanup_auth_client()
             cls._shared_instance.close()

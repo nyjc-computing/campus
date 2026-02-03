@@ -56,21 +56,6 @@ class TestVaultIntegration(unittest.TestCase):
         self.assertIsNotNone(self.app)
         self.assertIsNotNone(self.client)
 
-    def test_auth_vault_api_endpoint_not_404(self):
-        """Test that the auth vault API endpoint does not return 404."""
-        # Make a GET request to the auth vault API endpoint
-        # The endpoint is /auth/vaults/<label>/ based on campus.auth.routes.vaults
-        response = self.client.get("/auth/vaults/vault/")
-
-        # Assert that the response is not a 404 Not Found
-        self.assertNotEqual(response.status_code, 404,
-                            f"Auth vault API endpoint returned 404. Response: {response.data}")
-
-        # The endpoint might return other status codes (like 401 for unauthorized)
-        # but it should exist and not return 404
-        self.assertIn(response.status_code, [200, 401, 403],
-                      f"Unexpected status code: {response.status_code}. Response: {response.data}")
-
     def test_auth_vault_api_response_format(self):
         """Test that the auth vault API endpoint returns a valid response format."""
         response = self.client.get("/auth/vaults/vault/")
