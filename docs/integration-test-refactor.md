@@ -1,7 +1,26 @@
 # Integration Test Refactor Analysis
 
-**Date:** 2025-01-30
+**Date:** 2025-01-30 (Updated 2025-02-03)
 **Context:** Review of integration test infrastructure after fixing failing tests
+
+**Status:** ✅ Complete - See [test-plan.md](test-plan.md) for current test strategy
+
+## Summary of Completed Work
+
+All "Quick Wins" and "Medium Term" items from this analysis have been completed:
+
+- ✅ HTTP contract tests for auth vault endpoints
+- ✅ Error response format tests (401, 409, 400)
+- ✅ `auth.init()` and `yapper.init()` are idempotent
+- ✅ Token creation fixture for bearer token tests (`tests/fixtures/tokens.py`)
+- ✅ `test_assignments.py` re-enabled with bearer auth
+- ✅ Contract tests for API endpoints (`tests/contract/test_api_*.py`)
+- ✅ Contract test documentation (`tests/contract/README.md`)
+- ✅ Test plan documentation (`docs/test-plan.md`)
+
+**Decision on External Dependencies (#3):** The Flask test client approach is appropriate for our scope. We test our API implementation, not the HTTP layer or deployment platform. See [test-plan.md](test-plan.md) for detailed scope.
+
+**Remaining Open Questions:** Tracked as GitHub issues #334-#337
 
 ## Summary of Issues Encountered
 
