@@ -24,7 +24,6 @@ TODO: Update doc link after migration
 from dataclasses import dataclass, field
 
 from campus.common import schema
-from campus.common.schema.openapi import String, Integer, DateTime
 from campus.common.utils import uid
 
 from .base import Model
@@ -49,8 +48,8 @@ class WeekDay(Model):
       index (Integer): index 0 is earliest (eg. Mon A), followed by Tues A, etc.
     """
     id: schema.CampusID = unique_field
-    label: String
-    index: Integer
+    label: schema.String
+    index: schema.Integer
     
 
 @dataclass(eq=False, kw_only=True)
@@ -68,10 +67,10 @@ class TimeSlot(Model):
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable", length=8)
     ))
-    label: String
-    start_time: DateTime = unique_field # ISO8601
-    end_time: DateTime = unique_field # ISO8601
-    index: Integer = unique_field
+    label: schema.String
+    start_time: schema.DateTime = unique_field  # ISO8601
+    end_time: schema.DateTime = unique_field  # ISO8601
+    index: schema.Integer = unique_field
 
 
 @dataclass(eq=False, kw_only=True)
@@ -87,7 +86,7 @@ class Venue(Model):
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable", length=8)
     ))
-    label: String
+    label: schema.String
 
 
 @dataclass(eq=False, kw_only=True)
@@ -132,8 +131,8 @@ class LessonGroup(Model):
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable", length=8)
     ))
-    filename: String
-    label: String
+    filename: schema.String
+    label: schema.String
 
 
 @dataclass(eq=False, kw_only=True)
@@ -155,9 +154,9 @@ class LessonGroupMember(Model):
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable", length=8)
     ))
-    filename: String
+    filename: schema.String
     lessongroup_id: schema.CampusID
-    ade_participant: String
+    ade_participant: schema.String
     __constraints__ = constraints.Unique("lessongroup_id", "ade_participant", "filename")
 
 
@@ -175,7 +174,7 @@ class Timetable(Model):
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable", length=8)
     ))
-    filename: String
+    filename: schema.String
     lessongroup_id: schema.CampusID
     venuetimeslot_id: schema.CampusID
     __constraints__ = constraints.Unique("lessongroup_id", "venuetimeslot_id", "filename")
