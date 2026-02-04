@@ -157,6 +157,29 @@ class ServiceManager:
 
         return self
 
+    def reset_test_data(self):
+        """Reset test storage for per-test isolation.
+
+        This method clears all test storage (SQLite in-memory DB, memory collections)
+        and re-initializes services. Use this in tearDown() for per-test isolation.
+
+        WARNING: This clears auth credentials, so tests using bearer tokens will need
+        to re-create their tokens after calling this method.
+
+        For tests that use authentication, consider using unique identifiers per test
+        (e.g., filtering by created_by) instead of full reset, or re-create the token
+        in setUp() after calling this in tearDown().
+        """
+        import campus.storage.testing
+
+        # Reset storage (clears SQLite in-memory DB and memory collections)
+        campus.storage.testing.reset_test_storage()
+
+        # Re-initialize auth and yapper services
+        # These are idempotent and will recreate necessary tables/collections
+        auth.init()
+        yapper.init()
+
     def close(self):
         """Clean up service instances and resources.
 

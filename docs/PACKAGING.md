@@ -6,24 +6,26 @@ Campus uses a **monorepo with centralized dependencies** approach. All component
 
 **Key Benefits:**
 - Consistent versioning across all services
-- Simplified dependency management  
+- Simplified dependency management
 - Clean modular structure
 - No PyPI publishing delays
 
-## Architecture Decisions
+## Architecture
 
 ### Monorepo Structure
-Campus consolidates all services in a single repository with unified dependency management in the root `pyproject.toml`. This solves several challenges:
+
+Campus consolidates all services in a single repository with unified dependency management in the root `pyproject.toml`:
 - Eliminates complex inter-service dependency management
 - Ensures compatibility between components
 - Simplifies distribution and testing
 
 ### Branch Strategy
+
 ```
 weekly → staging → main
 ```
 - **`weekly`**: Active development, expected breakage
-- **`staging`**: Extended testing, pre-production validation  
+- **`staging`**: Extended testing, pre-production validation
 - **`main`**: Stable, production-ready releases
 
 ## Dependency Rules
@@ -34,7 +36,7 @@ storage → common
 model → common
 ```
 
-**Key Constraints**:
+**Key Constraints:**
 - `auth` and `api` contain business logic in `.resources` submodules
 - `model` contains only entity definitions (minimal dependencies)
 - `storage` provides backend-agnostic persistence
@@ -42,24 +44,29 @@ model → common
 
 ## Installation
 
-### Production Use
+### For Production Use
+
+Add to your `pyproject.toml`:
+
 ```toml
 [tool.poetry.dependencies]
 campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main"}
 ```
 
-### Development Integration
+### For Development Integration
+
 ```toml
-[tool.poetry.group.dev.dependencies]  
+[tool.poetry.group.dev-dependencies]
 campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
 ```
 
 ### CLI Installation
+
 ```bash
-# Production
+# Production (stable)
 poetry add git+https://github.com/nyjc-computing/campus.git@main
 
-# Development
+# Development (bleeding edge)
 poetry add git+https://github.com/nyjc-computing/campus.git@weekly --group dev
 
 # Specific commit (reproducible builds)
@@ -67,30 +74,14 @@ poetry add git+https://github.com/nyjc-computing/campus.git@abc123def456
 ```
 
 ### Client Library Installation
+
 ```bash
 # Add campus_python client library
 poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
 ```
 
-## Development Workflow
+## Using Campus in External Projects
 
-### Contributing to Campus
-```bash
-# Clone repository
-git clone https://github.com/nyjc-computing/campus.git
-cd campus
-
-# Install dependencies
-poetry install
-
-# Create feature branch from weekly
-git checkout weekly
-git checkout -b feature/new-feature
-
-# Make changes, test, submit PR to weekly
-```
-
-### Using Campus in External Projects
 ```bash
 # Add Campus as dependency
 poetry add git+https://github.com/nyjc-computing/campus.git@main
@@ -102,9 +93,10 @@ poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
 python -c "import campus_python; campus = campus_python.Campus()"
 ```
 
-## Building and Distribution
+## Building and Validation
 
 ### Local Development
+
 ```bash
 # Install dependencies
 poetry install
@@ -117,13 +109,16 @@ poetry run python tests/run_tests.py unit
 ```
 
 ### Release Process
+
 1. **Development**: Work in `weekly` branch
 2. **Integration**: Merge `weekly` → `staging` for extended testing
 3. **Release**: Merge `staging` → `main` when stable
 4. **Tagging**: Create version tags on `main` branch
 
 ### Dependency Updates
+
 Update dependencies in root `pyproject.toml`:
+
 ```bash
 # Update a specific package
 poetry add requests@^2.31.0
@@ -137,21 +132,26 @@ poetry lock
 
 ## Troubleshooting
 
-### Common Issues
+### Import Errors
 
-**Import errors**: Ensure you're using `poetry run python` instead of system Python.
+Ensure you're using `poetry run python` instead of system Python.
 
-**Dependency conflicts**: Update to latest main branch:
+### Dependency Conflicts
+
+Update to latest main branch:
 ```bash
 poetry add campus-suite@git+https://github.com/nyjc-computing/campus.git@main
 ```
 
-**Authentication issues**: Verify GitHub access for private repositories:
+### Authentication Issues
+
+Verify GitHub access for private repositories:
 ```bash
 git config --global url."https://username:token@github.com/".insteadOf "https://github.com/"
 ```
 
 ### Validation Commands
+
 ```bash
 # Check environment
 poetry env info
@@ -160,27 +160,9 @@ poetry env info
 poetry run python -c "import campus"
 
 # Test modules
-for module in auth api storage model common; do
-    poetry run python -c "import campus.$module"
-done
+poetry run python -c "import campus.auth; import campus.api; import campus.storage"
 ```
 
 ## Why Git Dependencies?
 
-### vs PyPI Publishing
-- ✅ **No publishing overhead** - Changes available immediately
-- ✅ **Development flexibility** - Can push breaking changes without version conflicts
-- ✅ **Branch-based stability** - Multiple stability levels available
-- ❌ **Dependency resolution** - Slightly slower than PyPI packages
-
-### vs Local Path Dependencies
-- ✅ **External projects** - Works for projects outside Campus repo
-- ✅ **External builds** - CI/CD works automatically
-- ✅ **Version control** - External projects can pin specific commits
-- ❌ **Network requirement** - Requires git access during install
-
-### Migration Path
-This approach provides a clear evolution:
-1. **Current**: Git dependencies for active development
-2. **Future**: PyPI releases for stable, mature packages
-3. **Hybrid**: Git for bleeding-edge, PyPI for stability
+Campus currently uses Git-based dependencies for active development. This approach provides immediate availability of changes and branch-based stability levels. When Campus stabilizes, we plan to publish to PyPI for stable releases while maintaining Git dependencies for bleeding-edge access.

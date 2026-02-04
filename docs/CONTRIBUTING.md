@@ -1,8 +1,10 @@
 # Contributing to Campus
 
-Welcome to Campus development! This guide covers our development workflow and contribution process.
+This guide covers our development workflow, branch strategy, and contribution process.
 
-## 🌳 Branch Structure
+**New here?** See [GETTING-STARTED.md](GETTING-STARTED.md) for installation instructions.
+
+## Branch Strategy
 
 Campus uses a three-branch model:
 
@@ -10,156 +12,140 @@ Campus uses a three-branch model:
 weekly → staging → main
 ```
 
-- **`weekly`** - Active development (target for all new work)
-- **`staging`** - Pre-production validation (requires review)
-- **`main`** - Production releases (maintainer only)
+| Branch | Purpose | Who Commits |
+|--------|---------|-------------|
+| `weekly` | Active development | All contributors |
+| `staging` | Pre-production validation | Maintainers (via PR) |
+| `main` | Production releases | Maintainers (via PR) |
 
-## 🚀 Quick Start
+## Workflow
 
-### 1. Setup
+### 1. Create a Feature Branch
 
 ```bash
-git clone https://github.com/nyjc-computing/campus.git
-cd campus
+# Start from weekly
 git checkout weekly
-poetry install
+git pull origin weekly
 
-# Set up pre-push hook to catch sanity check failures early
+# Create your feature branch
+git checkout -b feature/your-feature-name
+```
+
+### 2. Make Changes
+
+```bash
+# Run tests before committing
+poetry run python tests/run_tests.py
+
+# Commit with conventional commit format
+git add .
+git commit -m "feat(auth): add OAuth provider support"
+```
+
+### 3. Create Pull Request
+
+1. Push your branch: `git push origin feature/your-feature-name`
+2. Create PR targeting `weekly` branch
+3. Use conventional commit in title:
+   - `feat:` - New features
+   - `fix:` - Bug fixes
+   - `docs:` - Documentation changes
+   - `test:` - Test changes
+   - `refactor:` - Code restructuring
+
+### 4. Code Review
+
+- Address review feedback
+- Ensure tests pass
+- Wait for maintainer approval
+
+## Code Review Checklist
+
+### Before Submitting a PR
+
+- [ ] All tests pass locally (`poetry run python tests/run_tests.py all`)
+- [ ] Code follows [STYLE-GUIDE.md](STYLE-GUIDE.md)
+- [ ] Documentation is updated (docstrings, relevant docs)
+- [ ] Commit messages follow conventional commit format
+- [ ] No secrets or credentials in code
+- [ ] New features have corresponding tests
+
+### Review Focus Areas
+
+When reviewing or when preparing your PR for review:
+
+- **Security**: Check for potential vulnerabilities
+- **Performance**: Look for inefficient operations
+- **Maintainability**: Ensure code is readable and well-structured
+- **Testing**: Verify adequate test coverage
+- **Documentation**: Confirm docs match implementation
+
+## Commit Message Format
+
+```
+type(scope): description
+
+# Examples
+feat(api): add circle management endpoints
+fix(storage): resolve PostgreSQL connection timeout
+docs(auth): update OAuth configuration examples
+refactor(common): extract ID generation to utils module
+test(integration): add user flow tests
+```
+
+## Testing
+
+Always run tests before committing:
+
+```bash
+# All tests
+poetry run python tests/run_tests.py all
+
+# Specific category
+poetry run python tests/run_tests.py unit
+poetry run python tests/run_tests.py integration
+```
+
+See [TESTING-GUIDE.md](TESTING-GUIDE.md) for complete testing documentation.
+
+## Pre-Push Hooks (Recommended)
+
+Set up the pre-push hook to catch issues early:
+
+```bash
 git config core.hooksPath .githooks
 ```
 
-The pre-push hook will run sanity checks before allowing pushes to GitHub. This saves time by catching issues locally before CI/CD runs. To bypass the hook (not recommended): `git push --no-verify`
+The hook runs sanity checks before allowing pushes. To bypass (not recommended): `git push --no-verify`
 
-### 2. Create Feature
-
-```bash
-# Create branch from weekly
-git checkout weekly
-git pull origin weekly
-git checkout -b feature/your-feature-name
-
-# Make changes and test
-poetry run python run_tests.py
-poetry run python main.py
-
-# Commit and push
-git add .
-git commit -m "feat: describe your changes"
-git push origin feature/your-feature-name
-```
-
-### 3. Pull Request
-
-1. Create PR targeting `weekly` branch
-2. Use conventional commit format in title:
-   - `feat:` - New features
-   - `fix:` - Bug fixes
-   - `docs:` - Documentation
-   - `test:` - Tests
-   - `refactor:` - Code restructuring
-
-## 🧪 Testing
-
-**⚠️ IMPORTANT: Always use `run_tests.py` as the entrypoint for running tests.**
-
-```bash
-# Run all tests (sanity, type, unit, integration)
-poetry run python run_tests.py
-
-# Run specific test categories
-poetry run python run_tests.py unit        # Unit tests only
-poetry run python run_tests.py integration # Integration tests only
-poetry run python run_tests.py sanity      # Sanity checks only
-poetry run python run_tests.py type        # Type checks only
-```
-
-**Do NOT run tests directly with `unittest` or `pytest`** - the test entrypoint handles proper environment setup, cleanup, and isolation between test classes. Running tests directly may produce false positives or miss failures.
-
-See [Testing Strategies](testing-strategies.md) for comprehensive approaches.
-
-## 📦 Package Structure
-
-```
-campus/
-├── auth/       # Authentication and OAuth services
-│   ├── oauth_proxy/
-│   ├── resources/
-│   └── routes/
-├── api/        # RESTful API resources
-│   ├── resources/
-│   └── routes/
-├── common/     # Shared utilities
-├── model/      # Entity representation (dataclasses)
-├── services/   # Business services (email, etc.)
-├── storage/    # Data persistence layer
-├── integrations/# External service integrations
-└── yapper/     # Logging framework
-```
-
-### Key Rules
-
-- `auth` and `api` contain business logic in `.resources` submodules
-- `model` contains only entity definitions (no business logic)
-- Use `poetry run python` for consistency
-- Follow [Style Guide](STYLE-GUIDE.md) for imports and coding standards
-
-## 🎯 Best Practices
-
-### Code Quality
-- Write tests for new features
-- Update documentation for changes
-- Use type hints and docstrings
-- Follow existing patterns
-
-### Commit Messages
-```bash
-feat(auth): add OAuth provider support
-fix(storage): resolve PostgreSQL connection timeout
-docs(api): update circle management examples
-```
-
-### Common Pitfalls
-- Use `poetry run python` not bare `python`
-- Import packages not individual functions
-- Update `pyproject.toml` for new dependencies
-- Test locally before pushing
-
-## 🔀 Maintainer Workflow
+## Maintainer Workflow
 
 ### Weekly → Staging
-```bash
-# After sprint review
-# Create PR: weekly → staging
-# Title: "T3W10: weekly PR"
-```
+
+After sprint review:
+1. Create PR: `weekly` → `staging`
+2. Title: `"T3W10: weekly PR"` (or appropriate week)
+3. Validate on staging environment
 
 ### Staging → Main
-```bash
-# After validation
-# Create PR: staging → main
-# Title: "v0.2 release: staging PR"
-```
 
-## 🆘 Getting Help
+After staging validation:
+1. Create PR: `staging` → `main`
+2. Title: `"v0.2.0: staging PR"`
+3. Tag release after merge
 
-- **Issues**: [GitHub Issues](https://github.com/nyjc-computing/campus/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/nyjc-computing/campus/discussions)
-- **Code Reviews**: [Best Practices](https://nyjc-computing.github.io/nanyang-system-developers/contributors/training/code-reviews.html)
+## Development Guidelines
 
-## 📚 Documentation
+For code-level guidelines (patterns, architecture, imports), see:
+- [development-guidelines.md](development-guidelines.md) - Architecture patterns
+- [STYLE-GUIDE.md](STYLE-GUIDE.md) - Code standards and import patterns
+- [architecture.md](architecture.md) - System design
 
-- **[Architecture](architecture.md)** - System design
-- **[Development Guidelines](development-guidelines.md)** - Coding patterns
-- **[Testing Strategies](testing-strategies.md)** - Testing approaches
-- **[Style Guide](STYLE-GUIDE.md)** - Code standards
+## Getting Help
 
-## 🎓 Educational Goals
-
-This workflow teaches:
-- Industry-standard branching (weekly/staging/main)
-- Release management and quality gates
-- Modular architecture patterns
-- Collaborative development practices
+- **[Issues](https://github.com/nyjc-computing/campus/issues)** - Bug reports and feature requests
+- **[Discussions](https://github.com/nyjc-computing/campus/discussions)** - Questions
+- **[Code Reviews](https://nyjc-computing.github.io/nanyang-system-developers/contributors/training/code-reviews.html)** - Best practices
 
 ---
 

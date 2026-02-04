@@ -27,17 +27,32 @@ class TestAssignmentsIntegration(unittest.TestCase):
             raise RuntimeError("Expected Flask app from service manager")
 
         cls.app = api_app
+        cls.user_id = schema.UserID("test.user@campus.test")
 
-        # Initialize credentials storage (needed for token creation)
-        # This may have been cleared by a previous test class
-        from campus.auth import resources as auth_resources
-        auth_resources.credentials.init_storage()
-        auth_resources.user.init_storage()
+    def setUp(self):
+        """Set up test environment before each test."""
+        self.client = self.app.test_client()
+
+        # Set up test context
+        self.app_context = self.app.app_context()
+        self.app_context.push()
 
         # Create test user token for bearer auth
-        cls.user_id = schema.UserID("test.user@campus.test")
-        cls.token = create_test_token(cls.user_id)
-        cls.auth_headers = get_bearer_auth_headers(cls.token)
+        # Re-create before each test since tearDown() resets storage
+        self.token = create_test_token(self.user_id)
+        self.auth_headers = get_bearer_auth_headers(self.token)
+
+    def tearDown(self):
+        """Clean up after each test.
+
+        Resets storage for per-test isolation, ensuring tests don't pollute
+        each other's state. This eliminates the need for test_00_* prefixes.
+        """
+        self.app_context.pop()
+
+        # Reset storage for per-test isolation
+        if hasattr(self, 'service_manager'):
+            self.service_manager.reset_test_data()
 
     @classmethod
     def tearDownClass(cls):
@@ -49,20 +64,8 @@ class TestAssignmentsIntegration(unittest.TestCase):
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
 
-    def setUp(self):
-        """Set up test environment before each test."""
-        self.client = self.app.test_client()
-
-        # Set up test context
-        self.app_context = self.app.app_context()
-        self.app_context.push()
-
-    def tearDown(self):
-        """Clean up after each test."""
-        self.app_context.pop()
-
-    def test_00_list_assignments_empty(self):
-        """GET /assignments should return empty list initially. (Named test_00_* to run first for isolation)"""
+    def test_list_assignments_empty(self):
+        """GET /assignments should return empty list initially."""
         response = self.client.get('/api/v1/assignments/', headers=self.auth_headers)
 
         assert response.status_code == 200

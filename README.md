@@ -38,9 +38,9 @@ cd campus
 # Install dependencies
 poetry install
 
-# Run the deployment
-poetry run python main.py campus.auth  # or
-poetry run python main.py campus.api
+# Run the deployment (set DEPLOY environment variable)
+export DEPLOY=campus.auth  # or campus.api
+poetry run python main.py
 ```
 
 > **Note**: Configuration is managed through environment variables and the vault service. See [Configuration](#-configuration) section below for details.
@@ -77,7 +77,7 @@ Secrets managed via `campus.auth.vaults`, accessed through `campus_python` clien
 - **[📖 Getting Started](docs/GETTING-STARTED.md)** - New user guide and navigation
 - **[🏗️ Architecture](docs/architecture.md)** - Detailed architecture overview and design principles  
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Development workflow and guidelines
-- **[🧪 Testing](docs/testing-strategies.md)** - Testing approaches and strategies
+- **[🧪 Testing](docs/TESTING-GUIDE.md)** - Testing approaches and strategies
 - **[📦 Packaging](docs/PACKAGING.md)** - Monorepo structure and distribution
 
 **Service Documentation:**
