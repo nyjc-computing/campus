@@ -1,6 +1,8 @@
 
 # Campus Test Directories
 
+> **Comprehensive testing guide:** See [docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md) for complete testing documentation including what we test, how tests are organized, and how to write new tests.
+
 ## Critical Information
 
 - The test suite **only uses the standard library `unittest` module**—no other test dependencies are required or supported.
@@ -31,11 +33,18 @@ poetry run python -m unittest tests.unit.apps.test_client -v
 - Mock external dependencies (may mock `campus.common` classes)
 - Must not mock package classes (test real implementations)
 
-### Integration Tests  
+### Integration Tests
 - Integration tests test package as a whole including DB, API, cross-package interactions
 - Use tests.fixtures.setup for environment setup
 - Located in tests/integration/<package>/
 - Test real implementations with actual dependencies
+
+### Contract Tests
+- Contract tests verify HTTP interface contracts (status codes, response formats, authentication)
+- Test behavioral invariants of the API surface
+- Located in tests/contract/
+- No mocks for internal interfaces - test real HTTP behavior
+- See [tests/contract/README.md](contract/README.md) for invariants tested
 
 ## Directory Structure
 
@@ -59,9 +68,19 @@ tests/
     auth/
       test_auth_integration.py
     api/
-      test_api_integration.py
+      test_assignments.py
     yapper/
       test_yapper.py
+  contract/             # HTTP contract tests (interface invariants)
+    test_auth_vault.py  # Vault endpoint contracts
+    test_auth_clients.py # Client CRUD contracts
+    test_auth_*.py      # Other auth contracts
+    test_api_*.py       # API endpoint contracts
+  fixtures/             # Shared test fixtures
+    services.py         # ServiceManager for test coordination
+    tokens.py           # Test token creation utilities
+  flask_test/           # Flask test client adapters
+    campus_request.py   # Test-compatible CampusRequest
 ```
 
 ## Usage Examples
@@ -101,6 +120,15 @@ poetry run python tests/run_tests.py integration
 # Run integration tests for specific package
 poetry run python tests/run_tests.py integration --module auth
 poetry run python tests/run_tests.py integration --module api
+```
+
+### Running Contract Tests
+```bash
+# Run all contract tests (HTTP interface invariants)
+poetry run python -m unittest discover -s tests/contract -p "test_*.py"
+
+# Run specific contract test file
+poetry run python -m unittest tests.contract.test_auth_vault -v
 ```
 
 
@@ -160,3 +188,13 @@ python tests/run_tests.py integration --module auth
 # Verbose output
 python tests/run_tests.py unit -v
 ```
+
+## More Information
+
+For complete testing documentation including:
+- What we test and what we don't test
+- How to write new tests
+- Test environment setup
+- Known gotchas
+
+See [docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md).```

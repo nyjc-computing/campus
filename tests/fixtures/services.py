@@ -30,11 +30,13 @@ class ServiceManager:
     _shared_instance = None
     _shared_setup_done = False
 
-    def __init__(self, shared=True):
+    def __init__(self, shared=False):
         """Initialize ServiceManager.
 
         Args:
-            shared: Whether to reuse shared instance across test suites
+            shared: Whether to reuse shared instance across test suites.
+                    Defaults to False to create fresh Flask apps per test class
+                    for better test isolation.
         """
         self.auth_app: Optional[object] = None
         self.apps_app: Optional[object] = None
@@ -53,9 +55,19 @@ class ServiceManager:
         Performs environment setup, database configuration, and service
         initialization in proper dependency order: auth → storage → yapper → api.
 
+        Note:
+            With shared=False (the default), creates fresh Flask apps with
+            fresh blueprints for each test class. This ensures full test
+            isolation at the cost of slightly slower test execution.
+
         Returns:
             ServiceManager: Self for method chaining
         """
+        # Reset test storage at start of setup for clean state
+        # This ensures test classes don't pollute each other's storage
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
         # Ensure we're running in testing mode
         # env.ENV is mutable and can be set for testing purposes
         if env.get("ENV") != devops.TESTING:
@@ -145,27 +157,51 @@ class ServiceManager:
 
         return self
 
+    def reset_test_data(self):
+        """Reset test storage for per-test isolation.
+
+        This method clears all test storage (SQLite in-memory DB, memory collections)
+        and re-initializes services. Use this in tearDown() for per-test isolation.
+
+        WARNING: This clears auth credentials, so tests using bearer tokens will need
+        to re-create their tokens after calling this method.
+
+        For tests that use authentication, consider using unique identifiers per test
+        (e.g., filtering by created_by) instead of full reset, or re-create the token
+        in setUp() after calling this in tearDown().
+        """
+        import campus.storage.testing
+
+        # Reset storage (clears SQLite in-memory DB and memory collections)
+        campus.storage.testing.reset_test_storage()
+
+        # Re-initialize auth and yapper services
+        # These are idempotent and will recreate necessary tables/collections
+        auth.init()
+        yapper.init()
+
     def close(self):
         """Clean up service instances and resources.
 
-        Resets manager state and cleans up resources. For shared instances,
-        full cleanup occurs when cleanup_shared() is called.
+        Always cleans up auth client and credentials. With shared=False,
+        also cleans up Flask apps for full isolation.
         """
-        if not self._shared:
-            self._cleanup_auth_client()
+        # Always clean up auth client regardless of shared mode
+        self._cleanup_auth_client()
 
-        # For shared instances, preserve apps for subsequent test classes
+        # Always clear credentials from environment
+        if env.CLIENT_ID is not None:
+            delattr(env, "CLIENT_ID")
+        if env.CLIENT_SECRET is not None:
+            delattr(env, "CLIENT_SECRET")
+
+        # For non-shared instances, clean up apps for full isolation
+        # This is now the default behavior
         if not self._shared:
             if self.auth_app is not None:
                 self.auth_app = None
             if self.apps_app is not None:
                 self.apps_app = None
-
-        if not self._shared:
-            if env.CLIENT_ID is not None:
-                delattr(env, "CLIENT_ID")
-            if env.CLIENT_SECRET is not None:
-                delattr(env, "CLIENT_SECRET")
 
         self._setup_done = False
 
@@ -242,12 +278,13 @@ def init():
         manager.close()
 
 
-def create_service_manager(shared=True):
+def create_service_manager(shared=False):
     """Factory function to create a new ServiceManager.
 
     Args:
-        shared: If True, reuse shared instance across test suites.
-               If False, create independent instance.
+        shared: If True, reuse shared instance across test suites (faster).
+               If False (default), create independent instance with fresh
+               Flask apps for each test class (better isolation).
 
     Returns:
         ServiceManager: New or shared service manager

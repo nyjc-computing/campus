@@ -1,47 +1,44 @@
-
 # Getting Started with Campus
 
-Welcome to Campus! This guide helps you navigate the documentation based on your role and experience level.
+This guide helps you navigate the documentation based on your role and experience level.
 
-## 👋 New to Campus?
+## By Role
 
-**Start here:**
-1. Read the [main README](../README.md) for project overview
-2. Check out [Architecture](architecture.md) to understand the system design
-3. Follow [Installation](#installation) steps below
-
-## 🎯 Quick Navigation by Role
-
-### 📚 End Users
-- **[Deployment Guide](../DEPLOY.md)** — Deploy vault or full apps
-- **API Documentation** — *Coming soon*
-- **User Manual** — *Coming soon*
-
-### 👨‍💻 New Developers  
-- **[Contributing Guide](CONTRIBUTING.md)** — Development workflow and branch strategy
-- **[Development Guidelines](development-guidelines.md)** — Coding patterns and best practices
-- **[Style Guide](STYLE-GUIDE.md)** — Code and documentation standards
-- **[Testing Strategies](testing-strategies.md)** — How to test your changes
+### 👨‍💻 New Developers
+Start here if you're new to the codebase:
+1. [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow and branch strategy
+2. [development-guidelines.md](development-guidelines.md) - Coding patterns and best practices
+3. [STYLE-GUIDE.md](STYLE-GUIDE.md) - Code standards and import patterns
+4. [TESTING-GUIDE.md](TESTING-GUIDE.md) - How to run and write tests
 
 ### 🏗️ Experienced Developers
-- **[Architecture](architecture.md)** — System design and service boundaries
-- **[Packaging Guide](PACKAGING.md)** — Monorepo structure and distribution
-- **[Development Guidelines](development-guidelines.md)** — Advanced patterns and abstractions
+For those familiar with Python/Flask projects:
+1. [architecture.md](architecture.md) - System design and service boundaries
+2. [development-guidelines.md](development-guidelines.md) - Architecture patterns and abstractions
+3. [PACKAGING.md](PACKAGING.md) - Monorepo structure and distribution
 
 ### 🚀 DevOps/Infrastructure
-- **[Deployment Guide](../DEPLOY.md)** — Deployment options
-- **[Packaging Guide](PACKAGING.md)** — Build and distribution
-- **[Testing Strategies](testing-strategies.md)** — Testing infrastructure
+For deployment and operations:
+1. [DEPLOY.md](../DEPLOY.md) - Deployment options
+2. [PACKAGING.md](PACKAGING.md) - Build and distribution
+3. [TESTING-GUIDE.md](TESTING-GUIDE.md) - Testing infrastructure
 
-## 🛠️ Installation
+### 📚 End Users
+For those deploying or using Campus:
+1. [README.md](../README.md) - Project overview
+2. [DEPLOY.md](../DEPLOY.md) - Deployment guide
+3. [architecture.md](architecture.md) - System design
+
+## Installation
 
 ### Prerequisites
 - Python 3.11 or higher
-- Poetry for dependency management  
-- PostgreSQL (for vault service)
+- Poetry for dependency management
+- PostgreSQL (for auth service database)
 - MongoDB (optional, for alternative storage backend)
 
 ### Quick Setup
+
 ```bash
 # Clone and enter directory
 git clone https://github.com/nyjc-computing/campus.git
@@ -55,37 +52,30 @@ poetry run python main.py
 ```
 
 ### Environment Configuration
+
 ```bash
 ENV="development"                     # deployment environment
 CLIENT_ID="your-client-id"           # OAuth credentials
-CLIENT_SECRET="your-client-secret"   
+CLIENT_SECRET="your-client-secret"
 POSTGRESDB_URI="postgresql://..."    # auth service database
 ```
 
-Other configuration managed via `campus.auth.vaults`.
+Other configuration is managed via `campus.auth.vaults`.
 
-## 📖 Documentation Index
+## Documentation Index
 
-### Core Documentation
-- **[Architecture](architecture.md)** — System design and component overview
-- **[Contributing](CONTRIBUTING.md)** — Development workflow and guidelines  
-- **[Development Guidelines](development-guidelines.md)** — Coding patterns and best practices
-- **[Style Guide](STYLE-GUIDE.md)** — Code and documentation standards
-- **[Testing Strategies](testing-strategies.md)** — Testing approaches and tools
-- **[Packaging](PACKAGING.md)** — Monorepo structure and distribution
+| Document | Purpose |
+|----------|---------|
+| [AGENTS.md](../AGENTS.md) | Quick reference for humans and AI assistants |
+| [architecture.md](architecture.md) | System design and component overview |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and branch strategy |
+| [development-guidelines.md](development-guidelines.md) | Coding patterns and best practices |
+| [STYLE-GUIDE.md](STYLE-GUIDE.md) | Code standards and documentation |
+| [TESTING-GUIDE.md](TESTING-GUIDE.md) | Testing approaches and strategies |
+| [PACKAGING.md](PACKAGING.md) | Monorepo structure and distribution |
 
-### Service-Specific Documentation
-- **[Storage Layer](../campus/storage/README.md)** — Data persistence
-- **[Common Utilities](../campus/common/README.md)** — Shared utilities
+## Getting Help
 
-## 🆘 Need Help?
-
-- **📋 Issues**: Report bugs via [GitHub Issues](https://github.com/nyjc-computing/campus/issues)
-- **💬 Discussions**: Ask questions in [GitHub Discussions](https://github.com/nyjc-computing/campus/discussions)  
-- **🔒 Security**: Report vulnerabilities to [security@nyjc.edu.sg](mailto:security@nyjc.edu.sg)
-
-## 🏃‍♂️ Next Steps
-
-1. **New Contributors**: Start with [CONTRIBUTING.md](CONTRIBUTING.md)
-2. **Developers**: Review [development-guidelines.md](development-guidelines.md)  
-3. **Users**: Check out [DEPLOY.md](../DEPLOY.md) for deployment options
+- **[Issues](https://github.com/nyjc-computing/campus/issues)** - Bug reports and feature requests
+- **[Discussions](https://github.com/nyjc-computing/campus/discussions)** - Questions and discussions
+- **[security@nyjc.edu.sg](mailto:security@nyjc.edu.sg)** - Security vulnerabilities

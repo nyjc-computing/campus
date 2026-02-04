@@ -190,3 +190,22 @@ def update_provider_session(
         }
     )
     return {}, 200
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('sessions', __name__, url_prefix='/sessions')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/sweep", "sweep", sweep, methods=["POST"])
+    new_bp.add_url_rule("/<provider>/authorization_code", "get_by_authorization_code", get_by_authorization_code, methods=["POST"])
+    new_bp.add_url_rule("/<provider>/", "new_provider_session", new_provider_session, methods=["POST"])
+    new_bp.add_url_rule("/<provider>/<session_id>/", "delete_provider_session", delete_provider_session, methods=["DELETE"])
+    new_bp.add_url_rule("/<provider>/<session_id>/", "get_provider_session", get_provider_session, methods=["GET"])
+    new_bp.add_url_rule("/<provider>/<session_id>/", "update_provider_session", update_provider_session, methods=["PATCH"])
+
+    return new_bp

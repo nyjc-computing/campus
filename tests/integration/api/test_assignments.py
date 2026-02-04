@@ -4,18 +4,13 @@ Tests that the assignments endpoints can be instantiated and basic
 functionality works end-to-end.
 """
 
-import base64
 import unittest
 
-from campus.common import env
+from campus.common import schema
 from tests.fixtures import services
+from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 
 
-@unittest.skip(
-    "Assignments API requires bearer token auth (user credentials). "
-    "No test fixture support yet for creating test user tokens. "
-    "Re-enable after user credential flow is implemented."
-)
 class TestAssignmentsIntegration(unittest.TestCase):
     """Integration tests for the assignments resource in campus.api."""
 
@@ -32,6 +27,32 @@ class TestAssignmentsIntegration(unittest.TestCase):
             raise RuntimeError("Expected Flask app from service manager")
 
         cls.app = api_app
+        cls.user_id = schema.UserID("test.user@campus.test")
+
+    def setUp(self):
+        """Set up test environment before each test."""
+        self.client = self.app.test_client()
+
+        # Set up test context
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+
+        # Create test user token for bearer auth
+        # Re-create before each test since tearDown() resets storage
+        self.token = create_test_token(self.user_id)
+        self.auth_headers = get_bearer_auth_headers(self.token)
+
+    def tearDown(self):
+        """Clean up after each test.
+
+        Resets storage for per-test isolation, ensuring tests don't pollute
+        each other's state. This eliminates the need for test_00_* prefixes.
+        """
+        self.app_context.pop()
+
+        # Reset storage for per-test isolation
+        if hasattr(self, 'service_manager'):
+            self.service_manager.reset_test_data()
 
     @classmethod
     def tearDownClass(cls):
@@ -43,26 +64,9 @@ class TestAssignmentsIntegration(unittest.TestCase):
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
 
-    def setUp(self):
-        """Set up test environment before each test."""
-        self.client = self.app.test_client()
-
-        # Set up test context
-        self.app_context = self.app.app_context()
-        self.app_context.push()
-
-        # Prepare auth headers for API requests
-        credentials = f"{env.CLIENT_ID}:{env.CLIENT_SECRET}"
-        encoded = base64.b64encode(credentials.encode()).decode()
-        self.auth_headers = {"Authorization": f"Basic {encoded}"}
-
-    def tearDown(self):
-        """Clean up after each test."""
-        self.app_context.pop()
-
     def test_list_assignments_empty(self):
         """GET /assignments should return empty list initially."""
-        response = self.client.get('/api/v1/assignments', headers=self.auth_headers)
+        response = self.client.get('/api/v1/assignments/', headers=self.auth_headers)
 
         assert response.status_code == 200
         data = response.get_json()
@@ -71,7 +75,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
 
     def test_create_assignment_minimal(self):
         """POST /assignments should create assignment with minimal fields."""
-        response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Test Assignment"
         })
 
@@ -86,7 +90,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
 
     def test_create_assignment_with_questions(self):
         """POST /assignments should create assignment with questions."""
-        response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Questions Test",
             "description": "Test with questions",
             "questions": [
@@ -103,7 +107,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
 
     def test_create_assignment_with_classroom_links(self):
         """POST /assignments should create assignment with Classroom links."""
-        response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Classroom Test",
             "classroom_links": [
                 {
@@ -123,7 +127,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
     def test_get_assignment(self):
         """GET /assignments/{id} should return assignment."""
         # First create an assignment
-        create_response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        create_response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Get Test"
         })
         assignment_id = create_response.get_json()["id"]
@@ -145,7 +149,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
     def test_update_assignment_title(self):
         """PATCH /assignments/{id} should update title."""
         # First create an assignment
-        create_response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        create_response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Original Title"
         })
         assignment_id = create_response.get_json()["id"]
@@ -164,7 +168,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
     def test_update_assignment_questions(self):
         """PATCH /assignments/{id} should update questions."""
         # First create an assignment
-        create_response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        create_response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Update Test",
             "questions": [{"id": "q1", "prompt": "P", "question": "Q?"}]
         })
@@ -187,7 +191,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
     def test_delete_assignment(self):
         """DELETE /assignments/{id} should remove assignment."""
         # First create an assignment
-        create_response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        create_response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Delete Test"
         })
         assignment_id = create_response.get_json()["id"]
@@ -204,7 +208,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
     def test_add_classroom_link(self):
         """POST /assignments/{id}/links should add Classroom link."""
         # First create an assignment
-        create_response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        create_response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Link Test"
         })
         assignment_id = create_response.get_json()["id"]
@@ -227,14 +231,14 @@ class TestAssignmentsIntegration(unittest.TestCase):
     def test_list_assignments_filter_by_created_by(self):
         """GET /assignments?created_by=x should filter by creator."""
         # Create two assignments with different creators
-        self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Assignment 1"
         })
 
         # This assumes authentication sets created_by - in real scenario,
         # the authenticated user's ID would be used
 
-        response = self.client.get('/api/v1/assignments', headers=self.auth_headers)
+        response = self.client.get('/api/v1/assignments/', headers=self.auth_headers)
 
         # Should return at least our created assignment
         assert response.status_code == 200
@@ -244,7 +248,7 @@ class TestAssignmentsIntegration(unittest.TestCase):
     def test_patch_empty_body(self):
         """PATCH /assignments/{id} with empty body should return error."""
         # First create an assignment
-        create_response = self.client.post('/api/v1/assignments', headers=self.auth_headers, json={
+        create_response = self.client.post('/api/v1/assignments/', headers=self.auth_headers, json={
             "title": "Empty Body Test"
         })
         assignment_id = create_response.get_json()["id"]

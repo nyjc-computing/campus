@@ -25,16 +25,16 @@ campus/
 
 ## Core Principles
 
-- **🔄 Separation of Concerns**: Each service has a single, well-defined responsibility
-- **🔌 Loose Coupling**: Services communicate through clean interfaces
-- **� API-First**: Most actions have corresponding HTTP API endpoints
-- **� Extensible Storage**: Backend-agnostic storage interfaces support multiple implementations
+- **Separation of Concerns**: Each service has a single, well-defined responsibility
+- **Loose Coupling**: Services communicate through clean interfaces
+- **API-First**: Most actions have corresponding HTTP API endpoints
+- **Extensible Storage**: Backend-agnostic storage interfaces support multiple implementations
 
 ## Service Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   🔐 Auth       │    │   🌐 API        │    │   🛠️ Common     │
+│   Auth          │    │   API           │    │   Common        │
 │   OAuth &       │    │   RESTful       │    │   Utilities     │
 │   Credentials   │    │   Resources     │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
@@ -44,7 +44,7 @@ campus/
          ┌───────────────────────┼───────────────────────┐
          │                       │                       │
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   🏛️ Model      │    │   � Services   │    │   � Integr.    │
+│   Model         │    │   Services      │    │   Integrations  │
 │   Entities      │    │   Email, etc.   │    │   External      │
 │   (dataclasses) │    │                 │    │   APIs          │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
@@ -52,7 +52,7 @@ campus/
          └───────────────────────┼───────────────────────┘
                                  │
                     ┌─────────────────┐
-                    │   💾 Storage    │
+                    │   Storage       │
                     │   Data Layer    │
                     └─────────────────┘
 ```
@@ -161,4 +161,4 @@ Three-tier testing strategy:
 2. **Integration Tests**: Service-to-service communication testing
 3. **End-to-End Tests**: Full application workflow testing
 
-See [testing-strategies.md](testing-strategies.md) for detailed testing approaches.
+See [TESTING-GUIDE.md](TESTING-GUIDE.md) for detailed testing approaches.

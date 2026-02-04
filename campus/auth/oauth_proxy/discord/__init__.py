@@ -6,10 +6,10 @@ Reference: https://discord.com/developers/docs/topics/oauth2
 
 Discord OAuth 2.0 Client Credentials Flow:
 
-+--------+        (A)        +---------+ 
++--------+        (A)        +---------+
 |        |------------------>| Discord |
-| Campus |   Token Request    |         | 
-| Server |   (Basic Auth)    +---------+ 
+| Campus |   Token Request    |         |
+| Server |   (Basic Auth)    +---------+
 |        |        (B)        +---------+
 |        |<------------------|         |
 |        |   Access Token    | Campus  |
@@ -41,71 +41,70 @@ from . import proxy
 
 PROVIDER = "discord"
 
-bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f"/{PROVIDER}")
-
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
-    """Initialise Discord OAuth routes with the given Flask app/blueprint."""
-    app.register_blueprint(bp)
+    """Initialise Discord OAuth routes with the given Flask app/blueprint.
 
-
-@bp.before_request
-def before_request() -> None:
-    flask.g.proxy = proxy.get_proxy()
-
-
-@bp.get("/authorize")
-def authorize(
-        target: schema.Url,
-        prompt: Literal["consent", "none"] | None = None
-) -> werkzeug.Response:
-    """Prepares the Discord OAuth authorization URL and redirects to it."""
-    return flask.g.proxy.redirect_for_authorization(
-        target,
-        prompt=prompt
-    )
-
-
-@bp.get("/callback")
-def callback() -> werkzeug.Response:
-    """Handles the Discord OAuth callback request.
-
-    Dispatches to success or error handlers based on payload type.
+    Creates a fresh blueprint each time to support test isolation.
     """
-    callback_payload = flask_campus.get_request_payload()
-    if "error" in callback_payload:
-        # TODO: For testing - display error instead of redirecting
-        # This should be replaced with proper error handling that redirects to target
-        error_html = f"""
-        <html>
-        <head><title>OAuth Error</title></head>
-        <body>
-            <h1>OAuth Error</h1>
-            <p><strong>Error:</strong> {callback_payload.get('error')}</p>
-            <p><strong>Description:</strong> {callback_payload.get('error_description', 'N/A')}</p>
-            <p><strong>Error URI:</strong> {callback_payload.get('error_uri', 'N/A')}</p>
-            <hr>
-            <p><strong>All callback parameters:</strong></p>
-            <pre>{callback_payload}</pre>
-        </body>
-        </html>
+    bp = flask.Blueprint(PROVIDER, __name__, url_prefix=f"/{PROVIDER}")
+
+    @bp.before_request
+    def before_request() -> None:
+        flask.g.proxy = proxy.get_proxy()
+
+    @bp.get("/authorize")
+    def authorize(
+            target: schema.Url,
+            prompt: Literal["consent", "none"] | None = None
+    ) -> werkzeug.Response:
+        """Prepares the Discord OAuth authorization URL and redirects to it."""
+        return flask.g.proxy.redirect_for_authorization(
+            target,
+            prompt=prompt
+        )
+
+    @bp.get("/callback")
+    def callback() -> werkzeug.Response:
+        """Handles the Discord OAuth callback request.
+
+        Dispatches to success or error handlers based on payload type.
         """
-        return flask.Response(error_html, status=400, mimetype='text/html')
-    else:
-        return flask_campus.unpack_into(success_callback,
-                                        **callback_payload)
+        callback_payload = flask_campus.get_request_payload()
+        if "error" in callback_payload:
+            # TODO: For testing - display error instead of redirecting
+            # This should be replaced with proper error handling that redirects to target
+            error_html = f"""
+            <html>
+            <head><title>OAuth Error</title></head>
+            <body>
+                <h1>OAuth Error</h1>
+                <p><strong>Error:</strong> {callback_payload.get('error')}</p>
+                <p><strong>Description:</strong> {callback_payload.get('error_description', 'N/A')}</p>
+                <p><strong>Error URI:</strong> {callback_payload.get('error_uri', 'N/A')}</p>
+                <hr>
+                <p><strong>All callback parameters:</strong></p>
+                <pre>{callback_payload}</pre>
+            </body>
+            </html>
+            """
+            return flask.Response(error_html, status=400, mimetype='text/html')
+        else:
+            return flask_campus.unpack_into(success_callback,
+                                            **callback_payload)
 
+    def success_callback(
+            state: str,
+            code: str,
+            scope: str,
+            **kwargs: str
+    ) -> werkzeug.Response:
+        """Handle a Discord OAuth callback request."""
+        return flask.g.proxy.handle_callback(
+            state,
+            code,
+            scope,
+            **kwargs
+        )
 
-def success_callback(
-        state: str,
-        code: str,
-        scope: str,
-        **kwargs: str
-) -> werkzeug.Response:
-    """Handle a Discord OAuth callback request."""
-    return flask.g.proxy.handle_callback(
-        state,
-        code,
-        scope,
-        **kwargs
-    )
+    app.register_blueprint(bp)
