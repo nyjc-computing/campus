@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 
 from campus.common import devops
 from campus.common.utils import datacls
-from campus.model import Model, constraints
+from campus.model import InternalModel, Model, constraints
 from ..interface import TableInterface, PK
 
 
@@ -97,7 +97,7 @@ def _field_to_sql_schema(field: dataclasses.Field) -> str:
     return f"\"{field_name}\" {sql_type} {constraints_sql}"
 
 
-def _model_to_sql_schema(name: str, model: type[Model]) -> str:
+def _model_to_sql_schema(name: str, model: type[InternalModel | Model]) -> str:
     """Convert a dataclass model to SQL schema."""
     columns = []
     constraints_ = []
@@ -312,7 +312,7 @@ class SQLiteTable(TableInterface):
             self.delete_by_id(row[PK])
 
     @devops.block_env(devops.PRODUCTION)
-    def init_from_model(self, name: str, model: type[Model]) -> None:
+    def init_from_model(self, name: str, model: type[InternalModel | Model]) -> None:
         """Initialize the table from a Campus model definition."""
         conn = self.get_connection()
         create_table_sql = _model_to_sql_schema(name, model)

@@ -31,7 +31,7 @@ from psycopg2.extras import RealDictCursor
 
 from campus.common import devops, env
 from campus.common.utils import datacls
-from campus.model import Model, constraints
+from campus.model import InternalModel, Model, constraints
 from campus.storage import errors
 
 from ..interface import PK, TableInterface
@@ -70,7 +70,8 @@ def _field_to_sql_schema(field: dataclasses.Field) -> str:
     constraints_sql = " ".join(sql_field_constraints)
     return f"\"{field_name}\" {sql_type} {constraints_sql}"
 
-def _model_to_sql_schema(name: str, model: type[Model]) -> str:
+
+def _model_to_sql_schema(name: str, model: type[InternalModel | Model]) -> str:
     """Convert a dataclass model to SQL schema."""
     columns = []
     constraints_ = []
@@ -286,7 +287,11 @@ class PostgreSQLTable(TableInterface):
                     conn.commit()
     
     @devops.block_env(devops.PRODUCTION)
-    def init_from_model(self, name: str, model: type[Model]) -> None:
+    def init_from_model(
+            self,
+            name: str,
+            model: type[InternalModel | Model]
+    ) -> None:
         """Initialize the table from a Campus model definition."""
         create_table_sql = _model_to_sql_schema(name, model)
         # Ensure connection is properly closed after operation
