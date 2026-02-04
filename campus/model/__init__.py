@@ -25,6 +25,7 @@ __all__ = [
     "Feedback",
     "HttpHeader",
     "HttpHeaderWithAuth",
+    "InternalModel",
     "LoginSession",
     "Model",
     "Question",
@@ -37,7 +38,7 @@ __all__ = [
 ]
 
 from .assignment import Assignment, ClassroomLink, Question
-from .base import Model
+from .base import InternalModel, Model
 from .circle import Circle
 from .client import Client, ClientAccess
 from .credentials import OAuthToken, UserCredentials

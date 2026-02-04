@@ -9,7 +9,7 @@ Each row in the table is assumed to have:
 
 from abc import ABC, abstractmethod
 
-from campus.model import Model
+from campus.model import InternalModel, Model
 
 # This constant should match the one in campus.common.schema
 PK = "id"
@@ -58,6 +58,6 @@ class TableInterface(ABC):
         ...
 
     @abstractmethod
-    def init_from_model(self, name: str, model: type[Model]) -> None:
+    def init_from_model(self, name: str, model: type[InternalModel | Model]) -> None:
         """Initialize the table from a Campus model definition."""
         ...
