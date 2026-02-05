@@ -119,13 +119,13 @@ class LessonGroup(Model):
       directly from the XML. It seems we cannot seperate class and subject.
     
     Fields:
-      filename (String): Allocation xml filename which this entry is relevant to
+      timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       label (String): Label brought over from xml, like 2527-COM
     """
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable-group", length=8)
     ))
-    filename: schema.String
+    timetable_id: schema.CampusID 
     label: schema.String
 
 
@@ -140,7 +140,7 @@ class LessonGroupMember(InternalModel):
     2510-Chem will have its own set of entries, even if the participant is duplicated.
 
     Fields:
-      filename (String): Allocation xml filename which this entry is relevant to
+      timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       lessongroup_id (CampusID): FK referencing a LessonGroup.id
       ade_participant (String): XML id (aka TTCode or teacher_id). We have a unique mapping of these IDs
         to nyjc email etc., for each allocation.
@@ -155,11 +155,11 @@ class LessonGroupMember(InternalModel):
 @dataclass(eq=False, kw_only=True)
 class TimetableEntry(Model):
     """
-    A timetable represents a single lesson for a LessonGroup
+    A timetable entry represents a single lesson for a LessonGroup
         at some VenueTimeSlot. 
     
     Fields:
-      filename (String): Allocation xml filename which this entry is relevant to
+      timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       lessongroup_id (CampusID): FK referencing a LessonGroup.id
       venuetimeslot_id (CampusID): FK referencing a VenueTimeSlot.id
     """
@@ -170,3 +170,22 @@ class TimetableEntry(Model):
     lessongroup_id: schema.CampusID
     venuetimeslot_id: schema.Integer
     __constraints__ = constraints.Unique("lessongroup_id", "venuetimeslot_id", "filename")
+
+##        Represents an allocation itself         ##
+class Timetable(Model):
+    """
+    The timetable represents an allocation.
+    It refers to a new set of classes, people and class timings
+        imported with each new timetable XML. 
+    
+    Fields:
+      filename (String): The XML filename it was imported from
+      start (DateTime): 00:00 on the first day the timetable comes into effect
+      end_date (DateTime): 00:00 on the day the last day the timetable is effective
+    """
+    id: schema.CampusID = field(default_factory=(
+        lambda: uid.generate_category_uid("timetable", length=8)
+    ))
+    filename: schema.String
+    start_date: schema.DateTime # 00:00 on the day it begins
+    end_date: schema.DateTime # 00:00 on the day it begins
