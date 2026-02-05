@@ -106,8 +106,8 @@ class InternalError(APIError):
 
     def __init__(
             self,
-            message: str = "Internal server error",
-            error_code: str = ErrorConstant.SERVER_ERROR,
+            message: str = "An unexpected error occurred",
+            error_code: str = ErrorConstant.INTERNAL_ERROR,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)

@@ -43,7 +43,8 @@ All endpoints must:
 - Return **401** without valid `Authorization` header
 - Return **409** (Conflict) when resource not found (Campus convention)
 - Return **400** (Bad Request) for invalid request bodies
-- Include structured error responses with `error_code` field
+- Include structured error responses following the API Error Handling Specification
+  - Error responses have the shape: `{"error": {"code": "ERROR_CODE", "message": "...", "request_id": null}}`
 
 **Vault endpoints** (`/auth/v1/vaults/*`):
 - Require Basic auth with `CLIENT_ID` and `CLIENT_SECRET`
@@ -97,7 +98,7 @@ def test_endpoint_requires_auth(self):
     response = self.client.get("/api/v1/endpoint")
     assert response.status_code == 401
     data = response.get_json()
-    assert data["error_code"] == "UNAUTHORIZED"
+    assert data["error"]["code"] == "UNAUTHORIZED"
 
 def test_endpoint_not_found_returns_409(self):
     """GET /endpoint/{id} for missing id returns 409."""

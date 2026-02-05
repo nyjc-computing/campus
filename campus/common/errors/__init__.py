@@ -38,11 +38,8 @@ def handle_authorization_error(
     module = get_caller()
     logger.exception("OAuthError in %s: %s", module, err)
     err_dict = err.to_dict()
-    from campus.common import devops
-    # Remove details and traceback in production for security reasons
-    if devops.ENV == devops.PRODUCTION:
-        del err_dict["details"]
-        del err_dict["traceback"]
+    # OAuth errors follow RFC 6749, not the API error spec
+    # No production cleanup needed for OAuth redirect errors
     return flask.redirect(
         url.add_query(
             err.redirect_uri or flask.request.base_url,
@@ -54,15 +51,17 @@ def handle_api_error(err: api_errors.APIError) -> tuple[JsonDict, int]:
     """Handle API errors.
 
     This function is used to handle API errors and return
-    standardised JSON responses.
+    standardised JSON responses following the API Error Handling Specification.
+
+    Reference: campus/api/docs/api-error-spec.md
     """
     module = get_caller()
     logger.exception("APIError in %s: %s", module, err)
     err_dict = err.to_dict()
     from campus.common import devops
-    # Remove traceback in production for security reasons
+    # Remove traceback and sensitive details in production for security reasons
     if devops.ENV == devops.PRODUCTION:
-        err_dict.pop("traceback")
+        err_dict["error"].pop("details", None)
     return err_dict, err.status_code
 
 
@@ -72,16 +71,17 @@ def handle_token_error(
     """Handle OAuth token request errors.
 
     This function is used to handle Token errors and return
-    standardised JSON responses.
+    standardised JSON responses following RFC 6749 Section 5.2.
     """
     module = get_caller()
     logger.exception("TokenError in %s: %s", module, err)
     err_dict = err.to_dict()
     from campus.common import devops
-    # Remove details and traceback in production for security reasons
+    # Remove details in production for security reasons
+    # OAuth errors follow RFC 6749 format
     if devops.ENV == devops.PRODUCTION:
-        del err_dict["details"]
-        del err_dict["traceback"]
+        err_dict.pop("details", None)
+        err_dict.pop("traceback", None)
     return err_dict, err.status_code
 
 
