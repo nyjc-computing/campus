@@ -203,11 +203,13 @@ pytest tests/ -k validation -v
 
 ---
 
-## Phase 3: Update Validation Code
+## Phase 3: Update Validation Code ✅
+
+**Status**: Complete. Commit `0ceac37`.
 
 **Goal**: Convert existing validation errors to use new structured format.
 
-### 3.1 Update `unpack_request` Decorator
+### 3.1 Update `unpack_request` Decorator ✅
 
 **File**: `campus/flask_campus/utils.py`
 
@@ -253,17 +255,18 @@ def unpack_into(
     return func(**reconciled, **extra_args)
 ```
 
-### 3.2 Update Type Validation (Optional Enhancement)
+### 3.2 Update Type Validation (Optional Enhancement) ⏸️ Deferred
 
 **File**: `campus/common/validation/record.py`
 
-The `_validate_key_names_types` function could be enhanced to return `FieldError` objects instead of raising directly. This can be done in a follow-up to keep phases small.
+The `_validate_key_names_types` function could be enhanced to return `FieldError` objects instead of raising directly. Deferred to a follow-up to keep phases small.
 
-### Test Phase 3
+### Test Phase 3 ✅
 
 ```bash
 cd campus
-pytest tests/ -k "unpack or validation" -v
+poetry run python tests/run_tests.py all
+# All 103 unit tests and 18 integration tests passed
 ```
 
 ---
