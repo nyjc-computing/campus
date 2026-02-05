@@ -11,7 +11,7 @@ This document outlines the phased implementation plan to bring the Campus API er
 | Phase | Status | Description |
 |-------|--------|-------------|
 | 1 | ✅ Complete | Core error structure (error envelope) |
-| 2 | Pending | Validation error structure |
+| 2 | ✅ Complete | Validation error structure |
 | 3 | Pending | Update validation code |
 | 4 | Pending | Add error response tests |
 | 5 | Pending | Client-side updates (campus-api-python) |
@@ -54,7 +54,9 @@ pytest tests/ -k error -v
 
 ---
 
-## Phase 2: Validation Error Structure
+## Phase 2: Validation Error Structure ✅
+
+**Status**: Complete. Commit `f526a74`.
 
 **Goal**: Implement field-level validation error format per Section 5 of the spec.
 
@@ -563,9 +565,9 @@ Use this checklist to track progress through each phase.
 - [x] Phase 1.1: Update ErrorConstant enum ✅
 - [x] Phase 1.2: Update `APIError.to_dict()` for new envelope ✅
 - [x] Phase 1.3: Update error handlers (production cleanup) ✅
-- [ ] Phase 2.1: Create `ValidationError` class with `FieldError`
-- [ ] Phase 2.2: Add 422 to `raise_api_error` helper
-- [ ] Phase 2.3: Export new error classes
+- [x] Phase 2.1: Create `ValidationError` class with `FieldError` ✅
+- [x] Phase 2.2: Add 422 to `raise_api_error` helper ✅
+- [x] Phase 2.3: Export new error classes ✅
 - [ ] Phase 3.1: Update `unpack_request` to use FieldError
 - [ ] Phase 3.2: Update type validation to collect errors (optional)
 - [ ] Phase 4: Add error response tests
