@@ -13,7 +13,7 @@ This document outlines the phased implementation plan to bring the Campus API er
 | 1 | ✅ Complete | Core error structure (error envelope) |
 | 2 | ✅ Complete | Validation error structure |
 | 3 | ✅ Complete | Update validation code |
-| 4 | Pending | Add error response tests |
+| 4 | ✅ Complete | Add error response tests |
 | 5 | Pending | Client-side updates (campus-api-python) |
 | 6 | Pending | Documentation |
 
@@ -271,7 +271,9 @@ poetry run python tests/run_tests.py all
 
 ---
 
-## Phase 4: Add Error Response Tests
+## Phase 4: Add Error Response Tests ✅
+
+**Status**: Complete.
 
 **Goal**: Ensure spec compliance is verified by tests.
 
@@ -573,7 +575,7 @@ Use this checklist to track progress through each phase.
 - [x] Phase 2.3: Export new error classes ✅
 - [x] Phase 3.1: Update `unpack_request` to use FieldError ✅
 - [ ] Phase 3.2: Update type validation to collect errors (optional)
-- [ ] Phase 4: Add error response tests
+- [x] Phase 4: Add error response tests ✅
 
 ### Client (campus-api-python)
 
