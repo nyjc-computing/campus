@@ -57,13 +57,27 @@ TOKEN_RESPONSE_ERROR_TYPES = (
 
 
 class ErrorConstant(str):
-    """Error enums"""
+    """Error enums.
+
+    Error codes follow the API Error Handling Specification:
+    - UPPER_SNAKE_CASE format
+    - Stable across versions
+    - Documented and machine-readable
+
+    Reference: campus/api/docs/api-error-spec.md
+    """
+    # General API errors
     CONFLICT = "CONFLICT"
     FORBIDDEN = "FORBIDDEN"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
     INVALID_REQUEST = "INVALID_REQUEST"
     NOT_FOUND = "NOT_FOUND"
-    SERVER_ERROR = "SERVER_ERROR"
     UNAUTHORIZED = "UNAUTHORIZED"
+
+    # Validation errors
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+
+    # Additional specific error codes can be added here as needed
 
 
 class APIError(Exception):
@@ -91,21 +105,42 @@ class APIError(Exception):
     def to_dict(self) -> dict[str, Any]:
         """Convert the error to a dictionary.
 
-        This function is used to convert the error to a dictionary
-        for JSON serialisation.
-        """
-        err_obj = {
-            "message": self.message,
-            "error_code": self.error_code,
-            "details": self.details,
+        Returns a spec-compliant error envelope:
+        {
+            "error": {
+                "code": "ERROR_CODE",
+                "message": "Human-readable explanation",
+                "details": {},
+                "request_id": null
+            }
         }
-        # We can't use campus.common.devops to do a env check here
+
+        Reference: campus/api/docs/api-error-spec.md
+        """
+        error_obj: dict[str, Any] = {
+            "code": str(self.error_code),
+            "message": self.message,
+        }
+
+        # Only include details if non-empty
+        if self.details:
+            error_obj["details"] = dict(self.details)
+
+        # Add traceback in development mode for server errors
+        # We can't use campus.common.devops to do an env check here
         # because it would create a circular import.
-        # Pop the traceback in production environment.
         if 500 <= self.status_code < 600:
-            import traceback
-            err_obj.update(traceback=traceback.format_exc())
-        return err_obj
+            import os
+            if os.getenv("ENV", "development") == "development":
+                import traceback
+                if not self.details:
+                    error_obj["details"] = {}
+                error_obj["details"]["traceback"] = traceback.format_exc()
+
+        # request_id will contain a correlation ID once request tracing is implemented
+        error_obj["request_id"] = None
+
+        return {"error": error_obj}
 
 
 class OAuthError(Exception):

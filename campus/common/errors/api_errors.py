@@ -7,6 +7,7 @@ These errors represent all possible API errors that would be raised.
 from typing import NoReturn
 
 from .base import APIError, ErrorConstant
+from .validation import ValidationError
 
 
 def raise_api_error(status: int, **body) -> NoReturn:
@@ -46,6 +47,13 @@ def raise_api_error(status: int, **body) -> NoReturn:
             raise UnsupportedMediaTypeError(
                 message="Unsupported Media Type",
                 status=status,
+                **body
+            )
+        case 422:
+            errors = body.pop("errors", None)
+            raise ValidationError(
+                message=body.get("message", "Validation failed"),
+                errors=errors,
                 **body
             )
         case 500:
@@ -106,8 +114,8 @@ class InternalError(APIError):
 
     def __init__(
             self,
-            message: str = "Internal server error",
-            error_code: str = ErrorConstant.SERVER_ERROR,
+            message: str = "An unexpected error occurred",
+            error_code: str = ErrorConstant.INTERNAL_ERROR,
             **details
     ) -> None:
         super().__init__(message, error_code, **details)

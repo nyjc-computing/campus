@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: Campus API
+  description: |
+    Campus API for managing educational resources.
+
+    ## Error Responses
+
+    All error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.
+
+    ## Error Codes
+
+    Common error codes:
+    - `INVALID_REQUEST` (400): Malformed or invalid request
+    - `UNAUTHORIZED` (401): Missing or invalid authentication
+    - `FORBIDDEN` (403): Insufficient permissions
+    - `NOT_FOUND` (404): Resource not found
+    - `VALIDATION_FAILED` (422): Request validation failed with field-level errors
+    - `CONFLICT` (409): Resource state conflict
+    - `INTERNAL_ERROR` (500): Unexpected server error
+
+  version: 0.1.0
+  contact:
+    name: NYJC Computing
+    email: nyjc.computing@nyjc.edu.sg
+
+servers:
+  - url: https://api.campus.nyjc.app
+    description: Production
+  - url: https://api.campus.nyjc.dev
+    description: Staging
+  - url: https://campusapi-development.up.railway.app
+    description: Development
+
+components:
+  schemas:
+    # ============================================================
+    # Error Response Schemas
+    # ============================================================
+
+    ErrorEnvelope:
+      type: object
+      description: |
+        Standard error response envelope. All error responses are wrapped in this format.
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/Error'
+      example:
+        error:
+          code: NOT_FOUND
+          message: Resource not found
+          request_id: null
+          details:
+            resource_id: "123"
+
+    Error:
+      type: object
+      description: Base error object with common fields
+      required:
+        - code
+        - message
+        - request_id
+      properties:
+        code:
+          type: string
+          description: |
+            Machine-readable error code in UPPER_SNAKE_CASE.
+            Stable across API versions.
+          example: NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Resource not found
+        request_id:
+          type: string
+          nullable: true
+          description: |
+            Request correlation ID for tracing.
+            Currently null, will be populated in future implementations.
+          example: "req-abc123"
+        details:
+          type: object
+          description: |
+            Additional error details.
+            Only included in development mode for server errors (5xx).
+            Always removed in production mode for security.
+          additionalProperties: true
+          example:
+            resource_type: "Circle"
+            resource_id: "123"
+
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            errors:
+              type: array
+              description: |
+                Field-level validation errors.
+                Each entry represents a specific field that failed validation.
+              items:
+                $ref: '#/components/schemas/FieldError'
+      example:
+        code: VALIDATION_FAILED
+        message: One or more fields are invalid
+        request_id: null
+        errors:
+          - field: email
+            code: INVALID_FORMAT
+            message: Invalid email format
+          - field: password
+            code: TOO_SHORT
+            message: Password must be at least 8 characters
+
+    FieldError:
+      type: object
+      description: |
+        A single field validation error.
+        Used in ValidationError to indicate which fields failed validation.
+      required:
+        - field
+        - code
+        - message
+      properties:
+        field:
+          type: string
+          description: The field name that failed validation
+          example: email
+        code:
+          type: string
+          description: |
+            Machine-readable error code for this field.
+            Common values: MISSING, INVALID_FORMAT, TOO_SHORT, TOO_LONG, INVALID_TYPE.
+          example: INVALID_FORMAT
+        message:
+          type: string
+          description: Human-readable error message for this field
+          example: Invalid email format
+
+    # ============================================================
+    # Common HTTP Error Responses
+    # ============================================================
+
+    BadRequestResponse:
+      description: Bad request - malformed or invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: INVALID_REQUEST
+              message: Malformed JSON payload
+              request_id: null
+
+    UnauthorizedResponse:
+      description: Unauthorized - missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: UNAUTHORIZED
+              message: Missing Authorization header
+              request_id: null
+
+    ForbiddenResponse:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: FORBIDDEN
+              message: You do not have permission to access this resource
+              request_id: null
+
+    NotFoundResponse:
+      description: Not found - resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: NOT_FOUND
+              message: Resource not found
+              request_id: null
+
+    ConflictResponse:
+      description: Conflict - resource state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: CONFLICT
+              message: Resource already exists
+              request_id: null
+
+    ValidationErrorResponse:
+      description: Validation failed - field-level errors
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: VALIDATION_FAILED
+              message: One or more fields are invalid
+              request_id: null
+              errors:
+                - field: email
+                  code: INVALID_FORMAT
+                  message: Invalid email format
+
+    InternalErrorResponse:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: INTERNAL_ERROR
+              message: An unexpected error occurred
+              request_id: null
+
+  # ============================================================
+  # Reusable Response Objects
+  # ============================================================
+
+  responses:
+    BadRequest:
+      $ref: '#/components/responses/BadRequestResponse'
+    Unauthorized:
+      $ref: '#/components/responses/UnauthorizedResponse'
+    Forbidden:
+      $ref: '#/components/responses/ForbiddenResponse'
+    NotFound:
+      $ref: '#/components/responses/NotFoundResponse'
+    Conflict:
+      $ref: '#/components/responses/ConflictResponse'
+    ValidationError:
+      $ref: '#/components/responses/ValidationErrorResponse'
+    InternalError:
+      $ref: '#/components/responses/InternalErrorResponse'
+
+paths:
+  # Placeholder - actual endpoints to be added as API is documented
+  _example:
+    get:
+      summary: Example endpoint
+      description: |
+        Example showing how to reference error responses.
+
+        Responses follow the Campus API Error Specification.
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
