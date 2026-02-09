@@ -1,30 +1,22 @@
 # Campus Style Guide
 
-This document defines coding and documentation standards for the Campus project.
+This document defines coding standards for the Campus project.
 
-## Documentation Standards
+**For documentation standards**, see [development-guidelines.md](development-guidelines.md).
 
-### Writing Style
-- **Brief and precise**: Avoid verbose explanations; focus on essential information
-- **Clear structure**: Use headings, lists, and code blocks to organize content
-- **Consistent terminology**: Use established terms throughout the project
-- **Active voice**: Prefer "Configure the database" over "The database should be configured"
-
-### Documentation Format
-- Use Markdown for all documentation files
-- Include table of contents for documents longer than 50 lines
-- End code blocks with proper language specification (```python, ```bash, etc.)
-- Use relative links for internal documentation references
+**For code review checklist**, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Python Code Standards
 
 ### Code Conventions
+
 Follow established Python conventions:
 - **PEP 8**: Python code style guide
 - **PEP 257**: Docstring conventions
 - **Type hints**: Use type annotations for function parameters and return values
 
 ### Import Structure
+
 Organize imports in this order:
 1. **Built-in modules** (standard library)
 2. **Third-party packages** (installed via pip/poetry)
@@ -42,9 +34,9 @@ import flask
 import requests
 
 # Campus package imports
-from campus.vault import get_vault
-from campus.storage import PostgreSQLStorage
+from campus.common import utils
 from campus.common.errors import CampusError
+import campus.storage
 
 # Local imports
 from .models import User
@@ -52,8 +44,6 @@ from .utils import validate_input
 ```
 
 ### Package Import Requirements
-
-Organize imports in ascending order by name, uppercase then lowercase.
 
 **Preferred**: Module-level imports
 
@@ -115,19 +105,19 @@ Use Google-style docstrings:
 ```python
 def create_user(name: str, email: str, role: str = "student") -> User:
     """Create a new user with the specified details.
-    
+
     Args:
         name: Full name of the user
         email: Valid email address
         role: User role (student, teacher, admin)
-        
+
     Returns:
         User object with generated ID and timestamps
-        
+
     Raises:
         ValidationError: If email format is invalid
         CampusError: If user creation fails
-        
+
     Example:
         >>> user = create_user("John Doe", "john@example.com", "student")
         >>> print(user.id)
@@ -164,37 +154,3 @@ def validate_user_data(data: Dict) -> None:
 - **refactor**: Code refactoring
 - **test**: Adding or updating tests
 - **chore**: Build process or auxiliary tool changes
-
-## Common Pitfalls
-
-### Development Environment
-- **Always use Poetry**: Run `poetry run python` instead of just `python`
-- **Check your environment**: Use `poetry env info` to verify active environment
-
-### Import Issues
-- **Avoid circular imports**: Structure imports to prevent dependency cycles
-- **Use absolute imports**: Prefer `campus.vault` over relative imports in most cases
-
-### Testing
-- **Use appropriate test strategy**: See [testing-strategies.md](testing-strategies.md)
-- **Test edge cases**: Include error conditions and boundary values
-
-### Configuration
-- **Never commit secrets**: Use `campus.auth.vaults` for sensitive data
-- **Document configuration**: Update docs for new config options
-
-## Code Review Guidelines
-
-### Before Submitting
-- [ ] All tests pass locally
-- [ ] Code follows style guide
-- [ ] Documentation is updated
-- [ ] Commit messages follow format
-- [ ] No secrets in code
-
-### Review Focus Areas
-- **Security**: Check for potential vulnerabilities
-- **Performance**: Look for inefficient operations
-- **Maintainability**: Ensure code is readable and well-structured
-- **Testing**: Verify adequate test coverage
-- **Documentation**: Confirm docs match implementation

@@ -55,15 +55,50 @@ TOKEN_RESPONSE_ERROR_TYPES = (
     "invalid_scope",
 )
 
+# Mapping of OAuth error strings to Campus error codes
+# Used for envelope format conversion
+_OAUTH_TO_CAMPUS_ERROR_CODES: dict[str, str] = {
+    "unsupported_grant_type": "AUTH_UNSUPPORTED_GRANT",
+    "unsupported_response_type": "AUTH_UNSUPPORTED_RESPONSE_TYPE",
+}
+
 
 class ErrorConstant(str):
-    """Error enums"""
+    """Error enums.
+
+    Error codes follow the API Error Handling Specification:
+    - UPPER_SNAKE_CASE format
+    - Stable across versions
+    - Documented and machine-readable
+
+    Reference: campus/api/docs/api-error-spec.md
+    """
+    # General API errors
     CONFLICT = "CONFLICT"
     FORBIDDEN = "FORBIDDEN"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
     INVALID_REQUEST = "INVALID_REQUEST"
     NOT_FOUND = "NOT_FOUND"
-    SERVER_ERROR = "SERVER_ERROR"
     UNAUTHORIZED = "UNAUTHORIZED"
+
+    # Validation errors
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+
+    # OAuth/Auth errors
+    AUTH_INVALID_REQUEST = "AUTH_INVALID_REQUEST"
+    AUTH_INVALID_CLIENT = "AUTH_INVALID_CLIENT"
+    AUTH_INVALID_GRANT = "AUTH_INVALID_GRANT"
+    AUTH_UNAUTHORIZED_CLIENT = "AUTH_UNAUTHORIZED_CLIENT"
+    AUTH_UNSUPPORTED_GRANT = "AUTH_UNSUPPORTED_GRANT"
+    AUTH_UNSUPPORTED_RESPONSE_TYPE = "AUTH_UNSUPPORTED_RESPONSE_TYPE"
+    AUTH_INVALID_SCOPE = "AUTH_INVALID_SCOPE"
+    AUTH_ACCESS_DENIED = "AUTH_ACCESS_DENIED"
+    AUTH_SERVER_ERROR = "AUTH_SERVER_ERROR"
+    AUTH_TEMPORARILY_UNAVAILABLE = "AUTH_TEMPORARILY_UNAVAILABLE"
+    AUTH_TOKEN_INVALID = "AUTH_TOKEN_INVALID"
+    AUTH_INSUFFICIENT_SCOPE = "AUTH_INSUFFICIENT_SCOPE"
+
+    # Additional specific error codes can be added here as needed
 
 
 class APIError(Exception):
@@ -91,21 +126,42 @@ class APIError(Exception):
     def to_dict(self) -> dict[str, Any]:
         """Convert the error to a dictionary.
 
-        This function is used to convert the error to a dictionary
-        for JSON serialisation.
-        """
-        err_obj = {
-            "message": self.message,
-            "error_code": self.error_code,
-            "details": self.details,
+        Returns a spec-compliant error envelope:
+        {
+            "error": {
+                "code": "ERROR_CODE",
+                "message": "Human-readable explanation",
+                "details": {},
+                "request_id": null
+            }
         }
-        # We can't use campus.common.devops to do a env check here
+
+        Reference: campus/api/docs/api-error-spec.md
+        """
+        error_obj: dict[str, Any] = {
+            "code": str(self.error_code),
+            "message": self.message,
+        }
+
+        # Only include details if non-empty
+        if self.details:
+            error_obj["details"] = dict(self.details)
+
+        # Add traceback in development mode for server errors
+        # We can't use campus.common.devops to do an env check here
         # because it would create a circular import.
-        # Pop the traceback in production environment.
         if 500 <= self.status_code < 600:
-            import traceback
-            err_obj.update(traceback=traceback.format_exc())
-        return err_obj
+            import os
+            if os.getenv("ENV", "development") == "development":
+                import traceback
+                if not self.details:
+                    error_obj["details"] = {}
+                error_obj["details"]["traceback"] = traceback.format_exc()
+
+        # request_id will contain a correlation ID once request tracing is implemented
+        error_obj["request_id"] = None
+
+        return {"error": error_obj}
 
 
 class OAuthError(Exception):
@@ -133,12 +189,39 @@ class OAuthError(Exception):
         self.error_uri = error_uri
         self.details = details
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, envelope_format: bool = False) -> dict[str, Any]:
         """Convert the error to a dictionary.
 
         This function is used to convert the error to a dictionary
         for JSON serialisation.
+
+        Args:
+            envelope_format: If True, use Campus error envelope.
+                           If False, use RFC 6749 format (default).
+
+        Returns:
+            RFC 6749 format by default, Campus envelope when requested.
         """
+        if envelope_format:
+            # Campus envelope for API consistency
+            # Map OAuth errors to Campus error codes following auth-error-spec.md
+            campus_code = _OAUTH_TO_CAMPUS_ERROR_CODES.get(
+                self.error,
+                f"AUTH_{self.error.upper()}"
+            )
+            return {
+                "error": {
+                    "code": campus_code,
+                    "message": self.error_description,
+                    "details": {
+                        "oauth_error": self.error,
+                        "oauth_error_description": self.error_description,
+                        **self.details
+                    },
+                    "request_id": None
+                }
+            }
+        # RFC 6749 format (default for OAuth compliance)
         err_obj = {
             "error": self.error,
             "error_description": self.error_description,

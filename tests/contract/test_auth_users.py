@@ -69,8 +69,9 @@ class TestAuthUsersContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_list_users_with_auth_returns_list(self):
         """GET /users/ with auth returns list of users."""

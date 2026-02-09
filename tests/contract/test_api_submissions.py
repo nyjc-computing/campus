@@ -88,8 +88,9 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_list_submissions_empty(self):
         """GET /submissions/ with auth returns empty list for unique filter."""
@@ -329,8 +330,9 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "INVALID_REQUEST")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "INVALID_REQUEST")
 
     def test_update_missing_submission_returns_error(self):
         """PATCH /submissions/{submission_id} for non-existent submission returns 200.
@@ -539,8 +541,9 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "INVALID_REQUEST")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "INVALID_REQUEST")
 
 
 if __name__ == '__main__':

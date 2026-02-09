@@ -1,6 +1,8 @@
 
 # Campus Test Directories
 
+> **Comprehensive testing guide:** See [docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md) for complete testing documentation including what we test, how tests are organized, and how to write new tests.
+
 ## Critical Information
 
 - The test suite **only uses the standard library `unittest` module**—no other test dependencies are required or supported.
@@ -186,3 +188,13 @@ python tests/run_tests.py integration --module auth
 # Verbose output
 python tests/run_tests.py unit -v
 ```
+
+## More Information
+
+For complete testing documentation including:
+- What we test and what we don't test
+- How to write new tests
+- Test environment setup
+- Known gotchas
+
+See [docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md).```
