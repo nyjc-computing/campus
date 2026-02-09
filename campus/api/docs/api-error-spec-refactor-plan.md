@@ -15,7 +15,7 @@ This document outlines the phased implementation plan to bring the Campus API er
 | 3 | ✅ Complete | Update validation code |
 | 4 | ✅ Complete | Add error response tests |
 | 5 | ✅ Complete | Client-side updates (campus-api-python) |
-| 6 | Pending | Documentation |
+| 6 | ✅ Complete | Documentation (OpenAPI spec) |
 
 ---
 
@@ -540,24 +540,9 @@ pytest tests/ -v
 
 ## Phase 6: Documentation
 
-### 6.1 Update OpenAPI/Swagger Docs
+### 6.1 Create OpenAPI Spec
 
-Add error response schemas to API documentation.
-
-### 6.2 Create Migration Guide
-
-Document the changes for API consumers:
-
-**New Error Envelope Format:**
-- Root `error` object wrapper
-- `error.code` (was `error_code`)
-- `error.message` (was `message`)
-- `error.details` (was `details`)
-- `error.request_id` (new, currently `null`)
-
-**Validation Errors:**
-- New `error.errors` array with field-level details
-- Status code 422 for validation failures
+Create OpenAPI 3.0 specification with error response schemas at `campus/api/docs/openapi.yaml`.
 
 ---
 
@@ -586,17 +571,6 @@ Use this checklist to track progress through each phase.
 
 ### Documentation
 
-- [ ] Phase 6.1: Update OpenAPI docs
-- [ ] Phase 6.2: Create migration guide
+- [x] Phase 6.1: Create OpenAPI spec with error response schemas ✅
 
 ---
-
-## Migration Strategy
-
-The refactor is designed to be **backward compatible** during transition:
-
-1. **Client parses both formats**: New envelope is preferred, legacy format is fallback
-2. **Each phase is independently deployable**: Code works after each phase completion
-3. **Tests pass after each phase**: No regression in functionality
-
-Once all phases are complete and deployed, legacy format support can be removed in a future major version.
