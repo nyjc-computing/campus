@@ -15,8 +15,16 @@ An allocation refers to a new set of classes, people and class timings
   imported with a new timetable. 
 It refers to one of these:
   https://github.com/nyjc-computing/nyxchange-timetable-v2/blob/data-schema/tt_file/tt_xml_docs.md
-This year's timetable and last year's timetable are two seperate allocations.
+This year's timetable and last year's timetable are two separate allocations.
 The data for an allocation is stored in some .xml file, named `filename`
+
+Internal models not returned through APIs: 
+- WeekDay, TimeSlot, VenueTimeSlot 
+- use Integer IDs for their own id, and are referenced as such
+
+Models that can be returned through APIs:
+- LessonGroup, TimetableEntry, Timetable 
+- use CampusID (UUID) for their own id, and are referenced as such
 
 TODO: Update doc link after migration
 """
@@ -26,7 +34,7 @@ from dataclasses import dataclass, field
 from campus.common import schema
 from campus.common.utils import uid
 
-from .base import Model
+from .base import Model, InternalModel
 from . import constraints
 
 # NOTE: Assumes reusing the same object is not an issue
@@ -38,7 +46,7 @@ unique_field = field(metadata={
 ##      They will be relevant every for every allocation.        ##
 
 @dataclass(eq=False, kw_only=True)
-class WeekDay(Model):
+class WeekDay(InternalModel):
     """
     Describes a day in a repeating timetable.
     Assumption: This will stay constant across all allocations.
@@ -47,13 +55,13 @@ class WeekDay(Model):
       label (String): (cosmetic purposes: 'Mon A', 'Tue A', ... 'Mon B', 'Tue B', ..., 'Sat', 'Sun')
       index (Integer): index 0 is earliest (eg. Mon A), followed by Tues A, etc.
     """
-    id: schema.CampusID = unique_field
+    id: schema.Integer
     label: schema.String
     index: schema.Integer
     
 
 @dataclass(eq=False, kw_only=True)
-class TimeSlot(Model):
+class TimeSlot(InternalModel):
     """
     Timeslot which repeats across all `WeekDay`s
     Assumption: This will stay constant across all allocations.
@@ -64,9 +72,7 @@ class TimeSlot(Model):
       end_time (DateTime): ISO8601
       index (Integer): index 0 is earliest slot (eg. 0730), followed by 0800 at idx 1, etc.
     """
-    id: schema.CampusID = field(default_factory=(
-        lambda: uid.generate_category_uid("timetable", length=8)
-    ))
+    id: schema.Integer
     label: schema.String
     start_time: schema.DateTime = unique_field  # ISO8601
     end_time: schema.DateTime = unique_field  # ISO8601
@@ -74,7 +80,7 @@ class TimeSlot(Model):
 
 
 @dataclass(eq=False, kw_only=True)
-class Venue(Model):
+class TimetableVenue(InternalModel):
     """
     Describes a single venue.
     We have a set of venues that remain across years, except additions.
@@ -83,14 +89,12 @@ class Venue(Model):
     Fields:
       label (String): (e.g. '03-39', 'i-Space 1', ..., follow XML when possible)
     """
-    id: schema.CampusID = field(default_factory=(
-        lambda: uid.generate_category_uid("timetable", length=8)
-    ))
+    id: schema.Integer
     label: schema.String
 
 
 @dataclass(eq=False, kw_only=True)
-class VenueTimeSlot(Model):
+class VenueTimeSlot(InternalModel):
     """
     Imagine each venue has its own timetable.
     This is one timeslot on such a timetable, representing an intersection of
@@ -100,21 +104,19 @@ class VenueTimeSlot(Model):
     Must be automatically generated for each Venue for all WeekDay, TimeSlot.
 
     Fields:
-      weekday_id (CampusID): FK referencing a WeekDay.id
-      timeslot_id (CampusID): FK referencing a TimeSlot.id
-      venue_id (CampusID): FK referencing a Venue.id
+      weekday_id (Integer): FK referencing a WeekDay.id
+      timeslot_id (Integer): FK referencing a TimeSlot.id
+      venue_id (Integer): FK referencing a TimetableVenue.id
     """
-    id: schema.CampusID = field(default_factory=(
-        lambda: uid.generate_category_uid("timetable", length=8)
-    ))
-    weekday_id: schema.CampusID
-    timeslot_id: schema.CampusID
-    venue_id: schema.CampusID
+    id: schema.Integer
+    weekday_id: schema.Integer
+    timeslot_id: schema.Integer
+    venue_id: schema.Integer
     __constraints__ = constraints.Unique("weekday_id", "timeslot_id", "venue_id")
 
 ##      Sections that are only relevant to a specific allocation.       ##
 ##      New entries are created for each allocation.       ##
-##      Which allocation the entry is relevant to is .       ##
+##      Which allocation the entry is relevant to is in timetable_id.       ##
 
 @dataclass(eq=False, kw_only=True)
 class LessonGroup(Model):
@@ -122,21 +124,22 @@ class LessonGroup(Model):
     This represents a specific subject taught to a class.
     Eg. Chem, taught to 2510. (eg. stored as '2510-CM')
     These are labelled as an inconsistently formatted string, imported
-      directly from the XML. It seems we cannot seperate class and subject.
+      directly from the XML. It seems we cannot separate class and subject.
     
     Fields:
-      filename (String): Allocation xml filename which this entry is relevant to
+      timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       label (String): Label brought over from xml, like 2527-COM
     """
     id: schema.CampusID = field(default_factory=(
-        lambda: uid.generate_category_uid("timetable", length=8)
+        lambda: uid.generate_category_uid("timetable-group", length=8)
     ))
-    filename: schema.String
+    timetable_id: schema.CampusID 
     label: schema.String
+    __constraints__ = constraints.Unique("timetable_id", "label")
 
 
 @dataclass(eq=False, kw_only=True)
-class LessonGroupMember(Model):
+class LessonGroupMember(InternalModel):
     """
     Represents a single member of a LessonGroup.
     For example, 2510-Math will have:
@@ -146,35 +149,54 @@ class LessonGroupMember(Model):
     2510-Chem will have its own set of entries, even if the participant is duplicated.
 
     Fields:
-      filename (String): Allocation xml filename which this entry is relevant to
+      timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       lessongroup_id (CampusID): FK referencing a LessonGroup.id
       ade_participant (String): XML id (aka TTCode or teacher_id). We have a unique mapping of these IDs
         to nyjc email etc., for each allocation.
     """
-    id: schema.CampusID = field(default_factory=(
-        lambda: uid.generate_category_uid("timetable", length=8)
-    ))
-    filename: schema.String
+    id: schema.Integer
+    timetable_id: schema.CampusID 
     lessongroup_id: schema.CampusID
     ade_participant: schema.String
-    __constraints__ = constraints.Unique("lessongroup_id", "ade_participant", "filename")
+    __constraints__ = constraints.Unique("lessongroup_id", "ade_participant", "timetable_id")
 
 
 @dataclass(eq=False, kw_only=True)
-class Timetable(Model):
+class TimetableEntry(Model):
     """
-    A timetable represents a single lesson for a LessonGroup
+    A timetable entry represents a single lesson for a LessonGroup
         at some VenueTimeSlot. 
     
     Fields:
-      filename (String): Allocation xml filename which this entry is relevant to
+      timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       lessongroup_id (CampusID): FK referencing a LessonGroup.id
-      venuetimeslot_id (CampusID): FK referencing a VenueTimeSlot.id
+      venuetimeslot_id (Integer): FK referencing a VenueTimeSlot.id
+    """
+    id: schema.CampusID = field(default_factory=(
+        lambda: uid.generate_category_uid("timetable-entry", length=16)
+    ))
+    timetable_id: schema.CampusID 
+    lessongroup_id: schema.CampusID
+    venuetimeslot_id: schema.Integer
+    __constraints__ = constraints.Unique("lessongroup_id", "venuetimeslot_id", "timetable_id")
+
+##        Represents an allocation itself         ##
+@dataclass(eq=False, kw_only=True)
+class Timetable(Model):
+    """
+    The timetable represents an allocation.
+    It refers to a new set of classes, people and class timings
+        imported with each new timetable XML. 
+    
+    Fields:
+      filename (String): The XML filename it was imported from
+      start_date (DateTime): 00:00 on the first day the timetable comes into effect
+      end_date (DateTime): 00:00 on the last day the timetable is effective
     """
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable", length=8)
     ))
     filename: schema.String
-    lessongroup_id: schema.CampusID
-    venuetimeslot_id: schema.CampusID
-    __constraints__ = constraints.Unique("lessongroup_id", "venuetimeslot_id", "filename")
+    start_date: schema.DateTime 
+    end_date: schema.DateTime 
+    __constraints__ = constraints.Unique("filename")
