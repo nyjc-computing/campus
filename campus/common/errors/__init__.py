@@ -72,17 +72,18 @@ def handle_token_error(
     """Handle OAuth token request errors.
 
     This function is used to handle Token errors and return
-    standardised JSON responses following RFC 6749 Section 5.2.
+    standardised JSON responses following RFC 6749 Section 5.2
+    with Campus error envelope for API consistency.
+
+    Reference: campus/auth/docs/auth-error-spec.md
     """
     module = get_caller()
     logger.exception("TokenError in %s: %s", module, err)
-    err_dict = err.to_dict()
+    err_dict = err.to_dict(envelope_format=True)
     from campus.common import devops
     # Remove details in production for security reasons
-    # OAuth errors follow RFC 6749 format
     if devops.ENV == devops.PRODUCTION:
-        err_dict.pop("details", None)
-        err_dict.pop("traceback", None)
+        err_dict["error"].pop("details", None)
     return err_dict, err.status_code
 
 
