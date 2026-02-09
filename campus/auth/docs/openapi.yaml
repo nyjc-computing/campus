@@ -1,0 +1,352 @@
+openapi: 3.0.3
+info:
+  title: Campus Auth API
+  description: |
+    Campus OAuth 2.0 Authorization Server and Authentication API.
+
+    ## Error Responses
+
+    All errors follow the Campus error envelope format while maintaining
+    OAuth 2.0 compliance (RFC 6749).
+
+    OAuth-specific details are included in the `details.oauth_error` field.
+
+    Reference: [auth-error-spec.md](./auth-error-spec.md)
+  version: 0.1.0
+
+servers:
+  - url: https://auth.campus.nyjc.app
+    description: Production
+  - url: https://auth.campus.nyjc.dev
+    description: Staging
+  - url: https://campusauth-development.up.railway.app
+    description: Development
+
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/AuthError'
+
+    AuthError:
+      type: object
+      required: [code, message, request_id]
+      properties:
+        code:
+          type: string
+          description: Campus error code (AUTH_* prefix)
+          example: AUTH_INVALID_CLIENT
+        message:
+          type: string
+          description: Human-readable error message
+        request_id:
+          type: string
+          nullable: true
+          description: Request correlation ID for tracing
+        details:
+          type: object
+          description: Additional error details including OAuth protocol fields
+          properties:
+            oauth_error:
+              type: string
+              description: RFC 6749 OAuth error string
+              example: invalid_client
+            oauth_error_description:
+              type: string
+              description: OAuth error description
+            required_scopes:
+              type: array
+              items:
+                type: string
+              description: Required scopes for insufficient_scope errors
+
+    ValidationError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id, errors]
+          properties:
+            code:
+              type: string
+              example: VALIDATION_FAILED
+            message:
+              type: string
+            request_id:
+              type: string
+              nullable: true
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, code, message]
+                properties:
+                  field:
+                    type: string
+                  code:
+                    type: string
+                  message:
+                    type: string
+
+  responses:
+    InvalidClient:
+      description: Client authentication failed (401)
+      headers:
+        WWW-Authenticate:
+          description: Bearer authentication scheme with error details
+          schema:
+            type: string
+            example: 'Bearer error="invalid_client", error_description="Client authentication failed"'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: AUTH_INVALID_CLIENT
+              message: Client authentication failed
+              request_id: req_42a91c
+              details:
+                oauth_error: invalid_client
+                oauth_error_description: Client authentication failed
+
+    InvalidGrant:
+      description: Invalid or expired authorization grant (400)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: AUTH_INVALID_GRANT
+              message: Invalid credentials
+              request_id: req_d81b0f
+              details:
+                oauth_error: invalid_grant
+                oauth_error_description: Invalid credentials
+
+    UnauthorizedClient:
+      description: Client not authorized for this grant type (403)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: AUTH_UNAUTHORIZED_CLIENT
+              message: Client not authorized
+              request_id: req_aa921f
+              details:
+                oauth_error: unauthorized_client
+
+    InsufficientScope:
+      description: Token lacks required scope (403)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: AUTH_INSUFFICIENT_SCOPE
+              message: Insufficient permissions
+              request_id: req_bb922g
+              details:
+                oauth_error: insufficient_scope
+                required_scopes: [campus.read]
+
+    ValidationError:
+      description: Request validation failed (422)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+          example:
+            error:
+              code: VALIDATION_FAILED
+              message: One or more fields are invalid
+              request_id: req_cc923h
+              errors:
+                - field: username
+                  code: MISSING
+                  message: Username is required
+                - field: password
+                  code: MISSING
+                  message: Password is required
+
+paths:
+  /oauth/token:
+    post:
+      summary: Request token
+      description: Get an access token using OAuth 2.0 grant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grant_type]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, password, client_credentials, refresh_token]
+                username:
+                  type: string
+                  description: Username for password grant
+                password:
+                  type: string
+                  description: Password for password grant
+                refresh_token:
+                  type: string
+                  description: Refresh token for refresh_token grant
+      responses:
+        '200':
+          description: Token granted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                  refresh_token:
+                    type: string
+                  scope:
+                    type: string
+        '400':
+          $ref: '#/components/responses/InvalidGrant'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '403':
+          $ref: '#/components/responses/UnauthorizedClient'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /oauth/authorize:
+    get:
+      summary: Authorization endpoint
+      description: OAuth 2.0 authorization endpoint (uses redirects)
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: scope
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect with authorization code or error
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Redirect URI with code or error parameters
+        '400':
+          description: Invalid request - redirects with error
+
+  /sessions/{provider}:
+    post:
+      summary: Create OAuth session
+      description: Create a new OAuth session with external provider
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, microsoft]
+      responses:
+        '200':
+          description: Session created successfully
+        '400':
+          $ref: '#/components/responses/InvalidGrant'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /logins:
+    post:
+      summary: Create login session
+      description: Create a new login session with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful
+        '400':
+          $ref: '#/components/responses/InvalidGrant'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /clients:
+    post:
+      summary: Register OAuth client
+      description: Register a new OAuth client application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_name, redirect_uris]
+              properties:
+                client_name:
+                  type: string
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+                grant_types:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Client registered successfully
+        '400':
+          $ref: '#/components/responses/InvalidGrant'
+        '409':
+          description: Client already exists
+        '422':
+          $ref: '#/components/responses/ValidationError'
