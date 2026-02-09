@@ -371,26 +371,6 @@ components:
               message: An unexpected error occurred
               request_id: null
 
-    # ============================================================
-    # Reusable Response Objects
-    # ============================================================
-
-    responses:
-      BadRequest:
-        $ref: '#/components/responses/BadRequestResponse'
-      Unauthorized:
-        $ref: '#/components/responses/UnauthorizedResponse'
-      Forbidden:
-        $ref: '#/components/responses/ForbiddenResponse'
-      NotFound:
-        $ref: '#/components/responses/NotFoundResponse'
-      Conflict:
-        $ref: '#/components/responses/ConflictResponse'
-      ValidationError:
-        $ref: '#/components/responses/ValidationErrorResponse'
-      InternalError:
-        $ref: '#/components/responses/InternalErrorResponse'
-
 paths:
   # ============================================================
   # Assignments
@@ -790,6 +770,39 @@ paths:
         '409':
           $ref: '#/components/responses/ConflictResponse'
 
+    patch:
+      summary: Update member access level
+      description: Update the access level of a member within a circle
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id, access_value]
+              properties:
+                member_id:
+                  type: string
+                access_value:
+                  type: integer
+      responses:
+        '200':
+          description: Member access updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
   /circles/{circle_id}/members/add:
     post:
       summary: Add circle member
@@ -850,40 +863,6 @@ paths:
       responses:
         '200':
           description: Member removed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-        '409':
-          $ref: '#/components/responses/ConflictResponse'
-
-  /circles/{circle_id}/members:
-    patch:
-      summary: Update member access level
-      description: Update the access level of a member within a circle
-      tags:
-        - Circles
-      parameters:
-        - name: circle_id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [member_id, access_value]
-              properties:
-                member_id:
-                  type: string
-                access_value:
-                  type: integer
-      responses:
-        '200':
-          description: Member access updated successfully
           content:
             application/json:
               schema:

@@ -560,12 +560,14 @@ paths:
               schema:
                 type: object
                 properties:
-                  credentials:
+                  credential:
                     type: object
+                    description: Single credential if token_id is specified
                   credentials:
                     type: array
                     items:
                       type: object
+                    description: List of all credentials if token_id is not specified
         '401':
           $ref: '#/components/responses/InvalidClient'
 
