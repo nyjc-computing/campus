@@ -14,7 +14,7 @@ This document outlines the phased implementation plan to bring the Campus API er
 | 2 | ✅ Complete | Validation error structure |
 | 3 | ✅ Complete | Update validation code |
 | 4 | ✅ Complete | Add error response tests |
-| 5 | Pending | Client-side updates (campus-api-python) |
+| 5 | ✅ Complete | Client-side updates (campus-api-python) |
 | 6 | Pending | Documentation |
 
 ---
@@ -579,10 +579,10 @@ Use this checklist to track progress through each phase.
 
 ### Client (campus-api-python)
 
-- [ ] Phase 5.1: Update `raise_for_status()` parsing
-- [ ] Phase 5.2: Update `APIError` dataclass
-- [ ] Phase 5.3: Add `ValidationError` class
-- [ ] Phase 5: Update tests for new error parsing
+- [x] Phase 5.1: Update `raise_for_status()` parsing ✅
+- [x] Phase 5.2: Update `APIError` dataclass ✅
+- [x] Phase 5.3: Add `ValidationError` class ✅
+- [x] Phase 5: Update tests for new error parsing ✅
 
 ### Documentation
 
