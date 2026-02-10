@@ -163,9 +163,8 @@ components:
           type: string
           example: "Homework 1"
         description:
-          type:
-            - string
-            "null"
+          type: string
+          nullable: true
           example: "Complete the exercises"
         created_by:
           type: string
@@ -204,9 +203,8 @@ components:
           type: string
           example: "Design Team"
         description:
-          type:
-            - string
-            "null"
+          type: string
+          nullable: true
           example: "Handles UI/UX"
         tag:
           type: string
@@ -273,12 +271,12 @@ components:
             type: object
             description: Teacher feedback on responses
         submitted_at:
-          type:
-            - string
-            - "null"
+          type: string
+          nullable: true
           format: date-time
           description: When submission was finalized
 
+  responses:
     # ============================================================
     # Common HTTP Error Responses
     # ============================================================
@@ -402,9 +400,9 @@ paths:
                     items:
                       $ref: '#/components/schemas/Assignment'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: '#/components/responses/UnauthorizedResponse'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: '#/components/responses/ForbiddenResponse'
 
     post:
       summary: Create a new assignment
@@ -443,11 +441,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Assignment'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/BadRequestResponse'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: '#/components/responses/UnauthorizedResponse'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/ValidationErrorResponse'
 
   /assignments/{assignment_id}:
     get:
@@ -492,27 +490,20 @@ paths:
               properties:
                 title:
                   type: string
+                  description: New title
                 description:
-                  type:
-                    - string
-                    - "null"
-                description: New title
-                description:
-                  type:
-                    - string
-                    - "null"
-                description: New description
+                  type: string
+                  nullable: true
+                  description: New description
                 questions:
-                  type:
-                    - array
-                    - "null"
+                  type: array
+                  nullable: true
                   items:
                     type: object
                   description: New questions
                 classroom_links:
-                  type:
-                    - array
-                    - "null"
+                  type: array
+                  nullable: true
                   items:
                     type: object
                   description: New classroom links
@@ -524,7 +515,7 @@ paths:
               schema:
                 type: object
         '400':
-          $ref: '#/components/responses/BadRequest'
+          $ref: '#/components/responses/BadRequestResponse'
         '404':
           $ref: '#/components/responses/NotFoundResponse'
 
@@ -613,9 +604,9 @@ paths:
                     items:
                       $ref: '#/components/schemas/Circle'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: '#/components/responses/UnauthorizedResponse'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          $ref: '#/components/responses/ForbiddenResponse'
 
     post:
       summary: Create a new circle
@@ -640,9 +631,8 @@ paths:
                   type: string
                   description: Circle tag/category
                 parents:
-                  type:
-                    - object
-                    - "null"
+                  type: object
+                  nullable: true
                   description: Parent circles and access values
       responses:
         '201':
@@ -723,16 +713,11 @@ paths:
               properties:
                 name:
                   type: string
+                  description: New circle name
                 description:
-                  type:
-                    - string
-                    - "null"
-                description: New circle name
-                description:
-                  type:
-                    - string
-                    - "null"
-                description: New circle description
+                  type: string
+                  nullable: true
+                  description: New circle description
       responses:
         '200':
           description: Circle updated successfully
@@ -913,7 +898,7 @@ paths:
                       type: object
                       description: Submission resource
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: '#/components/responses/UnauthorizedResponse'
 
     post:
       summary: Create a new submission
@@ -1045,21 +1030,18 @@ paths:
               type: object
               properties:
                 responses:
-                  type:
-                    - array
-                    - "null"
+                  type: array
+                  nullable: true
                   items:
                     type: object
                 feedback:
-                  type:
-                    - array
-                    - "null"
+                  type: array
+                  nullable: true
                   items:
                     type: object
                 submitted_at:
-                  type:
-                    - string
-                    - "null"
+                  type: string
+                  nullable: true
                   format: date-time
       responses:
         '200':
