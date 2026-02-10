@@ -6,13 +6,16 @@ info:
 
     ## Error Responses
 
-    All errors follow the Campus error envelope format while maintaining
+    All error responses follow the Campus error envelope format while maintaining
     OAuth 2.0 compliance (RFC 6749).
 
     OAuth-specific details are included in the `details.oauth_error` field.
 
     Reference: [auth-error-spec.md](./auth-error-spec.md)
   version: 0.1.0
+  contact:
+    name: NYJC Computing
+    email: nyjc.computing@nyjc.edu.sg
 
 servers:
   - url: https://auth.campus.nyjc.app
@@ -92,6 +95,95 @@ components:
                   message:
                     type: string
 
+    User:
+      type: object
+      required: [id, email, name, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          example: usr_123abc
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        name:
+          type: string
+          example: John Doe
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Client:
+      type: object
+      required: [id, client_id, client_secret]
+      properties:
+        id:
+          type: string
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+
+    LoginSession:
+      type: object
+      required: [id, user_id, created_at, expires_at]
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    Session:
+      type: object
+      required: [id, provider, user_id]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+          enum: [google, microsoft]
+        user_id:
+          type: string
+
+    Credentials:
+      type: object
+      required: [token, client_id, user_id, scopes, expiry]
+      properties:
+        token:
+          type: string
+        client_id:
+          type: string
+        user_id:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        expiry:
+          type: string
+          format: date-time
+
+    VaultKey:
+      type: string
+      description: A key in a vault (encrypted value)
+
   responses:
     InvalidClient:
       description: Client authentication failed (401)
@@ -112,7 +204,6 @@ components:
               request_id: req_42a91c
               details:
                 oauth_error: invalid_client
-                oauth_error_description: Client authentication failed
 
     InvalidGrant:
       description: Invalid or expired authorization grant (400)
@@ -127,7 +218,6 @@ components:
               request_id: req_d81b0f
               details:
                 oauth_error: invalid_grant
-                oauth_error_description: Invalid credentials
 
     UnauthorizedClient:
       description: Client not authorized for this grant type (403)
@@ -177,125 +267,180 @@ components:
                   code: MISSING
                   message: Password is required
 
+    NotFound:
+      description: Resource not found (404)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: NOT_FOUND
+              message: Resource not found
+              request_id: req_dd924i
+
+    Conflict:
+      description: Resource conflict (409)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: CONFLICT
+              message: Resource already exists
+              request_id: req_ee925j
+
 paths:
-  /oauth/token:
+  /users:
+    get:
+      summary: List all users
+      description: Get all Campus users
+      tags:
+        - Users
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+        '403':
+          $ref: '#/components/responses/UnauthorizedClient'
+
     post:
-      summary: Request token
-      description: Get an access token using OAuth 2.0 grant
+      summary: Create a new user
+      description: Create a new Campus user
+      tags:
+        - Users
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [grant_type]
+              required: [email, name]
               properties:
-                grant_type:
+                email:
                   type: string
-                  enum: [authorization_code, password, client_credentials, refresh_token]
-                username:
+                  format: email
+                name:
                   type: string
-                  description: Username for password grant
-                password:
-                  type: string
-                  description: Password for password grant
-                refresh_token:
-                  type: string
-                  description: Refresh token for refresh_token grant
       responses:
-        '200':
-          description: Token granted successfully
+        '201':
+          description: User created successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  access_token:
-                    type: string
-                  token_type:
-                    type: string
-                    example: Bearer
-                  expires_in:
-                    type: integer
-                  refresh_token:
-                    type: string
-                  scope:
-                    type: string
+                $ref: '#/components/schemas/User'
         '400':
           $ref: '#/components/responses/InvalidGrant'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-        '403':
-          $ref: '#/components/responses/UnauthorizedClient'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '422':
           $ref: '#/components/responses/ValidationError'
 
-  /oauth/authorize:
+  /users/{user_id}:
     get:
-      summary: Authorization endpoint
-      description: OAuth 2.0 authorization endpoint (uses redirects)
+      summary: Get user details
+      description: Get details of a specific user
+      tags:
+        - Users
       parameters:
-        - name: response_type
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [code]
-        - name: client_id
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: redirect_uri
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uri
-        - name: scope
-          in: query
-          schema:
-            type: string
-        - name: state
-          in: query
-          schema:
-            type: string
-      responses:
-        '302':
-          description: Redirect with authorization code or error
-          headers:
-            Location:
-              schema:
-                type: string
-              description: Redirect URI with code or error parameters
-        '400':
-          description: Invalid request - redirects with error
-
-  /sessions/{provider}:
-    post:
-      summary: Create OAuth session
-      description: Create a new OAuth session with external provider
-      parameters:
-        - name: provider
+        - name: user_id
           in: path
           required: true
           schema:
             type: string
-            enum: [google, microsoft]
+          description: User ID
       responses:
         '200':
-          description: Session created successfully
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/ValidationError'
+
+    patch:
+      summary: Update a user
+      description: Update user details (not yet implemented)
+      tags:
+        - Users
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '501':
+          description: Not implemented
+
+    delete:
+      summary: Delete a user
+      description: Delete a user
+      tags:
+        - Users
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{user_id}/activate:
+    post:
+      summary: Activate a user
+      description: Activate a user account
+      tags:
+        - Users
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /logins:
     post:
       summary: Create login session
       description: Create a new login session with email/password
+      tags:
+        - Authentication
       requestBody:
         required: true
         content:
@@ -313,15 +458,47 @@ paths:
       responses:
         '200':
           description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSession'
         '400':
           $ref: '#/components/responses/InvalidGrant'
         '422':
           $ref: '#/components/responses/ValidationError'
 
+  /sessions/{provider}:
+    post:
+      summary: Create OAuth session
+      description: Create a new OAuth session with external provider
+      tags:
+        - Authentication
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google, microsoft]
+            description: OAuth provider
+      responses:
+        '200':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          $ref: '#/components/responses/InvalidGrant'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+
   /clients:
     post:
       summary: Register OAuth client
       description: Register a new OAuth client application
+      tags:
+        - Clients
       requestBody:
         required: true
         content:
@@ -344,9 +521,344 @@ paths:
       responses:
         '201':
           description: Client registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
         '400':
           $ref: '#/components/responses/InvalidGrant'
         '409':
           description: Client already exists
         '422':
           $ref: '#/components/responses/ValidationError'
+
+  /credentials/{provider}:
+    get:
+      summary: Get credentials
+      description: |
+        Get credentials for a specific token, or list all credentials
+        for a provider.
+      tags:
+        - Credentials
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: token_id
+          in: query
+          schema:
+            type: string
+          description: Specific token ID (optional)
+          required: false
+      responses:
+        '200':
+          description: Credentials retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credential:
+                    type: object
+                    description: Single credential if token_id is specified
+                  credentials:
+                    type: array
+                    items:
+                      type: object
+                    description: List of all credentials if token_id is not specified
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+
+  /credentials/{provider}/{user_id}:
+    get:
+      summary: Get user credentials
+      description: Get credentials for a specific provider and user ID
+      tags:
+        - Credentials
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Credentials retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credentials'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      summary: Issue new credentials
+      description: Issue new credentials for a specific provider and user ID
+      tags:
+        - Credentials
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                expiry_seconds:
+                  type: integer
+      responses:
+        '201':
+          description: Credentials issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credentials'
+        '400':
+          $ref: '#/components/responses/InvalidGrant'
+        '401':
+          $ref: '#/components/responses/InvalidClient'
+
+    patch:
+      summary: Update credentials
+      description: Update credentials for a specific provider and user ID
+      tags:
+        - Credentials
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: object
+      responses:
+        '200':
+          description: Credentials updated
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete credentials
+      description: Delete credentials for a specific provider and user ID
+      tags:
+        - Credentials
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Credentials deleted
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /vaults/{label}:
+    get:
+      summary: List vault keys
+      description: Get the keys for a specific vault
+      tags:
+        - Vaults
+      parameters:
+        - name: label
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vault keys retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: string
+
+  /vaults/{label}/{key}:
+    get:
+      summary: Get vault value
+      description: Get a specific key from a vault
+      tags:
+        - Vaults
+      parameters:
+        - name: label
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vault value retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+        '404':
+          description: Key not found
+
+    post:
+      summary: Set vault value
+      description: Set a specific key in a vault
+      tags:
+        - Vaults
+      parameters:
+        - name: label
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Value set successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+
+    delete:
+      summary: Delete vault key
+      description: Delete a key from a vault
+      tags:
+        - Vaults
+      parameters:
+        - name: label
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Key deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /root/authenticate:
+    post:
+      summary: Authenticate service
+      description: |
+        Authenticate a service client using token or client credentials.
+        **WARNING: For internal backend use only.**
+      tags:
+        - Internal
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                  description: OAuth token for authentication
+                client_id:
+                  type: string
+                  description: Client ID for client credential auth
+                client_secret:
+                  type: string
+                  description: Client secret for client credential auth
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  client:
+                    type: object
+                  user:
+                    type: object
+        '400':
+          description: Missing credentials
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                type: object

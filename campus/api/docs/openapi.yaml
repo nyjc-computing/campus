@@ -141,6 +141,143 @@ components:
           example: Invalid email format
 
     # ============================================================
+    # Resource Schemas
+    # ============================================================
+
+    Assignment:
+      type: object
+      description: An assignment in the Campus system
+      required:
+        - id
+        - title
+        - created_by
+        - created_at
+        - updated_at
+        - questions
+        - classroom_links
+      properties:
+        id:
+          type: string
+          example: assign_123abc
+        title:
+          type: string
+          example: "Homework 1"
+        description:
+          type: string
+          nullable: true
+          example: "Complete the exercises"
+        created_by:
+          type: string
+          example: "usr_123abc"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        questions:
+          type: array
+          items:
+            type: object
+            description: Assignment questions
+        classroom_links:
+          type: array
+          items:
+            type: object
+            description: Links to Google Classroom
+
+    Circle:
+      type: object
+      description: A circle in the Campus access control system
+      required:
+        - id
+        - name
+        - tag
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          example: design-team
+        name:
+          type: string
+          example: "Design Team"
+        description:
+          type: string
+          nullable: true
+          example: "Handles UI/UX"
+        tag:
+          type: string
+          description: Circle category/tag
+          example: project
+        parents:
+          type: object
+          description: Parent circles and access values
+          additionalProperties:
+            type: string
+          example:
+            "/root/admin": "admin"
+        sources:
+          type: object
+          description: Enrichment sources
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Submission:
+      type: object
+      description: A student's assignment submission
+      required:
+        - id
+        - assignment_id
+        - student_id
+        - course_id
+        - created_at
+        - updated_at
+        - responses
+        - feedback
+        - submitted_at
+      properties:
+        id:
+          type: string
+          example: sub_123abc
+        assignment_id:
+          type: string
+          example: assign_123abc
+        student_id:
+          type: string
+          example: usr_123abc
+        course_id:
+          type: string
+          example: course_123abc
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        responses:
+          type: array
+          items:
+            type: object
+            description: Student responses to questions
+        feedback:
+          type: array
+          items:
+            type: object
+            description: Teacher feedback on responses
+        submitted_at:
+          type: string
+          nullable: true
+          format: date-time
+          description: When submission was finalized
+
+  responses:
+    # ============================================================
     # Common HTTP Error Responses
     # ============================================================
 
@@ -232,47 +369,877 @@ components:
               message: An unexpected error occurred
               request_id: null
 
-  # ============================================================
-  # Reusable Response Objects
-  # ============================================================
-
-  responses:
-    BadRequest:
-      $ref: '#/components/responses/BadRequestResponse'
-    Unauthorized:
-      $ref: '#/components/responses/UnauthorizedResponse'
-    Forbidden:
-      $ref: '#/components/responses/ForbiddenResponse'
-    NotFound:
-      $ref: '#/components/responses/NotFoundResponse'
-    Conflict:
-      $ref: '#/components/responses/ConflictResponse'
-    ValidationError:
-      $ref: '#/components/responses/ValidationErrorResponse'
-    InternalError:
-      $ref: '#/components/responses/InternalErrorResponse'
-
 paths:
-  # Placeholder - actual endpoints to be added as API is documented
-  _example:
-    get:
-      summary: Example endpoint
-      description: |
-        Example showing how to reference error responses.
+  # ============================================================
+  # Assignments
+  # ============================================================
 
-        Responses follow the Campus API Error Specification.
+  /assignments:
+    get:
+      summary: List all assignments
+      description: List all assignments matching filter requirements
+      tags:
+        - Assignments
+      parameters:
+        - name: created_by
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by teacher who created the assignment
       responses:
         '200':
-          description: Successful response
-        '400':
-          $ref: '#/components/responses/BadRequest'
+          description: List of assignments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Assignment'
         '401':
-          $ref: '#/components/responses/Unauthorized'
+          $ref: '#/components/responses/UnauthorizedResponse'
         '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+          $ref: '#/components/responses/ForbiddenResponse'
+
+    post:
+      summary: Create a new assignment
+      description: Create a new assignment
+      tags:
+        - Assignments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  description: Assignment title
+                description:
+                  type: string
+                  description: Assignment description
+                questions:
+                  type: array
+                  items:
+                    type: object
+                  description: Assignment questions
+                classroom_links:
+                  type: array
+                  items:
+                    type: object
+                  description: Links to Google Classroom
+      responses:
+        '201':
+          description: Assignment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          $ref: '#/components/responses/ValidationErrorResponse'
+
+  /assignments/{assignment_id}:
+    get:
+      summary: Get a single assignment
+      description: Get a single assignment by ID
+      tags:
+        - Assignments
+      parameters:
+        - name: assignment_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Assignment ID
+      responses:
+        '200':
+          description: Assignment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Assignment'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+    patch:
+      summary: Update an assignment
+      description: Update an assignment
+      tags:
+        - Assignments
+      parameters:
+        - name: assignment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: New title
+                description:
+                  type: string
+                  nullable: true
+                  description: New description
+                questions:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                  description: New questions
+                classroom_links:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                  description: New classroom links
+      responses:
+        '200':
+          description: Assignment updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+    delete:
+      summary: Delete an assignment
+      description: Delete an assignment
+      tags:
+        - Assignments
+      parameters:
+        - name: assignment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Assignment deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+  /assignments/{assignment_id}/links:
+    post:
+      summary: Add classroom link
+      description: Add a Google Classroom link to an assignment
+      tags:
+        - Assignments
+      parameters:
+        - name: assignment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [course_id, coursework_id]
+              properties:
+                course_id:
+                  type: string
+                coursework_id:
+                  type: string
+                attachment_id:
+                  type: string
+      responses:
+        '200':
+          description: Link added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ============================================================
+  # Circles
+  # ============================================================
+
+  /circles:
+    get:
+      summary: List all circles
+      description: List all circles matching filter requirements
+      tags:
+        - Circles
+      parameters:
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by tag
+      responses:
+        '200':
+          description: List of circles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Circle'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+
+    post:
+      summary: Create a new circle
+      description: Create a new circle
+      tags:
+        - Circles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, tag]
+              properties:
+                name:
+                  type: string
+                  description: Circle name
+                description:
+                  type: string
+                  description: Circle description
+                tag:
+                  type: string
+                  description: Circle tag/category
+                parents:
+                  type: object
+                  nullable: true
+                  description: Parent circles and access values
+      responses:
+        '201':
+          description: Circle created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '422':
+          $ref: '#/components/responses/ValidationErrorResponse'
+
+  /circles/{circle_id}:
+    get:
+      summary: Get circle details
+      description: Retrieve detailed information about a specific circle
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Circle ID
+      responses:
+        '200':
+          description: Circle details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Circle'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
+    delete:
+      summary: Delete a circle
+      description: Delete a circle by its unique ID
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Circle deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
+    patch:
+      summary: Update circle name/description
+      description: Update the name and/or description of an existing circle
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: New circle name
+                description:
+                  type: string
+                  nullable: true
+                  description: New circle description
+      responses:
+        '200':
+          description: Circle updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
+  /circles/{circle_id}/members:
+    get:
+      summary: List circle members
+      description: Retrieve the member IDs of a circle along with their access values
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Circle members
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                description: Mapping of member IDs to access values
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
+    patch:
+      summary: Update member access level
+      description: Update the access level of a member within a circle
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id, access_value]
+              properties:
+                member_id:
+                  type: string
+                access_value:
+                  type: integer
+      responses:
+        '200':
+          description: Member access updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
+  /circles/{circle_id}/members/add:
+    post:
+      summary: Add circle member
+      description: Add a member to a circle with a specified access level
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id, access_value]
+              properties:
+                member_id:
+                  type: string
+                access_value:
+                  type: integer
+                  description: Access level (0-255)
+      responses:
+        '200':
+          description: Member added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
+  /circles/{circle_id}/members/remove:
+    delete:
+      summary: Remove circle member
+      description: Remove a member from a circle
+      tags:
+        - Circles
+      parameters:
+        - name: circle_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_id]
+              properties:
+                member_id:
+                  type: string
+      responses:
+        '200':
+          description: Member removed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '409':
+          $ref: '#/components/responses/ConflictResponse'
+
+  # ============================================================
+  # Submissions
+  # ============================================================
+
+  /submissions:
+    get:
+      summary: List all submissions
+      description: List all submissions matching filter requirements
+      tags:
+        - Submissions
+      parameters:
+        - name: assignment_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by assignment
+        - name: student_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by student
+        - name: course_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by Google Classroom course
+      responses:
+        '200':
+          description: List of submissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Submission resource
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+    post:
+      summary: Create a new submission
+      description: Create a new submission
+      tags:
+        - Submissions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignment_id, student_id, course_id]
+              properties:
+                assignment_id:
+                  type: string
+                student_id:
+                  type: string
+                course_id:
+                  type: string
+                responses:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '201':
+          description: Submission created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Submission resource
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+  /submissions/by-assignment/{assignment_id}:
+    get:
+      summary: List submissions by assignment
+      description: List submissions for a specific assignment
+      tags:
+        - Submissions
+      parameters:
+        - name: assignment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of submissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Submission resource
+
+  /submissions/by-student/{student_id}:
+    get:
+      summary: List submissions by student
+      description: List submissions from a specific student
+      tags:
+        - Submissions
+      parameters:
+        - name: student_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of submissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      description: Submission resource
+
+  /submissions/{submission_id}:
+    get:
+      summary: Get a submission
+      description: Get a single submission by ID
+      tags:
+        - Submissions
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Submission details
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Submission resource
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+    patch:
+      summary: Update a submission
+      description: Update a submission
+      tags:
+        - Submissions
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                responses:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                feedback:
+                  type: array
+                  nullable: true
+                  items:
+                    type: object
+                submitted_at:
+                  type: string
+                  nullable: true
+                  format: date-time
+      responses:
+        '200':
+          description: Submission updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+    delete:
+      summary: Delete a submission
+      description: Delete a submission
+      tags:
+        - Submissions
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Submission deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+  /submissions/{submission_id}/responses:
+    post:
+      summary: Add response to question
+      description: Add or update a response to a question in a submission
+      tags:
+        - Submissions
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question_id, response_text]
+              properties:
+                question_id:
+                  type: string
+                response_text:
+                  type: string
+      responses:
+        '200':
+          description: Response added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /submissions/{submission_id}/feedback:
+    post:
+      summary: Add feedback to response
+      description: Add feedback on a response to a question
+      tags:
+        - Submissions
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question_id, feedback_text]
+              properties:
+                question_id:
+                  type: string
+                feedback_text:
+                  type: string
+      responses:
+        '200':
+          description: Feedback added successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+  /submissions/{submission_id}/submit:
+    post:
+      summary: Submit a submission
+      description: Finalize/submit a submission (mark submitted_at timestamp)
+      tags:
+        - Submissions
+      parameters:
+        - name: submission_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Submission submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+  # ============================================================
+  # Email OTP
+  # ============================================================
+
+  /emailotp/request:
+    post:
+      summary: Request OTP
+      description: Request a new OTP for email authentication
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Email address to send OTP to
+      responses:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: OTP sent
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
         '500':
-          $ref: '#/components/responses/InternalError'
+          $ref: '#/components/responses/InternalErrorResponse'
+
+  /emailotp/verify:
+    post:
+      summary: Verify OTP
+      description: Verify an OTP for email authentication
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email:
+                  type: string
+                  format: email
+                otp:
+                  type: string
+                  description: OTP code to verify
+      responses:
+        '200':
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: OTP verified
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                type: object
