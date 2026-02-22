@@ -25,23 +25,77 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @bp.get('/current')
 @flask_campus.unpack_request
 def get_current() -> flask_campus.JsonResponse:
+    """Summary:
+        Get the currently active timetable ID.
+
+    Method:
+        GET /timetable/current
+
+    Query Parameters:
+        None
+
+    Responses:
+        200 OK: dict
+            {"data": timetable_id}
+    """
     timetable_id = timetable_resource.get_current()
     return {'data': timetable_id}, 200
 
 @bp.put('/current')
 @flask_campus.unpack_request
 def set_current(UUID: schema.CampusID) -> flask_campus.JsonResponse:
+    """Summary:
+        Set the currently active timetable.
+
+    Method:
+        PUT /timetable/current
+
+    Body Parameters:
+        UUID: CampusID
+            The timetable ID to set as the current timetable.
+
+    Responses:
+        200 OK: dict
+            {}
+    """
     timetable_resource.set_current(UUID)
     return {}, 200
 
 @bp.get('/next')
 def get_next() -> flask_campus.JsonResponse:
+    """Summary:
+        Get the next scheduled timetable ID.
+
+    Method:
+        GET /timetable/next
+
+    Query Parameters:
+        None
+
+    Responses:
+        200 OK: dict
+            {"data": timetable_id}
+    """
     timetable_id = timetable_resource.get_next()
     return {'data': timetable_id}, 200
 
 @bp.put('/next')
 @flask_campus.unpack_request
 def set_next(UUID: schema.CampusID) -> flask_campus.JsonResponse:
+    """Summary:
+        Set the next scheduled timetable.
+
+    Method:
+        PUT /timetable/next
+
+    Body Parameters:
+        UUID: CampusID
+            The timetable ID to set as the next timetable.
+
+    Responses:
+        200 OK: dict
+            {}
+    """
     timetable_resource.set_current(UUID)
     return {}, 200
 
@@ -53,6 +107,24 @@ def upload() -> flask_campus.JsonResponse:
 @bp.get('/<timetable_id>')
 @flask_campus.unpack_request
 def get_timetable(timetable_id: schema.CampusID, user_id: schema.UserID) -> flask_campus.JsonResponse:
+    """Summary:
+        List all timetable entries for a specific timetable and user.
+
+    Method:
+        GET /timetable/<timetable_id>
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable to retrieve.
+
+    Query Parameters:
+        user_id: UserID
+            The user whose timetable entries should be returned.
+
+    Responses:
+        200 OK: dict
+            {"data": [timetable entry resources]}
+    """
     result = timetable_resource[timetable_id].list(user_id=user_id)
     return {'data': [entry.to_resource() for entry in result]}, 200
     
@@ -60,12 +132,46 @@ def get_timetable(timetable_id: schema.CampusID, user_id: schema.UserID) -> flas
 @bp.get('/<timetable_id>/metadata')
 @flask_campus.unpack_request
 def get_metadata(timetable_id: schema.CampusID):
+    """Summary:
+        Get metadata for a specific timetable.
+
+    Method:
+        GET /timetable/<timetable_id>/metadata
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable.
+
+    Responses:
+        200 OK: dict
+            timetable metadata resource
+    """
     timetable = timetable_resource[timetable_id].get()
     return timetable.to_resource(), 200
 
 @bp.patch('/<timetable_id>/metadata')
 @flask_campus.unpack_request
 def set_metadata(timetable_id: schema.CampusID, start_date: schema.DateTime, end_date: schema.DateTime) -> flask_campus.JsonResponse:
+    """Summary:
+        Update metadata for a specific timetable.
+
+    Method:
+        PATCH /timetable/<timetable_id>/metadata
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable.
+
+    Body Parameters:
+        start_date: DateTime
+            The new start date of the timetable.
+        end_date: DateTime
+            The new end date of the timetable.
+
+    Responses:
+        200 OK: dict
+            {}
+    """
     timetable_resource[timetable_id].update(
         start_date=start_date,
         end_date=end_date
