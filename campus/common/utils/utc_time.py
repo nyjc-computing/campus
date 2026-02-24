@@ -6,9 +6,8 @@ is meant to replace all usage of the Python `time` module in those modules.
 All timestamps are handled in UTC to avoid timezone issues.
 """
 
-from functools import singledispatch
 from datetime import UTC, date, datetime, time, timedelta
-from typing import cast
+from typing import cast, overload
 
 DAY_SECONDS = 86400
 
@@ -23,44 +22,43 @@ def today() -> date:
     return now().date()
 
 
-@singledispatch
-def after(_dt=None, **delta):
+@overload
+def after(dt: None = None, **delta) -> datetime: ...
+
+
+@overload
+def after(dt: datetime, **delta) -> datetime: ...
+
+
+@overload
+def after(dt: date, **delta) -> date: ...
+
+
+def after(dt=None, **delta):
     """Create an expiry timestamp at a given timedelta.
 
-    If time is not specified, defaults to the current time.
+    If dt is not specified, defaults to the current time.
 
     Keyword arguments:
     - **delta: follows that of timedelta
     """
-    # Handle cases where _dt is an unsupported type or None
-    if _dt is None:
-        _dt = now()
-    elif not isinstance(_dt, (datetime, date, time)):
-        raise TypeError(f"Unsupported type for after: {_dt}")
+    # Handle cases where dt is an unsupported type or None
+    if dt is None:
+        dt = now()
+    elif not isinstance(dt, (datetime, date)):
+        raise TypeError(f"Unsupported type for after: {dt}")
+
     if not delta:
-        return _dt
-    return after(_dt, **delta)
+        return dt
 
-@after.register
-def _(dt: datetime, **delta) -> datetime:
-    """Create an expiry timestamp at a given delta after time.
-
-    Keyword arguments:
-    - **delta: follows that of timedelta
-    """
-    return dt + timedelta(**delta)
-
-@after.register
-def _(d: date, **delta) -> date:
-    """Create an expiry date at a given delta after date."""
-    dt = datetime(d.year, d.month, d.day, tzinfo=UTC)
-    return cast(datetime, after(dt, **delta)).date()
-
-@after.register
-def _(t: time, **delta) -> time:
-    """Create an expiry time at a given delta after time."""
-    dt = datetime(1970, 1, 1, t.hour, t.minute, t.second, tzinfo=UTC)
-    return cast(datetime, after(dt, **delta)).time()
+    # Dispatch based on type
+    if isinstance(dt, datetime):
+        return dt + timedelta(**delta)
+    elif isinstance(dt, date):
+        dt_obj = datetime(dt.year, dt.month, dt.day, tzinfo=UTC)
+        return cast(datetime, after(dt_obj, **delta)).date()
+    else:
+        raise TypeError(f"Unsupported type for after: {dt}")
 
 
 def is_expired(ts: datetime | float, *, at_time: datetime | None = None, threshold: float | int = 1) -> bool:
