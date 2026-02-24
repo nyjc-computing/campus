@@ -6,7 +6,8 @@ is meant to replace all usage of the Python `time` module in those modules.
 All timestamps are handled in UTC to avoid timezone issues.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from typing import cast, overload
 
 DAY_SECONDS = 86400
 
@@ -16,19 +17,48 @@ def now() -> datetime:
     return datetime.now(UTC)
 
 
-def after(time: datetime | None = None, **delta) -> datetime:
-    """Create an expiry timestamp at a given delta after time.
+def today() -> date:
+    """Get the current date in UTC."""
+    return now().date()
 
-    If time is not specified, defaults to the current time.
+
+@overload
+def after(dt: None = None, **delta) -> datetime: ...
+
+
+@overload
+def after(dt: datetime, **delta) -> datetime: ...
+
+
+@overload
+def after(dt: date, **delta) -> date: ...
+
+
+def after(dt=None, **delta):
+    """Create an expiry timestamp at a given timedelta.
+
+    If dt is not specified, defaults to the current time.
 
     Keyword arguments:
     - **delta: follows that of timedelta
     """
-    time = time or now()
-    if delta:
-        return time + timedelta(**delta)
+    # Handle cases where dt is an unsupported type or None
+    if dt is None:
+        dt = now()
+    elif not isinstance(dt, (datetime, date)):
+        raise TypeError(f"Unsupported type for after: {dt}")
+
+    if not delta:
+        return dt
+
+    # Dispatch based on type
+    if isinstance(dt, datetime):
+        return dt + timedelta(**delta)
+    elif isinstance(dt, date):
+        dt_obj = datetime(dt.year, dt.month, dt.day, tzinfo=UTC)
+        return cast(datetime, after(dt_obj, **delta)).date()
     else:
-        return time
+        raise TypeError(f"Unsupported type for after: {dt}")
 
 
 def is_expired(ts: datetime | float, *, at_time: datetime | None = None, threshold: float | int = 1) -> bool:
@@ -48,9 +78,9 @@ def from_rfc3339(dtstr: str) -> datetime:
     return datetime.fromisoformat(dtstr)
 
 
-def to_rfc3339(dt: datetime) -> str:
+def to_rfc3339(d_t: date | datetime | time) -> str:
     """Convert a datetime object to an RFC3339 formatted string."""
-    return dt.isoformat()
+    return d_t.isoformat()
 
 
 def from_timestamp(ts: int) -> datetime:
