@@ -36,6 +36,11 @@ TokenResponseErrorType = Literal[
     "unauthorized_client",
     "unsupported_grant_type",
     "invalid_scope",
+    # Device Authorization Flow errors (RFC 8628)
+    "authorization_pending",
+    "slow_down",
+    "expired_token",
+    "access_denied",
 ]
 AUTH_RESPONSE_ERROR_TYPES = (
     "invalid_request",
@@ -53,6 +58,11 @@ TOKEN_RESPONSE_ERROR_TYPES = (
     "unauthorized_client",
     "unsupported_grant_type",
     "invalid_scope",
+    # Device Authorization Flow errors (RFC 8628)
+    "authorization_pending",
+    "slow_down",
+    "expired_token",
+    "access_denied",
 )
 
 # Mapping of OAuth error strings to Campus error codes
