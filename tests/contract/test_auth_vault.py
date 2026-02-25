@@ -38,8 +38,9 @@ class TestAuthVaultContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_get_secret_missing_returns_404(self):
         """GET /vaults/{label}/{key} for missing key returns 404."""

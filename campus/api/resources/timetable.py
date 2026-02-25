@@ -12,15 +12,14 @@ import campus.storage
 
 timetable_storage = campus.storage.get_collection("timetables")
 
-def _from_record(record: dict) -> campus.model.Timetable:
-    """Convert storage record to Timetable model."""
-    return campus.model.Timetable(
+def _from_record(record: dict) -> campus.model.TimetableEntry:
+    """Convert storage record to TimetableEntry model."""
+    return campus.model.TimetableEntry(
         id=schema.CampusID(record["id"]),
-        filename=record["filename"],
+        timetable_id=record["timetable_id"],
         lessongroup_id=record["lessongroup_id"],
         venuetimeslot_id=record["venuetimeslot_id"],
-        created_at=schema.DateTime(record["created_at"]) if record.get("created_at") else None,
-        updated_at=schema.DateTime(record["updated_at"]) if record.get("updated_at") else None,
+        created_at=schema.DateTime(record["created_at"])
     )
 
 class TimetablesResource:
@@ -34,7 +33,7 @@ class TimetablesResource:
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         return TimetableResource(timetable_id)
     
-    def list(self, **filters: typing.Any) -> list[campus.model.Timetable]:
+    def list(self, **filters: typing.Any) -> list[campus.model.TimetableEntry]:
         """List timetables matching filters."""
         try:
             records = timetable_storage.get_matching(filters)
@@ -42,17 +41,15 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
     
-    def new(self, **fields: typing.Any) -> campus.model.Timetable:
+    def new(self, **fields: typing.Any) -> campus.model.TimetableEntry:
         """Create new timetable."""
 
-        timetable = campus.model.Timetable(
-            id = schema.CampusID(
-                uid.generate_category_uid("timetable", length=8)
-            ),
-            filename=fields["filename"],
+        timetable = campus.model.TimetableEntry(
+            # id generation is handled by the dataclass default factory
             lessongroup_id = fields["lessongroup_id"],
             venuetimeslot_id = fields["venuetimeslot_id"],
-            created_at=schema.DateTime.utcnow()
+            created_at=schema.DateTime.utcnow(),
+            timetable_id=fields["timetable_id"]
         )
 
         try:
@@ -68,7 +65,7 @@ class TimetableResource:
     def __init__(self, timetable_id: schema.CampusID):
         self.timetable_id = timetable_id
     
-    def get(self) -> campus.model.Timetable:
+    def get(self) -> campus.model.TimetableEntry:
         """Get the timetable."""
         try:
             record = timetable_storage.get_by_id(self.timetable_id)

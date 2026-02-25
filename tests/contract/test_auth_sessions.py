@@ -53,7 +53,8 @@ class TestAuthSessionsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
 
     def test_sweep_sessions_with_auth(self):
         """POST /sessions/sweep with auth returns sweep count."""

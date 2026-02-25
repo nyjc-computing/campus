@@ -35,6 +35,12 @@ __all__ = [
     "User",
     "UserCredentials",
     "Vault",
+    "WeekDay",
+    "TimeSlot",
+    "VenueTimeSlot",
+    "LessonGroup",
+    "TimetableEntry",
+    "Timetable",
 ]
 
 from .assignment import Assignment, ClassroomLink, Question
@@ -49,3 +55,4 @@ from .session import AuthSession
 from .submission import Feedback, Response, Submission
 from .user import User
 from .vault import Vault
+from .timetable import WeekDay, TimeSlot, VenueTimeSlot, LessonGroup, TimetableEntry, Timetable
