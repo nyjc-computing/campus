@@ -84,8 +84,9 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     @unittest.skip("API BUG: GET /circles/ returns 500 - possibly related to list operation on circles")
     def test_list_circles_returns_circles(self):
@@ -132,8 +133,9 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_create_circle(self):
         """POST /circles/ creates a new circle."""
@@ -217,8 +219,9 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "CONFLICT")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "CONFLICT")
 
     # Get Circle Tests
 
@@ -246,8 +249,9 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_get_missing_circle_returns_error(self):
         """GET /circles/{circle_id} for non-existent circle returns 409."""
@@ -258,8 +262,9 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "CONFLICT")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "CONFLICT")
 
     # Update Circle Tests
 
@@ -328,8 +333,9 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "INVALID_REQUEST")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "INVALID_REQUEST")
 
     def test_update_circle_requires_auth(self):
         """PATCH /circles/{circle_id} without auth returns 401."""

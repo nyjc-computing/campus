@@ -66,8 +66,9 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     @unittest.skip("Skipped: Sends actual email - verify with mocked email sender")
     def test_request_otp(self):
@@ -134,8 +135,9 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     @unittest.skip("API BUG: Missing required params returns KeyError (500) instead of 400 (similar to bug #324)")
     def test_verify_otp_missing_email_returns_error(self):
@@ -172,8 +174,9 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "CONFLICT")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "CONFLICT")
 
     def test_verify_invalid_otp_returns_error(self):
         """POST /emailotp/verify with invalid OTP returns 401."""
@@ -243,8 +246,9 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     @unittest.skip("Skipped: Requires OTP generation - use mock or direct resource access")
     def test_otp_full_flow(self):
