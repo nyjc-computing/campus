@@ -176,8 +176,8 @@ class OAuth2DeviceAuthorizationFlowScheme(base.OAuth2FlowScheme):
             The verification URI
         """
         if user_code and self.verification_uri_complete:
-            return url.create_url(
+            return schema.Url(url.create_url(
                 hostname=self.verification_uri_complete,
                 params={"user_code": user_code}
-            )
+            ))
         return schema.Url(self.verification_uri)

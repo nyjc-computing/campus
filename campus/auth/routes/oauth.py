@@ -53,14 +53,14 @@ def device_authorize(
     """
     # Validate the client
     try:
-        client_resource.client[client_id].get()
+        client_resource[client_id].get()
     except api_errors.NotFoundError:
-        raise auth_errors.InvalidClientError(
+        raise token_errors.InvalidClientError(
             "Invalid client_id"
         )
 
     # Create device code
-    device_code = device_code_resource.device_code.create(
+    device_code = device_code_resource.create(
         client_id=client_id,
         scopes=DEFAULT_CLI_SCOPES,
     )
@@ -136,9 +136,9 @@ def token(
     """
     # Validate the client
     try:
-        client_resource.client[client_id].get()
+        client_resource[client_id].get()
     except api_errors.NotFoundError:
-        raise auth_errors.InvalidClientError(
+        raise token_errors.InvalidClientError(
             "Invalid client_id"
         )
 
@@ -166,9 +166,9 @@ def _handle_device_code_grant(
         )
 
     try:
-        dc = device_code_resource.device_code.get_by_device_code(device_code)
+        dc = device_code_resource.get_by_device_code(device_code)
     except api_errors.NotFoundError:
-        raise auth_errors.InvalidGrantError(
+        raise token_errors.InvalidGrantError(
             "Invalid or expired device code"
         )
 
@@ -214,16 +214,15 @@ def _handle_device_code_grant(
 
         try:
             # Store credentials using the resource
-            credentials_resource.credentials["campus"].new(
+            credentials_resource["campus"][dc.user_id].update(
                 client_id=str(client_id),
-                user_id=dc.user_id,
                 token=oauth_token,
             )
         except Exception as e:
             raise api_errors.InternalError.from_exception(e)
 
         # Delete the device code as it's now used
-        device_code_resource.device_code.delete(dc.id)
+        device_code_resource.delete(dc.id)
 
         get_yapper().emit('campus.oauth.token', {
             "grant_type": "device_code",
@@ -588,7 +587,7 @@ def device_authorize_submit(
         raise api_errors.InvalidRequestError("user_id is required")
 
     try:
-        dc = device_code_resource.device_code.get_by_user_code(user_code)
+        dc = device_code_resource.get_by_user_code(user_code)
     except api_errors.NotFoundError:
         raise api_errors.NotFoundError(
             "Invalid user code. Please check and try again."
@@ -602,7 +601,7 @@ def device_authorize_submit(
         )
 
     # Authorize the device code
-    device_code_resource.device_code.update(
+    device_code_resource.update(
         dc.id,
         user_id=str(user_id),
         state="authorized"

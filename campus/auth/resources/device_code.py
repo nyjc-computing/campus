@@ -9,7 +9,7 @@ import typing
 
 from campus import config
 from campus.common import schema
-from campus.common.errors import api_errors, auth_errors
+from campus.common.errors import api_errors
 from campus.common.utils import uid, secret
 import campus.model
 import campus.storage
@@ -110,7 +110,7 @@ class DeviceCodeResource:
                 device_code_obj.id,
                 {"state": "expired"}
             )
-            raise auth_errors.ExpiredTokenError(
+            raise api_errors.InvalidRequestError(
                 "The device code has expired. Please restart the authentication flow."
             )
 
