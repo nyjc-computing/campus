@@ -1,4 +1,4 @@
-"""campus.api.resources.submission
+"""campus.api.resources.timetable
 
 Timetable resource for Campus API.
 """
