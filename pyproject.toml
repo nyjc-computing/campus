@@ -32,6 +32,7 @@ werkzeug = "^3.0.0"
 pylint = "^3.0"
 pyright = "^1.1.391"
 openapi-spec-validator = "^0.7.2"
+boto3-stubs = "^1.42.57"
 
 [tool.poetry.scripts]
 campus = "main:main"
