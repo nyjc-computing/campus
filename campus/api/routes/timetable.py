@@ -104,9 +104,9 @@ def set_next(UUID: schema.CampusID) -> flask_campus.JsonResponse:
 def upload() -> flask_campus.JsonResponse:
     return {}, 501 # Not implemented yet
 
-@bp.get('/<timetable_id>')
+@bp.get('/<timetable_id>/')
 @flask_campus.unpack_request
-def get_timetable(timetable_id: schema.CampusID, user_id: schema.UserID) -> flask_campus.JsonResponse:
+def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         List all timetable entries for a specific timetable and user.
 
@@ -117,15 +117,11 @@ def get_timetable(timetable_id: schema.CampusID, user_id: schema.UserID) -> flas
         timetable_id: CampusID
             The ID of the timetable to retrieve.
 
-    Query Parameters:
-        user_id: UserID
-            The user whose timetable entries should be returned.
-
     Responses:
         200 OK: dict
             {"data": [timetable entry resources]}
     """
-    result = timetable_resource[timetable_id].list(user_id=user_id)
+    result = timetable_resource[timetable_id].entries.list()
     return {'data': [entry.to_resource() for entry in result]}, 200
     
 
@@ -146,7 +142,7 @@ def get_metadata(timetable_id: schema.CampusID):
         200 OK: dict
             timetable metadata resource
     """
-    timetable = timetable_resource[timetable_id].get()
+    timetable = timetable_resource[timetable_id].metadata.get()
     return timetable.to_resource(), 200
 
 @bp.patch('/<timetable_id>/metadata')
@@ -172,7 +168,7 @@ def set_metadata(timetable_id: schema.CampusID, start_date: schema.DateTime, end
         200 OK: dict
             {}
     """
-    timetable_resource[timetable_id].update(
+    timetable_resource[timetable_id].metadata.update(
         start_date=start_date,
         end_date=end_date
     )
