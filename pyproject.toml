@@ -30,6 +30,7 @@ werkzeug = "^3.0.0"
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
 pyright = "^1.1.391"
+openapi-spec-validator = "^0.7.2"
 
 [tool.poetry.scripts]
 campus = "main:main"

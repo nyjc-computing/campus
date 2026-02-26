@@ -13,6 +13,8 @@ from typing import (
     get_origin,
 )
 
+from campus.common.errors import FieldError
+
 C = TypeVar('C', bound=Collection)
 
 class Requiredness(Enum):
@@ -189,4 +191,39 @@ def validate_keys(
             )
         case _:
             raise TypeError(f"Invalid type for valid_keys: {type(valid_keys)}")
+
+
+def validate_types(
+        value: dict[str, Any],
+        schema: dict[str, type],
+        *,
+        ignore_extra: bool = False
+) -> list[FieldError]:
+    """Validate value types against schema.
+
+    Returns list of FieldError instead of raising.
+
+    Args:
+        value: The dictionary to validate.
+        schema: A mapping of field names to expected types.
+        ignore_extra: If True, keys not in schema are ignored.
+
+    Returns:
+        A list of FieldError objects for any type mismatches.
+    """
+    errors: list[FieldError] = []
+
+    for key, expected_type in schema.items():
+        if key not in value:
+            continue
+
+        actual_value = value[key]
+        if not isinstance(actual_value, expected_type):
+            errors.append(FieldError(
+                field=key,
+                code="INVALID_TYPE",
+                message=f"Expected {expected_type.__name__}, got {type(actual_value).__name__}"
+            ))
+
+    return errors
 

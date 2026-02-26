@@ -35,7 +35,7 @@ def _from_record(record: dict, include_entries: bool = False) -> campus.model.Ti
     
     return campus.model.Timetable(
         id=schema.CampusID(record["id"]),
-        filename=record["filename"],
+        timetable_id=record["timetable_id"],
         lessongroup_id=record["lessongroup_id"],
         venuetimeslot_id=record["venuetimeslot_id"],
         entries=entries,
@@ -69,7 +69,7 @@ class TimetablesResource:
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         return TimetableResource(timetable_id)
     
-    def list(self, **filters: typing.Any) -> list[campus.model.Timetable]:
+    def list(self, **filters: typing.Any) -> list[campus.model.TimetableEntry]:
         """List timetables matching filters."""
         try:
             records = timetable_storage.get_matching(filters)

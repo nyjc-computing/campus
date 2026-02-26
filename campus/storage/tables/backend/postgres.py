@@ -36,6 +36,9 @@ from campus.storage import errors
 
 from ..interface import PK, TableInterface
 
+# Valid field constraint names
+_VALID_CONSTRAINTS = (constraints.UNIQUE,)
+
 _TYPEMAP = {
     str: "TEXT",
     int: "INTEGER",
@@ -43,8 +46,50 @@ _TYPEMAP = {
     bool: "BOOLEAN",
 }
 
+
+def _validate_field_metadata(field: dataclasses.Field) -> None:
+    """Validate field metadata for SQL schema generation.
+
+    Args:
+        field: The dataclass field to validate
+
+    Raises:
+        TypeError: If metadata values have incorrect types
+        ValueError: If metadata values contain invalid entries
+    """
+    # Validate 'storage' metadata (must be bool)
+    if "storage" in field.metadata:
+        storage = field.metadata["storage"]
+        if not isinstance(storage, bool):
+            raise TypeError(
+                f"Field '{field.name}': metadata 'storage' must be bool, "
+                f"got {type(storage).__name__}"
+            )
+
+    # Validate 'constraints' metadata (must be sequence of strings)
+    if "constraints" in field.metadata:
+        constraints_meta = field.metadata["constraints"]
+        if not isinstance(constraints_meta, (list, tuple)):
+            raise TypeError(
+                f"Field '{field.name}': metadata 'constraints' must be "
+                f"list or tuple, got {type(constraints_meta).__name__}"
+            )
+        for i, c in enumerate(constraints_meta):
+            if not isinstance(c, str):
+                raise TypeError(
+                    f"Field '{field.name}': constraint at index {i} must be str, "
+                    f"got {type(c).__name__}"
+                )
+            if c not in _VALID_CONSTRAINTS:
+                raise ValueError(
+                    f"Field '{field.name}': invalid constraint '{c}'. "
+                    f"Valid constraints: {', '.join(repr(c) for c in _VALID_CONSTRAINTS)}"
+                )
+
+
 def _field_to_sql_schema(field: dataclasses.Field) -> str:
     """Convert a dataclass field to a SQL column definition."""
+    _validate_field_metadata(field)
     field_name = field.name
     field_type = field.type
     sql_type = _TYPEMAP.get(field_type, "TEXT")
@@ -76,6 +121,7 @@ def _model_to_sql_schema(name: str, model: type[InternalModel | Model]) -> str:
     columns = []
     constraints_ = []
     for field in model.fields().values():
+        _validate_field_metadata(field)
         if not field.metadata.get("storage", True):
             continue  # skip non-storage fields
         if field.name == "__constraints__":

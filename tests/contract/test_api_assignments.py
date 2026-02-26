@@ -79,8 +79,9 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_list_assignments_empty(self):
         """GET /assignments/ returns empty list when no assignments exist."""
@@ -186,8 +187,9 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_get_assignment_by_id(self):
         """GET /assignments/{assignment_id} returns the assignment."""
@@ -212,8 +214,9 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_get_missing_assignment_returns_error(self):
         """GET /assignments/{assignment_id} for non-existent assignment returns error."""
@@ -312,8 +315,9 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "INVALID_REQUEST")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "INVALID_REQUEST")
 
     def test_update_assignment_requires_auth(self):
         """PATCH /assignments/{assignment_id} without auth returns 401."""
@@ -326,8 +330,9 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_update_missing_assignment_returns_error(self):
         """PATCH /assignments/{assignment_id} for non-existent assignment returns 200.
@@ -377,8 +382,9 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_delete_missing_assignment_returns_error(self):
         """DELETE /assignments/{assignment_id} for non-existent assignment returns error."""
@@ -448,8 +454,9 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_add_classroom_link_to_missing_assignment_returns_error(self):
         """POST /assignments/{assignment_id}/links for non-existent assignment returns error."""

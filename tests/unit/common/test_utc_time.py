@@ -62,7 +62,7 @@ class TestUTCTimeAfter(unittest.TestCase):
     def test_after_with_specific_time(self):
         """Test that after() with time parameter adds to that time."""
         base_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        result = utc_time.after(time=base_time, days=1)
+        result = utc_time.after(base_time, days=1)
 
         expected = datetime(2025, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
         self.assertEqual(result, expected)
@@ -70,7 +70,7 @@ class TestUTCTimeAfter(unittest.TestCase):
     def test_after_with_multiple_deltas(self):
         """Test that after() correctly handles multiple time deltas."""
         base_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        result = utc_time.after(time=base_time, days=1, hours=2, minutes=30)
+        result = utc_time.after(base_time, days=1, hours=2, minutes=30)
 
         expected = datetime(2025, 1, 2, 14, 30, 0, tzinfo=timezone.utc)
         self.assertEqual(result, expected)
@@ -78,7 +78,7 @@ class TestUTCTimeAfter(unittest.TestCase):
     def test_after_with_negative_delta(self):
         """Test that after() works with negative deltas (past times)."""
         base_time = datetime(2025, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
-        result = utc_time.after(time=base_time, days=-1)
+        result = utc_time.after(base_time, days=-1)
 
         expected = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         self.assertEqual(result, expected)
@@ -91,7 +91,7 @@ class TestUTCTimeAfter(unittest.TestCase):
     def test_after_with_seconds(self):
         """Test that after() works with seconds parameter."""
         base_time = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        result = utc_time.after(time=base_time, seconds=90)
+        result = utc_time.after(base_time, seconds=90)
 
         expected = datetime(2025, 1, 1, 12, 1, 30, tzinfo=timezone.utc)
         self.assertEqual(result, expected)
@@ -115,7 +115,7 @@ class TestUTCTimeIsExpired(unittest.TestCase):
         now = utc_time.now()
 
         # Time just barely in the past (0.5 seconds ago)
-        almost_expired = utc_time.after(time=now, seconds=-0.5)
+        almost_expired = utc_time.after(now, seconds=-0.5)
 
         # With threshold of 1 second, should not be expired
         self.assertFalse(utc_time.is_expired(
@@ -161,7 +161,7 @@ class TestUTCTimeIsExpired(unittest.TestCase):
 
         for offset, threshold, expected, desc in test_cases:
             with self.subTest(desc=desc):
-                test_time = utc_time.after(time=now, seconds=offset)
+                test_time = utc_time.after(now, seconds=offset)
                 result = utc_time.is_expired(
                     test_time, at_time=now, threshold=threshold)
                 self.assertEqual(result, expected, f"Failed: {desc}")
