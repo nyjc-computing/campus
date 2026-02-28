@@ -26,6 +26,10 @@ Models that can be returned through APIs:
 - LessonGroup, TimetableEntry, Timetable 
 - use CampusID (UUID) for their own id, and are referenced as such
 
+An ade_participant is an integer XML id. One ID corresponds to one teacher,
+or one class-subject combi intersection (eg. 2510-COM/EC/P). Each Timetable, the mapping
+changes. 
+
 TODO: Update doc link after migration
 """
 
@@ -103,6 +107,9 @@ class VenueTimeSlot(InternalModel):
       we usually reason about an intersection of venue and time anyway
     Must be automatically generated for each Venue for all WeekDay, TimeSlot.
 
+    Let there also be a set of VenueTimeSlot for null venue_id, for when there
+    is no venue relevant to the VenueTimeSlot.
+
     Fields:
       weekday_id (Integer): FK referencing a WeekDay.id
       timeslot_id (Integer): FK referencing a TimeSlot.id
@@ -153,11 +160,12 @@ class LessonGroupMember(InternalModel):
       lessongroup_id (CampusID): FK referencing a LessonGroup.id
       ade_participant (String): XML id (aka TTCode or teacher_id). We have a unique mapping of these IDs
         to nyjc email etc., for each allocation.
+        A TTcode is an ID which corresponds to a class-subject combi intersection (eg. 2510-COM/EC/P)
     """
     id: schema.Integer
     timetable_id: schema.CampusID 
     lessongroup_id: schema.CampusID
-    ade_participant: schema.String
+    ade_participant: schema.String 
     __constraints__ = constraints.Unique("lessongroup_id", "ade_participant", "timetable_id")
 
 
@@ -166,6 +174,10 @@ class TimetableEntry(Model):
     """
     A timetable entry represents a single lesson for a LessonGroup
         at some VenueTimeSlot. 
+    
+    For lessons that span multiple slots, there is an entry for each slot.
+    For lessons that have multiple venues, there is an entry for each venue.
+    If an event has no listed venue, the <Null> venue is used.
     
     Fields:
       timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
