@@ -113,12 +113,12 @@ class VenueTimeSlot(InternalModel):
     Fields:
       weekday_id (Integer): FK referencing a WeekDay.id
       timeslot_id (Integer): FK referencing a TimeSlot.id
-      venue_id (Integer): FK referencing a TimetableVenue.id
+      venue_id (Integer|None): FK referencing a TimetableVenue.id
     """
     id: schema.Integer
     weekday_id: schema.Integer
     timeslot_id: schema.Integer
-    venue_id: schema.Integer
+    venue_id: schema.Integer | None
     __constraints__ = constraints.Unique("weekday_id", "timeslot_id", "venue_id")
 
 ##      Sections that are only relevant to a specific allocation.       ##
