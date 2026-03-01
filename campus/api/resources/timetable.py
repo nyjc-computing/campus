@@ -16,39 +16,20 @@ timetable_storage = campus.storage.get_collection("timetables")
 timetable_table = campus.storage.get_table("timetables") 
 
 
-def _from_record(record: dict, include_entries: bool = False) -> campus.model.Timetable:
-    """Convert storage record to Timetable model."""
-    entries = None
-    if include_entries:
-        entry_records = timetable_entry_storage.get_matching({
-            "timetable_id": record["id"]
-        })
-        entries = [
-            campus.model.TimetableEntry(
-                id=schema.CampusID(e["id"]),
-                timetable_id=schema.CampusID(e["timetable_id"]),
-                start_time=schema.DateTime(e["start_time"]),
-                end_time=schema.DateTime(e["end_time"]),
-            )
-            for e in entry_records
-        ]
-    
+def _from_record(record: dict) -> campus.model.Timetable:
     return campus.model.Timetable(
         id=schema.CampusID(record["id"]),
-        timetable_id=record["timetable_id"],
-        lessongroup_id=record["lessongroup_id"],
-        venuetimeslot_id=record["venuetimeslot_id"],
-        entries=entries,
-        created_at=schema.DateTime(record["created_at"]) if record.get("created_at") else None,
-        updated_at=schema.DateTime(record["updated_at"]) if record.get("updated_at") else None,
+        filename=record["filename"],
+        start_date=schema.DateTime(record["start_date"]),
+        end_date=schema.DateTime(record["end_date"]),
     )
 
 def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
     return campus.model.TimetableEntry(
         id=schema.CampusID(record["id"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
-        start_time=schema.DateTime(record["start_time"]),
-        end_time=schema.DateTime(record["end_time"]),
+        lessongroup_id=schema.CampusID(record["lessongroup_id"]),
+        venuetimeslot_id=schema.Integer(record["venuetimeslot_id"]),
     )
 
 
@@ -69,7 +50,7 @@ class TimetablesResource:
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         return TimetableResource(timetable_id)
     
-    def list(self, **filters: typing.Any) -> list[campus.model.TimetableEntry]:
+    def list(self, **filters: typing.Any) -> list[campus.model.Timetable]:
         """List timetables matching filters."""
         try:
             records = timetable_storage.get_matching(filters)
@@ -79,28 +60,21 @@ class TimetablesResource:
     
     def new(self, **fields: typing.Any) -> campus.model.Timetable:
         timetable = campus.model.Timetable(
-            id=schema.CampusID(uid.generate_category_uid("timetable", length=8)),
             filename=fields["filename"],
-            lessongroup_id=fields["lessongroup_id"],
-            venuetimeslot_id=fields["venuetimeslot_id"],
-            created_at=schema.DateTime.utcnow(),
-            entries=[]
+            start_date=fields["start_date"],
+            end_date=fields["end_date"],
         )
-
         try:
             timetable_storage.insert_one(timetable.to_storage())
             for entry_data in fields.get("entries", []):
                 entry = campus.model.TimetableEntry(
-                    id=schema.CampusID(uid.generate_category_uid("entry", length=8)),
                     timetable_id=timetable.id,
-                    start_time=entry_data["start_time"],
-                    end_time=entry_data["end_time"],
+                    lessongroup_id=entry_data["lessongroup_id"],
+                    venuetimeslot_id=entry_data["venuetimeslot_id"],
                 )
                 timetable_entry_storage.insert_one(entry.to_storage())
-                timetable.entries.append(entry)  # keep in sync
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
-
         return timetable
 
     def get_current(self) -> schema.CampusID | None:
@@ -150,7 +124,7 @@ class TimetableResource:
                     "Timetable not found",
                     id=self.timetable_id
                 )
-            return _from_record(record, include_entries=True)
+            return _from_record(record)
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Timetable not found",
@@ -228,7 +202,7 @@ class TimetableMetadataResource:
                     "Timetable not found",
                     id=self.timetable_id
                 )
-            return _from_record(record, include_entries=False)
+            return _from_record(record)
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Timetable not found",
