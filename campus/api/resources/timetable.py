@@ -12,9 +12,8 @@ import campus.storage
 from campus.storage.documents.interface import PK
 
 timetable_entry_storage = campus.storage.get_collection("timetable_entries")
-timetable_storage = campus.storage.get_collection("timetables")
+timetable_collection = campus.storage.get_collection("timetables")
 timetable_table = campus.storage.get_table("timetables") 
-
 
 def _from_record(record: dict) -> campus.model.Timetable:
     return campus.model.Timetable(
@@ -45,7 +44,7 @@ class TimetablesResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage."""
-        timetable_storage.init_collection()
+        timetable_collection.init_collection()
     
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         return TimetableResource(timetable_id)
@@ -53,7 +52,7 @@ class TimetablesResource:
     def list(self, **filters: typing.Any) -> list[campus.model.Timetable]:
         """List timetables matching filters."""
         try:
-            records = timetable_storage.get_matching(filters)
+            records = timetable_collection.get_matching(filters)
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
@@ -64,14 +63,17 @@ class TimetablesResource:
             start_date=fields["start_date"],
             end_date=fields["end_date"],
         )
-        try:
-            timetable_storage.insert_one(timetable.to_storage())
-            for entry_data in fields.get("entries", []):
+        entry_list = []
+        for entry_data in fields.get("entries", []):
                 entry = campus.model.TimetableEntry(
                     timetable_id=timetable.id,
                     lessongroup_id=entry_data["lessongroup_id"],
                     venuetimeslot_id=entry_data["venuetimeslot_id"],
                 )
+                entry_list.append(entry)
+        try:
+            timetable_collection.insert_one(timetable.to_storage())
+            for entry in entry_list:
                 timetable_entry_storage.insert_one(entry.to_storage())
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
@@ -118,7 +120,7 @@ class TimetableResource:
     def get(self) -> campus.model.Timetable:
         """Get the timetable with entries."""
         try:
-            record = timetable_storage.get_by_id(self.timetable_id)
+            record = timetable_collection.get_by_id(self.timetable_id)
             if record is None:
                 raise api_errors.ConflictError(
                     "Timetable not found",
@@ -138,7 +140,7 @@ class TimetableResource:
     def update(self, **updates: typing.Any) -> None:
         """Update the timetable record."""
         try:
-            timetable_storage.update_by_id(self.timetable_id, updates)
+            timetable_collection.update_by_id(self.timetable_id, updates)
         except campus.storage.errors.NoChangesAppliedError:
             return None
         except campus.storage.errors.NotFoundError:
@@ -151,14 +153,14 @@ class TimetableResource:
 
     def delete(self) -> None:
         try:
-            record = timetable_storage.get_by_id(self.timetable_id)
+            record = timetable_collection.get_by_id(self.timetable_id)
             if record is None:
                 raise api_errors.ConflictError(
                     "Timetable not found",
                     id=self.timetable_id
                 )
             timetable_entry_storage.delete_matching({"timetable_id": self.timetable_id})
-            timetable_storage.delete_by_id(self.timetable_id)
+            timetable_collection.delete_by_id(self.timetable_id)
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Timetable not found",
@@ -196,7 +198,7 @@ class TimetableMetadataResource:
     def get(self) -> campus.model.Timetable:
         """Get the timetable metadata without entries."""
         try:
-            record = timetable_storage.get_by_id(self.timetable_id)
+            record = timetable_collection.get_by_id(self.timetable_id)
             if record is None:
                 raise api_errors.ConflictError(
                     "Timetable not found",
@@ -214,7 +216,7 @@ class TimetableMetadataResource:
     def update(self, **updates: typing.Any) -> None:
         """Update the timetable metadata."""
         try:
-            timetable_storage.update_by_id(self.timetable_id, updates)
+            timetable_collection.update_by_id(self.timetable_id, updates)
         except campus.storage.errors.NoChangesAppliedError:
             return None
         except campus.storage.errors.NotFoundError:
