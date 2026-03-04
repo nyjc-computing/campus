@@ -18,9 +18,11 @@ from .assignment import AssignmentsResource
 from .circle import CirclesResource
 from .emailotp import EmailOTPResource
 from .submission import SubmissionsResource
+from .timetable import TimetablesResource
 
 # Initialize resource instances for internal use
 assignment = AssignmentsResource()
 circle = CirclesResource()
 emailotp = EmailOTPResource()
 submission = SubmissionsResource()
+timetable = TimetablesResource()
