@@ -12,17 +12,27 @@ from campus.common import schema
 
 class FieldMeta(typing.TypedDict):
     """Metadata for a model field.
-    
+
     These are passed to the metadata parameter of dataclasses.field().
     See https://docs.python.org/3/library/dataclasses.html#dataclasses.field
-    This class is not used; the allowed arguments are documented here
-    for reference.
+
+    Note: Types are enforced when generating SQL schemas via
+    TableInterface.init_from_model(). Invalid metadata will raise
+    TypeError or ValueError.
+
+    Attributes:
+        resource: Whether the field is returned in API responses. Default is True.
+        storage: Whether the field is stored in the database. Must be bool. Default is True.
+        constraints: List of constraint names. Must be list/tuple of str.
+                     Valid constraint names are defined in campus.model.constraints
+                     (e.g., "unique" for UNIQUE constraint).
     """
     # Whether the field is returned in API responses. Default is True.
     resource: bool
-    # Whether the field is stored in the database. Default is True.
+    # Whether the field is stored in the database. Must be bool. Default is True.
     storage: bool
-    # Any additional constraints for the field, e.g., UNIQUE.
+    # Any additional constraints for the field. Must be list/tuple of str.
+    # Valid values are defined in campus.model.constraints (e.g., "unique").
     constraints: typing.Sequence[str]
 
 

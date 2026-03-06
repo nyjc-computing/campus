@@ -11,7 +11,7 @@ from typing import (
 import flask
 
 import campus.model
-from campus.common.errors import api_errors
+from campus.common.errors import api_errors, ValidationError, FieldError
 from campus.common.validation import record
 
 from . import parameter, types
@@ -68,15 +68,32 @@ def unpack_into(
 ) -> Any:
     """Unpack request arguments into the given function's arguments,
     based on its signature.
+
+    Raises ValidationError with structured field errors for any issues.
     """
     reconciled, extra_args, missing_params = parameter.reconcile(
         request_args,
         func
     )
+
+    field_errors: list[FieldError] = []
+
     if missing_params:
-        raise (
-            KeyError(f"Missing required parameters: {missing_params}")
-        ) from None
+        field_errors.extend([
+            FieldError(
+                field=param,
+                code="MISSING",
+                message=f"Missing required field: {param}"
+            )
+            for param in missing_params
+        ])
+
+    if field_errors:
+        raise ValidationError(
+            message="One or more fields are invalid",
+            errors=field_errors
+        )
+
     # Call the original function with unpacked arguments
     return func(**reconciled, **extra_args)
 

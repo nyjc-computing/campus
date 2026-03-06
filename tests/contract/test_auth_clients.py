@@ -73,8 +73,9 @@ class TestAuthClientsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
-        self.assertIn("error_code", data)
-        self.assertEqual(data["error_code"], "UNAUTHORIZED")
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_list_clients_with_auth_returns_list(self):
         """GET /clients with auth returns list of clients."""
@@ -135,7 +136,8 @@ class TestAuthClientsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         data = response.get_json()
-        self.assertIn("error_code", data)
+        self.assertIn("error", data)
+        self.assertIn("code", data["error"])
 
     def test_revoke_client_secret(self):
         """POST /clients/{id}/revoke generates new secret."""

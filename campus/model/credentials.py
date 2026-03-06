@@ -87,7 +87,7 @@ class UserCredentials(Model):
         metadata={
             "storage": True,
             "resource": False,
-            "constraints": constraints.UNIQUE
+            "constraints": [constraints.UNIQUE]
         }
     )
     token: OAuthToken = field(  # type: ignore

@@ -273,6 +273,42 @@ For tests that require real HTTP or deployment verification:
 
 These are not automated because they require network access and external services.
 
+## OpenAPI Specification Validation
+
+Campus maintains OpenAPI 3.0.3 specifications for API documentation:
+
+- **Auth Service:** `campus/auth/docs/openapi.yaml`
+- **API Service:** `campus/api/docs/openapi.yaml`
+
+### Running Validation
+
+```bash
+# Validate auth service spec
+poetry run python -m openapi_spec_validator campus/auth/docs/openapi.yaml
+
+# Validate API service spec
+poetry run python -m openapi_spec_validator campus/api/docs/openapi.yaml
+
+# Run unit tests (includes OpenAPI validation)
+poetry run python tests/run_tests.py unit --module common
+```
+
+### OpenAPI Validation Tests
+
+Unit tests in `tests/unit/common/test_openapi_spec.py` automatically validate:
+- YAML syntax is valid
+- Spec conforms to OpenAPI 3.0.3 schema
+- Required top-level fields are present (`info`, `paths`, `components`)
+
+These tests focus on structural validity rather than endpoint-specific details to minimize maintenance as the API evolves.
+
+### Why Validate OpenAPI Specs?
+
+- Ensures API documentation is machine-readable and valid
+- Catches syntax errors before deployment
+- Enables auto-generation of client SDKs and server stubs
+- Supports API mocking and testing tools
+
 ## Related Documentation
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
