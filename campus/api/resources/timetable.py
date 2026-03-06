@@ -8,9 +8,12 @@ from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
 import campus.model
+from campus.model import timetable
 import campus.storage
 from campus.storage.documents.interface import PK
 
+timetable_lessongroup_collection = campus.storage.get_collection("timetable_lessongroup")
+timetable_lessongroupmembers_table = campus.storage.get_table("timetable_lessongroupmembers")
 timetable_entry_storage = campus.storage.get_collection("timetable_entries")
 timetable_collection = campus.storage.get_collection("timetables")
 timetable_table = campus.storage.get_table("timetables") 
@@ -28,7 +31,15 @@ def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
         id=schema.CampusID(record["id"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         lessongroup_id=schema.CampusID(record["lessongroup_id"]),
-        venuetimeslot_id=schema.Integer(record["venuetimeslot_id"]),
+        weekday = schema.String(record["weekday"]),
+        timeslot = schema.String(record["timeslot"]),
+        venue = schema.String(record["venue"]),
+    )
+
+def _lessongroup_from_record(record: dict) -> campus.model.LessonGroup:
+    return campus.model.LessonGroup(
+        timetable_id=schema.CampusID(record["timetable_id"]),
+        label = schema.String(record["label"])
     )
 
 
@@ -57,26 +68,92 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
     
-    def new(self, **fields: typing.Any) -> campus.model.TimetableMetadata:
-        timetable = campus.model.TimetableMetadata(
-            filename=fields["filename"],
-            start_date=fields["start_date"],
-            end_date=fields["end_date"],
+    def new(self, **fields: typing.Any) -> campus.model.Timetable:
+
+        timetable = campus.model.Timetable(
+            filename=fields["metadata"]["filename"],
+            start_date=fields["metadata"]["start"],
+            end_date=fields["metadata"]["end"],
+            entries = []
         )
+
+        data = fields.get("data", {})
+
+        lessongroups = []
+        members = []
         entry_list = []
-        for entry_data in fields.get("entries", []):
-                entry = campus.model.TimetableEntry(
+        entry_list_to_insert = []
+        
+        for lessongroup in data.get("lessongroups", []):
+
+            lgStorageData = timetable_lessongroup_collection.get_matching({
+                "timetable_id": timetable.id,
+                "label": lessongroup["label"]
+            })
+            if lgStorageData:
+                lgStorageData = lgStorageData[0]
+                
+                lg = campus.model.LessonGroup.from_storage(lgStorageData)
+            else:
+                lg = campus.model.LessonGroup(
                     timetable_id=timetable.id,
-                    lessongroup_id=entry_data["lessongroup_id"],
-                    venuetimeslot_id=entry_data["venuetimeslot_id"],
+                    label = lessongroup["label"]
                 )
+                lessongroups.append(lg)
+
+              
+            for ade_participant in lessongroup["members"]:
+                memberStorageData = timetable_lessongroupmembers_table.get_matching({
+                    "timetable_id": timetable.id,
+                    "lessongroup_id": lg.id,
+                    "ade_participant": ade_participant
+                })
+                if memberStorageData:
+                    memberStorageData = memberStorageData[0]
+                    member = campus.model.LessonGroupMember.from_storage(memberStorageData)
+                else:
+                    member = campus.model.LessonGroupMember(
+                        timetable_id=timetable.id,
+                        lessongroup_id=lg.id,
+                        ade_participant=ade_participant
+                    )
+                    members.append(member)
+            
+            for entry_data in lessongroup.get("entries", []):
+                entryStorageData = timetable_entry_storage.get_matching({
+                    "timetable_id": timetable.id,
+                    "lessongroup_id": lg.id,
+                    "weekday": entry_data["weekday"],
+                    "timeslot": entry_data["timeslot"],
+                    "venue": entry_data["venue"]
+                })
+                if entryStorageData:
+                    entryStorageData = entryStorageData[0]
+                    entry = campus.model.TimetableEntry.from_storage(entryStorageData)
+                else:
+                    entry = campus.model.TimetableEntry(
+                        timetable_id=timetable.id,
+                        lessongroup_id=lg.id,
+                        weekday = entry_data["weekday"],
+                        timeslot = entry_data["timeslot"],
+                        venue = entry_data["venue"],
+                    )
+                    entry_list_to_insert.append(entry)
                 entry_list.append(entry)
+        
+        timetable.entries = entry_list
+
         try:
             timetable_collection.insert_one(timetable.to_storage())
-            for entry in entry_list:
+            for entry in entry_list_to_insert:
                 timetable_entry_storage.insert_one(entry.to_storage())
+            for lessongroup in lessongroups:
+                timetable_lessongroup_collection.insert_one(lessongroup.to_storage())
+            for member in members:
+                timetable_lessongroupmembers_table.insert_one(member.to_storage())
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+    
         return timetable
 
     def get_current(self) -> schema.CampusID | None:
@@ -161,6 +238,8 @@ class TimetableResource:
                 )
             timetable_entry_storage.delete_matching({"timetable_id": self.timetable_id})
             timetable_collection.delete_by_id(self.timetable_id)
+            timetable_lessongroup_collection.delete_matching({"timetable_id": self.timetable_id})
+            timetable_lessongroupmembers_table.delete_matching({"timetable_id": self.timetable_id})
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Timetable not found",
