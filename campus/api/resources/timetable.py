@@ -69,7 +69,7 @@ class TimetablesResource:
         return [_from_record(record) for record in records]
     
     def new(self, **fields: typing.Any) -> campus.model.Timetable:
-
+        """Create a new timetable with metadata and entries."""
         timetable = campus.model.Timetable(
             filename=fields["metadata"]["filename"],
             start_date=fields["metadata"]["start"],
@@ -85,60 +85,30 @@ class TimetablesResource:
         entry_list_to_insert = []
         
         for lessongroup in data.get("lessongroups", []):
-
-            lgStorageData = timetable_lessongroup_collection.get_matching({
-                "timetable_id": timetable.id,
-                "label": lessongroup["label"]
-            })
-            if lgStorageData:
-                lgStorageData = lgStorageData[0]
-                
-                lg = campus.model.LessonGroup.from_storage(lgStorageData)
-            else:
-                lg = campus.model.LessonGroup(
-                    timetable_id=timetable.id,
-                    label = lessongroup["label"]
-                )
-                lessongroups.append(lg)
+            lg = campus.model.LessonGroup(
+                timetable_id=timetable.id,
+                label = lessongroup["label"]
+            )
+            lessongroups.append(lg)
 
               
             for ade_participant in lessongroup["members"]:
-                memberStorageData = timetable_lessongroupmembers_table.get_matching({
-                    "timetable_id": timetable.id,
-                    "lessongroup_id": lg.id,
-                    "ade_participant": ade_participant
-                })
-                if memberStorageData:
-                    memberStorageData = memberStorageData[0]
-                    member = campus.model.LessonGroupMember.from_storage(memberStorageData)
-                else:
-                    member = campus.model.LessonGroupMember(
-                        timetable_id=timetable.id,
-                        lessongroup_id=lg.id,
-                        ade_participant=ade_participant
-                    )
-                    members.append(member)
+                member = campus.model.LessonGroupMember(
+                    timetable_id=timetable.id,
+                    lessongroup_id=lg.id,
+                    ade_participant=ade_participant
+                )
+                members.append(member)
             
             for entry_data in lessongroup.get("entries", []):
-                entryStorageData = timetable_entry_storage.get_matching({
-                    "timetable_id": timetable.id,
-                    "lessongroup_id": lg.id,
-                    "weekday": entry_data["weekday"],
-                    "timeslot": entry_data["timeslot"],
-                    "venue": entry_data["venue"]
-                })
-                if entryStorageData:
-                    entryStorageData = entryStorageData[0]
-                    entry = campus.model.TimetableEntry.from_storage(entryStorageData)
-                else:
-                    entry = campus.model.TimetableEntry(
-                        timetable_id=timetable.id,
-                        lessongroup_id=lg.id,
-                        weekday = entry_data["weekday"],
-                        timeslot = entry_data["timeslot"],
-                        venue = entry_data["venue"],
-                    )
-                    entry_list_to_insert.append(entry)
+                entry = campus.model.TimetableEntry(
+                    timetable_id=timetable.id,
+                    lessongroup_id=lg.id,
+                    weekday = entry_data["weekday"],
+                    timeslot = entry_data["timeslot"],
+                    venue = entry_data["venue"],
+                )
+                entry_list_to_insert.append(entry)
                 entry_list.append(entry)
         
         timetable.entries = entry_list
@@ -157,6 +127,7 @@ class TimetablesResource:
         return timetable
 
     def get_current(self) -> schema.CampusID | None:
+        """Get the current active timetable. This is used to indicate which timetable is currently active."""
         try:
             record = timetable_table.get_by_id("current_timetable")
             return schema.CampusID(record["timetable_id"]) if record else None
@@ -166,6 +137,7 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def set_current(self, timetable_id: schema.CampusID) -> None:
+        """Set the current active timetable. This is used to indicate which timetable is currently active."""
         TimetableResource(timetable_id).get()
         try:
             _upsert(timetable_table, "current_timetable", {"timetable_id": str(timetable_id)})
@@ -173,6 +145,7 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def get_next(self) -> schema.CampusID | None:
+        """Get the next timetable. This is used to indicate which timetable will be active after the current one expires."""
         try:
             record = timetable_table.get_by_id("next_timetable")
             return schema.CampusID(record["timetable_id"]) if record else None
@@ -182,6 +155,7 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def set_next(self, timetable_id: schema.CampusID) -> None:
+        """Set the next timetable. This is used to indicate which timetable will be active after the current one expires."""
         TimetableResource(timetable_id).get()
         try:
             _upsert(timetable_table, "next_timetable", {"timetable_id": str(timetable_id)})
@@ -194,23 +168,39 @@ class TimetableResource:
     def __init__(self, timetable_id: schema.CampusID):
         self.timetable_id = timetable_id
 
-    def get(self) -> campus.model.TimetableMetadata:
-        """Get the timetable with entries."""
+    def get(self) -> campus.model.Timetable:
+        """
+        Get a full Timetable (metadata + entries) by ID.
+        Assembles the Timetable model from the three storage collections:
+          timetable_collection, timetable_entry_storage, timetable_lessongroup_collection.
+        """
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
-            if record is None:
-                raise api_errors.ConflictError(
-                    "Timetable not found",
-                    id=self.timetable_id
-                )
-            return _from_record(record)
         except campus.storage.errors.NotFoundError:
-            raise api_errors.ConflictError(
+            raise api_errors.NotFoundError(
                 "Timetable not found",
                 id=self.timetable_id
             ) from None
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+
+        if record is None:
+            raise api_errors.NotFoundError("Timetable not found", id=self.timetable_id)
+
+        try:
+            entry_records = timetable_entry_storage.get_matching({"timetable_id": self.timetable_id})
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
+        entries = [_entry_from_record(r) for r in entry_records]
+
+        return campus.model.Timetable(
+            id=schema.CampusID(record["id"]),
+            filename=record["filename"],
+            start_date=schema.DateTime(record["start_date"]),
+            end_date=schema.DateTime(record["end_date"]),
+            entries=entries,
+        )
 
 
     
@@ -229,6 +219,7 @@ class TimetableResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def delete(self) -> None:
+        """Delete the timetable and all associated entries, lessongroups and members."""
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
             if record is None:
