@@ -34,6 +34,7 @@ TODO: Update doc link after migration
 """
 
 from dataclasses import dataclass, field
+from typing import Any, Self
 
 from campus.common import schema
 from campus.common.utils import uid
@@ -147,5 +148,21 @@ class TimetableMetadata(Model):
 class Timetable(TimetableMetadata):
     """
     Model representing timetable metadata and entries.
+
+    This model is meant for API representation, not for storage
     """
     entries: list[TimetableEntry]
+
+    # prevent accidental use of from_storage and to_storage
+    @classmethod
+    def from_storage(cls: type[Self], record: dict[str, Any]) -> Self:
+        raise NotImplementedError(
+            "Timetable.from_storage() is not supported. "
+            "Use TimetableMetadata and TimetableEntry models instead."
+        )
+
+    def to_storage(self) -> dict[str, Any]:
+        raise NotImplementedError(
+            "Timetable.to_storage() is not supported. "
+            "Use TimetableMetadata and TimetableEntry models instead."
+        )
