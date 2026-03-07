@@ -82,7 +82,6 @@ class TimetablesResource:
         lessongroups = []
         members = []
         entry_list = []
-        entry_list_to_insert = []
         
         for lessongroup in data.get("lessongroups", []):
             lg = campus.model.LessonGroup(
@@ -108,14 +107,13 @@ class TimetablesResource:
                     timeslot = entry_data["timeslot"],
                     venue = entry_data["venue"],
                 )
-                entry_list_to_insert.append(entry)
                 entry_list.append(entry)
         
         timetable.entries = entry_list
 
         try:
             timetable_collection.insert_one(timetable.to_storage())
-            for entry in entry_list_to_insert:
+            for entry in entry_list:
                 timetable_entry_storage.insert_one(entry.to_storage())
             for lessongroup in lessongroups:
                 timetable_lessongroup_collection.insert_one(lessongroup.to_storage())
@@ -125,6 +123,10 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
     
         return timetable
+
+    def get(self, timetable_id: schema.CampusID) -> campus.model.Timetable:
+        """Get a full timetable by ID."""
+        return TimetableResource(timetable_id).get()
 
     def get_current(self) -> schema.CampusID | None:
         """Get the current active timetable. This is used to indicate which timetable is currently active."""
