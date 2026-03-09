@@ -81,7 +81,7 @@ class TimetablesResource:
 
         lessongroups = []
         members = []
-        entry_list = []
+        entries = []
         
         for lessongroup in data.get("lessongroups", []):
             lg = campus.model.LessonGroup(
@@ -107,13 +107,13 @@ class TimetablesResource:
                     timeslot = entry_data["timeslot"],
                     venue = entry_data["venue"],
                 )
-                entry_list.append(entry)
+                entries.append(entry)
         
-        timetable.entries = entry_list
+        timetable.entries = entries
 
         try:
             timetable_collection.insert_one(timetable.to_storage())
-            for entry in entry_list:
+            for entry in entries:
                 timetable_entry_storage.insert_one(entry.to_storage())
             for lessongroup in lessongroups:
                 timetable_lessongroup_collection.insert_one(lessongroup.to_storage())
