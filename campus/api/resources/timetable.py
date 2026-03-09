@@ -81,7 +81,7 @@ class TimetablesResource:
 
         lessongroups = []
         members = []
-        entry_list = []
+entries = []
         
         for lessongroup in data.get("lessongroups", []):
             lg = campus.model.LessonGroup(
