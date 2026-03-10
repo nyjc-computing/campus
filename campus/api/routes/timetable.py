@@ -108,6 +108,14 @@ def upload() -> flask_campus.JsonResponse:
 @flask_campus.unpack_request
 def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
+        Returns timetable metadata and entries in a single JSON object.
+    """
+    return {}, 501
+
+@bp.get('/<timetable_id>/entries')
+@flask_campus.unpack_request
+def get_timetable_entries(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
+    """Summary:
         List all timetable entries for a specific timetable and user.
 
     Method:
@@ -127,7 +135,7 @@ def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
 
 @bp.get('/<timetable_id>/metadata')
 @flask_campus.unpack_request
-def get_metadata(timetable_id: schema.CampusID):
+def get_timetable_metadata(timetable_id: schema.CampusID):
     """Summary:
         Get metadata for a specific timetable.
 

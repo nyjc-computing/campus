@@ -15,8 +15,8 @@ timetable_entry_storage = campus.storage.get_collection("timetable_entries")
 timetable_collection = campus.storage.get_collection("timetables")
 timetable_table = campus.storage.get_table("timetables") 
 
-def _from_record(record: dict) -> campus.model.Timetable:
-    return campus.model.Timetable(
+def _from_record(record: dict) -> campus.model.TimetableMetadata:
+    return campus.model.TimetableMetadata(
         id=schema.CampusID(record["id"]),
         filename=record["filename"],
         start_date=schema.DateTime(record["start_date"]),
@@ -28,7 +28,9 @@ def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
         id=schema.CampusID(record["id"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         lessongroup_id=schema.CampusID(record["lessongroup_id"]),
-        venuetimeslot_id=schema.Integer(record["venuetimeslot_id"]),
+        venue=schema.String(record["venue"]),
+        weekday=schema.String(record["weekday"]),
+        timeslot=schema.String(record["timeslot"]),
     )
 
 
@@ -49,7 +51,7 @@ class TimetablesResource:
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         return TimetableResource(timetable_id)
     
-    def list(self, **filters: typing.Any) -> list[campus.model.Timetable]:
+    def list(self, **filters: typing.Any) -> list[campus.model.TimetableMetadata]:
         """List timetables matching filters."""
         try:
             records = timetable_collection.get_matching(filters)
@@ -57,8 +59,8 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
     
-    def new(self, **fields: typing.Any) -> campus.model.Timetable:
-        timetable = campus.model.Timetable(
+    def new(self, **fields: typing.Any) -> campus.model.TimetableMetadata:
+        timetable = campus.model.TimetableMetadata(
             filename=fields["filename"],
             start_date=fields["start_date"],
             end_date=fields["end_date"],
@@ -68,7 +70,9 @@ class TimetablesResource:
                 entry = campus.model.TimetableEntry(
                     timetable_id=timetable.id,
                     lessongroup_id=entry_data["lessongroup_id"],
-                    venuetimeslot_id=entry_data["venuetimeslot_id"],
+                    venue=schema.String(entry_data["venue"]),
+                    weekday=schema.String(entry_data["weekday"]),
+                    timeslot=schema.String(entry_data["timeslot"]),
                 )
                 entry_list.append(entry)
         try:
@@ -117,7 +121,7 @@ class TimetableResource:
     def __init__(self, timetable_id: schema.CampusID):
         self.timetable_id = timetable_id
 
-    def get(self) -> campus.model.Timetable:
+    def get(self) -> campus.model.TimetableMetadata:
         """Get the timetable with entries."""
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
@@ -195,7 +199,7 @@ class TimetableMetadataResource:
     def __init__(self, timetable_id: schema.CampusID):
         self.timetable_id = timetable_id
     
-    def get(self) -> campus.model.Timetable:
+    def get(self) -> campus.model.TimetableMetadata:
         """Get the timetable metadata without entries."""
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
