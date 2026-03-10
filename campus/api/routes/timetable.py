@@ -138,35 +138,8 @@ def upload(
 def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         Returns timetable metadata and entries in a single JSON object.
-
-    Method:
-        GET /timetable/<timetable_id>/
-
-    Path Parameters:
-        timetable_id: CampusID
-            The ID of the timetable to retrieve.
-    Responses:
-        200 OK: dict
-            {
-                "data": {
-                    "metadata": {timetable metadata},
-                    "entries": [timetable entry resources]
-                }
-            }
-            
     """
-    timetable = timetable_resource[timetable_id].get() # campus.model.timetable.Timetable
-    metadata = {
-        "filename": timetable.filename,
-        "start_date": timetable.start_date,
-        "end_date": timetable.end_date,
-    }
-    entries = timetable.entries
-
-    return {"data": {
-        **metadata,
-        "entries": [entry.to_resource() for entry in entries],
-    }}, 200
+    return {}, 501
 
 @bp.get('/<timetable_id>/entries')
 @flask_campus.unpack_request
