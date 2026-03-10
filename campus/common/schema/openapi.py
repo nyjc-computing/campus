@@ -80,8 +80,64 @@ class String(str):
         return super().__str__()
 
 
+class Date(String):
+    """Emulates Python datetime.date behavior.
+
+    Since date-time is considered a string format in OpenAPI 3, for future
+    compatibility we have Date subclass str.
+    This class 
+    """
+
+    def __new__(cls, value: str):
+        return super().__new__(cls, value)
+
+    def __repr__(self) -> str:
+        return f"DateTime({self})"
+
+    @classmethod
+    def from_date(cls: Type[Self], d: utc_time.date) -> Self:
+        """Create a Date string from a UTC date object."""
+        return cls(utc_time.to_rfc3339(d))
+
+    @classmethod
+    def utcafter(cls: Type[Self], today: Self | None = None, **delta) -> Self:
+        """Get a Date string at a given delta after the current time.
+
+        Keyword arguments:
+        - **delta: follows that of timedelta
+        """
+
+        _t = utc_time.today() if today is None else today.to_date()
+        assert isinstance(_t, utc_time.date), f"Expected date, got {_t}"
+        return cls.from_date(utc_time.after(_t, **delta)) # pyright: ignore[reportArgumentType]
+
+    @classmethod
+    def today(cls: Type[Self]) -> Self:
+        """Get the current UTC time as a DateTime string."""
+        return cls.from_date(utc_time.today())
+
+    def to_date(self) -> utc_time.date:
+        """Convert the DateTime string to a UTC date object."""
+        return utc_time.from_rfc3339(self).date()
+
+    @property
+    def year(self) -> int:
+        """Passthrough to datetime.year"""
+        return self.to_date().year
+
+    @property
+    def month(self) -> int:
+        """Passthrough to datetime.month"""
+        return self.to_date().month
+
+    @property
+    def day(self) -> int:
+        """Passthrough to datetime.day"""
+        return self.to_date().day
+
+
 class DateTime(String):
-    """Emulates Python datetime behavior.
+    """Emulates Python datetime.datetime behavior.
 
     Since date-time is considered a string format in OpenAPI 3, for future
     compatibility we have DateTime subclass str.
@@ -112,7 +168,8 @@ class DateTime(String):
         - **delta: follows that of timedelta
         """
         dtnow = utc_time.now() if now is None else now.to_datetime()
-        return cls.from_datetime(utc_time.after(dtnow, **delta))
+        assert isinstance(dtnow, utc_time.datetime), f"Expected datetime, got {dtnow}"
+        return cls.from_datetime(utc_time.after(dtnow, **delta)) # pyright: ignore[reportArgumentType]
 
     @classmethod
     def utcnow(cls: Type[Self]) -> Self:

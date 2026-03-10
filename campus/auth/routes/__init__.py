@@ -14,6 +14,7 @@ __all__ = [
     "clients",
     "credentials",
     "logins",
+    "oauth",
     "sessions",
     "users",
     "vaults",
@@ -25,7 +26,7 @@ from campus.common import webauth
 from campus.common.errors import auth_errors
 
 from .. import resources
-from . import clients, credentials, logins, root, sessions, users, vaults
+from . import clients, credentials, logins, oauth, root, sessions, users, vaults
 
 # Route modules that require authentication
 _AUTHENTICATED_ROUTE_MODULES = [
@@ -90,8 +91,16 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     Creates fresh blueprints each time to support test isolation.
     Authentication is applied to each blueprint individually to avoid
     affecting OAuth proxy routes which should be publicly accessible.
+
+    Note: OAuth routes are registered WITHOUT authentication as they are
+    publicly accessible for the device authorization flow.
     """
     for module in _AUTHENTICATED_ROUTE_MODULES:
         blueprint = module.create_blueprint()
         blueprint.before_request(authenticate)
         app.register_blueprint(blueprint)
+
+    # Register OAuth blueprint WITHOUT authentication
+    # These routes are publicly accessible for device authorization
+    oauth_blueprint = oauth.create_blueprint()
+    app.register_blueprint(oauth_blueprint)
