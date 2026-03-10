@@ -22,6 +22,7 @@ flask = "^3.0.0"
 requests = "^2.32.4"
 psycopg2-binary = "^2.9.0"
 pymongo = {extras = ["srv"], version = "^4.13.2"}
+boto3 = "^1.35.0"
 
 # Deployment orchestration dependencies (all services) - required for deployment
 gunicorn = "^21.2.0"
@@ -31,6 +32,7 @@ werkzeug = "^3.0.0"
 pylint = "^3.0"
 pyright = "^1.1.391"
 openapi-spec-validator = "^0.7.2"
+boto3-stubs = "^1.42.57"
 
 [tool.poetry.scripts]
 campus = "main:main"

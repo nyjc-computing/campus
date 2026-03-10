@@ -13,9 +13,11 @@ The OAuth2 security scheme comprises four flows:
 __all__ = [
     "OAuth2AuthorizationCodeFlowScheme",
     "OAuth2ClientCredentialsFlowScheme",
+    "OAuth2DeviceAuthorizationFlowScheme",
     "OAuth2FlowScheme",
 ]
 
 from .authorization_code import OAuth2AuthorizationCodeFlowScheme
 from .base import OAuth2FlowScheme
 from .client_credentials import OAuth2ClientCredentialsFlowScheme
+from .device_authorization import OAuth2DeviceAuthorizationFlowScheme
