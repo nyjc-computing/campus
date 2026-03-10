@@ -12,8 +12,20 @@ from typing import Optional
 class StorageError(Exception):
     """Base class for all storage-related errors."""
 
-    def __init__(self, message: str = "An error occurred in storage."):
-        super().__init__(message)
+    def __init__(
+            self,
+            message: str = "An error occurred in storage.",
+            group_name: Optional[str] = None,
+            details: Optional[dict] = None
+    ):
+        full_message = message
+        if group_name:
+            full_message += f" in group '{group_name}'"
+            self.group_name = group_name
+        if details:
+            self.details = details
+            full_message += f". Details: {details}"
+        super().__init__(full_message)
         self.message = message
 
 
