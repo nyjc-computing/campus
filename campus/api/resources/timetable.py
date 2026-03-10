@@ -28,7 +28,9 @@ def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
         id=schema.CampusID(record["id"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         lessongroup_id=schema.CampusID(record["lessongroup_id"]),
-        venuetimeslot_id=schema.Integer(record["venuetimeslot_id"]),
+        venue=schema.String(record["venue"]),
+        weekday=schema.String(record["weekday"]),
+        timeslot=schema.String(record["timeslot"]),
     )
 
 
@@ -68,7 +70,9 @@ class TimetablesResource:
                 entry = campus.model.TimetableEntry(
                     timetable_id=timetable.id,
                     lessongroup_id=entry_data["lessongroup_id"],
-                    venuetimeslot_id=entry_data["venuetimeslot_id"],
+                    venue=schema.String(entry_data["venue"]),
+                    weekday=schema.String(entry_data["weekday"]),
+                    timeslot=schema.String(entry_data["timeslot"]),
                 )
                 entry_list.append(entry)
         try:
