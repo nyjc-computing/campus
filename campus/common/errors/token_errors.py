@@ -5,10 +5,14 @@ These errors represent all possible JSON errors from the /token endpoint.
 """
 
 __all__ = [
+    "AccessDeniedError",
+    "AuthorizationPendingError",
+    "ExpiredTokenError",
     "InvalidClientError",
     "InvalidGrantError",
     "InvalidRequestError",
     "InvalidScopeError",
+    "SlowDownError",
     "TOKEN_RESPONSE_ERROR_TYPES",
     "TokenError",
     "UnauthorizedClientError",
@@ -40,6 +44,15 @@ def raise_from_error(
             errorClass = UnauthorizedClientError
         case "unsupported_grant_type":
             errorClass = UnsupportedGrantTypeError
+        # Device Authorization Flow errors (RFC 8628)
+        case "authorization_pending":
+            errorClass = AuthorizationPendingError
+        case "slow_down":
+            errorClass = SlowDownError
+        case "expired_token":
+            errorClass = ExpiredTokenError
+        case "access_denied":
+            errorClass = AccessDeniedError
         case _:
             raise ValueError(f"Unknown error type: {error}")
     raise errorClass(error_description, **details)
@@ -166,4 +179,71 @@ class UnsupportedGrantTypeError(TokenError):
     error_uri = None
 
     def __init__(self, error_description: str, **details) -> None:
+        super().__init__(error_description, error_uri=None, **details)
+
+
+# Device Authorization Flow errors (RFC 8628)
+# https://datatracker.ietf.org/doc/html/rfc8628#section-3.5
+
+
+class AuthorizationPendingError(TokenError):
+    """Authorization Pending error.
+
+    The authorization request is still pending; the client should
+    continue to poll the token endpoint.
+
+    From RFC 8628 Section 3.5
+    """
+    status_code: int = 400
+    error = "authorization_pending"
+    error_uri = None
+
+    def __init__(self, error_description: str = "", **details) -> None:
+        super().__init__(error_description, error_uri=None, **details)
+
+
+class SlowDownError(TokenError):
+    """Slow Down error.
+
+    The client is polling too frequently and should reduce the
+    frequency of its polls.
+
+    From RFC 8628 Section 3.5
+    """
+    status_code: int = 400
+    error = "slow_down"
+    error_uri = None
+
+    def __init__(self, error_description: str = "", **details) -> None:
+        super().__init__(error_description, error_uri=None, **details)
+
+
+class ExpiredTokenError(TokenError):
+    """Expired Token error.
+
+    The "device_code" has expired and the client must restart the
+    device authorization flow.
+
+    From RFC 8628 Section 3.5
+    """
+    status_code: int = 400
+    error = "expired_token"
+    error_uri = None
+
+    def __init__(self, error_description: str = "", **details) -> None:
+        super().__init__(error_description, error_uri=None, **details)
+
+
+class AccessDeniedError(TokenError):
+    """Access Denied error.
+
+    The resource owner or authorization server denied the access request.
+
+    From RFC 8628 Section 3.5
+    """
+    status_code: int = 400
+    error = "access_denied"
+    error_uri = None
+
+    def __init__(self, error_description: str = "", **details) -> None:
         super().__init__(error_description, error_uri=None, **details)
