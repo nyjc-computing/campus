@@ -607,7 +607,7 @@ def device_verification(user_code: str | None = None):
             <p class="subtitle">Enter the code from your CLI application</p>
 
             <!-- Success State View -->
-            <div id="successView" class="state-view {{ '' if status != 'success' else 'hidden' }}" role="alert" aria-live="polite">
+            <div id="successView" class="state-view {{ 'hidden' if status != 'success' else '' }}" role="alert" aria-live="polite">
                 <div class="success-icon"></div>
                 <h2>Authorization Complete!</h2>
                 <p>Your device has been successfully authorized.</p>
@@ -621,7 +621,7 @@ def device_verification(user_code: str | None = None):
             </div>
 
             <!-- Error State View -->
-            <div id="errorView" class="state-view hidden" role="alert" aria-live="assertive">
+            <div id="errorView" class="state-view {{ 'hidden' if status != 'error' else '' }}" role="alert" aria-live="assertive">
                 <div class="error-icon"></div>
                 <h2 id="errorTitle">Authorization Failed</h2>
                 <p id="errorMessage">An error occurred during authorization.</p>
