@@ -38,7 +38,7 @@ def device_authorize(
 
     POST /oauth/device_authorize
     Body: {
-        "client_id": "uid-client-9c48f62e"
+        "client_id": "guest"
     }
     Returns: {
         "device_code": "...",
