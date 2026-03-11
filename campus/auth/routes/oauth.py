@@ -75,12 +75,13 @@ def device_authorize(
 
     # Build verification URIs
     # Use the request to determine the base URL
+    # Note: endpoint needs 'auth.' prefix since oauth blueprint is registered under auth blueprint
     verification_uri = flask.url_for(
-        "oauth.device_verification",
+        "auth.oauth.device_verification",
         _external=True
     )
     verification_uri_complete = flask.url_for(
-        "oauth.device_verification",
+        "auth.oauth.device_verification",
         _external=True,
         user_code=device_code.user_code
     )
@@ -91,12 +92,12 @@ def device_authorize(
     })
 
     return {
-        "device_code": device_code.device_code,
-        "user_code": device_code.user_code,
-        "verification_uri": verification_uri,
-        "verification_uri_complete": verification_uri_complete,
+        "device_code": str(device_code.device_code),
+        "user_code": str(device_code.user_code),
+        "verification_uri": str(verification_uri),
+        "verification_uri_complete": str(verification_uri_complete),
         "expires_in": campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS,
-        "interval": device_code.interval,
+        "interval": int(device_code.interval),
     }, 200
 
 
