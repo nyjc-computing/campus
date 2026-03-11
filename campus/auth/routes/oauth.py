@@ -29,8 +29,42 @@ bp = flask.Blueprint('oauth', __name__, url_prefix='/oauth')
 DEFAULT_CLI_SCOPES = ["read", "write"]
 
 
+def _get_oauth_payload() -> dict:
+    """Get request payload for OAuth endpoints.
+
+    OAuth 2.0 spec requires endpoints to accept application/x-www-form-urlencoded.
+    This function accepts both JSON and form-encoded data for compatibility.
+    """
+    if flask.request.is_json:
+        data = flask.request.get_json(silent=True)
+        if data is None:
+            raise api_errors.InvalidRequestError(
+                message="Malformed JSON payload",
+                error_code="MALFORMED_REQUEST"
+            )
+        return data
+    else:
+        # Fall back to form data (OAuth 2.0 standard)
+        return dict(flask.request.form)
+
+
+def unpack_oauth_request(func):
+    """Decorator that unpacks Flask request for OAuth endpoints.
+
+    Accepts both JSON and form-encoded data per OAuth 2.0 specification.
+    """
+    from functools import wraps
+
+    @wraps(func)
+    def wrapper(**kwargs):
+        request_data = _get_oauth_payload()
+        return flask_campus.unpack_into(func, **kwargs, **request_data)
+
+    return wrapper
+
+
 @bp.post("/device_authorize")
-@flask_campus.unpack_request
+@unpack_oauth_request
 def device_authorize(
         client_id: schema.CampusID,
 ) -> flask_campus.JsonResponse:
@@ -102,7 +136,7 @@ def device_authorize(
 
 
 @bp.post("/token")
-@flask_campus.unpack_request
+@unpack_oauth_request
 def token(
         grant_type: str,
         client_id: schema.CampusID,
@@ -573,7 +607,7 @@ def device_verification(user_code: str | None = None):
 
 
 @bp.post("/device/authorize")
-@flask_campus.unpack_request
+@unpack_oauth_request
 def device_authorize_submit(
         user_code: str,
         user_id: schema.UserID,
