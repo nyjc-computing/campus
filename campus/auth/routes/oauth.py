@@ -55,7 +55,7 @@ def device_authorize(
     # "guest" is a special public client type for CLI/device apps
     # It doesn't exist in the database and has no inherent permissions
     # All access comes from the user's credentials during the OAuth flow
-    if client_id == "guest":
+    if client_id == campus.config.PUBLIC_OAUTH_CLIENT_ID:
         # Skip database validation for public guest clients
         pass
     else:
@@ -144,7 +144,7 @@ def token(
     """
     # Validate the client
     # "guest" is a special public client type - no database validation needed
-    if client_id != "guest":
+    if client_id != campus.config.PUBLIC_OAUTH_CLIENT_ID:
         try:
             client_resource[client_id].get()
         except api_errors.NotFoundError:
