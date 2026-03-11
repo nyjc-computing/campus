@@ -38,7 +38,7 @@ def device_authorize(
 
     POST /oauth/device_authorize
     Body: {
-        "client_id": "campus-cli"
+        "client_id": "guest"
     }
     Returns: {
         "device_code": "...",
@@ -52,12 +52,20 @@ def device_authorize(
     Reference: https://datatracker.ietf.org/doc/html/rfc8628#section-3.1
     """
     # Validate the client
-    try:
-        client_resource[client_id].get()
-    except api_errors.NotFoundError:
-        raise token_errors.InvalidClientError(
-            "Invalid client_id"
-        )
+    # "guest" is a special public client type for CLI/device apps
+    # It doesn't exist in the database and has no inherent permissions
+    # All access comes from the user's credentials during the OAuth flow
+    if client_id == campus.config.PUBLIC_OAUTH_CLIENT_ID:
+        # Skip database validation for public guest clients
+        pass
+    else:
+        # For regular clients, verify they exist in the database
+        try:
+            client_resource[client_id].get()
+        except api_errors.NotFoundError:
+            raise token_errors.InvalidClientError(
+                "Invalid client_id"
+            )
 
     # Create device code
     device_code = device_code_resource.create(
@@ -135,12 +143,14 @@ def token(
     }
     """
     # Validate the client
-    try:
-        client_resource[client_id].get()
-    except api_errors.NotFoundError:
-        raise token_errors.InvalidClientError(
-            "Invalid client_id"
-        )
+    # "guest" is a special public client type - no database validation needed
+    if client_id != campus.config.PUBLIC_OAUTH_CLIENT_ID:
+        try:
+            client_resource[client_id].get()
+        except api_errors.NotFoundError:
+            raise token_errors.InvalidClientError(
+                "Invalid client_id"
+            )
 
     # Route to appropriate handler based on grant_type
     if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
