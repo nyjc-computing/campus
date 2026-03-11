@@ -347,8 +347,14 @@ def device_verification(user_code: str | None = None):
 
     GET /device - Shows the entry form
     GET /device/<user_code> - Pre-fills the user code
+    GET /device?status=success&user_code=XXXX - Shows success state (for no-JS fallback)
+    GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
     """
-    from flask import render_template_string
+    from flask import render_template_string, request
+
+    # Check for query parameters for non-JS redirect states
+    status = request.args.get('status')
+    error_code = request.args.get('error_code')
 
     template = """
     <!DOCTYPE html>
@@ -430,28 +436,40 @@ def device_verification(user_code: str | None = None):
                 cursor: pointer;
                 transition: all 0.3s;
             }
-            .btn:hover {
+            .btn:hover:not(:disabled) {
                 transform: translateY(-2px);
                 box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
             }
-            .btn:active {
+            .btn:active:not(:disabled) {
                 transform: translateY(0);
             }
-            .error {
+            .btn:disabled {
+                opacity: 0.7;
+                cursor: not-allowed;
+            }
+            .btn-secondary {
+                background: #6c757d;
+                margin-top: 10px;
+            }
+            .alert {
+                padding: 16px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                font-size: 14px;
+                display: none;
+            }
+            .alert.error {
                 background: #fee;
                 color: #c33;
-                padding: 12px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                font-size: 14px;
+                border-left: 4px solid #c33;
             }
-            .success {
+            .alert.success {
                 background: #efe;
                 color: #3c3;
-                padding: 12px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                font-size: 14px;
+                border-left: 4px solid #3c3;
+            }
+            .alert.show {
+                display: block;
             }
             .instructions {
                 background: #f5f5f5;
@@ -482,6 +500,66 @@ def device_verification(user_code: str | None = None):
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
             }
+            .success-icon {
+                width: 64px;
+                height: 64px;
+                margin: 0 auto 20px;
+                background: #4caf50;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .success-icon::after {
+                content: '';
+                width: 32px;
+                height: 16px;
+                border-left: 4px solid white;
+                border-bottom: 4px solid white;
+                transform: rotate(-45deg);
+                margin-bottom: 6px;
+            }
+            .error-icon {
+                width: 64px;
+                height: 64px;
+                margin: 0 auto 20px;
+                background: #f44336;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            .error-icon::after {
+                content: '!';
+                color: white;
+                font-size: 32px;
+                font-weight: bold;
+            }
+            .countdown {
+                text-align: center;
+                color: #666;
+                font-size: 13px;
+                margin-top: 16px;
+            }
+            /* Success/Error state views */
+            .state-view {
+                text-align: center;
+            }
+            .state-view h2 {
+                margin-bottom: 12px;
+                color: #333;
+            }
+            .state-view p {
+                color: #666;
+                line-height: 1.6;
+            }
+            /* Hide form in success/error states */
+            .form-container.hidden {
+                display: none;
+            }
+            .state-view.hidden {
+                display: none;
+            }
         </style>
     </head>
     <body>
@@ -489,39 +567,96 @@ def device_verification(user_code: str | None = None):
             <h1>Campus Device Authorization</h1>
             <p class="subtitle">Enter the code from your CLI application</p>
 
-            <div class="instructions">
-                Your CLI application should have displayed a code.
-                Enter that code below to complete the authentication process.
+            <!-- Success State View -->
+            <div id="successView" class="state-view {{ '' if status != 'success' else 'hidden' }}">
+                <div class="success-icon"></div>
+                <h2>Authorization Complete!</h2>
+                <p>Your device has been successfully authorized.</p>
+                <p style="margin-top: 12px;">You can now return to your CLI application.</p>
+                <div class="countdown">
+                    <span id="countdownText">This window will close in <span id="countdownTimer">5</span> seconds...</span>
+                </div>
+                <button type="button" class="btn" onclick="window.close()" style="margin-top: 16px;">
+                    Close Window
+                </button>
             </div>
 
-            <div id="error" class="error" style="display: none;"></div>
-            <div id="success" class="success" style="display: none;"></div>
-
-            <form id="authForm" onsubmit="handleSubmit(event)">
-                <div class="form-group">
-                    <label for="userCode">Enter User Code</label>
-                    <input
-                        type="text"
-                        id="userCode"
-                        class="user-code-input"
-                        placeholder="XXXX-XXXX"
-                        maxlength="9"
-                        pattern="[A-Z0-9]{4}-[A-Z0-9]{4}"
-                        required
-                        {{ 'value="' + user_code + '"' if user_code else '' }}
-                    >
-                </div>
-                <button type="submit" class="btn" id="submitBtn">
-                    Authorize
+            <!-- Error State View -->
+            <div id="errorView" class="state-view hidden">
+                <div class="error-icon"></div>
+                <h2 id="errorTitle">Authorization Failed</h2>
+                <p id="errorMessage">An error occurred during authorization.</p>
+                <button type="button" class="btn" onclick="location.reload()" style="margin-top: 16px;">
+                    Try Again
                 </button>
-            </form>
+            </div>
+
+            <!-- Form View -->
+            <div id="formView" class="form-container {{ 'hidden' if status == 'success' else '' }}">
+                <div class="instructions">
+                    Your CLI application should have displayed a code.
+                    Enter that code below to complete the authentication process.
+                </div>
+
+                <div id="errorAlert" class="alert error"></div>
+                <div id="successAlert" class="alert success"></div>
+
+                <!-- Non-JS fallback for showing query param errors -->
+                {% if status == 'error' %}
+                <div class="alert error show">
+                    {{ error_messages.get(error_code, 'An error occurred during authorization.') }}
+                </div>
+                {% endif %}
+
+                <form id="authForm" action="{{ url_for('auth.oauth.device_verification') }}" method="POST" onsubmit="handleSubmit(event)">
+                    <div class="form-group">
+                        <label for="userCode">Enter User Code</label>
+                        <input
+                            type="text"
+                            id="userCode"
+                            name="user_code"
+                            class="user-code-input"
+                            placeholder="XXXX-XXXX"
+                            maxlength="9"
+                            pattern="[A-Z0-9]{4}-[A-Z0-9]{4}"
+                            required
+                            {{ 'value="' + user_code + '"' if user_code else '' }}
+                        >
+                        <input type="hidden" name="redirect_url" value="{{ request.url }}">
+                    </div>
+                    <button type="submit" class="btn" id="submitBtn">
+                        Authorize
+                    </button>
+                    <noscript>
+                        <p style="margin-top: 12px; color: #666; font-size: 13px;">
+                            JavaScript is disabled. After clicking Authorize, you will be redirected to see the result.
+                        </p>
+                    </noscript>
+                </form>
+            </div>
         </div>
 
         <script>
             const userCodeInput = document.getElementById('userCode');
             const submitBtn = document.getElementById('submitBtn');
-            const errorDiv = document.getElementById('error');
-            const successDiv = document.getElementById('success');
+            const errorAlert = document.getElementById('errorAlert');
+            const successAlert = document.getElementById('successAlert');
+            const formView = document.getElementById('formView');
+            const successView = document.getElementById('successView');
+            const errorView = document.getElementById('errorView');
+            const errorTitle = document.getElementById('errorTitle');
+            const errorMessage = document.getElementById('errorMessage');
+
+            // Error messages mapping
+            const errorMessages = {
+                'invalid_code': 'The user code you entered is invalid. Please check and try again.',
+                'expired': 'This user code has expired. Please restart the authentication process on your CLI application to get a new code.',
+                'already_used': 'This user code has already been used. Please restart the authentication process on your CLI application to get a new code.',
+                'denied': 'The authorization was denied. If you did not intend to deny access, you can restart the process on your CLI application.',
+                'not_logged_in': 'You must be logged in to authorize a device. Please log in first.',
+                'network_error': 'Network error. Please check your connection and try again.',
+                'unknown': 'An unexpected error occurred. Please try again.'
+            };
 
             // Auto-format user code (XXXX-XXXX)
             userCodeInput.addEventListener('input', function(e) {
@@ -537,7 +672,7 @@ def device_verification(user_code: str | None = None):
                 const userCode = userCodeInput.value.trim();
 
                 if (!userCode || userCode.length !== 9) {
-                    showError('Please enter a valid user code (XXXX-XXXX)');
+                    showAlert('error', errorMessages.invalid_code);
                     return;
                 }
 
@@ -548,7 +683,7 @@ def device_verification(user_code: str | None = None):
                 });
 
                 if (!response.ok) {
-                    showError('You must be logged in to authorize a device. Please log in first.');
+                    showAlert('error', errorMessages.not_logged_in);
                     return;
                 }
 
@@ -556,7 +691,7 @@ def device_verification(user_code: str | None = None):
                 const userId = userData.user?.id;
 
                 if (!userId) {
-                    showError('Could not determine your user ID. Please log in again.');
+                    showAlert('error', errorMessages.not_logged_in);
                     return;
                 }
 
@@ -578,45 +713,135 @@ def device_verification(user_code: str | None = None):
                     });
 
                     if (authResponse.ok) {
-                        showSuccess('Device authorized successfully! You can close this window and return to your CLI application.');
-                        submitBtn.innerHTML = 'Authorized ✓';
-                        userCodeInput.disabled = true;
+                        showSuccessState();
                     } else {
                         const errorData = await authResponse.json();
-                        showError(errorData.error?.message || 'Authorization failed. Please check your code and try again.');
+                        handleError(errorData);
                         submitBtn.disabled = false;
                         submitBtn.innerHTML = 'Authorize';
                     }
                 } catch (err) {
-                    showError('Network error. Please check your connection and try again.');
+                    showAlert('error', errorMessages.network_error);
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = 'Authorize';
                 }
             }
 
-            function showError(message) {
-                errorDiv.textContent = message;
-                errorDiv.style.display = 'block';
-                successDiv.style.display = 'none';
+            function showAlert(type, message) {
+                if (type === 'error') {
+                    errorAlert.textContent = message;
+                    errorAlert.classList.add('show');
+                    successAlert.classList.remove('show');
+                } else {
+                    successAlert.textContent = message;
+                    successAlert.classList.add('show');
+                    errorAlert.classList.remove('show');
+                }
             }
 
-            function showSuccess(message) {
-                successDiv.textContent = message;
-                successDiv.style.display = 'block';
-                errorDiv.style.display = 'none';
+            function showSuccessState() {
+                formView.classList.add('hidden');
+                successView.classList.remove('hidden');
+                errorView.classList.add('hidden');
+                startCountdown();
+            }
+
+            function showErrorState(title, message) {
+                formView.classList.add('hidden');
+                successView.classList.add('hidden');
+                errorView.classList.remove('hidden');
+                errorTitle.textContent = title;
+                errorMessage.textContent = message;
+            }
+
+            function handleError(errorData) {
+                let message = errorMessages.unknown;
+                let stateTitle = 'Authorization Failed';
+
+                if (errorData.error) {
+                    const errorCode = errorData.error.state || errorData.error.code;
+                    const errorMsg = errorData.error.message || errorData.error.description;
+
+                    if (errorMsg) {
+                        message = errorMsg;
+                    } else if (errorMessages[errorCode]) {
+                        message = errorMessages[errorCode];
+                    }
+
+                    if (errorCode === 'expired') {
+                        stateTitle = 'Code Expired';
+                    } else if (errorCode === 'denied' || errorCode === 'already_used') {
+                        stateTitle = 'Authorization Failed';
+                    }
+                }
+
+                // Show inline alert for quick retries
+                showAlert('error', message);
+
+                // Also show error state for severe errors
+                if (errorData.error && (errorData.error.state === 'expired' || errorData.error.state === 'denied' || errorData.error.state === 'already_used')) {
+                    showErrorState(stateTitle, message);
+                }
+            }
+
+            function startCountdown() {
+                const timer = document.getElementById('countdownTimer');
+                const countdownText = document.getElementById('countdownText');
+                let seconds = 5;
+
+                const interval = setInterval(function() {
+                    seconds--;
+                    if (timer) timer.textContent = seconds;
+
+                    if (seconds <= 0) {
+                        clearInterval(interval);
+                        countdownText.textContent = 'Closing window...';
+                        setTimeout(function() {
+                            window.close();
+                        }, 500);
+                    }
+                }, 1000);
             }
 
             // Auto-focus on the input
-            userCodeInput.focus();
+            if (userCodeInput && !userCodeInput.disabled) {
+                userCodeInput.focus();
+            }
 
             // Pre-filled user code - auto-submit if valid
-            {{ 'if (userCodeInput.value.length === 9) { submitBtn.click(); }' if user_code else '' }}
+            {{ 'if (userCodeInput.value.length === 9) { submitBtn.click(); }' if user_code and status != 'success' and status != 'error' else '' }}
+
+            // Handle URL-based error states for non-JS redirects
+            const urlParams = new URLSearchParams(window.location.search);
+            const status = urlParams.get('status');
+            const errorCode = urlParams.get('error_code');
+
+            if (status === 'success') {
+                showSuccessState();
+            } else if (status === 'error' && errorCode) {
+                const message = errorMessages[errorCode] || errorMessages.unknown;
+                let title = 'Authorization Failed';
+                if (errorCode === 'expired') title = 'Code Expired';
+                showErrorState(title, message);
+            }
         </script>
     </body>
     </html>
     """
 
-    return render_template_string(template, user_code=user_code)
+    return render_template_string(
+        template,
+        user_code=user_code,
+        status=status,
+        error_code=error_code,
+        error_messages={
+            'invalid_code': 'The user code you entered is invalid. Please check and try again.',
+            'expired': 'This user code has expired. Please restart the authentication process on your CLI application to get a new code.',
+            'already_used': 'This user code has already been used. Please restart the authentication process on your CLI application to get a new code.',
+            'denied': 'The authorization was denied. If you did not intend to deny access, you can restart the process on your CLI application.',
+            'not_logged_in': 'You must be logged in to authorize a device. Please log in first.',
+        }
+    )
 
 
 @bp.post("/device/authorize")
@@ -638,24 +863,55 @@ def device_authorize_submit(
     Returns: {
         "success": true
     }
+
+    Error responses return appropriate error codes for the frontend to handle:
+    - invalid_code: The user code doesn't exist
+    - expired: The user code has expired
+    - already_used: The user code has already been used/authorized
+    - denied: The authorization was denied
     """
     if not user_code:
-        raise api_errors.InvalidRequestError("user_code is required")
+        raise api_errors.InvalidRequestError(
+            "user_code is required",
+            error_code="invalid_code"
+        )
     if not user_id:
-        raise api_errors.InvalidRequestError("user_id is required")
+        raise api_errors.InvalidRequestError(
+            "user_id is required",
+            error_code="invalid_code"
+        )
 
     try:
         dc = device_code_resource.get_by_user_code(user_code)
     except api_errors.NotFoundError:
         raise api_errors.NotFoundError(
-            "Invalid user code. Please check and try again."
+            "Invalid user code. Please check and try again.",
+            error_code="invalid_code"
         )
 
-    # Check the state of the device code
-    if dc.state != "pending":
+    # Check the state of the device code and provide appropriate error codes
+    if dc.state == "expired":
         raise api_errors.ConflictError(
-            f"This user code has already been {dc.state}",
-            state=dc.state
+            "This user code has expired. Please restart the authentication process on your CLI application to get a new code.",
+            error_code="expired",
+            state="expired"
+        )
+    elif dc.state == "denied":
+        raise api_errors.ConflictError(
+            "This authorization was previously denied. Please restart the process on your CLI application.",
+            error_code="denied",
+            state="denied"
+        )
+    elif dc.state == "authorized":
+        raise api_errors.ConflictError(
+            "This user code has already been used. Please restart the authentication process on your CLI application to get a new code.",
+            error_code="already_used",
+            state="authorized"
+        )
+    elif dc.state != "pending":
+        raise api_errors.InternalError(
+            f"Invalid device code state: {dc.state}",
+            error_code="unknown"
         )
 
     # Authorize the device code
