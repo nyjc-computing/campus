@@ -29,8 +29,43 @@ bp = flask.Blueprint('oauth', __name__, url_prefix='/oauth')
 DEFAULT_CLI_SCOPES = ["read", "write"]
 
 
+def _get_oauth_payload() -> dict:
+    """Get request payload for OAuth endpoints.
+
+    OAuth 2.0 spec requires endpoints to accept application/x-www-form-urlencoded.
+    This function accepts both JSON and form-encoded data for compatibility.
+    """
+    if flask.request.is_json:
+        data = flask.request.get_json(silent=True)
+        if data is None:
+            raise api_errors.InvalidRequestError(
+                message="Malformed JSON payload",
+                error_code="MALFORMED_REQUEST"
+            )
+        return data
+    else:
+        # Fall back to form data (OAuth 2.0 standard)
+        # Ensure all values are strings (form data can sometimes return bytes)
+        return {k: v if isinstance(v, str) else str(v) for k, v in flask.request.form.items()}
+
+
+def unpack_oauth_request(func):
+    """Decorator that unpacks Flask request for OAuth endpoints.
+
+    Accepts both JSON and form-encoded data per OAuth 2.0 specification.
+    """
+    from functools import wraps
+
+    @wraps(func)
+    def wrapper(**kwargs):
+        request_data = _get_oauth_payload()
+        return flask_campus.unpack_into(func, **kwargs, **request_data)
+
+    return wrapper
+
+
 @bp.post("/device_authorize")
-@flask_campus.unpack_request
+@unpack_oauth_request
 def device_authorize(
         client_id: schema.CampusID,
 ) -> flask_campus.JsonResponse:
@@ -91,18 +126,30 @@ def device_authorize(
         "device_code_id": str(device_code.id),
     })
 
-    return {
+    # Build response with explicit type conversion to avoid JSON serialization issues
+    response = {
         "device_code": str(device_code.device_code),
         "user_code": str(device_code.user_code),
         "verification_uri": str(verification_uri),
         "verification_uri_complete": str(verification_uri_complete),
-        "expires_in": campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS,
+        "expires_in": int(campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS),
         "interval": int(device_code.interval),
-    }, 200
+    }
+
+    # Log types for debugging (remove after fixing)
+    import logging
+    logger = logging.getLogger(__name__)
+    for k, v in response.items():
+        logger.debug(f"Response field '{k}': type={type(v).__name__}, value={v!r}")
+        if isinstance(v, bytes):
+            logger.error(f"Response field '{k}' is bytes, converting to str")
+            response[k] = v.decode('utf-8') if isinstance(v, bytes) else str(v)
+
+    return response, 200
 
 
 @bp.post("/token")
-@flask_campus.unpack_request
+@unpack_oauth_request
 def token(
         grant_type: str,
         client_id: schema.CampusID,
@@ -573,7 +620,7 @@ def device_verification(user_code: str | None = None):
 
 
 @bp.post("/device/authorize")
-@flask_campus.unpack_request
+@unpack_oauth_request
 def device_authorize_submit(
         user_code: str,
         user_id: schema.UserID,
