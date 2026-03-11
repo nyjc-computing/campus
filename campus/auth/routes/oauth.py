@@ -339,6 +339,7 @@ def _handle_refresh_token_grant(
 
 @bp.get("/device")
 @bp.get("/device/<user_code>")
+@bp.post("/device")
 def device_verification(user_code: str | None = None):
     """Device code verification page for users to enter their user code.
 
@@ -347,14 +348,52 @@ def device_verification(user_code: str | None = None):
 
     GET /device - Shows the entry form
     GET /device/<user_code> - Pre-fills the user code
-    GET /device?status=success&user_code=XXXX - Shows success state (for no-JS fallback)
+    GET /device?status=success - Shows success state (for no-JS fallback)
     GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
+    POST /device - Handles form submission for non-JS clients
     """
-    from flask import render_template_string, request
+    from flask import render_template_string, request, redirect
+    import html
+
+    # Handle POST for non-JS fallback
+    if request.method == "POST":
+        user_code_form = request.form.get('user_code', '').strip().upper()
+        redirect_url = request.form.get('redirect_url', flask.url_for('auth.oauth.device_verification', _external=True))
+
+        # Validate user code format
+        if not user_code_form or len(user_code_form) != 9 or user_code_form[4] != '-':
+            return redirect(f"{redirect_url}?status=error&error_code=invalid_code")
+
+        # Get user ID from session (user must be logged in)
+        from flask import session
+        user_id = session.get('user_id')
+        if not user_id:
+            return redirect(f"{redirect_url}?status=error&error_code=not_logged_in")
+
+        # Try to authorize the device code
+        try:
+            dc = device_code_resource.get_by_user_code(user_code_form)
+            if dc.state != "pending":
+                error_code = "expired" if dc.state == "expired" else "already_used"
+                return redirect(f"{redirect_url}?status=error&error_code={error_code}")
+
+            device_code_resource.update(dc.id, user_id=str(user_id), state="authorized")
+            get_yapper().emit('campus.oauth.device_authorize_submit', {
+                "device_code_id": str(dc.id),
+                "user_id": str(user_id),
+            })
+            return redirect(f"{redirect_url}?status=success")
+        except api_errors.NotFoundError:
+            return redirect(f"{redirect_url}?status=error&error_code=invalid_code")
+        except Exception:
+            return redirect(f"{redirect_url}?status=error&error_code=unknown")
 
     # Check for query parameters for non-JS redirect states
     status = request.args.get('status')
     error_code = request.args.get('error_code')
+
+    # Escape user_code for safe HTML attribute use
+    safe_user_code = html.escape(user_code) if user_code else None
 
     template = """
     <!DOCTYPE html>
@@ -568,7 +607,7 @@ def device_verification(user_code: str | None = None):
             <p class="subtitle">Enter the code from your CLI application</p>
 
             <!-- Success State View -->
-            <div id="successView" class="state-view {{ '' if status != 'success' else 'hidden' }}">
+            <div id="successView" class="state-view {{ '' if status != 'success' else 'hidden' }}" role="alert" aria-live="polite">
                 <div class="success-icon"></div>
                 <h2>Authorization Complete!</h2>
                 <p>Your device has been successfully authorized.</p>
@@ -582,7 +621,7 @@ def device_verification(user_code: str | None = None):
             </div>
 
             <!-- Error State View -->
-            <div id="errorView" class="state-view hidden">
+            <div id="errorView" class="state-view hidden" role="alert" aria-live="assertive">
                 <div class="error-icon"></div>
                 <h2 id="errorTitle">Authorization Failed</h2>
                 <p id="errorMessage">An error occurred during authorization.</p>
@@ -620,7 +659,7 @@ def device_verification(user_code: str | None = None):
                             maxlength="9"
                             pattern="[A-Z0-9]{4}-[A-Z0-9]{4}"
                             required
-                            {{ 'value="' + user_code + '"' if user_code else '' }}
+                            {{ 'value="' + safe_user_code + '"' if safe_user_code else '' }}
                         >
                         <input type="hidden" name="redirect_url" value="{{ request.url }}">
                     </div>
@@ -789,12 +828,13 @@ def device_verification(user_code: str | None = None):
                 const countdownText = document.getElementById('countdownText');
                 let seconds = 5;
 
-                const interval = setInterval(function() {
+                // Store interval reference for cleanup
+                window.deviceAuthCountdown = setInterval(function() {
                     seconds--;
                     if (timer) timer.textContent = seconds;
 
                     if (seconds <= 0) {
-                        clearInterval(interval);
+                        clearInterval(window.deviceAuthCountdown);
                         countdownText.textContent = 'Closing window...';
                         setTimeout(function() {
                             window.close();
@@ -813,12 +853,12 @@ def device_verification(user_code: str | None = None):
 
             // Handle URL-based error states for non-JS redirects
             const urlParams = new URLSearchParams(window.location.search);
-            const status = urlParams.get('status');
+            const urlStatus = urlParams.get('status');
             const errorCode = urlParams.get('error_code');
 
-            if (status === 'success') {
+            if (urlStatus === 'success') {
                 showSuccessState();
-            } else if (status === 'error' && errorCode) {
+            } else if (urlStatus === 'error' && errorCode) {
                 const message = errorMessages[errorCode] || errorMessages.unknown;
                 let title = 'Authorization Failed';
                 if (errorCode === 'expired') title = 'Code Expired';
@@ -831,16 +871,9 @@ def device_verification(user_code: str | None = None):
 
     return render_template_string(
         template,
-        user_code=user_code,
+        safe_user_code=safe_user_code,
         status=status,
         error_code=error_code,
-        error_messages={
-            'invalid_code': 'The user code you entered is invalid. Please check and try again.',
-            'expired': 'This user code has expired. Please restart the authentication process on your CLI application to get a new code.',
-            'already_used': 'This user code has already been used. Please restart the authentication process on your CLI application to get a new code.',
-            'denied': 'The authorization was denied. If you did not intend to deny access, you can restart the process on your CLI application.',
-            'not_logged_in': 'You must be logged in to authorize a device. Please log in first.',
-        }
     )
 
 
@@ -940,8 +973,8 @@ def create_blueprint() -> flask.Blueprint:
     # Manually register routes (mimicking the decorator behavior)
     new_bp.add_url_rule("/device_authorize", "device_authorize", device_authorize, methods=["POST"])
     new_bp.add_url_rule("/token", "token", token, methods=["POST"])
-    new_bp.add_url_rule("/device", "device_verification", device_verification, methods=["GET"])
-    new_bp.add_url_rule("/device/<user_code>", "device_verification_prefilled", device_verification, methods=["GET"])
+    new_bp.add_url_rule("/device", "device_verification", device_verification, methods=["GET", "POST"])
+    new_bp.add_url_rule("/device/<user_code>", "device_verification_prefilled", device_verification, methods=["GET", "POST"])
     new_bp.add_url_rule("/device/authorize", "device_authorize_submit", device_authorize_submit, methods=["POST"])
 
     return new_bp
