@@ -45,7 +45,8 @@ def _get_oauth_payload() -> dict:
         return data
     else:
         # Fall back to form data (OAuth 2.0 standard)
-        return dict(flask.request.form)
+        # Ensure all values are strings (form data can sometimes return bytes)
+        return {k: v if isinstance(v, str) else str(v) for k, v in flask.request.form.items()}
 
 
 def unpack_oauth_request(func):
@@ -125,14 +126,26 @@ def device_authorize(
         "device_code_id": str(device_code.id),
     })
 
-    return {
+    # Build response with explicit type conversion to avoid JSON serialization issues
+    response = {
         "device_code": str(device_code.device_code),
         "user_code": str(device_code.user_code),
         "verification_uri": str(verification_uri),
         "verification_uri_complete": str(verification_uri_complete),
-        "expires_in": campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS,
+        "expires_in": int(campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS),
         "interval": int(device_code.interval),
-    }, 200
+    }
+
+    # Log types for debugging (remove after fixing)
+    import logging
+    logger = logging.getLogger(__name__)
+    for k, v in response.items():
+        logger.debug(f"Response field '{k}': type={type(v).__name__}, value={v!r}")
+        if isinstance(v, bytes):
+            logger.error(f"Response field '{k}' is bytes, converting to str")
+            response[k] = v.decode('utf-8') if isinstance(v, bytes) else str(v)
+
+    return response, 200
 
 
 @bp.post("/token")
