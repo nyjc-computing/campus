@@ -156,12 +156,13 @@ class TestOAuthIntegration(unittest.TestCase):
         self.assertIn("PENDING", error_code)
 
     def test_oauth_verification_page(self):
-        """Test the device verification page is accessible."""
+        """Test the device verification page redirects unauthenticated users to login."""
         response = self.client.get("/auth/v1/oauth/device")
-        self.assertIn(response.status_code, (200, 200))
 
-        # Should return HTML
-        self.assertIn("text/html", response.content_type)
+        # Unauthenticated users should be redirected to Google OAuth login
+        self.assertEqual(response.status_code, 302)
+        # Redirect should go to Google OAuth authorize endpoint
+        self.assertIn("google", response.location.lower())
 
 
 if __name__ == '__main__':

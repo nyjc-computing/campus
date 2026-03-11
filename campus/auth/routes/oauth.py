@@ -352,8 +352,23 @@ def device_verification(user_code: str | None = None):
     GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
     POST /device - Handles form submission for non-JS clients
     """
-    from flask import render_template_string, request, redirect
+    from flask import render_template_string, request, redirect, session, url_for
     import html
+
+    # Check if user is authenticated (for both GET and POST)
+    user_id = session.get('user_id')
+    if not user_id:
+        # User not logged in - redirect to Google OAuth login
+        # After login, they'll return to this page to authorize the device
+        login_callback = url_for('auth.oauth.device_verification', _external=True)
+        if user_code:
+            login_callback += f"/{user_code}"
+        oauth_authorize_url = url_for(
+            'auth.google.authorize',
+            _external=True,
+            target=login_callback
+        )
+        return redirect(oauth_authorize_url)
 
     # Handle POST for non-JS fallback
     if request.method == "POST":
@@ -363,12 +378,6 @@ def device_verification(user_code: str | None = None):
         # Validate user code format
         if not user_code_form or len(user_code_form) != 9 or user_code_form[4] != '-':
             return redirect(f"{redirect_url}?status=error&error_code=invalid_code")
-
-        # Get user ID from session (user must be logged in)
-        from flask import session
-        user_id = session.get('user_id')
-        if not user_id:
-            return redirect(f"{redirect_url}?status=error&error_code=not_logged_in")
 
         # Try to authorize the device code
         try:
