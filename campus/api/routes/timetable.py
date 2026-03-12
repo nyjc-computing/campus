@@ -115,8 +115,8 @@ def upload(
         metadata: dict
             Metadata for the timetable, e.g. start and end date.
         
-        data: dict
-            The actual timetable data, e.g. entries.
+        lessongroups: dict
+            A mapping of lesson group IDs to lists of timetable entries.
         
     Responses:
         200 OK: dict
@@ -127,7 +127,7 @@ def upload(
     """
     
     try:
-        timetable = timetable_resource.new(**metadata, **data)
+        timetable = timetable_resource.new(**metadata, lessongroups=data['lessongroups'])
     except Exception as e:
         return {'error': e}, 400
     
