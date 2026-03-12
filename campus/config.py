@@ -48,5 +48,11 @@ def get_base_url(app_name: str) -> Url:
 DEFAULT_LOGIN_EXPIRY_DAYS = 30
 DEFAULT_OAUTH_EXPIRY_MINUTES = 10
 DEFAULT_TOKEN_EXPIRY_DAYS = 7
+DEFAULT_DEVICE_CODE_EXPIRY_SECONDS = 600  # 10 minutes
+DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 
-SUPPORTED_OAUTH2_GRANT_TYPES = ("code",)
+# Public OAuth client ID for CLI/device apps (no database entry required)
+# This client type skips database validation and relies entirely on user credentials
+PUBLIC_OAUTH_CLIENT_ID = "guest"
+
+SUPPORTED_OAUTH2_GRANT_TYPES = ("code", "device_code")
