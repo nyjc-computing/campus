@@ -296,7 +296,7 @@ class TimetableMetadataResource:
     """Represents metadata for a single timetable."""
     
     def __init__(self, timetable_id: schema.CampusID):
-         """Initialize with the timetable ID.
+        """Initialize with the timetable ID.
 
         Args:
             timetable_id (schema.CampusID): ID of the timetable.
