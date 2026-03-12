@@ -101,8 +101,37 @@ def set_next(UUID: schema.CampusID) -> flask_campus.JsonResponse:
 
 @bp.post('/')
 @flask_campus.unpack_request
-def upload() -> flask_campus.JsonResponse:
-    return {}, 501 # Not implemented yet
+def upload(
+    metadata: dict,
+    data: dict
+) -> flask_campus.JsonResponse:
+    """Summary:
+        Upload a new timetable.
+    
+    Method:
+        POST /timetable/
+    
+    Body Parameters:
+        metadata: dict
+            Metadata for the timetable, e.g. start and end date.
+        
+        data: dict
+            The actual timetable data, e.g. entries.
+        
+    Responses:
+        200 OK: dict
+           {"data": timetable resource} 
+
+        400 Bad Request: dict
+            {"error": error message}
+    """
+    
+    try:
+        timetable = timetable_resource.new(**metadata, **data)
+    except Exception as e:
+        return {'error': e}, 400
+    
+    return {"data": timetable.to_resource()}, 200
 
 @bp.get('/<timetable_id>/')
 @flask_campus.unpack_request
