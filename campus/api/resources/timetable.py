@@ -164,8 +164,13 @@ class TimetablesResource:
         """Get the current active timetable. This is used to indicate which timetable is currently active."""
         try:
             metadata = timetable_collection.get_by_id("@metadata")
-            record = metadata["current"]
-            return schema.CampusID(record["timetable_id"]) if record else None
+
+            if metadata is None:
+                return None
+
+            record = metadata.get("current")
+            timetable_id = record.get("timetable_id") if record else None
+            return schema.CampusID(timetable_id) if timetable_id else None
         except campus.storage.errors.NotFoundError:
             return None
         except campus.storage.errors.StorageError as e:
@@ -183,8 +188,14 @@ class TimetablesResource:
         """Get the next timetable. This is used to indicate which timetable will be active after the current one expires."""
         try:
             metadata = timetable_collection.get_by_id("@metadata")
-            record = metadata["next"]
-            return schema.CampusID(record["timetable_id"]) if record else None
+
+            if metadata is None:
+                return None
+
+            record = metadata.get("next")
+            timetable_id = record.get("timetable_id") if record else None
+            return schema.CampusID(timetable_id) if timetable_id else None
+
         except campus.storage.errors.NotFoundError:
             return None
         except campus.storage.errors.StorageError as e:
