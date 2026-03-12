@@ -195,6 +195,7 @@ class TimetablesResource:
         except campus.storage.errors.StorageError as e:
             # TODO: transaction rollback
             raise api_errors.InternalError.from_exception(e) from e
+    
         return timetable
 
     def get(self, timetable_id: schema.CampusID) -> campus.model.Timetable:
@@ -425,4 +426,5 @@ class TimetableMetadataResource:
             ) from None
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+
 
