@@ -55,4 +55,4 @@ from .session import AuthSession
 from .submission import Feedback, Response, Submission
 from .user import User
 from .vault import Vault
-from .timetable import LessonGroup, LessonGroupMember, TimetableEntry, TimetableMetadata, Timetable
+from .timetable import LessonGroup, TimetableEntry, TimetableMetadata
