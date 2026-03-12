@@ -21,6 +21,7 @@ __all__ = [
     "ClassroomLink",
     "Client",
     "ClientAccess",
+    "DeviceCode",
     "EmailOTP",
     "Feedback",
     "HttpHeader",
@@ -35,12 +36,9 @@ __all__ = [
     "User",
     "UserCredentials",
     "Vault",
-    "WeekDay",
-    "TimeSlot",
-    "VenueTimeSlot",
     "LessonGroup",
     "TimetableEntry",
-    "Timetable",
+    "TimetableMetadata",
 ]
 
 from .assignment import Assignment, ClassroomLink, Question
@@ -48,6 +46,7 @@ from .base import InternalModel, Model
 from .circle import Circle
 from .client import Client, ClientAccess
 from .credentials import OAuthToken, UserCredentials
+from .device_code import DeviceCode
 from .http.header import HttpHeader, HttpHeaderWithAuth
 from .emailotp import EmailOTP
 from .login import LoginSession
@@ -55,4 +54,4 @@ from .session import AuthSession
 from .submission import Feedback, Response, Submission
 from .user import User
 from .vault import Vault
-from .timetable import WeekDay, TimeSlot, VenueTimeSlot, LessonGroup, TimetableEntry, Timetable
+from .timetable import LessonGroup, TimetableEntry, TimetableMetadata

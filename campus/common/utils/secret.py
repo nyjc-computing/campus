@@ -138,6 +138,50 @@ def generate_session_state() -> str:
     return secrets.token_urlsafe(32)
 
 
+def generate_device_code(length: int = 36) -> str:
+    """Generate a device code for OAuth 2.0 Device Authorization Flow.
+
+    The device code is used by the client to poll for token completion.
+
+    Reference: https://datatracker.ietf.org/doc/html/rfc8628
+
+    Args:
+        length: Length of the device code (default: 36).
+
+    Returns:
+        A string containing the generated device code.
+    """
+    # Device code should be a 36-character string (similar to a UUID)
+    # with characters from the set: A-Z, a-z, 0-9, and hyphen
+    if length <= 0:
+        return ""
+    nbytes = (length + 1) // 2
+    code = secrets.token_hex(nbytes)
+    return code[:length]
+
+
+def generate_user_code() -> str:
+    """Generate a user code for OAuth 2.0 Device Authorization Flow.
+
+    The user code is displayed to the user for manual entry on the
+    verification page. Format: XXXX-XXXX for easy entry.
+
+    Reference: https://datatracker.ietf.org/doc/html/rfc8628
+
+    Returns:
+        A string in the format XXXX-XXXX where X is a base20 character.
+    """
+    # Base20 character set (excluding ambiguous characters like 0/O, 1/I/l)
+    # Using: BCDFGHJKLMNPQRSTVWXZ (consonants) + 23456789 (numbers)
+    # Common implementation uses: BCDFGHJKLMNPQRSTVWXZ23456789
+    charset = "BCDFGHJKLMNPQRSTVWXZ23456789"
+
+    # Generate two 4-character segments separated by a hyphen
+    segment1 = "".join(secrets.choice(charset) for _ in range(4))
+    segment2 = "".join(secrets.choice(charset) for _ in range(4))
+    return f"{segment1}-{segment2}"
+
+
 def hash_client_secret(secret: str, key: str) -> str:
     """Hash the client secret using HMAC for secure storage.
 
