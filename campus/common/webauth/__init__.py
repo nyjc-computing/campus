@@ -1,21 +1,17 @@
-"""common.webauth
+"""campus.common.webauth
 
-Web authentication models for the Campus API.
+Web authentication models for Campus Auth.
 
-This module contains classes and functions for handling web-based authentication
-schemes, including HTTP Basic and Bearer authentication, as well as OAuth2
-flows.
+This module contains classes and functions for handling web-based
+authentication schemes, including HTTP Basic and Bearer authentication,
+as well as OAuth2 flows.
 
-The classes do not authenticate credentials, but provide the necessary
-configuration and validation methods for authentication headers. Actual
-authentication logic is handled by the campusauth module.
+Session state is not handled.
 """
 
-from . import http, oauth2
-from .base import SecurityScheme
-
 __all__ = [
-    "SecurityScheme",
     "http",
     "oauth2",
 ]
+
+from . import http, oauth2

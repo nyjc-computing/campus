@@ -10,6 +10,9 @@ Each document in the collection is assumed to have:
 
 from abc import ABC, abstractmethod
 
+from campus.model.base import Model
+
+# This constant should match the one in campus.common.schema
 PK = "id"
 
 
@@ -53,4 +56,9 @@ class CollectionInterface(ABC):
     @abstractmethod
     def delete_matching(self, query: dict):
         """Delete documents matching a query in the specified table."""
+        ...
+
+    @abstractmethod
+    def init_from_model(self, name: str, model: type[Model]) -> None:
+        """Initialize the table from a Campus model definition."""
         ...

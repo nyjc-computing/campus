@@ -1,340 +1,368 @@
 # Development Guidelines
 
-This document captures architectural decisions, design patterns, and development best practices for the Campus project. These guidelines ensure consistency across the codebase and help both human developers and AI agents make appropriate decisions.
+This document outlines key architectural patterns and development practices for Campus.
 
-## Table of Contents
+**Looking for the contribution workflow?** See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- [Core Architectural Patterns](#core-architectural-patterns)
-- [Environment and Configuration](#environment-and-configuration)
-- [Database and Storage](#database-and-storage)
-- [Package Architecture](#package-architecture)
-- [Testing and CI/CD](#testing-and-cicd)
-- [Code Organization](#code-organization)
+**For coding standards and import conventions**, see [STYLE-GUIDE.md](STYLE-GUIDE.md).
 
-## Core Architectural Patterns
+## The Storage-Model-Resources Pattern
 
-### Lazy Loading Pattern
+This is the foundational architectural pattern in Campus. Understanding this pattern is essential before working with any part of the codebase.
 
-**Context**: Classes that require external resources (databases, APIs, vault secrets) should not fail during import or instantiation if those resources are unavailable.
-
-**Pattern**: Defer resource acquisition until first use.
-
-**Implementation**:
-```python
-class ResourceClient:
-    def __init__(self, name: str):
-        self.name = name
-        self._connection = None
-        self._config = None
-    
-    def _ensure_connection(self):
-        """Establish connection on first use."""
-        if self._connection is None:
-            config = self._get_config()  # May require vault/env vars
-            self._connection = create_connection(config)
-    
-    @property
-    def connection(self):
-        """Get connection, establishing it if needed."""
-        self._ensure_connection()
-        return self._connection
-    
-    def close(self):
-        """Clean up resources if established."""
-        if self._connection is not None:
-            self._connection.close()
-            self._connection = None
+```
+Routes → Resources → Storage → Model
 ```
 
-**Rationale**: 
-- Enables CI/CD builds without requiring production secrets
-- Allows package imports in environments where resources aren't available
-- Improves startup time by deferring expensive operations
+### Model Layer (`campus.model`)
 
-**Examples**: `MongoDBCollection`, database connection classes
+**Purpose:** Entity representation only - pure data structures with no business logic.
+
+Models are dataclasses that define the shape of your data:
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class User:
+    id: str
+    name: str
+    email: str
+    created_at: str
+```
+
+**Key principles:**
+- Keyword-only init
+- No methods beyond data conversion helpers (`to_storage()`, `to_resource()`)
+- No business logic
+- No dependencies on other campus packages (except `campus.common` for types)
+
+### Storage Layer (`campus.storage`)
+
+**Purpose:** Backend-agnostic data persistence with multiple backend support.
+
+Storage provides CRUD operations independent of the underlying database:
+
+```python
+import campus.storage
+
+# Document storage (MongoDB-style)
+users = campus.storage.get_collection("users")
+user = users.create({"name": "John", "email": "john@example.com"})
+
+# Table storage (SQL-style)
+sessions = campus.storage.get_table("sessions")
+session = sessions.find_by_id("session_123")
+```
+
+**Storage interface requirements:**
+- `id` field - unique identifier (string)
+- `created_at` field - creation timestamp (RFC3339 UTC)
+- Standard CRUD operations
+- Consistent error handling
+
+### Resources Layer (`.resources/`)
+
+**Purpose:** Business logic - the "brains" of your application.
+
+Resources are classes that encapsulate business operations. They bridge the gap between HTTP requests and data storage.
+
+**Resource types:**
+
+1. **Collection Resources** - Operate on multiple items
+```python
+class CirclesResource:
+    """Represents the circles resource in Campus API Schema."""
+
+    def list(self, **filters) -> list[Circle]:
+        """List all circles matching filters."""
+        records = circle_storage.get_matching(filters)
+        return [_from_record(r) for r in records]
+
+    def new(self, **fields) -> Circle:
+        """Create a new circle with validation."""
+        # Validation logic here
+        # Storage operations here
+        return circle
+```
+
+2. **Item Resources** - Operate on single items
+```python
+class CircleResource:
+    """Represents a single circle in Campus API Schema."""
+
+    def __init__(self, circle_id: CampusID):
+        self.circle_id = circle_id
+
+    def get(self) -> Circle:
+        """Get the circle record."""
+        record = circle_storage.get_by_id(self.circle_id)
+        return _from_record(record)
+
+    def update(self, **updates) -> None:
+        """Update the circle record."""
+        circle_storage.update_by_id(self.circle_id, updates)
+
+    def delete(self) -> None:
+        """Delete the circle record."""
+        circle_storage.delete_by_id(self.circle_id)
+```
+
+3. **Sub-Resources** - Nested resources under a parent
+```python
+class CircleMembersResource:
+    """Represents the circle members resource."""
+
+    def __init__(self, parent: CirclesResource):
+        self._parent = parent
+
+    def list(self, circle_id: CampusID) -> dict:
+        """List all members of a circle."""
+        # Implementation
+
+    def add(self, circle_id: CampusID, member_id: CampusID, access_value: int) -> None:
+        """Add a member to a circle."""
+        # Implementation
+```
+
+**Resources are exported from `__init__.py`:**
+```python
+# campus/api/resources/__init__.py
+from .circle import CirclesResource
+circle = CirclesResource()  # Module-level instance
+```
+
+### Routes Layer (`.routes/`)
+
+**Purpose:** HTTP endpoints - thin wrappers that call Resource methods.
+
+Routes use Flask blueprints and delegate to resource instances:
+
+```python
+from campus.api import resources
+
+bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
+
+@bp.get('/')
+def list_circles(tag: str | None = None):
+    """List all circles matching filter requirements."""
+    result = resources.circle.list(**{"tag": tag} if tag else {})
+    return {"data": [c.to_resource() for c in result]}, 200
+
+@bp.post('/')
+def new_circle(name: str, description: str, tag: str, parents: dict | None = None):
+    """Create a new circle."""
+    circle = resources.circle.new(name=name, description=description, tag=tag, parents=parents)
+    return {"data": circle.to_resource()}, 201
+```
+
+**Key principles for routes:**
+- Minimal logic - just parameter extraction and response formatting
+- Delegate all business logic to Resources
+- Use `flask_campus.unpack_request` decorator for request parsing
+
+## Package Structure
+
+```
+campus/
+├── auth/       # Authentication and OAuth services
+│   ├── oauth_proxy/
+│   ├── resources/      # Business logic
+│   └── routes/         # HTTP endpoints
+├── api/        # RESTful API resources
+│   ├── resources/      # Business logic
+│   └── routes/         # HTTP endpoints
+├── common/     # Shared utilities
+├── model/      # Entity representation (dataclasses)
+├── services/   # Business services (email, etc.)
+├── storage/    # Data persistence layer
+├── integrations/  # External service integrations
+└── yapper/     # Logging framework
+```
+
+**Key rule:** Business logic lives in `.resources/` submodules. Models (`campus.model`) are pure data structures.
+
+## Core Abstractions
+
+### Campus Storage (`campus.storage`)
+
+Backend-agnostic data persistence with multiple backend support.
+
+**Usage:**
+```python
+import campus.storage
+
+# Document storage (MongoDB-style)
+users = campus.storage.get_collection("users")
+user = users.create({"name": "John", "email": "john@example.com"})
+
+# Table storage (SQL-style)
+sessions = campus.storage.get_table("sessions")
+session = sessions.find_by_id("session_123")
+```
+
+### Campus Authentication (`campus.auth`)
+
+**Purpose:** Authentication, OAuth, and credential management.
+
+**Via campus_python client:**
+```python
+import campus_python
+
+campus = campus_python.Campus()
+
+# Authenticate
+auth_result = campus.auth.root.authenticate(
+    client_id="your_client_id",
+    client_secret="your-client_secret"
+)
+
+# Access secrets
+secret = campus.auth.vaults["deployment"]["DATABASE_URL"]
+```
+
+**Within codebase:**
+```python
+# Within same service
+from campus.auth import resources
+
+# Cross-service (e.g., from campus.api)
+from campus.auth import resources as auth_resources
+```
+
+### Campus Common (`campus.common`)
+
+Shared utilities used across services.
+
+**Key modules:**
+- `utils` - ID generation, time handling
+- `devops` - Environment detection
+- `errors` - Standardized error types
+- `http` - HTTP utilities
+
+```python
+from campus.common import utils, devops, errors
+
+user_id = utils.uid()
+timestamp = utils.utc_time()
+env = devops.ENV
+```
+
+### Entity Models (`campus.model`)
+
+**Purpose:** Entity representation only - no business logic.
+
+```python
+from campus import model
+
+def process_user(user: model.User) -> dict:
+    return {"id": user.id, "name": user.name}
+```
+
+## Development Patterns
 
 ### Interface-First Design
 
-**Pattern**: Define abstract interfaces before implementing concrete classes.
+Define abstract interfaces for polymorphic concrete classes.
 
-**Implementation**:
 ```python
 from abc import ABC, abstractmethod
 
-class StorageInterface(ABC):
+class EmailSender(ABC):
     @abstractmethod
-    def get_by_id(self, doc_id: str) -> dict:
-        """Retrieve a document by ID."""
+    def send(self, to: str, subject: str, body: str) -> bool:
         pass
 
-class ConcreteStorage(StorageInterface):
-    def get_by_id(self, doc_id: str) -> dict:
-        # Implementation here
+class SMTPSender(EmailSender):
+    def send(self, to: str, subject: str, body: str) -> bool:
+        # SMTP implementation
         pass
 ```
 
-**Rationale**: Enables swappable backends, easier testing, clear contracts
+**Benefits:**
+- Enables swappable implementations
+- Easier testing with mock implementations
+- Clear contracts between components
 
-## Environment and Configuration
+## Common Pitfalls
 
-### Environment Variable Access
+### Storage Initialization Order
 
-**Pattern**: All environment variable access must go through the vault system.
-
-**Correct**:
-```python
-from campus.vault import get_vault
-
-def get_database_uri():
-    storage_vault = get_vault("storage")
-    return storage_vault.get("DATABASE_URI")
-```
-
-**Incorrect**:
-```python
-import os
-database_uri = os.getenv("DATABASE_URI")  # Don't do this
-```
-
-**Rationale**: Centralized secret management, consistent error handling, audit trail
-
-### Configuration Lazy Loading
-
-**Pattern**: Configuration retrieval should be deferred until needed.
-
-**Implementation**:
-```python
-def _get_config_value():
-    """Get configuration value from vault (called lazily)."""
-    try:
-        vault = get_vault("service_name")
-        return vault.get("CONFIG_KEY")
-    except Exception as e:
-        raise RuntimeError(f"Failed to get config: {e}") from e
-
-class Service:
-    def __init__(self):
-        self._config = None
-    
-    def _ensure_config(self):
-        if self._config is None:
-            self._config = _get_config_value()
-    
-    def operation(self):
-        self._ensure_config()
-        # Use self._config here
-```
-
-## Database and Storage
-
-### Backend Abstraction
-
-**Pattern**: All storage implementations must implement their respective interfaces.
-
-**Structure**:
-```
-storage/
-├── documents/
-│   ├── interface.py          # Abstract interface
-│   ├── backend/
-│   │   ├── mongodb.py        # MongoDB implementation
-│   │   └── other_db.py       # Other implementations
-│   └── __init__.py           # Factory functions
-└── tables/
-    ├── interface.py          # Abstract interface
-    ├── backend/
-    │   └── postgres.py       # PostgreSQL implementation
-    └── __init__.py           # Factory functions
-```
-
-### Connection Management
-
-**Pattern**: Database connections should be managed lazily with proper cleanup.
-
-**Requirements**:
-- Connection established only when needed
-- Provide `close()` method for cleanup
-- Handle connection failures gracefully
-- Support connection pooling where appropriate
-
-### Primary Key Mapping
-
-**Pattern**: Abstract database-specific primary key handling.
-
-**Example**: MongoDB uses `_id`, Campus uses `id` - handle mapping transparently in the backend.
-
-## Package Architecture
-
-### Namespace Package Structure
-
-**Pattern**: Use namespace packages for modular distribution.
-
-**Structure**:
-```
-campus/
-├── __init__.py              # Namespace package
-├── common/                  # Shared utilities
-├── vault/                   # Secret management
-├── storage/                 # Storage interfaces
-├── client/                  # Client libraries
-└── apps/                    # Web applications
-```
-
-### Dependency Ordering
-
-**Critical**: Packages must be buildable in dependency order:
-
-1. **Independent**: `common` (no dependencies)
-2. **Dependent**: `vault`, `client`, `models` (depend on `common`)
-3. **Storage**: `storage` (depends on `vault` + `common`)
-4. **Final**: `apps`, `workspace` (depend on multiple others)
-
-### Development Setup
-
-**Pattern**: Use Poetry's editable install for local development.
-
-**Command**:
-```bash
-# In the campus root directory
-poetry install --all-extras
-```
-
-## Testing and CI/CD
-
-### Build Environment Isolation
-
-**Requirement**: All packages must build successfully without external dependencies.
-
-**Implementation**:
-- Use lazy loading for external resources
-- Mock environment variables only when absolutely necessary
-- Prefer dependency ordering over environment setup
-
-### Poetry Configuration
-
-**Required settings** for CI/CD:
-```bash
-poetry config virtualenvs.use-poetry-python false
-poetry config virtualenvs.create true
-poetry config virtualenvs.in-project false
-```
-
-**Rationale**: Ensures Poetry uses the Python version from actions/setup-python instead of Poetry's bundled Python.
-
-### Import Shadowing Prevention
-
-**Critical**: Avoid directory names that shadow Python standard library modules.
-
-**Examples to Avoid**:
-- `collections/` (shadows `collections` module)
-- `json/` (shadows `json` module)
-- `os/` (shadows `os` module)
-
-**Solution**: Use descriptive names like `document_collections/`, `json_utils/`, etc.
-
-## Code Organization
-
-### Module Structure
-
-**Pattern**: Consistent module organization across packages.
-
-```
-package/
-├── __init__.py              # Public API
-├── interface.py             # Abstract interfaces
-├── backend/                 # Implementation backends
-│   ├── __init__.py
-│   └── implementation.py
-├── errors.py                # Package-specific exceptions
-└── utils.py                 # Utility functions
-```
-
-### Dependency Management
-
-**Pattern**: Include campus-suite as a git dependency.
-
-```toml
-# Production use
-[tool.poetry.dependencies]
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main"}
-
-# Development use (staging branch)
-[tool.poetry.group.dev.dependencies]
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "staging"}
-
-# Pin to specific commit for reproducibility
-[tool.poetry.dependencies]
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", rev = "abc123def"}
-
-# Install with specific features
-[tool.poetry.dependencies]
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["vault"]}  # vault only
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["apps"]}   # apps only
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main", extras = ["full"]}   # all features
-```
-
-### Import Organization
-
-**Pattern**: Organize imports by source.
+Test fixtures must lazy-import `campus.storage` modules. Otherwise storage backends initialize before test mode is set.
 
 ```python
-# Standard library
-import os
-from typing import Dict, List
+# Bad - initializes storage immediately
+from campus.storage import tables
 
-# Third-party
-import requests
-from flask import Flask
-
-# Campus packages
-from campus.common import utils
-from campus.vault import get_vault
-
-# Local package
-from .interface import Interface
-from .errors import CustomError
+# Good - lazy import
+def test_something():
+    from campus.storage import tables
 ```
 
-### Error Handling
+### Import Problems
 
-**Pattern**: Use package-specific exception hierarchies.
+- **Circular imports:** Structure dependencies to prevent cycles
+- **Standard library shadowing:** Avoid directory names like `collections/`, `json/`, `os/`
+- **Package imports:** Import packages, not individual functions (see [STYLE-GUIDE.md](STYLE-GUIDE.md))
 
-```python
-class StorageError(Exception):
-    """Base exception for storage operations."""
-    pass
+### Architecture Violations
 
-class NotFoundError(StorageError):
-    """Raised when a requested item is not found."""
-    pass
+- **Business logic in models:** Keep `campus.model` as pure data structures; put logic in `.resources`
+- **Missing .resources:** Each service (auth, api) should have business logic in `.resources` submodule
 
-class ConnectionError(StorageError):
-    """Raised when database connection fails."""
-    pass
-```
+### Storage Interface Violations
+
+- **Missing required fields:** All storage objects need `id` and `created_at`
+- **Inconsistent error handling:** Use standardized error types from `campus.common.errors`
+- **Direct database access:** Use storage interfaces instead of direct DB connections
+
+### Configuration
+
+- **Use campus_python client:** Access config via `campus.auth.vaults`
+- **Environment variables:** Only for deployment (ENV, DEPLOY, CLIENT_ID, CLIENT_SECRET, POSTGRESDB_URI)
+- **Secrets management:** Access via `campus_python.Campus().auth.vaults[deployment][key]`
+
+## Adding New Features
+
+1. **Design interfaces first** - Define abstract classes for new functionality
+2. **Follow storage pattern** - Implement storage-model-resources separation
+3. **Test thoroughly** - Use appropriate testing strategy (see [TESTING-GUIDE.md](TESTING-GUIDE.md))
+4. **Update documentation** - Include usage examples and interface contracts
+
+## Modifying Existing Code
+
+1. **Understand dependencies** - Check which services depend on your changes
+2. **Maintain interfaces** - Don't break existing abstract contracts
+3. **Test backwards compatibility** - Ensure existing code still works
+4. **Update all implementations** - If changing interfaces, update all backends
 
 ## Documentation Standards
 
-### Docstring Requirements
+### Writing Style
 
-**Pattern**: Use consistent docstring format.
+- **Brief and precise**: Avoid verbose explanations; focus on essential information
+- **Clear structure**: Use headings, lists, and code blocks to organize content
+- **Consistent terminology**: Use established terms throughout the project
+- **Active voice**: Prefer "Configure the database" over "The database should be configured"
+
+### Docstring Requirements
 
 ```python
 def function_name(param: str) -> dict:
     """Brief description of the function.
-    
+
     Longer description if needed. Explain the purpose,
     behavior, and any important details.
-    
+
     Args:
         param: Description of the parameter
-        
+
     Returns:
         Description of the return value
-        
+
     Raises:
         SpecificError: When this specific condition occurs
-        
+
     Example:
         >>> result = function_name("test")
         >>> print(result)
@@ -344,45 +372,11 @@ def function_name(param: str) -> dict:
 
 ### Code Comments
 
-**Guidelines**:
 - Explain **why**, not **what**
 - Document non-obvious design decisions
 - Include rationale for architectural choices
 - Reference related issues or documentation
 
-## Decision Record
-
-### ADR-001: Lazy Loading for External Resources
-- **Date**: 2025-01-21
-- **Status**: Adopted
-- **Context**: CI/CD builds failing due to missing environment variables during package imports
-- **Decision**: Implement lazy loading pattern for all external resource access
-- **Consequences**: Enables build-time isolation, requires consistent implementation across codebase
-
-### ADR-002: Namespace Package Architecture
-- **Date**: 2025-01-21  
-- **Status**: Adopted
-- **Context**: Need for modular distribution and independent package versioning
-- **Decision**: Use namespace packages with clear dependency ordering
-- **Consequences**: Enables selective installation, requires careful dependency management
-
-### ADR-003: Vault-Centralized Configuration
-- **Date**: 2025-01-21
-- **Status**: Adopted
-- **Context**: Need for secure, auditable configuration management
-- **Decision**: All environment variable access goes through vault system
-- **Consequences**: Centralized secret management, consistent error handling, audit trail
-
 ---
-
-## Contributing
-
-When contributing to Campus:
-
-1. **Follow the established patterns** documented above
-2. **Add new patterns** to this document when you establish them
-3. **Update ADRs** when making architectural decisions
-4. **Test your changes** in isolation to ensure they follow lazy loading principles
-5. **Document your design decisions** in code comments
 
 This document is living and should be updated as the project evolves.

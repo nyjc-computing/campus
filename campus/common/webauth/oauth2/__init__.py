@@ -1,4 +1,4 @@
-"""common.webauth.oauth2
+"""campus.common.webauth.oauth2
 
 OAuth2 security scheme configs and models.
 
@@ -10,13 +10,14 @@ The OAuth2 security scheme comprises four flows:
    in Campus).
 """
 
-from .authorization_code import (
-    OAuth2AuthorizationCodeFlowScheme
-)
-from .base import OAuth2FlowScheme
-
-
 __all__ = [
-    "OAuth2FlowScheme",
     "OAuth2AuthorizationCodeFlowScheme",
+    "OAuth2ClientCredentialsFlowScheme",
+    "OAuth2DeviceAuthorizationFlowScheme",
+    "OAuth2FlowScheme",
 ]
+
+from .authorization_code import OAuth2AuthorizationCodeFlowScheme
+from .base import OAuth2FlowScheme
+from .client_credentials import OAuth2ClientCredentialsFlowScheme
+from .device_authorization import OAuth2DeviceAuthorizationFlowScheme

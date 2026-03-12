@@ -1,4 +1,4 @@
-"""storage.documents.backend.mongodb
+"""campus.storage.documents.backend.mongodb
 
 This module provides the MongoDB backend for the Documents storage interface.
 
@@ -10,13 +10,15 @@ Implementation:
 Uses MongoDB's native document storage with transparent primary key mapping
 between Campus `id` and MongoDB `_id` fields. Collections are created automatically.
 Record validation is handled before storage and is not the responsibility of this module.
+Null values are not allowed. `None` values passed in update dicts will be
+treated as an $unset operation.
 
 Usage Example:
 ```python
 from campus.storage.documents.backend.mongodb import MongoDBCollection
 
 collection = MongoDBCollection("users")
-collection.insert_one({"id": "123", "name": "John"})
+collection.insert_one({PK: "123", "name": "John"})
 user = collection.get_by_id("123")
 collection.update_by_id("123", {"name": "Jane"})
 collection.delete_by_id("123")
@@ -24,48 +26,53 @@ collection.delete_by_id("123")
 """
 
 from pymongo import MongoClient
+from pymongo.database import Database
 from pymongo.collection import Collection
+from pymongo.errors import DuplicateKeyError
 
-from campus.common import devops
-from campus.client import Campus
+from campus.common import devops, env
+from campus.model.base import Model
 from campus.storage.documents.interface import CollectionInterface, PK
-from campus.storage.errors import NotFoundError, NoChangesAppliedError
-
-# Singleton Campus client for this backend
-_campus_client = Campus()
+from campus.storage.errors import (
+    ConflictError,
+    NoChangesAppliedError,
+    NotFoundError,
+    StorageError
+)
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
 
+class MongoCollectionError(StorageError):
+    """Custom error class for MongoDB collection operations."""
+    ...
+
+
 def _get_mongodb_uri() -> str:
     """Get the MongoDB URI from the vault using the core client API."""
-    try:
-        return _campus_client.vault["storage"]["MONGODB_URI"].get()
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to retrieve MongoDB URI from vault secret 'MONGODB_URI' "
-            f"in 'storage' vault: {e}"
-        ) from e
+    db_uri = env.getsecret("MONGODB_URI", env.DEPLOY)
+    return db_uri
 
 
 def _get_mongodb_name() -> str:
     """Get the MongoDB database name from the vault using the core client API."""
     try:
-        return _campus_client.vault["storage"]["MONGODB_NAME"].get()
+        return env.getsecret("MONGODB_NAME", env.DEPLOY)
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to retrieve MongoDB database name from vault secret 'MONGODB_NAME' "
-            f"in 'storage' vault: {e}"
-        ) from e
+        raise MongoCollectionError(
+            f"Failed to retrieve MONGODB_NAME from '{env.DEPLOY}' vault: {e}"
+        ) from None
 
 
 class MongoRecord(dict):
     """Handles transparent mapping between Campus and MongoDB primary keys.
 
     Maps Campus `id` field to MongoDB's `_id` field.
+    Internally, MongoRecord stores the document id under the `id` key, following
+    Campus schema; `_id` is only generated when exporting to MongoDB.
 
     Example:
-        record = MongoRecord({"id": "123", "name": "John"})
+        record = MongoRecord({PK: "123", "name": "John"})
         mongo_doc = record.to_mongo()  # {"_id": "123", "name": "John"}
     """
 
@@ -76,13 +83,13 @@ class MongoRecord(dict):
     @classmethod
     def from_mongo(cls, mongo_doc: dict) -> "MongoRecord":
         """Create a MongoRecord from a MongoDB document."""
-        mongo_doc[PK] = mongo_doc.pop(MONGO_PK)
-        return cls(mongo_doc)
+        record = mongo_doc.copy()
+        record[PK] = record.pop(MONGO_PK)
+        return cls(record)
 
     @classmethod
     def from_record(cls, record: dict) -> "MongoRecord":
         """Create a MongoRecord from an API document."""
-        record[MONGO_PK] = record.pop(PK)
         return cls(record)
 
     def to_mongo(self) -> dict:
@@ -93,9 +100,7 @@ class MongoRecord(dict):
 
     def to_record(self) -> dict:
         """Convert the MongoRecord to an API document."""
-        record = dict(self)
-        record[PK] = record.pop(MONGO_PK)
-        return record
+        return dict(self)
 
 
 class MongoDBCollection(CollectionInterface):
@@ -107,7 +112,7 @@ class MongoDBCollection(CollectionInterface):
 
     Example:
         collection = MongoDBCollection("users")
-        collection.insert_one({"id": "123", "name": "John"})
+        collection.insert_one({PK: "123", "name": "John"})
         user = collection.get_by_id("123")
     """
 
@@ -117,9 +122,9 @@ class MongoDBCollection(CollectionInterface):
         Connection is established lazily on first database operation.
         """
         super().__init__(name)
-        self._client = None
-        self._db = None
-        self._collection = None
+        self._client: MongoClient | None = None
+        self._db: Database | None = None
+        self._collection: Collection | None = None
 
     def _ensure_connection(self):
         """Ensure MongoDB connection is established.
@@ -127,7 +132,7 @@ class MongoDBCollection(CollectionInterface):
         Establishes connection on first call, subsequent calls are no-ops.
 
         Raises:
-            RuntimeError: If vault secret retrieval fails
+            MongoCollectionError: If vault secret retrieval fails
             pymongo.errors.ConnectionFailure: If MongoDB connection fails
         """
         if self._collection is None:
@@ -135,56 +140,126 @@ class MongoDBCollection(CollectionInterface):
             mongodb_name = _get_mongodb_name()
             self._client = MongoClient(mongodb_uri)
             self._db = self._client[mongodb_name]
-            self._collection: Collection = self._db[self.name]
+            self._collection = self._db[self.name]
 
     @property
     def collection(self) -> Collection:
         """Get the MongoDB collection, establishing connection if needed."""
         self._ensure_connection()
+        assert self._collection is not None
         return self._collection
 
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
-        record = self.collection.find_one({PK: doc_id})
-        if record:
-            return MongoRecord.from_mongo(record).to_record()
+        try:
+            mongo_doc = self.collection.find_one({MONGO_PK: doc_id})
+        except Exception as e:
+            raise MongoCollectionError(
+                f"Failed to retrieve document by id: {e}"
+            ) from None
+        if mongo_doc:
+            return MongoRecord.from_mongo(mongo_doc).to_record()
         return {}
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve documents matching a query."""
-        cursor = self.collection.find(query)
+        assert 'id' not in query, "Matching by 'id' is not allowed"
+        try:
+            cursor = self.collection.find(query)
+        except Exception as e:
+            raise MongoCollectionError(
+                f"Failed to retrieve documents matching query: {e}"
+            ) from None
         return [
-            MongoRecord.from_mongo(record).to_record()
-            for record in cursor
+            MongoRecord.from_mongo(mongo_doc).to_record()
+            for mongo_doc in cursor
         ]
 
-    def insert_one(self, row: dict) -> None:
+    def insert_one(self, record: dict) -> None:  # type: ignore
         """Insert a document into the collection."""
-        self.collection.insert_one(
-            MongoRecord.from_record(row).to_mongo()
-        )
+        mongo_doc = MongoRecord.from_record(record).to_mongo()
+        try:
+            self.collection.insert_one(mongo_doc)
+        except Exception as e:
+            # Duplicate key error (conflict)
+            # pymongo.errors.DuplicateKeyError is the canonical error, but fallback to message check
+            if isinstance(e, DuplicateKeyError) or 'duplicate key' in str(e).lower():
+                raise ConflictError(
+                    message="Conflict occurred during insert",
+                    group_name=self.name,
+                    details={"row": record, "error": str(e)}
+                ) from None
+            raise
 
     def update_by_id(self, doc_id: str, update: dict) -> None:
-        """Update a document in the collection."""
-        result = self.collection.update_one({PK: doc_id}, {"$set": update})
+        """Update a document in the collection.
+        Keys where the associated value is None are considered unset.
+        """
+        if not update:
+            return
+        try:
+            result = self.collection.update_one(
+                {MONGO_PK: doc_id},
+                {
+                    "$set": {
+                        k: v for k, v in update.items() if v is not None
+                    },
+                    "$unset": {
+                        k: "" for k, v in update.items() if v is None
+                    }
+                }
+            )
+        except Exception as e:
+            raise MongoCollectionError(
+                f"Failed to update document by id: {e}"
+            ) from None
         if result.matched_count == 0:
-            raise NotFoundError(doc_id, self.name)
+            raise NotFoundError(doc_id, self.name) from None
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update documents matching a query in the collection."""
-        result = self.collection.update_many(query, {"$set": update})
+        assert 'id' not in query, "Matching by 'id' is not allowed"
+        if not update:
+            return
+        try:
+            result = self.collection.update_many(
+                query,
+                {
+                    "$set": {
+                        k: v for k, v in update.items() if v is not None
+                    },
+                    "$unset": {
+                        k: "" for k, v in update.items() if v is None
+                    }
+                }
+            )
+        except Exception as e:
+            raise MongoCollectionError(
+                f"Failed to update documents matching query: {e}"
+            ) from None
         if result.matched_count == 0:
             raise NoChangesAppliedError("update", query, self.name)
 
     def delete_by_id(self, doc_id: str) -> None:
         """Delete a document from the collection."""
-        result = self.collection.delete_one({PK: doc_id})
+        try:
+            result = self.collection.delete_one({MONGO_PK: doc_id})
+        except Exception as e:
+            raise MongoCollectionError(
+                f"Failed to delete document by id: {e}"
+            ) from None
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
     def delete_matching(self, query: dict) -> None:
         """Delete documents matching a query in the collection."""
-        result = self.collection.delete_many(query)
+        assert 'id' not in query, "Matching by 'id' is not allowed"
+        try:
+            result = self.collection.delete_many(query)
+        except Exception as e:
+            raise MongoCollectionError(
+                f"Failed to delete documents matching query: {e}"
+            ) from None
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
@@ -209,6 +284,14 @@ class MongoDBCollection(CollectionInterface):
             self._client = None
             self._db = None
             self._collection = None
+    
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(self, name: str, model: type[Model]) -> None:
+        """Initialize the table from a Campus model definition."""
+        # Document stores do not need any initialization from model
+        # definitions as yet.
+        # This method is added for future use
+        pass
 
 
 @devops.block_env(devops.PRODUCTION)
@@ -219,7 +302,7 @@ def purge_collections() -> None:
     It drops all collections in the MongoDB database.
 
     Raises:
-        RuntimeError: If database connection or purge operations fail
+        MongoCollectionError: If database connection or purge operations fail
     """
     try:
         uri = _get_mongodb_uri()
@@ -235,4 +318,6 @@ def purge_collections() -> None:
         client.close()
 
     except Exception as e:
-        raise RuntimeError(f"Failed to purge MongoDB collections: {e}") from e
+        raise MongoCollectionError(
+            f"Failed to purge MongoDB collections: {e}"
+        ) from None

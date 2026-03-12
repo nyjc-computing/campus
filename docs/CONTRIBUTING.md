@@ -1,293 +1,151 @@
-# Campus Development Guide
+# Contributing to Campus
 
-Welcome to Campus development! This guide will help you understand our development workflow and get you contributing quickly.
+This guide covers our development workflow, branch strategy, and contribution process.
 
-## 🌳 Branch Structure
+**New here?** See [GETTING-STARTED.md](GETTING-STARTED.md) for installation instructions.
 
-Campus uses a simple three-branch model designed for educational development:
+## Branch Strategy
+
+Campus uses a three-branch model:
 
 ```
 weekly → staging → main
 ```
 
-### Branch Purposes
+| Branch | Purpose | Who Commits |
+|--------|---------|-------------|
+| `weekly` | Active development | All contributors |
+| `staging` | Pre-production validation | Maintainers (via PR) |
+| `main` | Production releases | Maintainers (via PR) |
 
-- **`main`** - Stable, production-ready packages for external projects
-- **`staging`** - Extended testing, migration validation, pre-production quality
-- **`weekly`** - Active development, all new work, expected breakage welcome!
+## Workflow
 
-## 🚀 Getting Started
-
-### 1. Initial Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/nyjc-computing/campus.git
-cd campus
-
-# Switch to active development branch
-git checkout weekly
-
-# Install dependencies
-poetry install
-```
-
-### 2. Development Workflow
-
-**We use GitHub Pull Requests for all changes to teach proper collaborative development practices.**
+### 1. Create a Feature Branch
 
 ```bash
-# Create your feature branch from weekly
+# Start from weekly
 git checkout weekly
 git pull origin weekly
+
+# Create your feature branch
 git checkout -b feature/your-feature-name
+```
 
-# Make your changes
-# ... edit files ...
+### 2. Make Changes
 
-# Test your changes
-python run_tests.py
-cd campus/vault && poetry build  # Test individual packages
+```bash
+# Run tests before committing
+poetry run python tests/run_tests.py
 
-# Commit and push
+# Commit with conventional commit format
 git add .
-git commit -m "feat: describe your changes"
-git push origin feature/your-feature-name
+git commit -m "feat(auth): add OAuth provider support"
 ```
 
-### 3. Create Pull Request (Required!)
+### 3. Create Pull Request
 
-**All changes must go through Pull Requests - no direct pushes to weekly/staging/main.**
+1. Push your branch: `git push origin feature/your-feature-name`
+2. Create PR targeting `weekly` branch
+3. Use conventional commit in title:
+   - `feat:` - New features
+   - `fix:` - Bug fixes
+   - `docs:` - Documentation changes
+   - `test:` - Test changes
+   - `refactor:` - Code restructuring
 
-1. **Go to GitHub** and create a Pull Request
-2. **Target branch**: `weekly` (for all development work)
-3. **Title**: Clear, descriptive title (e.g., "feat: add user authentication", "fix: resolve import circular dependency")
-4. **Description**: 
-   - What you changed and why
-   - Testing you performed
-   - Any breaking changes or special considerations
+### 4. Code Review
 
-### 4. PR Review Process
+- Address review feedback
+- Ensure tests pass
+- Wait for maintainer approval
 
-- **Automated checks**: CI/CD will test your changes across all packages
-- **Code review**: Maintainers or peers review your code
-- **Feedback**: Address any requested changes
-- **Approval**: Once approved, maintainers will merge
+## Code Review Checklist
 
-**Educational Goal**: This mirrors real-world software development practices!
+### Before Submitting a PR
 
-### 5. Choosing the Right Target Branch
+- [ ] All tests pass locally (`poetry run python tests/run_tests.py all`)
+- [ ] Code follows [STYLE-GUIDE.md](STYLE-GUIDE.md)
+- [ ] Documentation is updated (docstrings, relevant docs)
+- [ ] Commit messages follow conventional commit format
+- [ ] No secrets or credentials in code
+- [ ] New features have corresponding tests
 
-**For all development work:**
-- **Target**: `weekly` 
-- **Use for**: New features, bug fixes, experiments, infrastructure improvements
+### Review Focus Areas
 
-**Never target `main` or `staging` directly** - these are managed through the promotion flow.
+When reviewing or when preparing your PR for review:
 
-**Examples:**
-```bash
-# New authentication feature
-git checkout weekly
-git checkout -b feature/oauth-integration
-# PR: feature/oauth-integration → weekly
+- **Security**: Check for potential vulnerabilities
+- **Performance**: Look for inefficient operations
+- **Maintainability**: Ensure code is readable and well-structured
+- **Testing**: Verify adequate test coverage
+- **Documentation**: Confirm docs match implementation
 
-# Fix package build issue  
-git checkout weekly
-git checkout -b fix/poetry-dependencies
-# PR: fix/poetry-dependencies → weekly
+## Commit Message Format
+
+```
+type(scope): description
+
+# Examples
+feat(api): add circle management endpoints
+fix(storage): resolve PostgreSQL connection timeout
+docs(auth): update OAuth configuration examples
+refactor(common): extract ID generation to utils module
+test(integration): add user flow tests
 ```
 
-## 🎯 Branch Promotion Flow (Maintainer Workflow)
+## Testing
 
-**All promotions happen through Pull Requests to maintain transparency and teach best practices.**
-
-### Upstream Flow (Requires PRs)
-**All promotions to higher stability levels require Pull Requests and review.**
-
-#### Weekly → Staging
-After weekly sprint review, stable features get promoted:
-
-```bash
-# Create PR from weekly to staging
-git checkout weekly
-git pull origin weekly
-# Create Pull Request: weekly → staging
-# Title: "promote: weekly sprint [YYYY-MM-DD] to staging"
-# Review and merge via GitHub UI
-```
-
-#### Staging → Main
-After extended validation (typically end of term):
+Always run tests before committing:
 
 ```bash
-# Create PR from staging to main  
-git checkout staging
-git pull origin staging
-# Create Pull Request: staging → main
-# Title: "release: promote staging to production main"
-# Review and merge via GitHub UI
-# Tag the release: git tag v1.x.x && git push origin v1.x.x
+# All tests
+poetry run python tests/run_tests.py all
+
+# Specific category
+poetry run python tests/run_tests.py unit
+poetry run python tests/run_tests.py integration
 ```
 
-### Downstream Flow (Automatic)
-**Changes flow automatically from higher to lower stability branches since they were already reviewed.**
+See [TESTING-GUIDE.md](TESTING-GUIDE.md) for complete testing documentation.
 
-#### Main → Staging & Weekly
-When changes are merged to `main`, they automatically flow downstream:
-- **Main → Staging**: Automated merge (no PR needed)
-- **Main → Weekly**: Automated merge (no PR needed)
-- **Staging → Weekly**: Automated merge when staging is updated
+## Pre-Push Hooks (Recommended)
 
-**Rationale**: These changes were already reviewed and approved when going upstream, so they should be reflected in all downstream environments without manual overhead.
-
-### Direct Pushes (Limited Cases)
-**Only for emergencies:**
-- Security fixes requiring immediate deployment
-- All other changes go through the upstream PR flow
-
-**Teaching Goal**: Contributors learn that production systems require review processes, but approved changes flow efficiently downstream!
-
-## 📦 Package Architecture
-
-Campus is organized as modular packages:
-
-```
-campus/
-├── common/         # Shared utilities (no dependencies)
-├── vault/          # Secrets management (depends on common)
-├── client/         # External API integrations (depends on common)
-├── models/         # Data models (depends on common)
-├── storage/        # Storage interfaces (depends on common + vault)
-└── apps/           # Web applications (depends on all others)
-```
-
-### Key Principles
-
-1. **Clear dependencies** - Follow the dependency flow diagram
-2. **Independent builds** - Each package builds on its own
-3. **Lazy loading** - External resources loaded only when needed
-4. **Environment isolation** - Packages work without production secrets
-
-## 🧪 Testing Your Changes
-
-### Individual Package Testing
+Set up the pre-push hook to catch issues early:
 
 ```bash
-# Test a specific package builds
-cd campus/vault && poetry build
-cd campus/common && poetry build
-
-# Run package tests
-python run_tests.py
+git config core.hooksPath .githooks
 ```
 
-### Full System Testing
+The hook runs sanity checks before allowing pushes. To bypass (not recommended): `git push --no-verify`
 
-```bash
-# Run all tests
-python run_tests.py
+## Maintainer Workflow
 
-# (If you need to test integration across packages, ensure all relevant packages are installed and importable.)
-# Example:
-# python -c "import campus.client, campus.vault; print('✅ Core packages import successfully')"
-```
+### Weekly → Staging
 
-### CI/CD Validation
+After sprint review:
+1. Create PR: `weekly` → `staging`
+2. Title: `"T3W10: weekly PR"` (or appropriate week)
+3. Validate on staging environment
 
-Our GitHub Actions will automatically:
-- Build all packages independently
-- Run the full test suite
-- Validate dependency ordering
-- Check for import issues
+### Staging → Main
 
-## 🎓 Educational Goals
+After staging validation:
+1. Create PR: `staging` → `main`
+2. Title: `"v0.2.0: staging PR"`
+3. Tag release after merge
 
-This workflow teaches:
+## Development Guidelines
 
-- **Industry-standard branching** (weekly/staging/main mirrors dev/staging/production)
-- **Release management** (controlled promotion between environments)
-- **Quality gates** (testing at each stability level)
-- **Modular architecture** (independent, composable packages)
+For code-level guidelines (patterns, architecture, imports), see:
+- [development-guidelines.md](development-guidelines.md) - Architecture patterns
+- [STYLE-GUIDE.md](STYLE-GUIDE.md) - Code standards and import patterns
+- [architecture.md](architecture.md) - System design
 
-## 📋 Contribution Guidelines
+## Getting Help
 
-### Code Style
-
-- Follow existing patterns in the codebase
-- Use type hints where appropriate
-- Add docstrings for public functions
-- Keep functions focused and testable
-
-### Commit Messages
-
-Use conventional commit format:
-```
-feat: add new user authentication method
-fix: resolve circular import in storage module  
-docs: update API documentation
-test: add coverage for vault access controls
-```
-
-### Testing Requirements
-
-- Add tests for new functionality
-- Ensure existing tests still pass
-- Test package builds independently
-- Update documentation as needed
-
-## 🔧 Development Environment
-
-### Required Tools
-
-- **Python 3.11+** - Language runtime
-- **Poetry** - Dependency management
-- **Git** - Version control
-
-### Recommended Setup
-
-```bash
-# Install Poetry if not already installed
-curl -sSL https://install.python-poetry.org | python3 -
-
-# Configure Poetry for this project
-poetry config virtualenvs.in-project true
-poetry install
-
-# Install pre-commit hooks (optional)
-poetry run pre-commit install
-```
-
-## 🚨 Common Issues
-
-### Import Errors
-- Check dependency ordering in the package architecture
-- Ensure you're importing from the correct package
-- Use lazy loading for external resources
-
-### Build Failures
-- Verify all dependencies are in pyproject.toml
-- Check for circular dependencies
-- Ensure environment variables are handled gracefully
-
-### Test Failures
-- Run tests locally before pushing
-- Check that mock data is properly set up
-- Verify database connections use lazy loading
-
-## 📞 Getting Help
-
-- **Documentation**: Check package-specific READMEs in each `campus/` subdirectory
-- **Issues**: Report bugs via [GitHub Issues](https://github.com/nyjc-computing/campus/issues)
-- **Discussions**: Ask questions in [GitHub Discussions](https://github.com/nyjc-computing/campus/discussions)
-- **Code Review**: Tag maintainers in your pull requests
-
-## 🏫 Academic Context
-
-Campus is developed by the **NYJC Computing Department** as both:
-- **Educational tool** - Learn modern Python architecture patterns
-- **Practical platform** - Solve real institutional management needs
-
-Your contributions help other developers learn while building something genuinely useful!
+- **[Issues](https://github.com/nyjc-computing/campus/issues)** - Bug reports and feature requests
+- **[Discussions](https://github.com/nyjc-computing/campus/discussions)** - Questions
+- **[Code Reviews](https://nyjc-computing.github.io/nanyang-system-developers/contributors/training/code-reviews.html)** - Best practices
 
 ---
 

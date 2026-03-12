@@ -1,4 +1,4 @@
-"""common.validation.record
+"""campus.common.validation.record
 
 This module contains utility functions for validating records (dictionaries).
 """
@@ -12,6 +12,8 @@ from typing import (
     get_args,
     get_origin,
 )
+
+from campus.common.errors import FieldError
 
 C = TypeVar('C', bound=Collection)
 
@@ -44,12 +46,12 @@ def _validate_key_names(
     if required:
         missing_keys = valid_set - record_set
         if missing_keys:
-            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}")
+            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}") from None
     # all required keys are present
     if not ignore_extra:
         extra_keys = record_set - valid_set
         if extra_keys:
-            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}")
+            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}") from None
     # all keys are valid
 
 def get_requiredness_type(typ: type) -> tuple[Requiredness, type]:
@@ -102,7 +104,7 @@ def unpack_required_optional(
             case _:
                 raise AssertionError(
                     f"Unexpected state: requiredness={requiredness}, total={total}"
-                )
+                ) from None
     return factory(required), factory(optional)
 
 def _validate_key_names_types(
@@ -131,21 +133,23 @@ def _validate_key_names_types(
     if required:
         missing_keys = required_keys - record_set
         if missing_keys:
-            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}")
+            raise KeyError(f"Missing required keys: {', '.join(missing_keys)}") from None
     # all required keys are present
     if not ignore_extra:
         extra_keys = record_set - required_keys - optional_keys
         if extra_keys:
-            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}")
+            raise KeyError(f"Invalid keys: {', '.join(extra_keys)}") from None
     # all record keys are valid
-    for key in record_set:
+    # Only validate keys that exist in the schema
+    keys_to_validate = record_set if not ignore_extra else (record_set & (required_keys | optional_keys))
+    for key in keys_to_validate:
         requiredness, unwrapped_type = get_requiredness_type(valid_keys[key])
         KeyType = unwrapped_type if requiredness is not Requiredness.UNMARKED else valid_keys[key]
         if not isinstance(record[key], KeyType):
             raise TypeError(
                 f"Invalid type for key '{key}': expected {valid_keys[key].__name__}, "
                 f"got {type(record[key]).__name__}"
-            )
+            ) from None
 
 
 def validate_keys(
@@ -187,4 +191,39 @@ def validate_keys(
             )
         case _:
             raise TypeError(f"Invalid type for valid_keys: {type(valid_keys)}")
+
+
+def validate_types(
+        value: dict[str, Any],
+        schema: dict[str, type],
+        *,
+        ignore_extra: bool = False
+) -> list[FieldError]:
+    """Validate value types against schema.
+
+    Returns list of FieldError instead of raising.
+
+    Args:
+        value: The dictionary to validate.
+        schema: A mapping of field names to expected types.
+        ignore_extra: If True, keys not in schema are ignored.
+
+    Returns:
+        A list of FieldError objects for any type mismatches.
+    """
+    errors: list[FieldError] = []
+
+    for key, expected_type in schema.items():
+        if key not in value:
+            continue
+
+        actual_value = value[key]
+        if not isinstance(actual_value, expected_type):
+            errors.append(FieldError(
+                field=key,
+                code="INVALID_TYPE",
+                message=f"Expected {expected_type.__name__}, got {type(actual_value).__name__}"
+            ))
+
+    return errors
 

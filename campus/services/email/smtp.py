@@ -1,4 +1,4 @@
-"""services.email.smtp
+"""campus.services.email.smtp
 
 SMTP email sending service.
 """
@@ -7,9 +7,11 @@ import smtplib
 from email.message import EmailMessage
 from typing import Any, Sequence
 
-from campus.client import Campus
+import campus_python
 
 from .base import EmailSenderInterface
+
+email_vault = campus_python.Campus(timeout=60).auth.vaults["smtp"]
 
 
 class SMTPEmailSender(EmailSenderInterface):
@@ -44,11 +46,9 @@ class SMTPEmailSender(EmailSenderInterface):
         Returns:
             bool: True if email was sent successfully, False otherwise
         """
-        campus_client = Campus()
-        vault = campus_client.vault["smtp"]
-        username = vault["SMTP_USERNAME"].get()
-        password = vault["SMTP_PASSWORD"].get()
-        host = vault["SMTP_HOST"].get()
+        username = email_vault["SMTP_USERNAME"]
+        password = email_vault["SMTP_PASSWORD"]
+        host = email_vault["SMTP_HOST"]
 
         msg = EmailMessage()
         msg['Subject'] = subject

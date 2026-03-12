@@ -9,17 +9,22 @@ This interface is usually provided by document-oriented databases like MongoDB
 or CouchDB.
 """
 
-from .backend.mongodb import MongoDBCollection
+__all__ = [
+    "CollectionInterface",
+    "get_db",
+]
 
 from .interface import CollectionInterface
 
 
 def get_db(name: str):
-    """Get a collection by name."""
-    return MongoDBCollection(name)
+    """Get a collection by name, using appropriate backend for environment."""
+    # Import testing module to check for test mode
+    from campus.storage.testing import is_test_mode
 
-
-__all__ = [
-    "CollectionInterface",
-    "get_db",
-]
+    if is_test_mode():
+        from .backend.memory import MemoryCollection
+        return MemoryCollection(name)
+    else:
+        from .backend.mongodb import MongoDBCollection
+        return MongoDBCollection(name)

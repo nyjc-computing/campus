@@ -1,13 +1,14 @@
-"""common.schema.base
+"""campus.common.schema.base
 
 Base schema definitions, enums, and constants for Campus.
 """
 
 from typing import Literal
 
+from . import openapi
+
 ResponseStatus = Literal["ok", "error"]
 
-
-# TODO: Replace with OpenAPI-based pattern-string schema
-CampusID = str
-UserID = str
+# Campus types
+CampusID = openapi.String
+UserID = openapi.Email

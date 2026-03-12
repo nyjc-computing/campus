@@ -2,19 +2,46 @@
 
 This module provides the common storage interface for the campus application.
 
-Two kinds of storage interface are provided:
+Three kinds of storage interface are provided:
 1. Tables: For storing rows following a common schema.
 2. Documents: For storing documents that can have different schemas.
+3. Objects: For storing binary blobs with S3-compatible object storage.
 """
 
-from . import documents, tables
+__all__ = [
+    "BucketInterface",
+    "CollectionInterface",
+    "ConflictError",
+    "NoChangesAppliedError",
+    "NotFoundError",
+    "ObjectMetadata",
+    "TableInterface",
+    "StorageError",
+    "get_bucket",
+    "get_collection",
+    "get_table",
+    "purge_all",
+    "purge_buckets",
+    "purge_collections",
+    "purge_tables",
+]
+
+from campus.common import devops
+
+from . import documents, objects, tables
 
 from .documents import CollectionInterface
 from .tables import TableInterface
-from .errors import StorageError, NotFoundError, NoChangesAppliedError
+from .objects import BucketInterface, ObjectMetadata
+from .errors import (
+    StorageError,
+    ConflictError,
+    NotFoundError,
+    NoChangesAppliedError
+)
 
 
-def get_table(name: str):
+def get_table(name: str) -> TableInterface:
     """Get a table by name."""
     return tables.get_db(name)
 
@@ -24,6 +51,13 @@ def get_collection(name: str):
     return documents.get_db(name)
 
 
+def get_bucket(name: str):
+    """Get a bucket by name."""
+    return objects.get_bucket(name)
+
+
+@devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def purge_tables() -> None:
     """Purge all tables in the database.
 
@@ -37,6 +71,8 @@ def purge_tables() -> None:
     _purge_tables()
 
 
+@devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def purge_collections() -> None:
     """Purge all collections in the database.
 
@@ -50,10 +86,12 @@ def purge_collections() -> None:
     _purge_collections()
 
 
+@devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
 def purge_all() -> None:
-    """Purge all tables and collections.
+    """Purge all tables, collections, and buckets.
 
-    This is a convenience function that purges both tables and collections.
+    This is a convenience function that purges tables, collections, and buckets.
     Intended for development/testing environments only.
 
     Raises:
@@ -61,17 +99,19 @@ def purge_all() -> None:
     """
     purge_tables()
     purge_collections()
+    purge_buckets()
 
 
-__all__ = [
-    "CollectionInterface",
-    "TableInterface",
-    "StorageError",
-    "NotFoundError",
-    "NoChangesAppliedError",
-    "get_table",
-    "get_collection",
-    "purge_tables",
-    "purge_collections",
-    "purge_all",
-]
+@devops.block_env(devops.PRODUCTION)
+@devops.confirm_action_in_env(devops.STAGING)
+def purge_buckets() -> None:
+    """Purge all objects in buckets.
+
+    This is a convenience function that calls the backend-specific purge
+    implementation. Intended for development/testing environments only.
+
+    Raises:
+        RuntimeError: If purge operation fails
+    """
+    from .objects.backend.local import purge_buckets as _purge_buckets
+    _purge_buckets()

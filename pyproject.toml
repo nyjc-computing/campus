@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "campus-suite"
-version = "0.1.0"
+version = "0.1.14"
 description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
@@ -13,25 +13,26 @@ packages = [{include = "campus"}]
 [tool.poetry.dependencies]
 python = ">=3.11.0,<3.12"
 
-# Client library dependencies (minimal for HTTP requests)
-requests = "^2.32.4"
+# Campus internal dependencies
+campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
 
-# Deployment orchestration dependencies (all services) - required for deployment
-flask = "^3.0.0"
+# Client library dependencies (minimal for HTTP requests)
 bcrypt = "^4.2.1"
+flask = "^3.0.0"
+requests = "^2.32.4"
 psycopg2-binary = "^2.9.0"
 pymongo = {extras = ["srv"], version = "^4.13.2"}
+boto3 = "^1.35.0"
+
+# Deployment orchestration dependencies (all services) - required for deployment
 gunicorn = "^21.2.0"
 werkzeug = "^3.0.0"
 
-[tool.poetry.extras]
-# Optional dependency groups for deployment modes
-vault = ["flask", "bcrypt", "psycopg2-binary", "gunicorn", "werkzeug"]
-apps = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
-full = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
-
 [tool.poetry.group.dev.dependencies]
 pylint = "^3.0"
+pyright = "^1.1.391"
+openapi-spec-validator = "^0.7.2"
+boto3-stubs = "^1.42.57"
 
 [tool.poetry.scripts]
 campus = "main:main"
@@ -39,6 +40,7 @@ campus = "main:main"
 [tool.pyright]
 useLibraryCodeForTypes = true
 exclude = [".cache"]
+reportIncompatibleMethodOverride = "none"
 
 [tool.ruff]
 select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']

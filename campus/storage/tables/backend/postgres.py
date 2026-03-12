@@ -1,10 +1,11 @@
-"""storage.tables.backend.postgres
+"""campus.storage.tables.backend.postgres
 
 This module provides the PostgreSQL backend for the Tables storage interface.
 
 Vault Integration:
-The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the 'storage' 
-vault. The storage system depends on the vault service for database credentials.
+The database URI is retrieved from the vault secret 'POSTGRESDB_URI' in the
+'storage' vault. The storage system depends on the vault service for database
+credentials.
 
 Implementation:
 Uses direct column mapping where record keys correspond to table column names.
@@ -16,35 +17,126 @@ Usage Example:
 from campus.storage.tables.backend.postgres import PostgreSQLTable
 
 table = PostgreSQLTable("users")
-table.insert_one({"id": "123", "created_at": "2023-01-01", "name": "John"})
+table.insert_one({PK: "123", "created_at": "2023-01-01T00:00:00Z", "name": "John"})
 user = table.get_by_id("123")
 table.update_by_id("123", {"name": "Jane"})
 table.delete_by_id("123")
 ```
 """
 
+import dataclasses
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
-from campus.common import devops
-from campus.client import Campus
-from campus.storage.tables.interface import TableInterface, PK
-from campus.storage.errors import NotFoundError, NoChangesAppliedError
+from campus.common import devops, env
+from campus.common.utils import datacls
+from campus.model import InternalModel, Model, constraints
+from campus.storage import errors
+
+from ..interface import PK, TableInterface
+
+# Valid field constraint names
+_VALID_CONSTRAINTS = (constraints.UNIQUE,)
+
+_TYPEMAP = {
+    str: "TEXT",
+    int: "INTEGER",
+    float: "REAL",
+    bool: "BOOLEAN",
+}
 
 
-# Singleton Campus client for this backend
-_campus_client = Campus()
+def _validate_field_metadata(field: dataclasses.Field) -> None:
+    """Validate field metadata for SQL schema generation.
 
+    Args:
+        field: The dataclass field to validate
+
+    Raises:
+        TypeError: If metadata values have incorrect types
+        ValueError: If metadata values contain invalid entries
+    """
+    # Validate 'storage' metadata (must be bool)
+    if "storage" in field.metadata:
+        storage = field.metadata["storage"]
+        if not isinstance(storage, bool):
+            raise TypeError(
+                f"Field '{field.name}': metadata 'storage' must be bool, "
+                f"got {type(storage).__name__}"
+            )
+
+    # Validate 'constraints' metadata (must be sequence of strings)
+    if "constraints" in field.metadata:
+        constraints_meta = field.metadata["constraints"]
+        if not isinstance(constraints_meta, (list, tuple)):
+            raise TypeError(
+                f"Field '{field.name}': metadata 'constraints' must be "
+                f"list or tuple, got {type(constraints_meta).__name__}"
+            )
+        for i, c in enumerate(constraints_meta):
+            if not isinstance(c, str):
+                raise TypeError(
+                    f"Field '{field.name}': constraint at index {i} must be str, "
+                    f"got {type(c).__name__}"
+                )
+            if c not in _VALID_CONSTRAINTS:
+                raise ValueError(
+                    f"Field '{field.name}': invalid constraint '{c}'. "
+                    f"Valid constraints: {', '.join(repr(c) for c in _VALID_CONSTRAINTS)}"
+                )
+
+
+def _field_to_sql_schema(field: dataclasses.Field) -> str:
+    """Convert a dataclass field to a SQL column definition."""
+    _validate_field_metadata(field)
+    field_name = field.name
+    field_type = field.type
+    sql_type = _TYPEMAP.get(field_type, "TEXT")
+    sql_field_constraints = []
+
+    if field_name == "__constraints__":
+        match field.default:
+            case constraints.Unique():
+                unique_fields = field.default.fields
+                unique_constraint = ", ".join(unique_fields)
+                return f"UNIQUE ({unique_constraint})"
+            case _:
+                raise ValueError(
+                    f"Unsupported constraint type: {field.default}"
+                )
+    elif field_name == PK:
+        sql_field_constraints.append("PRIMARY KEY")
+    if constraints.UNIQUE in field.metadata.get("constraints", []):
+        sql_field_constraints.append("UNIQUE")
+    if not datacls.is_optional(field):
+        sql_field_constraints.append("NOT NULL")
+
+    constraints_sql = " ".join(sql_field_constraints)
+    return f"\"{field_name}\" {sql_type} {constraints_sql}"
+
+
+def _model_to_sql_schema(name: str, model: type[InternalModel | Model]) -> str:
+    """Convert a dataclass model to SQL schema."""
+    columns = []
+    constraints_ = []
+    for field in model.fields().values():
+        _validate_field_metadata(field)
+        if not field.metadata.get("storage", True):
+            continue  # skip non-storage fields
+        if field.name == "__constraints__":
+            constraints_.append(field)
+            continue
+        columns.append(_field_to_sql_schema(field))
+    for field in constraints_:
+        columns.append(_field_to_sql_schema(field))
+    columns_sql = ", ".join(columns)
+    return f"CREATE TABLE IF NOT EXISTS \"{name}\" ({columns_sql});"
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
-    try:
-        return _campus_client.vault["storage"]["POSTGRESDB_URI"].get()
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to retrieve database URI from vault secret 'POSTGRESDB_URI' "
-            f"in 'storage' vault: {e}"
-        ) from e
+    db_uri = env.getsecret("POSTGRESDB_URI", env.DEPLOY)
+    return db_uri
 
 
 class PostgreSQLTable(TableInterface):
@@ -54,7 +146,9 @@ class PostgreSQLTable(TableInterface):
 
     Example:
         table = PostgreSQLTable("users")
-        table.insert_one({"id": "123", "created_at": "2023-01-01", "name": "John"})
+        table.insert_one(
+            {PK: "123", "created_at": "2023-01-01T00:00:00Z", "name": "John"}
+        )
         user = table.get_by_id("123")
     """
 
@@ -68,7 +162,8 @@ class PostgreSQLTable(TableInterface):
             psycopg2.Error: If database connection fails
         """
         db_uri = _get_db_uri()
-        return psycopg2.connect(db_uri)
+        conn = psycopg2.connect(db_uri)
+        return conn
 
     @staticmethod
     def _build_where_clause(query: dict) -> tuple[str, list]:
@@ -116,7 +211,9 @@ class PostgreSQLTable(TableInterface):
                     (row_id,)
                 )
                 row = cursor.fetchone()
-                return dict(row) if row else {}
+                if not row:
+                    raise errors.NotFoundError(row_id, self.name)
+                return dict(row)
 
     def get_matching(self, query: dict) -> list[dict]:
         """Retrieve rows matching a query."""
@@ -135,11 +232,23 @@ class PostgreSQLTable(TableInterface):
                 column_names, placeholders, values = self._build_columns_and_values(
                     row)
 
-                cursor.execute(
-                    f"INSERT INTO {self.name} ({column_names}) VALUES ({placeholders})",
-                    values
-                )
-                conn.commit()
+                try:
+                    cursor.execute(
+                        f"INSERT INTO {self.name} ({column_names}) VALUES ({placeholders})",
+                        values
+                    )
+                except psycopg2.IntegrityError as e:
+                    conn.rollback()
+                    raise errors.ConflictError(
+                        message="Conflict occurred during insert",
+                        group_name=self.name,
+                        details={"row": row, "error": str(e)}
+                    ) from e
+                except psycopg2.Error as e:
+                    conn.rollback()
+                    raise
+                else:
+                    conn.commit()
 
     def update_by_id(self, row_id: str, update: dict) -> None:
         """Update a row in the specified table."""
@@ -151,13 +260,19 @@ class PostgreSQLTable(TableInterface):
                 set_clause, params = self._build_set_clause(update)
                 params.append(row_id)
 
-                cursor.execute(
-                    f"UPDATE {self.name} SET {set_clause} WHERE {PK} = %s",
-                    params
-                )
-                if cursor.rowcount == 0:
-                    raise NotFoundError(row_id, self.name)
-                conn.commit()
+                try:
+                    cursor.execute(
+                        f"UPDATE {self.name} SET {set_clause} WHERE {PK} = %s",
+                        params
+                    )
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NotFoundError(
+                            row_id, self.name
+                        )
+                    conn.commit()
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update rows matching a query in the specified table."""
@@ -172,38 +287,67 @@ class PostgreSQLTable(TableInterface):
                 params = set_params + where_params
                 sql = f"UPDATE {self.name} SET {set_clause} {where_clause}"
 
-                cursor.execute(sql, params)
-                if cursor.rowcount == 0:
-                    raise NoChangesAppliedError("update", query, self.name)
-                conn.commit()
+                try:
+                    cursor.execute(sql, params)
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NoChangesAppliedError(
+                            "update", query, self.name)
+                    conn.commit()
 
     def delete_by_id(self, row_id: str) -> None:
         """Delete a row from the specified table."""
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
-                cursor.execute(
-                    f"DELETE FROM {self.name} WHERE {PK} = %s",
-                    (row_id,)
-                )
-                if cursor.rowcount == 0:
-                    raise NotFoundError(row_id, self.name)
-                conn.commit()
+                try:
+                    cursor.execute(
+                        f"DELETE FROM {self.name} WHERE {PK} = %s",
+                        (row_id,)
+                    )
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NotFoundError(row_id, self.name)
+                    conn.commit()
 
     def delete_matching(self, query: dict) -> None:
         """Delete rows matching a query in the specified table."""
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 where_clause, params = self._build_where_clause(query)
-                cursor.execute(
-                    f"DELETE FROM {self.name} {where_clause}",
-                    params
-                )
-                if cursor.rowcount == 0:
-                    raise NoChangesAppliedError("delete", query, self.name)
+                try:
+                    cursor.execute(
+                        f"DELETE FROM {self.name} {where_clause}",
+                        params
+                    )
+                except psycopg2.Error as e:
+                    raise
+                else:
+                    if cursor.rowcount == 0:
+                        raise errors.NoChangesAppliedError(
+                            "delete", query, self.name
+                        )
+                    conn.commit()
+    
+    @devops.block_env(devops.PRODUCTION)
+    def init_from_model(
+            self,
+            name: str,
+            model: type[InternalModel | Model]
+    ) -> None:
+        """Initialize the table from a Campus model definition."""
+        create_table_sql = _model_to_sql_schema(name, model)
+        # Ensure connection is properly closed after operation
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(create_table_sql)
                 conn.commit()
 
     @devops.block_env(devops.PRODUCTION)
-    def init_table(self, schema: str) -> None:
+    def init_from_schema(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
 
         This method is intended for development/testing environments.
@@ -212,6 +356,7 @@ class PostgreSQLTable(TableInterface):
         Args:
             schema: SQL CREATE TABLE statement defining the table structure.
         """
+        # Ensure connection is properly closed after operation
         with self._get_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(schema)

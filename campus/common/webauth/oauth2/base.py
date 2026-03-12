@@ -1,55 +1,25 @@
-"""apps.common.webauth.oauth2.base
+"""campus.common.webauth.oauth2.base
 
 OAuth2 security scheme base configs and models.
-
 """
 
-from typing import Generic, TypeVar, Unpack
+__all__ = ["OAuth2FlowScheme"]
 
-from campus.common.integration.config import (
-    OAuth2Flow,
-    OAuth2AuthorizationCodeConfigSchema,
-)
+from typing import Generic, Type, TypeVar
 
-from ..base import (
-    SecurityError,
-    SecurityScheme
-)
+from .. import base
 
 # Generic type for OAuth2 flow schemes
 F = TypeVar('F', bound='OAuth2FlowScheme')
-Url = str
+
+FLOW_PREFERENCE = ("authorizationCode", "clientCredentials")
 
 
-class OAuth2InvalidRequestError(SecurityError):
-    """OAuth2 invalid request error."""
-
-
-class OAuth2SecurityError(SecurityError):
-    """OAuth2 authentication error."""
-
-
-class OAuth2FlowScheme(SecurityScheme, Generic[F]):
-    """OAuth2 security scheme base class for OAuth2 flows.
-
-    OAuth2 is only used for initial authentication of users and clients.
-    Subsequent authorization uses HTTP Basic/Bearer schemes.
-    """
+class OAuth2FlowScheme(base.SecurityScheme, Generic[F]):
+    """OAuth2 security scheme base class for OAuth2 flows."""
+    _flow_map: dict[str, Type[F]] = {}
+    security_scheme = "oauth2"
     flow: str
 
-    def __init__(
-            self,
-            provider: str,
-            **config: Unpack[OAuth2AuthorizationCodeConfigSchema]
-    ):
-        super().__init__(provider, **config)
-        self.flow = config["flow"]
-
-
-__all__ = [
-    "OAuth2AuthorizationCodeConfigSchema",
-    "OAuth2FlowScheme",
-    "OAuth2SecurityError",
-    "OAuth2Flow",
-    "OAuth2SecurityError"
-]
+    def __init__(self, provider: str):
+        super().__init__(provider)
