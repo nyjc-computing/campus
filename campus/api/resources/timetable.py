@@ -9,7 +9,6 @@ from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
 import campus.model
-from campus.model import timetable
 import campus.storage
 from campus.storage.documents.interface import PK
 
@@ -427,4 +426,5 @@ class TimetableMetadataResource:
             ) from None
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+
 
