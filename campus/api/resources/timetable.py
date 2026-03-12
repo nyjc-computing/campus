@@ -16,6 +16,14 @@ timetable_collection = campus.storage.get_collection("timetables")
 timetable_table = campus.storage.get_table("timetables") 
 
 def _from_record(record: dict) -> campus.model.TimetableMetadata:
+    """Convert a storage record into a TimetableMetadata model.
+
+    Args:
+        record (dict): Raw timetable metadata record from storage.
+
+    Returns:
+        campus.model.TimetableMetadata: Parsed timetable metadata object.
+    """
     return campus.model.TimetableMetadata(
         id=schema.CampusID(record["id"]),
         filename=record["filename"],
@@ -24,6 +32,14 @@ def _from_record(record: dict) -> campus.model.TimetableMetadata:
     )
 
 def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
+    """Convert a storage record into a TimetableEntry model.
+
+    Args:
+        record (dict): Raw timetable entry record from storage.
+
+    Returns:
+        campus.model.TimetableEntry: Parsed timetable entry object.
+    """
     return campus.model.TimetableEntry(
         id=schema.CampusID(record["id"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
@@ -35,6 +51,16 @@ def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
 
 
 def _upsert(table, key: str, data: dict) -> None:
+    """Insert or update a record in a table.
+
+    Attempts to update a record by its key. If the record does not exist,
+    it inserts a new record with the provided key and data.
+
+    Args:
+        table: Storage table object.
+        key (str): Primary key for the record.
+        data (dict): Data fields to update or insert.
+    """
     try:
         table.update_by_id(key, data)
     except campus.storage.errors.NotFoundError:
@@ -49,10 +75,25 @@ class TimetablesResource:
         timetable_collection.init_collection()
     
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
+        """Return a resource object for a specific timetable.
+
+        Args:
+            timetable_id (schema.CampusID): ID of the timetable.
+
+        Returns:
+            TimetableResource: Resource representing the timetable.
+        """
         return TimetableResource(timetable_id)
     
     def list(self, **filters: typing.Any) -> list[campus.model.TimetableMetadata]:
-        """List timetables matching filters."""
+        """List timetables matching the provided filters.
+
+        Args:
+            **filters: Arbitrary filter parameters applied to the storage query.
+
+        Returns:
+            list[campus.model.TimetableMetadata]: Matching timetable metadata objects.
+        """
         try:
             records = timetable_collection.get_matching(filters)
         except campus.storage.errors.StorageError as e:
@@ -60,6 +101,15 @@ class TimetablesResource:
         return [_from_record(record) for record in records]
     
     def new(self, **fields: typing.Any) -> campus.model.TimetableMetadata:
+        """Create a new timetable and optionally its entries.
+
+        Args:
+            **fields: Timetable fields including filename, start_date,
+                      end_date, and optionally entries.
+
+        Returns:
+            campus.model.TimetableMetadata: The created timetable metadata.
+        """
         timetable = campus.model.TimetableMetadata(
             filename=fields["filename"],
             start_date=fields["start_date"],
@@ -84,6 +134,11 @@ class TimetablesResource:
         return timetable
 
     def get_current(self) -> schema.CampusID | None:
+        """Retrieve the current active timetable ID.
+
+        Returns:
+            schema.CampusID | None: The current timetable ID, or None if not set.
+        """
         try:
             record = timetable_table.get_by_id("current_timetable")
             return schema.CampusID(record["timetable_id"]) if record else None
@@ -93,6 +148,12 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def set_current(self, timetable_id: schema.CampusID) -> None:
+        """Set the current active timetable.
+
+        Args:
+            timetable_id (schema.CampusID): ID of the timetable to set as current.
+        """
+
         TimetableResource(timetable_id).get()
         try:
             _upsert(timetable_table, "current_timetable", {"timetable_id": str(timetable_id)})
@@ -100,6 +161,11 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def get_next(self) -> schema.CampusID | None:
+        """Retrieve the next scheduled timetable ID.
+
+        Returns:
+            schema.CampusID | None: The next timetable ID, or None if not set.
+        """
         try:
             record = timetable_table.get_by_id("next_timetable")
             return schema.CampusID(record["timetable_id"]) if record else None
@@ -109,6 +175,11 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def set_next(self, timetable_id: schema.CampusID) -> None:
+        """Set the next scheduled timetable.
+
+        Args:
+            timetable_id (schema.CampusID): ID of the timetable to set as next.
+        """
         TimetableResource(timetable_id).get()
         try:
             _upsert(timetable_table, "next_timetable", {"timetable_id": str(timetable_id)})
@@ -122,7 +193,14 @@ class TimetableResource:
         self.timetable_id = timetable_id
 
     def get(self) -> campus.model.TimetableMetadata:
-        """Get the timetable with entries."""
+        """Retrieve the timetable metadata.
+
+        Returns:
+            campus.model.TimetableMetadata: The timetable metadata.
+
+        Raises:
+            ConflictError: If the timetable does not exist.
+        """
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
             if record is None:
@@ -142,7 +220,11 @@ class TimetableResource:
 
     
     def update(self, **updates: typing.Any) -> None:
-        """Update the timetable record."""
+        """Update fields of the timetable.
+
+        Args:
+            **updates: Fields to update in the timetable record.
+        """
         try:
             timetable_collection.update_by_id(self.timetable_id, updates)
         except campus.storage.errors.NoChangesAppliedError:
@@ -156,6 +238,11 @@ class TimetableResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def delete(self) -> None:
+        """Delete the timetable and all associated entries.
+
+        Raises:
+            ConflictError: If the timetable does not exist.
+        """
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
             if record is None:
@@ -175,19 +262,31 @@ class TimetableResource:
 
     @property
     def entries(self) -> "TimetableEntriesResource":
+        """Access the timetable entries resource."""
         return TimetableEntriesResource(self.timetable_id)
 
     @property
     def metadata(self) -> "TimetableMetadataResource":
+        """Access the timetable metadata resource."""
         return TimetableMetadataResource(self.timetable_id)
 
 
 class TimetableEntriesResource:
     """Represents the TimetableEntries Resource."""
     def __init__(self, timetable_id: schema.CampusID):
+        """Initialize with the parent timetable ID.
+
+        Args:
+            timetable_id (schema.CampusID): ID of the timetable.
+        """
         self.timetable_id = timetable_id
 
     def list(self) -> list[campus.model.TimetableEntry]:
+        """List all entries belonging to the timetable.
+
+        Returns:
+            list[campus.model.TimetableEntry]: Timetable entries.
+        """
         records = timetable_entry_storage.get_matching({
             "timetable_id": self.timetable_id
         })
@@ -197,6 +296,11 @@ class TimetableMetadataResource:
     """Represents metadata for a single timetable."""
     
     def __init__(self, timetable_id: schema.CampusID):
+         """Initialize with the timetable ID.
+
+        Args:
+            timetable_id (schema.CampusID): ID of the timetable.
+        """
         self.timetable_id = timetable_id
     
     def get(self) -> campus.model.TimetableMetadata:
@@ -218,7 +322,11 @@ class TimetableMetadataResource:
             raise api_errors.InternalError.from_exception(e) from e
 
     def update(self, **updates: typing.Any) -> None:
-        """Update the timetable metadata."""
+        """Update timetable metadata fields.
+
+        Args:
+            **updates: Metadata fields to update.
+        """
         try:
             timetable_collection.update_by_id(self.timetable_id, updates)
         except campus.storage.errors.NoChangesAppliedError:
@@ -230,3 +338,4 @@ class TimetableMetadataResource:
             ) from None
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+
