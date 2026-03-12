@@ -177,3 +177,16 @@ replit.nix
 # VS Code
 # Workspace configuration file on local machine
 *.code-workspace
+
+# System files
+*.DS_Store
+
+# Project directories (separate repos)
+campus/
+campus-admin/
+campus-api-python/
+campus-classroom/
+campus-cli/
+devcontainers/
+nyxchange-timetable-v2/
+t1w5-webapp-quiz-submission/
