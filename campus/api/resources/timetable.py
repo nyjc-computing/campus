@@ -58,11 +58,14 @@ class TimetablesResource:
         """Initialize storage."""
         timetable_collection.init_collection()
         # Use a metadata document to store current & next
-        timetable_collection.insert_one({
-            PK: "@metadata",
-            "current": None,
-            "next": None
-        })
+        _upsert(
+            timetable_collection,
+            "@metadata",
+            {
+                "current": None,
+                "next": None
+            }
+        )
         # Use this to update the metadata doc
         # timetable_collection.update_by_id("@metadata", {"current": ...})
 
@@ -160,7 +163,8 @@ class TimetablesResource:
     def get_current(self) -> schema.CampusID | None:
         """Get the current active timetable. This is used to indicate which timetable is currently active."""
         try:
-            record = timetable_table.get_by_id("current_timetable")
+            metadata = timetable_collection.get_by_id("@metadata")
+            record = metadata["current"]
             return schema.CampusID(record["timetable_id"]) if record else None
         except campus.storage.errors.NotFoundError:
             return None
@@ -171,14 +175,15 @@ class TimetablesResource:
         """Set the current active timetable. This is used to indicate which timetable is currently active."""
         TimetableResource(timetable_id).get()
         try:
-            _upsert(timetable_table, "current_timetable", {"timetable_id": str(timetable_id)})
+            _upsert(timetable_collection, "@metadata", {"current": timetable_id})
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
 
     def get_next(self) -> schema.CampusID | None:
         """Get the next timetable. This is used to indicate which timetable will be active after the current one expires."""
         try:
-            record = timetable_table.get_by_id("next_timetable")
+            metadata = timetable_collection.get_by_id("@metadata")
+            record = metadata["next"]
             return schema.CampusID(record["timetable_id"]) if record else None
         except campus.storage.errors.NotFoundError:
             return None
@@ -189,7 +194,7 @@ class TimetablesResource:
         """Set the next timetable. This is used to indicate which timetable will be active after the current one expires."""
         TimetableResource(timetable_id).get()
         try:
-            _upsert(timetable_table, "next_timetable", {"timetable_id": str(timetable_id)})
+            _upsert(timetable_collection, "@metadata", {"next": timetable_id})
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
 
