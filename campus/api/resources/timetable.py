@@ -99,7 +99,7 @@ class TimetablesResource:
             start_date=metadata["start"],
             end_date=metadata["end"],
         )
-        lessongroups = []
+        groups: list[campus.model.LessonGroup] = []
         members = []
         entries = []
         
@@ -108,7 +108,7 @@ class TimetablesResource:
                 timetable_id=timetable_meta.id,
                 label = lessongroup["label"]
             )
-            lessongroups.append(lg)
+            groups.append(lg)
             for ade_participant in lessongroup["members"]:
                 member = campus.model.LessonGroupMember(
                     timetable_id=timetable_meta.id,
@@ -140,7 +140,7 @@ class TimetablesResource:
                 timetable_entry_storage.insert_one(
                     entry.to_storage()
                 )
-            for lessongroup in lessongroups:
+            for lessongroup in groups:
                 timetable_lessongroup_table.insert_one(
                     lessongroup.to_storage()
                 )
