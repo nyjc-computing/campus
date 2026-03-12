@@ -19,6 +19,9 @@ import os
 from datetime import datetime, timedelta
 from typing import Any
 
+import boto3
+from botocore.config import Config
+
 from campus.storage import errors
 from campus.storage.objects.interface import BucketInterface, ObjectMetadata
 
@@ -82,29 +85,19 @@ class RailwayBucket(BucketInterface):
             boto3 S3 client configured for Railway endpoint
         """
         if self._s3_client is None:
-            try:
-                import boto3
-                from botocore.config import Config
+            # Configure botocore for Railway
+            config = Config(
+                region_name=self._region,
+                retries={"max_attempts": 3, "mode": "adaptive"},
+            )
 
-                # Configure botocore for Railway
-                config = Config(
-                    region_name=self._region,
-                    retries={"max_attempts": 3, "mode": "adaptive"},
-                )
-
-                self._s3_client = boto3.client(
-                    "s3",
-                    endpoint_url=self._endpoint,
-                    aws_access_key_id=self._access_key,
-                    aws_secret_access_key=self._secret_key,
-                    config=config,
-                )
-            except ImportError as e:
-                raise ImportError(
-                    "boto3 is required for Railway bucket storage. "
-                    "Install it with: pip install boto3"
-                ) from e
-
+            self._s3_client = boto3.client(
+                "s3",
+                endpoint_url=self._endpoint,
+                aws_access_key_id=self._access_key,
+                aws_secret_access_key=self._secret_key,
+                config=config,
+            )
         return self._s3_client
 
     def _full_key(self, key: str) -> str:
