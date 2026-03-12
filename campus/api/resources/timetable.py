@@ -69,60 +69,80 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
     
-    def new(self, **fields: typing.Any) -> campus.model.Timetable:
-        """Create a new timetable with metadata and entries."""
-        timetable = campus.model.Timetable(
-            filename=fields["metadata"]["filename"],
-            start_date=fields["metadata"]["start"],
-            end_date=fields["metadata"]["end"],
-            entries = []
+    def new(
+            self,
+            metadata: dict[str, typing.Any],
+            lessongroups: typing.List[dict[str, typing.Any]],
+    ) -> campus.model.Timetable:
+        """Create a new timetable with metadata and entries.
+
+        `lessongroups` is a list of dicts following the schema:
+        - label [str]
+        - members list[str]
+        - entries list[dict]
+
+        Each entry has:
+        - venue Optional[str]
+        - weekday [str]
+        - timeslot [str]
+        """
+        timetable_meta = campus.model.TimetableMetadata(
+            filename=metadata["filename"],
+            start_date=metadata["start"],
+            end_date=metadata["end"],
         )
-
-        data = fields.get("data", {})
-
         lessongroups = []
         members = []
         entries = []
         
-        for lessongroup in data.get("lessongroups", []):
+        for lessongroup in lessongroups:
             lg = campus.model.LessonGroup(
-                timetable_id=timetable.id,
+                timetable_id=timetable_meta.id,
                 label = lessongroup["label"]
             )
             lessongroups.append(lg)
-
-              
             for ade_participant in lessongroup["members"]:
                 member = campus.model.LessonGroupMember(
-                    timetable_id=timetable.id,
+                    timetable_id=timetable_meta.id,
                     lessongroup_id=lg.id,
                     ade_participant=ade_participant
                 )
                 members.append(member)
-            
-            for entry_data in lessongroup.get("entries", []):
+            for entry_data in lessongroup["entries"]:
                 entry = campus.model.TimetableEntry(
-                    timetable_id=timetable.id,
+                    timetable_id=timetable_meta.id,
                     lessongroup_id=lg.id,
                     weekday = entry_data["weekday"],
                     timeslot = entry_data["timeslot"],
                     venue = entry_data["venue"],
                 )
                 entries.append(entry)
-        
-        timetable.entries = entries
 
+        timetable = campus.model.Timetable(
+            id=timetable_meta.id,
+            filename=timetable_meta.filename,
+            start_date=timetable_meta.start_date,
+            end_date=timetable_meta.end_date,
+            entries=entries,
+        )
         try:
-            timetable_collection.insert_one(timetable.to_storage())
+            # TODO: Atomic transactions across multiple storage objects
+            timetable_collection.insert_one(timetable_meta.to_storage())
             for entry in entries:
-                timetable_entry_storage.insert_one(entry.to_storage())
+                timetable_entry_storage.insert_one(
+                    entry.to_storage()
+                )
             for lessongroup in lessongroups:
                 timetable_lessongroup_table.insert_one(
+                    lessongroup.to_storage()
+                )
             for member in members:
-                timetable_lessongroupmembers_table.insert_one(member.to_storage())
+                timetable_lessongroupmembers_table.insert_one(
+                    member.to_storage()
+                )
         except campus.storage.errors.StorageError as e:
+            # TODO: transaction rollback
             raise api_errors.InternalError.from_exception(e) from e
-    
         return timetable
 
     def get(self, timetable_id: schema.CampusID) -> campus.model.Timetable:
