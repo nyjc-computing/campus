@@ -66,10 +66,9 @@ class TimetablesResource:
         # Use this to update the metadata doc
         # timetable_collection.update_by_id("@metadata", {"current": ...})
 
-
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         return TimetableResource(timetable_id)
-    
+
     def list(self, **filters: typing.Any) -> list[campus.model.TimetableMetadata]:
         """List timetables matching filters."""
         try:
