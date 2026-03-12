@@ -4,19 +4,20 @@ Timetable resource for Campus API.
 """
 
 import typing
+
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
 import campus.model
-from campus.model import timetable
 import campus.storage
 from campus.storage.documents.interface import PK
 
-timetable_lessongroup_collection = campus.storage.get_collection("timetable_lessongroup")
+timetable_lessongroup_table = campus.storage.get_collection("timetable_lessongroup")
 timetable_lessongroupmembers_table = campus.storage.get_table("timetable_lessongroupmembers")
+
 timetable_entry_storage = campus.storage.get_collection("timetable_entries")
 timetable_collection = campus.storage.get_collection("timetables")
-timetable_table = campus.storage.get_table("timetables") 
+
 
 def _from_record(record: dict) -> campus.model.TimetableMetadata:
     return campus.model.TimetableMetadata(
@@ -116,7 +117,7 @@ class TimetablesResource:
             for entry in entries:
                 timetable_entry_storage.insert_one(entry.to_storage())
             for lessongroup in lessongroups:
-                timetable_lessongroup_collection.insert_one(lessongroup.to_storage())
+                timetable_lessongroup_table.insert_one(
             for member in members:
                 timetable_lessongroupmembers_table.insert_one(member.to_storage())
         except campus.storage.errors.StorageError as e:
@@ -231,7 +232,7 @@ class TimetableResource:
                 )
             timetable_entry_storage.delete_matching({"timetable_id": self.timetable_id})
             timetable_collection.delete_by_id(self.timetable_id)
-            timetable_lessongroup_collection.delete_matching({"timetable_id": self.timetable_id})
+            timetable_lessongroup_table.delete_matching({"timetable_id": self.timetable_id})
             timetable_lessongroupmembers_table.delete_matching({"timetable_id": self.timetable_id})
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
