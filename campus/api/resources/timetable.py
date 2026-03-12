@@ -57,7 +57,16 @@ class TimetablesResource:
     def init_storage() -> None:
         """Initialize storage."""
         timetable_collection.init_collection()
-    
+        # Use a metadata document to store current & next
+        timetable_collection.insert_one({
+            PK: "@metadata",
+            "current": None,
+            "next": None
+        })
+        # Use this to update the metadata doc
+        # timetable_collection.update_by_id("@metadata", {"current": ...})
+
+
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         return TimetableResource(timetable_id)
     
