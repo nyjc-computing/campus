@@ -158,6 +158,12 @@ class GoogleAuthProxy(base.AuthProxy):
                 "Domain not allowed",
                 domain=user_id.domain
             )
+        # Ensure user exists (auto-provision)
+        resources.user.get_or_create(
+            user_id=user_id,
+            email=userinfo["email"],
+            name=userinfo.get("name", "")
+        )
         # Store/update token
         credentials = resources.credentials[PROVIDER][user_id].update(
             client_id=self._CLIENT_ID,
