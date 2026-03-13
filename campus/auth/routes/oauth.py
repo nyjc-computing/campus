@@ -401,6 +401,17 @@ def device_verification(user_code: str | None = None):
     status = request.args.get('status')
     error_code = request.args.get('error_code')
 
+    # Error messages for no-JS fallback (must match JavaScript error_messages)
+    error_messages = {
+        'invalid_code': 'The user code you entered is invalid. Please check and try again.',
+        'expired': 'This user code has expired. Please restart the authentication process on your CLI application to get a new code.',
+        'already_used': 'This user code has already been used. Please restart the authentication process on your CLI application to get a new code.',
+        'denied': 'The authorization was denied. If you did not intend to deny access, you can restart the process on your CLI application.',
+        'not_logged_in': 'You must be logged in to authorize a device. Please log in first.',
+        'network_error': 'Network error. Please check your connection and try again.',
+        'unknown': 'An unexpected error occurred. Please try again.'
+    }
+
     # Escape user_code for safe HTML attribute use
     safe_user_code = html.escape(user_code) if user_code else None
 
@@ -883,6 +894,7 @@ def device_verification(user_code: str | None = None):
         safe_user_code=safe_user_code,
         status=status,
         error_code=error_code,
+        error_messages=error_messages,
     )
 
 
