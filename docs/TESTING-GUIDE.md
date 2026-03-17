@@ -29,6 +29,29 @@ python -m unittest tests.unit.auth.test_resources -v
 .venv/bin/python tests/run_tests.py unit
 ```
 
+### How `.venv/bin/python` Works
+
+If you're new to Python virtual environments, here's what's happening:
+
+| Command | What It Does | Runs in venv? |
+|---------|--------------|---------------|
+| `python tests/run_tests.py` | Uses system Python, then auto-detects `.venv` | Yes (via test runner) |
+| `.venv/bin/python tests/run_tests.py` | Directly executes the venv's Python | Yes |
+| `poetry run python tests/run_tests.py` | Poetry finds venv, runs Python | Yes |
+| `source .venv/bin/activate` | Modifies shell to use venv for all commands | Yes (until deactivate) |
+
+**Key insight:** `.venv/bin/python` **IS** the virtual environment's Python interpreter. When you run it directly:
+- It uses packages installed in `.venv/lib/python3.11/site-packages/`
+- No `activate` step needed
+- Same as what `poetry run python` does internally (just faster, no Poetry lookup)
+
+The test runner (`tests/run_tests.py`) checks for `.venv/bin/python` first, then falls back to system Python. This means you can run tests with either:
+```bash
+# Both work identically in this project
+python tests/run_tests.py unit
+.venv/bin/python tests/run_tests.py unit
+```
+
 ## Test Types
 
 ### Unit Tests
