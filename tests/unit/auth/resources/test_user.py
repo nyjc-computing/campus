@@ -28,10 +28,15 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         """Should create a new user record when user_id doesn't exist in
         database.
         """
-        # TODO: Arrange: Set up test parameters
-        #   user_id = schema.UserID("new.user@example.com")
-        #   email = "new.user@example.com"
-        #   name = "New User"
+        user_id = schema.UserID("New_User")
+        email = "new_user@gmail.com"
+        name = "New_User"
+        self.resource.get_or_create(user_id, email, name)
+        user_resource_object = self.resource.user_storage.get(user_id)
+        self.assertIsNotNone(user_resource_object)
+        self.assertEqual(user_resource_object.email, email)
+        self.assertEqual(user_resource_object.name, name)
+
         # Act: Call self.resource.get_or_create(user_id, email, name)
         # Assert: Verify user was created by fetching it from user_storage
         #        Verify email and name match what was passed
