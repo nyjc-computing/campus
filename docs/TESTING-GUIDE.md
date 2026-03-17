@@ -141,8 +141,8 @@ python tests/run_tests.py integration
 # Sanity checks
 python tests/run_tests.py sanity
 
-# Type checks
-python tests/run_tests.py type
+# Type checks (requires Poetry for pyright environment)
+poetry run python tests/run_tests.py type
 
 # Package-specific tests
 python tests/run_tests.py unit --module auth
@@ -152,6 +152,7 @@ python tests/run_tests.py unit --module api
 **Environment notes:**
 - Works with activated venv: `source .venv/bin/activate`
 - Works with configured PATH (pyenv + pipx)
+- **Type checks require `poetry run`** (pyright needs Poetry's environment to find packages)
 - Or use Poetry wrapper: `poetry run python tests/run_tests.py unit`
 
 ### Using unittest Directly

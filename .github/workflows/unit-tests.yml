@@ -83,4 +83,4 @@ jobs:
       - name: Install Campus Suite
         run: poetry install --no-root
       - name: Run Type Checks
-        run: .venv/bin/python tests/run_tests.py type
+        run: poetry run python tests/run_tests.py type
