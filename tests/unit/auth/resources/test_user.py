@@ -37,10 +37,7 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         self.assertEqual(user_resource_object.email, email)
         self.assertEqual(user_resource_object.name, name)
 
-        # Act: Call self.resource.get_or_create(user_id, email, name)
-        # Assert: Verify user was created by fetching it from user_storage
-        #        Verify email and name match what was passed
-
+    
     def test_get_or_create_returns_existing_user_when_exists(self):
         """Should return existing user record without creating
         duplicate.
