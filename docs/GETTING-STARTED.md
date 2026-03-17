@@ -32,10 +32,30 @@ For those deploying or using Campus:
 ## Installation
 
 ### Prerequisites
-- Python 3.11 or higher
-- Poetry for dependency management
+- **pyenv** for Python version management
+- **Python 3.11** (managed via pyenv)
+- **pipx** for installing Poetry
+- **Poetry** for dependency management (installed via pipx)
 - PostgreSQL (for auth service database)
 - MongoDB (optional, for alternative storage backend)
+
+### Environment Setup
+
+```bash
+# 1. Install pyenv (Arch: pacman -S python-pyenv)
+# 2. Install Python 3.11
+pyenv install 3.11.11
+pyenv local 3.11.11
+
+# 3. Install Poetry via pipx (user-level, isolated)
+pipx install --python python3.11 poetry
+
+# 4. Configure PATH in ~/.bashrc:
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/shims:$PATH"  # pyenv shims first
+export PATH="$HOME/.local/bin:$PATH"    # pipx binaries
+eval "$(pyenv init - bash)"
+```
 
 ### Quick Setup
 
@@ -48,6 +68,8 @@ cd campus
 poetry install
 
 # Run the application
+.venv/bin/python main.py
+# OR
 poetry run python main.py
 ```
 

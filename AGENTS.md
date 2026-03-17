@@ -4,32 +4,64 @@ Essential reminders for working on the Campus codebase. This guide applies to bo
 
 ## Critical Reminders (Read First!)
 
-### 1. Use Poetry for All Python Commands
+### 1. Python Environment Setup
 
-Campus uses Poetry for dependency management. Never run Python directly.
+Campus uses pyenv for Python version management and pipx for Poetry installation.
 
+**Prerequisites:**
+- pyenv with Python 3.11 installed
+- pipx with Poetry installed
+- `~/.local/bin` and pyenv shims in PATH (configured in `~/.bashrc`)
+
+**Installation:**
 ```bash
-# Correct
-poetry run python main.py
-poetry run python tests/run_tests.py unit
+# Install pyenv (via package manager)
+# Install Python 3.11
+pyenv install 3.11.11
+pyenv local 3.11.11
 
-# Incorrect
-python main.py
-python -m unittest discover tests
+# Install Poetry via pipx (user-level, isolated)
+pipx install --python python3.11 poetry
 ```
 
-### 2. Use `run_tests.py` for Testing
+### 2. Running Python Commands
+
+**Option A: Direct with .venv (Recommended for CI/Codespaces)**
+```bash
+# Install dependencies
+poetry install
+
+# Run tests or main script
+.venv/bin/python tests/run_tests.py unit
+.venv/bin/python main.py
+```
+
+**Option B: Via Poetry (Traditional)**
+```bash
+# Same commands using Poetry wrapper
+poetry run python tests/run_tests.py unit
+poetry run python main.py
+```
+
+Both options work. The test runner (`tests/run_tests.py`) automatically detects and uses `.venv/bin/python` when available.
+
+### 3. Use `run_tests.py` for Testing
 
 The only supported test entrypoint is `tests/run_tests.py`. It handles environment setup, cleanup, and isolation. Running tests directly may produce false positives.
 
 ```bash
 # Run all tests
-poetry run python tests/run_tests.py all
+python tests/run_tests.py all
 
 # Run specific category
-poetry run python tests/run_tests.py unit
-poetry run python tests/run_tests.py integration
+python tests/run_tests.py unit
+python tests/run_tests.py integration
 ```
+
+Note: These commands work when either:
+1. You've activated the venv: `source .venv/bin/activate`
+2. Your PATH is configured (pyenv + pipx setup)
+3. Poetry is being used: `poetry run python tests/run_tests.py unit`
 
 ### 3. Campus Uses `unittest`, Not pytest
 
