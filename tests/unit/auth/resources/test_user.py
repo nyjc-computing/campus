@@ -32,7 +32,7 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         email = "new_user@gmail.com"
         name = "New_User"
         self.resource.get_or_create(user_id, email, name)
-        user_resource_object = self.resource.__getitem__(user_id).get()
+        user_resource_object = self.resource[user_id].get()
         self.assertIsNotNone(user_resource_object)
         self.assertEqual(user_resource_object.email, email)
         self.assertEqual(user_resource_object.name, name)
