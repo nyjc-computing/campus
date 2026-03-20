@@ -8,6 +8,7 @@ __all__ = [
     "Array",
     "Boolean",
     "CampusID",
+    "Date",
     "DateTime",
     "Email",
     "Integer",
@@ -26,6 +27,7 @@ from .base import (
 from .openapi import (
     Array,
     Boolean,
+    Date,
     DateTime,
     Email,
     Integer,
