@@ -15,6 +15,7 @@ __all__ = [
     "Number",
     "Object",
     "String",
+    "Time",
     "Url",
     "UserID",
 ]
@@ -34,6 +35,7 @@ from .openapi import (
     Number,
     Object,
     String,
+    Time,
     Url,
 )
 
