@@ -235,6 +235,43 @@ class Email(String):
         return str(self).split("@")[1]
 
 
+class Time(String):
+    """HHMM (24-hr) representation of time, without seconds or microseconds.
+
+    `time` is not a defined string format in OpenAPI 3, but `format` is an open value
+    so we define time as a string format.
+    """
+
+    def __new__(cls, value: str):
+        if (
+                len(value) != 4
+                or not value.isascii()
+                or not value.isdecimal()
+        ):
+            raise ValueError(f"{value!r} is not a valid HHMM-format string")
+        hh, mm = value[:2], value[2:]
+        if int(hh) >= 24 or int(mm) >= 60:
+            raise ValueError(f"{value!r} does not represent a HHMM time earlier than 2359")
+        return super().__new__(cls, value)
+
+    def __repr__(self) -> str:
+        return f"Time('{self!s}')"
+
+    def to_time(self) -> utc_time.time:
+        """Convert the DateTime string to a UTC date object."""
+        return utc_time.time(hour=self.hour, minute=self.minute)
+
+    @property
+    def hour(self) -> int:
+        """hour as an integer"""
+        return int(self[:2])
+
+    @property
+    def minute(self) -> int:
+        """minute as an integer"""
+        return int(self[2:])
+
+
 class Url(String):
     """Emulates Python str behavior for URLs."""
 
