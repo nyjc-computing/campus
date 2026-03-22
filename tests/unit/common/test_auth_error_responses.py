@@ -191,5 +191,125 @@ class TestOAuthErrorDetails(unittest.TestCase):
         self.assertEqual(response["error"]["details"]["attempt_count"], 3)
 
 
+class TestAuthorizationErrorHandler(unittest.TestCase):
+    """handle_authorization_error must return appropriate responses based on request type."""
+
+    def setUp(self):
+        """Set up Flask app for testing error handler."""
+        # Lazy import to avoid storage initialization issues
+        from campus.common.errors import init_app
+        from campus.common.errors.auth_errors import (
+            AuthorizationError,
+            UnauthorizedClientError,
+        )
+        from campus.common import devops
+
+        import flask
+        self.app = flask.Flask(__name__)
+        init_app(self.app)
+        self.app.config["TESTING"] = True
+        self.UnauthorizedClientError = UnauthorizedClientError
+        self.AuthorizationError = AuthorizationError
+        self.devops = devops
+
+        # Save original ENV
+        self.original_env = os.environ.get("ENV")
+
+    def tearDown(self):
+        """Restore original ENV."""
+        if self.original_env:
+            os.environ["ENV"] = self.original_env
+        elif "ENV" in os.environ:
+            del os.environ["ENV"]
+
+    def test_json_accept_header_returns_json_error(self):
+        """API requests with JSON Accept header return JSON error response."""
+        err = self.UnauthorizedClientError("Invalid credentials")
+
+        with self.app.test_request_context(
+            "/auth/v1/sessions/test",
+            headers={"Accept": "application/json"}
+        ):
+            from campus.common.errors import handle_authorization_error
+            response, status_code = handle_authorization_error(err)
+
+            self.assertEqual(status_code, 400)
+            self.assertIn("error", response)
+            self.assertEqual(response["error"]["code"], "AUTH_UNAUTHORIZED_CLIENT")
+            self.assertEqual(response["error"]["message"], "Invalid credentials")
+
+    def test_api_path_returns_json_error(self):
+        """API requests under /auth/v1/* return JSON error response."""
+        err = self.UnauthorizedClientError("Invalid credentials")
+
+        with self.app.test_request_context(
+            "/auth/v1/clients/test",
+            headers={"Accept": "text/html"}  # Not JSON, but path is API
+        ):
+            from campus.common.errors import handle_authorization_error
+            response, status_code = handle_authorization_error(err)
+
+            self.assertEqual(status_code, 400)
+            self.assertIn("error", response)
+            self.assertEqual(response["error"]["code"], "AUTH_UNAUTHORIZED_CLIENT")
+
+    def test_oauth_flow_with_redirect_uri_returns_redirect(self):
+        """OAuth browser flows with redirect_uri return HTTP redirect."""
+        err = self.AuthorizationError(
+            "Invalid credentials",
+            redirect_uri="https://example.com/callback"
+        )
+
+        with self.app.test_request_context(
+            "/oauth/authorize",  # Not an API path
+            headers={"Accept": "text/html"}
+        ):
+            from campus.common.errors import handle_authorization_error
+            response = handle_authorization_error(err)
+
+            # Should be a Flask redirect response
+            self.assertIn("location", response.headers)
+            self.assertIn("error=invalid_request", response.headers["location"])
+
+    def test_ambiguous_request_in_development_raises_400(self):
+        """Ambiguous requests (no JSON Accept, no API path, no redirect_uri) raise 400 in development."""
+        os.environ["ENV"] = "development"
+
+        err = self.UnauthorizedClientError("Invalid credentials")
+
+        with self.app.test_request_context(
+            "/some/unknown/path",
+            headers={"Accept": "text/html"}
+        ):
+            from campus.common.errors import handle_authorization_error
+            from werkzeug.exceptions import BadRequest
+
+            with self.assertRaises(BadRequest) as context:
+                handle_authorization_error(err)
+
+            self.assertIn("Ambiguous authorization error", str(context.exception))
+
+    def test_ambiguous_request_in_production_returns_json(self):
+        """Ambiguous requests default to JSON in production for safety."""
+        # Use devops.PRODUCTION constant for reliable check
+        original = self.devops.ENV
+        self.devops.ENV = self.devops.PRODUCTION
+
+        try:
+            err = self.UnauthorizedClientError("Invalid credentials")
+
+            with self.app.test_request_context(
+                "/some/unknown/path",
+                headers={"Accept": "text/html"}
+            ):
+                from campus.common.errors import handle_authorization_error
+                response, status_code = handle_authorization_error(err)
+
+                self.assertEqual(status_code, 400)
+                self.assertIn("error", response)
+        finally:
+            self.devops.ENV = original
+
+
 if __name__ == "__main__":
     unittest.main()
