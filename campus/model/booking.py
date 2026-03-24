@@ -7,17 +7,12 @@ from campus.common.utils import uid
 from .base import Model
 from . import constraints
 
-# NOTE: Assumes reusing the same object is not an issue
-unique_field = field(metadata={
-    "constraints": [constraints.UNIQUE],
-})
-
 @dataclass(eq=False, kw_only=True)
 class VenueBooking(Model):
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("booking", length=8)
     ))
-    user_id: schema.CampusID
+    user_id: schema.UserID
     venue_id: schema.CampusID
     description: schema.String
     start_time: schema.Time
@@ -32,4 +27,4 @@ class Venue(Model):
         lambda: uid.generate_category_uid("venue", length=8)
     ))
     venue_name: schema.String
-    #NOTE: Other model fields TBC
+    # NOTE: Other model fields TBC
