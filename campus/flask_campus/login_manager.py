@@ -11,13 +11,14 @@ import werkzeug
 
 import campus_python
 from campus import flask_campus
+from campus.common.utils import url
 
 
-def _is_safe_redirect(url: str) -> bool:
+def _is_safe_redirect(redirect_url: str) -> bool:
     """Ensure URL is safe for redirect (prevents open redirect attacks)."""
     # Only allow relative URLs starting with /
     # Reject protocol-relative URLs (//)
-    return url.startswith('/') and not url.startswith('//')
+    return redirect_url.startswith('/') and not redirect_url.startswith('//')
 
 
 def _create_bp(
@@ -50,7 +51,8 @@ def _create_bp(
         flask.session['login_next'] = next or flask.url_for(default_endpoint)
 
         # Use /finalize_login as the OAuth callback
-        callback_url = flask.url_for('auth.finalize_login', _external=True)
+        # Use url.full_url_for to get proper public URL (not localhost/internal host)
+        callback_url = url.full_url_for('auth.finalize_login')
         return campus.auth.authorize(target=callback_url)
 
 
