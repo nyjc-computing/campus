@@ -66,11 +66,11 @@ def raise_from_json(error_json: dict[str, str]) -> NoReturn:
 
 class AuthorizationError(base.OAuthError):
     """OAuth Authorization Errors.
-    
+
     From RFC 6749 Section 4.1.2.1
     https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
     """
-    error: base.AuthResponseErrorType  # type: ignore
+    error: base.AuthResponseErrorType = "invalid_request"  # type: ignore
     error_uri = None
     redirect_uri: str | None
 
@@ -82,8 +82,6 @@ class AuthorizationError(base.OAuthError):
     ) -> None:
         if "redirect_uri" in details:
             redirect_uri = details.pop("redirect_uri")
-        else:
-            redirect_uri = None
         super().__init__(error_description, **details)
         self.redirect_uri = redirect_uri
 
