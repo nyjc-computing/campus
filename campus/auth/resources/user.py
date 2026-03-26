@@ -85,27 +85,26 @@ class UsersResource:
 
     def get_or_create(
             self,
-            user_id: schema.UserID,
-            email: str,
+            email: schema.Email,
             name: str,
     ) -> campus.model.User:
-        """Get a user by ID, creating them if they don't exist.
+        """Get a user by email, creating them if they don't exist.
 
         This is the primary method for user auto-provisioning during
         OAuth login flows.
 
         Args:
-            user_id: The user identifier (email)
-            email: User's email address
+            email: User's email address (used as user_id)
             name: User's display name
 
         Returns:
             User instance (either existing or newly created)
         """
+        user_id = schema.UserID(email)
         try:
             return self[user_id].get()
         except api_errors.NotFoundError:
-            return self.new(email=schema.Email(email), name=name)
+            return self.new(email=email, name=name)
 
 
 class UserResource:
