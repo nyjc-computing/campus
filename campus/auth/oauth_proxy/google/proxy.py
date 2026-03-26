@@ -161,7 +161,6 @@ class GoogleAuthProxy(base.AuthProxy):
         user_id = schema.UserID(userinfo["email"])
         # Ensure user exists (auto-provision)
         resources.user.get_or_create(
-            user_id=user_id,
             email=user_email,
             name=userinfo.get("name", "")
         )
