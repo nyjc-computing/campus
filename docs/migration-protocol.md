@@ -299,13 +299,14 @@ class MigrationState:
 
     def init_state_table(self):
         """Initialize the _migrations table if not exists."""
-        # Uses init_from_schema() - allowed for system table
         sql = '''CREATE TABLE IF NOT EXISTS "_migrations" (
             "id" TEXT PRIMARY KEY,
             "description" TEXT NOT NULL,
             "storage_type" TEXT NOT NULL,
+            "status" TEXT NOT NULL,
             "applied_at" TIMESTAMP NOT NULL,
-            "rollback_at" TIMESTAMP NULL
+            "rollback_at" TIMESTAMP NULL,
+            "error_message" TEXT NULL
         );'''
         from campus.storage.tables.backend.postgres import PostgreSQLTable
         table = PostgreSQLTable("_migrations")
@@ -317,25 +318,40 @@ class MigrationState:
             "id": revision_id,
             "description": description,
             "storage_type": storage_type,
+            "status": "applied",
             "applied_at": datetime.now(UTC).isoformat(),
-            "rollback_at": None
+            "rollback_at": None,
+            "error_message": None
+        })
+
+    def record_failure(self, revision_id: str, description: str, storage_type: str, error: str):
+        """Record a failed migration attempt."""
+        self._table.insert_one({
+            "id": revision_id,
+            "description": description,
+            "storage_type": storage_type,
+            "status": "failed",
+            "applied_at": datetime.now(UTC).isoformat(),
+            "rollback_at": None,
+            "error_message": error
         })
 
     def get_applied_migrations(self) -> set[str]:
-        """Get set of applied migration IDs."""
-        return {row["id"] for row in self._table.get_matching({})}
+        """Get set of successfully applied migration IDs."""
+        return {row["id"] for row in self._table.get_matching({"status": "applied"})}
 
     def mark_rollback(self, revision_id: str):
         """Mark a migration as rolled back."""
         self._table.update_by_id(revision_id, {
+            "status": "rolled_back",
             "rollback_at": datetime.now(UTC).isoformat()
         })
 
     def is_applied(self, revision_id: str) -> bool:
-        """Check if a migration has been applied."""
+        """Check if a migration has been successfully applied."""
         try:
-            self._table.get_by_id(revision_id)
-            return True
+            row = self._table.get_by_id(revision_id)
+            return row["status"] == "applied"
         except NotFoundError:
             return False
 ```
