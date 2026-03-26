@@ -571,12 +571,66 @@ def create_app():
     return app
 ```
 
-### Pre-Deployment Checklist
+### Pre-Deployment Checks (Built into MigrationRunner)
 
-1. **Backup database** before running migrations in production
-2. **Test migrations** on staging with production-like data
-3. **Review downgrade logic** - ensure rollback path exists
-4. **Monitor logs** via Yapper events for migration completion
+The migration runner should validate before executing:
+
+```python
+# campus/storage/migrations/runner.py
+
+class MigrationRunner:
+    """Execute and track migrations."""
+
+    def pre_flight_checks(self) -> list[str]:
+        """Validate environment before running migrations.
+        Returns list of warnings (empty if all checks pass).
+        """
+        warnings = []
+
+        # 1. Check if running in production
+        if os.getenv("ENV") == "production":
+            warnings.append("Running in PRODUCTION - ensure database backup exists")
+
+        # 2. Verify downgrade() exists for applied migrations
+        for mid in self.state.get_applied_migrations():
+            module = self._load_migration_module(mid)
+            if not hasattr(module, 'downgrade'):
+                warnings.append(f"Migration {mid} has no downgrade()")
+
+        # 3. Check for pending migrations
+        applied = self.state.get_applied_migrations()
+        available = {m["id"] for m in self.discover_migrations()}
+        pending = available - applied
+        if pending:
+            warnings.append(f"Pending migrations: {sorted(pending)}")
+
+        return warnings
+
+    def upgrade(self, target: str | None = None):
+        """Apply pending migrations with pre-flight checks."""
+        # Run pre-flight checks
+        for warning in self.pre_flight_checks():
+            print(f"⚠️  {warning}")
+
+        # Confirm if in production
+        if os.getenv("ENV") == "production":
+            response = input("Continue with migration? (yes/no): ")
+            if response.lower() != "yes":
+                raise RuntimeError("Migration cancelled by user")
+
+        # ... rest of upgrade logic
+```
+
+### Deployment Checklist
+
+| Check | Built-in | Manual |
+|-------|----------|--------|
+| Database backup exists | ⚠️ Warning only | ✅ Verify backup completed |
+| Downgrade logic exists | ✅ Validates in code | |
+| Pending migrations count | ✅ Shows in pre-flight | |
+| Test on staging first | | ✅ PR validation required |
+| Monitor Yapper events | ✅ Auto-emits events | ✅ Confirm delivery |
+| Health check after deploy | | ✅ Verify application status |
 
 ---
 
