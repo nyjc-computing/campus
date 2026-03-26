@@ -148,29 +148,22 @@ Each migration is a Python module with:
 4. **downgrade()** - Reverse transformation
 5. **Storage type** - One of: `table`, `document`, `object`
 
-### Accessing Storage: Type-Safe vs String-Based
+### Accessing Storage in Migrations
 
-**Option 1: Import from resource module (type-safe, recommended)**
+Migrations should import from resource modules for type safety:
 
 ```python
 from campus.api.resources import SubmissionsResource
 
 def upgrade():
     """Access collection through resource - no typos possible."""
-    submissions = SubmissionsResource._storage  # Internal access
+    submissions = SubmissionsResource._storage  # Internal storage access
 ```
 
-**Option 2: Direct string access (simple, common in migrations)**
-
-```python
-from campus.storage import get_collection
-
-def upgrade():
-    """Direct access - be careful with typos."""
-    submissions = get_collection("submissions")
-```
-
-> **Note:** Using resource imports (`campus.api.resources.*`) provides type safety and prevents typos. Direct string access is simpler but requires careful testing.
+**Benefits:**
+- ✅ No typos in collection/table names
+- ✅ IDE autocomplete and type checking
+- ✅ Single source of truth for storage configuration
 
 ### Example Migration
 
@@ -183,7 +176,7 @@ Storage Type: document
 """
 
 from datetime import datetime, UTC
-from campus.storage import get_collection
+from campus.api.resources import SubmissionsResource
 
 
 REVISION_ID = "003"
@@ -193,7 +186,7 @@ STORAGE_TYPE = "document"
 
 def upgrade():
     """Add created_at field to existing responses."""
-    submissions = get_collection("submissions")
+    submissions = SubmissionsResource._storage
 
     # Get all submissions with responses
     all_docs = submissions.get_matching({})
@@ -213,7 +206,7 @@ def upgrade():
 
 def downgrade():
     """Remove created_at field from responses."""
-    submissions = get_collection("submissions")
+    submissions = SubmissionsResource._storage
 
     all_docs = submissions.get_matching({})
 
