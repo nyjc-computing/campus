@@ -227,6 +227,20 @@ def downgrade():
         submissions.update_by_id(doc["id"], {"responses": updated_responses})
 ```
 
+### One-Step Revision Policy
+
+Each migration's `upgrade()` and `downgrade()` functions transform **exactly one revision step**.
+
+- `upgrade()` transforms schema from version *N-1* to *N*
+- `downgrade()` transforms schema from version *N* to *N-1*
+- Never skip versions - migrations run sequentially
+
+This ensures:
+- Predictable transformation chain
+- Easy rollback of any single migration
+- Clear dependency order
+```
+
 ---
 
 ## Migration State Tracking
