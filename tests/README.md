@@ -3,12 +3,27 @@
 
 > **Comprehensive testing guide:** See [docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md) for complete testing documentation including what we test, how tests are organized, and how to write new tests.
 
+## Cross-Platform Support
+
+The test runner and infrastructure supports **Windows, Linux, and macOS** with automatic platform detection:
+
+- **Windows**: Uses `.venv/Scripts/python.exe` and `.venv/Scripts/pyright.exe`
+- **Linux/macOS**: Uses `.venv/bin/python` and `.venv/bin/pyright`
+- Platform detection is automatic - no manual configuration needed
+
+The `poetry run` pattern works identically across all platforms:
+```bash
+# Works identically on Windows, Linux, and macOS
+poetry run python tests/run_tests.py unit
+poetry run python tests/run_tests.py all
+```
+
 ## Critical Information
 
 - The test suite **only uses the standard library `unittest` module**—no other test dependencies are required or supported.
 - **All tests must be run using the Poetry environment.** Do not create or activate new virtual environments manually.
-- **Recommended:** Use `poetry run` before any test command, or activate the environment with `poetry shell` and then run your test commands directly.
-- **Tests should ideally be invoked through `tests/run_tests.py`** for consistent environment and options.
+- **Cross-platform compatible**: Tests run on Windows, Linux, and macOS via the test runner.
+- **Tests should ideally be invoked through `tests/run_tests.py`** for consistent environment and cross-platform executable detection.
 
 ### Poetry Usage Example
 
@@ -171,22 +186,22 @@ poetry run python tests/run_tests.py all
 Use the convenience script for common test scenarios:
 ```bash
 # Run only unit tests
-python tests/run_tests.py unit
+poetry run python tests/run_tests.py unit
 
-# Run only integration tests  
-python tests/run_tests.py integration
+# Run only integration tests
+poetry run python tests/run_tests.py integration
 
 # Run all tests (unit + integration)
-python tests/run_tests.py all
+poetry run python tests/run_tests.py all
 
 # Test specific modules
-python tests/run_tests.py unit --module auth
-python tests/run_tests.py unit --module api
-python tests/run_tests.py unit --module common
-python tests/run_tests.py integration --module auth
+poetry run python tests/run_tests.py unit --module auth
+poetry run python tests/run_tests.py unit --module api
+poetry run python tests/run_tests.py unit --module common
+poetry run python tests/run_tests.py integration --module auth
 
 # Verbose output
-python tests/run_tests.py unit -v
+poetry run python tests/run_tests.py unit -v
 ```
 
 ## More Information
