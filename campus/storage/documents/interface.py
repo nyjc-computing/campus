@@ -38,12 +38,39 @@ class CollectionInterface(ABC):
         """Insert a document into the specified collection."""
         ...
 
-    def insert_many(self, docs: list[dict]):
+    def insert_many(
+            self,
+            docs: list[dict],
+            *,
+            max_retries: int = 1
+    ) -> dict[int, Exception]:
         """Insert multiple documents into the specified collection."""
         # Concrete implementations may override this method for improved
         # performance with multiple insertions
-        for doc in docs:
-            self.insert_one(doc)
+        if not isinstance(max_retries, int) or max_retries < 0:
+            raise ValueError("max_retries must be a zero or positive integer")
+        # Use a dict as a sparse array for errors to avoid empty indices in list
+        errors = {}
+        for i, row in enumerate(docs):
+            try:
+                self.insert_one(row)
+            except Exception as e:
+                errors[i] = e
+        # Happy path
+        if not errors:
+            return errors
+        # Retry while errors remain and max_retries not reached
+        retries = 1
+        while 0 < retries <= max_retries and errors:
+            for i, e in errors.items():
+                try:
+                    self.insert_one(docs[i])
+                except Exception as e:
+                    errors[i] = e
+                else:
+                    del errors[i]
+            retries += 1
+        return errors
 
     @abstractmethod
     def update_by_id(self, doc_id: str, update: dict):
