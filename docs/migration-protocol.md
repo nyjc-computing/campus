@@ -524,21 +524,22 @@ class MigrationRunner:
 - End-user commands for interacting with Campus services
 - Example: `campus auth login`, `campus api list`
 
-**Admin CLI (`campus-admin`) = Operational control**
+**Admin CLI (`admin`) = Operational control**
 - Database migrations, health checks, configuration
-- Example: `campus-admin migrate`, `campus-admin status`
+- Example: `admin migrate`, `admin status`
 
 **Separation rationale:**
 - User CLI should not expose dangerous admin operations
 - Admin commands require different authentication/authorization
 - Clear boundary prevents accidental misuse
+- Separate package/project, not bundled with campus
 
 ### Admin CLI Implementation
 
-Create separate `campus-admin` package:
+Create separate `admin` package:
 
 ```python
-# campus-admin/main.py
+# admin/main.py
 
 def migrate(target: str | None = None):
     """Run database migrations."""
@@ -589,79 +590,20 @@ def status():
 - Status check: query migration state without starting app
 - Recovery: repair failed migration states
 
-### CLI Implementation
-
-Add to `campus` CLI via `main.py`:
-
-```python
-# main.py additions
-
-def migrate(target: str | None = None):
-    """Run database migrations."""
-    from campus.storage.migrations import MigrationRunner
-    from pathlib import Path
-
-    migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
-    runner = MigrationRunner(migrations_dir)
-    runner.upgrade(target)
-    print("Migration complete.")
-
-
-def rollback(target: str):
-    """Rollback to a specific migration."""
-    from campus.storage.migrations import MigrationRunner
-    from pathlib import Path
-
-    migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
-    runner = MigrationRunner(migrations_dir)
-    runner.downgrade(target)
-    print("Rollback complete.")
-
-
-def status():
-    """Show current migration state."""
-    from campus.storage.migrations import MigrationState
-
-    state = MigrationState()
-    state.init_state_table()
-    applied = state.get_applied_migrations()
-
-    print(f"Applied migrations: {len(applied)}")
-    for mid in sorted(applied):
-        print(f"  ✓ {mid}")
-    print(f"Pending: compute by listing migrations/ vs applied")
-
-
-if __name__ == "__main__":
-    import sys
-    command = sys.argv[1] if len(sys.argv) >= 2 else None
-
-    if command == "migrate":
-        target = sys.argv[2] if len(sys.argv) >= 3 else None
-        migrate(target)
-    elif command == "rollback":
-        target = sys.argv[2]
-        rollback(target)
-    elif command == "status":
-        status()
-    else:
-        main(deployment=command)
-```
-
 ### Usage
 
 ```bash
 # Apply all pending migrations
-campus migrate
+admin migrate
 
 # Apply up to specific revision
-campus migrate 003
+admin migrate 003
 
 # Rollback to specific revision
-campus rollback 002
+admin rollback 002
 
 # Show migration state
-campus status
+admin status
 ```
 
 ---
@@ -895,13 +837,13 @@ def upgrade():
 
 ```bash
 # 1. Check current state
-campus migrate status
+admin status
 
 # 2. Backup production data
 pg_dump $POSTGRESDB_URI > backup_$(date +%Y%m%d).sql
 
 # 3. Rollback to safe revision
-campus rollback 002
+admin rollback 002
 
 # 4. Verify application health
 curl -f https://api.campus.nyjc.app/health || exit 1
