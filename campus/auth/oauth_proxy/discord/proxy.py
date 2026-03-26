@@ -121,12 +121,6 @@ class DiscordAuthPoxy(base.AuthProxy):
             )
         userinfo = self._oauth2.get_user_info(token.access_token)
         user_id = schema.Email(userinfo["email"])
-        # Ensure user exists (auto-provision)
-        resources.user.get_or_create(
-            user_id=user_id,
-            email=userinfo["email"],
-            name=userinfo.get("name", userinfo.get("username", ""))
-        )
         # Store/update token
         resources.credentials[PROVIDER][user_id].update(
             client_id=self._CLIENT_ID,
