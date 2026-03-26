@@ -8,6 +8,89 @@ This document defines the storage migration protocol for Campus. Migrations are 
 
 ---
 
+## Architecture Decision: Separate Admin Storage
+
+**Final Decision:** Auditing & migrations live in `campus-admin` as separate apps with their own schema and storage layer.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Campus Applications                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────────┐         ┌──────────────────┐         │
+│  │   campus.auth    │         │   campus.api     │         │
+│  │                  │         │                  │         │
+│  │  Users           │         │  Assignments     │         │
+│  │  Sessions        │         │  Submissions     │         │
+│  │  OAuth Clients   │         │  Circles         │         │
+│  │                  │         │  Timetables      │         │
+│  └────────┬─────────┘         └────────┬─────────┘         │
+│           │                            │                     │
+│           └────────────┬───────────────┘                     │
+│                        ▼                                    │
+│           ┌────────────────────────────────┐                │
+│           │   Campus Storage Layer        │                │
+│           │   (PostgreSQL + MongoDB)      │                │
+│           └────────────────────────────────┘                │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    campus-admin (Separate)                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────────┐         ┌──────────────────┐         │
+│  │   Migrations     │         │     Audit        │         │
+│  │                  │         │                  │         │
+│  │  _migrations     │         │  _audit_log      │         │
+│  │  State tracking  │         │  API traces      │         │
+│  │  Rollback        │         │  Event history   │         │
+│  └────────┬─────────┘         └────────┬─────────┘         │
+│           │                            │                     │
+│           └────────────┬───────────────┘                     │
+│                        ▼                                    │
+│           ┌────────────────────────────────┐                │
+│           │   Admin Storage Layer         │                │
+│           │   (Separate PostgreSQL DB)    │                │
+│           │   - Separate schema           │                │
+│           │   - Optimized for high volume │                │
+│           └────────────────────────────────┘                │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Separate apps** | Migrations/audit are operational concerns, not domain models |
+| **Separate storage** | Campus schema focuses on business data, admin on operational data |
+| **campus-admin package** | Clear boundary: campus = user features, admin = operational control |
+| **`admin` CLI** | Separate command-line tool for admin operations |
+
+### Benefits of Separation
+
+1. **Clear concern boundaries** - Domain models vs operational infrastructure
+2. **Independent deployment** - Admin changes don't require Campus deployment
+3. **Different storage optimization** - Admin optimized for high-volume writes, Campus for queries
+4. **Security isolation** - Admin data protected separately from user data
+5. **Development velocity** - Campus team can ship features without worrying about admin schema
+
+### Storage Separation
+
+| Aspect | Campus Storage | Admin Storage |
+|--------|---------------|---------------|
+| **Database** | Separate DBs for auth/api | Dedicated admin DB |
+| **Schema** | Business domain models | Operational infrastructure |
+| **Access pattern** | Query-heavy (user requests) | Write-heavy (audit/ migrations) |
+| **Optimization** | Indexed for reads | Optimized for bulk inserts |
+| **Connection** | Via `campus.storage` | Direct to admin DB |
+| **Tables** | users, sessions, assignments... | _migrations, _audit_log |
+
+---
+
 ## Requirements
 
 Per [issue #27](https://github.com/nyjc-computing/campus/issues/27):
@@ -18,11 +101,13 @@ Per [issue #27](https://github.com/nyjc-computing/campus/issues/27):
 4. **Rollback/restore** - Ability to revert migrations
 5. **Audit logging** - Record all migration actions for investigation
 
+**Implementation:** All requirements implemented in `campus-admin` package.
+
 ---
 
 ## Architecture
 
-### Storage Types
+### Campus Storage Types
 
 | Storage Type | Backend | Use Case |
 |-------------|---------|----------|
@@ -30,22 +115,53 @@ Per [issue #27](https://github.com/nyjc-computing/campus/issues/27):
 | **Documents** | MongoDB | Flexible JSON-like objects (assignments, submissions) |
 | **Objects** | S3-compatible | Binary blobs (files, attachments) |
 
-### Migration Structure
+### Admin Storage Structure
 
 ```
-campus/storage/migrations/
-├── __init__.py           # Migration runner interface
-├── state.py              # Migration state tracking (uses storage layer)
-├── runner.py             # Main migration execution logic
-├── scripts/
-│   ├── migrate.py        # CLI entry point: `campus migrate`
-│   └── rollback.py       # CLI entry point: `campus rollback`
-└── migrations/
-    ├── 001_init_assignments.py
-    ├── 002_init_submissions.py
-    ├── 003_add_response_timestamps.py
-    └── ...
+campus-admin/
+├── storage/
+│   ├── __init__.py           # Admin storage interface
+│   ├── migrations/
+│   │   ├── __init__.py        # Migration runner interface
+│   │   ├── state.py           # Migration state tracking
+│   │   ├── runner.py          # Main migration execution logic
+│   │   └── migrations/
+│   │       ├── 001_init_assignments.py
+│   │       ├── 002_init_submissions.py
+│   │       └── ...
+│   └── audit/
+│       ├── __init__.py        # Audit logging interface
+│       ├── log.py             # High-volume audit writer
+│       └── queries.py         # Audit query helpers
+└── main.py                    # `admin` CLI entry point
 ```
+
+### Migration Structure (Updated)
+
+**Migrations run from campus-admin, operate on Campus data:**
+
+```
+campus-admin/
+├── storage/
+│   ├── __init__.py
+│   ├── migrations/
+│   │   ├── __init__.py           # Migration runner interface
+│   │   ├── state.py              # State tracking (in admin DB)
+│   │   ├── runner.py             # Executes migrations
+│   │   └── migrations/
+│   │       ├── 001_init_assignments.py      # Operates on campus.api
+│   │       ├── 002_init_submissions.py      # Operates on campus.api
+│   │       ├── 003_add_response_timestamps.py
+│   │       └── ...
+│   └── audit/
+│       ├── __init__.py
+│       ├── log.py                 # High-volume audit writer
+│       └── queries.py             # Audit query helpers
+├── __init__.py
+└── main.py                        # `admin` CLI entry point
+```
+
+**Key point:** Migration files live in `campus-admin` but import from `campus.api.resources` or `campus.auth.resources` to operate on Campus data.
 
 ---
 
@@ -278,40 +394,63 @@ PostgreSQL table is preferred over JSON/bucket storage because:
 
 ### Database Placement Strategy
 
-**Current architecture:** Separate PostgreSQL databases for `campus.auth` and `campus.api`.
+**Decision:** Dedicated admin/audit database for `campus-admin`.
 
-**Option A: Dedicated migrations/audit database (recommended for future)**
+```
+PostgreSQL Instances:
+├── campus_auth_db     (campus.auth users, sessions, clients)
+├── campus_api_db      (campus.api assignments, submissions, circles)
+└── campus_admin_db    (campus-admin _migrations, _audit_log)
+```
 
-| Pros | Cons |
-|------|------|
-| Centralized audit trail across all services | Additional infrastructure to manage |
-| Clear separation of concerns | Extra database connection |
-| Easier backup/retention policies | Cross-database queries not possible |
-| Can host other admin/audit tables | |
-| Migration state survives service rebuilds | |
+### Rationale for Separate Admin Database
 
-**Option B: Store _migrations in each service database (current proposal)**
+| Consideration | Decision | Reasoning |
+|---------------|----------|-----------|
+| **Concern separation** | ✅ Separate DB | Domain data vs operational infrastructure |
+| **Performance isolation** | ✅ Separate DB | Admin write-heavy won't impact Campus queries |
+| **Backup policies** | ✅ Separate DB | Different retention: admin longer, business data GDPR |
+| **Deployment coupling** | ✅ Separate DB | Campus updates don't depend on admin schema |
+| **Cross-service audit** | ✅ Separate DB | Single audit trail across auth + API + future services |
+| **Infrastructure cost** | ⚠️ Additional DB | Managed via Railway/RDS, minimal overhead |
+| **Query complexity** | ⚠️ No cross-DB joins | Not needed - audit is append-only log |
 
-| Pros | Cons |
-|------|------|
-| No additional infrastructure | Fragmented audit trail |
-| Simpler deployment | Harder to query across services |
-| Existing connections | Service-specific data |
-| Low overhead | |
+### Storage Interface Separation
 
-**Recommendension:** Start with Option B (each DB tracks its own migrations). Move to Option A when:
-- Multiple services need unified audit view
-- Additional admin/audit tables emerge
-- Compliance requires centralized logging
+**Campus storage layer:**
+- Accessed via `campus.storage.get_table()` / `get_collection()`
+- Optimized for domain queries
+- Validates against Campus models
 
-This keeps the protocol simple now while leaving room to grow.
+**Admin storage layer:**
+- Accessed via `campus_admin.storage.get_table()`
+- Optimized for high-volume writes (audit)
+- Separate connection pool
+- May use raw SQL for bulk inserts (audit logging optimization)
+
+```python
+# Campus app uses campus storage
+from campus.storage import get_table
+users = get_table("users")
+
+# Admin app uses admin storage
+from campus_admin.storage import get_table
+migrations = get_table("_migrations")
+
+# High-volume audit may use optimized writer
+from campus_admin.storage.audit import AuditWriter
+audit = AuditWriter()
+audit.bulk_log(events)  # Uses executemany for performance
+```
 
 ### State Interface
 
-```python
-# campus/storage/migrations/state.py
+Located in `campus-admin/storage/migrations/state.py`:
 
-from campus.storage import get_table
+```python
+# campus-admin/storage/migrations/state.py
+
+from campus_admin.storage import get_table
 from datetime import datetime, UTC
 
 class MigrationState:
@@ -381,111 +520,86 @@ class MigrationState:
 
 ### Storage Interface for Migrations
 
-**Current approach:** `MigrationState` uses `get_table("_migrations")` through the normal storage layer.
-
-**Question:** Should migrations use a dedicated storage interface?
-
-**Option A: Use existing storage layer (current)**
+**Decision:** Migrations use dedicated `campus_admin.storage` interface.
 
 ```python
-# Current approach
-from campus.storage import get_table
+# campus-admin/storage/migrations/state.py
 
-def __init__(self):
-    self._table = get_table("_migrations")
-```
-
-| Pros | Cons |
-|------|------|
-| Reuses existing infrastructure | Migrations depend on storage layer working |
-| Single connection pool | Can't migrate the storage layer itself |
-| Consistent with app code | Circular dependency risk |
-
-**Option B: Direct database connection for migrations**
-
-```python
-# Dedicated migration interface
-import psycopg2
-from campus.common.env import get_postgres_url
+from campus_admin.storage import get_table
 
 class MigrationState:
     def __init__(self):
-        self._conn = psycopg2.connect(get_postgres_url())
+        # Connects to campus_admin_db, not campus databases
+        self._table = get_table("_migrations")
 ```
 
-| Pros | Cons |
-|------|------|
-| Bootstraps independently | Duplicate connection management |
-| Can migrate storage layer itself | More code to maintain |
-| No circular dependencies | Inconsistent with app code |
+**Why dedicated interface:**
+- **Separation of concerns** - Admin infrastructure independent of Campus domain models
+- **Independent deployment** - Campus schema changes don't break admin/migrations
+- **Different optimization** - Admin optimized for audit writes, Campus for queries
+- **Clear ownership** - `campus_admin` package owns its storage, not `campus.storage`
 
-**Recommendation:** Option A (existing storage layer) for Campus because:
-- Migrations are part of the app, not external tools
-- Storage layer changes are infrequent
-- Simpler to maintain one connection pattern
-- If storage layer needs migration, handle with special-case init
+**Migration runners still operate on Campus data:**
+```python
+# campus-admin/storage/migrations/migrations/001_init_assignments.py
 
-For complex scenarios requiring Option B, document as "bootstrap migrations" in implementation.
+from campus.api.resources import AssignmentsResource
+
+def upgrade():
+    """Migrate Campus schema via Campus resources."""
+    assignments = AssignmentsResource._storage
+    # Operate on Campus data using Campus resources
+```
+
+**State tracking stays in admin DB:**
+```python
+# campus-admin tracks migration state
+from campus_admin.storage import get_table
+state_table = get_table("_migrations")
+state_table.insert_one({"id": "001", "status": "applied", ...})
+```
 
 ### High-Volume Audit Logging
 
-**Context:** Audit/migration logging traces every API call, unlike regular API traffic which is user-initiated and lower volume.
-
-**Question:** Should audit logging bypass the storage layer and use raw queries?
-
-**Storage layer approach (current):**
-```python
-# Using storage layer
-from campus.storage import get_table
-audit = get_table("_audit")
-audit.insert_one({...})
-```
-
-**Raw query approach (alternative):**
-```python
-# Direct SQL for high-volume logging
-import psycopg2
-conn = psycopg2.connect(get_postgres_url())
-cursor = conn.cursor()
-cursor.execute("INSERT INTO _audit (...) VALUES (...)")
-```
-
-**Trade-off analysis:**
-
-| Factor | Storage Layer | Raw Queries |
-|--------|---------------|-------------|
-| **Performance** | Abstraction overhead | Faster execution |
-| **Consistency** | Single pattern | Mixed patterns in codebase |
-| **Maintainability** | Centralized query logic | Scattered SQL |
-| **Optimization** | Harder to tune | Can batch/bulk insert |
-| **Safety** | Validated schemas | Manual SQL validation |
-
-**Recommendation:** Use storage layer for migrations, but add optimization hooks for high-volume audit:
+**Decision:** Admin storage uses optimized bulk inserts for audit.
 
 ```python
-# campus/storage/tables/optimized.py
-class OptimizedTable(TableInterface):
-    """Table interface optimized for high-volume inserts."""
+# campus-admin/storage/audit/log.py
+
+class AuditWriter:
+    """High-volume audit logging for admin database."""
+
+    def __init__(self):
+        # Direct connection for performance
+        self._conn = psycopg2.connect(get_admin_postgres_url())
 
     def bulk_insert(self, rows: list[dict]) -> None:
-        """Batch insert for audit/migration logging."""
-        # Bypass row-by-row validation for bulk operations
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.executemany("INSERT INTO _table (...) VALUES (...)", rows)
-                conn.commit()
+        """Batch insert for audit - optimized for high volume."""
+        with self._conn.cursor() as cursor:
+            cursor.executemany(
+                "INSERT INTO _audit_log (event_type, data, created_at) VALUES (%s, %s, %s)",
+                [(r["event_type"], json.dumps(r["data"]), r["created_at"]) for r in rows]
+            )
+            self._conn.commit()
 ```
 
-This keeps the storage layer pattern while providing optimization for heavy audit workloads. Mixing raw queries throughout the codebase creates a slippery slope where developers bypass the storage layer for convenience rather than performance needs.
+**Why raw queries for audit:**
+- **Performance** - Traces every API call (high volume)
+- **Write pattern** - Append-only, no read-modify-write
+- **No validation needed** - Audit data structure controlled internally
+- **Different pattern** - Audit is infrastructure, not domain model
 
-**Decision:** Storage layer with optimization hooks, not raw query access.
+**Campus domain models still use campus.storage:**
+- Domain entities (users, assignments) use validated storage layer
+- Only admin/audit infrastructure uses optimized direct access
+- Clear boundary enforced by package separation
 
 ```python
-# campus/storage/migrations/runner.py
+# campus-admin/storage/migrations/runner.py
 
 import importlib
 from pathlib import Path
-from campus.yapper import Yapper
+from campus_admin.yapper import Yapper
 from .state import MigrationState
 
 class MigrationRunner:
@@ -589,14 +703,14 @@ class MigrationRunner:
 
 ### Admin CLI Implementation
 
-Create separate `admin` package:
+Located in `campus-admin/main.py`:
 
 ```python
-# admin/main.py
+# campus-admin/main.py
 
 def migrate(target: str | None = None):
     """Run database migrations."""
-    from campus.storage.migrations import MigrationRunner
+    from campus_admin.storage.migrations import MigrationRunner
     from pathlib import Path
 
     migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
@@ -607,7 +721,7 @@ def migrate(target: str | None = None):
 
 def rollback(target: str):
     """Rollback to a specific migration."""
-    from campus.storage.migrations import MigrationRunner
+    from campus_admin.storage.migrations import MigrationRunner
     from pathlib import Path
 
     migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
@@ -618,7 +732,7 @@ def rollback(target: str):
 
 def status():
     """Show current migration state."""
-    from campus.storage.migrations import MigrationState
+    from campus_admin.storage.migrations import MigrationState
 
     state = MigrationState()
     state.init_state_table()
@@ -665,12 +779,12 @@ admin status
 
 ### Automatic Migration on Deploy
 
-Add to deployment configuration (`wsgi.py` or app factory):
+Migrations run from `campus-admin`, triggered during Campus deployment:
 
 ```python
 # wsgi.py or apps/*/factory.py
 
-from campus.storage.migrations import MigrationRunner
+from campus_admin.storage.migrations import MigrationRunner
 from pathlib import Path
 import os
 
@@ -680,7 +794,7 @@ def create_app():
     # Run migrations on app startup in production
     if os.getenv("ENV") in ("staging", "production"):
         try:
-            migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
+            migrations_dir = Path(__file__).parent.parent / "campus-admin" / "storage" / "migrations" / "migrations"
             runner = MigrationRunner(migrations_dir)
             runner.upgrade()
         except Exception as e:
@@ -690,12 +804,14 @@ def create_app():
     return app
 ```
 
+**Note:** Campus app triggers migrations, but migration logic lives in `campus-admin`.
+
 ### Pre-Deployment Checks (Built into MigrationRunner)
 
 The migration runner should validate before executing:
 
 ```python
-# campus/storage/migrations/runner.py
+# campus-admin/storage/migrations/runner.py
 
 class MigrationRunner:
     """Execute and track migrations."""
@@ -934,7 +1050,7 @@ logger.emit("migration.failed", {
 ### Consuming Migration Events
 
 ```python
-from campus.yapper import Yapper
+from campus_admin.yapper import Yapper
 
 yapper = Yapper()
 
