@@ -44,6 +44,7 @@ DEFAULT_INTEGRATION_TIMEOUT = 300
 def set_test_environment():
     """Set environment variables for testing."""
     os.environ.setdefault("ENV", "testing")
+    os.environ.setdefault("STORAGE_MODE", "1")
 
 
 def run_command(
