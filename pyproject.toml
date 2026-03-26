@@ -39,6 +39,9 @@ campus = "main:main"
 
 [tool.pyright]
 useLibraryCodeForTypes = true
+extraPaths = ["."]
+venvPath = "."
+venv = ".venv"
 exclude = [".cache"]
 reportIncompatibleMethodOverride = "none"
 
