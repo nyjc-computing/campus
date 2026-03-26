@@ -148,6 +148,32 @@ Each migration is a Python module with:
 4. **downgrade()** - Reverse transformation
 5. **Storage type** - One of: `table`, `document`, `object`
 
+### Accessing Storage: Type-Safe vs String-Based
+
+**Option 1: Import from resource module (type-safe, recommended)**
+
+```python
+from campus.api.resources import SubmissionsResource
+
+def upgrade():
+    """Access collection through resource - no typos possible."""
+    submissions = SubmissionsResource._storage  # Internal access
+```
+
+**Option 2: Direct string access (simple, common in migrations)**
+
+```python
+from campus.storage import get_collection
+
+def upgrade():
+    """Direct access - be careful with typos."""
+    submissions = get_collection("submissions")
+```
+
+> **Note:** Using resource imports (`campus.api.resources.*`) provides type safety and prevents typos. Direct string access is simpler but requires careful testing.
+
+### Example Migration
+
 ```python
 """Add response timestamps to submissions.
 
