@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """Campus Test Runner
 
-A unified test runner for the Campus project that supports all test categories.
+A unified, cross-platform test runner for the Campus project.
 
-Usage:
-    python tests/run_tests.py unit              # unit tests
-    python tests/run_tests.py integration       # integration tests
-    python tests/run_tests.py sanity            # sanity checks
-    python tests/run_tests.py type              # type checks (pyright)
-    python tests/run_tests.py all               # all tests (unit + integration + sanity + type)
+Supports Windows, Linux, and macOS with automatic platform detection.
+
+Recommended usage (all platforms):
+    poetry run python tests/run_tests.py unit              # unit tests
+    poetry run python tests/run_tests.py integration       # integration tests
+    poetry run python tests/run_tests.py sanity            # sanity checks
+    poetry run python tests/run_tests.py type              # type checks (pyright)
+    poetry run python tests/run_tests.py all               # all tests
 
     # With timeout
-    python tests/run_tests.py unit --timeout 60
-    python tests/run_tests.py all --timeout 60  # applies to unit/integration only
+    poetry run python tests/run_tests.py unit --timeout 60
+    poetry run python tests/run_tests.py all --timeout 60  # applies to unit/integration only
 
     # Other options
-    python tests/run_tests.py unit --module common -v   # specific module, verbose
-    python tests/run_tests.py unit --silent            # minimal output
+    poetry run python tests/run_tests.py unit --module common -v   # specific module, verbose
+    poetry run python tests/run_tests.py unit --silent            # minimal output
 
 Exit Codes:
     0   - All tests passed
@@ -36,29 +38,58 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
-# Default timeout values (matching CI configuration)
+# ===== Constants =====
 DEFAULT_UNIT_TIMEOUT = 60
 DEFAULT_INTEGRATION_TIMEOUT = 300
+
+# Test categories
+TEST_CATEGORIES = ["unit", "integration", "sanity", "type", "all"]
+MODULE_CHOICES = ["apps", "vault", "yapper", "common", "client"]
+
+# Platform detection
+IS_WINDOWS = sys.platform == "win32"
+
+# Venv binary locations by platform
+# Windows uses Scripts/, Unix (Linux/macOS) uses bin/
+VENV_BIN_DIR = "Scripts" if IS_WINDOWS else "bin"
+PYTHON_EXE = "python.exe" if IS_WINDOWS else "python"
+PYRIGHT_EXE = "pyright.exe" if IS_WINDOWS else "pyright"
+
+
+def get_venv_executable(executable: str) -> Path | None:
+    """Get the path to an executable in the venv, if it exists.
+
+    Cross-platform function that checks the correct venv binary directory
+    based on the operating system.
+
+    Args:
+        executable: Name of the executable WITHOUT extension
+                   (e.g., "python", "pyright", not "python.exe")
+
+    Returns:
+        Path to the executable, or None if not found
+    """
+    exe_name = f"{executable}.exe" if IS_WINDOWS else executable
+    venv_path = project_root / ".venv" / VENV_BIN_DIR / exe_name
+    return venv_path if venv_path.exists() else None
 
 
 def get_python_executable() -> str:
     """Get the Python executable to use for running tests.
 
-    Prioritizes .venv/bin/python for local/CI/Codespaces environments
-    (pyenv + pipx Poetry + .venv setup), falling back to poetry run
-    for traditional Poetry workflows.
+    Priority order:
+    1. .venv python (detected via platform-specific path)
+    2. System python (for poetry run workflows)
 
     Returns:
         Path to Python executable as a string
     """
-    venv_python = project_root / ".venv" / "bin" / "python"
-    if venv_python.exists():
+    if venv_python := get_venv_executable("python"):
         return str(venv_python)
-    # Fall back to system python (which will be invoked via poetry run in the commands)
     return "python"
 
 
-def set_test_environment():
+def set_test_environment() -> None:
     """Set environment variables for testing."""
     os.environ.setdefault("ENV", "testing")
     os.environ.setdefault("STORAGE_MODE", "1")
@@ -127,13 +158,36 @@ def run_command(
 
 
 def run_unittest_discover(
-    test_path: str,
+    test_type: str,
+    module: str | None = None,
     verbose: bool = False,
     timeout: int | None = None,
     silent: bool = False
 ) -> int:
-    """Run unittest discover on the specified path."""
+    """Run unittest discover for a test type.
+
+    Args:
+        test_type: "unit" or "integration"
+        module: Optional specific module to test
+        verbose: Enable verbose output
+        timeout: Maximum time in seconds
+        silent: Suppress output
+
+    Returns:
+        Exit code
+    """
+    set_test_environment()
     python = get_python_executable()
+
+    # Build test path
+    if module:
+        test_path = f"tests/{test_type}/{module}"
+        if not (project_root / test_path).exists():
+            print(f"Error: Test path '{test_path}' does not exist")
+            return 1
+    else:
+        test_path = f"tests/{test_type}"
+
     cmd = [python, "-m", "unittest", "discover", test_path]
     if verbose:
         cmd.append("-v")
@@ -152,18 +206,18 @@ def run_sanity_checks(silent: bool = False) -> int:
 def run_type_checks(silent: bool = False) -> int:
     """Run pyright type checks."""
     set_test_environment()
-    # Try to use pyright from .venv if available
-    venv_pyright = project_root / ".venv" / "bin" / "pyright"
-    if venv_pyright.exists():
+
+    if venv_pyright := get_venv_executable("pyright"):
         cmd = [str(venv_pyright), "campus"]
     else:
         cmd = ["pyright", "campus"]
+
     return run_command(cmd, timeout=None, silent=silent)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Campus Test Runner",
+        description="Campus Test Runner (Cross-platform: Windows, Linux, macOS)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -178,6 +232,11 @@ Examples:
 
 Supported modules: apps, vault, yapper, common, client
 
+Cross-platform notes:
+  - Automatically detects venv location for your platform
+  - Windows: .venv/Scripts/python.exe
+  - Linux/macOS: .venv/bin/python
+
 Exit codes:
     0   - All tests passed
     1   - General error
@@ -188,13 +247,13 @@ Exit codes:
 
     parser.add_argument(
         "test_type",
-        choices=["unit", "integration", "sanity", "type", "all"],
+        choices=TEST_CATEGORIES,
         help="Type of tests to run"
     )
 
     parser.add_argument(
         "--module", "-m",
-        choices=["apps", "vault", "yapper", "common", "client"],
+        choices=MODULE_CHOICES,
         help="Specific module to test (only for unit/integration)"
     )
 
@@ -252,37 +311,15 @@ Exit codes:
 
     # Unit tests
     if args.test_type == "unit":
-        set_test_environment()
-        if args.module:
-            test_path = f"tests/unit/{args.module}"
-            if not (project_root / test_path).exists():
-                print(f"Error: Test path '{test_path}' does not exist")
-                return 1
-            exit_code = run_unittest_discover(
-                test_path, args.verbose, timeout, args.silent
-            )
-        else:
-            test_path = "tests/unit"
-            exit_code = run_unittest_discover(
-                test_path, args.verbose, timeout, args.silent
-            )
+        exit_code = run_unittest_discover(
+            "unit", args.module, args.verbose, timeout, args.silent
+        )
 
     # Integration tests
     elif args.test_type == "integration":
-        set_test_environment()
-        if args.module:
-            test_path = f"tests/integration/{args.module}"
-            if not (project_root / test_path).exists():
-                print(f"Error: Test path '{test_path}' does not exist")
-                return 1
-            exit_code = run_unittest_discover(
-                test_path, args.verbose, timeout, args.silent
-            )
-        else:
-            test_path = "tests/integration"
-            exit_code = run_unittest_discover(
-                test_path, args.verbose, timeout, args.silent
-            )
+        exit_code = run_unittest_discover(
+            "integration", args.module, args.verbose, timeout, args.silent
+        )
 
     # Sanity checks
     elif args.test_type == "sanity":
@@ -307,14 +344,14 @@ Exit codes:
         # Unit tests (with timeout)
         run_category(
             "unit tests",
-            lambda: run_unittest_discover("tests/unit", args.verbose, timeout, args.silent)
+            lambda: run_unittest_discover("unit", None, args.verbose, timeout, args.silent)
         )
 
         # Integration tests (with timeout)
         run_category(
             "integration tests",
             lambda: run_unittest_discover(
-                "tests/integration", args.verbose,
+                "integration", None, args.verbose,
                 timeout or DEFAULT_INTEGRATION_TIMEOUT, args.silent
             )
         )
