@@ -34,31 +34,38 @@ class CollectionInterface(ABC):
         ...
 
     @abstractmethod
-    def insert_one(self, row: dict):
-        """Insert a document into the specified table."""
+    def insert_one(self, doc: dict):
+        """Insert a document into the specified collection."""
         ...
+
+    def insert_many(self, docs: list[dict]):
+        """Insert multiple documents into the specified collection."""
+        # Concrete implementations may override this method for improved
+        # performance with multiple insertions
+        for doc in docs:
+            self.insert_one(doc)
 
     @abstractmethod
     def update_by_id(self, doc_id: str, update: dict):
-        """Update a document in the specified table."""
+        """Update a document in the specified collection."""
         ...
 
     @abstractmethod
     def update_matching(self, query: dict, update: dict):
-        """Update documents matching a query in the specified table."""
+        """Update documents matching a query in the specified collection."""
         ...
 
     @abstractmethod
     def delete_by_id(self, doc_id: str):
-        """Delete a document from the specified table."""
+        """Delete a document from the specified collection."""
         ...
 
     @abstractmethod
     def delete_matching(self, query: dict):
-        """Delete documents matching a query in the specified table."""
+        """Delete documents matching a query in the specified collection."""
         ...
 
     @abstractmethod
     def init_from_model(self, name: str, model: type[Model]) -> None:
-        """Initialize the table from a Campus model definition."""
+        """Initialize the collection from a Campus model definition."""
         ...

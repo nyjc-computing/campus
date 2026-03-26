@@ -37,6 +37,13 @@ class TableInterface(ABC):
         """Insert a row into the specified table."""
         ...
 
+    def insert_many(self, rows: list[dict]):
+        """Insert multiple rows into the specified table."""
+        # Concrete implementations may override this method for improved
+        # performance with multiple insertions
+        for row in rows:
+            self.insert_one(row)
+
     @abstractmethod
     def update_by_id(self, row_id: str, update: dict):
         """Update a row in the specified table."""
