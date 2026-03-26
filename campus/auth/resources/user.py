@@ -55,18 +55,57 @@ class UsersResource:
         records = user_storage.get_matching({})
         return [_from_record(record) for record in records]
 
-    def new(self, **kwargs: typing.Any) -> campus.model.User:
+    def new(
+            self,
+            email: schema.Email,
+            name: str,
+            activated_at: schema.DateTime | None = None,
+    ) -> campus.model.User:
         """Create a new Campus user.
 
         Args:
-            **kwargs: Additional fields for user creation
+            email: User's email address (used as user_id)
+            name: User's display name
+            activated_at: Optional activation timestamp
 
         Returns:
             User instance
         """
-        user = _from_record(kwargs)
+        # Create user record with email as id
+        record = {
+            "id": schema.UserID(email),
+            "email": email,
+            "name": name,
+            "created_at": schema.DateTime.utcnow(),
+            "activated_at": activated_at,
+        }
+        user = _from_record(record)
         user_storage.insert_one(user.to_storage())
         return user
+
+    def get_or_create(
+            self,
+            user_id: schema.UserID,
+            email: str,
+            name: str,
+    ) -> campus.model.User:
+        """Get a user by ID, creating them if they don't exist.
+
+        This is the primary method for user auto-provisioning during
+        OAuth login flows.
+
+        Args:
+            user_id: The user identifier (email)
+            email: User's email address
+            name: User's display name
+
+        Returns:
+            User instance (either existing or newly created)
+        """
+        try:
+            return self[user_id].get()
+        except api_errors.NotFoundError:
+            return self.new(email=schema.Email(email), name=name)
 
 
 class UserResource:

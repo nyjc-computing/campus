@@ -1,4 +1,11 @@
+"""Unit tests for UsersResource.get_or_create() method.
+
+These tests verify the auto-provisioning behavior for user records
+during OAuth login flows.
+"""
+
 import unittest
+
 from campus.auth.resources.user import UsersResource, user_storage
 from campus.common import schema
 import campus.storage.testing
@@ -33,6 +40,7 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         # Campus uses email as ID
         user_id = schema.UserID(email)
         self.resource.get_or_create(user_id, email, name)
+        # Use UserResource to invoke storage retrieval
         user_resource_object = self.resource[user_id].get()
         self.assertIsNotNone(user_resource_object)
         self.assertEqual(user_resource_object.email, email)
@@ -43,11 +51,6 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         """Should return existing user record without creating
         duplicate.
         """
-        # TODO: Arrange: Create a user directly via user_storage.insert_one()
-        #   Store the original created_at timestamp
-        # Act: Call get_or_create() with the same user_id
-        # Assert: Verify returned user has same created_at (no new record)
-        #        Verify only one record exists in storage
         email = "new_user2@example.com"
         name = "New_User2"
         # Campus uses email as ID
@@ -56,6 +59,7 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         self.assertIsNotNone(user)
         self.assertEqual(user.email, email)
         self.assertEqual(user.name, name)
+        # Use UserResource to invoke storage retrieval, check for match
         user_resource_object = self.resource.get_or_create(user_id, email, name)
         self.assertIsNotNone(user_resource_object)
         self.assertEqual(user_resource_object.email, user.email)
@@ -88,3 +92,7 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         """
         # TODO: Consider using monkeypatch to temporarily break storage
         #        Verify error is propagated or handled appropriately
+
+
+if __name__ == '__main__':
+    unittest.main()
