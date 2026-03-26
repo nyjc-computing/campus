@@ -427,6 +427,59 @@ class MigrationState:
 
 For complex scenarios requiring Option B, document as "bootstrap migrations" in implementation.
 
+### High-Volume Audit Logging
+
+**Context:** Audit/migration logging traces every API call, unlike regular API traffic which is user-initiated and lower volume.
+
+**Question:** Should audit logging bypass the storage layer and use raw queries?
+
+**Storage layer approach (current):**
+```python
+# Using storage layer
+from campus.storage import get_table
+audit = get_table("_audit")
+audit.insert_one({...})
+```
+
+**Raw query approach (alternative):**
+```python
+# Direct SQL for high-volume logging
+import psycopg2
+conn = psycopg2.connect(get_postgres_url())
+cursor = conn.cursor()
+cursor.execute("INSERT INTO _audit (...) VALUES (...)")
+```
+
+**Trade-off analysis:**
+
+| Factor | Storage Layer | Raw Queries |
+|--------|---------------|-------------|
+| **Performance** | Abstraction overhead | Faster execution |
+| **Consistency** | Single pattern | Mixed patterns in codebase |
+| **Maintainability** | Centralized query logic | Scattered SQL |
+| **Optimization** | Harder to tune | Can batch/bulk insert |
+| **Safety** | Validated schemas | Manual SQL validation |
+
+**Recommendation:** Use storage layer for migrations, but add optimization hooks for high-volume audit:
+
+```python
+# campus/storage/tables/optimized.py
+class OptimizedTable(TableInterface):
+    """Table interface optimized for high-volume inserts."""
+
+    def bulk_insert(self, rows: list[dict]) -> None:
+        """Batch insert for audit/migration logging."""
+        # Bypass row-by-row validation for bulk operations
+        with self._get_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.executemany("INSERT INTO _table (...) VALUES (...)", rows)
+                conn.commit()
+```
+
+This keeps the storage layer pattern while providing optimization for heavy audit workloads. Mixing raw queries throughout the codebase creates a slippery slope where developers bypass the storage layer for convenience rather than performance needs.
+
+**Decision:** Storage layer with optimization hooks, not raw query access.
+
 ```python
 # campus/storage/migrations/runner.py
 
