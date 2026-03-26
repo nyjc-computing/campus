@@ -379,9 +379,53 @@ class MigrationState:
             return False
 ```
 
----
+### Storage Interface for Migrations
 
-## Migration Runner
+**Current approach:** `MigrationState` uses `get_table("_migrations")` through the normal storage layer.
+
+**Question:** Should migrations use a dedicated storage interface?
+
+**Option A: Use existing storage layer (current)**
+
+```python
+# Current approach
+from campus.storage import get_table
+
+def __init__(self):
+    self._table = get_table("_migrations")
+```
+
+| Pros | Cons |
+|------|------|
+| Reuses existing infrastructure | Migrations depend on storage layer working |
+| Single connection pool | Can't migrate the storage layer itself |
+| Consistent with app code | Circular dependency risk |
+
+**Option B: Direct database connection for migrations**
+
+```python
+# Dedicated migration interface
+import psycopg2
+from campus.common.env import get_postgres_url
+
+class MigrationState:
+    def __init__(self):
+        self._conn = psycopg2.connect(get_postgres_url())
+```
+
+| Pros | Cons |
+|------|------|
+| Bootstraps independently | Duplicate connection management |
+| Can migrate storage layer itself | More code to maintain |
+| No circular dependencies | Inconsistent with app code |
+
+**Recommendation:** Option A (existing storage layer) for Campus because:
+- Migrations are part of the app, not external tools
+- Storage layer changes are infrequent
+- Simpler to maintain one connection pattern
+- If storage layer needs migration, handle with special-case init
+
+For complex scenarios requiring Option B, document as "bootstrap migrations" in implementation.
 
 ```python
 # campus/storage/migrations/runner.py
