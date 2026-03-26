@@ -49,6 +49,95 @@ campus/storage/migrations/
 
 ---
 
+## Transaction Strategy
+
+### Design Decision: Autocommit per Migration, Atomic Within
+
+Each migration file commits independently, but operations within a single migration are atomic.
+
+```python
+# Each migration is ONE transaction boundary
+def upgrade():
+    """All operations in this migration commit together."""
+    with PostgreSQLTransaction():
+        # Multiple statements execute atomically
+        cursor.execute("ALTER TABLE submissions ADD COLUMN status TEXT")
+        cursor.execute("UPDATE submissions SET status = 'pending'")
+        # If anything fails, entire upgrade() rolls back
+```
+
+**Transaction boundary = migration file**, not individual statements.
+
+### Why This Approach?
+
+| Factor | Autocommit per Migration | Single Atomic Transaction |
+|--------|-------------------------|---------------------------|
+| **Failure recovery** | Manual rollback via `downgrade()` | Automatic rollback |
+| **Large datasets** | ✅ Handles 10k+ rows with batching | ❌ Transaction timeout |
+| **Cross-storage** | ✅ Works with PostgreSQL + MongoDB | ❌ No cross-DB transactions |
+| **Intermediate states** | ⚠️ Partial if migration fails | ✅ Always consistent |
+| **Testing** | ⚠️ Must test downgrade path | ✅ Simpler error handling |
+
+### Trade-off Analysis
+
+**Autocommit with Downgrade (Chosen)**
+
+*Pros:*
+- Resilient to partial failures - failed migration leaves earlier migrations intact
+- Works with large datasets - no single transaction timeout for bulk updates
+- Cross-database compatible - MongoDB and PostgreSQL can migrate independently
+- Progress visibility - `_migrations` table shows exactly what's been applied
+- Safe for long-running operations - data backfills won't hit transaction limits
+
+*Cons:*
+- No automatic atomic rollback - if migration fails, database in intermediate state
+- Manual cleanup required - must run `campus rollback` to reverse failed migrations
+- Potential inconsistency - app could start mid-migration if deploy continues unchecked
+- Harder testing - must explicitly test `downgrade()` path
+
+**Alternative: All-or-Nothing Transaction**
+
+*Pros:*
+- Automatic safety - any failure rolls back entire migration
+- No intermediate states - database always in consistent schema
+- Simpler error handling - just let transaction fail
+
+*Cons:*
+- Transaction limits - PostgreSQL has size/duration constraints
+- Fails with large datasets - updating thousands of rows times out
+- Not cross-storage compatible - can't atomically update PostgreSQL + MongoDB
+- Blocks longer - tables locked during entire transaction
+- Memory pressure - large transactions consume connection resources
+
+### For Campus (~2000 users)
+
+The hybrid approach balances safety with practicality:
+
+1. **One migration = one logical change** - Natural atomic boundary
+2. **Manageable transaction sizes** - ~2000 users means reasonable single-migration volume
+3. **Clear rollback semantics** - `downgrade()` reverses at same boundary
+4. **Matches existing patterns** - `init_from_schema()` already uses explicit transactions
+
+### For Large Migrations
+
+Document batched approach for operations that exceed single transaction limits:
+
+```python
+def upgrade():
+    """For very large tables, process in batches."""
+    batch_size = 100
+    for offset in range(0, total_rows, batch_size):
+        with PostgreSQLTransaction():
+            # Each batch is atomic
+            for row in get_batch(offset, batch_size):
+                transform_and_update(row)
+        # Commits between batches
+```
+
+This pattern provides atomicity at the batch level while avoiding transaction timeouts.
+
+---
+
 ## Migration File Format
 
 Each migration is a Python module with:
@@ -427,20 +516,24 @@ def upgrade():
 
 ### 4. Transaction Safety
 
-Wrap related changes in transactions:
+Wrap related changes in transactions. See [Transaction Strategy](#transaction-strategy) for rationale.
 
 ```python
 def upgrade():
-    """Make multiple related changes atomically."""
+    """Make multiple related changes atomically within this migration."""
     from campus.storage.tables.backend.postgres import PostgreSQLTable
 
     table = PostgreSQLTable("assignments")
     with table._get_connection() as conn:
         with conn.cursor() as cursor:
+            # These statements commit together as one unit
             cursor.execute("ALTER TABLE assignments ADD COLUMN new_field TEXT")
             cursor.execute("UPDATE assignments SET new_field = default_value")
             conn.commit()
+            # If either fails, both roll back automatically
 ```
+
+**Key principle:** Each `upgrade()`/`downgrade()` function is its own transaction boundary. Don't commit mid-migration.
 
 ---
 
