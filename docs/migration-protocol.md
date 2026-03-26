@@ -474,14 +474,71 @@ class MigrationRunner:
 
 ## CLI Interface
 
-### When is CLI Needed?
+### Admin CLI vs User CLI
+
+**Campus CLI (`campus`) = User features**
+- End-user commands for interacting with Campus services
+- Example: `campus auth login`, `campus api list`
+
+**Admin CLI (`campus-admin`) = Operational control**
+- Database migrations, health checks, configuration
+- Example: `campus-admin migrate`, `campus-admin status`
+
+**Separation rationale:**
+- User CLI should not expose dangerous admin operations
+- Admin commands require different authentication/authorization
+- Clear boundary prevents accidental misuse
+
+### Admin CLI Implementation
+
+Create separate `campus-admin` package:
+
+```python
+# campus-admin/main.py
+
+def migrate(target: str | None = None):
+    """Run database migrations."""
+    from campus.storage.migrations import MigrationRunner
+    from pathlib import Path
+
+    migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
+    runner = MigrationRunner(migrations_dir)
+    runner.upgrade(target)
+    print("Migration complete.")
+
+
+def rollback(target: str):
+    """Rollback to a specific migration."""
+    from campus.storage.migrations import MigrationRunner
+    from pathlib import Path
+
+    migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
+    runner = MigrationRunner(migrations_dir)
+    runner.downgrade(target)
+    print("Rollback complete.")
+
+
+def status():
+    """Show current migration state."""
+    from campus.storage.migrations import MigrationState
+
+    state = MigrationState()
+    state.init_state_table()
+    applied = state.get_applied_migrations()
+
+    print(f"Applied migrations: {len(applied)}")
+    for mid in sorted(applied):
+        print(f"  ✓ {mid}")
+```
+
+### When is Admin CLI Needed?
 
 **Automated deployment (primary):**
 - Staging/production: migrations run automatically on app startup
 - PR validation: migrations tested against backup database
 - CI/CD: status reported via deployment checks
 
-**CLI (secondary, for manual operations):**
+**Admin CLI (secondary, for manual operations):**
 - Local development: apply migrations during feature development
 - Staging manual run: re-run migrations after fixing failures
 - Rollback: manual `rollback` when deployment needs quick revert
