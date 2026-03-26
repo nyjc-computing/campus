@@ -28,9 +28,10 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         """Should create a new user record when user_id doesn't exist in
         database.
         """
-        user_id = schema.UserID("New_User")
-        email = "new_user@gmail.com"
-        name = "New_User"
+        email = "new_user1@example.com"
+        name = "New_User1"
+        # Campus uses email as ID
+        user_id = schema.UserID(email)
         self.resource.get_or_create(user_id, email, name)
         user_resource_object = self.resource[user_id].get()
         self.assertIsNotNone(user_resource_object)
@@ -47,16 +48,19 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         # Act: Call get_or_create() with the same user_id
         # Assert: Verify returned user has same created_at (no new record)
         #        Verify only one record exists in storage
-        user_id = schema.UserID("New_User")
-        email = "new_user@gmail.com"
-        name = "New_User"
-        self.resource.user_storage.insert_one(user_id, email, name)
-        timestamp = self.resource.user_storage.get(user_id).created_at
+        email = "new_user2@example.com"
+        name = "New_User2"
+        # Campus uses email as ID
+        user_id = schema.UserID(email)
+        user = self.resource.new(id=user_id, email=email, name=name)
+        self.assertIsNotNone(user)
+        self.assertEqual(user.email, email)
+        self.assertEqual(user.name, name)
         user_resource_object = self.resource.get_or_create(user_id, email, name)
         self.assertIsNotNone(user_resource_object)
-        self.assertEqual(user_resource_object.email, email)
-        self.assertEqual(user_resource_object.name, name)
-        self.assertEqual(user_resource_object.created_at, timestamp)
+        self.assertEqual(user_resource_object.email, user.email)
+        self.assertEqual(user_resource_object.name, user.name)
+        self.assertEqual(user_resource_object.created_at, user.created_at)
 
     def test_get_or_create_idempotent_multiple_calls(self):
         """Should return same user record across multiple calls with
