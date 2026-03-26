@@ -451,6 +451,22 @@ class MigrationRunner:
 
 ## CLI Interface
 
+### When is CLI Needed?
+
+**Automated deployment (primary):**
+- Staging/production: migrations run automatically on app startup
+- PR validation: migrations tested against backup database
+- CI/CD: status reported via deployment checks
+
+**CLI (secondary, for manual operations):**
+- Local development: apply migrations during feature development
+- Staging manual run: re-run migrations after fixing failures
+- Rollback: manual `rollback` when deployment needs quick revert
+- Status check: query migration state without starting app
+- Recovery: repair failed migration states
+
+### CLI Implementation
+
 Add to `campus` CLI via `main.py`:
 
 ```python
@@ -478,6 +494,20 @@ def rollback(target: str):
     print("Rollback complete.")
 
 
+def status():
+    """Show current migration state."""
+    from campus.storage.migrations import MigrationState
+
+    state = MigrationState()
+    state.init_state_table()
+    applied = state.get_applied_migrations()
+
+    print(f"Applied migrations: {len(applied)}")
+    for mid in sorted(applied):
+        print(f"  ✓ {mid}")
+    print(f"Pending: compute by listing migrations/ vs applied")
+
+
 if __name__ == "__main__":
     import sys
     command = sys.argv[1] if len(sys.argv) >= 2 else None
@@ -488,6 +518,8 @@ if __name__ == "__main__":
     elif command == "rollback":
         target = sys.argv[2]
         rollback(target)
+    elif command == "status":
+        status()
     else:
         main(deployment=command)
 ```
@@ -503,6 +535,9 @@ campus migrate 003
 
 # Rollback to specific revision
 campus rollback 002
+
+# Show migration state
+campus status
 ```
 
 ---
