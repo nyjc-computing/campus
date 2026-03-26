@@ -36,14 +36,14 @@ def get_current() -> flask_campus.JsonResponse:
 
     Responses:
         200 OK: dict
-            {"data": timetable_id}
+            {"value": timetable_id}
     """
     timetable_id = timetable_resource.get_current()
-    return {'data': timetable_id}, 200
+    return {'value': timetable_id}, 200
 
 @bp.put('/current')
 @flask_campus.unpack_request
-def set_current(UUID: schema.CampusID) -> flask_campus.JsonResponse:
+def set_current(value: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         Set the currently active timetable.
 
@@ -51,14 +51,14 @@ def set_current(UUID: schema.CampusID) -> flask_campus.JsonResponse:
         PUT /timetable/current
 
     Body Parameters:
-        UUID: CampusID
+        value: CampusID
             The timetable ID to set as the current timetable.
 
     Responses:
         200 OK: dict
             {}
     """
-    timetable_resource.set_current(UUID)
+    timetable_resource.set_current(value)
     return {}, 200
 
 @bp.get('/next')
@@ -74,14 +74,14 @@ def get_next() -> flask_campus.JsonResponse:
 
     Responses:
         200 OK: dict
-            {"data": timetable_id}
+            {"value": timetable_id}
     """
     timetable_id = timetable_resource.get_next()
-    return {'data': timetable_id}, 200
+    return {'value': timetable_id}, 200
 
 @bp.put('/next')
 @flask_campus.unpack_request
-def set_next(UUID: schema.CampusID) -> flask_campus.JsonResponse:
+def set_next(value: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         Set the next scheduled timetable.
 
@@ -89,48 +89,48 @@ def set_next(UUID: schema.CampusID) -> flask_campus.JsonResponse:
         PUT /timetable/next
 
     Body Parameters:
-        UUID: CampusID
+        value: CampusID
             The timetable ID to set as the next timetable.
 
     Responses:
         200 OK: dict
             {}
     """
-    timetable_resource.set_current(UUID)
+    timetable_resource.set_next(value)
     return {}, 200
 
 @bp.post('/')
 @flask_campus.unpack_request
-def upload(
+def new(
     metadata: dict,
     data: dict
 ) -> flask_campus.JsonResponse:
     """Summary:
-        Upload a new timetable.
-    
+        Create a new timetable.
+
     Method:
         POST /timetable/
-    
+
     Body Parameters:
         metadata: dict
             Metadata for the timetable, e.g. start and end date.
-        
+
         data: dict
             The actual timetable data, e.g. entries.
-        
+
     Responses:
         200 OK: dict
-           {"data": timetable resource} 
+           {"data": timetable resource}
 
         400 Bad Request: dict
             {"error": error message}
     """
-    
+
     try:
         timetable = timetable_resource.new(**metadata, **data)
     except Exception as e:
         return {'error': e}, 400
-    
+
     return {"data": timetable.to_resource()}, 200
 
 @bp.get('/<timetable_id>/')
@@ -148,7 +148,7 @@ def get_timetable_entries(timetable_id: schema.CampusID) -> flask_campus.JsonRes
         List all timetable entries for a specific timetable and user.
 
     Method:
-        GET /timetable/<timetable_id>
+        GET /timetable/<timetable_id>/entries
 
     Path Parameters:
         timetable_id: CampusID
@@ -156,10 +156,10 @@ def get_timetable_entries(timetable_id: schema.CampusID) -> flask_campus.JsonRes
 
     Responses:
         200 OK: dict
-            {"data": [timetable entry resources]}
+            {"entries": [timetable entry resources]}
     """
     result = timetable_resource[timetable_id].entries.list()
-    return {'data': [entry.to_resource() for entry in result]}, 200
+    return {'entries': [entry.to_resource() for entry in result]}, 200
     
 
 @bp.get('/<timetable_id>/metadata')

@@ -38,23 +38,72 @@ def get_caller() -> str:
 
 def handle_authorization_error(
         err: auth_errors.AuthorizationError
-) -> werkzeug.Response:
+) -> werkzeug.Response | tuple[JsonDict, int]:
     """Handle OAuth authorization request errors.
 
-    This function is used to handle OAuth errors and return
-    standardised JSON responses.
+    This function handles OAuth errors and returns appropriate responses:
+    - For API requests (JSON Accept header or /auth/v1/* paths): JSON error
+    - For OAuth browser flows: HTTP redirect (RFC 6749)
+
+    In development mode, raises BadRequest for ambiguous requests.
     """
     module = get_caller()
     logger.exception("OAuthError in %s: %s", module, err)
-    err_dict = err.to_dict()
-    # OAuth errors follow RFC 6749, not the API error spec
-    # No production cleanup needed for OAuth redirect errors
-    return flask.redirect(
-        url.add_query(
-            err.redirect_uri or flask.request.base_url,
-            **err_dict
+
+    # Determine if this is an API request (expects JSON) or OAuth browser flow (expects redirect)
+    accept_header = flask.request.headers.get("Accept", "")
+    is_json_accept = "application/json" in accept_header
+    is_api_path = flask.request.path.startswith("/auth/v1/")
+    has_redirect_uri = err.redirect_uri is not None
+
+    # API request detection: JSON Accept header or API path prefix
+    is_api_request = is_json_accept or is_api_path
+
+    # OAuth browser flow detection: has redirect_uri and not an API request
+    is_oauth_flow = has_redirect_uri and not is_api_request
+
+    if is_api_request:
+        # API request - return JSON error response
+        # Use envelope format for API consistency
+        err_dict = err.to_dict(envelope_format=True)
+        from campus.common import devops
+        # Remove details in production for security reasons
+        if devops.ENV == devops.PRODUCTION:
+            err_dict["error"].pop("details", None)
+        # Return appropriate status code from the error
+        return err_dict, err.status_code
+
+    elif is_oauth_flow:
+        # OAuth browser flow - return redirect (RFC 6749)
+        err_dict = err.to_dict()
+        # OAuth errors follow RFC 6749, not the API error spec
+        # No production cleanup needed for OAuth redirect errors
+        return flask.redirect(
+            url.add_query(
+                err.redirect_uri or flask.request.base_url,
+                **err_dict
+            )
         )
-    )
+
+    else:
+        # Ambiguous request - in development, raise an error to help debugging
+        from campus.common import devops
+        if devops.ENV == devops.PRODUCTION:
+            # In production, default to JSON for safety
+            err_dict = err.to_dict(envelope_format=True)
+            return err_dict, err.status_code
+        else:
+            # In development, raise to help identify the issue
+            raise flask.abort(
+                400,
+                description=(
+                    f"Ambiguous authorization error: "
+                    f"Accept={accept_header!r}, path={flask.request.path!r}, "
+                    f"has_redirect_uri={has_redirect_uri}. "
+                    f"Please set Accept: application/json for API requests "
+                    f"or provide redirect_uri for OAuth flows."
+                )
+            )
 
 def handle_api_error(err: api_errors.APIError) -> tuple[JsonDict, int]:
     """Handle API errors.

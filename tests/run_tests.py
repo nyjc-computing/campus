@@ -41,6 +41,23 @@ DEFAULT_UNIT_TIMEOUT = 60
 DEFAULT_INTEGRATION_TIMEOUT = 300
 
 
+def get_python_executable() -> str:
+    """Get the Python executable to use for running tests.
+
+    Prioritizes .venv/bin/python for local/CI/Codespaces environments
+    (pyenv + pipx Poetry + .venv setup), falling back to poetry run
+    for traditional Poetry workflows.
+
+    Returns:
+        Path to Python executable as a string
+    """
+    venv_python = project_root / ".venv" / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    # Fall back to system python (which will be invoked via poetry run in the commands)
+    return "python"
+
+
 def set_test_environment():
     """Set environment variables for testing."""
     os.environ.setdefault("ENV", "testing")
@@ -116,7 +133,8 @@ def run_unittest_discover(
     silent: bool = False
 ) -> int:
     """Run unittest discover on the specified path."""
-    cmd = ["poetry", "run", "python", "-m", "unittest", "discover", test_path]
+    python = get_python_executable()
+    cmd = [python, "-m", "unittest", "discover", test_path]
     if verbose:
         cmd.append("-v")
 
@@ -126,14 +144,20 @@ def run_unittest_discover(
 def run_sanity_checks(silent: bool = False) -> int:
     """Run sanity checks from tests/sanity_check.py."""
     set_test_environment()
-    cmd = ["poetry", "run", "python", "tests/sanity_check.py"]
+    python = get_python_executable()
+    cmd = [python, "tests/sanity_check.py"]
     return run_command(cmd, timeout=None, silent=silent)
 
 
 def run_type_checks(silent: bool = False) -> int:
     """Run pyright type checks."""
     set_test_environment()
-    cmd = ["poetry", "run", "pyright", "campus"]
+    # Try to use pyright from .venv if available
+    venv_pyright = project_root / ".venv" / "bin" / "pyright"
+    if venv_pyright.exists():
+        cmd = [str(venv_pyright), "campus"]
+    else:
+        cmd = ["pyright", "campus"]
     return run_command(cmd, timeout=None, silent=silent)
 
 
