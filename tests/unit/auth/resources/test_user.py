@@ -35,11 +35,11 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         """Should create a new user record when user_id doesn't exist in
         database.
         """
-        email = "new_user1@example.com"
+        email = schema.Email("new_user1@example.com")
         name = "New_User1"
         # Campus uses email as ID
         user_id = schema.UserID(email)
-        self.resource.get_or_create(user_id, email, name)
+        self.resource.get_or_create(email, name)
         # Use UserResource to invoke storage retrieval
         user_resource_object = self.resource[user_id].get()
         self.assertIsNotNone(user_resource_object)
@@ -51,20 +51,20 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
         """Should return existing user record without creating
         duplicate.
         """
-        email = "new_user2@example.com"
+        email = schema.Email("new_user2@example.com")
         name = "New_User2"
-        # Campus uses email as ID
-        user_id = schema.UserID(email)
-        user = self.resource.new(id=user_id, email=email, name=name)
+        user = self.resource.new(email=email, name=name)
         self.assertIsNotNone(user)
         self.assertEqual(user.email, email)
         self.assertEqual(user.name, name)
+        # Campus uses email as ID
         # Use UserResource to invoke storage retrieval, check for match
-        user_resource_object = self.resource.get_or_create(user_id, email, name)
+        user_resource_object = self.resource.get_or_create(email, name)
         self.assertIsNotNone(user_resource_object)
+        self.assertEqual(user_resource_object.id, user.id)
+        self.assertEqual(user_resource_object.created_at, user.created_at)
         self.assertEqual(user_resource_object.email, user.email)
         self.assertEqual(user_resource_object.name, user.name)
-        self.assertEqual(user_resource_object.created_at, user.created_at)
 
     def test_get_or_create_idempotent_multiple_calls(self):
         """Should return same user record across multiple calls with
