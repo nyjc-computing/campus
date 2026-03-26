@@ -254,10 +254,34 @@ CREATE TABLE IF NOT EXISTS "_migrations" (
     "id" TEXT PRIMARY KEY,           -- Revision ID (e.g., "001", "002")
     "description" TEXT NOT NULL,     -- Human-readable description
     "storage_type" TEXT NOT NULL,    -- "table", "document", "object"
+    "status" TEXT NOT NULL,          -- "pending", "applied", "rolled_back", "failed"
     "applied_at" TIMESTAMP NOT NULL, -- When migration was applied
-    "rollback_at" TIMESTAMP NULL     -- When migration was rolled back (if applicable)
+    "rollback_at" TIMESTAMP NULL,    -- When migration was rolled back (if applicable)
+    "error_message" TEXT NULL        -- Error details if status is "failed"
 );
 ```
+
+### Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Discovered but not yet applied |
+| `applied` | Successfully applied to database |
+| `rolled_back` | Reversed via `downgrade()` |
+| `failed` | Migration execution failed (see `error_message`) |
+
+### Archival Strategy
+
+The `_migrations` table **is** the permanent audit log. For long-term archival:
+
+1. **Primary**: Keep `_migrations` table indefinitely (small, low overhead)
+2. **Secondary**: Yapper events provide real-time streaming to external systems
+3. **Optional**: Export to object storage via bucket backup scripts
+
+PostgreSQL table is preferred over JSON/bucket storage because:
+- Queryable for status checks (`SELECT * FROM _migrations WHERE status = 'failed'`)
+- Transactional consistency with schema changes
+- Supports joins and aggregations for reporting
 
 ### State Interface
 
