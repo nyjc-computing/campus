@@ -276,6 +276,36 @@ PostgreSQL table is preferred over JSON/bucket storage because:
 - Transactional consistency with schema changes
 - Supports joins and aggregations for reporting
 
+### Database Placement Strategy
+
+**Current architecture:** Separate PostgreSQL databases for `campus.auth` and `campus.api`.
+
+**Option A: Dedicated migrations/audit database (recommended for future)**
+
+| Pros | Cons |
+|------|------|
+| Centralized audit trail across all services | Additional infrastructure to manage |
+| Clear separation of concerns | Extra database connection |
+| Easier backup/retention policies | Cross-database queries not possible |
+| Can host other admin/audit tables | |
+| Migration state survives service rebuilds | |
+
+**Option B: Store _migrations in each service database (current proposal)**
+
+| Pros | Cons |
+|------|------|
+| No additional infrastructure | Fragmented audit trail |
+| Simpler deployment | Harder to query across services |
+| Existing connections | Service-specific data |
+| Low overhead | |
+
+**Recommendension:** Start with Option B (each DB tracks its own migrations). Move to Option A when:
+- Multiple services need unified audit view
+- Additional admin/audit tables emerge
+- Compliance requires centralized logging
+
+This keeps the protocol simple now while leaving room to grow.
+
 ### State Interface
 
 ```python
