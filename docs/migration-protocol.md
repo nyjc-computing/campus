@@ -88,6 +88,9 @@ This document defines the storage migration protocol for Campus. Migrations are 
 | **Optimization** | Indexed for reads | Optimized for bulk inserts |
 | **Connection** | Via `campus.storage` | Direct to admin DB |
 | **Tables** | users, sessions, assignments... | _migrations, _audit_log |
+| **Package** | `campus/storage/` | `campus-admin/storage/` (separate module) |
+
+**Important:** `campus-admin` creates its own storage module at `campus-admin/storage/`. It is NOT part of `campus.storage` and does NOT share the `campus.common.devops.deploy` infrastructure.
 
 ---
 
@@ -418,29 +421,38 @@ PostgreSQL Instances:
 ### Storage Interface Separation
 
 **Campus storage layer:**
-- Accessed via `campus.storage.get_table()` / `get_collection()`
+- Package: `campus/storage/`
+- Accessed via `from campus.storage import get_table`
 - Optimized for domain queries
 - Validates against Campus models
 
 **Admin storage layer:**
-- Accessed via `campus_admin.storage.get_table()`
+- Package: `campus-admin/storage/` (separate module, not under campus/)
+- Accessed via `from campus_admin.storage import get_table`
 - Optimized for high-volume writes (audit)
 - Separate connection pool
 - May use raw SQL for bulk inserts (audit logging optimization)
+- Does NOT use `campus.common.devops.deploy` (manual deployment)
 
 ```python
 # Campus app uses campus storage
 from campus.storage import get_table
 users = get_table("users")
 
-# Admin app uses admin storage
+# Admin app uses campus-admin storage (separate module)
 from campus_admin.storage import get_table
 migrations = get_table("_migrations")
 
-# High-volume audit may use optimized writer
+# High-volume audit uses optimized writer
 from campus_admin.storage.audit import AuditWriter
 audit = AuditWriter()
 audit.bulk_log(events)  # Uses executemany for performance
+```
+
+**Module structure:**
+```
+campus/storage/              → Campus domain storage
+campus-admin/storage/       → Admin operational storage (separate repo)
 ```
 
 ### State Interface
@@ -777,34 +789,47 @@ admin status
 
 ## Deployment Integration
 
-### Automatic Migration on Deploy
+### Deployment Approach
 
-Migrations run from `campus-admin`, triggered during Campus deployment:
+**Current: Manual deployment for campus-admin**
 
-```python
-# wsgi.py or apps/*/factory.py
+Migrations are run manually via the `admin` CLI. There is NO automatic migration trigger from Campus apps.
 
-from campus_admin.storage.migrations import MigrationRunner
-from pathlib import Path
-import os
-
-def create_app():
-    app = Flask(__name__)
-
-    # Run migrations on app startup in production
-    if os.getenv("ENV") in ("staging", "production"):
-        try:
-            migrations_dir = Path(__file__).parent.parent / "campus-admin" / "storage" / "migrations" / "migrations"
-            runner = MigrationRunner(migrations_dir)
-            runner.upgrade()
-        except Exception as e:
-            # Log but don't fail deployment
-            app.logger.error(f"Migration failed: {e}")
-
-    return app
+```bash
+# Manual migration workflow
+1. ssh into server
+2. cd /path/to/campus-admin
+3. admin migrate          # Apply pending migrations
+4. admin status           # Verify success
 ```
 
-**Note:** Campus app triggers migrations, but migration logic lives in `campus-admin`.
+**Future: Optional auto-run (if needed)**
+
+Campus apps could potentially trigger migrations, but this is NOT implemented initially. If added, it would require:
+
+1. Campus app depends on campus-admin as a submodule
+2. Import from campus-admin.storage.migrations
+3. Handle campus-admin not being installed
+4. Manual approval before running migrations
+
+**Recommendation:** Keep manual migrations initially. Auto-run adds complexity and failure modes that aren't justified for ~2000 users.
+
+### Manual Deployment Steps
+
+```bash
+# 1. Deploy campus-admin code
+git pull campus-admin main
+poetry install
+
+# 2. Run migrations manually
+admin migrate
+
+# 3. Verify success
+admin status
+
+# 4. Deploy Campus app (if needed)
+# Campus deployment is separate from campus-admin deployment
+```
 
 ### Pre-Deployment Checks (Built into MigrationRunner)
 
