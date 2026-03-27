@@ -29,4 +29,4 @@ jobs:
       - name: Install Campus Suite
         run: poetry install --no-root
       - name: Run Sanity Checks
-        run: poetry run python tests/run_tests.py sanity
+        run: .venv/bin/python tests/run_tests.py sanity
