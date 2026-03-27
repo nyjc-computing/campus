@@ -146,9 +146,13 @@ class UserResource:
 
         Returns:
             User instance
+
+        Raises:
+            api_errors.NotFoundError: If user not found
         """
-        record = user_storage.get_by_id(self.user_id)
-        if not record:
+        try:
+            record = user_storage.get_by_id(self.user_id)
+        except campus.storage.errors.NotFoundError:
             raise api_errors.NotFoundError(
                 f"User '{self.user_id}' not found",
                 user_id=self.user_id
