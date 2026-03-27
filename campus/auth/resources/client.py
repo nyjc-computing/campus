@@ -203,8 +203,9 @@ class ClientResource:
             ClientRecord instance
         """
         client_id = self.client_id
-        record = client_storage.get_by_id(client_id)
-        if not record:
+        try:
+            record = client_storage.get_by_id(client_id)
+        except campus.storage.errors.NotFoundError:
             raise auth_errors.InvalidRequestError(
                 f"Client '{client_id}' not found",
                 client_id=client_id
