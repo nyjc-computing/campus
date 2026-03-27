@@ -32,21 +32,9 @@ def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
         id=schema.CampusID(record["id"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         lessongroup_id=schema.CampusID(record["lessongroup_id"]),
-<<<<<<<<< Temporary merge branch 1
-        weekday = schema.String(record["weekday"]),
-        timeslot = schema.String(record["timeslot"]),
-        venue = schema.String(record["venue"]),
-    )
-
-def _lessongroup_from_record(record: dict) -> campus.model.LessonGroup:
-    return campus.model.LessonGroup(
-        timetable_id=schema.CampusID(record["timetable_id"]),
-        label = schema.String(record["label"])
-=========
         venue=schema.String(record["venue"]),
         weekday=schema.String(record["weekday"]),
         timeslot=schema.String(record["timeslot"]),
->>>>>>>>> Temporary merge branch 2
     )
 
 
@@ -86,13 +74,11 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
     
-    def new(self, **fields: typing.Any) -> campus.model.Timetable:
-
-        timetable = campus.model.Timetable(
-            filename=fields["metadata"]["filename"],
-            start_date=fields["metadata"]["start"],
-            end_date=fields["metadata"]["end"],
-            entries = []
+    def new(self, **fields: typing.Any) -> campus.model.TimetableMetadata:
+        timetable = campus.model.TimetableMetadata(
+            filename=fields["filename"],
+            start_date=fields["start_date"],
+            end_date=fields["end_date"],
         )
         groups: list[campus.model.LessonGroup] = []
         members = []
@@ -111,14 +97,10 @@ class TimetablesResource:
             else:
                 lg = campus.model.LessonGroup(
                     timetable_id=timetable.id,
-<<<<<<<<< Temporary merge branch 1
-                    label = lessongroup["label"]
-=========
                     lessongroup_id=entry_data["lessongroup_id"],
                     venue=schema.String(entry_data["venue"]),
                     weekday=schema.String(entry_data["weekday"]),
                     timeslot=schema.String(entry_data["timeslot"]),
->>>>>>>>> Temporary merge branch 2
                 )
                 lessongroups.append(lg)
 
