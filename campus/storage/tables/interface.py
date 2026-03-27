@@ -10,6 +10,7 @@ Each row in the table is assumed to have:
 from abc import ABC, abstractmethod
 
 from campus.model import InternalModel, Model
+from campus.storage import errors as storage_errors
 
 # This constant should match the one in campus.common.schema
 PK = "id"
@@ -24,7 +25,17 @@ class TableInterface(ABC):
 
     @abstractmethod
     def get_by_id(self, row_id: str) -> dict:
-        """Retrieve a row by its ID."""
+        """Retrieve a row by its ID.
+
+        Args:
+            row_id: The ID of the row to retrieve
+
+        Returns:
+            The row data as a dictionary
+
+        Raises:
+            storage_errors.NotFoundError: If no row exists with the given ID
+        """
         ...
 
     @abstractmethod

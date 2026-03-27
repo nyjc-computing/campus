@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Optional
 from campus.common import devops
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
+from campus.storage import errors as storage_errors
 from ..interface import TableInterface, PK
 
 
@@ -214,16 +215,19 @@ class SQLiteTable(TableInterface):
             values.append(value)
         return tuple(values)
 
-    def _deserialize_row(self, sqlite_row) -> Dict[str, Any]:
+    def _deserialize_row(self, sqlite_row) -> Dict[str, Any] | None:
         """Deserialize a row from storage using actual table columns.
 
         TODO: Type conversion issue - SQLite returns all values as strings in row_factory mode.
         Need to use PRAGMA table_info to get column types and cast values appropriately.
         For example, INTEGER columns should return int, REAL should return float, etc.
         Currently this causes issues with bitwise operations on integer fields like 'access'.
+
+        Returns:
+            The deserialized row as a dict, or None if sqlite_row is None
         """
         if sqlite_row is None:
-            return {}
+            return None
 
         row = {}
         for key in sqlite_row.keys():
@@ -239,11 +243,18 @@ class SQLiteTable(TableInterface):
         return row
 
     def get_by_id(self, row_id: str) -> Dict[str, Any]:
-        """Retrieve a row by its ID."""
+        """Retrieve a row by its ID.
+
+        Raises:
+            storage_errors.NotFoundError: If no row exists with the given ID
+        """
         cursor = self.get_connection().cursor()
         cursor.execute(f"SELECT * FROM {self.name} WHERE id = ?", (row_id,))
         sqlite_row = cursor.fetchone()
-        return self._deserialize_row(sqlite_row)
+        row = self._deserialize_row(sqlite_row)
+        if row is None:
+            raise storage_errors.NotFoundError(row_id, self.name)
+        return row
 
     def get_matching(self, query: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Retrieve rows matching a query."""
@@ -252,9 +263,17 @@ class SQLiteTable(TableInterface):
         if not query:
             # Return all rows if no query
             cursor.execute(f"SELECT * FROM {self.name}")
-            return [self._deserialize_row(row) for row in cursor.fetchall()]
+            return [row for row in (self._deserialize_row(row) for row in cursor.fetchall()) if row is not None]
 
         # Simple query handling - exact matches only for this implementation
+        rows = []
+        cursor.execute(f"SELECT * FROM {self.name}")
+        for sqlite_row in cursor.fetchall():
+            row = self._deserialize_row(sqlite_row)
+            if row and self._matches_query(row, query):  # Skip None/empty rows
+                rows.append(row)
+
+        return rows
         rows = []
         cursor.execute(f"SELECT * FROM {self.name}")
         for sqlite_row in cursor.fetchall():
