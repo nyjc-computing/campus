@@ -146,7 +146,7 @@ class TimetablesResource:
         groups: list[campus.model.LessonGroup] = []
         members = []
         entries = []
-        
+
         for lessongroup in lessongroups:
             lg = campus.model.LessonGroup(
                 timetable_id=timetable_meta.id,
