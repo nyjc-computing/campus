@@ -47,7 +47,7 @@ def _create_bp(
         """
         # Validate and store destination to prevent open redirect attacks
         if next and not _is_safe_redirect(next):
-            next = flask.url_for(default_endpoint)
+            next = url.full_url_for(default_endpoint)
         flask.session['login_next'] = next or flask.url_for(default_endpoint)
 
         # Use /finalize_login as the OAuth callback
