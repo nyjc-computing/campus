@@ -45,7 +45,7 @@ def list_bookings(
         200 OK: dict
             {"data": [booking resources]}
     """
-    pass
+    return {"error": "Not implemented"}, 501
 
 
 @bp.post('/')
@@ -82,7 +82,7 @@ def create_booking(
         400 Bad Request: dict
             {"error": error message}
     """
-    pass
+    return {"error": "Not implemented"}, 501
 
 
 @bp.get('/<string:booking_id>')
@@ -104,7 +104,7 @@ def get_booking(booking_id: str) -> flask_campus.JsonResponse:
         404 Not Found: dict
             {"error": "Booking not found"}
     """
-    pass
+    return {"error": "Not implemented"}, 501
 
 
 @bp.patch('/<string:booking_id>')
@@ -141,7 +141,7 @@ def update_booking(
         404 Not Found: dict
             {"error": "Booking not found"}
     """
-    pass
+    return {"error": "Not implemented"}, 501
 
 
 @bp.delete('/<string:booking_id>')
@@ -163,4 +163,4 @@ def delete_booking(booking_id: str) -> flask_campus.JsonResponse:
         404 Not Found: dict
             {"error": "Booking not found"}
     """
-    pass
+    return {"error": "Not implemented"}, 501
