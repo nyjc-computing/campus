@@ -151,13 +151,19 @@ class GoogleAuthProxy(base.AuthProxy):
             )
         # Fill in user info from userinfo endpoint
         userinfo = self._oauth2.get_user_info(token.access_token)
-        user_id = schema.Email(userinfo["email"])
+        user_email = schema.Email(userinfo["email"])
         # Verify domain is permitted
-        if not user_id.domain == env.WORKSPACE_DOMAIN:
+        if not user_email.domain == env.WORKSPACE_DOMAIN:
             raise token_errors.InvalidGrantError(
                 "Domain not allowed",
-                domain=user_id.domain
+                domain=user_email.domain
             )
+        user_id = schema.UserID(userinfo["email"])
+        # Ensure user exists (auto-provision)
+        resources.user.get_or_create(
+            email=user_email,
+            name=userinfo.get("name", "")
+        )
         # Store/update token
         credentials = resources.credentials[PROVIDER][user_id].update(
             client_id=self._CLIENT_ID,
