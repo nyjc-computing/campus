@@ -48,6 +48,44 @@ class TableInterface(ABC):
         """Insert a row into the specified table."""
         ...
 
+    def insert_many(
+            self,
+            rows: list[dict],
+            *,
+            max_retries: int = 1
+    ) -> dict[int, Exception]:
+        """Insert multiple rows into the specified table.
+
+        This returns a dict of errors encountered, with row index as key
+        and exception as value.
+        """
+        # Concrete implementations may override this method for improved
+        # performance with multiple insertions
+        if not isinstance(max_retries, int) or max_retries < 0:
+            raise ValueError("max_retries must be a zero or positive integer")
+        # Use a dict as a sparse array for errors to avoid empty indices in list
+        errors = {}
+        for i, row in enumerate(rows):
+            try:
+                self.insert_one(row)
+            except Exception as e:
+                errors[i] = e
+        # Happy path
+        if not errors:
+            return errors
+        # Retry while errors remain and max_retries not reached
+        retries = 1
+        while 0 < retries <= max_retries and errors:
+            for i, e in errors.items():
+                try:
+                    self.insert_one(rows[i])
+                except Exception as e:
+                    errors[i] = e
+                else:
+                    del errors[i]
+            retries += 1
+        return errors
+
     @abstractmethod
     def update_by_id(self, row_id: str, update: dict):
         """Update a row in the specified table."""
