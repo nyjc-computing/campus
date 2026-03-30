@@ -9,6 +9,7 @@ from . import constraints
 
 @dataclass(eq=False, kw_only=True)
 class VenueBooking(Model):
+    """Represents a booking for a venue on a specific date and time."""
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("booking", length=8)
     ))
@@ -23,6 +24,7 @@ class VenueBooking(Model):
 
 @dataclass(eq=False, kw_only=True)
 class Venue(Model):
+    """Represents a venue that can be booked."""
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("venue", length=8)
     ))
