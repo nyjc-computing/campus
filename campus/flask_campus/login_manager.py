@@ -94,7 +94,7 @@ def _create_bp(
     def logout():
         """Sign Out of Campus Admin Portal."""
         campus.auth.logout()
-        resp = flask.redirect(flask.url_for(default_endpoint))
+        resp = flask.redirect(url.full_url_for(default_endpoint))
         return resp
 
     return bp
