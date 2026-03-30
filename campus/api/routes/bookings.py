@@ -6,6 +6,7 @@ API routes for the Booking resource.
 import flask
 
 from campus import flask_campus
+from campus.common import schema
 
 from .. import resources
 
@@ -23,9 +24,9 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @bp.get('/')
 @flask_campus.unpack_request
 def list_bookings(
-    user_id: str | None = None,
-    venue_id: str | None = None,
-    date: str | None = None,
+    user_id: schema.UserID | None = None,
+    venue_id: schema.CampusID | None = None,
+    date: schema.Date | None = None,
 ) -> flask_campus.JsonResponse:
     """Summary:
         List all bookings matching filter requirements.
@@ -51,11 +52,11 @@ def list_bookings(
 @bp.post('/')
 @flask_campus.unpack_request
 def create_booking(
-    venue_id: str,
+    venue_id: schema.CampusID,
     description: str,
-    start_time: str,
-    end_time: str,
-    date: str,
+    start_time: schema.Time,
+    end_time: schema.Time,
+    date: schema.Date,
 ) -> flask_campus.JsonResponse:
     """Summary:
         Create a new venue booking.
@@ -85,8 +86,8 @@ def create_booking(
     return {"error": "Not implemented"}, 501
 
 
-@bp.get('/<string:booking_id>')
-def get_booking(booking_id: str) -> flask_campus.JsonResponse:
+@bp.get('/<schema.CampusID:booking_id>/')
+def get_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         Get a single booking by ID.
 
@@ -107,11 +108,11 @@ def get_booking(booking_id: str) -> flask_campus.JsonResponse:
     return {"error": "Not implemented"}, 501
 
 
-@bp.patch('/<string:booking_id>')
+@bp.patch('/<schema.CampusID:booking_id>/')
 @flask_campus.unpack_request
 def update_booking(
     *,
-    booking_id: str,
+    booking_id: schema.CampusID,
     description: str | None = None,
 ) -> flask_campus.JsonResponse:
     """Summary:
@@ -144,8 +145,8 @@ def update_booking(
     return {"error": "Not implemented"}, 501
 
 
-@bp.delete('/<string:booking_id>')
-def delete_booking(booking_id: str) -> flask_campus.JsonResponse:
+@bp.delete('/<schema.CampusID:booking_id>/')
+def delete_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         Delete a booking.
 
