@@ -34,6 +34,8 @@ class VenueBooking(Model):
     start_time: schema.Time
     end_time: schema.Time
     date: schema.Date
+    # NOTE: This only prevents exact duplicate bookings.
+    # Overlap checking must still be conducted separately
     __constraints__ = constraints.Unique("venue_id", "date", "start_time", "end_time")
 
 @dataclass(eq=False, kw_only=True)
