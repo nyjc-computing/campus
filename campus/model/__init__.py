@@ -51,6 +51,7 @@ from .credentials import OAuthToken, UserCredentials
 from .device_code import DeviceCode
 from .http.header import HttpHeader, HttpHeaderWithAuth
 from .emailotp import EmailOTP
+from .event import Event
 from .login import LoginSession
 from .session import AuthSession
 from .submission import Feedback, Response, Submission
