@@ -10,7 +10,7 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.common import env, schema, webauth
+from campus.common import schema, webauth
 from campus.common.errors import auth_errors
 import campus.config
 
@@ -18,8 +18,13 @@ from .. import base
 from ... import resources
 
 PROVIDER = "discord"
-REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
 SCOPE_SEP = " "
+
+
+def _get_redirect_uri() -> schema.Url:
+    """Get redirect URI with runtime env access."""
+    from campus.common import env
+    return schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
 
 
 def get_proxy() -> "DiscordAuthPoxy":
@@ -35,24 +40,26 @@ class DiscordAuthPoxy(base.AuthProxy):
     version = "10.0.0"
     openapi_version = "3.0.3"
     _headers = {"Accept": "application/json"}
-    _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-        provider=PROVIDER,
-        client_id=env.CLIENT_ID,
-        redirect_uri=REDIRECT_URI,
-        authorization_url=schema.Url(
-            "https://discord.com/oauth2/authorize"
-        ),
-        token_url=schema.Url("https://discord.com/api/oauth2/token"),
-        user_info_url=schema.Url(
-            "https://discord.com/api/users/@me"
-        ),
-        scopes=["identify", "email", "guilds"],
-        headers={"Accept": "application/json"},
-    )
     _PROMPT_OPTIONS = Literal["consent", "none"] | None
 
     def __init__(self) -> None:
         super().__init__()
+        # Import env at runtime and create OAuth2 scheme
+        from campus.common import env
+        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+            provider=PROVIDER,
+            client_id=env.CLIENT_ID,
+            redirect_uri=_get_redirect_uri(),
+            authorization_url=schema.Url(
+                "https://discord.com/oauth2/authorize"
+            ),
+            token_url=schema.Url("https://discord.com/api/oauth2/token"),
+            user_info_url=schema.Url(
+                "https://discord.com/api/users/@me"
+            ),
+            scopes=["identify", "email", "guilds"],
+            headers={"Accept": "application/json"},
+        )
 
     @property
     def authorization_url(self) -> schema.Url:

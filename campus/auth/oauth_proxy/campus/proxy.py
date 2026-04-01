@@ -5,10 +5,12 @@ Campus OAuth2 proxy implementation.
 
 __all__ = ["CampusAuthProxy", "get_proxy"]
 
+import functools
+
 import flask
 import werkzeug
 
-from campus.common import env, schema, webauth
+from campus.common import schema, webauth
 from campus.common.utils import url
 
 from .. import base
@@ -28,14 +30,12 @@ def get_proxy() -> "CampusAuthProxy":
     return CampusAuthProxy()
 
 
-class CampusAuthProxy(base.AuthProxy):
-    """Campus OAuth2 provider implementation."""
-    provider = PROVIDER
-    title = "Campus OAuth2 Authentication API"
-    description = "OAuth2 authentication endpoints for Campus integration"
-    version = "2025-11-05"
-    openapi_version = "3.0.3"
-    _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+def _create_oauth2_scheme():
+    """Create OAuth2 scheme with runtime env access."""
+    # Import env only at runtime to avoid capturing module instead of
+    # EnvironmentProxy during class definition
+    from campus.common import env
+    return webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
         client_id=env.CLIENT_ID,
         redirect_uri=REDIRECT_URI,
         provider=PROVIDER,
@@ -49,9 +49,31 @@ class CampusAuthProxy(base.AuthProxy):
         headers={"Accept": "application/json"},
     )
 
+
+@functools.lru_cache(maxsize=None)
+def _get_oauth2_scheme():
+    """Get cached OAuth2 scheme instance."""
+    return _create_oauth2_scheme()
+
+
+class CampusAuthProxy(base.AuthProxy):
+    """Campus OAuth2 provider implementation."""
+    provider = PROVIDER
+    title = "Campus OAuth2 Authentication API"
+    description = "OAuth2 authentication endpoints for Campus integration"
+    version = "2025-11-05"
+    openapi_version = "3.0.3"
+
     def __init__(self) -> None:
+        # Import env only at runtime
+        from campus.common import env
         self._CLIENT_ID = env.CLIENT_ID
         self._CLIENT_SECRET = env.CLIENT_SECRET
+
+    @property
+    def _oauth2(self):
+        """Get OAuth2 scheme instance (cached)."""
+        return _get_oauth2_scheme()
 
     @property
     def authorization_url(self) -> schema.Url:
