@@ -190,3 +190,17 @@ campus-cli/
 devcontainers/
 nyxchange-timetable-v2/
 t1w5-webapp-quiz-submission/
+
+# Sensitive files and directories (from upstream template)
+.claude/
+.claude-memory/
+*.key
+*.pem
+*.cert
+*.crt
+secrets/
+credentials/
+*.credentials.json
+
+# Playwright auth state (contains session cookies/tokens)
+.playwright_auth_state.json
