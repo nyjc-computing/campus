@@ -331,7 +331,22 @@ def verify_login_and_redirect(
     # Import at runtime to avoid circular dependency - type: ignore for pyright
     from campus.auth.oauth_proxy.google import get_proxy  # type: ignore
     proxy = get_proxy()
-    userinfo = proxy._oauth2.get_user_info(google_cred.token.access_token)  # type: ignore[arg-type]
+
+    # Refresh Google token if expired before fetching userinfo
+    token = google_cred.token
+    if token.is_expired():
+        token = proxy._oauth2.refresh_token(
+            token,
+            client_id=proxy._CLIENT_ID,
+            client_secret=proxy._CLIENT_SECRET
+        )
+        # Update the stored credential with refreshed token
+        resources.credentials["google"][user].update(
+            client_id=proxy._CLIENT_ID,
+            token=token,
+        )
+
+    userinfo = proxy._oauth2.get_user_info(token.access_token)  # type: ignore[arg-type]
 
     # Provision user record (auto-create if not exists)
     user_name = userinfo.get("name", "")
