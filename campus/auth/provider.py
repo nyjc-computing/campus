@@ -33,6 +33,8 @@ Legend:
     Google's token endpoint for user profile.
 """
 
+import logging
+
 import flask
 import werkzeug
 
@@ -43,6 +45,8 @@ from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import secret, url, utc_time
 
 from . import resources
+
+logger = logging.getLogger(__name__)
 
 PROVIDER = "campus"
 INVALIDATED = "INVALIDATED"  # Marker for used authorization codes
@@ -330,9 +334,17 @@ def verify_login_and_redirect(
     userinfo = proxy._oauth2.get_user_info(google_cred.token.access_token)  # type: ignore[arg-type]
 
     # Provision user record (auto-create if not exists)
+    user_name = userinfo.get("name", "")
+    if not user_name:
+        # Fallback to email localpart if name is empty
+        user_name = str(user).split("@")[0]
+        logger.warning(
+            "Google userinfo missing 'name' field for user %s, using email localpart '%s' as fallback",
+            user, user_name
+        )
     resources.user.get_or_create(
         email=schema.Email(user),
-        name=userinfo.get("name", "")
+        name=user_name
     )
 
     # Generate authorization code AFTER successful Google authentication
