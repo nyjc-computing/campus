@@ -334,6 +334,11 @@ def verify_login_and_redirect(
 
     # Refresh Google token if expired before fetching userinfo
     token = google_cred.token
+    if not token:
+        raise auth_errors.AuthorizationError(
+            "Google credential exists but has no access token. Please re-authenticate with Google.",
+            user_id=user
+        )
     if token.is_expired():
         token = proxy._oauth2.refresh_token(
             token,
