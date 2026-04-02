@@ -3,10 +3,14 @@
 This module provides utility functions for URL manipulation and validation.
 """
 
+from typing import TYPE_CHECKING
 import typing
 from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
 
 import flask
+
+if TYPE_CHECKING:
+    from campus.common import env
 
 
 def create_url(
