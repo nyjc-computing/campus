@@ -90,7 +90,7 @@ class DiscordAuthPoxy(base.AuthProxy):
         """Redirect to GitHub OAuth2 authorization endpoint."""
         authsession = self.init_authsession(
             expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-            redirect_uri=REDIRECT_URI,
+            redirect_uri=_get_redirect_uri(),
             scopes=self._oauth2.scopes,
             target=target
         )
