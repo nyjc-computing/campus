@@ -310,10 +310,11 @@ def verify_login_and_redirect(
             domain=user.domain
         )
 
-    # Verify user has valid Google credential
+    # Verify user has valid Google credential and get userinfo for provisioning
     google_client_id = resources.vault["google"]["CLIENT_ID"]
+    google_cred = None
     try:
-        google_cred_resource[user].get(google_client_id)
+        google_cred = google_cred_resource[user].get(google_client_id)
     except api_errors.NotFoundError:
         # User does not have a valid Google credential/sign-in
         # TODO: Display error page
@@ -321,6 +322,18 @@ def verify_login_and_redirect(
             "No valid Google credential found for user",
             user_id=user
         ) from None
+
+    # Get userinfo from Google to provision user record
+    # Import at runtime to avoid circular dependency - type: ignore for pyright
+    from campus.auth.oauth_proxy.google import get_proxy  # type: ignore
+    proxy = get_proxy()
+    userinfo = proxy._oauth2.get_user_info(google_cred.token.access_token)  # type: ignore[arg-type]
+
+    # Provision user record (auto-create if not exists)
+    resources.user.get_or_create(
+        email=schema.Email(user),
+        name=userinfo.get("name", "")
+    )
 
     # Generate authorization code AFTER successful Google authentication
     authorization_code = secret.generate_authorization_code()
