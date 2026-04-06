@@ -600,7 +600,7 @@ botocore = ["botocore"]
 
 [[package]]
 name = "campus-api-python"
-version = "0.1.47"
+version = "0.1.48"
 description = "Campus API for Python projects"
 optional = false
 python-versions = ">=3.11,<3.12"
@@ -616,7 +616,7 @@ flask = "^3.0.0"
 type = "git"
 url = "https://github.com/nyjc-computing/campus-api-python.git"
 reference = "main"
-resolved_reference = "9eaf79d1dacc9161f67de5ec098512d488f86805"
+resolved_reference = "294efd3027e5b9a9f3edb399d8a835ef2d09bcab"
 
 [[package]]
 name = "certifi"
