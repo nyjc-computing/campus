@@ -89,7 +89,7 @@ class GoogleAuthProxy(base.AuthProxy):
     def scopes(self) -> list[str]:
         return self._oauth2.scopes
 
-    def redirect_for_authorization(
+    def redirect_for_authorization(  # pyright: ignore [reportIncompatibleMethodOverride]
             self,
             target: schema.Url,
             *,
