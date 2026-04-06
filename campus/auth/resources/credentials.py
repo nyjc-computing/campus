@@ -137,7 +137,7 @@ class UserCredentialsResource:
         """Get credentials for this user-client.
 
         Returns:
-            UserCredentials instance
+            UserCredentials instance with token loaded
         """
         query: dict[str, str] = {
             "provider": self.parent.provider,
@@ -151,10 +151,17 @@ class UserCredentialsResource:
                 f"and user {self.user_id} not found.",
                 query=query
             )
-        # TODO: refresh token if expired
+        cred_record = records[0]
         credentials = campus.model.UserCredentials.from_storage(
-            records[0]
+            cred_record
         )
+        # Load token from token_storage using token_id
+        if cred_record.get('token_id'):
+            token_record = token_storage.get_by_id(cred_record['token_id'])
+            if token_record:
+                credentials.token = campus.model.OAuthToken.from_storage(
+                    token_record
+                )
         return credentials
 
     def new(

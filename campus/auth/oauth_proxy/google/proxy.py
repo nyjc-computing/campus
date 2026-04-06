@@ -166,11 +166,6 @@ class GoogleAuthProxy(base.AuthProxy):
                 domain=user_email.domain
             )
         user_id = schema.UserID(userinfo["email"])
-        # Ensure user exists (auto-provision)
-        resources.user.get_or_create(
-            email=user_email,
-            name=userinfo.get("name", "")
-        )
         # Store/update token
         credentials = resources.credentials[PROVIDER][user_id].update(
             client_id=self._CLIENT_ID,
