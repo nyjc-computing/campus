@@ -83,6 +83,7 @@ def get_by_user(
     Returns: { ... }
     """
     client_id = client_id or flask.g.current_client.id
+    assert client_id  # Authorization already done by this point
     credentials = creds_resource[provider][user_id].get(client_id)
     return credentials.to_resource(), 200
 
