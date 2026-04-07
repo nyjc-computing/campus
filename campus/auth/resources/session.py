@@ -125,6 +125,10 @@ class ProviderAuthSessionResource:
         logger = logging.getLogger(__name__)
 
         session_id = uid.generate_category_uid(f"{self.provider}_session")
+        logger.info(
+            "[SESSION CREATION] id=%s client_id=%s user_id=%s redirect_uri=%s",
+            session_id, client_id, user_id, redirect_uri
+        )
         session = _from_record({
             "id": session_id,
             "expiry_seconds": expiry_seconds,
