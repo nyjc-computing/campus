@@ -259,22 +259,33 @@ def token(
     user_credentials_resource = (
         campus_cred_resource[authsession.user_id]
     )
-    credentials = user_credentials_resource.get(authsession.client_id)
-    # Create token if not existing
-    if credentials.token and not credentials.token.is_expired():
+
+    # Try to get existing credentials
+    credentials = None
+    try:
+        credentials = user_credentials_resource.get(authsession.client_id)
+    except api_errors.NotFoundError:
+        pass
+
+    # Use existing token if available and not expired, otherwise create new
+    if (
+        credentials is not None
+        and credentials.token is not None
+        and not credentials.token.is_expired()
+    ):
         token = credentials.token
     else:
         token = user_credentials_resource.new(
-            client_id=client_id,
-            # TODO: user consent screen for scope grant
+            client_id=authsession.client_id,
             scopes=authsession.scopes,
             expiry_seconds=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
                 * utc_time.DAY_SECONDS
             ),
         )
+        # Update credentials with the new token
         user_credentials_resource.update(
-            client_id=credentials.client_id,
+            client_id=authsession.client_id,
             token=token
         )
     return token.to_resource(), 200
@@ -376,16 +387,8 @@ def verify_login_and_redirect(
         authorization_code=authorization_code
     )
 
-    # Issue Campus token and update credentials
-    # Token will be exchanged by app with auth code thru /token endpoint
-    resources.credentials[PROVIDER][user].new(
-        client_id=authsession.client_id,
-        scopes=authsession.scopes,
-        expiry_seconds=(
-            campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
-            * utc_time.DAY_SECONDS
-        ),
-    )
+    # NOTE: Token creation is now handled by /token endpoint
+    # This endpoint only creates the authorization code for the app to exchange
     
     # Redirect to app callback (redirect_uri, not final target)
     assert authsession.state and authsession.authorization_code
