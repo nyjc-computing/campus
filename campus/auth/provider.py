@@ -152,10 +152,6 @@ def authorize(
             from None
 
     # Validate client_id
-    logger.info(
-        "[AUTHORIZE] request_client_id=%s session_client_id=%s session_id=%s",
-        client_id, app_session.client_id, state
-    )
     if client_id != app_session.client_id:
         raise auth_errors.UnauthorizedClientError(
             f"Client mismatch: {client_id}"
@@ -263,43 +259,11 @@ def token(
     user_credentials_resource = (
         campus_cred_resource[authsession.user_id]
     )
-    logger.info(
-        "[TOKEN ENDPOINT] user=%s session_client_id=%s request_client_id=%s",
-        authsession.user_id, authsession.client_id, client_id
-    )
-
-    # Try to get existing credentials
-    try:
-        credentials = user_credentials_resource.get(authsession.client_id)
-        logger.info(
-            "[TOKEN ENDPOINT] Found existing credentials: token_id=%s",
-            credentials.token_id if credentials.token else "None"
-        )
-    except api_errors.NotFoundError:
-        logger.info(
-            "[TOKEN ENDPOINT] No existing credentials found, will create new ones"
-        )
-        # Create placeholder credentials object for the flow to continue
-        credentials = campus.model.UserCredentials(
-            id=uid.generate_category_uid("user_credentials"),
-            provider=PROVIDER,
-            user_id=authsession.user_id,
-            client_id=authsession.client_id,
-            token_id=None  # Will be set after token creation
-        )
-
-    # Create token if not existing or expired
+    credentials = user_credentials_resource.get(authsession.client_id)
+    # Create token if not existing
     if credentials.token and not credentials.token.is_expired():
         token = credentials.token
-        logger.info(
-            "[TOKEN ENDPOINT] Using existing token: token_id=%s",
-            token.id[:30] + "..."
-        )
     else:
-        logger.info(
-            "[TOKEN ENDPOINT] Creating new token for client_id=%s",
-            client_id
-        )
         token = user_credentials_resource.new(
             client_id=client_id,
             # TODO: user consent screen for scope grant
@@ -312,10 +276,6 @@ def token(
         user_credentials_resource.update(
             client_id=credentials.client_id,
             token=token
-        )
-        logger.info(
-            "[TOKEN ENDPOINT] New token created: token_id=%s",
-            token.id[:30] + "..."
         )
     return token.to_resource(), 200
 
@@ -343,11 +303,6 @@ def verify_login_and_redirect(
         302 Found: Redirect to app callback (redirect_uri) with authorization code
         401 Not authenticated: User domain not allowed or no valid Google credential
     """
-    logger.info(
-        "[VERIFY_LOGIN_AND_REDIRECT] Called with state=%s user=%s",
-        state, user
-    )
-
     # Ensure user is a UserID object (convert from string if needed)
     if isinstance(user, str):
         user = schema.UserID(user)
@@ -421,17 +376,8 @@ def verify_login_and_redirect(
         authorization_code=authorization_code
     )
 
-    logger.info(
-        "[VERIFY_LOGIN_AND_REDIRECT] authsession updated: id=%s client_id=%s user_id=%s auth_code=%s",
-        authsession.id, authsession.client_id, authsession.user_id, authorization_code[:20] + "..."
-    )
-
     # Issue Campus token and update credentials
     # Token will be exchanged by app with auth code thru /token endpoint
-    logger.info(
-        "[CREDENTIAL CREATION] user=%s provider=%s client_id=%s scopes=%s",
-        user, PROVIDER, authsession.client_id, authsession.scopes
-    )
     resources.credentials[PROVIDER][user].new(
         client_id=authsession.client_id,
         scopes=authsession.scopes,

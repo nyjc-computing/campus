@@ -186,20 +186,11 @@ class GoogleAuthProxy(base.AuthProxy):
             **kwargs: str,
     ) -> werkzeug.Response:
         """Handles Google OAuth callback for a consent flow."""
-        import logging
-        logger = logging.getLogger(__name__)
-
         # handle_auth_callback() also retrieves authsession
         # Unfortunately this duplication of code is necessary because
         # handle_auth_callback will finalize the authsession, deleting
         # it from the store. So we get it here before that happens.
         authsession = self.get_authsession()
-
-        logger.info(
-            "[GOOGLE OAUTH CALLBACK] state=%s authsession.id=%s authsession.client_id=%s authsession.target=%s",
-            state, authsession.id, authsession.client_id, authsession.target
-        )
-
         # Finalize authsession and get credentials
         credentials = self.handle_auth_callback(state, code, scope)
 
