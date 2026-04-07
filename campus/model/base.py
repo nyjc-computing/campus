@@ -105,9 +105,24 @@ class Model(typing.Protocol):
             record: dict[str, typing.Any]
     ) -> typing.Self:
         """Create a model instance from a storage record dictionary."""
+        def get_value(f: dataclasses.Field) -> typing.Any:
+            """Get value from record, falling back to field default if missing."""
+            if f.name in record:
+                return record[f.name]
+            # Key not in record - use field default if available
+            if f.default is not dataclasses.MISSING:
+                return f.default
+            if f.default_factory is not dataclasses.MISSING:  # type: ignore[attr-defined]
+                return f.default_factory()  # type: ignore[attr-defined]
+            # No default available - raise KeyError with clear message
+            raise KeyError(
+                f"Required field '{f.name}' not found in storage record "
+                f"for model '{cls.__name__}'"
+            )
+
         return cls(
             **{
-                field.name: record[field.name]
+                field.name: get_value(field)
                 for field in cls.fields().values()
                 if field.metadata.get("storage", True)
             }
