@@ -39,10 +39,11 @@ import flask
 import werkzeug
 
 import campus.config
+import campus.model
 from campus import flask_campus
 from campus.common import env, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
-from campus.common.utils import secret, url, utc_time
+from campus.common.utils import secret, uid, url, utc_time
 
 from . import resources
 
@@ -279,13 +280,14 @@ def token(
         logger.info(
             "[TOKEN ENDPOINT] No existing credentials found, will create new ones"
         )
-        # Create placeholder credentials object for the flow to continue
+        # No credentials exist - the token will be created below and saved via update()
+        # Set credentials to a placeholder that indicates token needs to be created
         credentials = campus.model.UserCredentials(
             id=uid.generate_category_uid("user_credentials"),
             provider=PROVIDER,
             user_id=authsession.user_id,
             client_id=authsession.client_id,
-            token_id=None  # Will be set after token creation
+            token_id="",  # Empty string indicates no token yet
         )
 
     # Create token if not existing or expired
