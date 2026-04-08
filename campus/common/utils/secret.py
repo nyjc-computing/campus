@@ -198,7 +198,6 @@ def hash_client_secret(secret: str, key: str) -> str:
     hmac_hash = hmac.new(hmac_key, secret_bytes, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(hmac_hash).decode('utf-8')
 
-
 def hash_otp(otp: str) -> str:
     """Hash the OTP using bcrypt for secure storage.
 
@@ -209,7 +208,6 @@ def hash_otp(otp: str) -> str:
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(otp_bytes, salt)
     return hashed.decode('utf-8')
-
 
 def verify_otp(plain_otp: str, hashed_otp: str) -> bool:
     """Verify if a plaintext OTP matches this hashed OTP.
