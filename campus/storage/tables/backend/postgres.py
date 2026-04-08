@@ -33,6 +33,7 @@ from campus.common import devops, env
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors
+from campus.storage.query import gt, gte, is_operator, lt, lte
 
 from ..interface import PK, TableInterface
 
@@ -167,7 +168,10 @@ class PostgreSQLTable(TableInterface):
 
     @staticmethod
     def _build_where_clause(query: dict) -> tuple[str, list]:
-        """Build WHERE clause from query dictionary."""
+        """Build WHERE clause from query dictionary.
+
+        Handles exact matches and comparison operators (gt, gte, lt, lte).
+        """
         if not query:
             return "", []
 
@@ -175,8 +179,24 @@ class PostgreSQLTable(TableInterface):
         params = []
 
         for key, value in query.items():
-            conditions.append(f"{key} = %s")
-            params.append(value)
+            if is_operator(value):
+                # Handle comparison operators
+                if isinstance(value, gt):
+                    conditions.append(f'"{key}" > %s')
+                elif isinstance(value, gte):
+                    conditions.append(f'"{key}" >= %s')
+                elif isinstance(value, lt):
+                    conditions.append(f'"{key}" < %s')
+                elif isinstance(value, lte):
+                    conditions.append(f'"{key}" <= %s')
+                else:
+                    # Unknown operator, fall back to exact match
+                    conditions.append(f'"{key}" = %s')
+                params.append(value.value)
+            else:
+                # Exact match
+                conditions.append(f'"{key}" = %s')
+                params.append(value)
 
         return f"WHERE {' AND '.join(conditions)}", params
 
@@ -215,12 +235,38 @@ class PostgreSQLTable(TableInterface):
                     raise errors.NotFoundError(row_id, self.name)
                 return dict(row)
 
-    def get_matching(self, query: dict) -> list[dict]:
-        """Retrieve rows matching a query."""
+    def get_matching(
+        self,
+        query: dict,
+        *,
+        order_by: str | None = None,
+        ascending: bool = True,
+        limit: int | None = None,
+        offset: int = 0
+    ) -> list[dict]:
+        """Retrieve rows matching a query.
+
+        Supports exact matches, comparison operators (gt, gte, lt, lte),
+        sorting, and pagination.
+        """
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 where_clause, params = self._build_where_clause(query)
                 sql = f"SELECT * FROM {self.name} {where_clause}"
+
+                # Add ORDER BY clause if specified
+                if order_by is not None:
+                    direction = "ASC" if ascending else "DESC"
+                    sql += f' ORDER BY "{order_by}" {direction}'
+
+                # Add LIMIT clause if specified
+                if limit is not None:
+                    sql += f" LIMIT {limit}"
+
+                # Add OFFSET clause if specified
+                if offset > 0:
+                    sql += f" OFFSET {offset}"
+
                 cursor.execute(sql, params)
                 rows = cursor.fetchall()
                 return [dict(row) for row in rows]
