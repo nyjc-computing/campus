@@ -33,6 +33,7 @@ __all__ = [
     "OAuthToken",
     "Response",
     "Submission",
+    "TraceSpan",
     "User",
     "UserCredentials",
     "Vault",
@@ -54,6 +55,7 @@ from .emailotp import EmailOTP
 from .login import LoginSession
 from .session import AuthSession
 from .submission import Feedback, Response, Submission
+from .trace import TraceSpan
 from .user import User
 from .vault import Vault
 from .timetable import (
