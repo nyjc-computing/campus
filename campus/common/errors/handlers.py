@@ -28,6 +28,28 @@ def get_caller() -> str:
     return "unknown"
 
 
+def log_error_by_status(
+        err: api_errors.APIError | auth_errors.AuthorizationError | token_errors.TokenError,
+        error_label: str | None = None,
+) -> None:
+    """Log error with appropriate level based on status code.
+
+    Only logs tracebacks for 5xx server errors; 4xx client errors are logged
+    at INFO level without tracebacks to reduce log noise.
+
+    Args:
+        err: The error object with a status_code attribute
+        error_label: Optional label for the error type (e.g., "APIError", "OAuthError").
+                     Defaults to the error class name if not provided.
+    """
+    module = get_caller()
+    label = error_label or err.__class__.__name__
+    if 500 <= err.status_code < 600:
+        logger.exception("%s in %s: %s", label, module, err)
+    else:
+        logger.info("%s in %s: %s", label, module, err)
+
+
 def handle_authorization_error(
         err: auth_errors.AuthorizationError
 ) -> werkzeug.Response | tuple[JsonDict, int]:
@@ -39,12 +61,7 @@ def handle_authorization_error(
 
     In development mode, raises BadRequest for ambiguous requests.
     """
-    module = get_caller()
-    # Only log tracebacks for 5xx errors; 4xx are client errors and don't need tracebacks
-    if 500 <= err.status_code < 600:
-        logger.exception("OAuthError in %s: %s", module, err)
-    else:
-        logger.info("OAuthError in %s: %s", module, err)
+    log_error_by_status(err)
 
     # Determine if this is an API request (expects JSON) or OAuth browser flow (expects redirect)
     accept_header = flask.request.headers.get("Accept", "")
@@ -109,12 +126,7 @@ def handle_api_error(err: api_errors.APIError) -> tuple[JsonDict, int]:
 
     Reference: campus/api/docs/api-error-spec.md
     """
-    module = get_caller()
-    # Only log tracebacks for 5xx errors; 4xx are client errors and don't need tracebacks
-    if 500 <= err.status_code < 600:
-        logger.exception("APIError in %s: %s", module, err)
-    else:
-        logger.info("APIError in %s: %s", module, err)
+    log_error_by_status(err)
     err_dict = err.to_dict()
     from campus.common import devops
     # Remove traceback and sensitive details in production for security reasons
@@ -134,12 +146,7 @@ def handle_token_error(
 
     Reference: campus/auth/docs/auth-error-spec.md
     """
-    module = get_caller()
-    # Only log tracebacks for 5xx errors; 4xx are client errors and don't need tracebacks
-    if 500 <= err.status_code < 600:
-        logger.exception("TokenError in %s: %s", module, err)
-    else:
-        logger.info("TokenError in %s: %s", module, err)
+    log_error_by_status(err)
     err_dict = err.to_dict(envelope_format=True)
     from campus.common import devops
     # Remove details in production for security reasons
