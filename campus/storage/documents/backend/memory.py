@@ -97,7 +97,9 @@ class MemoryCollection(CollectionInterface):
         # Sort if order_by is specified
         if order_by is not None:
             reverse = not ascending
-            matching_docs.sort(key=lambda d: d.get(order_by), reverse=reverse)
+            # Use tuple (has_key, value) so items without the key sort to the end
+            # Empty string is a safe default that works with most types
+            matching_docs.sort(key=lambda d: (order_by in d, d.get(order_by, "")), reverse=reverse)
 
         # Apply offset
         if offset > 0:
