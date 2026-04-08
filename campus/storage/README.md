@@ -7,11 +7,13 @@ Supported storage models:
 
 * **Tables** – structured rows with a fixed schema (relational databases)
 * **Documents** – flexible JSON-like objects (document databases)
+* **Objects** – binary blobs with S3-compatible storage (file uploads, images, etc.)
 
 Current backends:
 
 * Tables → PostgreSQL (production), SQLite (testing)
 * Documents → MongoDB (production), Memory (testing)
+* Objects → Railway (production), Local (testing)
 
 ---
 
@@ -51,11 +53,44 @@ events.insert_one({"type": "meeting", "room": "A101"})
 docs = events.get_matching({"type": "meeting"})
 ```
 
+## Objects (Buckets)
+
+```python
+from campus.storage import get_bucket
+
+uploads = get_bucket("uploads")
+
+# Upload a file
+uploads.put("avatar.jpg", image_data, metadata={"content-type": "image/jpeg"})
+
+# Download a file
+data = uploads.get("avatar.jpg")
+
+# Generate a presigned URL (valid for 1 hour)
+url = uploads.get_url("avatar.jpg", expires_in=3600)
+
+# Check if file exists
+if uploads.exists("avatar.jpg"):
+    print("File exists")
+
+# List files with prefix
+files = uploads.list(prefix="user123/", limit=10)
+
+# Get metadata without downloading
+metadata = uploads.get_metadata("avatar.jpg")
+print(f"Size: {metadata.size} bytes")
+
+# Delete a file
+uploads.delete("avatar.jpg")
+```
+
 ---
 
 # Storage Interfaces
 
-Both storage types support similar operations:
+## Tables & Documents
+
+Both Tables and Documents support similar operations:
 
 * `get_by_id(id)`
 * `get_matching(query, *, order_by, ascending, limit, offset)`
@@ -69,6 +104,19 @@ Each record/document is expected to include:
 
 * `id` – primary identifier
 * `created_at` – creation timestamp
+
+## Objects (Buckets)
+
+Buckets provide S3-compatible object storage operations:
+
+* `put(key, data, metadata)` – Upload binary data with optional metadata
+* `get(key)` – Download binary data
+* `delete(key)` – Delete an object
+* `exists(key)` – Check if an object exists
+* `list(prefix, limit)` – List object keys with optional prefix filter
+* `get_url(key, expires_in)` – Generate a presigned URL for temporary access
+* `get_metadata(key)` – Get object metadata without downloading
+* `copy(source_key, dest_key)` – Copy an object within the bucket
 
 ---
 
@@ -184,11 +232,12 @@ except NotFoundError:
 For development/testing only:
 
 ```python
-from campus.storage import purge_tables, purge_collections, purge_all
+from campus.storage import purge_tables, purge_collections, purge_buckets, purge_all
 ```
 
 * `purge_tables()` – delete all table data
 * `purge_collections()` – delete all document data
-* `purge_all()` – delete everything
+* `purge_buckets()` – delete all object storage data
+* `purge_all()` – delete everything (tables, collections, and buckets)
 
 ⚠️ These operations permanently delete data and should **never be used in production**.
