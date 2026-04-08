@@ -10,8 +10,8 @@ Supported storage models:
 
 Current backends:
 
-* Tables → PostgreSQL
-* Documents → MongoDB
+* Tables → PostgreSQL (production), SQLite (testing)
+* Documents → MongoDB (production), Memory (testing)
 
 ---
 
@@ -58,7 +58,7 @@ docs = events.get_matching({"type": "meeting"})
 Both storage types support similar operations:
 
 * `get_by_id(id)`
-* `get_matching(query)`
+* `get_matching(query, *, order_by, ascending, limit, offset)`
 * `insert_one(data)`
 * `update_by_id(id, update)`
 * `update_matching(query, update)`
@@ -69,6 +69,92 @@ Each record/document is expected to include:
 
 * `id` – primary identifier
 * `created_at` – creation timestamp
+
+---
+
+# Query Operators
+
+The `get_matching()` method supports comparison operators for more expressive queries:
+
+## Available Operators
+
+```python
+from campus.storage import gt, gte, lt, lte
+```
+
+* `gt(value)` – greater than
+* `gte(value)` – greater than or equal
+* `lt(value)` – less than
+* `lte(value)` – less than or equal
+
+## Examples
+
+### Exact Match (Backward Compatible)
+
+```python
+# Simple exact match queries work as before
+traces.get_matching({"user_id": "user_123"})
+traces.get_matching({"status": "active", "type": "request"})
+```
+
+### Comparison Operators
+
+```python
+# Greater than: find slow requests (> 1000ms)
+traces.get_matching({"duration_ms": gt(1000)})
+
+# Greater than or equal: find recent errors
+traces.get_matching({"created_at": gte("2024-01-01"), "status_code": gte(500)})
+
+# Less than: find quick requests
+traces.get_matching({"duration_ms": lt(100)})
+
+# Less than or equal: find old records
+traces.get_matching({"created_at": lte("2024-01-01")})
+```
+
+### Sorting
+
+```python
+from campus.storage import get_table
+
+traces = get_table("traces")
+
+# Ascending sort (default)
+traces.get_matching({}, order_by="created_at")
+
+# Descending sort
+traces.get_matching({}, order_by="created_at", ascending=False)
+
+# Sort by duration
+traces.get_matching({"status": "error"}, order_by="duration_ms", ascending=False)
+```
+
+### Pagination
+
+```python
+# Limit results
+traces.get_matching({}, limit=10)
+
+# Skip first N results
+traces.get_matching({}, offset=20)
+
+# Combined pagination (page 2, 10 per page)
+traces.get_matching({}, order_by="created_at", limit=10, offset=10)
+```
+
+### Combining Filters
+
+Multiple fields are treated as implicit AND (all conditions must match):
+
+```python
+# Find recent error traces from a specific user
+traces.get_matching({
+    "user_id": "user_123",
+    "status_code": gte(500),
+    "created_at": gte("2024-01-01")
+})
+```
 
 ---
 
