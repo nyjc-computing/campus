@@ -78,6 +78,24 @@ def unpack_into(
 
     field_errors: list[FieldError] = []
 
+    # Check if function accepts **kwargs
+    func_params = inspect.signature(func).parameters
+    has_var_keyword = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD
+        for p in func_params.values()
+    )
+
+    # Only raise error for extra arguments if function doesn't have **kwargs
+    if extra_args and not has_var_keyword:
+        field_errors.extend([
+            FieldError(
+                field=param,
+                code="UNRECOGNIZED_FIELD",
+                message=f"Unexpected field: {param}"
+            )
+            for param in extra_args
+        ])
+
     if missing_params:
         field_errors.extend([
             FieldError(
@@ -95,6 +113,7 @@ def unpack_into(
         )
 
     # Call the original function with unpacked arguments
+    # Include extra_args only if function has **kwargs
     return func(**reconciled, **extra_args)
 
 
