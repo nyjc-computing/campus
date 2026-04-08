@@ -34,6 +34,7 @@ from typing import Any, Dict, List
 from campus.common import devops
 from campus.model import Model
 from campus.storage.documents.interface import CollectionInterface, PK
+from campus.storage.query import gt, gte, is_operator, lt, lte
 
 
 class MemoryCollection(CollectionInterface):
@@ -67,27 +68,83 @@ class MemoryCollection(CollectionInterface):
         collection = self._get_collection()
         return collection.get(doc_id)
 
-    def get_matching(self, query: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Retrieve documents matching a query."""
+    def get_matching(
+        self,
+        query: Dict[str, Any],
+        *,
+        order_by: str | None = None,
+        ascending: bool = True,
+        limit: int | None = None,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Retrieve documents matching a query.
+
+        Supports exact matches, comparison operators (gt, gte, lt, lte),
+        sorting, and pagination.
+        """
         collection = self._get_collection()
 
         if not query:
             # Return all documents if no query
-            return list(collection.values())
+            matching_docs = list(collection.values())
+        else:
+            # Filter documents based on query
+            matching_docs = []
+            for doc in collection.values():
+                if self._matches_query(doc, query):
+                    matching_docs.append(doc)
 
-        # Simple query handling - exact matches only for this implementation
-        matching_docs = []
-        for doc in collection.values():
-            if self._matches_query(doc, query):
-                matching_docs.append(doc)
+        # Sort if order_by is specified
+        if order_by is not None:
+            reverse = not ascending
+            # Use tuple (has_key, value) so items without the key sort to the end
+            # Empty string is a safe default that works with most types
+            matching_docs.sort(key=lambda d: (order_by in d, d.get(order_by, "")), reverse=reverse)
+
+        # Apply offset
+        if offset > 0:
+            matching_docs = matching_docs[offset:]
+
+        # Apply limit
+        if limit is not None:
+            matching_docs = matching_docs[:limit]
 
         return matching_docs
 
     def _matches_query(self, doc: Dict[str, Any], query: Dict[str, Any]) -> bool:
-        """Check if a document matches a query."""
+        """Check if a document matches a query.
+
+        Handles exact matches and comparison operators (gt, gte, lt, lte).
+        """
         for key, value in query.items():
-            if key not in doc or doc[key] != value:
+            if key not in doc:
                 return False
+
+            doc_value = doc[key]
+
+            if is_operator(value):
+                # Handle comparison operators
+                if isinstance(value, gt):
+                    if not (doc_value > value.value):
+                        return False
+                elif isinstance(value, gte):
+                    if not (doc_value >= value.value):
+                        return False
+                elif isinstance(value, lt):
+                    if not (doc_value < value.value):
+                        return False
+                elif isinstance(value, lte):
+                    if not (doc_value <= value.value):
+                        return False
+                else:
+                    # Unknown operator, fall back to exact match
+                    if doc_value != value.value:
+                        return False
+            else:
+                # Exact match
+                if doc_value != value:
+                    return False
+
         return True
 
     def insert_one(self, row: Dict[str, Any]):

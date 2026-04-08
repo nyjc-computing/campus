@@ -39,6 +39,7 @@ from campus.storage.errors import (
     NotFoundError,
     StorageError
 )
+from campus.storage.query import gt, gte, is_operator, lt, lte
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
@@ -149,6 +150,36 @@ class MongoDBCollection(CollectionInterface):
         assert self._collection is not None
         return self._collection
 
+    @staticmethod
+    def _build_mongo_query(query: dict) -> dict:
+        """Build MongoDB query from query dictionary.
+
+        Translates Campus operators to MongoDB query syntax:
+        - gt(value) → {"field": {"$gt": value}}
+        - gte(value) → {"field": {"$gte": value}}
+        - lt(value) → {"field": {"$lt": value}}
+        - lte(value) → {"field": {"$lte": value}}
+        - exact match → {"field": value}
+        """
+        mongo_query = {}
+        for key, value in query.items():
+            if is_operator(value):
+                if isinstance(value, gt):
+                    mongo_query[key] = {"$gt": value.value}
+                elif isinstance(value, gte):
+                    mongo_query[key] = {"$gte": value.value}
+                elif isinstance(value, lt):
+                    mongo_query[key] = {"$lt": value.value}
+                elif isinstance(value, lte):
+                    mongo_query[key] = {"$lte": value.value}
+                else:
+                    # Unknown operator, fall back to exact match
+                    mongo_query[key] = value.value
+            else:
+                # Exact match
+                mongo_query[key] = value
+        return mongo_query
+
     def get_by_id(self, doc_id: str) -> dict:
         """Retrieve a document by its ID."""
         try:
@@ -161,11 +192,38 @@ class MongoDBCollection(CollectionInterface):
             return MongoRecord.from_mongo(mongo_doc).to_record()
         return {}
 
-    def get_matching(self, query: dict) -> list[dict]:
-        """Retrieve documents matching a query."""
+    def get_matching(
+        self,
+        query: dict,
+        *,
+        order_by: str | None = None,
+        ascending: bool = True,
+        limit: int | None = None,
+        offset: int = 0
+    ) -> list[dict]:
+        """Retrieve documents matching a query.
+
+        Supports exact matches, comparison operators (gt, gte, lt, lte),
+        sorting, and pagination.
+        """
         assert 'id' not in query, "Matching by 'id' is not allowed"
         try:
-            cursor = self.collection.find(query)
+            mongo_query = self._build_mongo_query(query)
+            cursor = self.collection.find(mongo_query)
+
+            # Add sorting if specified
+            if order_by is not None:
+                direction = 1 if ascending else -1
+                cursor = cursor.sort(order_by, direction)
+
+            # Add offset if specified
+            if offset > 0:
+                cursor = cursor.skip(offset)
+
+            # Add limit if specified
+            if limit is not None:
+                cursor = cursor.limit(limit)
+
         except Exception as e:
             raise MongoCollectionError(
                 f"Failed to retrieve documents matching query: {e}"
@@ -222,8 +280,9 @@ class MongoDBCollection(CollectionInterface):
         if not update:
             return
         try:
+            mongo_query = self._build_mongo_query(query)
             result = self.collection.update_many(
-                query,
+                mongo_query,
                 {
                     "$set": {
                         k: v for k, v in update.items() if v is not None
@@ -255,7 +314,8 @@ class MongoDBCollection(CollectionInterface):
         """Delete documents matching a query in the collection."""
         assert 'id' not in query, "Matching by 'id' is not allowed"
         try:
-            result = self.collection.delete_many(query)
+            mongo_query = self._build_mongo_query(query)
+            result = self.collection.delete_many(mongo_query)
         except Exception as e:
             raise MongoCollectionError(
                 f"Failed to delete documents matching query: {e}"
