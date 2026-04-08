@@ -86,7 +86,7 @@ def create_booking(
     return {"error": "Not implemented"}, 501
 
 
-@bp.get('/<schema.CampusID:booking_id>/')
+@bp.get('/<booking_id>/')
 def get_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         Get a single booking by ID.
@@ -108,7 +108,7 @@ def get_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
     return {"error": "Not implemented"}, 501
 
 
-@bp.patch('/<schema.CampusID:booking_id>/')
+@bp.patch('/<booking_id>/')
 @flask_campus.unpack_request
 def update_booking(
     *,
@@ -145,7 +145,7 @@ def update_booking(
     return {"error": "Not implemented"}, 501
 
 
-@bp.delete('/<schema.CampusID:booking_id>/')
+@bp.delete('/<booking_id>/')
 def delete_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
         Delete a booking.
