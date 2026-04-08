@@ -79,7 +79,13 @@ def ingest_spans(
 
 
 @bp.get("/")
-def list_traces() -> flask_campus.JsonResponse:
+@flask_campus.unpack_request
+def list_traces(
+    *,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 50,
+) -> flask_campus.JsonResponse:
     """List recent traces, newest first.
 
     Query params:
@@ -100,6 +106,7 @@ def list_traces() -> flask_campus.JsonResponse:
     # - Check Accept header for content negotiation
     # - Query traces via resources.traces
     # - Return JSON or plain text format
+    _ = since, until, limit  # TODO: Use parameters in implementation
     return {"traces": [], "cursor": {"next": None, "has_more": False}}, 200
 
 
@@ -145,7 +152,18 @@ def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
 
 
 @bp.get("/search")
-def search_traces() -> flask_campus.JsonResponse:
+@flask_campus.unpack_request
+def search_traces(
+    *,
+    path: str | None = None,
+    status: str | None = None,
+    api_key_id: str | None = None,
+    client_id: str | None = None,
+    user_id: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int = 50,
+) -> flask_campus.JsonResponse:
     """Filter and search traces.
 
     Query params:
@@ -168,4 +186,5 @@ def search_traces() -> flask_campus.JsonResponse:
     # - Build query from filters
     # - Check Accept header for content negotiation
     # - Return filtered traces
+    _ = path, status, api_key_id, client_id, user_id, since, until, limit  # TODO: Use parameters in implementation
     return {"traces": [], "cursor": {"next": None, "has_more": False}}, 200
