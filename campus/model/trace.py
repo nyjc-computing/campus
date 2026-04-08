@@ -9,7 +9,6 @@ capturing request-response data for observability.
 from dataclasses import dataclass, field
 
 from campus.common import schema
-from campus.common.utils import uid
 
 from .base import InternalModel
 
@@ -21,10 +20,12 @@ class TraceSpan(InternalModel):
     Captures HTTP request-response data for observability and debugging.
     Uses OpenTelemetry-compatible trace/span ID formats.
 
+    Note: span_id serves as the unique identifier (no separate 'id' field),
+    following OpenTelemetry conventions rather than Campus schema conventions.
+
     Attributes:
-        id: Internal row identifier (UUID)
         trace_id: 32-char hex string grouping related spans
-        span_id: 16-char hex string identifying this span
+        span_id: 16-char hex string identifying this span (unique identifier)
         parent_span_id: 16-char hex string of parent span, null for roots
         method: HTTP method (GET, POST, etc.)
         path: Request path (e.g. /api/v1/students)
@@ -45,13 +46,9 @@ class TraceSpan(InternalModel):
         tags: Arbitrary key-value metadata
     """
 
-    id: schema.CampusID = field(default_factory=(
-        lambda: uid.generate_category_uid("trace_span", length=16)
-    ))
-
     # Trace identification (OpenTelemetry-compatible)
     trace_id: str  # 32-char hex
-    span_id: str  # 16-char hex
+    span_id: str  # 16-char hex (primary key)
     parent_span_id: str | None = None
 
     # Request data

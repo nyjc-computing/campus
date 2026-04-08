@@ -11,9 +11,8 @@ def upgrade():
     """Create api_traces table with indexes for trace queries."""
     sql = """
     CREATE TABLE IF NOT EXISTS "api_traces" (
-        "id" TEXT PRIMARY KEY,
+        "span_id" TEXT PRIMARY KEY,
         "trace_id" TEXT NOT NULL,
-        "span_id" TEXT UNIQUE,
         "parent_span_id" TEXT,
         "method" TEXT NOT NULL,
         "path" TEXT NOT NULL,
@@ -40,7 +39,7 @@ def upgrade():
     CREATE INDEX idx_traces_api_key ON "api_traces"("api_key_id", "started_at" DESC);
     CREATE INDEX idx_traces_status ON "api_traces"("status_code") WHERE "status_code" >= 400;
     CREATE INDEX idx_traces_trace_id ON "api_traces"("trace_id");
-    CREATE INDEX idx_traces_trace_span ON "api_traces"("trace_id", "parent_span_id", "span_id");
+    CREATE INDEX idx_traces_parent_span ON "api_traces"("trace_id", "parent_span_id");
 
     -- JSONB indexes for querying headers/bodies/tags
     CREATE INDEX idx_traces_tags ON "api_traces" USING GIN("tags");
