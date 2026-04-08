@@ -48,7 +48,11 @@ def handle_authorization_error(
     In development mode, raises BadRequest for ambiguous requests.
     """
     module = get_caller()
-    logger.exception("OAuthError in %s: %s", module, err)
+    # Only log tracebacks for 5xx errors; 4xx are client errors and don't need tracebacks
+    if 500 <= err.status_code < 600:
+        logger.exception("OAuthError in %s: %s", module, err)
+    else:
+        logger.info("OAuthError in %s: %s", module, err)
 
     # Determine if this is an API request (expects JSON) or OAuth browser flow (expects redirect)
     accept_header = flask.request.headers.get("Accept", "")
@@ -114,7 +118,11 @@ def handle_api_error(err: api_errors.APIError) -> tuple[JsonDict, int]:
     Reference: campus/api/docs/api-error-spec.md
     """
     module = get_caller()
-    logger.exception("APIError in %s: %s", module, err)
+    # Only log tracebacks for 5xx errors; 4xx are client errors and don't need tracebacks
+    if 500 <= err.status_code < 600:
+        logger.exception("APIError in %s: %s", module, err)
+    else:
+        logger.info("APIError in %s: %s", module, err)
     err_dict = err.to_dict()
     from campus.common import devops
     # Remove traceback and sensitive details in production for security reasons
@@ -135,7 +143,11 @@ def handle_token_error(
     Reference: campus/auth/docs/auth-error-spec.md
     """
     module = get_caller()
-    logger.exception("TokenError in %s: %s", module, err)
+    # Only log tracebacks for 5xx errors; 4xx are client errors and don't need tracebacks
+    if 500 <= err.status_code < 600:
+        logger.exception("TokenError in %s: %s", module, err)
+    else:
+        logger.info("TokenError in %s: %s", module, err)
     err_dict = err.to_dict(envelope_format=True)
     from campus.common import devops
     # Remove details in production for security reasons
