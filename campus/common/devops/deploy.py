@@ -115,4 +115,11 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
     for module in appmodules:
         module.init_app(app)
     campus.common.errors.init_app(app)
+
+    # Register tracing middleware for auth/api deployments
+    # campus.audit handles ingestion but doesn't trace its own requests
+    if env.DEPLOY in ('campus.auth', 'campus.api'):
+        from campus.audit import middleware
+        middleware.init_app(app)
+
     return app
