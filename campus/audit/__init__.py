@@ -79,13 +79,12 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # Organise audit routes under audit blueprint
     bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
 
+    # Apply authentication to the traces blueprint (before registering)
+    # This ensures only trace routes require auth, not health routes
+    traces_blueprint.before_request(audit_authenticator.authenticate)
+
     # Register authenticated routes (traces)
     bp.register_blueprint(traces_blueprint)
-
-    # Apply authentication to the traces blueprint
-    # Note: We apply to the traces blueprint directly so that health
-    # routes can remain publicly accessible
-    bp.before_request(audit_authenticator.authenticate)
 
     # Register public health routes WITHOUT authentication
     bp.register_blueprint(health_blueprint)
