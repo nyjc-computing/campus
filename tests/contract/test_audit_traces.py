@@ -26,13 +26,14 @@ class TestAuditHealthContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager()
+        cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
         # Note: audit_app is created as part of the ServiceManager setup
         cls.app = cls.manager.audit_app
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager.reset_test_data()
         cls.manager.close()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
@@ -62,7 +63,7 @@ class TestAuditTracesIngestContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager()
+        cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
         cls.app = cls.manager.audit_app
 
@@ -72,6 +73,7 @@ class TestAuditTracesIngestContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager.reset_test_data()
         cls.manager.close()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
@@ -108,18 +110,18 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         return span
 
     def test_ingest_spans_requires_authentication(self):
-        """POST /audit/v1/traces requires authentication."""
+        """POST /audit/v1/traces/ requires authentication."""
         response = self.client.post(
-            "/audit/v1/traces",
+            "/audit/v1/traces/",
             json={"spans": [self._make_test_span()]}
         )
 
         self.assertEqual(response.status_code, 401)
 
     def test_ingest_single_span_success(self):
-        """POST /audit/v1/traces with single span returns 201."""
+        """POST /audit/v1/traces/ with single span returns 201."""
         response = self.client.post(
-            "/audit/v1/traces",
+            "/audit/v1/traces/",
             json={"spans": [self._make_test_span()]},
             headers=self.auth_headers
         )
@@ -131,14 +133,14 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         self.assertNotIn("failed", data)
 
     def test_ingest_batch_spans_success(self):
-        """POST /audit/v1/traces with multiple spans returns 201."""
+        """POST /audit/v1/traces/ with multiple spans returns 201."""
         spans = [
             self._make_test_span(span_id=f"span{i}", trace_id=f"trace{i}")
             for i in range(3)
         ]
 
         response = self.client.post(
-            "/audit/v1/traces",
+            "/audit/v1/traces/",
             json={"spans": spans},
             headers=self.auth_headers
         )
@@ -148,9 +150,9 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         self.assertEqual(len(data["created"]), 3)
 
     def test_ingest_missing_spans_field_returns_error(self):
-        """POST /audit/v1/traces without 'spans' field returns 400."""
+        """POST /audit/v1/traces/ without 'spans' field returns 400."""
         response = self.client.post(
-            "/audit/v1/traces",
+            "/audit/v1/traces/",
             json={},
             headers=self.auth_headers
         )
@@ -158,9 +160,9 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_ingest_invalid_span_returns_error(self):
-        """POST /audit/v1/traces with invalid span data returns 400."""
+        """POST /audit/v1/traces/ with invalid span data returns 400."""
         response = self.client.post(
-            "/audit/v1/traces",
+            "/audit/v1/traces/",
             json={"spans": [{"invalid": "data"}]},
             headers=self.auth_headers
         )
@@ -173,7 +175,7 @@ class TestAuditTracesListContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager()
+        cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
         cls.app = cls.manager.audit_app
 
@@ -183,6 +185,7 @@ class TestAuditTracesListContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager.reset_test_data()
         cls.manager.close()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
@@ -192,15 +195,15 @@ class TestAuditTracesListContract(unittest.TestCase):
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
     def test_list_traces_requires_authentication(self):
-        """GET /audit/v1/traces requires authentication."""
-        response = self.client.get("/audit/v1/traces")
+        """GET /audit/v1/traces/ requires authentication."""
+        response = self.client.get("/audit/v1/traces/")
 
         self.assertEqual(response.status_code, 401)
 
     def test_list_traces_empty_returns_empty_list(self):
-        """GET /audit/v1/traces with no traces returns empty list."""
+        """GET /audit/v1/traces/ with no traces returns empty list."""
         response = self.client.get(
-            "/audit/v1/traces",
+            "/audit/v1/traces/",
             headers=self.auth_headers
         )
 
@@ -210,7 +213,7 @@ class TestAuditTracesListContract(unittest.TestCase):
         self.assertIn("cursor", data)
 
     def test_list_traces_returns_trace_summaries(self):
-        """GET /audit/v1/traces returns trace summaries with cursor."""
+        """GET /audit/v1/traces/ returns trace summaries with cursor."""
         # First, ingest a span
         from campus.audit.resources.traces import TracesResource
         traces_resource = TracesResource()
@@ -228,7 +231,7 @@ class TestAuditTracesListContract(unittest.TestCase):
 
         # Then list traces
         response = self.client.get(
-            "/audit/v1/traces",
+            "/audit/v1/traces/",
             headers=self.auth_headers
         )
 
@@ -239,9 +242,9 @@ class TestAuditTracesListContract(unittest.TestCase):
         self.assertIn("cursor", data)
 
     def test_list_traces_with_limit(self):
-        """GET /audit/v1/traces?limit=5 respects limit parameter."""
+        """GET /audit/v1/traces/?limit=5 respects limit parameter."""
         response = self.client.get(
-            "/audit/v1/traces?limit=5",
+            "/audit/v1/traces/?limit=5",
             headers=self.auth_headers
         )
 
@@ -255,7 +258,7 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager()
+        cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
         cls.app = cls.manager.audit_app
 
@@ -265,6 +268,7 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager.reset_test_data()
         cls.manager.close()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
@@ -341,7 +345,7 @@ class TestAuditSpansListContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager()
+        cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
         cls.app = cls.manager.audit_app
 
@@ -351,6 +355,7 @@ class TestAuditSpansListContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager.reset_test_data()
         cls.manager.close()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
@@ -414,7 +419,7 @@ class TestAuditSpanGetContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager()
+        cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
         cls.app = cls.manager.audit_app
 
@@ -424,6 +429,7 @@ class TestAuditSpanGetContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager.reset_test_data()
         cls.manager.close()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
@@ -514,7 +520,7 @@ class TestAuditTracesSearchContract(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager()
+        cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
         cls.app = cls.manager.audit_app
 
@@ -524,6 +530,7 @@ class TestAuditTracesSearchContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.manager.reset_test_data()
         cls.manager.close()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
