@@ -123,9 +123,12 @@ class TracesResource:
             List of TraceSummary model instances
         """
         query = {}
-        if since:
+        if since and until:
+            # Both time bounds provided - use between operator
+            query["started_at"] = campus.storage.between(since, until)
+        elif since:
             query["started_at"] = campus.storage.gte(since)
-        if until:
+        elif until:
             query["started_at"] = campus.storage.lte(until)
 
         try:
@@ -177,14 +180,12 @@ class TracesResource:
             query["client_id"] = client_id
         if user_id:
             query["user_id"] = user_id
-        if since:
+        if since and until:
+            # Both time bounds provided - use between operator
+            query["started_at"] = campus.storage.between(since, until)
+        elif since:
             query["started_at"] = campus.storage.gte(since)
-        if until:
-            # Combine time range filters
-            if "started_at" in query:
-                # Both since and until - need to handle differently
-                # For now, just use the most recent filter
-                pass
+        elif until:
             query["started_at"] = campus.storage.lte(until)
 
         try:
