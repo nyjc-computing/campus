@@ -11,18 +11,20 @@ from typing import Optional, cast
 from . import setup, auth, api, storage, yapper
 from campus.common import devops, env
 
+# Lazy import of audit (imports campus_python which needs vault setup)
 # pylint: disable=import-outside-toplevel
 
 
 class ServiceManager:
     """Manages Campus service instances for integration testing.
 
-    Coordinates initialization of campus.auth, campus.api, and related services
-    with proper test fixtures and environment configuration.
+    Coordinates initialization of campus.auth, campus.api, campus.audit,
+    and related services with proper test fixtures and environment configuration.
 
     Attributes:
         auth_app: Flask application for campus.auth service
         apps_app: Flask application for campus.api service
+        audit_app: Flask application for campus.audit service
         _setup_done: Initialization completion flag
         _shared: Whether instance uses shared resources across tests
     """
@@ -40,6 +42,7 @@ class ServiceManager:
         """
         self.auth_app: Optional[object] = None
         self.apps_app: Optional[object] = None
+        self.audit_app: Optional[object] = None
         self._setup_done = False
         self._shared = shared
 
@@ -47,6 +50,7 @@ class ServiceManager:
             # Reuse existing shared instance
             self.auth_app = ServiceManager._shared_instance.auth_app
             self.apps_app = ServiceManager._shared_instance.apps_app
+            self.audit_app = ServiceManager._shared_instance.audit_app
             self._setup_done = ServiceManager._shared_setup_done
 
     def setup(self):
@@ -148,6 +152,19 @@ class ServiceManager:
         # API routes are at /api/v1/*
         flask_test.register_test_app("https://campus.test", self.apps_app, path_prefix="/api")
 
+        # Initialize audit service
+        import campus.audit
+        # Note: audit doesn't have a separate init() function like auth/api
+        # Storage initialization happens in init_app() and in tests
+
+        # Create Flask app for campus.audit service
+        self.audit_app = devops.deploy.create_app(campus.audit)
+        flask_test.configure_for_testing(self.audit_app)
+
+        # Register audit app with path prefix for test routing
+        # Audit routes are at /audit/v1/*
+        flask_test.register_test_app("https://campus.test", self.audit_app, path_prefix="/audit")
+
         self._setup_done = True
 
         # Store as shared instance if using shared mode
@@ -202,6 +219,8 @@ class ServiceManager:
                 self.auth_app = None
             if self.apps_app is not None:
                 self.apps_app = None
+            if self.audit_app is not None:
+                self.audit_app = None
 
         self._setup_done = False
 
