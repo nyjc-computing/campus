@@ -253,7 +253,7 @@ env = devops.ENV
 **Purpose:** Entity representation only - no business logic.
 
 ```python
-from campus import model
+import campus.model as model
 
 def process_user(user: model.User) -> dict:
     return {"id": user.id, "name": user.name}

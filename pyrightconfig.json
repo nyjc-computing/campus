@@ -1,0 +1,22 @@
+{
+    "include": [
+        "campus"
+    ],
+    "extraPaths": [
+        ".",
+        "campus"
+    ],
+    "venvPath": ".",
+    "venv": ".venv",
+    "exclude": [
+        ".cache",
+        ".venv/Lib/site-packages/campus_python",
+        "**/__pycache__",
+        "**/*.pyc"
+    ],
+    "useLibraryCodeForTypes": true,
+    "reportMissingImports": "warning",
+    "reportMissingModuleSource": "warning",
+    "reportIncompatibleMethodOverride": "none",
+    "stubPath": ""
+}

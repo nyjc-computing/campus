@@ -8,7 +8,7 @@ import typing
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model
+import campus.model as model
 import campus.storage
 
 circle_storage = campus.storage.get_collection("circles")
@@ -19,9 +19,9 @@ DOMAIN = "nyjc.edu.sg"
 
 def _from_record(
         record: dict[str, typing.Any],
-) -> campus.model.Circle:
+) -> model.Circle:
     """Convert a storage record to a Circle model instance."""
-    return campus.model.Circle(
+    return model.Circle(
         id=schema.CampusID(record['id']),
         created_at=schema.DateTime(record['created_at']),
         name=record['name'],
@@ -139,7 +139,7 @@ class CirclesResource:
         """
         return CircleMembersResource(self)
 
-    def list(self, **filters: typing.Any) -> list[campus.model.Circle]:
+    def list(self, **filters: typing.Any) -> list[model.Circle]:
         """List all circles matching the given filters.
 
         Args:
@@ -154,7 +154,7 @@ class CirclesResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
 
-    def new(self, **fields: typing.Any) -> campus.model.Circle:
+    def new(self, **fields: typing.Any) -> model.Circle:
         """Create a new circle.
 
         Args:
@@ -176,7 +176,7 @@ class CirclesResource:
         circle_id = schema.CampusID(
             uid.generate_category_uid("circle", length=8)
         )
-        circle = campus.model.Circle(
+        circle = model.Circle(
             id=circle_id,
             created_at=schema.DateTime.utcnow(),
             name=fields["name"],
@@ -234,7 +234,7 @@ class CircleResource:
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
 
-    def get(self) -> campus.model.Circle:
+    def get(self) -> model.Circle:
         """Get the circle record.
 
         Returns:

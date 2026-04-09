@@ -8,11 +8,11 @@ e.g. through campus-api-python
 
 import typing
 
-from campus import config
 from campus.common import schema
 from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import uid, secret
-import campus.model
+import campus.config as config
+import campus.model as model
 import campus.storage
 
 session_storage = campus.storage.get_collection("auth_sessions")
@@ -31,7 +31,7 @@ class AuthSessionsResource:
     def init_storage() -> None:
         """Initialize storage for session resource."""
         session_storage.init_from_model(
-            "auth_sessions", campus.model.AuthSession
+            "auth_sessions", model.AuthSession
         )
 
     def __getitem__(
@@ -58,7 +58,7 @@ class AuthSessionsResource:
         Returns the number of deleted sessions.
         """
         expired_records = (
-            campus.model.AuthSession.from_storage(r)
+            model.AuthSession.from_storage(r)
             for r in session_storage.get_matching({})
         )
         expired_sessions = (
@@ -91,7 +91,7 @@ class ProviderAuthSessionResource:
         """
         return AuthSessionResource(self, session_id)
 
-    def get(self, code: str) -> campus.model.AuthSession:
+    def get(self, code: str) -> model.AuthSession:
         """Get the auth session for this provider by authorization code.
 
         Args:
@@ -119,7 +119,7 @@ class ProviderAuthSessionResource:
         authorization_code: str | None = None,
         state: str | None = None,
         target: schema.Url | None = None,
-    ) -> campus.model.AuthSession:
+    ) -> model.AuthSession:
         """Create a new session."""
         import logging
         logger = logging.getLogger(__name__)
@@ -180,7 +180,7 @@ class AuthSessionResource:
         self.delete()
         return auth_session.target
 
-    def get(self) -> campus.model.AuthSession:
+    def get(self) -> model.AuthSession:
         """Get the auth session record.
 
         Returns:
@@ -206,7 +206,7 @@ class AuthSessionResource:
             *,
             user_id: schema.UserID | None = None,
             authorization_code: str | None = None,
-    ) -> campus.model.AuthSession:
+    ) -> model.AuthSession:
         """Update an existing session.
         
         Only the following fields can be updated:
@@ -234,7 +234,7 @@ class AuthSessionResource:
 
 def _from_record(
         record: dict[str, typing.Any],
-) -> campus.model.AuthSession:
+) -> model.AuthSession:
     """Convert a storage record to an AuthSession model instance."""
     args: dict[str, typing.Any] = {}
     if "id" in record:
@@ -261,5 +261,5 @@ def _from_record(
     if "target" in record and record["target"] is not None:
         args["target"] = schema.Url(record["target"])
 
-    result = campus.model.AuthSession(**args)
+    result = model.AuthSession(**args)
     return result

@@ -9,6 +9,7 @@ capturing request-response data for observability.
 from dataclasses import dataclass, field
 
 from campus.common import schema
+from campus.common.utils import uid
 
 from .base import InternalModel
 
@@ -20,12 +21,13 @@ class TraceSpan(InternalModel):
     Captures HTTP request-response data for observability and debugging.
     Uses OpenTelemetry-compatible trace/span ID formats.
 
-    Note: span_id serves as the unique identifier (no separate 'id' field),
-    following OpenTelemetry conventions rather than Campus schema conventions.
+    Note: The `id` field is a Campus storage convention that mirrors `span_id`.
+    The `span_id` field follows OpenTelemetry conventions (16-char hex).
 
     Attributes:
+        id: Alias for span_id (Campus storage convention, stored as 'id' column)
         trace_id: 32-char hex string grouping related spans
-        span_id: 16-char hex string identifying this span (unique identifier)
+        span_id: 16-char hex string identifying this span (OpenTelemetry convention)
         parent_span_id: 16-char hex string of parent span, null for roots
         method: HTTP method (GET, POST, etc.)
         path: Request path (e.g. /api/v1/students)
@@ -47,8 +49,12 @@ class TraceSpan(InternalModel):
     """
 
     # Trace identification (OpenTelemetry-compatible)
-    trace_id: str  # 32-char hex
-    span_id: str  # 16-char hex (primary key)
+    id: str = field(
+        default="",
+        metadata={"resource": False}  # Hide from API, use as PK only
+    )
+    trace_id: str = field(default_factory=uid.generate_trace_id)  # 32-char hex
+    span_id: str = field(default_factory=uid.generate_span_id)  # 16-char hex (OpenTelemetry identifier, used in resources)
     parent_span_id: str | None = None
 
     # Request data
@@ -81,3 +87,13 @@ class TraceSpan(InternalModel):
 
     # Metadata
     tags: dict[str, object] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Alias id to span_id after initialization.
+
+        This ensures the Campus storage convention (id field as PK)
+        aligns with OpenTelemetry convention (span_id as identifier).
+        """
+        if self.id == "" or self.id is None:
+            # Use object.__setattr__ to avoid frozen dataclass issues
+            object.__setattr__(self, "id", self.span_id)
