@@ -38,7 +38,7 @@ def init_app(app: flask.Flask) -> None:
     def end_span(response):
         """Complete the span and send to audit service.
 
-        Builds TraceSpan from request/response data and ingests asynchronously.
+        Builds TraceSpan from request-response data and ingests asynchronously.
         Echoes trace_id in response headers for correlation.
 
         Args:
