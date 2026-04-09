@@ -6,7 +6,7 @@ These operators enable more expressive queries while maintaining backward
 compatibility with simple exact-match queries.
 
 Example:
-    from campus.storage.query import gt, gte, lt, lte
+    from campus.storage.query import gt, gte, lt, lte, between
 
     # Simple exact match (backward compatible)
     storage.get_matching({"user_id": "user_123"})
@@ -15,6 +15,7 @@ Example:
     storage.get_matching({"duration_ms": gt(1000)})
     storage.get_matching({"started_at": gte("2024-01-01")})
     storage.get_matching({"status_code": lt(500)})
+    storage.get_matching({"started_at": between("2024-01-01", "2024-12-31")})
 """
 
 from dataclasses import dataclass
@@ -61,6 +62,23 @@ class lte(Operator):
     Example:
         {"retries": lte(3)}  # retries <= 3
     """
+
+
+@dataclass(frozen=True)
+class between(Operator):
+    """Range comparison for inclusive lower and upper bounds.
+
+    Example:
+        {"started_at": between("2024-01-01", "2024-12-31")}  # 2024-01-01 <= started_at <= 2024-12-31
+
+    Attributes:
+        value: A tuple of (min_value, max_value) representing the inclusive range
+    """
+    value: tuple[Any, Any]
+
+    def __init__(self, min_value: Any, max_value: Any):
+        # Use object.__setattr__ since dataclass is frozen
+        object.__setattr__(self, "value", (min_value, max_value))
 
 
 def is_operator(value: Any) -> bool:
