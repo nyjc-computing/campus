@@ -9,52 +9,78 @@ __all__ = ["init_app"]
 
 from typing import Any
 
+import campus_python
 import flask
 
 from campus.auth.middleware import Authenticator
 from campus.common import env
+from campus.common import schema
 from campus.common.errors import auth_errors
 
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
 
+# Lazily initialized campus client - set in init_app() after test fixtures are ready
+# This prevents connection to external services during module import in tests
+# Type: ignore because we initialize these in init_app() before first use
+campus: campus_python.Campus = None  # type: ignore
 
-def bearer_authenticate(token: str) -> dict[str, Any]:
-    """Authenticate using HTTP Bearer Authentication with audit API key.
 
-    Validates audit API tokens. For now, this is a placeholder that
-    stores the token in flask.g for later validation.
-
-    TODO: Validate audit token against campus.auth or internal audit API keys.
-    """
-    # TODO: Implement proper audit API key validation
-    # - Check against campus.auth credentials resources
-    # - Or validate against internal audit API keys
-    # For now, store the token in flask.g for later use
+def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
+    """Authenticate using HTTP Basic Authentication."""
+    try:
+        auth_result = campus.auth.root.authenticate(
+            client_id=schema.CampusID(client_id),
+            client_secret=client_secret
+        )
+    except campus_python.errors.AuthenticationError:
+        raise auth_errors.UnauthorizedClientError(
+            "Invalid client credentials"
+        )
     return {
-        "client": {"client_id": f"audit:{token}"},
+        "client": auth_result["client"],
         "user": None,
     }
 
 
-# Create authenticator for audit (Bearer-only for API keys)
+def bearer_authenticate(token: str) -> dict[str, Any]:
+    """Authenticate using HTTP Bearer Authentication."""
+    try:
+        auth_result = campus.auth.root.authenticate(token=token)
+    except campus_python.errors.AuthenticationError:
+        raise auth_errors.UnauthorizedClientError(
+            "Invalid access token"
+        )
+    return {
+        "client": auth_result["client"],
+        "user": auth_result.get("user"),
+    }
+
+
+# Create authenticator using campus_python (same as campus.api)
 audit_authenticator = Authenticator(
-    basic_authenticator=lambda client_id, client_secret: (_ for _ in ()).throw(
-        auth_errors.InvalidRequestError("Only Bearer authentication supported for audit service")
-    ),
+    basic_authenticator=basic_authenticate,
     bearer_authenticator=bearer_authenticate,
 )
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
+    # Initialize campus client after test fixtures have set up the vault
+    global campus
+    campus = campus_python.Campus(timeout=60)
+
     from . import routes
+
+    # Create route blueprints using create_blueprint() for test isolation
+    traces_blueprint = routes.traces.create_blueprint()
+    health_blueprint = routes.health.create_blueprint()
 
     # Organise audit routes under audit blueprint
     bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
 
     # Register authenticated routes (traces)
-    routes.traces.init_app(bp)
+    bp.register_blueprint(traces_blueprint)
 
     # Apply authentication to the traces blueprint
     # Note: We apply to the traces blueprint directly so that health
@@ -62,7 +88,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     bp.before_request(audit_authenticator.authenticate)
 
     # Register public health routes WITHOUT authentication
-    routes.health.init_app(bp)
+    bp.register_blueprint(health_blueprint)
 
     app.register_blueprint(bp)
 
