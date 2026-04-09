@@ -10,7 +10,7 @@ import typing
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, secret
-import campus,config as config
+import campus.config as config
 import campus.model as model
 import campus.storage
 
