@@ -8,7 +8,7 @@ import typing
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model
+import campus.model as model
 import campus.storage
 from campus.storage.documents.interface import PK
 
@@ -19,32 +19,32 @@ timetable_entry_storage = campus.storage.get_collection("timetable_entries")
 timetable_collection = campus.storage.get_collection("timetables")
 
 
-def _from_record(record: dict) -> campus.model.TimetableMetadata:
+def _from_record(record: dict) -> model.TimetableMetadata:
     """Convert a storage record into a TimetableMetadata model.
 
     Args:
         record (dict): Raw timetable metadata record from storage.
 
     Returns:
-        campus.model.TimetableMetadata: Parsed timetable metadata object.
+        model.TimetableMetadata: Parsed timetable metadata object.
     """
-    return campus.model.TimetableMetadata(
+    return model.TimetableMetadata(
         id=schema.CampusID(record["id"]),
         filename=record["filename"],
         start_date=schema.DateTime(record["start_date"]),
         end_date=schema.DateTime(record["end_date"]),
     )
 
-def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
+def _entry_from_record(record: dict) -> model.TimetableEntry:
     """Convert a storage record into a TimetableEntry model.
 
     Args:
         record (dict): Raw timetable entry record from storage.
 
     Returns:
-        campus.model.TimetableEntry: Parsed timetable entry object.
+        model.TimetableEntry: Parsed timetable entry object.
     """
-    return campus.model.TimetableEntry(
+    return model.TimetableEntry(
         id=schema.CampusID(record["id"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         lessongroup_id=schema.CampusID(record["lessongroup_id"]),
@@ -53,8 +53,8 @@ def _entry_from_record(record: dict) -> campus.model.TimetableEntry:
         venue = schema.String(record["venue"]),
     )
 
-def _lessongroup_from_record(record: dict) -> campus.model.LessonGroup:
-    return campus.model.LessonGroup(
+def _lessongroup_from_record(record: dict) -> model.LessonGroup:
+    return model.LessonGroup(
         timetable_id=schema.CampusID(record["timetable_id"]),
         label = schema.String(record["label"])
     )
@@ -106,14 +106,14 @@ class TimetablesResource:
         """
         return TimetableResource(timetable_id)
 
-    def list(self, **filters: typing.Any) -> list[campus.model.TimetableMetadata]:
+    def list(self, **filters: typing.Any) -> list[model.TimetableMetadata]:
         """List timetables matching the provided filters.
 
         Args:
             **filters: Arbitrary filter parameters applied to the storage query.
 
         Returns:
-            list[campus.model.TimetableMetadata]: Matching timetable metadata objects.
+            list[model.TimetableMetadata]: Matching timetable metadata objects.
         """
         try:
             records = timetable_collection.get_matching(filters)
@@ -125,7 +125,7 @@ class TimetablesResource:
             self,
             metadata: dict[str, typing.Any],
             lessongroups: typing.List[dict[str, typing.Any]],
-    ) -> campus.model.Timetable:
+    ) -> model.Timetable:
         """Create a new timetable with metadata and entries.
 
         `lessongroups` is a list of dicts following the schema:
@@ -138,30 +138,30 @@ class TimetablesResource:
         - weekday [str]
         - timeslot [str]
         """
-        timetable_meta = campus.model.TimetableMetadata(
+        timetable_meta = model.TimetableMetadata(
             filename=metadata["filename"],
             start_date=metadata["start"],
             end_date=metadata["end"],
         )
-        groups: list[campus.model.LessonGroup] = []
+        groups: list[model.LessonGroup] = []
         members = []
         entries = []
 
         for lessongroup in lessongroups:
-            lg = campus.model.LessonGroup(
+            lg = model.LessonGroup(
                 timetable_id=timetable_meta.id,
                 label = lessongroup["label"]
             )
             groups.append(lg)
             for ade_participant in lessongroup["members"]:
-                member = campus.model.LessonGroupMember(
+                member = model.LessonGroupMember(
                     timetable_id=timetable_meta.id,
                     lessongroup_id=lg.id,
                     ade_participant=ade_participant
                 )
                 members.append(member)
             for entry_data in lessongroup["entries"]:
-                entry = campus.model.TimetableEntry(
+                entry = model.TimetableEntry(
                     timetable_id=timetable_meta.id,
                     lessongroup_id=lg.id,
                     weekday = entry_data["weekday"],
@@ -170,7 +170,7 @@ class TimetablesResource:
                 )
                 entries.append(entry)
 
-        timetable = campus.model.Timetable(
+        timetable = model.Timetable(
             id=timetable_meta.id,
             filename=timetable_meta.filename,
             start_date=timetable_meta.start_date,
@@ -198,7 +198,7 @@ class TimetablesResource:
     
         return timetable
 
-    def get(self, timetable_id: schema.CampusID) -> campus.model.Timetable:
+    def get(self, timetable_id: schema.CampusID) -> model.Timetable:
         """Get a full timetable by ID."""
         return TimetableResource(timetable_id).get()
 
@@ -274,14 +274,14 @@ class TimetableResource:
     def __init__(self, timetable_id: schema.CampusID):
         self.timetable_id = timetable_id
 
-    def get(self) -> campus.model.Timetable:
+    def get(self) -> model.Timetable:
         """
         Get a full Timetable (metadata + entries) by ID.
         Assembles the Timetable model from the three storage collections:
           timetable_collection, timetable_entry_storage, timetable_lessongroup_collection.
 
         Returns:
-            campus.model.TimetableMetadata: The timetable metadata.
+            model.TimetableMetadata: The timetable metadata.
 
         Raises:
             ConflictError: If the timetable does not exist.
@@ -306,7 +306,7 @@ class TimetableResource:
 
         entries = [_entry_from_record(r) for r in entry_records]
 
-        return campus.model.Timetable(
+        return model.Timetable(
             id=schema.CampusID(record["id"]),
             filename=record["filename"],
             start_date=schema.DateTime(record["start_date"]),
@@ -380,11 +380,11 @@ class TimetableEntriesResource:
         """
         self.timetable_id = timetable_id
 
-    def list(self) -> list[campus.model.TimetableEntry]:
+    def list(self) -> list[model.TimetableEntry]:
         """List all entries belonging to the timetable.
 
         Returns:
-            list[campus.model.TimetableEntry]: Timetable entries.
+            list[model.TimetableEntry]: Timetable entries.
         """
         records = timetable_entry_storage.get_matching({
             "timetable_id": self.timetable_id
@@ -402,7 +402,7 @@ class TimetableMetadataResource:
         """
         self.timetable_id = timetable_id
     
-    def get(self) -> campus.model.TimetableMetadata:
+    def get(self) -> model.TimetableMetadata:
         """Get the timetable metadata without entries."""
         try:
             record = timetable_collection.get_by_id(self.timetable_id)

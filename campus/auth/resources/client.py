@@ -10,7 +10,7 @@ import typing
 from campus.common import env, schema
 from campus.common.errors import auth_errors
 from campus.common.utils import secret, uid
-import campus.model
+import campus.model as model
 import campus.storage
 
 client_storage = campus.storage.get_table("vault_clients")
@@ -20,9 +20,9 @@ access_storage = campus.storage.get_table("vault_access")
 def _from_record(
         record: dict[str, typing.Any],
         permissions: dict[str, int] | None = None
-) -> campus.model.Client:
+) -> model.Client:
     """Convert a storage record to a Client model instance."""
-    return campus.model.Client(
+    return model.Client(
         id=schema.CampusID(record["id"]),
         created_at=schema.DateTime(
             record.get("created_at", schema.DateTime.utcnow())
@@ -79,9 +79,9 @@ class ClientsResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for client authentication."""
-        client_storage.init_from_model("vault_clients", campus.model.Client)
+        client_storage.init_from_model("vault_clients", model.Client)
         access_storage.init_from_model(
-            "vault_access", campus.model.ClientAccess
+            "vault_access", model.ClientAccess
         )
 
     def __getitem__(
@@ -145,7 +145,7 @@ class ClientsResource:
                 client_id=client_id
             )
 
-    def list_all(self) -> list[campus.model.Client]:
+    def list_all(self) -> list[model.Client]:
         """List all clients.
 
         Returns:
@@ -155,7 +155,7 @@ class ClientsResource:
         access = _get_all_client_permissions()
         clients = []
         for record in records:
-            client = campus.model.Client.from_storage(record)
+            client = model.Client.from_storage(record)
             client.permissions = access.get(client.id, {})
             clients.append(client)
         return clients
@@ -163,7 +163,7 @@ class ClientsResource:
     def new(
             self,
             **kwargs: typing.Any
-    ) -> campus.model.Client:
+    ) -> model.Client:
         """Create a new client and return it.
 
         Args:
@@ -172,7 +172,7 @@ class ClientsResource:
         Returns:
             Client instance
         """
-        client = campus.model.Client(**kwargs)
+        client = model.Client(**kwargs)
         client_storage.insert_one(client.to_storage())
         return client
 
@@ -196,7 +196,7 @@ class ClientResource:
         """Delete the client record."""
         client_storage.delete_by_id(self.client_id)
 
-    def get(self) -> campus.model.Client:
+    def get(self) -> model.Client:
         """Get the client record.
 
         Returns:
@@ -240,7 +240,7 @@ class ClientResource:
         Args:
             **updates: Fields to update (name, description)
         """
-        campus.model.Client.validate_update(updates)
+        model.Client.validate_update(updates)
         client_storage.update_by_id(self.client_id, updates)
 
 

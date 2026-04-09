@@ -48,23 +48,6 @@ class InternalModel(typing.Protocol):
     def fields(cls) -> dict[str, dataclasses.Field]:  # type: ignore[override]
         return {field.name: field for field in dataclasses.fields(cls)}
 
-
-@dataclass(kw_only=True)
-class Model(typing.Protocol):
-    """Base class for all public models in Campus.
-    
-    Public models are queryable through Campus API endpoints,
-    and may be returned by the Python API.
-    """
-    id: schema.CampusID | schema.UserID
-    created_at: schema.DateTime = dataclasses.field(
-        default_factory=schema.DateTime.utcnow
-    )
-
-    @classmethod
-    def fields(cls) -> dict[str, dataclasses.Field]:  # type: ignore[override]
-        return {field.name: field for field in dataclasses.fields(cls)}
-
     @classmethod
     def validate_update(cls, update: dict[str, typing.Any]) -> None:
         """Validate an update dictionary against the model's mutable
@@ -143,3 +126,16 @@ class Model(typing.Protocol):
             for field in self.fields().values()
             if field.metadata.get("storage", True)
         }
+
+
+@dataclass(kw_only=True)
+class Model(InternalModel):
+    """Base class for all public models in Campus.
+    
+    Public models are queryable through Campus API endpoints,
+    and may be returned by the Python API.
+    """
+    id: schema.CampusID | schema.UserID
+    created_at: schema.DateTime = dataclasses.field(
+        default_factory=schema.DateTime.utcnow
+    )
