@@ -199,6 +199,28 @@ class TestSQLiteBackend(unittest.TestCase):
         self.assertEqual(results[0]["duration_ms"], 500)
         self.assertEqual(results[1]["duration_ms"], 1500)
 
+    def test_get_matching_with_between_operator(self):
+        """get_matching() with between operator for inclusive range."""
+        from campus.storage import between
+        # Query for traces with duration_ms between 500 and 1500 (inclusive)
+        results = self.traces_table.get_matching({"duration_ms": between(500, 1500)})
+        self.assertEqual(len(results), 2)
+        for r in results:
+            self.assertGreaterEqual(r["duration_ms"], 500)
+            self.assertLessEqual(r["duration_ms"], 1500)
+
+    def test_get_matching_with_between_operator_string_field(self):
+        """get_matching() with between operator on string/timestamp field."""
+        from campus.storage import between
+        # Query for traces created between 11:00 and 13:00
+        results = self.traces_table.get_matching({
+            "created_at": between("2023-01-01T11:00:00Z", "2023-01-01T13:00:00Z")
+        })
+        self.assertEqual(len(results), 2)
+        # Should return trace2 (11:00) and trace3 (12:00)
+        self.assertIn(results[0]["id"], ["trace2", "trace3"])
+        self.assertIn(results[1]["id"], ["trace2", "trace3"])
+
 
 class TestMemoryBackend(unittest.TestCase):
     """Test the memory collection backend."""
