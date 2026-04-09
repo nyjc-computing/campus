@@ -14,7 +14,6 @@ __all__ = []
 import typing
 
 from campus.common.errors import api_errors
-from campus.common.utils import datacls
 import campus.model as model
 import campus.storage
 
@@ -170,7 +169,7 @@ class TracesResource:
         since: str | None = None,
         until: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> "list[dict]":
         """List traces newest first with optional time range filter.
 
         Args:
@@ -209,7 +208,7 @@ class TracesResource:
         since: str | None = None,
         until: str | None = None,
         limit: int = 50,
-    ) -> list[dict]:
+    ) -> "list[dict]":
         """Search traces by multiple filter criteria.
 
         Args:
@@ -237,14 +236,14 @@ class TracesResource:
         if user_id:
             query["user_id"] = user_id
         if since:
-            query["started_at"] = datacls.gte(since)
+            query["started_at"] = campus.storage.gte(since)
         if until:
             # Combine time range filters
             if "started_at" in query:
                 # Both since and until - need to handle differently
                 # For now, just use the most recent filter
                 pass
-            query["started_at"] = datacls.lte(until)
+            query["started_at"] = campus.storage.lte(until)
 
         try:
             spans = traces_storage.get_matching(
@@ -329,7 +328,7 @@ class TraceSpansResource:
         """
         return SpanResource(self, span_id)
 
-    def list(self) -> list[model.TraceSpan]:
+    def list(self) -> "list[model.TraceSpan]":
         """List all spans in the trace (flat list).
 
         Returns:
