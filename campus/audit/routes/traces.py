@@ -9,19 +9,13 @@ from typing import Any
 
 import flask
 
-from campus import flask_campus
+import campus.flask_campus as flask_campus
+from campus.common.errors import api_errors
+
+from ..resources import traces as traces_resource
 
 # Create blueprint for trace routes
 bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
-
-
-def init_app(app: flask.Flask | flask.Blueprint) -> None:
-    """Initialize trace routes.
-
-    Args:
-        app: The Flask app or blueprint to register routes on.
-    """
-    app.register_blueprint(bp)
 
 
 @bp.post("/")
@@ -69,13 +63,14 @@ def ingest_spans(
         207 Multi-Status on partial failure
         400 Bad Request on invalid input
     """
-    # TODO: Implement span ingestion
-    # - Validate request body schema
-    # - Insert spans to database via resources.traces
-    # - Handle batch partial failures (207 Multi-Status)
-    # - Return inserted span IDs
-    _ = spans  # TODO: Use spans parameter in implementation
-    return {}, 201
+    # Convert dicts to TraceSpan models
+    import campus.model as model
+    span_models = [
+        model.TraceSpan.from_resource(span_dict)
+        for span_dict in spans
+    ]
+    result = traces_resource.ingest(span_models)
+    return result, 201
 
 
 @bp.get("/")
@@ -101,13 +96,11 @@ def list_traces(
         JSON: {"traces": [...], "cursor": {"next": "...", "has_more": true}}
         Text: Compact trace list with pagination hint
     """
-    # TODO: Implement trace listing
-    # - Parse query params (since, until, limit)
-    # - Check Accept header for content negotiation
-    # - Query traces via resources.traces
-    # - Return JSON or plain text format
-    _ = since, until, limit  # TODO: Use parameters in implementation
-    return {"traces": [], "cursor": {"next": None, "has_more": False}}, 200
+    summaries = traces_resource.list(since=since, until=until, limit=limit)
+    return {
+        "traces": [s.to_resource() for s in summaries],
+        "cursor": {"next": None, "has_more": False}
+    }, 200
 
 
 @bp.get("/<trace_id>/")
@@ -125,12 +118,26 @@ def get_trace(trace_id: str) -> flask_campus.JsonResponse:
         JSON: Trace tree with nested children
         Text: Waterfall visualization showing timing hierarchy
     """
-    # TODO: Implement trace tree retrieval
-    # - Validate trace_id format (32 hex chars)
-    # - Build tree from spans via recursive CTE
-    # - Calculate offset, duration, depth for each span
-    # - Return JSON or text waterfall format
-    return {}, 200
+    tree = traces_resource[trace_id].get_tree()
+    if tree is None:
+        raise api_errors.NotFoundError(f"Trace {trace_id} not found")
+    return tree.to_resource(), 200
+
+
+@bp.get("/<trace_id>/spans/")
+def list_spans(trace_id: str) -> flask_campus.JsonResponse:
+    """List all spans in a trace (flat list).
+
+    Args:
+        trace_id: The 32-char hex trace identifier
+
+    Returns:
+        Flat list of all spans in the trace
+    """
+    spans = traces_resource[trace_id]["spans"].list()
+    return {
+        "spans": [s.to_resource() for s in spans]
+    }, 200
 
 
 @bp.get("/<trace_id>/spans/<span_id>/")
@@ -144,11 +151,12 @@ def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
     Returns:
         Full span data including request/response headers and bodies
     """
-    # TODO: Implement single span retrieval
-    # - Validate trace_id and span_id formats
-    # - Query span by trace_id and span_id
-    # - Return full span detail
-    return {}, 200
+    span = traces_resource[trace_id]["spans"][span_id].get()
+    if span is None:
+        raise api_errors.NotFoundError(
+            f"Span {span_id} not found in trace {trace_id}"
+        )
+    return span.to_resource(), 200
 
 
 @bp.get("/search")
@@ -156,7 +164,7 @@ def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
 def search_traces(
     *,
     path: str | None = None,
-    status: str | None = None,
+    status: int | None = None,
     api_key_id: str | None = None,
     client_id: str | None = None,
     user_id: str | None = None,
@@ -168,7 +176,7 @@ def search_traces(
 
     Query params:
         path: Filter by endpoint path
-        status: Filter by status (e.g. "5xx", "4xx", "200")
+        status: Filter by HTTP status code
         api_key_id: Filter by API key
         client_id: Filter by OAuth client
         user_id: Filter by user
@@ -181,10 +189,36 @@ def search_traces(
     Returns:
         Filtered trace list matching criteria
     """
-    # TODO: Implement trace search
-    # - Parse and validate filter parameters
-    # - Build query from filters
-    # - Check Accept header for content negotiation
-    # - Return filtered traces
-    _ = path, status, api_key_id, client_id, user_id, since, until, limit  # TODO: Use parameters in implementation
-    return {"traces": [], "cursor": {"next": None, "has_more": False}}, 200
+    summaries = traces_resource.search(
+        path=path,
+        status=status,
+        api_key_id=api_key_id,
+        client_id=client_id,
+        user_id=user_id,
+        since=since,
+        until=until,
+        limit=limit,
+    )
+    return {
+        "traces": [s.to_resource() for s in summaries],
+        "cursor": {"next": None, "has_more": False}
+    }, 200
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "ingest_spans", ingest_spans, methods=["POST"])
+    new_bp.add_url_rule("/", "list_traces", list_traces, methods=["GET"])
+    new_bp.add_url_rule("/<trace_id>/", "get_trace", get_trace, methods=["GET"])
+    new_bp.add_url_rule("/<trace_id>/spans/", "list_spans", list_spans, methods=["GET"])
+    new_bp.add_url_rule("/<trace_id>/spans/<span_id>/", "get_span", get_span, methods=["GET"])
+    new_bp.add_url_rule("/search", "search_traces", search_traces, methods=["GET"])
+
+    return new_bp
