@@ -39,12 +39,16 @@ __all__ = [
     "TimetableEntry",
     "TimetableMetadata",
     "TraceSpan",
+    "TraceSummary",
+    "TraceTree",
+    "TraceTreeNode",
     "User",
     "UserCredentials",
     "Vault",
 ]
 
 from .assignment import Assignment, ClassroomLink, Question
+from .audit import TraceSpan, TraceSummary, TraceTree, TraceTreeNode
 from .base import InternalModel, Model
 from .circle import Circle
 from .client import Client, ClientAccess
@@ -62,6 +66,5 @@ from .timetable import (
     TimetableEntry,
     TimetableMetadata,
 )
-from .trace import TraceSpan
 from .user import User
 from .vault import Vault
