@@ -27,4 +27,4 @@ class Venue(Model):
         lambda: uid.generate_category_uid("venue", length=8)
     ))
     venue_name: schema.String
-    # NOTE: Other model fields TBC
+    venue_type: schema.String
