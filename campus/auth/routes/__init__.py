@@ -20,12 +20,14 @@ __all__ = [
     "vaults",
 ]
 
+from typing import Any
+
 import flask
 
-from campus.common import webauth
-from campus.common.errors import auth_errors
+from campus.common import schema
 
 from .. import resources
+from ..middleware import Authenticator
 from . import clients, credentials, logins, oauth, root, sessions, users, vaults
 
 # Route modules that require authentication
@@ -39,50 +41,32 @@ _AUTHENTICATED_ROUTE_MODULES = [
     vaults,
 ]
 
-
-def authenticate() -> tuple[dict[str, str], int] | None:
-    """Authenticate the client credentials using HTTP Basic/Bearer
-    Authentication.
-
-    This function is used only in campus.auth; it accesses resources
-    directly to avoid a circular dependency with campus-api-python.
-
-    This function is meant to be used with Flask.before_request
-    to enforce authentication for all routes in the blueprint.
-
-    Any return value from this function will be treated as a response
-    to the client, and the request will not be processed further.
-
-    See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
-    """
-    req_header = dict(flask.request.headers)
-    httpauth = (
-        webauth.http.HttpAuthenticationScheme
-        .with_header(provider="campus", http_header=req_header)
+def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
+    """Authenticate using HTTP Basic Authentication."""
+    resources.client.raise_for_authentication(
+        schema.CampusID(client_id),
+        client_secret
     )
-    assert httpauth.header
-    if not httpauth.header.authorization:
-        raise auth_errors.InvalidRequestError(
-            "Missing Authorization property in HTTP header"
-        )
-    match httpauth.scheme:
-        case "basic":
-            client_id, client_secret = (
-                httpauth.header.authorization.credentials()
-            )
-            # Raises auth errors if auth fails
-            resources.client.raise_for_authentication(
-                client_id, client_secret)  # type: ignore[arg-type]
-            flask.g.current_client = resources.client[client_id].get()  # type: ignore[index]
-        case "bearer":
-            access_token = httpauth.header.authorization.token
-            # TODO: Support ClientCredentials
-            credentials = resources.credentials["campus"].get(
-                token_id=access_token
-            )
-            flask.g.current_client = (
-                resources.client[credentials.client_id].get()  # type: ignore[index]
-            )
+    return {
+        "client": resources.client[schema.CampusID(client_id)].get()
+    }
+
+def bearer_authenticate(token: str) -> dict[str, Any]:
+    """Authenticate using HTTP Bearer Authentication."""
+    credentials = resources.credentials["campus"].get(token_id=token)
+    return {
+        "client": resources.client[schema.CampusID(credentials.client_id)].get()
+    }
+
+# campus.auth authenticates directly from campus.auth.resources to avoid
+# circular dependency with campus-api-python
+# This is meant to be used with Flask.before_request to enforce authentication
+# for all routes in the blueprint
+# See https://flask.palletsprojects.com/en/stable/api/#flask.Flask.before_request
+resource_authenticator = Authenticator(
+    basic_authenticator=basic_authenticate,
+    bearer_authenticator=bearer_authenticate
+)
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
@@ -97,7 +81,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """
     for module in _AUTHENTICATED_ROUTE_MODULES:
         blueprint = module.create_blueprint()
-        blueprint.before_request(authenticate)
+        blueprint.before_request(resource_authenticator.authenticate)
         app.register_blueprint(blueprint)
 
     # Register OAuth blueprint WITHOUT authentication

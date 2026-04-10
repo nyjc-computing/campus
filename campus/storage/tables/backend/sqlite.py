@@ -261,7 +261,7 @@ class SQLiteTable(TableInterface):
     def _build_where_clause(query: Dict[str, Any]) -> tuple[str, list]:
         """Build WHERE clause from query dictionary.
 
-        Handles exact matches and comparison operators (gt, gte, lt, lte).
+        Handles exact matches and comparison operators (gt, gte, lt, lte, between).
         Uses ? placeholders for SQLite parameter binding.
         """
         if not query:
@@ -270,21 +270,31 @@ class SQLiteTable(TableInterface):
         conditions = []
         params = []
 
+        from campus.storage.query import between as between_op
         for key, value in query.items():
             if is_operator(value):
                 # Handle comparison operators
                 if isinstance(value, gt):
                     conditions.append(f'"{key}" > ?')
+                    params.append(value.value)
                 elif isinstance(value, gte):
                     conditions.append(f'"{key}" >= ?')
+                    params.append(value.value)
                 elif isinstance(value, lt):
                     conditions.append(f'"{key}" < ?')
+                    params.append(value.value)
                 elif isinstance(value, lte):
                     conditions.append(f'"{key}" <= ?')
+                    params.append(value.value)
+                elif isinstance(value, between_op):
+                    # BETWEEN operator: key >= min AND key <= max
+                    min_val, max_val = value.value
+                    conditions.append(f'("{key}" >= ? AND "{key}" <= ?)')
+                    params.extend([min_val, max_val])
                 else:
                     # Unknown operator, fall back to exact match
                     conditions.append(f'"{key}" = ?')
-                params.append(value.value)
+                    params.append(value.value)
             else:
                 # Exact match
                 conditions.append(f'"{key}" = ?')

@@ -5,7 +5,7 @@ Implements Campus API for vault access.
 
 from campus.common import schema
 from campus.common.utils import uid
-import campus.model
+import campus.model as model
 import campus.storage
 
 vault_storage = campus.storage.get_table("vault")
@@ -28,7 +28,7 @@ class VaultsResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for vault resource."""
-        vault_storage.init_from_model("vault", campus.model.Vault)
+        vault_storage.init_from_model("vault", model.Vault)
 
 
 class VaultResource:

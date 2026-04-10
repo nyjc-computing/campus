@@ -27,37 +27,38 @@ __all__ = [
     "HttpHeader",
     "HttpHeaderWithAuth",
     "InternalModel",
-    "LoginSession",
-    "Model",
-    "Question",
-    "OAuthToken",
-    "Response",
-    "Submission",
-    "TraceSpan",
-    "User",
-    "UserCredentials",
-    "Vault",
     "LessonGroup",
     "LessonGroupMember",
+    "LoginSession",
+    "Model",
+    "OAuthToken",
+    "Question",
+    "Response",
+    "Submission",
     "Timetable",
     "TimetableEntry",
     "TimetableMetadata",
+    "TraceSpan",
+    "TraceSummary",
+    "TraceTree",
+    "TraceTreeNode",
+    "User",
+    "UserCredentials",
+    "Vault",
 ]
 
 from .assignment import Assignment, ClassroomLink, Question
+from .audit import TraceSpan, TraceSummary, TraceTree, TraceTreeNode
 from .base import InternalModel, Model
 from .circle import Circle
 from .client import Client, ClientAccess
 from .credentials import OAuthToken, UserCredentials
 from .device_code import DeviceCode
-from .http.header import HttpHeader, HttpHeaderWithAuth
 from .emailotp import EmailOTP
+from .http.header import HttpHeader, HttpHeaderWithAuth
 from .login import LoginSession
 from .session import AuthSession
 from .submission import Feedback, Response, Submission
-from .trace import TraceSpan
-from .user import User
-from .vault import Vault
 from .timetable import (
     LessonGroup,
     LessonGroupMember,
@@ -65,3 +66,5 @@ from .timetable import (
     TimetableEntry,
     TimetableMetadata,
 )
+from .user import User
+from .vault import Vault

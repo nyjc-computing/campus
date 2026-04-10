@@ -1,10 +1,10 @@
-"""campus.api
+"""campus.audit
 
-Web API for Campus services.
+Audit service for tracing and monitoring Campus services.
 """
 
 # Note: do not expose .resources directly here. It is meant for internal
-# use within campus.api only.
+# use within campus.audit only.
 __all__ = ["init_app"]
 
 from typing import Any
@@ -23,7 +23,6 @@ from campus.common.errors import auth_errors
 # Lazily initialized campus client - set in init_app() after test fixtures are ready
 # This prevents connection to external services during module import in tests
 # Type: ignore because we initialize these in init_app() before first use
-
 campus: campus_python.Campus = None  # type: ignore
 
 
@@ -43,6 +42,7 @@ def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
         "user": None,
     }
 
+
 def bearer_authenticate(token: str) -> dict[str, Any]:
     """Authenticate using HTTP Bearer Authentication."""
     try:
@@ -56,31 +56,38 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
         "user": auth_result.get("user"),
     }
 
-# Create authenticator using campus_python
-campus_authenticator = Authenticator(
+
+# Create authenticator using campus_python (same as campus.api)
+audit_authenticator = Authenticator(
     basic_authenticator=basic_authenticate,
     bearer_authenticator=bearer_authenticate,
 )
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
-    """Initialise the API blueprint with the given Flask app."""
+    """Initialise the audit blueprint with the given Flask app."""
     # Initialize campus client after test fixtures have set up the vault
     global campus
     campus = campus_python.Campus(timeout=60)
 
     from . import routes
 
-    # Organise API routes under api blueprint
-    bp = flask.Blueprint('api_v1', __name__, url_prefix='/api/v1')
-    routes.assignments.init_app(bp)
-    routes.bookings.init_app(bp)
-    routes.circles.init_app(bp)
-    routes.emailotp.init_app(bp)
-    routes.submissions.init_app(bp)
+    # Create route blueprints using create_blueprint() for test isolation
+    traces_blueprint = routes.traces.create_blueprint()
+    health_blueprint = routes.health.create_blueprint()
 
-    # Apply authentication to all API routes
-    bp.before_request(campus_authenticator.authenticate)
+    # Organise audit routes under audit blueprint
+    bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
+
+    # Apply authentication to the traces blueprint (before registering)
+    # This ensures only trace routes require auth, not health routes
+    traces_blueprint.before_request(audit_authenticator.authenticate)
+
+    # Register authenticated routes (traces)
+    bp.register_blueprint(traces_blueprint)
+
+    # Register public health routes WITHOUT authentication
+    bp.register_blueprint(health_blueprint)
 
     app.register_blueprint(bp)
 

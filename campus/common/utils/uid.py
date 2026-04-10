@@ -59,7 +59,7 @@ def generate_trace_id() -> str:
     Returns:
         A 32-character hexadecimal string.
     """
-    return uuid.uuid4().hex + uuid.uuid4().hex[:16]
+    return uuid.uuid4().hex
 
 
 def generate_span_id() -> str:

@@ -10,8 +10,8 @@ Credentials link an issued token to a provider, client, and user.
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import secret, uid, utc_time
-import campus.config
-import campus.model
+import campus.config as config
+import campus.model as model
 import campus.storage
 
 token_storage = campus.storage.get_collection("tokens")
@@ -25,10 +25,10 @@ class CredentialsResource:
     def init_storage() -> None:
         """Initialize storage for credentials resource."""
         token_storage.init_from_model(
-            "tokens", campus.model.OAuthToken
+            "tokens", model.OAuthToken
         )
         cred_storage.init_from_model(
-            "credentials", campus.model.UserCredentials
+            "credentials", model.UserCredentials
         )
 
     def __getitem__(
@@ -66,7 +66,7 @@ class ProviderCredentialsResource:
         """
         return UserCredentialsResource(self, user_id)
 
-    def get(self, token_id: str) -> campus.model.UserCredentials:
+    def get(self, token_id: str) -> model.UserCredentials:
         """Get credentials by token ID.
 
         Args:
@@ -85,12 +85,12 @@ class ProviderCredentialsResource:
                 f"Credentials for provider {self.provider} "
                 f"and token {token_id} not found."
             )
-        return campus.model.UserCredentials.from_storage(records[0])
+        return model.UserCredentials.from_storage(records[0])
 
     def list_all(
             self,
             user_id: str | None = None
-    ) -> list[campus.model.UserCredentials]:
+    ) -> list[model.UserCredentials]:
         """List all credentials for this provider.
 
         Returns:
@@ -101,7 +101,7 @@ class ProviderCredentialsResource:
             **{"user_id": user_id} if user_id else {}
         ))
         return [
-            campus.model.UserCredentials.from_storage(record)
+            model.UserCredentials.from_storage(record)
             for record in records
         ]
 
@@ -133,7 +133,7 @@ class UserCredentialsResource:
             "client_id": client_id
         })
 
-    def get(self, client_id: str) -> campus.model.UserCredentials:
+    def get(self, client_id: str) -> model.UserCredentials:
         """Get credentials for this user-client.
 
         Returns:
@@ -152,14 +152,14 @@ class UserCredentialsResource:
                 query=query
             )
         cred_record = records[0]
-        credentials = campus.model.UserCredentials.from_storage(
+        credentials = model.UserCredentials.from_storage(
             cred_record
         )
         # Load token from token_storage using token_id
         if cred_record.get('token_id'):
             token_record = token_storage.get_by_id(cred_record['token_id'])
             if token_record:
-                credentials.token = campus.model.OAuthToken.from_storage(
+                credentials.token = model.OAuthToken.from_storage(
                     token_record
                 )
         return credentials
@@ -170,16 +170,16 @@ class UserCredentialsResource:
             client_id: str,
             scopes: list[str],
             expiry_seconds: int = (
-                campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
+                config.DEFAULT_TOKEN_EXPIRY_DAYS
                 * utc_time.DAY_SECONDS
             ),
-    ) -> campus.model.OAuthToken:
+    ) -> model.OAuthToken:
         """Create a new Campus OAuth token."""
         assert self.parent.provider == "campus", (
             f"Unable to issue token for provider {self.parent.provider!r}"
         )
         token_id = secret.generate_access_token()
-        token = campus.model.OAuthToken(
+        token = model.OAuthToken(
             id=token_id,
             expiry_seconds=expiry_seconds,
             scopes=scopes,
@@ -195,7 +195,7 @@ class UserCredentialsResource:
                 {"token_id": token_id}
             )
         else:  # New credentials
-            credential = campus.model.UserCredentials(
+            credential = model.UserCredentials(
                 id=uid.generate_category_uid("user_credentials"),
                 provider=self.parent.provider,
                 user_id=self.user_id,
@@ -208,8 +208,8 @@ class UserCredentialsResource:
     def update(
             self,
             client_id: str,
-            token: campus.model.OAuthToken
-    ) -> campus.model.UserCredentials:
+            token: model.OAuthToken
+    ) -> model.UserCredentials:
         """Update access token.
 
         Checks for existing credentials for this user-client pair and
@@ -226,7 +226,7 @@ class UserCredentialsResource:
             "client_id": client_id
         })
         if not records:  # No existing credentials
-            credentials = campus.model.UserCredentials(
+            credentials = model.UserCredentials(
                 id=uid.generate_category_uid("user_credentials"),
                 provider=self.parent.provider,
                 user_id=self.user_id,
@@ -237,7 +237,7 @@ class UserCredentialsResource:
         elif records[0]['token_id'] != token.id:  # token_id changed
             cred_record = records[0]
             # UserCredentials.from_storage requires token
-            credentials = campus.model.UserCredentials.from_storage(
+            credentials = model.UserCredentials.from_storage(
                 cred_record
             )
             cred_storage.update_by_id(
@@ -245,7 +245,7 @@ class UserCredentialsResource:
                 {"token_id": token.id}
             )
         else:  # token_id unchanged, just load existing credentials
-            credentials = campus.model.UserCredentials.from_storage(
+            credentials = model.UserCredentials.from_storage(
                 records[0]
             )
         credentials.token = token

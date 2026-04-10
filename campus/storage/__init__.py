@@ -29,6 +29,7 @@ __all__ = [
     "gte",
     "lt",
     "lte",
+    "between",
     "is_operator",
 ]
 
@@ -45,7 +46,7 @@ from .errors import (
     NotFoundError,
     NoChangesAppliedError
 )
-from .query import gt, gte, lt, lte, is_operator
+from .query import gt, gte, lt, lte, between, is_operator
 
 
 def get_table(name: str) -> TableInterface:

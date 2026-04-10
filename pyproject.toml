@@ -42,8 +42,9 @@ useLibraryCodeForTypes = true
 extraPaths = ["."]
 venvPath = "."
 venv = ".venv"
-exclude = [".cache"]
+exclude = [".cache", ".venv/Lib/site-packages/campus_python"]
 reportIncompatibleMethodOverride = "none"
+stubPath = ""
 
 [tool.ruff]
 select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']

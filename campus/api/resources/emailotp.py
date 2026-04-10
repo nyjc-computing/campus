@@ -11,7 +11,7 @@ import bcrypt
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
-import campus.model
+import campus.model as model
 import campus.storage
 
 emailotp_storage = campus.storage.get_table("emailotp")
@@ -43,9 +43,9 @@ def _verify_otp(plain_otp: str, hashed_otp: str) -> bool:
 
 def _from_record(
         record: dict[str, typing.Any],
-) -> campus.model.EmailOTP:
+) -> model.EmailOTP:
     """Convert a storage record to an EmailOTP model instance."""
-    return campus.model.EmailOTP(
+    return model.EmailOTP(
         id=schema.CampusID(record['id']),
         created_at=schema.DateTime(record['created_at']),
         email=schema.Email(record['email']),
@@ -60,7 +60,7 @@ class EmailOTPResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for email OTP management."""
-        emailotp_storage.init_from_model("emailotp", campus.model.EmailOTP)
+        emailotp_storage.init_from_model("emailotp", model.EmailOTP)
 
     def request(self, email: str, expiry_minutes: int | float = 5) -> str:
         """Generate a new OTP for the given email and return it.
@@ -101,7 +101,7 @@ class EmailOTPResource:
 
             # Insert new OTP
             otp_id = uid.generate_category_uid("emailotp", length=16)
-            otp = campus.model.EmailOTP(
+            otp = model.EmailOTP(
                 id=otp_id,
                 email=schema.Email(email),
                 otp_hash=otp_hash,
