@@ -13,7 +13,7 @@ URL path mapping:
 from typing import Optional, Any
 
 from campus.common.http.interface import JsonClient, JsonResponse
-from ..interface import ResourceCollection, Resource, ResourceRoot
+from ..interface import ResourceCollection, Resource, ResourceRoot, SLASH
 
 
 class Traces(ResourceCollection):
@@ -178,18 +178,13 @@ class Traces(ResourceCollection):
                 trace_id: The trace identifier.
                 parent: The parent traces resource.
             """
+            super().__init__(trace_id, parent=parent, root=parent.root)
             self.trace_id = trace_id
-            self.path = parent.make_path(trace_id)
 
         @property
         def client(self) -> JsonClient:
             """Get the JsonClient associated with this resource."""
             return self.parent.client
-
-        @property
-        def root(self) -> ResourceRoot:
-            """Get the root resource."""
-            return self.parent.root
 
         def get_tree(self) -> JsonResponse:
             """Get the trace tree with hierarchical span structure.
@@ -231,16 +226,33 @@ class Traces(ResourceCollection):
                 trace_id: The trace identifier.
                 parent: The parent trace resource.
             """
-            self.trace_id = trace_id
+            self._client = None  # Will use parent's client
+            # ResourceCollection requires root and path to be set
+            self.root = parent.root
             self.path = "spans/"
             self.parent = parent
-            self.root = parent.root
-            self._client = None  # Will use parent's client
+            self.trace_id = trace_id
 
         @property
         def client(self) -> JsonClient:
             """Get the JsonClient associated with this resource."""
             return self.parent.client
+
+        def make_path(self, part: str | None = None) -> str:
+            """Create a full path for a sub-resource or action.
+
+            Override because Spans is nested under Trace (not directly under root).
+            """
+            if part:
+                return (
+                    f"{self.parent.path.rstrip(SLASH)}"
+                    f"/{self.path.lstrip(SLASH).rstrip(SLASH)}"
+                    f"/{part.lstrip(SLASH)}"
+                )
+            return (
+                f"{self.parent.path.rstrip(SLASH)}"
+                f"/{self.path.lstrip(SLASH)}"
+            )
 
         def list(self) -> JsonResponse:
             """List all spans in the trace (flat list).
@@ -282,19 +294,13 @@ class Traces(ResourceCollection):
                     span_id: The span identifier.
                     parent: The parent spans resource.
                 """
+                super().__init__(span_id, parent=parent, root=parent.root)
                 self.span_id = span_id
-                self.trace_id = parent.trace_id
-                self.path = parent.make_path(span_id)
 
             @property
             def client(self) -> JsonClient:
                 """Get the JsonClient associated with this resource."""
                 return self.parent.client
-
-            @property
-            def root(self) -> ResourceRoot:
-                """Get the root resource."""
-                return self.parent.root
 
             def get(self) -> JsonResponse:
                 """Get the span details.

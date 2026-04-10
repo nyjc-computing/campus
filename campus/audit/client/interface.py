@@ -92,14 +92,15 @@ class ResourceCollection:
         """Create a full path for a sub-resource or action."""
         if part:
             return (
-                f"/{self.root.make_path(self.path).lstrip(SLASH).rstrip(SLASH)}"
+                f"/{self.root.url_prefix.lstrip(SLASH)}"
+                f"/{self.path.lstrip(SLASH).rstrip(SLASH)}"
                 f"/{part.lstrip(SLASH)}"
             )
-        return f"/{self.root.make_path(self.path).lstrip(SLASH)}"
+        return f"/{self.root.url_prefix.lstrip(SLASH)}/{self.path.lstrip(SLASH)}"
 
     def make_url(self, part: str | None = None) -> str:
         """Create a full URL for a sub-resource or action."""
-        return f"{self.root.make_url()}{self.make_path(part)}"
+        return f"{self.root.base_url}{self.make_path(part)}"
 
 
 class Resource:
