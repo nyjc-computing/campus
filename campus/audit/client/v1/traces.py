@@ -10,7 +10,7 @@ URL path mapping:
     /audit/v1/traces/search         → Search traces
 """
 
-from typing import Optional
+from typing import Optional, Any
 
 from campus.common.http.interface import JsonClient, JsonResponse
 from ..interface import ResourceCollection, Resource, ResourceRoot
@@ -102,7 +102,7 @@ class Traces(ResourceCollection):
         Raises:
             NetworkError: If the HTTP request fails.
         """
-        params = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
         if since is not None:
             params["since"] = since
         if until is not None:
@@ -142,7 +142,7 @@ class Traces(ResourceCollection):
         Raises:
             NetworkError: If the HTTP request fails.
         """
-        params = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
         if path is not None:
             params["path"] = path
         if status is not None:
@@ -205,7 +205,7 @@ class Traces(ResourceCollection):
             return response
 
         @property
-        def spans(self) -> "Spans":
+        def spans(self) -> "Traces.Spans":
             """Get the spans sub-resource for this trace.
 
             Returns:
@@ -221,6 +221,8 @@ class Traces(ResourceCollection):
         Supports:
         - GET: List all spans in trace (flat list)
         """
+
+        trace_id: str
 
         def __init__(self, *, trace_id: str, parent: Resource):
             """Initialize the trace spans resource.
@@ -253,7 +255,7 @@ class Traces(ResourceCollection):
             response.raise_for_status()
             return response
 
-        def __getitem__(self, span_id: str) -> "Span":
+        def __getitem__(self, span_id: str) -> "Traces.Spans.Span":
             """Get a specific span resource by ID.
 
             Args:
@@ -273,7 +275,7 @@ class Traces(ResourceCollection):
             - GET: Get individual span details
             """
 
-            def __init__(self, span_id: str, parent: ResourceCollection):
+            def __init__(self, span_id: str, parent: "Traces.Spans"):
                 """Initialize the span resource.
 
                 Args:

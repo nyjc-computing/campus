@@ -85,6 +85,11 @@ def end_span(response: flask.Response) -> flask.Response:
         # Tracing wasn't started properly, skip ingestion
         return response
 
+    # Type narrowing: we know these are not None after the check
+    trace_id = typing.cast(str, trace_id)
+    span_id = typing.cast(str, span_id)
+    trace_start = typing.cast(float, trace_start)
+
     # Calculate duration
     duration_ms = (time.perf_counter() - trace_start) * 1000
 
@@ -212,11 +217,17 @@ def _extract_response_body(response: flask.Response) -> dict | str | None:
     try:
         # Get response data
         if isinstance(response.response, list):
-            data = b"".join(response.response)
+            # Join bytes from list
+            parts = typing.cast(list, response.response)
+            if all(isinstance(p, bytes) for p in parts):
+                data = bytes(b"".join(typing.cast(list[bytes], parts)))
+            else:
+                # Mixed types, convert to string
+                data = "".join(str(p) for p in parts)
         elif isinstance(response.response, str):
             data = response.response.encode("utf-8")
         else:
-            data = response.response
+            data = typing.cast(bytes, response.response)
 
         # Decode if possible
         if isinstance(data, bytes):
