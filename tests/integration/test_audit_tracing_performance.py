@@ -34,6 +34,10 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
         # Get the auth app
         cls.auth_app = cls.manager.auth_app
 
+        # Reset audit client singleton to ensure fresh client for this test class
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
+
     @classmethod
     def tearDownClass(cls):
         """Clean up services."""
