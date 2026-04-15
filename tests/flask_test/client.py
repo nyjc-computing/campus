@@ -54,7 +54,7 @@ class FlaskTestClient:
         self._app_context = None
 
     @property
-    def _auth_headers(self) -> dict[str, str]:
+    def _auth_headers(self) -> HttpHeader:
         """Get authentication headers, loading fresh from environment.
 
         This property ensures that credentials are always current, allowing
@@ -66,7 +66,7 @@ class FlaskTestClient:
         # Reload from environment each time to get current credentials
         return self._load_auth_headers()
 
-    def _load_auth_headers(self) -> dict[str, str]:
+    def _load_auth_headers(self) -> HttpHeader:
         """Load authentication headers from environment variables.
 
         Note: Headers are loaded fresh on each access to ensure test isolation.
@@ -80,13 +80,15 @@ class FlaskTestClient:
         # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
         client_id = env.get("CLIENT_ID")
         client_secret = env.get("CLIENT_SECRET")
-        if client_id and client_secret:
-            return HttpHeader.from_credentials(client_id, client_secret)  # HttpHeader is a dict
-
-        # No credentials found - unauthenticated requests are not yet supported
-        raise AuthenticationError(
-            "Missing credentials. Set ACCESS_TOKEN or both CLIENT_ID and CLIENT_SECRET environment variables."
-        )
+        if not client_id:
+            raise AuthenticationError(
+                "Missing CLIENT_ID. Set the CLIENT_ID environment variable."
+            )
+        if not client_secret:
+            raise AuthenticationError(
+                "Missing CLIENT_SECRET. Set the CLIENT_SECRET environment variable."
+            )
+        return HttpHeader.from_credentials(client_id, client_secret)
 
     def _ensure_app_context(self):
         """Ensure we have an active app context."""
