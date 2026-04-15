@@ -188,6 +188,7 @@ class UserCredentialsResource:
         records = cred_storage.get_matching({
             "provider": self.parent.provider,
             "user_id": str(self.user_id),
+            "client_id": client_id,
         })
         if records:  # Existing credentials
             cred_storage.update_by_id(
