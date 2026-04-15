@@ -137,13 +137,53 @@ CLIENT_SECRET="your-secret"      # client authentication
 POSTGRESDB_URI="postgresql://..."# auth service database
 ```
 
-### Secrets Management
-Secrets managed via `campus.auth.vaults` and accessed through `campus_python` client:
+### Environment Module (`campus.common.env`)
+
+The env module provides clean, thread-safe access to environment variables:
 
 ```python
-import campus_python
-campus = campus_python.Campus()
-secret = campus.auth.vaults["deployment"]["key"]
+from campus.common import env
+
+# Function-style access (recommended for setting/deleting)
+env.set('MY_VAR', 'value')
+value = env.get('MY_VAR', 'default')
+env.delete('MY_VAR')
+
+# Attribute-style access (convenient for reading)
+value = env.MY_VAR
+
+# Check existence
+if env.contains('MY_VAR'):
+    # ...
+
+# Require variables (raises OSError if missing)
+env.require('REQUIRED_VAR')
+
+# Get secrets with vault fallback
+secret = env.getsecret('SECRET_KEY')  # checks env, then vault
+```
+
+**Key patterns:**
+- Use `env.set()` and `env.delete()` for modifying environment variables
+- Use attribute access (`env.VAR_NAME`) for convenient reading
+- Use `env.getsecret()` for secrets that fall back to vault storage
+- Use `env.register_getsecret()` to register custom vault access functions (for deployment-specific implementations)
+
+### Secrets Management
+Secrets managed via `campus.auth.vaults` and accessed through the env module:
+
+```python
+from campus.common import env
+
+# Check environment first, fall back to vault
+secret = env.getsecret('MY_SECRET')
+
+# Register custom vault access (for deployment-specific implementations)
+def custom_getsecret(name: str) -> str:
+    # Custom vault access logic
+    return vault_retrieve(name)
+
+env.register_getsecret(custom_getsecret)
 ```
 
 ## Security Architecture

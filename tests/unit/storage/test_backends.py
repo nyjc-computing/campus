@@ -7,7 +7,7 @@ from campus.storage import errors as storage_errors
 from campus.common import env
 
 # Configure test storage before importing storage modules
-env.STORAGE_MODE = "1"
+env.set('STORAGE_MODE', "1")
 
 
 class TestSQLiteBackend(unittest.TestCase):

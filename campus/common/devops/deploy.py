@@ -41,10 +41,10 @@ def configure_for_codespace(app: flask.Flask) -> None:
 
     - sets HOSTNAME from Codespace environment variables
     """
-    env.PORT = env.get("PORT", "5000")
+    env.set('PORT', env.get("PORT", "5000"))
     assert env.CODESPACE_NAME and env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN, \
         "CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN must be set."
-    env.HOSTNAME = f"{env.CODESPACE_NAME}-{env.PORT}.{env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
+    env.set('HOSTNAME', f"{env.CODESPACE_NAME}-{env.PORT}.{env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}")
 
 
 def configure_for_development(app: flask.Flask) -> None:

@@ -27,7 +27,7 @@ def is_test_mode() -> bool:
 def configure_test_storage():
     """Configure storage to use test backends."""
     # Set environment variable to indicate test mode
-    env.STORAGE_MODE = "1"  # type: ignore[attr-defined]
+    env.set('STORAGE_MODE', "1")
 
 
 def get_table_backend() -> Type[TableInterface]:
