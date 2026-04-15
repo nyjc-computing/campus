@@ -30,7 +30,10 @@ class AppModule(Protocol):
 
 def is_codespace() -> bool:
     """Check if running in a GitHub Codespace environment."""
-    return env.CODESPACES is not None and env.CODESPACES.lower() == "true"
+    return (
+        env.get("CODESPACES") is not None
+        and env.CODESPACES.lower() == "true"
+    )
 
 
 def configure_for_codespace(app: flask.Flask) -> None:
