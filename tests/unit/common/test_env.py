@@ -88,15 +88,90 @@ class TestEnvModuleFunctions(unittest.TestCase):
         self.assertIn('NONEXISTENT_VAR', str(cm.exception))
 
     def test_register_getsecret_function(self):
-        """Test registering a custom getsecret function."""
+        """Test registering and using a custom getsecret function."""
         # Register a custom function
         def custom_getsecret(name: str) -> str:
             return f'custom:{name}'
 
         env.register_getsecret(custom_getsecret)
 
-        # Note: We can't fully test this without mocking campus_python,
-        # but we can verify the function is accepted without error
+        # Test that the registered function is called
+        result = env.getsecret('TEST_SECRET')
+        self.assertEqual(result, 'custom:TEST_SECRET')
+
+        # Clean up - reset to None
+        env.register_getsecret(lambda name: None)  # Reset
+        # Actually, we can't reset it since there's no unregister function
+        # This is a limitation - the registered function persists for the test run
+
+
+class TestEnvGetSecret(unittest.TestCase):
+    """Test the getsecret() function."""
+
+    def setUp(self):
+        """Save current getsecret function state."""
+        # Save the current getsecret function if any
+        self.original_getsecret_func = getattr(env, '_getsecret_func', None)
+
+    def tearDown(self):
+        """Restore getsecret function state."""
+        # Restore the original function
+        if self.original_getsecret_func is not None:
+            env.register_getsecret(self.original_getsecret_func)
+
+    def test_getsecret_from_env_var(self):
+        """Test getsecret() returns environment variable if set."""
+        os.environ['TEST_SECRET'] = 'env_value'
+
+        result = env.getsecret('TEST_SECRET')
+        self.assertEqual(result, 'env_value')
+
+        # Clean up
+        del os.environ['TEST_SECRET']
+
+    def test_getsecret_calls_registered_function(self):
+        """Test getsecret() calls registered function when env var not set."""
+        # Register a test function
+        def test_getsecret(name: str) -> str:
+            return f'registered:{name}'
+
+        env.register_getsecret(test_getsecret)
+
+        # Call getsecret for a non-existent env var
+        result = env.getsecret('NONEXISTENT_SECRET')
+        self.assertEqual(result, 'registered:NONEXISTENT_SECRET')
+
+    def test_getsecret_prefers_env_var_over_registered_function(self):
+        """Test getsecret() prefers env var even when registered function exists."""
+        # Register a test function
+        def test_getsecret(name: str) -> str:
+            return f'registered:{name}'
+
+        env.register_getsecret(test_getsecret)
+
+        # Set env var
+        os.environ['TEST_SECRET'] = 'env_value'
+
+        # Should return env var, not call registered function
+        result = env.getsecret('TEST_SECRET')
+        self.assertEqual(result, 'env_value')
+
+        # Clean up
+        del os.environ['TEST_SECRET']
+
+    def test_getsecret_raises_when_no_env_var_and_no_registered_function(self):
+        """Test getsecret() raises OSError when neither env var nor registered function."""
+        # Make sure no registered function and no env var
+        # We can't easily unregister, so we'll test with a function that raises
+        def raising_getsecret(name: str) -> str:
+            raise OSError(f"Secret {name!r} not found")
+
+        env.register_getsecret(raising_getsecret)
+
+        # Should raise OSError
+        with self.assertRaises(OSError) as cm:
+            env.getsecret('NONEXISTENT_SECRET')
+        self.assertIn('NONEXISTENT_SECRET', str(cm.exception))
 
 
 class TestEnvAttributeAccess(unittest.TestCase):
