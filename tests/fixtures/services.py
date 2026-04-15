@@ -143,18 +143,17 @@ class ServiceManager:
         # This must happen AFTER auth.init() so CLIENT_ID/CLIENT_SECRET are set
         from campus.audit.client import set_http_client_factory
 
-        # Capture credentials at factory creation time
-        # This ensures TestJsonClient has access to credentials even if env changes
-        client_id = env.CLIENT_ID
-        client_secret = env.CLIENT_SECRET
-
         def _test_http_client_factory(base_url: str) -> flask_test.TestJsonClient:
             """Factory function that creates TestJsonClient for testing."""
-            # Set env vars before creating client (in case they were cleared)
-            import os
-            os.environ["CLIENT_ID"] = client_id
-            os.environ["CLIENT_SECRET"] = client_secret
-            return flask_test.TestJsonClient(base_url=base_url)
+            # Load credentials from environment at call time (not at factory setup time)
+            # This ensures each test class gets the current credentials, not stale ones
+            # This is needed because auth.init() creates a new client for each test class
+            client_id = env.CLIENT_ID
+            client_secret = env.CLIENT_SECRET
+            return flask_test.TestJsonClient(
+                base_url=base_url,
+                _credentials=(client_id, client_secret)
+            )
 
         set_http_client_factory(_test_http_client_factory)
 
