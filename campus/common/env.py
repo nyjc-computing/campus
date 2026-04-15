@@ -39,6 +39,36 @@ def get(name: str, default: str | None = None) -> str | None: ...
 def getsecret(name: str, vault_label: str) -> str: ...
 def require(*envvars: str) -> None: ...
 
+# Assertion catches cases where env is still a module (i.e. the proxy
+# was not properly instantiated)
+def __getattr__(name: str) -> None:
+    """If this function is this called, it means the env proxy was not
+    properly instantiated and env is still a module, which should not
+    happen.
+
+    Raises:
+        RuntimeError: Always, since this means the env proxy was not
+        properly instantiated.
+    """
+    raise RuntimeError(
+        f"env proxy not properly instantiated, env is still a module. "
+        f"Attempted to access env.{name}"
+    )
+
+def __setattr__(name: str, value: str) -> None:
+    """If this function is this called, it means the env proxy was not
+    properly instantiated and env is still a module, which should not
+    happen.
+
+    Raises:
+        RuntimeError: Always, since this means the env proxy was not
+        properly instantiated.
+    """
+    raise RuntimeError(
+        f"env proxy not properly instantiated, env is still a module. "
+        f"Attempted to set env.{name} = {value}"
+    )
+
 
 class EnvironmentProxy:
     """Proxy object for environment variables.
