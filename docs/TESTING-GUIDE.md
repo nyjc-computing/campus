@@ -12,45 +12,32 @@ This guide covers testing in Campus: what we test, how tests are organized, and 
 
 ```bash
 # Run all unit tests (fast, no external dependencies)
-python tests/run_tests.py unit
+poetry run python tests/run_tests.py unit
 
 # Run all integration tests (requires environment setup)
-python tests/run_tests.py integration
+poetry run python tests/run_tests.py integration
 
 # Run all tests
-python tests/run_tests.py all
+poetry run python tests/run_tests.py all
 
 # Run specific test file
-python -m unittest tests.unit.auth.test_resources -v
+poetry run python -m unittest tests.unit.auth.test_resources -v
 ```
 
-**Note:** The test runner automatically detects and uses `.venv/bin/python` when available. If you don't have the venv activated or Poetry in PATH, use the full path:
-```bash
-.venv/bin/python tests/run_tests.py unit
-```
+### How `poetry run python` Works
 
-### How `.venv/bin/python` Works
+The `poetry run python` command finds the project's virtual environment and runs Python within it. This works consistently across all environments:
 
-If you're new to Python virtual environments, here's what's happening:
+| Environment | Command |
+|------------|---------|
+| Local development | `poetry run python tests/run_tests.py unit` |
+| CI/CD | `poetry run python tests/run_tests.py unit` |
+| GitHub Codespaces | `poetry run python tests/run_tests.py unit` |
 
-| Command | What It Does | Runs in venv? |
-|---------|--------------|---------------|
-| `python tests/run_tests.py` | Uses system Python, then auto-detects `.venv` | Yes (via test runner) |
-| `.venv/bin/python tests/run_tests.py` | Directly executes the venv's Python | Yes |
-| `poetry run python tests/run_tests.py` | Poetry finds venv, runs Python | Yes |
-| `source .venv/bin/activate` | Modifies shell to use venv for all commands | Yes (until deactivate) |
-
-**Key insight:** `.venv/bin/python` **IS** the virtual environment's Python interpreter. When you run it directly:
-- It uses packages installed in `.venv/lib/python3.11/site-packages/`
-- No `activate` step needed
-- Same as what `poetry run python` does internally (just faster, no Poetry lookup)
-
-The test runner (`tests/run_tests.py`) checks for `.venv/bin/python` first, then falls back to system Python. This means you can run tests with either:
-```bash
-# Both work identically in this project
-python tests/run_tests.py unit
-.venv/bin/python tests/run_tests.py unit
-```
+**Why `poetry run`?**
+- Works the same everywhere (no environment-specific commands needed)
+- Automatically finds the correct Python interpreter
+- No need to manually activate venv or remember `.venv/bin/python` paths
 
 ## Test Types
 
@@ -130,45 +117,39 @@ Are you testing HTTP interface contracts (status codes, auth)?
 
 ```bash
 # All tests
-python tests/run_tests.py all
+poetry run python tests/run_tests.py all
 
 # Unit tests only
-python tests/run_tests.py unit
+poetry run python tests/run_tests.py unit
 
 # Integration tests only
-python tests/run_tests.py integration
+poetry run python tests/run_tests.py integration
 
 # Sanity checks
-python tests/run_tests.py sanity
+poetry run python tests/run_tests.py sanity
 
-# Type checks (requires Poetry for pyright environment)
+# Type checks
 poetry run python tests/run_tests.py type
 
 # Package-specific tests
-python tests/run_tests.py unit --module auth
-python tests/run_tests.py unit --module api
+poetry run python tests/run_tests.py unit --module auth
+poetry run python tests/run_tests.py unit --module api
 ```
-
-**Environment notes:**
-- Works with activated venv: `source .venv/bin/activate`
-- Works with configured PATH (pyenv + pipx)
-- **Type checks require `poetry run`** (pyright needs Poetry's environment to find packages)
-- Or use Poetry wrapper: `poetry run python tests/run_tests.py unit`
 
 ### Using unittest Directly
 
 ```bash
 # Run specific test file
-python -m unittest tests.unit.auth.test_resources -v
+poetry run python -m unittest tests.unit.auth.test_resources -v
 
 # Run specific test class
-python -m unittest tests.unit.auth.test_resources.TestAuthResource -v
+poetry run python -m unittest tests.unit.auth.test_resources.TestAuthResource -v
 
 # Run specific test method
-python -m unittest tests.unit.auth.test_resources.TestAuthResource.test_authenticate -v
+poetry run python -m unittest tests.unit.auth.test_resources.TestAuthResource.test_authenticate -v
 
 # Run all contract tests
-python -m unittest discover -s tests/contract -p "test_*.py"
+poetry run python -m unittest discover -s tests/contract -p "test_*.py"
 ```
 
 ## Test Scope
@@ -318,13 +299,13 @@ Campus maintains OpenAPI 3.0.3 specifications for API documentation:
 
 ```bash
 # Validate auth service spec
-python -m openapi_spec_validator campus/auth/docs/openapi.yaml
+poetry run python -m openapi_spec_validator campus/auth/docs/openapi.yaml
 
 # Validate API service spec
-python -m openapi_spec_validator campus/api/docs/openapi.yaml
+poetry run python -m openapi_spec_validator campus/api/docs/openapi.yaml
 
 # Run unit tests (includes OpenAPI validation)
-python tests/run_tests.py unit --module common
+poetry run python tests/run_tests.py unit --module common
 ```
 
 ### OpenAPI Validation Tests
