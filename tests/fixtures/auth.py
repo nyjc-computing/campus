@@ -57,7 +57,7 @@ def init():
     auth_resources.vault["campus.auth"]["SECRET_KEY"] = "vault-secret-key"
 
     # Also set in environment for code that reads env.SECRET_KEY directly
-    env.SECRET_KEY = "vault-secret-key"
+    env.set('SECRET_KEY', "vault-secret-key")
 
     # Create a test client for authentication in tests
     # Check if client already exists to make this function idempotent
@@ -79,8 +79,8 @@ def init():
         secret = client_resource.revoke()
 
     # Set client credentials in environment for test authentication
-    env.CLIENT_ID = client_id
-    env.CLIENT_SECRET = secret
+    env.set('CLIENT_ID', client_id)
+    env.set('CLIENT_SECRET', secret)
 
     # Grant the test client full access to the 'vault' label
     client_resource.access.grant("vault", ClientAccess.ALL)

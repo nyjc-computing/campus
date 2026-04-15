@@ -75,7 +75,7 @@ class ServiceManager:
         # Ensure we're running in testing mode
         # env.ENV is mutable and can be set for testing purposes
         if env.get("ENV") != devops.TESTING:
-            env.ENV = devops.TESTING
+            env.set('ENV', devops.TESTING)
 
         # Always re-init auth and yapper services if already setup,
         # in case storage was reset. These are idempotent.
@@ -113,7 +113,7 @@ class ServiceManager:
         # Set HOSTNAME for test mode - campus_python uses this to build base_url
         # When DEPLOY="campus.auth", it uses base_url = f"https://{env.HOSTNAME}"
         # We use a fake hostname that we'll map to Flask test apps
-        env.HOSTNAME = "campus.test"
+        env.set('HOSTNAME', "campus.test")
 
         # Patch campus_python to use TestCampusRequest (Flask test client)
         # This must be done before any campus_python.Campus instances are created

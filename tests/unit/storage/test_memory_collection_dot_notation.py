@@ -23,7 +23,7 @@ class TestMemoryCollectionDotNotation(unittest.TestCase):
         """Set up test environment before each test."""
         # Ensure test mode
         if env.get("ENV") != devops.TESTING:
-            env.ENV = devops.TESTING
+            env.set('ENV', devops.TESTING)
 
         # Reset storage for clean state
         MemoryCollection.reset_storage()

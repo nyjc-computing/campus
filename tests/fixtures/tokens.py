@@ -38,7 +38,7 @@ def create_test_token(
 
     # Ensure we're in test mode
     if env.get("ENV") != devops.TESTING:
-        env.ENV = devops.TESTING
+        env.set('ENV', devops.TESTING)
 
     client_id = env.CLIENT_ID
 

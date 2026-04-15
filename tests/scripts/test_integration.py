@@ -68,7 +68,7 @@ class ServiceManager:
         print("🔐 Starting Campus Vault...")
 
         # Set deployment mode for vault
-        env.DEPLOY = 'vault'
+        env.set('DEPLOY', 'vault')
 
         # Debug: Print CLIENT_ID being used in main thread
         client_id = env.CLIENT_ID
@@ -92,7 +92,7 @@ class ServiceManager:
         print("🏫 Starting Campus Apps...")
 
         # Set deployment mode for apps
-        env.DEPLOY = 'apps'
+        env.set('DEPLOY', 'apps')
 
         # Debug: Print CLIENT_ID being used in main thread
         client_id = env.CLIENT_ID
