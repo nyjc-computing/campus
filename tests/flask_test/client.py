@@ -54,7 +54,7 @@ class FlaskTestClient:
         self._app_context = None
 
     @property
-    def _auth_headers(self) -> dict[str, str]:
+    def _auth_headers(self) -> HttpHeader:
         """Get authentication headers, loading fresh from environment.
 
         This property ensures that credentials are always current, allowing
@@ -66,7 +66,7 @@ class FlaskTestClient:
         # Reload from environment each time to get current credentials
         return self._load_auth_headers()
 
-    def _load_auth_headers(self) -> dict[str, str]:
+    def _load_auth_headers(self) -> HttpHeader:
         """Load authentication headers from environment variables.
 
         Note: Headers are loaded fresh on each access to ensure test isolation.

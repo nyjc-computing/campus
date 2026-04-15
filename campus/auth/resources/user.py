@@ -35,7 +35,7 @@ class UsersResource:
         """Initialize storage for user authentication."""
         user_storage.init_from_model("users", model.User)
 
-    def __getitem__(self, user_id: schema.UserID) -> "UserResource":
+    def __getitem__(self, user_id: schema.UserID | str) -> "UserResource":
         """Get a user record by user ID.
 
         Args:
@@ -44,7 +44,7 @@ class UsersResource:
         Returns:
             UserResource instance
         """
-        return UserResource(user_id)
+        return UserResource(schema.UserID(user_id))
 
     def list(self) -> list[model.User]:
         """Get all users.
@@ -57,7 +57,7 @@ class UsersResource:
 
     def new(
             self,
-            email: schema.Email,
+            email: schema.Email | str,
             name: str,
             activated_at: schema.DateTime | None = None,
     ) -> model.User:
@@ -74,7 +74,7 @@ class UsersResource:
         # Create user record with email as id
         record = {
             "id": schema.UserID(email),
-            "email": email,
+            "email": schema.Email(email),
             "name": name,
             "created_at": schema.DateTime.utcnow(),
             "activated_at": activated_at,
@@ -85,7 +85,7 @@ class UsersResource:
 
     def get_or_create(
             self,
-            email: schema.Email,
+            email: schema.Email | str,
             name: str,
     ) -> model.User:
         """Get a user by email, creating them if they don't exist.
@@ -110,8 +110,8 @@ class UsersResource:
 class UserResource:
     """Represents a single user in Campus API Schema."""
 
-    def __init__(self, user_id: schema.UserID):
-        self.user_id = user_id
+    def __init__(self, user_id: schema.UserID | str):
+        self.user_id = schema.UserID(user_id)
 
     def activate(self) -> None:
         """Activate a user account.
