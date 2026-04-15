@@ -111,7 +111,8 @@ class TableInterface(ABC):
         # Retry while errors remain and max_retries not reached
         retries = 1
         while 0 < retries <= max_retries and errors:
-            for i, e in errors.items():
+            # Convert to list to avoid RuntimeError: dictionary changed size during iteration
+            for i, e in list(errors.items()):
                 try:
                     self.insert_one(rows[i])
                 except Exception as e:
