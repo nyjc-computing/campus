@@ -25,7 +25,7 @@ def init():
     - ENV must be 'testing'
     - Auth fixtures must be initialized (CLIENT_ID must be set)
     """
-    require.env("testing")
+    require.require_env("testing")
 
     # Set up the 'campus.api' vault with its SECRET_KEY for Flask sessions
     from campus.auth import resources as auth_resources

@@ -35,7 +35,7 @@ class LoginSessionsResource:
 
     def __getitem__(
             self,
-            session_id: schema.CampusID
+            session_id: schema.CampusID | str
     ) -> "LoginSessionResource":
         """Get a login session resource.
 
@@ -48,7 +48,7 @@ class LoginSessionsResource:
             self,
             *,
             # expiry_seconds: int,
-            client_id: schema.CampusID,
+            client_id: schema.CampusID | str,
             user_id: schema.UserID | None = None,
             device_id: str | None = None,
             agent_string: str,
@@ -83,8 +83,8 @@ class LoginSessionsResource:
 class LoginSessionResource:
     """Represents a login session resource in Campus API Schema."""
 
-    def __init__(self, session_id: schema.CampusID | None = None):
-        self.session_id = session_id
+    def __init__(self, session_id: schema.CampusID | str | None = None):
+        self.session_id = schema.CampusID(session_id) if session_id else None
 
     def delete(self, sync_client: bool = True) -> None:
         """Delete this auth session."""
@@ -222,7 +222,7 @@ def _check_existing_id() -> schema.CampusID | None:
 
 
 def _verify_session_id(
-        session_id: schema.CampusID
+        session_id: schema.CampusID | str
 ) -> schema.CampusID:
     """Verify the session ID against the stored session.
     Raises:
@@ -232,6 +232,7 @@ def _verify_session_id(
     This avoids accidental deletion of a session that does not
     belong to the client.
     """
+    session_id = schema.CampusID(session_id)
     client_session_id = _check_existing_id()
     if client_session_id and session_id != client_session_id:
         raise api_errors.ConflictError(

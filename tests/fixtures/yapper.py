@@ -24,7 +24,7 @@ def init():
     same database file.
     """
     global _yapper_db_path
-    require.env("testing")
+    require.require_env("testing")
     client_id = require.envvar("CLIENT_ID")
     require.envvar("CLIENT_SECRET")
 
