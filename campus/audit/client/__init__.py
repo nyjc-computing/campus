@@ -80,13 +80,13 @@ def _get_base_url() -> str:
     """
     # If running in the audit deployment itself, use relative URL
     if env.get("DEPLOY") == "campus.audit":
-        return f"https://{env.HOSTNAME}"
+        return f"https://{env.get('HOSTNAME', 'localhost')}"
 
     match env.get("ENV", env.get("CAMPUS_ENV", "development")):
         case "development":
             return "https://campusaudit-development.up.railway.app"
         case "testing":
-            return f"https://{env.HOSTNAME}"
+            return f"https://{env.get('HOSTNAME', 'localhost')}"
         case "staging":
             return "https://audit.campus.nyjc.dev"
         case "production":

@@ -13,7 +13,6 @@ import campus_python
 import flask
 
 from campus.auth.middleware import Authenticator
-from campus.common import env
 from campus.common import schema
 from campus.common.errors import auth_errors
 
@@ -85,4 +84,5 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(bp)
 
     if isinstance(app, flask.Flask):
-        app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)
+        from campus.common import env
+        app.secret_key = env.getsecret("SECRET_KEY", env.get("DEPLOY", "campus.api"))
