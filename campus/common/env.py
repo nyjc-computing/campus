@@ -59,25 +59,21 @@ def register_getsecret(func: GetSecretFunc) -> None:
 
 
 def getsecret(name: str, vault_label: str | None = None) -> str:
-    """Get environment variable by name, falling back to retrieval from vault.
+    """Get environment variable by name, falling back to registered getsecret function.
 
     This function first checks if the environment variable is set. If not,
-    it attempts to retrieve the secret using a registered getsecret function
-    if available, otherwise falls back to campus_python.
+    it calls the registered getsecret function (if available).
 
     Args:
         name (str): Name of the environment variable.
-        vault_label (str | None): Deprecated parameter for backward compatibility.
+        vault_label (str | None): Ignored parameter for backward compatibility.
             Custom getsecret functions should handle vault querying internally.
-            Defaults to the DEPLOY environment variable for default implementation.
 
     Returns:
         str: Value of the environment variable or vault secret.
 
     Raises:
-        OSError: If neither environment variable nor vault secret is found.
-        api_errors.ForbiddenError: If access to the vault label is denied.
-        api_errors.InternalError: If the vault secret is not found.
+        OSError: If neither environment variable is set nor getsecret function registered.
     """
     # Check environment variable first
     if name in os.environ:
@@ -87,51 +83,7 @@ def getsecret(name: str, vault_label: str | None = None) -> str:
     if _getsecret_func is not None:
         return _getsecret_func(name)
 
-    # Default implementation using campus_python
-    from campus.model import ClientAccess
-
-    deployment = get("DEPLOY")
-    if deployment is None:
-        raise OSError(f"Environment variable '{name}' required")
-
-    # Use provided vault_label or default to DEPLOY
-    label = vault_label if vault_label is not None else deployment
-
-    # If within a deployment, fall back on campus.auth vault access
-    if deployment == "campus.auth":
-        # campus.auth cannot rely on campus_python for vault access
-        # otherwise we create a circular dependency.
-        # Use internal resources access instead.
-        from campus.auth import resources
-
-        client_id = get("CLIENT_ID")
-        if client_id is None:
-            raise OSError("Environment variable 'CLIENT_ID' required")
-
-        client_resource = resources.client[client_id]  # type: ignore[index]
-        if not client_resource.access.check(
-                vault_label=label,
-                permission=ClientAccess.READ,
-        ):
-            raise api_errors.ForbiddenError(
-                f"Access denied to vault label '{label}'"
-            )
-        try:
-            return resources.vault[label][name]
-        except KeyError:
-            raise api_errors.InternalError(
-                f"Vault secret '{name}' not found in label "
-                f"'{label}'"
-            )
-    else:
-        import campus_python
-        campus_auth = campus_python.Campus(timeout=60).auth
-        try:
-            return campus_auth.vaults[label][name]
-        except KeyError:
-            raise api_errors.InternalError(
-                f"Vault secret '{name}' not found in label "
-                f"'{label}'")
+    raise OSError(f"Secret {name!r} not found")
 
 
 @overload
