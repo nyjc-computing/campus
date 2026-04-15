@@ -26,24 +26,18 @@ pipx install --python python3.11 poetry
 
 ### 2. Running Python Commands
 
-**Option A: Direct with .venv (Recommended for CI/Codespaces)**
+Use `poetry run` for all Python commands - this works consistently across all environments (local, CI, Codespaces).
+
 ```bash
 # Install dependencies
 poetry install
 
 # Run tests or main script
-.venv/bin/python tests/run_tests.py unit
-.venv/bin/python main.py
-```
-
-**Option B: Via Poetry (Traditional)**
-```bash
-# Same commands using Poetry wrapper
 poetry run python tests/run_tests.py unit
 poetry run python main.py
 ```
 
-Both options work. The test runner (`tests/run_tests.py`) automatically detects and uses `.venv/bin/python` when available.
+**Note:** The test runner (`tests/run_tests.py`) automatically detects and uses `.venv/bin/python` when available, but using `poetry run` ensures consistency across all environments.
 
 ### 3. Use `run_tests.py` for Testing
 
@@ -51,17 +45,12 @@ The only supported test entrypoint is `tests/run_tests.py`. It handles environme
 
 ```bash
 # Run all tests
-python tests/run_tests.py all
+poetry run python tests/run_tests.py all
 
 # Run specific category
-python tests/run_tests.py unit
-python tests/run_tests.py integration
+poetry run python tests/run_tests.py unit
+poetry run python tests/run_tests.py integration
 ```
-
-Note: These commands work when either:
-1. You've activated the venv: `source .venv/bin/activate`
-2. Your PATH is configured (pyenv + pipx setup)
-3. Poetry is being used: `poetry run python tests/run_tests.py unit`
 
 ### 3. Campus Uses `unittest`, Not pytest
 
