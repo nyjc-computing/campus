@@ -86,7 +86,7 @@ class ClientsResource:
 
     def __getitem__(
             self,
-            client_id: schema.CampusID
+            client_id: schema.CampusID | str
     ) -> "ClientResource":
         """Get a client resource by client ID.
 
@@ -96,7 +96,7 @@ class ClientsResource:
         Returns:
             ClientResource instance
         """
-        return ClientResource(client_id)
+        return ClientResource(schema.CampusID(client_id))
 
     def is_valid_credentials(
             self,
