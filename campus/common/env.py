@@ -13,8 +13,6 @@ environment variables, or use the get() function for default values.
 import os
 from typing import Callable, overload
 
-from campus.common.errors import api_errors
-
 # Expected environment variables (for type checking)
 
 # Codespaces environment variables
