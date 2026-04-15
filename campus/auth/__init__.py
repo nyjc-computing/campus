@@ -41,6 +41,9 @@ def _auth_getsecret(name: str) -> str:
     This function is registered with env.register_getsecret() to provide
     deployment-specific vault access for campus.auth.
 
+    When DEPLOY is campus.auth, uses direct database access to avoid
+    circular dependency during initialization.
+
     Args:
         name: Name of the secret to retrieve
 
@@ -58,6 +61,18 @@ def _auth_getsecret(name: str) -> str:
     if deployment is None:
         raise OSError("Environment variable 'DEPLOY' required")
 
+    # For campus.auth deployment, use direct database access to avoid
+    # circular dependency (app trying to call its own HTTP API during init)
+    if deployment == "campus.auth":
+        from .resources import vault
+        try:
+            return vault[deployment][name]
+        except KeyError:
+            raise api_errors.InternalError(
+                f"Vault secret '{name}' not found in label '{deployment}'"
+            )
+
+    # For other deployments, use HTTP client to call auth service
     import campus_python
     campus_auth = campus_python.Campus(timeout=60).auth
     try:
