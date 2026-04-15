@@ -138,6 +138,25 @@ class ServiceManager:
         # Auth routes are at /auth/v1/*
         flask_test.register_test_app("https://campus.test", self.auth_app, path_prefix="/auth")
 
+        # Set up HTTP client factory for AuditClient dependency injection
+        # This must happen AFTER auth.init() so CLIENT_ID/CLIENT_SECRET are set
+        from campus.audit.client import set_http_client_factory
+
+        # Capture credentials at factory creation time
+        # This ensures TestJsonClient has access to credentials even if env changes
+        client_id = env.CLIENT_ID
+        client_secret = env.CLIENT_SECRET
+
+        def _test_http_client_factory(base_url: str) -> flask_test.TestJsonClient:
+            """Factory function that creates TestJsonClient for testing."""
+            # Set env vars before creating client (in case they were cleared)
+            import os
+            os.environ["CLIENT_ID"] = client_id
+            os.environ["CLIENT_SECRET"] = client_secret
+            return flask_test.TestJsonClient(base_url=base_url)
+
+        set_http_client_factory(_test_http_client_factory)
+
         # Initialize storage connections
         storage.init()
 
@@ -215,6 +234,10 @@ class ServiceManager:
             delattr(env, "CLIENT_ID")
         if env.CLIENT_SECRET is not None:
             delattr(env, "CLIENT_SECRET")
+
+        # Clean up audit client factory
+        from campus.audit.client import set_http_client_factory
+        set_http_client_factory(None)  # Reset to None
 
         # For non-shared instances, clean up apps for full isolation
         # This is now the default behavior

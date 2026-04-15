@@ -23,7 +23,7 @@ import re
 import time
 import typing
 import unittest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch
 
 from campus.common import env, schema
 from campus.audit.resources.traces import TracesResource
@@ -67,7 +67,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # Create auth headers for authenticated requests to auth service
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
-        # Reset audit client singleton to ensure it uses patched DefaultClient
+        # Reset audit client singleton to ensure fresh client for each test
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
@@ -77,28 +77,13 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # Use delete_matching with empty query to delete all spans
         traces_storage.delete_matching({})
 
-        # Mock the async ingestion to capture span data directly
-        # This avoids issues with HTTP client patching in test environment
-        self.captured_spans = []
-        self._original_ingest = tracing._ingest_span_async
-
-        def _mock_ingest(span: dict) -> None:
-            """Mock ingestion that captures spans for verification."""
-            self.captured_spans.append(span)
-
-        tracing._ingest_span_async = _mock_ingest
-
     def tearDown(self):
         """Clean up after each test."""
-        # Restore original ingestion function
-        from campus.audit.middleware import tracing
-        tracing._ingest_span_async = self._original_ingest
-
         # Wait for async ingestion to complete
+        from campus.audit.middleware import tracing
         tracing._ingestion_executor.shutdown(wait=True)
 
         # Reset the audit client singleton so next test gets a fresh one
-        # This ensures each test uses the patched DefaultClient
         tracing._audit_client = None
 
         # Re-create the executor for next test
@@ -110,7 +95,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         )
 
     def _get_span_by_trace_id(self, trace_id: str) -> dict | None:
-        """Get captured span by trace_id.
+        """Query audit service to retrieve span by trace_id.
 
         Args:
             trace_id: The 32-char hex trace identifier
@@ -118,25 +103,34 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         Returns:
             Span dict or None if not found
         """
-        for span in self.captured_spans:
-            if span.get("trace_id") == trace_id:
-                return span
-        return None
+        response = self.audit_client.get(
+            f"/audit/v1/traces/{trace_id}/spans/",
+            headers=self.auth_headers
+        )
+        if response.status_code != 200:
+            return None
+        data = response.get_json()
+        spans = data.get("spans", [])
+        return spans[0] if spans else None
 
     def _wait_for_span(self, trace_id: str, timeout: float = 1.0) -> dict | None:
         """Wait for a span to be ingested (async ingestion).
 
-        Since we're using mock ingestion, the span is available immediately.
-        This method exists for compatibility with the original test design.
-
         Args:
             trace_id: The 32-char hex trace identifier
-            timeout: Maximum time to wait in seconds (ignored with mock)
+            timeout: Maximum time to wait in seconds
 
         Returns:
-            Span dict or None if not found
+            Span dict or None if not found within timeout
         """
-        return self._get_span_by_trace_id(trace_id)
+        import time
+        start = time.time()
+        while time.time() - start < timeout:
+            span = self._get_span_by_trace_id(trace_id)
+            if span:
+                return span
+            time.sleep(0.01)
+        return None
 
     def _assert_span_matches_request(
         self,
@@ -153,10 +147,15 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
             path: Expected request path
             status_code: Expected status code
         """
-        # The span dict from tracing middleware uses http_method field
-        self.assertEqual(span.get("http_method"), method)
+        # The span dict from tracing middleware uses method field
+        self.assertEqual(span.get("method"), method)
         self.assertEqual(span.get("path"), path)
-        self.assertEqual(span.get("status_code"), status_code)
+        # SQLite returns integers as strings, so handle both cases
+        span_status = span.get("status_code")
+        if isinstance(span_status, str):
+            self.assertEqual(int(span_status), status_code)
+        else:
+            self.assertEqual(span_status, status_code)
         self.assertIn("trace_id", span)
         self.assertIn("span_id", span)
         self.assertIn("duration_ms", span)
