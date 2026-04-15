@@ -33,14 +33,6 @@ class TestJsonClient:
     - Compatible with DefaultClient interface used by AuditClient
     """
 
-    # Type annotation to match JsonClient protocol
-    # Note: In practice, this is always a string (base_url or ""), but the
-    # protocol allows None for compatibility with DefaultClient
-    base_url: str | None
-    _client_id: str | None
-    _client_secret: str | None
-    _timeout: int
-
     def __init__(
             self,
             base_url: str | None = None,
