@@ -283,11 +283,6 @@ def token(
                 * utc_time.DAY_SECONDS
             ),
         )
-        # Update credentials with the new token
-        user_credentials_resource.update(
-            client_id=authsession.client_id,
-            token=token
-        )
     return token.to_resource(), 200
 
 
