@@ -119,7 +119,7 @@ class ClientsResource:
             )
         expected_hash = secret.hash_client_secret(
             client_secret,
-            env.getsecret("SECRET_KEY", env.DEPLOY)
+            env.getsecret("SECRET_KEY")
         )
         return client.secret_hash == expected_hash
 
