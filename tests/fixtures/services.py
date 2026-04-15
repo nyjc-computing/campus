@@ -239,6 +239,10 @@ class ServiceManager:
         from campus.audit.client import set_http_client_factory
         set_http_client_factory(None)  # Reset to None
 
+        # Clean up audit client factory
+        from campus.audit.client import set_http_client_factory
+        set_http_client_factory(None)  # Reset to None
+
         # For non-shared instances, clean up apps for full isolation
         # This is now the default behavior
         if not self._shared:

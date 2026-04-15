@@ -34,7 +34,9 @@ def _from_record(
     )
 
 
-def _get_client_permissions(client_id: schema.CampusID) -> dict[str, int]:
+def _get_client_permissions(
+        client_id: schema.CampusID | str
+) -> dict[str, int]:
     """Get a client's vault access permissions.
 
     Args:
@@ -100,7 +102,7 @@ class ClientsResource:
 
     def is_valid_credentials(
             self,
-            client_id: schema.CampusID,
+            client_id: schema.CampusID | str,
             client_secret: str
     ) -> bool:
         """Check if client credentials are valid.
@@ -111,7 +113,7 @@ class ClientsResource:
         Returns:
             True if credentials are valid, False otherwise
         """
-        client = self[client_id].get()
+        client = self[schema.CampusID(client_id)].get()
         if not client.secret_hash:
             raise auth_errors.ServerError(
                 "Invalid configuration",
@@ -125,7 +127,7 @@ class ClientsResource:
 
     def raise_for_authentication(
             self,
-            client_id: schema.CampusID,
+            client_id: schema.CampusID | str,
             client_secret: str
     ) -> None:
         """Authenticate a client using their ID and secret.
@@ -139,6 +141,7 @@ class ClientsResource:
         Raises:
             UnauthorizedError: If client not found or client secret is invalid
         """
+        client_id = schema.CampusID(client_id)
         if not self.is_valid_credentials(client_id, client_secret):
             raise auth_errors.UnauthorizedClientError(
                 "Invalid credentials",
@@ -180,8 +183,8 @@ class ClientsResource:
 class ClientResource:
     """Represents a single client in Campus API Schema."""
 
-    def __init__(self, client_id: schema.CampusID):
-        self.client_id = client_id
+    def __init__(self, client_id: schema.CampusID | str):
+        self.client_id = schema.CampusID(client_id)
 
     @property
     def access(self) -> "ClientAccessResource":

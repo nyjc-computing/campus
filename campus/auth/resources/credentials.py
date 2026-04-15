@@ -54,7 +54,7 @@ class ProviderCredentialsResource:
 
     def __getitem__(
             self,
-            user_id: schema.UserID
+            user_id: schema.UserID | str
     ) -> "UserCredentialsResource":
         """Get access token by user ID.
 
@@ -120,10 +120,10 @@ class UserCredentialsResource:
     def __init__(
             self,
             parent: ProviderCredentialsResource,
-            user_id: schema.UserID
+            user_id: schema.UserID | str
     ):
         self.parent = parent
-        self.user_id = user_id
+        self.user_id = schema.UserID(user_id)
 
     def delete(self, client_id: str) -> None:
         """Delete credentials for this user-client."""

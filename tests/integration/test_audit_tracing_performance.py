@@ -28,23 +28,11 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
         cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
 
+        # Initialize traces storage
+        TracesResource.init_storage()
+
         # Get the auth app
         cls.auth_app = cls.manager.auth_app
-
-        # Initialize traces storage AFTER service manager setup
-        # This must come after setup() because setup() calls reset_test_storage()
-        # which closes the SQLite connection
-
-        # WORKAROUND: Manually create the table first, then call init_storage()
-        # This is needed because init_storage() seems to not create the table properly
-        import campus.storage
-        from campus.storage.tables.backend.sqlite import SQLiteTable
-        conn = SQLiteTable.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS spans (id TEXT PRIMARY KEY)")
-        conn.commit()
-
-        TracesResource.init_storage()
 
         # Reset audit client singleton to ensure fresh client for this test class
         from campus.audit.middleware import tracing
@@ -53,7 +41,10 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Clean up services."""
+        cls.manager.reset_test_data()
         cls.manager.close()
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
