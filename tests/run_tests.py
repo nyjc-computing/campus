@@ -221,14 +221,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python tests/run_tests.py unit                # Unit tests
-  python tests/run_tests.py integration         # Integration tests
-  python tests/run_tests.py sanity              # Sanity checks
-  python tests/run_tests.py type                # Type checks
-  python tests/run_tests.py all                 # All tests
+  poetry run python tests/run_tests.py unit                # Unit tests
+  poetry run python tests/run_tests.py integration         # Integration tests
+  poetry run python tests/run_tests.py sanity              # Sanity checks
+  poetry run python tests/run_tests.py type                # Type checks
+  poetry run python tests/run_tests.py all                 # All tests
 
-  python tests/run_tests.py unit --timeout 60   # With timeout
-  python tests/run_tests.py unit --module common -v  # Specific module, verbose
+  poetry run python tests/run_tests.py unit --timeout 60   # With timeout
+  poetry run python tests/run_tests.py unit --module common -v  # Specific module, verbose
 
 Supported modules: apps, vault, yapper, common, client
 
