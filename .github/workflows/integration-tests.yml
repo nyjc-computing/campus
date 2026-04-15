@@ -1,4 +1,4 @@
-name: Unit Tests
+name: Integration Tests
 
 on:
   push:
@@ -8,12 +8,15 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
-  UNIT_TEST_TIMEOUT: 60
+  INTEGRATION_TEST_TIMEOUT: 300
 
 jobs:
-  unit-tests:
+  integration-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 8
+    # Run integration tests for all target branches
+    # Required to pass for staging/main, optional for weekly
+    continue-on-error: ${{ github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
     env:
       ENV: testing
     steps:
@@ -31,5 +34,5 @@ jobs:
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite
         run: poetry install --no-root
-      - name: Run Unit Tests
-        run: poetry run python tests/run_tests.py unit --timeout ${{ env.UNIT_TEST_TIMEOUT }}
+      - name: Run Integration Tests (required for staging/main, optional for weekly)
+        run: poetry run python tests/run_tests.py integration --timeout ${{ env.INTEGRATION_TEST_TIMEOUT }}
