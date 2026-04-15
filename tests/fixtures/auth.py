@@ -36,7 +36,7 @@ def init():
     - ENV must be 'testing'
     - PostgreSQL environment variables must be configured
     """
-    require.env("testing")
+    require.require_env("testing")
 
     # Initialize storage-backed resources for the auth service
     from campus.auth import resources as auth_resources
@@ -116,7 +116,7 @@ def give_vault_access(
         - ENV must be 'testing'
         - CLIENT_ID environment variable must be set
     """
-    require.env("testing")
+    require.require_env("testing")
     client_id = require.envvar("CLIENT_ID")
 
     # Validate that 'all' is not combined with specific access levels

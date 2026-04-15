@@ -19,7 +19,7 @@ def init():
 
     ENV must be 'testing' and client credentials must be set before calling.
     """
-    require.env("testing")
+    require.require_env("testing")
     client_id = require.envvar("CLIENT_ID")
     require.envvar("CLIENT_SECRET")
 
