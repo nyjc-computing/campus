@@ -25,17 +25,30 @@ _ingestion_executor = concurrent.futures.ThreadPoolExecutor(
 
 # Client singleton (lazy initialized)
 _audit_client: AuditClient | None = None
+# Track credentials used to create the client, for detecting when they change
+_client_credentials: tuple[str, str] | None = None
 
 
 def _get_audit_client() -> AuditClient:
     """Get or create the audit client singleton.
 
+    The client is recreated if credentials have changed since last creation,
+    ensuring each test class gets a client with its own credentials.
+
     Returns:
         AuditClient instance for sending spans to audit service.
     """
-    global _audit_client
-    if _audit_client is None:
+    global _audit_client, _client_credentials
+
+    # Get current credentials from environment
+    from campus.common import env
+    current_credentials = (env.CLIENT_ID, env.CLIENT_SECRET)
+
+    # Recreate client if credentials have changed or client doesn't exist
+    if _audit_client is None or _client_credentials != current_credentials:
         _audit_client = AuditClient()
+        _client_credentials = current_credentials
+
     return _audit_client
 
 

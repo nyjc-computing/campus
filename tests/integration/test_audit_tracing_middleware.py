@@ -51,6 +51,11 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # Get audit client credentials for authenticated requests
         cls.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
+        # Reset audit client singleton to ensure fresh client for this test class
+        # This is important because the singleton persists across test classes
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
+
     @classmethod
     def tearDownClass(cls):
         """Clean up services."""
