@@ -122,6 +122,7 @@ class ServiceManager:
 
         # Patch DefaultClient to use TestJsonClient (Flask test client)
         # This allows AuditClient to use Flask test clients for testing
+        # Note: This is a safety net - the factory pattern below is the primary mechanism
         flask_test.patch_default_client()
 
         # Initialize auth service infrastructure
