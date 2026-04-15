@@ -149,11 +149,12 @@ class ServiceManager:
 
         def _test_http_client_factory(base_url: str) -> flask_test.TestJsonClient:
             """Factory function that creates TestJsonClient for testing."""
-            # Set env vars before creating client (in case they were cleared)
-            import os
-            os.environ["CLIENT_ID"] = client_id
-            os.environ["CLIENT_SECRET"] = client_secret
-            return flask_test.TestJsonClient(base_url=base_url)
+            # Pass credentials directly to TestJsonClient to ensure auth headers are available
+            # This bypasses the dynamic env loading which may fail in background threads
+            return flask_test.TestJsonClient(
+                base_url=base_url,
+                _credentials=(client_id, client_secret)
+            )
 
         set_http_client_factory(_test_http_client_factory)
 
