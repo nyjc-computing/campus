@@ -62,14 +62,14 @@ def getsecret(name: str, vault_label: str | None = None) -> str:
     """Get environment variable by name, falling back to retrieval from vault.
 
     This function first checks if the environment variable is set. If not,
-    it attempts to retrieve the secret from the vault using either a
-    registered getsecret function or campus_python.
+    it attempts to retrieve the secret using a registered getsecret function
+    if available, otherwise falls back to campus_python.
 
     Args:
         name (str): Name of the environment variable.
-        vault_label (str | None): Label to use when retrieving from vault.
-            Only used if no custom getsecret function is registered.
-            Defaults to the DEPLOY environment variable.
+        vault_label (str | None): Deprecated parameter for backward compatibility.
+            Custom getsecret functions should handle vault querying internally.
+            Defaults to the DEPLOY environment variable for default implementation.
 
     Returns:
         str: Value of the environment variable or vault secret.
@@ -79,6 +79,7 @@ def getsecret(name: str, vault_label: str | None = None) -> str:
         api_errors.ForbiddenError: If access to the vault label is denied.
         api_errors.InternalError: If the vault secret is not found.
     """
+    # Check environment variable first
     if name in os.environ:
         return os.environ[name]
 
