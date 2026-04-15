@@ -35,6 +35,39 @@ def get_yapper() -> "YapperInterface":
     return _yapper_instance
 
 
+def _auth_getsecret(name: str) -> str:
+    """Get secret from vault for campus.auth deployment.
+
+    This function is registered with env.register_getsecret() to provide
+    deployment-specific vault access for campus.auth.
+
+    Args:
+        name: Name of the secret to retrieve
+
+    Returns:
+        The secret value from the vault
+
+    Raises:
+        OSError: If DEPLOY environment variable is not set
+        api_errors.InternalError: If the secret is not found in the vault
+    """
+    from campus.common import env
+    from campus.common.errors import api_errors
+
+    deployment = env.get("DEPLOY")
+    if deployment is None:
+        raise OSError("Environment variable 'DEPLOY' required")
+
+    import campus_python
+    campus_auth = campus_python.Campus(timeout=60).auth
+    try:
+        return campus_auth.vaults[deployment][name]
+    except KeyError:
+        raise api_errors.InternalError(
+            f"Vault secret '{name}' not found in label '{deployment}'"
+        )
+
+
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Initialize the Campus app with all modules.
 
@@ -50,6 +83,10 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     This ensures proper error handling and deployment configuration.
     """
     from . import oauth_proxy, provider, routes
+    from campus.common import env
+
+    # Register deployment-specific getsecret function
+    env.register_getsecret(_auth_getsecret)
 
     bp = flask.Blueprint("auth", __name__, url_prefix="/auth/v1")
     provider.init_app(bp)
@@ -58,7 +95,7 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
 
     if isinstance(app, flask.Flask):
         from campus.common import env
-        app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)
+        app.secret_key = env.getsecret("SECRET_KEY")
 
     app.register_blueprint(bp)
 

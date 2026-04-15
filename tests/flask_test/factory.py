@@ -33,7 +33,7 @@ def create_test_app(module):
 
     # Set proper environment variables
     setup.set_test_env_vars()
-    env.STORAGE_MODE = "1"
+    env.set('STORAGE_MODE', "1")
 
     # Create and configure app
     app = create_app(module)

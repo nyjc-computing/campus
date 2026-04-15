@@ -26,6 +26,39 @@ from campus.common.errors import auth_errors
 campus: campus_python.Campus = None  # type: ignore
 
 
+def _api_getsecret(name: str) -> str:
+    """Get secret from vault for campus.api deployment.
+
+    This function is registered with env.register_getsecret() to provide
+    deployment-specific vault access for campus.api.
+
+    Args:
+        name: Name of the secret to retrieve
+
+    Returns:
+        The secret value from the vault
+
+    Raises:
+        OSError: If DEPLOY environment variable is not set
+        api_errors.InternalError: If the secret is not found in the vault
+    """
+    from campus.common import env
+    from campus.common.errors import api_errors
+
+    deployment = env.get("DEPLOY")
+    if deployment is None:
+        raise OSError("Environment variable 'DEPLOY' required")
+
+    import campus_python
+    campus_auth = campus_python.Campus(timeout=60).auth
+    try:
+        return campus_auth.vaults[deployment][name]
+    except KeyError:
+        raise api_errors.InternalError(
+            f"Vault secret '{name}' not found in label '{deployment}'"
+        )
+
+
 def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
     """Authenticate using HTTP Basic Authentication."""
     try:
@@ -64,6 +97,11 @@ campus_authenticator = Authenticator(
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
+    from campus.common import env
+
+    # Register deployment-specific getsecret function
+    env.register_getsecret(_api_getsecret)
+
     # Initialize campus client after test fixtures have set up the vault
     global campus
     campus = campus_python.Campus(timeout=60)
@@ -85,4 +123,4 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     if isinstance(app, flask.Flask):
         from campus.common import env
-        app.secret_key = env.getsecret("SECRET_KEY", env.get("DEPLOY", "campus.api"))
+        app.secret_key = env.getsecret("SECRET_KEY")
