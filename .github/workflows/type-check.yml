@@ -1,4 +1,4 @@
-name: Unit Tests
+name: Type Check
 
 on:
   push:
@@ -7,11 +7,8 @@ on:
     branches: [main, staging, weekly]
     types: [opened, synchronize, reopened, ready_for_review]
 
-env:
-  UNIT_TEST_TIMEOUT: 60
-
 jobs:
-  unit-tests:
+  type-check:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
@@ -31,5 +28,5 @@ jobs:
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite
         run: poetry install --no-root
-      - name: Run Unit Tests
-        run: poetry run python tests/run_tests.py unit --timeout ${{ env.UNIT_TEST_TIMEOUT }}
+      - name: Run Type Checks
+        run: poetry run python tests/run_tests.py type
