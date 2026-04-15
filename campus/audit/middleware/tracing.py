@@ -25,17 +25,30 @@ _ingestion_executor = concurrent.futures.ThreadPoolExecutor(
 
 # Client singleton (lazy initialized)
 _audit_client: AuditClient | None = None
+# Track credentials used to create the client, for detecting when they change
+_client_credentials: tuple[str, str] | None = None
 
 
 def _get_audit_client() -> AuditClient:
     """Get or create the audit client singleton.
 
+    The client is recreated if credentials have changed since last creation,
+    ensuring each test class gets a client with its own credentials.
+
     Returns:
         AuditClient instance for sending spans to audit service.
     """
-    global _audit_client
-    if _audit_client is None:
+    global _audit_client, _client_credentials
+
+    # Get current credentials from environment
+    from campus.common import env
+    current_credentials = (env.CLIENT_ID, env.CLIENT_SECRET)
+
+    # Recreate client if credentials have changed or client doesn't exist
+    if _audit_client is None or _client_credentials != current_credentials:
         _audit_client = AuditClient()
+        _client_credentials = current_credentials
+
     return _audit_client
 
 
@@ -140,20 +153,22 @@ def build_span_from_context(
         "trace_id": trace_id,
         "span_id": span_id,
         "parent_span_id": None,  # Root spans have no parent
-        "timestamp": time.time_ns() // 1_000_000,  # milliseconds since epoch
+        "started_at": schema.DateTime.utcnow(),
         "duration_ms": round(duration_ms, 3),
-        "name": f"{request.method} {request.path}",
-        "kind": "SERVER",  # This middleware handles server-side requests
         "status_code": response.status_code,
-        "http_method": request.method,
-        "url": request.url,
+        "method": request.method,
         "path": request.path,
         "query_params": dict(request.args),
         "request_headers": headers,
         "request_body": request_body,
         "response_headers": dict(response.headers),
         "response_body": response_body,
+        "client_ip": request.remote_addr,
+        "user_agent": request.user_agent.string if request.user_agent else None,
+        "error_message": None,  # No error for successful requests
+        "tags": {},  # No tags by default
         # Optional: populated by auth middleware if available
+        "api_key_id": getattr(flask.g, "api_key_id", None),
         "client_id": getattr(flask.g, "client_id", None),
         "user_id": getattr(flask.g, "user_id", None),
     }
@@ -267,7 +282,12 @@ def _ingest_span_async(span: dict) -> None:
             # Don't let tracing errors break the application
             logger.warning(f"Failed to ingest trace span: {e}")
 
-    _ingestion_executor.submit(_do_ingest)
+    try:
+        _ingestion_executor.submit(_do_ingest)
+    except RuntimeError as e:
+        # Executor has been shut down (e.g., during test cleanup)
+        # Log and continue - don't break the application
+        logger.debug(f"Cannot submit span to executor: {e}")
 
 
 def ingest_span(span: dict) -> None:
