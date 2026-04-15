@@ -19,7 +19,7 @@ class TestAuditClientInitialization(unittest.TestCase):
     """Test AuditClient initialization and configuration."""
 
     @patch("campus.audit.client._get_base_url")
-    @patch("campus.audit.client.DefaultClient")
+    @patch("campus.common.http.DefaultClient")
     def test_client_initialization(self, mock_client_class, mock_get_base_url):
         """Test that AuditClient initializes with proper configuration."""
         mock_get_base_url.return_value = "https://audit.test"
@@ -38,7 +38,7 @@ class TestAuditClientResources(unittest.TestCase):
     """Test AuditClient resource access."""
 
     @patch("campus.audit.client._get_base_url")
-    @patch("campus.audit.client.DefaultClient")
+    @patch("campus.common.http.DefaultClient")
     def test_traces_property_returns_traces_resource(self, mock_client_class, mock_get_base_url):
         """Test that client.traces returns Traces resource."""
         mock_get_base_url.return_value = "https://audit.test"
