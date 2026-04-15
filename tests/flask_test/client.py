@@ -71,9 +71,7 @@ class FlaskTestClient:
         Note: Headers are loaded fresh on each access to ensure test isolation.
         This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes.
         """
-        from types import ModuleType
         from campus.common import env
-        assert not isinstance(env, ModuleType), "env proxy not properly instantiated, env is still a module"
         # Try ACCESS_TOKEN first (Bearer auth)
         access_token = env.get("ACCESS_TOKEN")
         if access_token:

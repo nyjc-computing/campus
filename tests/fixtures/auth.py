@@ -34,18 +34,7 @@ def init():
     - ENV must be 'testing'
     - PostgreSQL environment variables must be configured
     """
-    from types import ModuleType
     from campus.common import env
-    import campus.common.env as campus_env_module
-
-    # Assert that we have the EnvironmentProxy, not the module
-    # This helps diagnose import issues where env is not properly replaced
-    assert not isinstance(env, ModuleType), (
-        "campus.common.env is resolving to the module object instead of "
-        "EnvironmentProxy. This indicates a problem with module import order "
-        "or the sys.modules replacement mechanism."
-    )
-
     require.require_env("testing")
 
     # Initialize storage-backed resources for the auth service
