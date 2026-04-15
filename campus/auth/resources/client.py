@@ -98,7 +98,7 @@ class ClientsResource:
         Returns:
             ClientResource instance
         """
-        return ClientResource(client_id)
+        return ClientResource(schema.CampusID(client_id))
 
     def is_valid_credentials(
             self,

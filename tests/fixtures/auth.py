@@ -9,8 +9,6 @@ This module sets up the backend resources needed by campus.auth:
 - Access permissions
 """
 
-from campus.common import env
-
 from . import require
 
 
@@ -36,6 +34,7 @@ def init():
     - ENV must be 'testing'
     - PostgreSQL environment variables must be configured
     """
+    from campus.common import env
     require.require_env("testing")
 
     # Initialize storage-backed resources for the auth service

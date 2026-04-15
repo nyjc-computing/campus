@@ -11,7 +11,6 @@ import flask
 from campus.common.http.interface import JsonDict, JsonResponse
 from campus.common.http.errors import AuthenticationError
 from campus.model import HttpHeader
-from campus.common import env
 
 from .response import FlaskTestResponse
 
@@ -72,6 +71,7 @@ class FlaskTestClient:
         Note: Headers are loaded fresh on each access to ensure test isolation.
         This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes.
         """
+        from campus.common import env
         # Try ACCESS_TOKEN first (Bearer auth)
         access_token = env.get("ACCESS_TOKEN")
         if access_token:
@@ -80,13 +80,15 @@ class FlaskTestClient:
         # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
         client_id = env.get("CLIENT_ID")
         client_secret = env.get("CLIENT_SECRET")
-        if client_id and client_secret:
-            return HttpHeader.from_credentials(client_id, client_secret)  # HttpHeader is a dict
-
-        # No credentials found - unauthenticated requests are not yet supported
-        raise AuthenticationError(
-            "Missing credentials. Set ACCESS_TOKEN or both CLIENT_ID and CLIENT_SECRET environment variables."
-        )
+        if not client_id:
+            raise AuthenticationError(
+                "Missing CLIENT_ID. Set the CLIENT_ID environment variable."
+            )
+        if not client_secret:
+            raise AuthenticationError(
+                "Missing CLIENT_SECRET. Set the CLIENT_SECRET environment variable."
+            )
+        return HttpHeader.from_credentials(client_id, client_secret)
 
     def _ensure_app_context(self):
         """Ensure we have an active app context."""

@@ -230,10 +230,14 @@ class ServiceManager:
         self._cleanup_auth_client()
 
         # Always clear credentials from environment
-        if env.CLIENT_ID is not None:
-            delattr(env, "CLIENT_ID")
-        if env.CLIENT_SECRET is not None:
-            delattr(env, "CLIENT_SECRET")
+        if env.contains("CLIENT_ID"):
+            env.delete("CLIENT_ID")
+        if env.contains("CLIENT_SECRET"):
+            env.delete("CLIENT_SECRET")
+
+        # Clean up audit client factory
+        from campus.audit.client import set_http_client_factory
+        set_http_client_factory(None)  # Reset to None
 
         # Clean up audit client factory
         from campus.audit.client import set_http_client_factory
@@ -285,10 +289,10 @@ class ServiceManager:
             cls._shared_instance = None
             cls._shared_setup_done = False
 
-        if env.CLIENT_ID is not None:
-            delattr(env, "CLIENT_ID")
-        if env.CLIENT_SECRET is not None:
-            delattr(env, "CLIENT_SECRET")
+        if env.contains("CLIENT_ID"):
+            env.delete("CLIENT_ID")
+        if env.contains("CLIENT_SECRET"):
+            env.delete("CLIENT_SECRET")
 
         # Reset test storage
         import campus.storage.testing
