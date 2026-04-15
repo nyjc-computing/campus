@@ -20,14 +20,13 @@ CODESPACES: str  # 'true' if running in GitHub Codespaces
 CODESPACE_NAME: str  # name of the Codespace
 GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str  # domain for port forwarding in Codespaces
 
-CLIENT_ID: str
-CLIENT_SECRET: str
-DEPLOY: str
+CLIENT_ID: str  # Campus client ID
+CLIENT_SECRET: str  # Campus client secret
+DEPLOY: str  # Campus deployment, (campus.auth, campus.api, campus.audit)
 ENV: str  # deployment environment (development, staging, production)
 HOSTNAME: str  # used for generating redirect_uris
 PORT: str  # port for running development server
 SECRET_KEY: str  # secret key for signing sessions and tokens
-VAULTDB_URI: str  # PostgreSQL connection URI for vault service
 WORKSPACE_DOMAIN: str  # Google Workspace domain
 
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers

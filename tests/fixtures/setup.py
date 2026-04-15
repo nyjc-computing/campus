@@ -54,8 +54,8 @@ def set_db_uri(env_var_name: str, database_name: str):
     """Set a database URI environment variable using existing postgres env vars.
 
     Args:
-        env_var_name: Name of the environment variable to set (e.g., "VAULTDB_URI")
-        database_name: Name of the database (e.g., "vaultdb")
+        env_var_name: Name of the environment variable to set (e.g., "POSTGRESDB_URI")
+        database_name: Name of the database (e.g., "storagedb")
 
     Raises:
         OSError: If required postgres environment variables are not set
