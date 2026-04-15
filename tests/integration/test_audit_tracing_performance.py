@@ -19,6 +19,7 @@ from tests.fixtures import services
 from tests.fixtures.tokens import get_basic_auth_headers
 
 
+@unittest.skip("Tests skipped due to auth client initialization issues. See: https://github.com/nyjc-computing/campus/issues/469")
 class TestTracingMiddlewarePerformance(unittest.TestCase):
     """Performance benchmark tests for tracing middleware."""
 
