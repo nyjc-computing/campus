@@ -136,7 +136,7 @@ def _model_to_sql_schema(name: str, model: type[InternalModel | Model]) -> str:
 
 def _get_db_uri() -> str:
     """Get the database URI from the vault using the client API."""
-    db_uri = env.getsecret("POSTGRESDB_URI", env.DEPLOY)
+    db_uri = env.getsecret("POSTGRESDB_URI")
     return db_uri
 
 

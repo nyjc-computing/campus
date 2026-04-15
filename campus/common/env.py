@@ -13,8 +13,6 @@ environment variables, or use the get() function for default values.
 import os
 from typing import Callable, overload
 
-from campus.common.errors import api_errors
-
 # Expected environment variables (for type checking)
 
 # Codespaces environment variables
@@ -22,14 +20,13 @@ CODESPACES: str  # 'true' if running in GitHub Codespaces
 CODESPACE_NAME: str  # name of the Codespace
 GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str  # domain for port forwarding in Codespaces
 
-CLIENT_ID: str
-CLIENT_SECRET: str
-DEPLOY: str
+CLIENT_ID: str  # Campus client ID
+CLIENT_SECRET: str  # Campus client secret
+DEPLOY: str  # Campus deployment, (campus.auth, campus.api, campus.audit)
 ENV: str  # deployment environment (development, staging, production)
 HOSTNAME: str  # used for generating redirect_uris
 PORT: str  # port for running development server
 SECRET_KEY: str  # secret key for signing sessions and tokens
-VAULTDB_URI: str  # PostgreSQL connection URI for vault service
 WORKSPACE_DOMAIN: str  # Google Workspace domain
 
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
@@ -59,26 +56,23 @@ def register_getsecret(func: GetSecretFunc) -> None:
 
 
 def getsecret(name: str, vault_label: str | None = None) -> str:
-    """Get environment variable by name, falling back to retrieval from vault.
+    """Get environment variable by name, falling back to registered getsecret function.
 
     This function first checks if the environment variable is set. If not,
-    it attempts to retrieve the secret from the vault using either a
-    registered getsecret function or campus_python.
+    it calls the registered getsecret function (if available).
 
     Args:
         name (str): Name of the environment variable.
-        vault_label (str | None): Label to use when retrieving from vault.
-            Only used if no custom getsecret function is registered.
-            Defaults to the DEPLOY environment variable.
+        vault_label (str | None): Ignored parameter for backward compatibility.
+            Custom getsecret functions should handle vault querying internally.
 
     Returns:
         str: Value of the environment variable or vault secret.
 
     Raises:
-        OSError: If neither environment variable nor vault secret is found.
-        api_errors.ForbiddenError: If access to the vault label is denied.
-        api_errors.InternalError: If the vault secret is not found.
+        OSError: If neither environment variable is set nor getsecret function registered.
     """
+    # Check environment variable first
     if name in os.environ:
         return os.environ[name]
 
@@ -86,51 +80,7 @@ def getsecret(name: str, vault_label: str | None = None) -> str:
     if _getsecret_func is not None:
         return _getsecret_func(name)
 
-    # Default implementation using campus_python
-    from campus.model import ClientAccess
-
-    deployment = get("DEPLOY")
-    if deployment is None:
-        raise OSError(f"Environment variable '{name}' required")
-
-    # Use provided vault_label or default to DEPLOY
-    label = vault_label if vault_label is not None else deployment
-
-    # If within a deployment, fall back on campus.auth vault access
-    if deployment == "campus.auth":
-        # campus.auth cannot rely on campus_python for vault access
-        # otherwise we create a circular dependency.
-        # Use internal resources access instead.
-        from campus.auth import resources
-
-        client_id = get("CLIENT_ID")
-        if client_id is None:
-            raise OSError("Environment variable 'CLIENT_ID' required")
-
-        client_resource = resources.client[client_id]  # type: ignore[index]
-        if not client_resource.access.check(
-                vault_label=label,
-                permission=ClientAccess.READ,
-        ):
-            raise api_errors.ForbiddenError(
-                f"Access denied to vault label '{label}'"
-            )
-        try:
-            return resources.vault[label][name]
-        except KeyError:
-            raise api_errors.InternalError(
-                f"Vault secret '{name}' not found in label "
-                f"'{label}'"
-            )
-    else:
-        import campus_python
-        campus_auth = campus_python.Campus(timeout=60).auth
-        try:
-            return campus_auth.vaults[label][name]
-        except KeyError:
-            raise api_errors.InternalError(
-                f"Vault secret '{name}' not found in label "
-                f"'{label}'")
+    raise OSError(f"Secret {name!r} not found")
 
 
 @overload
