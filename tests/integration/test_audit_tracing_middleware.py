@@ -441,6 +441,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertIn("Content-Type", response_headers)
 
     # Test 10: Duration Accuracy
+    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
     def test_duration_ms_is_accurate(self):
         """Test that duration_ms is reasonably accurate."""
         # Make a simple request
