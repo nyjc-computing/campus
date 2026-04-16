@@ -222,6 +222,7 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
             unittest.SkipTest: If span ingestion is not working.
         """
         import campus.storage
+        import concurrent.futures
 
         # First, ensure the spans table exists
         try:
@@ -233,51 +234,67 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
                 "Storage initialization may have failed."
             )
 
-        # Make a test request to generate a span
-        # Use auth_app (has tracing middleware) instead of audit_app (no tracing)
-        if not cls.auth_app:
-            cls._skip_dependency("Auth app not initialized")
-
-        test_client = cls.auth_app.test_client()  # type: ignore[reportOptionalMemberAccess]
-        # Use test health endpoint (publicly accessible, no auth required)
-        response = test_client.get("/test/health")
-
-        if response.status_code != 200:
-            cls._skip_dependency(
-                f"Health check failed with status {response.status_code}. "
-                "Cannot verify span ingestion."
-            )
-
-        # Get the trace_id from response headers
-        trace_id = response.headers.get("X-Request-ID")
-        if not trace_id:
-            cls._skip_dependency(
-                "No X-Request-ID header in response. "
-                "Tracing middleware may not be working."
-            )
-
-        # Try to retrieve the span from storage
-        # Wait a bit for async ingestion
-        import time
-        max_wait = 2.0  # seconds
-        start = time.time()
-
-        while time.time() - start < max_wait:
-            traces_storage = campus.storage.tables.get_db("spans")
-            spans = traces_storage.get_matching({"trace_id": trace_id})
-
-            if spans:
-                # Success! Span ingestion is working
-                return
-
-            time.sleep(0.05)
-
-        # If we get here, span ingestion failed
-        cls._skip_dependency(
-            "Span ingestion not working - spans are not being created in storage. "
-            "This is a known issue (#459) with the audit middleware/service. "
-            "See: https://github.com/nyjc-computing/campus/issues/459"
+        # CRITICAL FIX: Use a fresh executor for dependency check
+        # The global tracing._ingestion_executor may be in a corrupted state
+        # from previous test classes' tearDown() methods. Creating a fresh
+        # executor ensures clean state for this dependency check.
+        from campus.audit.middleware import tracing
+        original_executor = tracing._ingestion_executor
+        tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="dependency_check_ingest"
         )
+
+        try:
+            # Make a test request to generate a span
+            # Use auth_app (has tracing middleware) instead of audit_app (no tracing)
+            if not cls.auth_app:
+                cls._skip_dependency("Auth app not initialized")
+
+            test_client = cls.auth_app.test_client()  # type: ignore[reportOptionalMemberAccess]
+            # Use test health endpoint (publicly accessible, no auth required)
+            response = test_client.get("/test/health")
+
+            if response.status_code != 200:
+                cls._skip_dependency(
+                    f"Health check failed with status {response.status_code}. "
+                    "Cannot verify span ingestion."
+                )
+
+            # Get the trace_id from response headers
+            trace_id = response.headers.get("X-Request-ID")
+            if not trace_id:
+                cls._skip_dependency(
+                    "No X-Request-ID header in response. "
+                    "Tracing middleware may not be working."
+                )
+
+            # Try to retrieve the span from storage
+            # Wait a bit for async ingestion
+            import time
+            max_wait = 2.0  # seconds
+            start = time.time()
+
+            while time.time() - start < max_wait:
+                traces_storage = campus.storage.tables.get_db("spans")
+                spans = traces_storage.get_matching({"trace_id": trace_id})
+
+                if spans:
+                    # Success! Span ingestion is working
+                    return
+
+                time.sleep(0.05)
+
+            # If we get here, span ingestion failed
+            cls._skip_dependency(
+                "Span ingestion not working - spans are not being created in storage. "
+                "This is a known issue (#459) with the audit middleware/service. "
+                "See: https://github.com/nyjc-computing/campus/issues/459"
+            )
+
+        finally:
+            # Clean up the temporary executor
+            tracing._ingestion_executor.shutdown(wait=True)
+            tracing._ingestion_executor = original_executor
 
     @classmethod
     def tearDownClass(cls):
