@@ -37,8 +37,6 @@ class TestJsonClient:
     # Note: In practice, this is always a string (base_url or ""), but the
     # protocol allows None for compatibility with DefaultClient
     base_url: str | None
-    _client_id: str | None
-    _client_secret: str | None
     _timeout: int
 
     def __init__(
@@ -47,45 +45,29 @@ class TestJsonClient:
             *,
             auth: Iterable[str] | str | None = None,
             headers: Mapping[str, str] | None = None,
-            _credentials: tuple[str, str] | None = None,
             **kwargs: Any
     ):
         """Initialize with base URL for routing.
 
         Args:
             base_url: Base URL for determining which app to use (e.g., "https://campus.test")
-            auth: Authentication credentials (ignored, uses env vars or _credentials)
+            auth: Authentication credentials (ignored, uses env vars)
             headers: Default headers (ignored, uses env vars)
-            _credentials: Optional tuple of (client_id, client_secret) for testing
             **kwargs: Additional arguments (including timeout, ignored)
         """
         self.base_url = base_url or ""
         self._timeout = kwargs.get("timeout", 10)
 
-        # Capture credentials at initialization time if provided
-        # This is used by the factory pattern to ensure auth headers are available
-        if _credentials:
-            self._client_id, self._client_secret = _credentials
-        else:
-            # Load from environment (will be loaded dynamically via _auth_headers property)
-            self._client_id = None
-            self._client_secret = None
-
     @property
     def _auth_headers(self) -> dict[str, str]:
         """Get authentication headers.
 
-        Uses captured credentials if available (from factory), otherwise
-        loads from environment dynamically.
+        Loads from environment dynamically to ensure test isolation.
+        This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes.
 
         Returns:
             Dictionary of HTTP headers for authentication
         """
-        # Use captured credentials if available (from factory)
-        if self._client_id and self._client_secret:
-            return HttpHeader.from_credentials(self._client_id, self._client_secret)
-
-        # Otherwise, load from environment dynamically
         return self._load_auth_headers()
 
     def _load_auth_headers(self) -> dict[str, str]:
