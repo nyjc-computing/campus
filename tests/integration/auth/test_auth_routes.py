@@ -17,14 +17,14 @@ class TestVaultIntegration(IntegrationTestCase):
         """Set up local services once for the entire test class."""
         super().setUpClass()
 
-        # Get the apps (auth) app from the service manager
-        # campus.auth routes are served through the apps/api service
+        # Get the auth app from the service manager
+        # campus.auth has its own Flask app with auth routes
         import flask
-        apps_app = cls.service_manager.apps_app
-        if not isinstance(apps_app, flask.Flask):
+        auth_app = cls.service_manager.auth_app
+        if not isinstance(auth_app, flask.Flask):
             raise RuntimeError("Expected Flask app from service manager")
 
-        cls.app = apps_app
+        cls.app = auth_app
 
     def test_auth_vault_instantiation(self):
         """Test that campus.auth vault routes can be instantiated successfully."""
@@ -33,20 +33,11 @@ class TestVaultIntegration(IntegrationTestCase):
         self.assertIsNotNone(self.app)
         self.assertIsNotNone(self.client)
 
-    def test_auth_vault_api_response_format(self):
-        """Test that the auth vault API endpoint returns a valid response format."""
-        response = self.client.get("/auth/vaults/vault/")
-
-        # Ensure we get a response
-        self.assertIsNotNone(response)
-
-        # If the response is JSON, it should be parseable
-        if response.content_type and 'json' in response.content_type:
-            try:
-                response_data = response.get_json()
-                self.assertIsNotNone(response_data)
-            except Exception as e:
-                self.fail(f"Failed to parse JSON response: {e}")
+    # Note: Vault API response format testing has been removed because:
+    # 1. Vault endpoints are already properly tested in tests/contract/test_auth_vault.py
+    # 2. Those tests include proper authentication and comprehensive response validation
+    # 3. This test was using the wrong Flask app (apps_app instead of auth_app)
+    # 4. Vault endpoints require authentication, which this test didn't provide
 
 
 if __name__ == '__main__':
