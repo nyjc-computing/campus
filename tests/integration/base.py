@@ -7,7 +7,7 @@ File: tests/integration/base.py
 """
 
 import unittest
-from typing import Any, ClassVar
+from typing import Any, ClassVar, NoReturn
 
 from tests.fixtures import services
 
@@ -213,7 +213,7 @@ class DependencyCheckedTestCase(unittest.TestCase):
                 self.skipTest(f"Dependencies not met: {reason}")
         super().setUp()
 
-    def fail_dependency(self, reason: str) -> None:
+    def fail_dependency(self, reason: str) -> NoReturn:
         """Mark dependencies as failed, making this test fail and others skip.
 
         This method should be called from test_000_dependencies() when
