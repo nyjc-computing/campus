@@ -50,6 +50,7 @@ class TestAuthSessionsContract(unittest.TestCase):
         from campus.auth.resources import session as session_resource
         session_resource.init_storage()
 
+        assert self.app
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
         self.test_provider = "campus"
@@ -130,7 +131,6 @@ class TestAuthSessionsContract(unittest.TestCase):
         self.assertIn("id", data)
         self.assertEqual(data["user_id"], str(user_id))
 
-    @unittest.skip("API BUG: Missing redirect_uri returns 500 instead of 400")
     def test_create_provider_session_missing_redirect_uri(self):
         """POST /sessions/{provider}/ without redirect_uri returns error."""
         response = self.client.post(
