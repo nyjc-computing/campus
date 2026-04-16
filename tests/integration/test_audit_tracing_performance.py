@@ -57,6 +57,7 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
         # Initialize traces storage (not done by service manager)
         TracesResource.init_storage()
 
+        assert self.auth_app, "Auth app not initialized in setUpClass"
         self.auth_client = self.auth_app.test_client()
 
         # Create auth headers for authenticated requests

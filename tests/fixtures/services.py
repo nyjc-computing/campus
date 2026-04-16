@@ -6,7 +6,9 @@ Orchestrates setup and lifecycle of services for integration testing.
 """
 
 from contextlib import contextmanager
-from typing import Optional, cast
+from typing import Optional
+
+from flask import Flask
 
 from . import setup, auth, api, storage, yapper
 from campus.common import devops, env
@@ -29,7 +31,7 @@ class ServiceManager:
         _shared: Whether instance uses shared resources across tests
     """
 
-    _shared_instance = None
+    _shared_instance: Optional["ServiceManager"] = None
     _shared_setup_done = False
 
     def __init__(self, shared=False):
@@ -40,9 +42,9 @@ class ServiceManager:
                     Defaults to False to create fresh Flask apps per test class
                     for better test isolation.
         """
-        self.auth_app: Optional[object] = None
-        self.apps_app: Optional[object] = None
-        self.audit_app: Optional[object] = None
+        self.auth_app: Optional[Flask] = None
+        self.apps_app: Optional[Flask] = None
+        self.audit_app: Optional[Flask] = None
         self._setup_done = False
         self._shared = shared
 
@@ -335,7 +337,7 @@ def init():
         manager.close()
 
 
-def create_service_manager(shared=False):
+def create_service_manager(shared=False) -> ServiceManager:
     """Factory function to create a new ServiceManager.
 
     Args:
