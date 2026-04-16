@@ -12,7 +12,7 @@ import campus.model as model
 import campus.storage
 from campus.storage.documents.interface import PK
 
-timetable_lessongroup_table = campus.storage.get_collection("timetable_lessongroup")
+timetable_lessongroup_collection = campus.storage.get_collection("timetable_lessongroup")
 timetable_lessongroupmembers_table = campus.storage.get_table("timetable_lessongroupmembers")
 
 timetable_entry_storage = campus.storage.get_collection("timetable_entries")
@@ -82,6 +82,12 @@ class TimetablesResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage."""
+        timetable_lessongroupmembers_table.init_from_model(
+            "timetable_lessongroupmembers",
+            model.LessonGroupMember
+        )
+        timetable_lessongroup_collection.init_collection()
+        timetable_entry_storage.init_collection()
         timetable_collection.init_collection()
         # Use a metadata document to store current & next
         _upsert(
@@ -185,7 +191,7 @@ class TimetablesResource:
                     entry.to_storage()
                 )
             for lessongroup in groups:
-                timetable_lessongroup_table.insert_one(
+                timetable_lessongroup_collection.insert_one(
                     lessongroup.to_storage()
                 )
             for member in members:
@@ -349,7 +355,7 @@ class TimetableResource:
                 )
             timetable_entry_storage.delete_matching({"timetable_id": self.timetable_id})
             timetable_collection.delete_by_id(self.timetable_id)
-            timetable_lessongroup_table.delete_matching({"timetable_id": self.timetable_id})
+            timetable_lessongroup_collection.delete_matching({"timetable_id": self.timetable_id})
             timetable_lessongroupmembers_table.delete_matching({"timetable_id": self.timetable_id})
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
