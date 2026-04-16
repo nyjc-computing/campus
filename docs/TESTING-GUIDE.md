@@ -80,6 +80,143 @@ The `poetry run python` command finds the project's virtual environment and runs
 
 **Note:** Integration tests use shared state within a test class for performance. Tests that depend on empty state should be named with `test_00_*` prefix to run first.
 
+### Integration Test Base Classes
+
+**NEW:** Integration tests should use base classes from `tests/integration/base.py` to ensure consistent setup/teardown and prevent common bugs.
+
+#### Available Base Classes
+
+##### **`IntegrationTestCase`** (Default)
+
+Use for **most integration tests** that need Flask apps and service manager.
+
+**Provides:**
+- ✅ Automatic service manager setup/teardown
+- ✅ Storage reset in `setUp()` for per-test isolation
+- ✅ Flask app context management
+- ✅ Proper cleanup of resources
+
+**Example:**
+```python
+from tests.integration.base import IntegrationTestCase
+
+class TestMyFeature(IntegrationTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()  # Sets up service_manager
+        cls.app = cls.service_manager.apps_app  # Set the Flask app
+        # No need to set up client or context - base class handles it
+
+    def test_something(self):
+        # self.client and self.app_context are ready to use
+        response = self.client.get('/api/v1/endpoint')
+        self.assertEqual(response.status_code, 200)
+```
+
+**What you DON'T need to write:**
+- ❌ `setUpClass`: service manager setup
+- ❌ `setUp`: test client and app context
+- ❌ `tearDown`: app context cleanup
+- ❌ `tearDownClass`: service manager cleanup and storage reset
+
+##### **`IsolatedIntegrationTestCase`**
+
+Use for tests that need **fresh Flask apps** (complete isolation from other test classes).
+
+**When to use:**
+- Tests modify Flask app configuration
+- Tests use shared state that could conflict
+- Tests need complete isolation
+
+**Example:**
+```python
+from tests.integration.base import IsolatedIntegrationTestCase
+from campus.audit.resources.traces import TracesResource
+
+class TestTracing(IsolatedIntegrationTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()  # Fresh service manager
+        TracesResource.init_storage()  # Initialize storage
+        cls.audit_app = cls.manager.audit_app
+
+    def setUp(self):
+        super().setUp()  # Resets storage
+        TracesResource.init_storage()  # Reinitialize after reset
+```
+
+#### Benefits of Base Classes
+
+**Prevents Common Bugs:**
+- ❌ Forgetting to reset storage between tests
+- ❌ Forgetting to clean up Flask app context
+- ❌ Forgetting to close service manager
+- ❌ Inconsistent teardown patterns
+
+**Reduces Boilerplate:**
+- ✅ Less code to write (50% reduction in setup/teardown)
+- ✅ Consistent patterns across all tests
+- ✅ Easier to understand test intent
+- ✅ Centralized fixes apply to all tests
+
+#### Migration Guide
+
+**Before** (Error-prone):
+```python
+class TestMyFeature(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.service_manager = services.create_service_manager()
+        cls.service_manager.setup()
+        cls.app = cls.service_manager.apps_app
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self.app_context = self.app.app_context()
+        self.app_context.push()
+        # Easy to forget: storage reset
+
+    def tearDown(self):
+        self.app_context.pop()
+        # Easy to forget: storage reset
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, 'service_manager'):
+            cls.service_manager.close()
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+```
+
+**After** (Safe and concise):
+```python
+class TestMyFeature(IntegrationTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.app = cls.service_manager.apps_app
+
+    # No need to override setUp or tearDown!
+```
+
+#### Advanced: Combining Base Classes
+
+The `DependencyCheckedTestCase` can be combined with other base classes using multiple inheritance:
+
+```python
+class TestMyFeature(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Setup with dependency checking
+
+    @classmethod
+    def _check_dependencies(cls):
+        # Verify required dependencies
+        if not cls._verify_external_service():
+            cls._skip_dependency("Service not available. See: #123")
+```
+
 ### Contract Tests
 
 **Purpose:** Verify HTTP interface contracts.
