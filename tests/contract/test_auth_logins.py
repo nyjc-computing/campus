@@ -40,6 +40,14 @@ class TestAuthLoginsContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Use manager.reset_test_data() to properly reset ALL storage
+        self.manager.reset_test_data()
+
+        # Initialize login storage (not done by service manager)
+        from campus.auth.resources import login as login_resource
+        login_resource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
         self.test_user_id = schema.UserID("login.test@example.com")

@@ -60,6 +60,14 @@ class TestApiSubmissionsContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Use manager.reset_test_data() to properly reset ALL storage
+        self.manager.reset_test_data()
+
+        # Initialize submission storage (not done by service manager)
+        from campus.api.resources import submission as submission_resource
+        submission_resource.init_storage()
+
         self.client = self.app.test_client()
 
     def _create_test_submission(self, **overrides):

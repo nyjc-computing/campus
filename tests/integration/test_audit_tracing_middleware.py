@@ -66,6 +66,16 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
+        # Reinitialize storage after tearDownClass reset
+        # CRITICAL: Use manager.reset_test_data() to properly reset storage
+        # AND reinitialize auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
+        TracesResource.init_storage()
+
+        assert self.auth_app, "Auth app not initialized in setUp"
+        assert self.audit_app, "Audit app not initialized in setUp"
         self.auth_client = self.auth_app.test_client()
         self.audit_client = self.audit_app.test_client()
 
@@ -168,7 +178,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertGreater(span["duration_ms"], 0)
 
     # Test 1: Basic Span Recording
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_span_is_recorded_on_request(self):
         """Test that a span is recorded when making a request."""
         # Make a simple GET request to health endpoint (no auth required)
@@ -178,13 +188,14 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         # Get trace_id from response header
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
         self.assertIsNotNone(trace_id)
         self.assertEqual(len(trace_id), 32)  # 32-char hex
         self.assertTrue(re.match(r"^[0-9a-f]{32}$", trace_id))
 
         # Get the captured span
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span, "Span should be ingested")
+        assert span, "Span not ingested"
 
         # Verify span data
         self._assert_span_matches_request(
@@ -196,7 +207,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertEqual(span["trace_id"], trace_id)
 
     # Test 2: Trace ID Propagation
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_trace_id_echoed_in_response(self):
         """Test that trace ID is generated and echoed in response headers."""
         # Request without X-Request-ID header
@@ -204,7 +215,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         self.assertEqual(response1.status_code, 200)
         trace_id_1 = response1.headers.get("X-Request-ID")
-        self.assertIsNotNone(trace_id_1)
+        assert trace_id_1, "Response headers missing X-Request-ID"
         self.assertEqual(len(trace_id_1), 32)
         self.assertTrue(re.match(r"^[0-9a-f]{32}$", trace_id_1))
 
@@ -221,7 +232,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         # Verify the span was recorded with the custom trace_id
         span = self._wait_for_span(custom_trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
         self.assertEqual(span["trace_id"], custom_trace_id)
 
     # Test 3: Authorization Header Stripping
@@ -236,10 +247,11 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
 
         # Get the captured span
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Verify Authorization header is NOT in request_headers
         request_headers = span.get("request_headers", {})
@@ -249,7 +261,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # Verify other headers are preserved (User-Agent and Host are always present)
         self.assertTrue(len(request_headers) > 0, "Some headers should be preserved")
 
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_authorization_header_case_insensitive_stripping(self):
         """Test that Authorization header stripping is case-insensitive."""
         # Make authenticated request (uses Basic Auth which should be stripped)
@@ -260,9 +272,10 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
 
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # The middleware explicitly pops both cases
         request_headers = span.get("request_headers", {})
@@ -270,7 +283,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertNotIn("authorization", request_headers)
 
     # Test 4: Body Truncation
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_large_response_body_truncated(self):
         """Test that response body is truncated to 64KB max."""
         # Create a large response by hitting an endpoint that returns lots of data
@@ -302,16 +315,17 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
 
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Check response_body exists and is captured
         response_body = span.get("response_body")
         self.assertIsNotNone(response_body)
 
     # Test 5: Async Ingestion
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_ingestion_is_async_non_blocking(self):
         """Test that span ingestion is asynchronous and doesn't block requests."""
         # Make request and capture response time
@@ -321,6 +335,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
 
         # Response should be fast (< 10ms even with async overhead)
         # In practice, this should be < 1ms, but we allow some margin
@@ -328,21 +343,19 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         # Span should be ingested eventually (not immediately)
         # Query immediately - might not be there yet due to async ingestion
-        span_immediate = self._get_span_by_trace_id(trace_id)
-
+        _ = self._get_span_by_trace_id(trace_id)
         # Wait and verify it gets ingested
         span_eventual = self._wait_for_span(trace_id, timeout=2.0)
-        self.assertIsNotNone(span_eventual, "Span should eventually be ingested")
+        assert span_eventual, "Span should eventually be ingested"
 
     # Test 6: Graceful Degradation
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
     def test_request_succeeds_when_audit_unavailable(self):
         """Test that requests succeed even when audit service is unavailable."""
         # Mock the audit client to raise connection error
         from campus.audit.middleware import tracing
         from campus.audit.client import AuditClient
 
-        original_client = tracing._get_audit_client()
+        _ = tracing._get_audit_client()
 
         def mock_get_client():
             raise ConnectionError("Audit service unavailable")
@@ -363,7 +376,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
             self.assertIsNotNone(trace_id)
 
     # Test 7: Request Body Capture
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_request_body_captured_for_supported_types(self):
         """Test that request body is captured for JSON content type."""
         # Make a POST request to traces endpoint with JSON body
@@ -376,43 +389,44 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         # The request might fail due to validation, but span should still be captured
         trace_id = response.headers.get("X-Request-ID")
-        self.assertIsNotNone(trace_id)
+        assert trace_id, "Response headers missing X-Request-ID"
 
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Verify request_body was captured
         request_body = span.get("request_body")
-        self.assertIsNotNone(request_body)
+        assert request_body, "Request body not captured"
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
 
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Verify request_body was captured
         request_body = span.get("request_body")
-        self.assertIsNotNone(request_body)
+        assert request_body, "Request body not captured"
         # The request body should contain the data we sent
-        self.assertEqual(request_body.get("foo"), "bar")
+        assert request_body.get("foo") == "bar"
 
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_request_body_captured_for_form_data(self):
         """Test that request body is captured for different content types."""
         # Use query parameters instead of POST body to test parameter capture
         response = self.audit_client.get("/audit/v1/traces/?limit=10&foo=bar")
 
         trace_id = response.headers.get("X-Request-ID")
-        self.assertIsNotNone(trace_id)
+        assert trace_id, "Response headers missing X-Request-ID"
 
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Query parameters should be captured
         query_params = span.get("query_params", {})
-        self.assertIsNotNone(query_params)
+        assert query_params, "Query parameters not captured"
 
     # Test 8: Query Parameters Capture
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_query_params_captured(self):
         """Test that query parameters are captured in spans."""
         response = self.audit_client.get("/audit/v1/traces/?foo=bar&baz=qux")
@@ -420,9 +434,10 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # Get the trace_id from response header
         # The request will fail with 405, but span should still be recorded
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
 
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Verify query_params were captured
         query_params = span.get("query_params", {})
@@ -430,7 +445,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertEqual(query_params.get("baz"), "qux")
 
     # Test 9: Response Headers Capture
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_response_headers_captured(self):
         """Test that response headers are captured in spans."""
         response = self.auth_client.post(
@@ -441,16 +456,18 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
 
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Verify response_headers were captured
         response_headers = span.get("response_headers", {})
-        self.assertIn("Content-Type", response_headers)
+        assert "Content-Type" in response_headers, \
+            "Content-Type not found in response headers"
 
     # Test 10: Duration Accuracy
-    @unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+    @unittest.skip("Skipped due to span ingestion failure for health endpoint. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_duration_ms_is_accurate(self):
         """Test that duration_ms is reasonably accurate."""
         # Make a simple request
@@ -460,13 +477,13 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         trace_id = response.headers.get("X-Request-ID")
-
+        assert trace_id, "Response headers missing X-Request-ID"
         span = self._wait_for_span(trace_id)
-        self.assertIsNotNone(span)
+        assert span, "Span not ingested"
 
         # Check duration_ms is reasonable
         duration_ms = span.get("duration_ms")
-        self.assertIsNotNone(duration_ms)
+        assert duration_ms is not None, "duration_ms not found in span"
         self.assertGreater(duration_ms, 0)
         self.assertLess(duration_ms, 1000)  # Should be < 1s for simple request
 

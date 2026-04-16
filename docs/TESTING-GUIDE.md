@@ -272,12 +272,148 @@ def test_create_resource(self):
     # ... creates a resource
 ```
 
+## Storage Re-initialization After Reset
+
+**Critical Pattern:** When tests use SQLite in-memory storage and call `reset_test_storage()` in `tearDownClass()`, you **must reinitialize storage tables in `setUp()`**.
+
+### Why This Is Necessary
+
+SQLite in-memory databases (`:memory:`) are completely destroyed when the connection closes. The `reset_test_storage()` function closes the connection to clear data, which also destroys all table schemas.
+
+### The Pattern
+
+```python
+from tests.fixtures import services
+from campus.audit.resources.traces import TracesResource
+
+class TestMyFeature(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.service_manager = services.create_service_manager(shared=False)
+        cls.service_manager.setup()
+
+        # Initialize storage schema (creates tables)
+        TracesResource.init_storage()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Reset storage (closes SQLite connection, destroys tables)
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+        cls.service_manager.close()
+
+    def setUp(self):
+        """Reinitialize storage after tearDownClass reset."""
+        # CRITICAL: Reinitialize schema after reset
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
+        # ... rest of setup
+```
+
+### Common Pitfalls
+
+❌ **Wrong:** Only initialize in `setUpClass()`
+```python
+@classmethod
+def setUpClass(cls):
+    TracesResource.init_storage()  # Table created
+
+def setUp(self):
+    # ❌ Missing reinitialization!
+    # Table doesn't exist after tearDownClass() reset
+    storage.delete_matching({})  # ERROR: no such table
+```
+
+✅ **Correct:** Reinitialize in `setUp()` after reset
+```python
+def setUp(self):
+    # Reset and reinitialize
+    campus.storage.testing.reset_test_storage()
+    TracesResource.init_storage()  # Table recreated
+    # Now safe to use storage
+```
+
+### When To Apply This Pattern
+
+Apply this pattern when:
+1. Tests call `<Resource>.init_storage()` in `setUpClass()`
+2. Tests call `reset_test_storage()` in `tearDownClass()`
+3. Tests manipulate storage directly (insert, delete, query)
+
+**Reference Implementation:** See `tests/integration/auth/resources/test_user.py` for a working example.
+
+## Test Skipping Principles
+
+**Critical Rule:** Tests cannot be skipped unless they can be attributed to a different GitHub issue.
+
+### Why This Rule Exists
+
+Arbitrary test skipping hides real problems and makes the codebase harder to maintain. When tests are skipped without clear attribution:
+- We lose confidence in the test suite
+- Real issues get masked
+- It becomes unclear what needs to be fixed
+- Technical debt accumulates unnoticed
+
+### The Pattern
+
+✅ **Correct:** Skip with issue attribution
+```python
+@unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
+def test_authorization_header_stripped(self):
+    """Test that Authorization header is stripped from stored spans."""
+    # ... test code
+```
+
+❌ **Wrong:** Skip without attribution
+```python
+@unittest.skip("Skipping for now")
+def test_something(self):
+    # ... test code
+```
+
+❌ **Wrong:** Skip without filing an issue
+```python
+@unittest.skip("This test is failing")
+def test_something(self):
+    # ... test code
+```
+
+### Requirements for Skipping Tests
+
+Before skipping a test, you must:
+
+1. **Create or reference a GitHub issue** that documents the problem
+2. **Add a skip decorator** with the issue URL in the message
+3. **Ensure the fix addresses ALL skipped tests** attributed to that issue
+
+Example:
+```python
+@unittest.skip("Skipped due to SQLite table creation issue after connection reset. See: https://github.com/nyjc-computing/campus/issues/468")
+def test_span_recording(self):
+    # Test skipped because issue #468 documents the root cause
+    # When #468 is fixed, this test must pass
+```
+
+### Fix Attribution
+
+When fixing an issue:
+- **All tests skipped for that issue must pass** after the fix
+- If a test still fails after the fix, it either:
+  - Needs to be re-attributed to a different issue
+  - Indicates the fix is incomplete
+  - Requires additional investigation
+
+This ensures that issue fixes are complete and verified by the test suite.
+
 ## Known Gotchas
 
 See [AGENTS.md](../AGENTS.md) for common testing pitfalls:
 - Storage initialization order (lazy imports required)
 - Flask blueprint registration (shared across test classes)
 - Test cleanup requirements
+- **Storage re-initialization after reset** (see above)
 
 ## External Testing
 

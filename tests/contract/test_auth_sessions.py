@@ -42,6 +42,14 @@ class TestAuthSessionsContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Use manager.reset_test_data() to properly reset ALL storage
+        self.manager.reset_test_data()
+
+        # Initialize session storage (not done by service manager)
+        from campus.auth.resources import session as session_resource
+        session_resource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
         self.test_provider = "campus"

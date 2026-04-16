@@ -81,6 +81,7 @@ class TestAuthDeployment(unittest.TestCase):
         This catches missing SECRET_KEY in vault configuration.
         """
         app = self.service_manager.auth_app
+        assert app
 
         self.assertIsNotNone(app.secret_key,
                              "App secret_key is None")
@@ -96,6 +97,7 @@ class TestAuthDeployment(unittest.TestCase):
         are registered, not specific ones (which may change).
         """
         app = self.service_manager.auth_app
+        assert app
 
         # Should have at least one blueprint registered
         self.assertGreater(len(app.blueprints), 0,
@@ -109,6 +111,7 @@ class TestAuthDeployment(unittest.TestCase):
         This survives API changes while catching complete failures.
         """
         app = self.service_manager.auth_app
+        assert app
 
         # Get all registered routes
         routes = [rule.rule for rule in app.url_map.iter_rules()]
@@ -124,6 +127,7 @@ class TestAuthDeployment(unittest.TestCase):
         Verifies that oauth_proxy.init_app was called successfully.
         """
         app = self.service_manager.auth_app
+        assert app
 
         # Get all registered routes
         routes = [rule.rule for rule in app.url_map.iter_rules()]

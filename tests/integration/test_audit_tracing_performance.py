@@ -49,6 +49,15 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
+        # Reinitialize storage after tearDownClass reset
+        # CRITICAL: Use manager.reset_test_data() to properly reset storage
+        # AND reinitialize auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
+        TracesResource.init_storage()
+
+        assert self.auth_app, "Auth app not initialized in setUpClass"
         self.auth_client = self.auth_app.test_client()
 
         # Create auth headers for authenticated requests
