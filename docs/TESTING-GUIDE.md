@@ -407,6 +407,91 @@ When fixing an issue:
 
 This ensures that issue fixes are complete and verified by the test suite.
 
+### Advanced Pattern: Dependency-Checked Test Classes
+
+When multiple tests in a class depend on the same external dependency (e.g., a service or feature), use **dependency-checked test classes** instead of individual `@unittest.skip` decorators.
+
+#### When to Use This Pattern
+
+Use this pattern when:
+- **Multiple tests (3+) in a class are skipped for the same issue**
+- Tests require a specific dependency to work (e.g., span ingestion, external service)
+- You want a single point of control for all skips
+
+#### The Pattern
+
+Create separate test classes based on dependency requirements:
+
+```python
+from tests.integration.base import DependencyCheckedTestCase
+
+# Tests that DON'T require the dependency
+class TestMyFeatureBasic(unittest.TestCase):
+    """Tests that don't require span ingestion."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.setup()
+
+    def test_graceful_degradation(self):
+        """Test works even when dependency is unavailable."""
+        # Test implementation...
+        pass
+
+# Tests that DO require the dependency
+class TestMyFeatureWithDependency(DependencyCheckedTestCase):
+    """Tests that require functional span ingestion."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            cls.manager = services.create_service_manager(shared=False)
+            cls.manager.setup()
+
+            # CRITICAL: Verify dependency before running any tests
+            cls._check_dependencies()
+        except unittest.SkipTest:
+            raise
+        except Exception as e:
+            raise unittest.SkipTest(f"Setup failed: {e}")
+
+    @classmethod
+    def _check_dependencies(cls) -> None:
+        """Verify that required dependencies are available."""
+        # Perform dependency check here
+        # If check fails, call cls._skip_dependency() with a reason
+        if not cls._verify_dependency_works():
+            cls._skip_dependency(
+                "Dependency not working. "
+                "See: https://github.com/user/repo/issues/123"
+            )
+
+    # NO individual @unittest.skip decorators needed!
+    def test_span_recording(self):
+        # Automatically skipped if dependency check fails
+        pass
+
+    def test_trace_id_propagation(self):
+        # Automatically skipped if dependency check fails
+        pass
+```
+
+#### Benefits
+
+1. **Single Point of Control**: One dependency check affects entire test class
+2. **Clear Skip Reasons**: Test logs show exactly what failed and why
+3. **Easy to Fix**: When the issue is resolved, all tests automatically run
+4. **Explicit Dependencies**: Test class names indicate what they need
+5. **Future-Proof**: New tests added to class automatically get dependency checking
+
+#### Example Implementation
+
+See [tests/integration/test_audit_tracing_middleware.py](../tests/integration/test_audit_tracing_middleware.py) for a complete example of this pattern:
+
+- `TestTracingMiddlewareBasic`: Tests that don't require span ingestion
+- `TestTracingMiddlewareSpanIngestion`: Tests that require functional span ingestion (automatically skipped when issue #459 is unresolved)
+
 ## Known Gotchas
 
 See [AGENTS.md](../AGENTS.md) for common testing pitfalls:

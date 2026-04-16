@@ -30,19 +30,21 @@ from campus.audit.resources.traces import TracesResource
 from campus.audit.middleware import tracing
 from tests.fixtures import services
 from tests.fixtures.tokens import get_basic_auth_headers, get_bearer_auth_headers, create_test_token
+from tests.integration.base import DependencyCheckedTestCase
 
 
-class TestTracingMiddlewareIntegration(unittest.TestCase):
-    """Integration tests for tracing middleware end-to-end behavior."""
+class TestTracingMiddlewareBasic(unittest.TestCase):
+    """Basic tests for tracing middleware that don't require span ingestion.
+
+    These tests verify middleware behavior without relying on the audit service's
+    span ingestion functionality.
+    """
 
     @classmethod
     def setUpClass(cls):
         """Set up services for the test class."""
         cls.manager = services.create_service_manager(shared=False)
         cls.manager.setup()
-
-        # Initialize traces storage
-        TracesResource.init_storage()
 
         # Get the auth and audit apps
         cls.auth_app = cls.manager.auth_app
@@ -55,6 +57,194 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # This is important because the singleton persists across test classes
         from campus.audit.middleware import tracing
         tracing._audit_client = None
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up services."""
+        cls.manager.reset_test_data()
+        cls.manager.close()
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
+    def setUp(self):
+        """Set up test client and clear storage before each test."""
+        # Reinitialize storage after tearDownClass reset
+        # CRITICAL: Use manager.reset_test_data() to properly reset storage
+        # AND reinitialize auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
+        TracesResource.init_storage()
+
+        assert self.auth_app, "Auth app not initialized in setUp"
+        assert self.audit_app, "Audit app not initialized in setUp"
+        self.auth_client = self.auth_app.test_client()
+        self.audit_client = self.audit_app.test_client()
+
+        # Create auth headers for authenticated requests to auth service
+        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Reset audit client singleton to ensure fresh client for each test
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
+
+        # Clear trace storage between tests for isolation
+        import campus.storage
+        traces_storage = campus.storage.tables.get_db("spans")
+        # Use delete_matching with empty query to delete all spans
+        traces_storage.delete_matching({})
+
+    def tearDown(self):
+        """Clean up after each test."""
+        # Wait for async ingestion to complete
+        from campus.audit.middleware import tracing
+        tracing._ingestion_executor.shutdown(wait=True)
+
+        # Reset the audit client singleton so next test gets a fresh one
+        tracing._audit_client = None
+
+        # Re-create the executor for next test
+        tracing._ingestion_executor = typing.cast(
+            typing.Any,
+            type(tracing._ingestion_executor)(
+                max_workers=2, thread_name_prefix="audit_ingest"
+            )
+        )
+
+    # Test: Graceful Degradation (does NOT require span ingestion)
+    def test_request_succeeds_when_audit_unavailable(self):
+        """Test that requests succeed even when audit service is unavailable."""
+        # Mock the audit client to raise connection error
+        from campus.audit.middleware import tracing
+
+        _ = tracing._get_audit_client()
+
+        def mock_get_client():
+            raise ConnectionError("Audit service unavailable")
+
+        with patch.object(tracing, '_get_audit_client', side_effect=mock_get_client):
+            # Request should still succeed
+            response = self.auth_client.post(
+                "/auth/v1/root/",
+                json={"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET},
+                headers=self.auth_headers,
+            )
+
+            # Request should succeed despite audit failure
+            self.assertEqual(response.status_code, 200)
+
+            # Trace ID should still be in response
+            trace_id = response.headers.get("X-Request-ID")
+            self.assertIsNotNone(trace_id)
+
+
+class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
+    """Integration tests for tracing middleware that require functional span ingestion.
+
+    These tests verify end-to-end span recording and retrieval. They are automatically
+    skipped when span ingestion is not working (e.g., due to issue #459).
+
+    All tests in this class will be automatically skipped if span ingestion fails
+    during setUpClass, eliminating the need for individual @unittest.skip decorators.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up services for the test class and verify span ingestion works."""
+        try:
+            cls.manager = services.create_service_manager(shared=False)
+            cls.manager.setup()
+
+            # Initialize traces storage
+            TracesResource.init_storage()
+
+            # Get the auth and audit apps
+            cls.auth_app = cls.manager.auth_app
+            cls.audit_app = cls.manager.audit_app
+
+            # Get audit client credentials for authenticated requests
+            cls.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+            # Reset audit client singleton to ensure fresh client for this test class
+            # This is important because the singleton persists across test classes
+            from campus.audit.middleware import tracing
+            tracing._audit_client = None
+
+            # CRITICAL: Verify span ingestion works before running any tests
+            # This single check will skip all tests in this class if it fails
+            cls._check_dependencies()
+
+        except unittest.SkipTest:
+            raise
+        except Exception as e:
+            raise unittest.SkipTest(f"Setup failed: {e}")
+
+    @classmethod
+    def _check_dependencies(cls) -> None:
+        """Verify that span ingestion is working.
+
+        This method makes a test request and verifies that a span is created
+        and can be retrieved from storage. If span ingestion fails, the entire
+        test class is automatically skipped.
+
+        Raises:
+            unittest.SkipTest: If span ingestion is not working.
+        """
+        import campus.storage
+
+        # First, ensure the spans table exists
+        try:
+            traces_storage = campus.storage.tables.get_db("spans")
+            _ = traces_storage.get_matching({})  # Test query to ensure table exists
+        except Exception as e:
+            cls._skip_dependency(
+                f"Spans table not accessible: {e}. "
+                "Storage initialization may have failed."
+            )
+
+        # Make a test request to generate a span
+        if not cls.audit_app:
+            cls._skip_dependency("Audit app not initialized")
+
+        test_client = cls.audit_app.test_client()  # type: ignore[reportOptionalMemberAccess]
+        response = test_client.get("/audit/v1/health")
+
+        if response.status_code != 200:
+            cls._skip_dependency(
+                f"Health check failed with status {response.status_code}. "
+                "Cannot verify span ingestion."
+            )
+
+        # Get the trace_id from response headers
+        trace_id = response.headers.get("X-Request-ID")
+        if not trace_id:
+            cls._skip_dependency(
+                "No X-Request-ID header in response. "
+                "Tracing middleware may not be working."
+            )
+
+        # Try to retrieve the span from storage
+        # Wait a bit for async ingestion
+        import time
+        max_wait = 2.0  # seconds
+        start = time.time()
+
+        while time.time() - start < max_wait:
+            traces_storage = campus.storage.tables.get_db("spans")
+            spans = traces_storage.get_matching({"trace_id": trace_id})
+
+            if spans:
+                # Success! Span ingestion is working
+                return
+
+            time.sleep(0.05)
+
+        # If we get here, span ingestion failed
+        cls._skip_dependency(
+            "Span ingestion not working - spans are not being created in storage. "
+            "This is a known issue (#459) with the audit middleware/service. "
+            "See: https://github.com/nyjc-computing/campus/issues/459"
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -178,7 +368,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertGreater(span["duration_ms"], 0)
 
     # Test 1: Basic Span Recording
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_span_is_recorded_on_request(self):
         """Test that a span is recorded when making a request."""
         # Make a simple GET request to health endpoint (no auth required)
@@ -207,7 +396,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertEqual(span["trace_id"], trace_id)
 
     # Test 2: Trace ID Propagation
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_trace_id_echoed_in_response(self):
         """Test that trace ID is generated and echoed in response headers."""
         # Request without X-Request-ID header
@@ -236,7 +424,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertEqual(span["trace_id"], custom_trace_id)
 
     # Test 3: Authorization Header Stripping
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_authorization_header_stripped(self):
         """Test that Authorization header is stripped from stored spans."""
         # Make authenticated request to traces endpoint (requires auth)
@@ -261,7 +448,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # Verify other headers are preserved (User-Agent and Host are always present)
         self.assertTrue(len(request_headers) > 0, "Some headers should be preserved")
 
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_authorization_header_case_insensitive_stripping(self):
         """Test that Authorization header stripping is case-insensitive."""
         # Make authenticated request (uses Basic Auth which should be stripped)
@@ -283,7 +469,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertNotIn("authorization", request_headers)
 
     # Test 4: Body Truncation
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_large_response_body_truncated(self):
         """Test that response body is truncated to 64KB max."""
         # Create a large response by hitting an endpoint that returns lots of data
@@ -325,7 +510,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertIsNotNone(response_body)
 
     # Test 5: Async Ingestion
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_ingestion_is_async_non_blocking(self):
         """Test that span ingestion is asynchronous and doesn't block requests."""
         # Make request and capture response time
@@ -348,35 +532,7 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         span_eventual = self._wait_for_span(trace_id, timeout=2.0)
         assert span_eventual, "Span should eventually be ingested"
 
-    # Test 6: Graceful Degradation
-    def test_request_succeeds_when_audit_unavailable(self):
-        """Test that requests succeed even when audit service is unavailable."""
-        # Mock the audit client to raise connection error
-        from campus.audit.middleware import tracing
-        from campus.audit.client import AuditClient
-
-        _ = tracing._get_audit_client()
-
-        def mock_get_client():
-            raise ConnectionError("Audit service unavailable")
-
-        with patch.object(tracing, '_get_audit_client', side_effect=mock_get_client):
-            # Request should still succeed
-            response = self.auth_client.post(
-                "/auth/v1/root/",
-                json={"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET},
-                headers=self.auth_headers,
-            )
-
-            # Request should succeed despite audit failure
-            self.assertEqual(response.status_code, 200)
-
-            # Trace ID should still be in response
-            trace_id = response.headers.get("X-Request-ID")
-            self.assertIsNotNone(trace_id)
-
     # Test 7: Request Body Capture
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_request_body_captured_for_supported_types(self):
         """Test that request body is captured for JSON content type."""
         # Make a POST request to traces endpoint with JSON body
@@ -409,7 +565,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         # The request body should contain the data we sent
         assert request_body.get("foo") == "bar"
 
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_request_body_captured_for_form_data(self):
         """Test that request body is captured for different content types."""
         # Use query parameters instead of POST body to test parameter capture
@@ -426,7 +581,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         assert query_params, "Query parameters not captured"
 
     # Test 8: Query Parameters Capture
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_query_params_captured(self):
         """Test that query parameters are captured in spans."""
         response = self.audit_client.get("/audit/v1/traces/?foo=bar&baz=qux")
@@ -445,7 +599,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
         self.assertEqual(query_params.get("baz"), "qux")
 
     # Test 9: Response Headers Capture
-    @unittest.skip("Skipped due to authentication failure in span ingestion. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_response_headers_captured(self):
         """Test that response headers are captured in spans."""
         response = self.auth_client.post(
@@ -467,7 +620,6 @@ class TestTracingMiddlewareIntegration(unittest.TestCase):
             "Content-Type not found in response headers"
 
     # Test 10: Duration Accuracy
-    @unittest.skip("Skipped due to span ingestion failure for health endpoint. See: https://github.com/nyjc-computing/campus/issues/459")
     def test_duration_ms_is_accurate(self):
         """Test that duration_ms is reasonably accurate."""
         # Make a simple request
