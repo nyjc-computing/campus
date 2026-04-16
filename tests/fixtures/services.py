@@ -226,6 +226,16 @@ class ServiceManager:
         Always cleans up auth client and credentials. With shared=False,
         also cleans up Flask apps for full isolation.
         """
+        # Shut down tracing middleware's background thread pool FIRST
+        # This must happen BEFORE clearing credentials and storage to avoid
+        # race conditions where background threads try to access cleared resources
+        try:
+            from campus.audit.middleware import tracing
+            tracing._ingestion_executor.shutdown(wait=True)
+        except Exception:
+            # If tracing module isn't loaded or executor already shut down, continue
+            pass
+
         # Always clean up auth client regardless of shared mode
         self._cleanup_auth_client()
 
@@ -234,10 +244,6 @@ class ServiceManager:
             env.delete("CLIENT_ID")
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
-
-        # Clean up audit client factory
-        from campus.audit.client import set_http_client_factory
-        set_http_client_factory(None)  # Reset to None
 
         # Clean up audit client factory
         from campus.audit.client import set_http_client_factory
