@@ -13,7 +13,6 @@ Key Components:
 - create_test_app: Factory function for creating a single Flask app for testing
 - register_test_app: Register Flask app for test mode routing
 - patch_campus_python: Monkey-patch campus_python to use TestCampusRequest
-- patch_default_client: Monkey-patch DefaultClient to use TestJsonClient
 """
 
 __all__ = [
@@ -24,10 +23,8 @@ __all__ = [
     "configure_for_testing",
     "create_test_app",
     "patch_campus_python",
-    "patch_default_client",
     "register_test_app",
     "unpatch_campus_python",
-    "unpatch_default_client",
 ]
 
 from .campus_request import (
@@ -40,9 +37,5 @@ from .campus_request import (
 from .response import FlaskTestResponse
 from .factory import create_test_app
 from .configure import configure_for_testing
-from .json_client import (
-    TestJsonClient,
-    patch_default_client,
-    unpatch_default_client,
-)
+from .json_client import TestJsonClient
 

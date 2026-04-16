@@ -24,14 +24,12 @@ from .campus_request import get_test_app
 class TestJsonClient:
     """Test-compatible JsonClient using Flask test clients with routing.
 
-    This class implements the JsonClient protocol and routes requests to
-    the correct Flask app based on base_url and path prefix, using the
-    same routing mechanism as TestCampusRequest.
+    This class implements the campus.common.http.JsonClient protocol and
+    routes requests to the correct Flask app based on base_url and path prefix,
+    using the same routing mechanism as TestCampusRequest.
 
-    Key differences from FlaskTestClient:
-    - Routes requests dynamically based on base_url and path prefix
-    - Looks up Flask app from registry using get_test_app()
-    - Compatible with DefaultClient interface used by AuditClient
+    This is used by AuditClient via the json_client_class attribute for
+    testing, allowing it to use Flask test clients instead of making real HTTP calls.
     """
 
     # Type annotation to match JsonClient protocol
@@ -246,32 +244,6 @@ class TestJsonClient:
         return FlaskTestResponse(response)
 
 
-def patch_default_client() -> None:
-    """Patch campus.common.http.DefaultClient to use TestJsonClient in
-    integration tests.
-
-    This function monkey-patches campus.common.http.DefaultClient
-    with TestJsonClient, allowing all code using DefaultClient (like AuditClient)
-    to use Flask test clients for testing without actual HTTP calls.
-
-    Call this in test setup before any DefaultClient instances are
-    created.
-    """
-    import campus.common.http
-
-    # Store original for cleanup
-    if not hasattr(campus.common.http, "_original_DefaultClient"):
-        setattr(
-            campus.common.http,
-            "_original_DefaultClient",
-            campus.common.http.DefaultClient
-        )
-
-    # Replace with test version
-    campus.common.http.DefaultClient = TestJsonClient
-
-
-def unpatch_default_client() -> None:
     """Restore original campus.common.http.DefaultClient.
 
     Call this in test teardown to clean up the monkey-patch.

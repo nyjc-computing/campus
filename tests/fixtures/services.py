@@ -107,10 +107,8 @@ class ServiceManager:
         from tests import flask_test
         flask_test.patch_campus_python()
 
-        # Patch DefaultClient to use TestJsonClient (Flask test client)
-        # This allows AuditClient to use Flask test clients for testing
-        # Note: This is a safety net - the factory pattern below is the primary mechanism
-        flask_test.patch_default_client()
+        # Note: patch_default_client() removed - no longer needed
+        # AuditClient.json_client_class is now the primary mechanism
 
         # Always re-init auth and yapper services if already setup,
         # in case storage was reset. These are idempotent.
@@ -276,10 +274,9 @@ class ServiceManager:
 
         Should be called at the end of test runs to ensure clean state.
         """
-        # Unpatch campus_python, DefaultClient, and clear test apps
+        # Unpatch campus_python and clear test apps
         from tests import flask_test
         flask_test.unpatch_campus_python()
-        flask_test.unpatch_default_client()
         flask_test.clear_test_apps()
 
         if cls._shared_instance:
