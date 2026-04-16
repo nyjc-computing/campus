@@ -219,7 +219,7 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         to environment issues, configuration problems, or unresolved bugs.
 
         Raises:
-            unittest.SkipTest: If span ingestion is not working.
+            DependencyError: If span ingestion is not working.
         """
         import campus.storage
         import concurrent.futures

@@ -12,6 +12,20 @@ from typing import Any, ClassVar
 from tests.fixtures import services
 
 
+class DependencyError(RuntimeError):
+    """Raised when a dependency check fails in DependencyCheckedTestCase.
+
+    This exception indicates that a required dependency (service, resource,
+    configuration) is not available, preventing tests from running.
+
+    Unlike unittest.SkipTest, this makes dependency failures more visible
+    in test output and CI/CD pipelines while still preventing dependent
+    tests from running.
+    """
+
+    pass
+
+
 class IntegrationTestCase(unittest.TestCase):
     """Base class for standard integration tests with service manager.
 
@@ -193,6 +207,9 @@ class DependencyCheckedTestCase(unittest.TestCase):
     def _skip_dependency(cls, reason: str) -> None:
         """Skip the entire test class due to failed dependency check.
 
+        Raises a DependencyError to make dependency failures visible while
+        still preventing dependent tests from running.
+
         Args:
             reason: A descriptive message explaining why the tests are being skipped.
                     Should include issue URLs if applicable.
@@ -203,4 +220,4 @@ class DependencyCheckedTestCase(unittest.TestCase):
                 "See: https://github.com/nyjc-computing/campus/issues/459"
             )
         """
-        raise unittest.SkipTest(reason)
+        raise DependencyError(f"❌ DEPENDENCY CHECK FAILED: {reason}")
