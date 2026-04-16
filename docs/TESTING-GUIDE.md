@@ -272,12 +272,85 @@ def test_create_resource(self):
     # ... creates a resource
 ```
 
+## Storage Re-initialization After Reset
+
+**Critical Pattern:** When tests use SQLite in-memory storage and call `reset_test_storage()` in `tearDownClass()`, you **must reinitialize storage tables in `setUp()`**.
+
+### Why This Is Necessary
+
+SQLite in-memory databases (`:memory:`) are completely destroyed when the connection closes. The `reset_test_storage()` function closes the connection to clear data, which also destroys all table schemas.
+
+### The Pattern
+
+```python
+from tests.fixtures import services
+from campus.audit.resources.traces import TracesResource
+
+class TestMyFeature(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.service_manager = services.create_service_manager(shared=False)
+        cls.service_manager.setup()
+
+        # Initialize storage schema (creates tables)
+        TracesResource.init_storage()
+
+    @classmethod
+    def tearDownClass(cls):
+        # Reset storage (closes SQLite connection, destroys tables)
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+        cls.service_manager.close()
+
+    def setUp(self):
+        """Reinitialize storage after tearDownClass reset."""
+        # CRITICAL: Reinitialize schema after reset
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
+        # ... rest of setup
+```
+
+### Common Pitfalls
+
+❌ **Wrong:** Only initialize in `setUpClass()`
+```python
+@classmethod
+def setUpClass(cls):
+    TracesResource.init_storage()  # Table created
+
+def setUp(self):
+    # ❌ Missing reinitialization!
+    # Table doesn't exist after tearDownClass() reset
+    storage.delete_matching({})  # ERROR: no such table
+```
+
+✅ **Correct:** Reinitialize in `setUp()` after reset
+```python
+def setUp(self):
+    # Reset and reinitialize
+    campus.storage.testing.reset_test_storage()
+    TracesResource.init_storage()  # Table recreated
+    # Now safe to use storage
+```
+
+### When To Apply This Pattern
+
+Apply this pattern when:
+1. Tests call `<Resource>.init_storage()` in `setUpClass()`
+2. Tests call `reset_test_storage()` in `tearDownClass()`
+3. Tests manipulate storage directly (insert, delete, query)
+
+**Reference Implementation:** See `tests/integration/auth/resources/test_user.py` for a working example.
+
 ## Known Gotchas
 
 See [AGENTS.md](../AGENTS.md) for common testing pitfalls:
 - Storage initialization order (lazy imports required)
 - Flask blueprint registration (shared across test classes)
 - Test cleanup requirements
+- **Storage re-initialization after reset** (see above)
 
 ## External Testing
 
