@@ -4,7 +4,6 @@ Tracing middleware implementation for capturing HTTP request-response spans.
 """
 
 import concurrent.futures
-import copy
 import json
 import logging
 import time
@@ -37,12 +36,26 @@ def _get_audit_client() -> AuditClient:
 
     Returns:
         AuditClient instance for sending spans to audit service.
+
+    Raises:
+        ValueError: If CLIENT_ID or CLIENT_SECRET are not set in environment.
     """
     global _audit_client, _client_credentials
 
     # Get current credentials from environment
     from campus.common import env
-    current_credentials = (env.CLIENT_ID, env.CLIENT_SECRET)
+
+    # Check if credentials are available (they may be deleted during test cleanup)
+    client_id = env.get("CLIENT_ID")
+    client_secret = env.get("CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        raise ValueError(
+            "CLIENT_ID and CLIENT_SECRET must be set in environment "
+            "to create audit client"
+        )
+
+    current_credentials = (client_id, client_secret)
 
     # Recreate client if credentials have changed or client doesn't exist
     if _audit_client is None or _client_credentials != current_credentials:
@@ -278,6 +291,10 @@ def _ingest_span_async(span: dict) -> None:
         try:
             client = _get_audit_client()
             client.traces.new(span)
+        except ValueError as e:
+            # Credentials not available (e.g., during test cleanup)
+            # This is expected during shutdown, so log at debug level
+            logger.debug(f"Skipping trace ingestion: {e}")
         except Exception as e:
             # Don't let tracing errors break the application
             logger.warning(f"Failed to ingest trace span: {e}")
