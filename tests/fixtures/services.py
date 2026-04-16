@@ -143,23 +143,25 @@ class ServiceManager:
         # Auth routes are at /auth/v1/*
         flask_test.register_test_app("https://campus.test", self.auth_app, path_prefix="/auth")
 
-        # Set up HTTP client factory for AuditClient dependency injection
+        # Configure AuditClient to use TestJsonClient for testing
         # This must happen AFTER auth.init() so CLIENT_ID/CLIENT_SECRET are set
-        from campus.audit.client import set_http_client_factory
+        from campus.audit.client import AuditClient
 
-        def _test_http_client_factory(base_url: str) -> flask_test.TestJsonClient:
-            """Factory function that creates TestJsonClient for testing."""
-            # Load credentials from environment at call time (not at factory setup time)
-            # This ensures each test class gets the current credentials, not stale ones
-            # This is needed because auth.init() creates a new client for each test class
-            client_id = env.CLIENT_ID
-            client_secret = env.CLIENT_SECRET
-            return flask_test.TestJsonClient(
-                base_url=base_url,
-                _credentials=(client_id, client_secret)
-            )
+        # Capture credentials at configuration time
+        # TestJsonClient will use these for authentication
+        client_id = env.CLIENT_ID
+        client_secret = env.CLIENT_SECRET
 
-        set_http_client_factory(_test_http_client_factory)
+        # Create a factory class that captures credentials
+        class TestJsonClientFactory(flask_test.TestJsonClient):
+            """Factory class that creates TestJsonClient with captured credentials."""
+            def __new__(cls, base_url: str):
+                return flask_test.TestJsonClient(
+                    base_url=base_url,
+                    _credentials=(client_id, client_secret)
+                )
+
+        AuditClient.json_client_class = TestJsonClientFactory
 
         # Initialize storage connections
         storage.init()
