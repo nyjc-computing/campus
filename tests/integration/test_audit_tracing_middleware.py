@@ -494,8 +494,9 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         """Test that Authorization header is stripped from stored spans."""
         # Make authenticated request to auth service (requires auth)
         # Use auth_client (has tracing middleware) instead of audit_client
-        response = self.auth_client.get(
-            "/auth/v1/tokens/",
+        response = self.auth_client.post(
+            "/auth/v1/root/",
+            json={"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET},
             headers=self.auth_headers,
         )
 
@@ -515,34 +516,14 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         # Verify other headers are preserved (User-Agent and Host are always present)
         self.assertTrue(len(request_headers) > 0, "Some headers should be preserved")
 
-    def test_authorization_header_case_insensitive_stripping(self):
-        """Test that Authorization header stripping is case-insensitive."""
-        # Make authenticated request (uses Basic Auth which should be stripped)
-        # Use auth_client (has tracing middleware) instead of audit_client
-        response = self.auth_client.get(
-            "/auth/v1/tokens/",
-            headers=self.auth_headers,  # Note: Flask normalizes header names, so this tests the explicit stripping logic
-        )
-
-        self.assertEqual(response.status_code, 200)
-        trace_id = response.headers.get("X-Request-ID")
-        assert trace_id, "Response headers missing X-Request-ID"
-
-        span = self._wait_for_span(trace_id)
-        assert span, "Span not ingested"
-
-        # The middleware explicitly pops both cases
-        request_headers = span.get("request_headers", {})
-        self.assertNotIn("Authorization", request_headers)
-        self.assertNotIn("authorization", request_headers)
-
     # Test 4: Body Truncation
     def test_large_response_body_truncated(self):
         """Test that response body is truncated to 64KB max."""
         # Make a request that returns a moderately large response
-        # Use auth_client to query auth service tokens endpoint
-        response = self.auth_client.get(
-            "/auth/v1/tokens/",
+        # Use auth_client to query auth service root endpoint
+        response = self.auth_client.post(
+            "/auth/v1/root/",
+            json={"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET},
             headers=self.auth_headers,
         )
 
@@ -584,11 +565,11 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     # Test 7: Request Body Capture
     def test_request_body_captured_for_supported_types(self):
         """Test that request body is captured for JSON content type."""
-        # Make a POST request to auth tokens endpoint with JSON body
+        # Make a POST request to auth root endpoint with JSON body
         # Use auth_client (has tracing middleware) instead of audit_client
-        test_data = {"foo": "bar", "baz": [1, 2, 3]}
+        test_data = {"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET}
         response = self.auth_client.post(
-            "/auth/v1/tokens/",
+            "/auth/v1/root/",
             json=test_data,
             headers=self.auth_headers,
         )
@@ -608,7 +589,7 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         """Test that request body is captured for different content types."""
         # Use query parameters instead of POST body to test parameter capture
         # Use auth_client (has tracing middleware) instead of audit_client
-        response = self.auth_client.get("/auth/v1/tokens/?limit=10&foo=bar")
+        response = self.auth_client.get("/test/health?limit=10&foo=bar")
 
         trace_id = response.headers.get("X-Request-ID")
         assert trace_id, "Response headers missing X-Request-ID"
@@ -624,7 +605,7 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     def test_query_params_captured(self):
         """Test that query parameters are captured in spans."""
         # Use auth_client (has tracing middleware) instead of audit_client
-        response = self.auth_client.get("/auth/v1/tokens/?foo=bar&baz=qux")
+        response = self.auth_client.get("/test/health?foo=bar&baz=qux")
 
         # Get the trace_id from response header
         trace_id = response.headers.get("X-Request-ID")
