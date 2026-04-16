@@ -1,26 +1,18 @@
 import unittest
 
-from tests.fixtures import services
 from campus.common import env
+from tests.integration.base import IntegrationTestCase
 
 
-class TestYapper(unittest.TestCase):
+class TestYapper(IntegrationTestCase):
+    """Integration tests for Yapper service."""
 
     @classmethod
     def setUpClass(cls):
         """Set up local services once for the entire test class."""
-        cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up services after all tests in the class."""
-        if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
-
-        # Reset test storage to clear SQLite in-memory database
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
+        super().setUpClass()
+        # Set the auth app for vault access tests
+        cls.app = cls.service_manager.auth_app
 
     def test_vault_vars_and_access(self):
         # After service setup, vault credentials should be available
@@ -37,16 +29,14 @@ class TestYapper(unittest.TestCase):
         caches CampusRequest reference at import time, before our monkey-patch
         is applied. Testing through Flask directly validates the endpoint works.
         """
-        # Access the vault endpoint through Flask test client
-        client = self.service_manager.auth_app.test_client()
-
+        # Use self.client (provided by IntegrationTestCase base class)
         # Set basic auth headers (required by vault routes)
         import base64
         credentials = f"{env.CLIENT_ID}:{env.CLIENT_SECRET}"
         encoded = base64.b64encode(credentials.encode()).decode()
         headers = {"Authorization": f"Basic {encoded}"}
 
-        response = client.get("/auth/v1/vaults/yapper/YAPPERDB_URI", headers=headers)
+        response = self.client.get("/auth/v1/vaults/yapper/YAPPERDB_URI", headers=headers)
 
         # Should get a successful response with the YAPPERDB_URI value
         self.assertEqual(response.status_code, 200,
