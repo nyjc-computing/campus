@@ -213,8 +213,9 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         """Verify that span ingestion dependencies are met.
 
         This test runs first and verifies span ingestion is working.
-        If dependencies fail, this test FAILS (making it visible in CI/CD),
-        and all subsequent tests are SKIPPED (preventing cluttered output).
+        If dependencies fail, this test FAILS (making it visible in
+        CI/CD), and all subsequent tests are SKIPPED (preventing
+        cluttered output).
 
         This approach gives us:
         - errors=1 (visible failure in test results)
@@ -242,11 +243,12 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         from campus.audit.middleware import tracing
         original_executor = tracing._ingestion_executor
 
-        # CRITICAL: Wait for the original executor to finish all pending tasks
-        # before replacing it. This prevents issue #496 where pending tasks from
-        # the previous test class are still processing when we create the fresh
-        # executor, causing those tasks to fail when the original executor is
-        # restored and shut down.
+        # CRITICAL: Wait for the original executor to finish all pending
+        # tasks before replacing it. This prevents issue #496 where
+        # pending tasks from the previous test class are still
+        # processing when we create the fresh executor, causing those
+        # tasks to fail when the original executor is restored and shut
+        # down.
         original_executor.shutdown(wait=True)
 
         tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
@@ -255,7 +257,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
 
         try:
             # Make a test request to generate a span
-            # Use auth_app (has tracing middleware) instead of audit_app (no tracing)
+            # Use auth_app (has tracing middleware) instead of audit_app
+            # (no tracing)
             # Use class-level attributes since this runs before setUp()
             auth_app = self.__class__.auth_app
             if not auth_app:
@@ -304,14 +307,16 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
 
         finally:
             # Clean up the temporary executor
-            # Use wait=True to ensure all pending tasks complete before shutdown
+            # Use wait=True to ensure all pending tasks complete before
+            # shutdown
             # This prevents issue #496 where spans fail to ingest with
             # "cannot schedule new futures after shutdown" error
             tracing._ingestion_executor.shutdown(wait=True)
 
-            # CRITICAL: Recreate the original executor instead of restoring the
-            # shut-down executor. We already shut down the original executor
-            # before creating the fresh one, so we need to recreate it here.
+            # CRITICAL: Recreate the original executor instead of
+            # restoring the shut-down executor. We already shut down the
+            # original executor before creating the fresh one, so we
+            # need to recreate it here.
             tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
                 max_workers=2, thread_name_prefix="audit_ingest"
             )
@@ -323,13 +328,15 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         super().setUp()
 
         # Initialize traces storage BEFORE resetting test data
-        # This ensures the spans table exists before reset closes the connection
+        # This ensures the spans table exists before reset closes the
+        # connection
         TracesResource.init_storage()
 
         # Reinitialize storage after tearDownClass reset
         # CRITICAL: Use manager.reset_test_data() to properly reset
         # storage AND reinitialize auth/yapper service tables
-        # This will close the connection, so we need to reinitialize traces storage AFTER
+        # This will close the connection, so we need to reinitialize
+        # traces storage AFTER
         self.manager.reset_test_data()
 
         # Reinitialize traces storage AFTER reset_test_data()
@@ -344,12 +351,14 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         # Create auth headers for authenticated requests to auth service
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
-        # Reset audit client singleton to ensure fresh client for each test
+        # Reset audit client singleton to ensure fresh client for each
+        # test
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
         # Clear trace storage between tests for isolation
-        # Use the module-level traces_storage to avoid creating a new instance
+        # Use the module-level traces_storage to avoid creating a new
+        # instance
         import campus.storage
         from campus.audit.resources.traces import traces_storage
         # Use delete_matching with empty query to delete all spans
@@ -395,7 +404,11 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         spans = data.get("spans", [])
         return spans[0] if spans else None
 
-    def _wait_for_span(self, trace_id: str, timeout: float = 1.0) -> dict | None:
+    def _wait_for_span(
+            self,
+            trace_id: str,
+            timeout: float = 1.0
+    ) -> dict | None:
         """Wait for a span to be ingested (async ingestion).
 
         Args:
@@ -447,8 +460,10 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     # Test 1: Basic Span Recording
     def test_span_is_recorded_on_request(self):
         """Test that a span is recorded when making a request."""
-        # Make a simple GET request to test health endpoint (no auth required)
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Make a simple GET request to test health endpoint (no auth
+        # required)
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         response = self.auth_client.get("/test/health")
 
         self.assertEqual(response.status_code, 200)
@@ -477,7 +492,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     def test_trace_id_echoed_in_response(self):
         """Test that trace ID is generated and echoed in response headers."""
         # Request without X-Request-ID header
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         response1 = self.auth_client.get("/test/health")
 
         self.assertEqual(response1.status_code, 200)
@@ -506,7 +522,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     def test_authorization_header_stripped(self):
         """Test that Authorization header is stripped from stored spans."""
         # Make authenticated request to auth service (requires auth)
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         response = self.auth_client.post(
             "/auth/v1/root/",
             json={"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET},
@@ -526,7 +543,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         self.assertNotIn("Authorization", request_headers)
         self.assertNotIn("authorization", request_headers)
 
-        # Verify other headers are preserved (User-Agent and Host are always present)
+        # Verify other headers are preserved (User-Agent and Host are
+        # always present)
         self.assertTrue(len(request_headers) > 0, "Some headers should be preserved")
 
     # Test 4: Body Truncation
@@ -555,7 +573,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     def test_ingestion_is_async_non_blocking(self):
         """Test that span ingestion is asynchronous and doesn't block requests."""
         # Make request and capture response time
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         start_time = time.perf_counter()
         response = self.auth_client.get("/test/health")
         response_time = (time.perf_counter() - start_time) * 1000  # ms
@@ -569,7 +588,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         self.assertLess(response_time, 50, "Response time should be fast (< 50ms)")
 
         # Span should be ingested eventually (not immediately)
-        # Query immediately - might not be there yet due to async ingestion
+        # Query immediately - might not be there yet due to async
+        # ingestion
         _ = self._get_span_by_trace_id(trace_id)
         # Wait and verify it gets ingested
         span_eventual = self._wait_for_span(trace_id, timeout=2.0)
@@ -579,7 +599,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     def test_request_body_captured_for_supported_types(self):
         """Test that request body is captured for JSON content type."""
         # Make a POST request to auth root endpoint with JSON body
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         test_data = {"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET}
         response = self.auth_client.post(
             "/auth/v1/root/",
@@ -587,7 +608,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
             headers=self.auth_headers,
         )
 
-        # The request might fail due to validation, but span should still be captured
+        # The request might fail due to validation, but span should
+        # still be captured
         trace_id = response.headers.get("X-Request-ID")
         assert trace_id, "Response headers missing X-Request-ID"
 
@@ -600,8 +622,10 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
 
     def test_request_body_captured_for_form_data(self):
         """Test that request body is captured for different content types."""
-        # Use query parameters instead of POST body to test parameter capture
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Use query parameters instead of POST body to test parameter
+        # capture
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         response = self.auth_client.get("/test/health?limit=10&foo=bar")
 
         trace_id = response.headers.get("X-Request-ID")
@@ -617,7 +641,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     # Test 8: Query Parameters Capture
     def test_query_params_captured(self):
         """Test that query parameters are captured in spans."""
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         response = self.auth_client.get("/test/health?foo=bar&baz=qux")
 
         # Get the trace_id from response header
@@ -659,7 +684,8 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     def test_duration_ms_is_accurate(self):
         """Test that duration_ms is reasonably accurate."""
         # Make a simple request
-        # Use auth_client (has tracing middleware) instead of audit_client
+        # Use auth_client (has tracing middleware) instead of
+        # audit_client
         start = time.perf_counter()
         response = self.auth_client.get("/test/health")
         actual_duration = (time.perf_counter() - start) * 1000  # ms
