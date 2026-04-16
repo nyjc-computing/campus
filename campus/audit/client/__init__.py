@@ -12,26 +12,13 @@ Example:
     client.traces.ingest(span_data)
 """
 
-from typing import Protocol, Callable
-from typing import Any
+from typing import Callable
 
 __all__ = ("AuditClient", "set_http_client_factory")
 
 from campus.common import env
+from campus.common.http.interface import JsonClient
 from .v1 import AuditRoot
-
-
-# JsonClient protocol for dependency injection
-# This matches the interface from campus.common.http.interface
-class JsonClient(Protocol):
-    """Protocol for JSON HTTP clients used by AuditClient."""
-    base_url: str | None
-
-    def get(self, path: str, params: dict | None = None) -> Any: ...
-    def post(self, path: str, json: dict | None = None) -> Any: ...
-    def put(self, path: str, json: dict | None = None) -> Any: ...
-    def delete(self, path: str, json: dict | None = None) -> Any: ...
-    def patch(self, path: str, json: Any = None) -> Any: ...
 
 
 # Global factory for creating HTTP clients (used in tests)
@@ -66,7 +53,7 @@ def _create_http_client(base_url: str) -> JsonClient:
 
     # Lazy import - resolves at instantiation time, allowing monkey-patching
     from campus.common.http import DefaultClient
-    return DefaultClient(base_url=base_url)
+    return DefaultClient(base_url=base_url)  # type: ignore[return-value]
 
 
 def _get_base_url() -> str:
