@@ -240,6 +240,14 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         # executor ensures clean state for this dependency check.
         from campus.audit.middleware import tracing
         original_executor = tracing._ingestion_executor
+
+        # CRITICAL: Wait for the original executor to finish all pending tasks
+        # before replacing it. This prevents issue #496 where pending tasks from
+        # the previous test class are still processing when we create the fresh
+        # executor, causing those tasks to fail when the original executor is
+        # restored and shut down.
+        original_executor.shutdown(wait=True)
+
         tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=2, thread_name_prefix="dependency_check_ingest"
         )
@@ -293,8 +301,17 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
 
         finally:
             # Clean up the temporary executor
+            # Use wait=True to ensure all pending tasks complete before shutdown
+            # This prevents issue #496 where spans fail to ingest with
+            # "cannot schedule new futures after shutdown" error
             tracing._ingestion_executor.shutdown(wait=True)
-            tracing._ingestion_executor = original_executor
+
+            # CRITICAL: Recreate the original executor instead of restoring the
+            # shut-down executor. We already shut down the original executor
+            # before creating the fresh one, so we need to recreate it here.
+            tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="audit_ingest"
+            )
 
     @classmethod
     def tearDownClass(cls):
