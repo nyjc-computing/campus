@@ -18,7 +18,13 @@ from tests.fixtures import services
 
 
 class TestAuthDeployment(unittest.TestCase):
-    """Smoke tests for auth module deployment."""
+    """Smoke tests for auth module deployment.
+
+    NOTE: This test does NOT use IntegrationTestCase base class because:
+    - It's a deployment smoke test, not a functional integration test
+    - It tests deployability (imports, app creation) not auth behavior
+    - It needs to stay simple to survive auth changes during pre-MVP development
+    """
 
     @classmethod
     def setUpClass(cls):

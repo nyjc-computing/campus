@@ -15,19 +15,22 @@ import unittest
 from campus.common import env
 from campus.audit.resources.traces import TracesResource
 from campus.audit.middleware import tracing
-from tests.fixtures import services
 from tests.fixtures.tokens import get_basic_auth_headers
+from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
 
 
 @unittest.skip("Tests skipped due to auth client initialization issues. See: https://github.com/nyjc-computing/campus/issues/469")
-class TestTracingMiddlewarePerformance(unittest.TestCase):
-    """Performance benchmark tests for tracing middleware."""
+class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
+    """Performance benchmark tests for tracing middleware.
+
+    NOTE: This test overrides tearDown() because it has special cleanup
+    requirements for the ThreadPoolExecutor used in async ingestion.
+    """
 
     @classmethod
     def setUpClass(cls):
         """Set up services for the test class."""
-        cls.manager = services.create_service_manager(shared=False)
-        cls.manager.setup()
+        super().setUpClass()
 
         # Initialize traces storage
         TracesResource.init_storage()
@@ -36,28 +39,17 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
         cls.auth_app = cls.manager.auth_app
 
         # Reset audit client singleton to ensure fresh client for this test class
-        from campus.audit.middleware import tracing
         tracing._audit_client = None
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up services."""
-        cls.manager.reset_test_data()
-        cls.manager.close()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
-        # Reinitialize storage after tearDownClass reset
-        # CRITICAL: Use manager.reset_test_data() to properly reset storage
-        # AND reinitialize auth/yapper service tables
-        self.manager.reset_test_data()
+        super().setUp()
 
-        # Initialize traces storage (not done by service manager)
+        # Reinitialize traces storage after reset
         TracesResource.init_storage()
 
         assert self.auth_app, "Auth app not initialized in setUpClass"
+        # Create auth client
         self.auth_client = self.auth_app.test_client()
 
         # Create auth headers for authenticated requests
@@ -66,16 +58,19 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
         # Clear trace storage between tests
         import campus.storage
         traces_storage = campus.storage.tables.get_db("spans")
-        # Use delete_matching with empty query to delete all spans
         traces_storage.delete_matching({})
 
     def tearDown(self):
-        """Clean up after each test."""
+        """Clean up after each test.
+
+        NOTE: Override tearDown() to handle special ThreadPoolExecutor cleanup.
+        The base class tearDown() only handles Flask app context, so we need
+        to add the executor shutdown logic here.
+        """
         # Wait for async ingestion to complete
         tracing._ingestion_executor.shutdown(wait=True)
 
         # Reset the audit client singleton so next test gets a fresh one
-        # This ensures each test uses the patched DefaultClient
         tracing._audit_client = None
 
         # Re-create the executor for next test

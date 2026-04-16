@@ -9,6 +9,11 @@ from campus.common import env
 class TestWSGI(unittest.TestCase):
     """Test WSGI entry point with fresh Flask apps per test class.
 
+    NOTE: This test does NOT use IntegrationTestCase base class because:
+    - It requires custom environment variable management (saving/restoring os.environ)
+    - It needs special module cleanup (deleting 'wsgi' from sys.modules)
+    - It tests deployment-specific behavior that differs from standard integration tests
+
     Previously skipped due to blueprint re-registration issues.
     Fixed by creating fresh blueprints in init_app() (Option B).
     """
