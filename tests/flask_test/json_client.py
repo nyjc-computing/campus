@@ -124,8 +124,9 @@ class TestJsonClient:
         app = get_test_app(self.base_url, path)
         if app is None:
             raise ValueError(
-                f"No Flask app registered for base_url '{self.base_url}' "
-                f"with path '{path}'. Use register_test_app() to register apps."
+                f"No Flask app registered for base_url {self.base_url!r} "
+                f"with path {path!r}. Use register_test_app() to "
+                "register apps."
             )
         return app
 

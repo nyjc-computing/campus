@@ -8,11 +8,8 @@ clients with the Campus client interface for testing without actual HTTP calls.
 
 Key Components:
 - FlaskTestResponse: Adapts werkzeug.test.TestResponse to JsonResponse protocol
-- FlaskTestClient: Adapts Flask test client to JsonClient protocol
-- TestCampusRequest: FlaskTestClient wrapper compatible with CampusRequest
+- TestCampusRequest: JsonClient implementation with routing to Flask test apps
 - TestJsonClient: JsonClient implementation with routing to test apps
-- create_test_client: Factory function for creating Campus client with Flask apps
-- create_test_client_from_manager: Create Campus client from ServiceManager
 - create_test_app: Factory function for creating a single Flask app for testing
 - register_test_app: Register Flask app for test mode routing
 - patch_campus_python: Monkey-patch campus_python to use TestCampusRequest
@@ -20,7 +17,6 @@ Key Components:
 """
 
 __all__ = [
-    "FlaskTestClient",
     "FlaskTestResponse",
     "TestCampusRequest",
     "TestJsonClient",
@@ -41,7 +37,6 @@ from .campus_request import (
     register_test_app,
     unpatch_campus_python,
 )
-from .client import FlaskTestClient
 from .response import FlaskTestResponse
 from .factory import create_test_app
 from .configure import configure_for_testing
