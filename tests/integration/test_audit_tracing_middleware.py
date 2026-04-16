@@ -61,19 +61,31 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Clean up services."""
-        cls.manager.reset_test_data()
+        cls.manager.reset_test_data()  # This already calls reset_test_storage() internally
         cls.manager.close()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
+
+        # Reset audit client singleton after storage reset to avoid
+        # stale credentials
+        # This prevents the next test class from using an audit client
+        # with credentials that no longer exist after reset_test_data()
+        # recreates the client
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
+        # Initialize traces storage BEFORE resetting test data
+        # This ensures the spans table exists before reset_test_data() closes the connection
+        TracesResource.init_storage()
+
         # Reinitialize storage after tearDownClass reset
-        # CRITICAL: Use manager.reset_test_data() to properly reset storage
-        # AND reinitialize auth/yapper service tables
+        # CRITICAL: Use manager.reset_test_data() to properly reset
+        # storage AND reinitialize auth/yapper service tables
+        # This will close the connection, so we need to reinitialize traces storage AFTER
         self.manager.reset_test_data()
 
-        # Initialize traces storage (not done by service manager)
+        # Reinitialize traces storage AFTER reset_test_data()
+        # This ensures the spans table exists in the new connection
         TracesResource.init_storage()
 
         assert self.auth_app, "Auth app not initialized in setUp"
@@ -89,10 +101,15 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
         tracing._audit_client = None
 
         # Clear trace storage between tests for isolation
+        # Use the module-level traces_storage to avoid creating a new instance
         import campus.storage
-        traces_storage = campus.storage.tables.get_db("spans")
+        from campus.audit.resources.traces import traces_storage
         # Use delete_matching with empty query to delete all spans
-        traces_storage.delete_matching({})
+        # Ignore NoChangesAppliedError if table is already empty
+        try:
+            traces_storage.delete_matching({})
+        except campus.storage.errors.NoChangesAppliedError:
+            pass  # Table is already empty, which is fine
 
     def tearDown(self):
         """Clean up after each test."""
