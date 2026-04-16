@@ -2,8 +2,9 @@
 
 Test-compatible JsonClient that uses Flask test clients for routing.
 
-This module provides a drop-in replacement for campus.common.http.DefaultClient
-that uses Flask test clients for local testing without actual HTTP calls.
+This module provides a drop-in replacement for
+campus.common.http.DefaultClient that uses Flask test clients for local
+testing without actual HTTP calls.
 """
 
 from typing import Any, Iterable, Mapping, Self
@@ -23,9 +24,9 @@ from .campus_request import get_test_app
 class TestJsonClient:
     """Test-compatible JsonClient using Flask test clients with routing.
 
-    This class implements the JsonClient protocol and routes requests to the
-    correct Flask app based on base_url and path prefix, using the same routing
-    mechanism as TestCampusRequest.
+    This class implements the JsonClient protocol and routes requests to
+    the correct Flask app based on base_url and path prefix, using the
+    same routing mechanism as TestCampusRequest.
 
     Key differences from FlaskTestClient:
     - Routes requests dynamically based on base_url and path prefix
@@ -34,8 +35,8 @@ class TestJsonClient:
     """
 
     # Type annotation to match JsonClient protocol
-    # Note: In practice, this is always a string (base_url or ""), but the
-    # protocol allows None for compatibility with DefaultClient
+    # Note: In practice, this is always a string (base_url or ""), but
+    # the protocol allows None for compatibility with DefaultClient
     base_url: str | None
     _timeout: int
 
@@ -50,7 +51,8 @@ class TestJsonClient:
         """Initialize with base URL for routing.
 
         Args:
-            base_url: Base URL for determining which app to use (e.g., "https://campus.test")
+            base_url: Base URL for determining which app to use (e.g.,
+                "https://campus.test")
             auth: Authentication credentials (ignored, uses env vars)
             headers: Default headers (ignored, uses env vars)
             **kwargs: Additional arguments (including timeout, ignored)
@@ -73,8 +75,9 @@ class TestJsonClient:
     def _load_auth_headers(self) -> dict[str, str]:
         """Load authentication headers from environment variables.
 
-        Note: Headers are loaded fresh on each access to ensure test isolation.
-        This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes.
+        Note: Headers are loaded fresh on each access to ensure test
+        isolation. This allows tests to change CLIENT_ID/CLIENT_SECRET
+        between test classes.
         """
         # Try ACCESS_TOKEN first (Bearer auth)
         access_token = env.get("ACCESS_TOKEN")
@@ -103,17 +106,20 @@ class TestJsonClient:
         Returns:
             The Flask app to handle this request
         """
+        assert self.base_url
         app = get_test_app(self.base_url, path)
         if app is None:
             raise ValueError(
-                f"No Flask app registered for base_url {self.base_url!r} "
-                f"with path {path!r}. Use register_test_app() to "
-                "register apps."
+                f"No Flask app registered for base_url "
+                f"{self.base_url!r} with path {path!r}. Use "
+                "register_test_app() to register apps."
             )
         return app
 
     def _make_path(self, path: str) -> str:
-        """Convert path to full URL if base_url is set, otherwise return path."""
+        """Convert path to full URL if base_url is set, otherwise return
+        path.
+        """
         if self.base_url:
             return urljoin(self.base_url, path.lstrip('/'))
         return path
@@ -241,19 +247,23 @@ class TestJsonClient:
 
 
 def patch_default_client() -> None:
-    """Patch campus.common.http.DefaultClient to use TestJsonClient in tests.
+    """Patch campus.common.http.DefaultClient to use TestJsonClient in
+    integration tests.
 
     This function monkey-patches campus.common.http.DefaultClient
     with TestJsonClient, allowing all code using DefaultClient (like AuditClient)
     to use Flask test clients for testing without actual HTTP calls.
 
-    Call this in test setup before any DefaultClient instances are created.
+    Call this in test setup before any DefaultClient instances are
+    created.
     """
     import campus.common.http
 
     # Store original for cleanup
     if not hasattr(campus.common.http, "_original_DefaultClient"):
-        campus.common.http._original_DefaultClient = (
+        setattr(
+            campus.common.http,
+            "_original_DefaultClient",
             campus.common.http.DefaultClient
         )
 
@@ -269,7 +279,8 @@ def unpatch_default_client() -> None:
     import campus.common.http
 
     if hasattr(campus.common.http, "_original_DefaultClient"):
-        campus.common.http.DefaultClient = (
-            campus.common.http._original_DefaultClient
+        campus.common.http.DefaultClient = getattr(
+            campus.common.http,
+            "_original_DefaultClient"
         )
         delattr(campus.common.http, "_original_DefaultClient")
