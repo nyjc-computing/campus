@@ -79,24 +79,8 @@ class ServiceManager:
         if env.get("ENV") != devops.TESTING:
             env.set('ENV', devops.TESTING)
 
-        # Always re-init auth and yapper services if already setup,
-        # in case storage was reset. These are idempotent.
-        if self._setup_done:
-            auth.init()
-            yapper.init()
-            return self
-
-        # If using shared mode and shared instance exists, reuse it
-        if self._shared and ServiceManager._shared_setup_done and ServiceManager._shared_instance:
-            self.auth_app = ServiceManager._shared_instance.auth_app
-            self.apps_app = ServiceManager._shared_instance.apps_app
-            self._setup_done = True
-            # Re-init auth and yapper in case storage was reset
-            auth.init()
-            yapper.init()
-            return self
-
-        # Set up test environment
+        # Set up test environment BEFORE any service initialization
+        # This must happen before auth/yapper/api init since they create campus_python.Campus()
         setup.set_test_env_vars()
         # Ensure storage uses test backends (in-memory/sqlite) so we don't
         # attempt to connect to external Postgres/MongoDB during tests.
@@ -118,7 +102,8 @@ class ServiceManager:
         env.set('HOSTNAME', "campus.test")
 
         # Patch campus_python to use TestCampusRequest (Flask test client)
-        # This must be done before any campus_python.Campus instances are created
+        # This MUST happen before any campus_python.Campus instances are created
+        # Moved here to ensure patching happens before early returns below
         from tests import flask_test
         flask_test.patch_campus_python()
 
@@ -126,6 +111,23 @@ class ServiceManager:
         # This allows AuditClient to use Flask test clients for testing
         # Note: This is a safety net - the factory pattern below is the primary mechanism
         flask_test.patch_default_client()
+
+        # Always re-init auth and yapper services if already setup,
+        # in case storage was reset. These are idempotent.
+        if self._setup_done:
+            auth.init()
+            yapper.init()
+            return self
+
+        # If using shared mode and shared instance exists, reuse it
+        if self._shared and ServiceManager._shared_setup_done and ServiceManager._shared_instance:
+            self.auth_app = ServiceManager._shared_instance.auth_app
+            self.apps_app = ServiceManager._shared_instance.apps_app
+            self._setup_done = True
+            # Re-init auth and yapper in case storage was reset
+            auth.init()
+            yapper.init()
+            return self
 
         # Initialize auth service infrastructure
         # Creates storage tables, test client credentials, vault secrets
