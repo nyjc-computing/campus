@@ -49,6 +49,13 @@ class TestTracingMiddlewarePerformance(unittest.TestCase):
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
+        # Reinitialize storage after tearDownClass reset
+        # CRITICAL: SQLite in-memory DB is destroyed on reset, so we must
+        # reinitialize the schema before accessing storage
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
         self.auth_client = self.auth_app.test_client()
 
         # Create auth headers for authenticated requests
