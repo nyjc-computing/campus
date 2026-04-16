@@ -8,13 +8,14 @@ Supports Windows, Linux, and macOS with automatic platform detection.
 Recommended usage (all platforms):
     poetry run python tests/run_tests.py unit              # unit tests
     poetry run python tests/run_tests.py integration       # integration tests
+    poetry run python tests/run_tests.py performance       # performance tests
     poetry run python tests/run_tests.py sanity            # sanity checks
     poetry run python tests/run_tests.py type              # type checks (pyright)
     poetry run python tests/run_tests.py all               # all tests
 
     # With timeout
     poetry run python tests/run_tests.py unit --timeout 60
-    poetry run python tests/run_tests.py all --timeout 60  # applies to unit/integration only
+    poetry run python tests/run_tests.py all --timeout 60  # applies to unit/integration/performance only
 
     # Other options
     poetry run python tests/run_tests.py unit --module common -v   # specific module, verbose
@@ -41,9 +42,10 @@ sys.path.insert(0, str(project_root))
 # ===== Constants =====
 DEFAULT_UNIT_TIMEOUT = 60
 DEFAULT_INTEGRATION_TIMEOUT = 300
+DEFAULT_PERFORMANCE_TIMEOUT = 600
 
 # Test categories
-TEST_CATEGORIES = ["unit", "integration", "sanity", "type", "all"]
+TEST_CATEGORIES = ["unit", "integration", "performance", "sanity", "type", "all"]
 MODULE_CHOICES = ["apps", "vault", "yapper", "common", "client"]
 
 # Platform detection
@@ -223,6 +225,7 @@ def main():
 Examples:
   poetry run python tests/run_tests.py unit                # Unit tests
   poetry run python tests/run_tests.py integration         # Integration tests
+  poetry run python tests/run_tests.py performance         # Performance tests
   poetry run python tests/run_tests.py sanity              # Sanity checks
   poetry run python tests/run_tests.py type                # Type checks
   poetry run python tests/run_tests.py all                 # All tests
@@ -292,6 +295,8 @@ Exit codes:
             timeout = DEFAULT_UNIT_TIMEOUT
         elif args.test_type == "integration":
             timeout = DEFAULT_INTEGRATION_TIMEOUT
+        elif args.test_type == "performance":
+            timeout = DEFAULT_PERFORMANCE_TIMEOUT
 
     # Track results
     exit_code = 0
@@ -319,6 +324,12 @@ Exit codes:
     elif args.test_type == "integration":
         exit_code = run_unittest_discover(
             "integration", args.module, args.verbose, timeout, args.silent
+        )
+
+    # Performance tests
+    elif args.test_type == "performance":
+        exit_code = run_unittest_discover(
+            "performance", args.module, args.verbose, timeout, args.silent
         )
 
     # Sanity checks
@@ -353,6 +364,15 @@ Exit codes:
             lambda: run_unittest_discover(
                 "integration", None, args.verbose,
                 timeout or DEFAULT_INTEGRATION_TIMEOUT, args.silent
+            )
+        )
+
+        # Performance tests (with timeout)
+        run_category(
+            "performance tests",
+            lambda: run_unittest_discover(
+                "performance", None, args.verbose,
+                timeout or DEFAULT_PERFORMANCE_TIMEOUT, args.silent
             )
         )
 
