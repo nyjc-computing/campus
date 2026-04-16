@@ -251,9 +251,9 @@ class ServiceManager:
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
 
-        # Clean up audit client factory
-        from campus.audit.client import set_http_client_factory
-        set_http_client_factory(None)  # Reset to None
+        # Clean up audit client configuration
+        from campus.audit.client import AuditClient
+        AuditClient.json_client_class = None  # Reset to None
 
         # For non-shared instances, clean up apps for full isolation
         # This is now the default behavior

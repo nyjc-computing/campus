@@ -12,44 +12,19 @@ Example:
     client.traces.ingest(span_data)
 """
 
-from typing import Callable
-
-__all__ = ("AuditClient", "set_http_client_factory")
+__all__ = ("AuditClient",)
 
 from campus.common import env
 from campus.common.http.interface import JsonClient
 from .v1 import AuditRoot
 
 
-# Global factory for creating HTTP clients (deprecated, use json_client_class instead)
-_http_client_factory: Callable[[str], JsonClient] | None = None
-
-
-def set_http_client_factory(factory: Callable[[str], JsonClient] | None) -> None:
-    """Set a global factory for creating HTTP clients.
-
-    .. deprecated::
-        Use AuditClient.json_client_class instead. This function is kept
-        for backwards compatibility only.
-
-    Used in tests to inject TestJsonClient instead of DefaultClient.
-    Call with None to reset to default behavior.
-
-    Args:
-        factory: Function that takes base_url and returns a JsonClient,
-                 or None to reset to default.
-    """
-    global _http_client_factory
-    _http_client_factory = factory
-
-
 def _create_http_client(base_url: str) -> JsonClient:
-    """Create HTTP client using factory, class attribute, or default.
+    """Create HTTP client using class attribute or default.
 
     Priority:
-    1. Global factory (if set, for backwards compatibility)
-    2. AuditClient.json_client_class (if set)
-    3. DefaultClient (fallback)
+    1. AuditClient.json_client_class (if set)
+    2. DefaultClient (fallback)
 
     Args:
         base_url: The base URL for the client
@@ -57,17 +32,13 @@ def _create_http_client(base_url: str) -> JsonClient:
     Returns:
         A JsonClient instance
     """
-    # Priority 1: Global factory (deprecated, for backwards compatibility)
-    if _http_client_factory is not None:
-        return _http_client_factory(base_url)
-
-    # Priority 2: Class attribute (recommended approach)
+    # Priority 1: Class attribute (recommended approach)
     # Use getattr to avoid static type checker errors (attribute is set at runtime)
     client_class = getattr(AuditClient, "json_client_class", None)
     if client_class is not None:
         return client_class(base_url=base_url)
 
-    # Priority 3: Default client
+    # Priority 2: Default client
     from campus.common.http import DefaultClient
     return DefaultClient(base_url=base_url)  # type: ignore[return-value]
 
@@ -114,7 +85,6 @@ class AuditClient:
        AuditClient.json_client_class = TestJsonClient
     2. Pass http_client parameter directly (for custom instances):
        AuditClient(http_client=my_custom_client)
-    3. Use set_http_client_factory() (deprecated, for backwards compatibility)
     """
 
     # Configurable JsonClient class for dependency injection
