@@ -79,24 +79,8 @@ class ServiceManager:
         if env.get("ENV") != devops.TESTING:
             env.set('ENV', devops.TESTING)
 
-        # Always re-init auth and yapper services if already setup,
-        # in case storage was reset. These are idempotent.
-        if self._setup_done:
-            auth.init()
-            yapper.init()
-            return self
-
-        # If using shared mode and shared instance exists, reuse it
-        if self._shared and ServiceManager._shared_setup_done and ServiceManager._shared_instance:
-            self.auth_app = ServiceManager._shared_instance.auth_app
-            self.apps_app = ServiceManager._shared_instance.apps_app
-            self._setup_done = True
-            # Re-init auth and yapper in case storage was reset
-            auth.init()
-            yapper.init()
-            return self
-
-        # Set up test environment
+        # Set up test environment BEFORE any service initialization
+        # This must happen before auth/yapper/api init since they create campus_python.Campus()
         setup.set_test_env_vars()
         # Ensure storage uses test backends (in-memory/sqlite) so we don't
         # attempt to connect to external Postgres/MongoDB during tests.
@@ -118,14 +102,30 @@ class ServiceManager:
         env.set('HOSTNAME', "campus.test")
 
         # Patch campus_python to use TestCampusRequest (Flask test client)
-        # This must be done before any campus_python.Campus instances are created
+        # This MUST happen before any campus_python.Campus instances are created
+        # Moved here to ensure patching happens before early returns below
         from tests import flask_test
         flask_test.patch_campus_python()
 
-        # Patch DefaultClient to use TestJsonClient (Flask test client)
-        # This allows AuditClient to use Flask test clients for testing
-        # Note: This is a safety net - the factory pattern below is the primary mechanism
-        flask_test.patch_default_client()
+        # Note: patch_default_client() removed - no longer needed
+        # AuditClient.json_client_class is now the primary mechanism
+
+        # Always re-init auth and yapper services if already setup,
+        # in case storage was reset. These are idempotent.
+        if self._setup_done:
+            auth.init()
+            yapper.init()
+            return self
+
+        # If using shared mode and shared instance exists, reuse it
+        if self._shared and ServiceManager._shared_setup_done and ServiceManager._shared_instance:
+            self.auth_app = ServiceManager._shared_instance.auth_app
+            self.apps_app = ServiceManager._shared_instance.apps_app
+            self._setup_done = True
+            # Re-init auth and yapper in case storage was reset
+            auth.init()
+            yapper.init()
+            return self
 
         # Initialize auth service infrastructure
         # Creates storage tables, test client credentials, vault secrets
@@ -141,23 +141,12 @@ class ServiceManager:
         # Auth routes are at /auth/v1/*
         flask_test.register_test_app("https://campus.test", self.auth_app, path_prefix="/auth")
 
-        # Set up HTTP client factory for AuditClient dependency injection
-        # This must happen AFTER auth.init() so CLIENT_ID/CLIENT_SECRET are set
-        from campus.audit.client import set_http_client_factory
+        # Configure AuditClient to use TestJsonClient for testing
+        # TestJsonClient loads credentials from environment dynamically,
+        # just like FlaskTestClient/TestCampusRequest
+        from campus.audit.client import AuditClient
 
-        def _test_http_client_factory(base_url: str) -> flask_test.TestJsonClient:
-            """Factory function that creates TestJsonClient for testing."""
-            # Load credentials from environment at call time (not at factory setup time)
-            # This ensures each test class gets the current credentials, not stale ones
-            # This is needed because auth.init() creates a new client for each test class
-            client_id = env.CLIENT_ID
-            client_secret = env.CLIENT_SECRET
-            return flask_test.TestJsonClient(
-                base_url=base_url,
-                _credentials=(client_id, client_secret)
-            )
-
-        set_http_client_factory(_test_http_client_factory)
+        AuditClient.json_client_class = flask_test.TestJsonClient
 
         # Initialize storage connections
         storage.init()
@@ -247,9 +236,9 @@ class ServiceManager:
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
 
-        # Clean up audit client factory
-        from campus.audit.client import set_http_client_factory
-        set_http_client_factory(None)  # Reset to None
+        # Clean up audit client configuration
+        from campus.audit.client import AuditClient
+        AuditClient.json_client_class = None  # Reset to None
 
         # For non-shared instances, clean up apps for full isolation
         # This is now the default behavior
@@ -285,10 +274,9 @@ class ServiceManager:
 
         Should be called at the end of test runs to ensure clean state.
         """
-        # Unpatch campus_python, DefaultClient, and clear test apps
+        # Unpatch campus_python and clear test apps
         from tests import flask_test
         flask_test.unpatch_campus_python()
-        flask_test.unpatch_default_client()
         flask_test.clear_test_apps()
 
         if cls._shared_instance:

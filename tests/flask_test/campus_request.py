@@ -1,9 +1,16 @@
 """tests.flask_test.campus_request
 
-Test-compatible CampusRequest that uses FlaskTestClient.
+Test-compatible JsonClient that routes requests to Flask test clients.
 
 This module provides a drop-in replacement for campus_python.json_client.CampusRequest
-that uses FlaskTestClient for local testing without actual HTTP calls.
+that routes requests to the appropriate Flask app based on base_url and path prefix,
+using Flask test clients for local testing without actual HTTP calls.
+
+Key features:
+- Does NOT require Flask app at initialization time
+- Looks up apps from global registry at request time
+- Implements full JsonClient protocol including auth methods
+- Supports routing to multiple Flask apps by base_url and path prefix
 """
 
 from typing import Any, Self
@@ -11,8 +18,8 @@ from urllib.parse import urljoin
 
 import flask
 import campus.model
+from campus_python.json_client.interface import JsonClient
 
-from .client import FlaskTestClient
 from .response import FlaskTestResponse
 
 
@@ -71,101 +78,85 @@ def clear_test_apps() -> None:
     _test_apps.clear()
 
 
-class TestCampusRequest(FlaskTestClient):
-    """Test-compatible CampusRequest using FlaskTestClient.
+class TestCampusRequest(JsonClient):
+    """Test-compatible JsonClient that routes to Flask test clients.
 
-    This class extends FlaskTestClient to implement the full CampusRequest
-    interface from campus_python.json_client, allowing it to be used as
-    a drop-in replacement during testing.
+    This class implements the campus_python.json_client.JsonClient protocol
+    and routes requests to the appropriate Flask app based on base_url and
+    path prefix, using Flask test clients for local testing.
 
-    Key differences from FlaskTestClient:
-    - Implements set_basic_authorization() and set_bearer_authorization()
-    - Exposes headers property
-    - Looks up Flask app from registry based on base_url and request path
+    Key differences from CampusRequest:
+    - Does NOT require Flask app at initialization time
+    - Routes requests dynamically based on base_url and path prefix
+    - Looks up Flask app from registry using get_test_app()
+    - Compatible with JsonClient protocol used by campus_python
+
+    Initialization timing:
+    - Can be instantiated BEFORE Flask apps are created
+    - Apps can be created later via create_app()
+    - Apps must be registered via register_test_app() before requests are made
+    - App lookup happens at request time, not initialization time
+
+    Usage:
+        # Create test client (apps don't need to exist yet)
+        test_client = TestCampusRequest(base_url="https://campus.test")
+
+        # Create Flask apps
+        auth_app = create_app(campus.auth)
+        api_app = create_app(campus.api)
+
+        # Register apps for routing
+        register_test_app("https://campus.test", auth_app, path_prefix="/auth")
+        register_test_app("https://campus.test", api_app, path_prefix="/api")
+
+        # Use test client
+        test_client.get("/auth/v1/root/")  # Routes to auth_app
+        test_client.get("/api/v1/circles/")  # Routes to api_app
     """
 
     def __init__(
             self,
             base_url: str | None = None,
             *,
-            headers: dict[str, str] | None = None,
+            auth: Any = None,  # For compatibility with JsonClient ABC (ignored)
+            headers: Any = None,  # For compatibility with JsonClient ABC (ignored)
+            timeout: int = 10,
             **kwargs: Any
     ):
-        """Initialize with a Flask app for testing.
+        """Initialize test client.
 
         Args:
             base_url: Base URL for determining which app to use
-            headers: Default headers (for compatibility, ignored in favor of env)
-            **kwargs: Additional arguments (including timeout, ignored)
+            auth: Authentication (ignored, for JsonClient ABC compatibility)
+            headers: Default headers (ignored, for JsonClient ABC compatibility)
+            timeout: Request timeout in seconds (for compatibility)
+            **kwargs: Additional arguments (for compatibility)
         """
         self.base_url = base_url or ""
-        self._timeout = kwargs.get("timeout", 10)
+        self._timeout = timeout
 
-        # Override auth headers - if set, these take precedence over env vars
-        # This allows set_bearer_authorization() to work for explicit token auth
+        # Override headers for set_bearer_authorization/set_basic_authorization
         self._override_auth_headers: dict[str, str] | None = None
 
-        # Don't look up app at init time - we'll determine it per-request
-        # based on the path prefix
-        # Get a default app for initialization
-        app = self._get_app_for_base_url(self.base_url, "")
-        if app is None:
-            # Try to get any registered app
-            if self.base_url in _test_apps and _test_apps[self.base_url]:
-                app = next(iter(_test_apps[self.base_url].values()))
-            else:
-                raise ValueError(
-                    f"No Flask app registered for base_url '{self.base_url}'. "
-                    f"Use register_test_app() to register apps in test setup."
-                )
-
-        # Store the base_url for path-based routing
-        # Initialize parent FlaskTestClient with a default app
-        # We'll use the correct app per-request
-        super().__init__(app, base_url=self.base_url)
-
-    @property
-    def _auth_headers(self) -> dict[str, str]:
-        """Get authentication headers for requests.
-
-        Returns override headers if set (via set_bearer_authorization etc.),
-        otherwise loads dynamically from environment variables.
-
-        This ensures test isolation - when env.CLIENT_ID changes between
-        test classes, the new credentials are used automatically.
-
-        Returns:
-            Dictionary of HTTP headers for authentication
-        """
-        if self._override_auth_headers is not None:
-            return self._override_auth_headers
-        # Fall back to parent's dynamic loading from environment
-        return super()._auth_headers  # type: ignore[bad-property-access]
-
-    def _get_app_for_base_url(self, base_url: str, path: str = "") -> flask.Flask | None:
-        """Get the Flask app for a given base URL and path.
-
-        Uses path-based routing to determine the correct app.
-
-        Args:
-            base_url: The base URL to look up
-            path: The request path (used for prefix-based routing)
-
-        Returns:
-            The Flask app if found, None otherwise
-        """
-        return get_test_app(base_url, path)
+        # Note: We do NOT look up app at initialization time!
+        # Apps can be registered later via register_test_app()
 
     def _get_app_for_request(self, path: str) -> flask.Flask:
         """Get the Flask app for a specific request path.
+
+        Uses the test app registry to route to the correct app based on
+        base_url and path prefix.
 
         Args:
             path: The request path
 
         Returns:
             The Flask app to handle this request
+
+        Raises:
+            ValueError: If no app is registered for this base_url and path
         """
-        app = self._get_app_for_base_url(self.base_url, path)
+        app = get_test_app(self.base_url, path)
         if app is None:
             raise ValueError(
                 f"No Flask app registered for base_url '{self.base_url}' "
@@ -185,32 +176,32 @@ class TestCampusRequest(FlaskTestClient):
 
         Returns the headers that would be sent with requests.
         """
-        # Reconstruct HttpHeader from current auth headers
-        headers_dict = self._auth_headers
-        if isinstance(headers_dict, dict):
-            return campus.model.HttpHeader(**headers_dict)
-        return headers_dict
+        # Return override headers if set, otherwise load from environment
+        if self._override_auth_headers is not None:
+            return campus.model.HttpHeader(**self._override_auth_headers)
+        return self._load_auth_headers()
 
-    def set_basic_authorization(self, client_id: str, secret: str) -> None:
-        """Set Basic Authorization header.
+    def _load_auth_headers(self) -> campus.model.HttpHeader:
+        """Load authentication headers from environment variables.
 
-        Args:
-            client_id: Client ID for basic auth
-            secret: Client secret for basic auth
+        Returns:
+            HttpHeader with authentication credentials
         """
-        self._override_auth_headers = campus.model.HttpHeader.from_credentials(
-            client_id, secret
-        )  # HttpHeader is a dict
+        from campus.common import env
 
-    def set_bearer_authorization(self, token: str) -> None:
-        """Set Bearer Authorization header.
+        # Try ACCESS_TOKEN first (Bearer auth)
+        access_token = env.get("ACCESS_TOKEN")
+        if access_token:
+            return campus.model.HttpHeader.from_bearer_token(access_token)
 
-        Args:
-            token: Bearer token
-        """
-        self._override_auth_headers = campus.model.HttpHeader.from_bearer_token(
-            token
-        )  # HttpHeader is a dict
+        # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
+        client_id = env.get("CLIENT_ID")
+        client_secret = env.get("CLIENT_SECRET")
+        if client_id and client_secret:
+            return campus.model.HttpHeader.from_credentials(client_id, client_secret)
+
+        # Return empty headers for unauthenticated requests
+        return campus.model.HttpHeader()
 
     def reset_authorization(self) -> None:
         """Reset authorization back to client credentials from environment.
@@ -222,6 +213,37 @@ class TestCampusRequest(FlaskTestClient):
         allowing tests to change credentials between test classes.
         """
         self._override_auth_headers = None  # Clear override, use env vars
+
+    def set_basic_authorization(self, client_id: str, secret: str) -> None:
+        """Set Basic Authorization header.
+
+        Args:
+            client_id: Client ID for basic auth
+            secret: Client secret for basic auth
+        """
+        self._override_auth_headers = campus.model.HttpHeader.from_credentials(
+            client_id, secret
+        )
+
+    def set_bearer_authorization(self, token: str) -> None:
+        """Set Bearer Authorization header.
+
+        Args:
+            token: Bearer token
+        """
+        self._override_auth_headers = campus.model.HttpHeader.from_bearer_token(
+            token
+        )
+
+    def _get_auth_headers_dict(self) -> dict[str, str]:
+        """Get authentication headers as dict for requests.
+
+        Returns:
+            Dictionary of HTTP headers for authentication
+        """
+        if self._override_auth_headers is not None:
+            return dict(self._override_auth_headers)
+        return dict(self._load_auth_headers())
 
     def get(self: Self, path: str, query: dict[str, Any] | None = None) -> FlaskTestResponse:
         """Sends a GET request.
@@ -240,14 +262,14 @@ class TestCampusRequest(FlaskTestClient):
         response = test_client.get(
             full_path,
             query_string=query,
-            headers=self._auth_headers
+            headers=self._get_auth_headers_dict()
         )
         return FlaskTestResponse(response)
 
     def post(
-            self: Self,
-            path: str,
-            json: dict[str, Any] | None = None
+        self: Self,
+        path: str,
+        json: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a POST request.
 
@@ -266,14 +288,14 @@ class TestCampusRequest(FlaskTestClient):
             full_path,
             json=json,
             content_type='application/json',
-            headers=self._auth_headers
+            headers=self._get_auth_headers_dict()
         )
         return FlaskTestResponse(response)
 
     def put(
-            self: Self,
-            path: str,
-            json: dict[str, Any] | None = None
+        self: Self,
+        path: str,
+        json: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PUT request.
 
@@ -292,14 +314,14 @@ class TestCampusRequest(FlaskTestClient):
             full_path,
             json=json,
             content_type='application/json',
-            headers=self._auth_headers
+            headers=self._get_auth_headers_dict()
         )
         return FlaskTestResponse(response)
 
     def delete(
-            self: Self,
-            path: str,
-            json: dict[str, Any] | None = None
+        self: Self,
+        path: str,
+        json: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a DELETE request.
 
@@ -318,14 +340,14 @@ class TestCampusRequest(FlaskTestClient):
             full_path,
             json=json,
             content_type='application/json',
-            headers=self._auth_headers
+            headers=self._get_auth_headers_dict()
         )
         return FlaskTestResponse(response)
 
     def patch(
-            self: Self,
-            path: str,
-            json: dict[str, Any] | None = None
+        self: Self,
+        path: str,
+        json: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PATCH request.
 
@@ -344,21 +366,9 @@ class TestCampusRequest(FlaskTestClient):
             full_path,
             json=json,
             content_type='application/json',
-            headers=self._auth_headers
+            headers=self._get_auth_headers_dict()
         )
         return FlaskTestResponse(response)
-
-    def patch(self: Self, path: str, json: Any = None) -> FlaskTestResponse:
-        """Sends a PATCH request.
-
-        Args:
-            path: Request path
-            json: Optional JSON body
-
-        Returns:
-            FlaskTestResponse wrapping the test client response
-        """
-        return super().patch(path, json=json)
 
 
 def patch_campus_python() -> None:
@@ -366,7 +376,7 @@ def patch_campus_python() -> None:
 
     This function monkey-patches campus_python.json_client.CampusRequest
     with TestCampusRequest, allowing all Campus client code to use
-    FlaskTestClient for testing without actual HTTP calls.
+    Flask test clients for testing without actual HTTP calls.
 
     Also patches the module-level CampusRequest reference in campus_python
     since it imports CampusRequest directly at module level.
@@ -379,11 +389,11 @@ def patch_campus_python() -> None:
 
     # Store original for cleanup
     if not hasattr(campus_python.json_client, "_original_CampusRequest"):
-        campus_python.json_client._original_CampusRequest = (
+        campus_python.json_client._original_CampusRequest = (  # type: ignore[reportAttributeAccessIssue]
             campus_python.json_client.CampusRequest
         )
     if not hasattr(campus_python, "_original_CampusRequest"):
-        campus_python._original_CampusRequest = getattr(
+        campus_python._original_CampusRequest = getattr(  # type: ignore[reportAttributeAccessIssue]
             campus_python, "CampusRequest", None
         )
 
@@ -402,12 +412,14 @@ def unpatch_campus_python() -> None:
 
     if hasattr(campus_python.json_client, "_original_CampusRequest"):
         campus_python.json_client.CampusRequest = (
-            campus_python.json_client._original_CampusRequest
+            campus_python.json_client._original_CampusRequest  # type: ignore[reportAttributeAccessIssue]
         )
         delattr(campus_python.json_client, "_original_CampusRequest")
     if hasattr(campus_python, "_original_CampusRequest"):
-        if campus_python._original_CampusRequest is not None:
-            campus_python.CampusRequest = campus_python._original_CampusRequest
+        if campus_python._original_CampusRequest is not None:  # type: ignore[reportAttributeAccessIssue]
+            campus_python.CampusRequest = getattr(
+                campus_python, "_original_CampusRequest"
+            )
         else:
             delattr(campus_python, "CampusRequest")
         delattr(campus_python, "_original_CampusRequest")

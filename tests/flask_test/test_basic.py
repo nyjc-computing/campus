@@ -1,13 +1,13 @@
 """tests.flask_test.test_basic
 
-Basic tests for FlaskTestClient functionality.
+Basic tests for TestCampusRequest functionality.
 """
 
 import unittest
 
 import flask
 
-from tests.flask_test import FlaskTestClient, FlaskTestResponse
+from tests.flask_test import TestCampusRequest, FlaskTestResponse, register_test_app
 
 
 class TestFlaskTestResponse(unittest.TestCase):
@@ -68,8 +68,8 @@ class TestFlaskTestResponse(unittest.TestCase):
             self.assertFalse(response.server_error())
 
 
-class TestFlaskTestClient(unittest.TestCase):
-    """Test FlaskTestClient adapter functionality."""
+class TestTestCampusRequest(unittest.TestCase):
+    """Test TestCampusRequest adapter functionality."""
 
     def setUp(self):
         """Set up test Flask app."""
@@ -97,9 +97,12 @@ class TestFlaskTestClient(unittest.TestCase):
         def patch_test():
             return {'method': 'PATCH'}
 
+        # Register app for testing
+        register_test_app("https://campus.test", self.app, path_prefix="")
+
     def test_get_request(self):
         """Test GET request handling."""
-        client = FlaskTestClient(self.app)
+        client = TestCampusRequest(base_url="https://campus.test")
         response = client.get('/get-test')
 
         self.assertEqual(response.status_code, 200)
@@ -107,7 +110,7 @@ class TestFlaskTestClient(unittest.TestCase):
 
     def test_post_request(self):
         """Test POST request with JSON."""
-        client = FlaskTestClient(self.app)
+        client = TestCampusRequest(base_url="https://campus.test")
         test_data = {'key': 'value', 'number': 42}
         response = client.post('/post-test', json=test_data)
 
@@ -118,7 +121,7 @@ class TestFlaskTestClient(unittest.TestCase):
 
     def test_put_request(self):
         """Test PUT request handling."""
-        client = FlaskTestClient(self.app)
+        client = TestCampusRequest(base_url="https://campus.test")
         response = client.put('/put-test')
 
         self.assertEqual(response.status_code, 200)
@@ -126,7 +129,7 @@ class TestFlaskTestClient(unittest.TestCase):
 
     def test_delete_request(self):
         """Test DELETE request handling."""
-        client = FlaskTestClient(self.app)
+        client = TestCampusRequest(base_url="https://campus.test")
         response = client.delete('/delete-test')
 
         self.assertEqual(response.status_code, 200)
@@ -134,17 +137,11 @@ class TestFlaskTestClient(unittest.TestCase):
 
     def test_patch_request(self):
         """Test PATCH request handling."""
-        client = FlaskTestClient(self.app)
+        client = TestCampusRequest(base_url="https://campus.test")
         response = client.patch('/patch-test')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['method'], 'PATCH')
-
-    def test_context_manager(self):
-        """Test context manager functionality."""
-        with FlaskTestClient(self.app) as client:
-            response = client.get('/get-test')
-            self.assertEqual(response.status_code, 200)
 
 
 if __name__ == '__main__':

@@ -2,8 +2,9 @@
 
 Test-compatible JsonClient that uses Flask test clients for routing.
 
-This module provides a drop-in replacement for campus.common.http.DefaultClient
-that uses Flask test clients for local testing without actual HTTP calls.
+This module provides a drop-in replacement for
+campus.common.http.DefaultClient that uses Flask test clients for local
+testing without actual HTTP calls.
 """
 
 from typing import Any, Iterable, Mapping, Self
@@ -23,22 +24,19 @@ from .campus_request import get_test_app
 class TestJsonClient:
     """Test-compatible JsonClient using Flask test clients with routing.
 
-    This class implements the JsonClient protocol and routes requests to the
-    correct Flask app based on base_url and path prefix, using the same routing
-    mechanism as TestCampusRequest.
+    This class implements the campus.common.http.JsonClient protocol and
+    routes requests to the correct Flask app based on base_url and path
+    prefix, using the same routing mechanism as TestCampusRequest.
 
-    Key differences from FlaskTestClient:
-    - Routes requests dynamically based on base_url and path prefix
-    - Looks up Flask app from registry using get_test_app()
-    - Compatible with DefaultClient interface used by AuditClient
+    This is used by AuditClient via the json_client_class attribute for
+    testing, allowing it to use Flask test clients instead of making
+    real HTTP calls.
     """
 
     # Type annotation to match JsonClient protocol
-    # Note: In practice, this is always a string (base_url or ""), but the
-    # protocol allows None for compatibility with DefaultClient
+    # Note: In practice, this is always a string (base_url or ""), but
+    # the protocol allows None for compatibility with DefaultClient
     base_url: str | None
-    _client_id: str | None
-    _client_secret: str | None
     _timeout: int
 
     def __init__(
@@ -47,52 +45,39 @@ class TestJsonClient:
             *,
             auth: Iterable[str] | str | None = None,
             headers: Mapping[str, str] | None = None,
-            _credentials: tuple[str, str] | None = None,
             **kwargs: Any
     ):
         """Initialize with base URL for routing.
 
         Args:
-            base_url: Base URL for determining which app to use (e.g., "https://campus.test")
-            auth: Authentication credentials (ignored, uses env vars or _credentials)
+            base_url: Base URL for determining which app to use (e.g.,
+                "https://campus.test")
+            auth: Authentication credentials (ignored, uses env vars)
             headers: Default headers (ignored, uses env vars)
-            _credentials: Optional tuple of (client_id, client_secret) for testing
             **kwargs: Additional arguments (including timeout, ignored)
         """
         self.base_url = base_url or ""
         self._timeout = kwargs.get("timeout", 10)
 
-        # Capture credentials at initialization time if provided
-        # This is used by the factory pattern to ensure auth headers are available
-        if _credentials:
-            self._client_id, self._client_secret = _credentials
-        else:
-            # Load from environment (will be loaded dynamically via _auth_headers property)
-            self._client_id = None
-            self._client_secret = None
-
     @property
     def _auth_headers(self) -> dict[str, str]:
         """Get authentication headers.
 
-        Uses captured credentials if available (from factory), otherwise
-        loads from environment dynamically.
+        Loads from environment dynamically to ensure test isolation.
+        This allows tests to change CLIENT_ID/CLIENT_SECRET between test
+        classes.
 
         Returns:
             Dictionary of HTTP headers for authentication
         """
-        # Use captured credentials if available (from factory)
-        if self._client_id and self._client_secret:
-            return HttpHeader.from_credentials(self._client_id, self._client_secret)
-
-        # Otherwise, load from environment dynamically
         return self._load_auth_headers()
 
     def _load_auth_headers(self) -> dict[str, str]:
         """Load authentication headers from environment variables.
 
-        Note: Headers are loaded fresh on each access to ensure test isolation.
-        This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes.
+        Note: Headers are loaded fresh on each access to ensure test
+        isolation. This allows tests to change CLIENT_ID/CLIENT_SECRET
+        between test classes.
         """
         # Try ACCESS_TOKEN first (Bearer auth)
         access_token = env.get("ACCESS_TOKEN")
@@ -121,16 +106,20 @@ class TestJsonClient:
         Returns:
             The Flask app to handle this request
         """
+        assert self.base_url
         app = get_test_app(self.base_url, path)
         if app is None:
             raise ValueError(
-                f"No Flask app registered for base_url '{self.base_url}' "
-                f"with path '{path}'. Use register_test_app() to register apps."
+                f"No Flask app registered for base_url "
+                f"{self.base_url!r} with path {path!r}. Use "
+                "register_test_app() to register apps."
             )
         return app
 
     def _make_path(self, path: str) -> str:
-        """Convert path to full URL if base_url is set, otherwise return path."""
+        """Convert path to full URL if base_url is set, otherwise return
+        path.
+        """
         if self.base_url:
             return urljoin(self.base_url, path.lstrip('/'))
         return path
@@ -257,28 +246,6 @@ class TestJsonClient:
         return FlaskTestResponse(response)
 
 
-def patch_default_client() -> None:
-    """Patch campus.common.http.DefaultClient to use TestJsonClient in tests.
-
-    This function monkey-patches campus.common.http.DefaultClient
-    with TestJsonClient, allowing all code using DefaultClient (like AuditClient)
-    to use Flask test clients for testing without actual HTTP calls.
-
-    Call this in test setup before any DefaultClient instances are created.
-    """
-    import campus.common.http
-
-    # Store original for cleanup
-    if not hasattr(campus.common.http, "_original_DefaultClient"):
-        campus.common.http._original_DefaultClient = (
-            campus.common.http.DefaultClient
-        )
-
-    # Replace with test version
-    campus.common.http.DefaultClient = TestJsonClient
-
-
-def unpatch_default_client() -> None:
     """Restore original campus.common.http.DefaultClient.
 
     Call this in test teardown to clean up the monkey-patch.
@@ -286,7 +253,8 @@ def unpatch_default_client() -> None:
     import campus.common.http
 
     if hasattr(campus.common.http, "_original_DefaultClient"):
-        campus.common.http.DefaultClient = (
-            campus.common.http._original_DefaultClient
+        campus.common.http.DefaultClient = getattr(
+            campus.common.http,
+            "_original_DefaultClient"
         )
         delattr(campus.common.http, "_original_DefaultClient")
