@@ -80,10 +80,12 @@ class TestAuditTracesIngestContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        # including auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
         from campus.audit.resources.traces import TracesResource
-        campus.storage.testing.reset_test_storage()
         TracesResource.init_storage()
 
         self.client = self.app.test_client()
@@ -199,10 +201,12 @@ class TestAuditTracesListContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        # including auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
         from campus.audit.resources.traces import TracesResource
-        campus.storage.testing.reset_test_storage()
         TracesResource.init_storage()
 
         self.client = self.app.test_client()
@@ -289,10 +293,12 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        # including auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
         from campus.audit.resources.traces import TracesResource
-        campus.storage.testing.reset_test_storage()
         TracesResource.init_storage()
 
         self.client = self.app.test_client()
@@ -383,10 +389,12 @@ class TestAuditSpansListContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        # including auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
         from campus.audit.resources.traces import TracesResource
-        campus.storage.testing.reset_test_storage()
         TracesResource.init_storage()
 
         self.client = self.app.test_client()
@@ -464,10 +472,12 @@ class TestAuditSpanGetContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        # including auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
         from campus.audit.resources.traces import TracesResource
-        campus.storage.testing.reset_test_storage()
         TracesResource.init_storage()
 
         self.client = self.app.test_client()
@@ -572,10 +582,12 @@ class TestAuditTracesSearchContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        # including auth/yapper service tables
+        self.manager.reset_test_data()
+
+        # Initialize traces storage (not done by service manager)
         from campus.audit.resources.traces import TracesResource
-        campus.storage.testing.reset_test_storage()
         TracesResource.init_storage()
 
         self.client = self.app.test_client()

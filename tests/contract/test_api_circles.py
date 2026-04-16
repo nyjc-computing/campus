@@ -57,10 +57,11 @@ class TestApiCirclesContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        self.manager.reset_test_data()
+
+        # Initialize circle storage (not done by service manager)
         from campus.api.resources.circle import CirclesResource
-        campus.storage.testing.reset_test_storage()
         CirclesResource.init_storage()
 
         self.client = self.app.test_client()

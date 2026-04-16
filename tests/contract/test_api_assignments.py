@@ -52,10 +52,11 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
     def setUp(self):
         # Reinitialize storage after tearDownClass reset
-        # Ensures proper test isolation between tests
-        import campus.storage.testing
+        # Use manager.reset_test_data() to properly reset ALL storage
+        self.manager.reset_test_data()
+
+        # Initialize assignment storage (not done by service manager)
         from campus.api.resources.assignment import AssignmentsResource
-        campus.storage.testing.reset_test_storage()
         AssignmentsResource.init_storage()
 
         self.client = self.app.test_client()
