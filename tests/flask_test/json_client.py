@@ -25,11 +25,12 @@ class TestJsonClient:
     """Test-compatible JsonClient using Flask test clients with routing.
 
     This class implements the campus.common.http.JsonClient protocol and
-    routes requests to the correct Flask app based on base_url and path prefix,
-    using the same routing mechanism as TestCampusRequest.
+    routes requests to the correct Flask app based on base_url and path
+    prefix, using the same routing mechanism as TestCampusRequest.
 
     This is used by AuditClient via the json_client_class attribute for
-    testing, allowing it to use Flask test clients instead of making real HTTP calls.
+    testing, allowing it to use Flask test clients instead of making
+    real HTTP calls.
     """
 
     # Type annotation to match JsonClient protocol
@@ -63,7 +64,8 @@ class TestJsonClient:
         """Get authentication headers.
 
         Loads from environment dynamically to ensure test isolation.
-        This allows tests to change CLIENT_ID/CLIENT_SECRET between test classes.
+        This allows tests to change CLIENT_ID/CLIENT_SECRET between test
+        classes.
 
         Returns:
             Dictionary of HTTP headers for authentication
