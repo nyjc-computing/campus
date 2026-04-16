@@ -74,6 +74,10 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
+        # CRITICAL: Call parent setUp first to check dependencies
+        # This ensures tests are skipped if dependencies failed
+        super().setUp()
+
         # Initialize traces storage BEFORE resetting test data
         # This ensures the spans table exists before reset_test_data() closes the connection
         TracesResource.init_storage()
@@ -162,12 +166,11 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     skipped when span ingestion is not working (e.g., due to issue #459).
 
     All tests in this class will be automatically skipped if span ingestion fails
-    during setUpClass, eliminating the need for individual @unittest.skip decorators.
+    the test_000_dependencies() check, eliminating the need for individual skip decorators.
 
-    IMPORTANT: The _check_dependencies() method in setUpClass MUST be kept.
-    This dependency check serves a critical purpose: it prevents cluttering test
-    logs with 11 failing tests when span ingestion isn't working (for ANY reason -
-    environment issues, configuration problems, or unresolved bugs like #459).
+    The dependency check (test_000_dependencies) serves a critical purpose: it prevents
+    cluttering test logs with 11 failing tests when span ingestion isn't working (for
+    ANY reason - environment issues, configuration problems, or unresolved bugs like #459).
 
     The check is about test hygiene and clean output, NOT about gating on specific
     issues. Even when issue #459 is fixed, we want to keep this check to avoid
@@ -176,35 +179,24 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up services for the test class and verify span ingestion works."""
-        try:
-            cls.manager = services.create_service_manager(shared=False)
-            cls.manager.setup()
+        """Set up services for the test class."""
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.setup()
 
-            # Initialize traces storage
-            TracesResource.init_storage()
+        # Initialize traces storage
+        TracesResource.init_storage()
 
-            # Get the auth and audit apps
-            cls.auth_app = cls.manager.auth_app
-            cls.audit_app = cls.manager.audit_app
+        # Get the auth and audit apps
+        cls.auth_app = cls.manager.auth_app
+        cls.audit_app = cls.manager.audit_app
 
-            # Get audit client credentials for authenticated requests
-            cls.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+        # Get audit client credentials for authenticated requests
+        cls.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
-            # Reset audit client singleton to ensure fresh client for this test class
-            # This is important because the singleton persists across test classes
-            from campus.audit.middleware import tracing
-            tracing._audit_client = None
-
-            # CRITICAL: Verify span ingestion works before running any tests
-            # This dependency check prevents cluttering test logs with 11 failing tests
-            # when span ingestion isn't working (environment issues, config problems, or bugs)
-            cls._check_dependencies()
-
-        except unittest.SkipTest:
-            raise
-        except Exception as e:
-            raise unittest.SkipTest(f"Setup failed: {e}")
+        # Reset audit client singleton to ensure fresh client for this test class
+        # This is important because the singleton persists across test classes
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
 
     @classmethod
     def _check_dependencies(cls) -> None:
@@ -324,8 +316,119 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
+    def test_000_dependencies(self):
+        """Verify that span ingestion dependencies are met.
+
+        This test runs first and verifies span ingestion is working.
+        If dependencies fail, this test FAILS (making it visible in CI/CD),
+        and all subsequent tests are SKIPPED (preventing cluttered output).
+
+        This approach gives us:
+        - errors=1 (visible failure in test results)
+        - skipped=10 (remaining tests don't run)
+        Instead of:
+        - skipped=1 (silent skip, easy to miss)
+        """
+        import campus.storage
+        import concurrent.futures
+
+        # First, ensure the spans table exists
+        try:
+            traces_storage = campus.storage.tables.get_db("spans")
+            _ = traces_storage.get_matching({})  # Test query to ensure table exists
+        except Exception as e:
+            self.fail_dependency(
+                f"Spans table not accessible: {e}. "
+                "Storage initialization may have failed."
+            )
+
+        # CRITICAL FIX: Use a fresh executor for dependency check
+        # The global tracing._ingestion_executor may be in a corrupted state
+        # from previous test classes' tearDown() methods. Creating a fresh
+        # executor ensures clean state for this dependency check.
+        from campus.audit.middleware import tracing
+        original_executor = tracing._ingestion_executor
+
+        # CRITICAL: Wait for the original executor to finish all pending tasks
+        # before replacing it. This prevents issue #496 where pending tasks from
+        # the previous test class are still processing when we create the fresh
+        # executor, causing those tasks to fail when the original executor is
+        # restored and shut down.
+        original_executor.shutdown(wait=True)
+
+        tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="dependency_check_ingest"
+        )
+
+        try:
+            # Make a test request to generate a span
+            # Use auth_app (has tracing middleware) instead of audit_app (no tracing)
+            # Use class-level attributes since this runs before setUp()
+            auth_app = self.__class__.auth_app
+            if not auth_app:
+                self.fail_dependency("Auth app not initialized")
+
+            test_client = auth_app.test_client()
+            # Use test health endpoint (publicly accessible, no auth required)
+            response = test_client.get("/test/health")
+
+            if response.status_code != 200:
+                self.fail_dependency(
+                    f"Health check failed with status {response.status_code}. "
+                    "Cannot verify span ingestion."
+                )
+
+            # Get the trace_id from response headers
+            trace_id = response.headers.get("X-Request-ID")
+            if not trace_id:
+                self.fail_dependency(
+                    "No X-Request-ID header in response. "
+                    "Tracing middleware may not be working."
+                )
+
+            # Try to retrieve the span from storage
+            # Wait a bit for async ingestion
+            import time
+            max_wait = 2.0  # seconds
+            start = time.time()
+
+            while time.time() - start < max_wait:
+                traces_storage = campus.storage.tables.get_db("spans")
+                spans = traces_storage.get_matching({"trace_id": trace_id})
+
+                if spans:
+                    # Success! Span ingestion is working
+                    return
+
+                time.sleep(0.05)
+
+            # If we get here, span ingestion failed - fail the test
+            self.fail_dependency(
+                "Span ingestion not working - spans are not being created in storage. "
+                "This is a known issue (#459) with the audit middleware/service. "
+                "See: https://github.com/nyjc-computing/campus/issues/459"
+            )
+
+        finally:
+            # Clean up the temporary executor
+            # Use wait=True to ensure all pending tasks complete before shutdown
+            # This prevents issue #496 where spans fail to ingest with
+            # "cannot schedule new futures after shutdown" error
+            tracing._ingestion_executor.shutdown(wait=True)
+
+            # CRITICAL: Recreate the original executor instead of restoring the
+            # shut-down executor. We already shut down the original executor
+            # before creating the fresh one, so we need to recreate it here.
+            tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=2, thread_name_prefix="audit_ingest"
+            )
+
     def setUp(self):
         """Set up test client and clear storage before each test."""
+        # CRITICAL: Call parent setUp first to check dependencies
+        # This ensures tests are skipped if dependencies failed
+        super().setUp()
+
         # Initialize traces storage BEFORE resetting test data
         # This ensures the spans table exists before reset closes the connection
         TracesResource.init_storage()
