@@ -79,6 +79,13 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Ensures proper test isolation between tests
+        import campus.storage.testing
+        from campus.audit.resources.traces import TracesResource
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
@@ -191,6 +198,13 @@ class TestAuditTracesListContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Ensures proper test isolation between tests
+        import campus.storage.testing
+        from campus.audit.resources.traces import TracesResource
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
@@ -274,6 +288,13 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Ensures proper test isolation between tests
+        import campus.storage.testing
+        from campus.audit.resources.traces import TracesResource
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
@@ -361,6 +382,13 @@ class TestAuditSpansListContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Ensures proper test isolation between tests
+        import campus.storage.testing
+        from campus.audit.resources.traces import TracesResource
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
@@ -435,6 +463,13 @@ class TestAuditSpanGetContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Ensures proper test isolation between tests
+        import campus.storage.testing
+        from campus.audit.resources.traces import TracesResource
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
@@ -536,6 +571,13 @@ class TestAuditTracesSearchContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Ensures proper test isolation between tests
+        import campus.storage.testing
+        from campus.audit.resources.traces import TracesResource
+        campus.storage.testing.reset_test_storage()
+        TracesResource.init_storage()
+
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 

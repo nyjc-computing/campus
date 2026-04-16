@@ -53,6 +53,13 @@ class TestApiEmailOtpContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Reinitialize storage after tearDownClass reset
+        # Ensures proper test isolation between tests
+        import campus.storage.testing
+        from campus.api.resources.emailotp import EmailOTPResource
+        campus.storage.testing.reset_test_storage()
+        EmailOTPResource.init_storage()
+
         self.client = self.app.test_client()
 
     # Request OTP Tests
