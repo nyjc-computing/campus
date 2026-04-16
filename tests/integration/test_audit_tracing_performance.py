@@ -19,7 +19,6 @@ from tests.fixtures.tokens import get_basic_auth_headers
 from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
 
 
-@unittest.skip("Tests skipped due to auth client initialization issues. See: https://github.com/nyjc-computing/campus/issues/469")
 class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
     """Performance benchmark tests for tracing middleware.
 
@@ -43,9 +42,15 @@ class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCh
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
+        # Initialize traces storage BEFORE resetting test data
+        # This ensures the spans table exists before reset closes the connection
+        TracesResource.init_storage()
+
+        # Call parent setUp which handles storage reset
         super().setUp()
 
-        # Reinitialize traces storage after reset
+        # Reinitialize traces storage AFTER reset
+        # This ensures the spans table exists in the new connection
         TracesResource.init_storage()
 
         assert self.auth_app, "Auth app not initialized in setUpClass"
@@ -55,10 +60,15 @@ class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCh
         # Create auth headers for authenticated requests
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
-        # Clear trace storage between tests
+        # Clear trace storage between tests for isolation
+        # Use the module-level traces_storage to avoid creating a new instance
         import campus.storage
-        traces_storage = campus.storage.tables.get_db("spans")
-        traces_storage.delete_matching({})
+        from campus.audit.resources.traces import traces_storage
+        # Ignore NoChangesAppliedError if table is already empty
+        try:
+            traces_storage.delete_matching({})
+        except campus.storage.errors.NoChangesAppliedError:
+            pass  # Table is already empty, which is fine
 
     def tearDown(self):
         """Clean up after each test.
