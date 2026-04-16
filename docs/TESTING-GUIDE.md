@@ -11,13 +11,16 @@ This guide covers testing in Campus: what we test, how tests are organized, and 
 ## Quick Start
 
 ```bash
+# Run sanity checks (fast validation, 2-3 seconds)
+poetry run python tests/run_tests.py sanity
+
 # Run all unit tests (fast, no external dependencies)
 poetry run python tests/run_tests.py unit
 
 # Run all integration tests (requires environment setup)
 poetry run python tests/run_tests.py integration
 
-# Run all tests
+# Run all tests (sanity → type → unit → integration)
 poetry run python tests/run_tests.py all
 
 # Run specific test file
@@ -232,16 +235,117 @@ class TestMyFeature(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
 
 See [tests/contract/README.md](../tests/contract/README.md) for specific invariants tested.
 
+### Sanity Tests
+
+**Purpose:** Quick validation tests to catch common issues before running full test suite.
+
+- **Location:** `tests/sanity/`
+- **Dependencies:** Minimal (poetry, Python environment)
+- **Speed:** Very fast (2-3 seconds)
+- **Timeout:** 2 minutes in CI/CD
+- **Examples:**
+  - Lockfile synchronization (poetry.lock matches pyproject.toml)
+  - Python version compatibility
+  - Required deployment files exist
+  - Module import capability
+  - Deployment smoke tests (can modules be configured and started?)
+
+**Guidelines:**
+- Test infrastructure setup and configuration
+- Verify dependencies are correctly installed
+- Check for import failures early
+- Validate deployment readiness
+- No external service dependencies
+
+**What Makes a Test a "Sanity Test":**
+
+Sanity tests are distinguished by their **scope** and **purpose**:
+
+| Aspect | Sanity Tests | Integration Tests |
+|--------|-------------|-------------------|
+| **Purpose** | "Can it deploy?" | "Does it work?" |
+| **Scope** | Module-level, infrastructure | Service-level, end-to-end |
+| **Focus** | Imports, config, startup | Business logic, data flows |
+| **Speed** | Very fast (seconds) | Medium (seconds to minutes) |
+| **CI/CD Order** | Run FIRST (fail fast) | Run AFTER sanity checks |
+| **Examples** | poetry.lock sync, module imports | API endpoints, database operations |
+
+**Current Sanity Tests:**
+
+1. **Infrastructure Tests** (6 tests in `tests/sanity_check.py`):
+   - `test_poetry_lock_file_exists` - Verify poetry.lock exists
+   - `test_poetry_lock_is_in_sync` - Check poetry.lock matches pyproject.toml
+   - `test_poetry_lock_is_valid` - Validate poetry.lock is valid TOML
+   - `test_python_version_matches_requirements` - Check Python version compatibility
+   - `test_required_files_exist` - Verify critical deployment files present
+   - `test_test_fixtures_can_be_imported` - Test fixtures import without errors
+
+2. **Deployment Smoke Tests** (15 tests in `tests/sanity/`):
+   - `test_auth_module_can_be_imported` - Verify campus.auth imports
+   - `test_auth_app_can_be_created` - Verify auth Flask app creates
+   - `test_auth_app_has_secret_key` - Verify auth has SECRET_KEY
+   - `test_auth_blueprints_registered` - Verify auth blueprints registered
+   - `test_auth_routes_exist` - Verify auth routes exist
+   - `test_auth_provider_initialized` - Verify OAuth provider initialized
+   - `test_auth_has_error_handlers` - Verify error handlers configured
+   - `test_api_module_can_be_imported` - Verify campus.api imports
+   - `test_api_app_can_be_created` - Verify API Flask app creates
+   - `test_api_app_has_secret_key` - Verify API has SECRET_KEY
+   - `test_api_blueprints_registered` - Verify API blueprints registered
+   - `test_api_routes_exist` - Verify API routes exist
+   - `test_api_has_error_handlers` - Verify error handlers configured
+   - `test_wsgi_import` - Verify WSGI entry point works
+
+**When to Add to Sanity Tests:**
+
+Add a test to `tests/sanity/` when:
+- ✅ It checks deployment readiness (imports, config, startup)
+- ✅ It's very fast (under 1 second)
+- ✅ It has no external dependencies (no network, databases)
+- ✅ It catches infrastructure issues early
+- ✅ It should fail fast in CI/CD before expensive tests
+
+**When NOT to Add to Sanity Tests:**
+
+- ❌ It tests business logic or API behavior → Use unit/integration tests
+- ❌ It requires external services or databases → Use integration tests
+- ❌ It's slow or resource-intensive → Use integration tests
+- ❌ It tests specific functionality → Use unit/integration tests
+
+**Test Organization Philosophy:**
+
+Tests are organized by **when they should run** and **what they verify**:
+
+1. **Sanity tests** (2-3 seconds) → "Can we deploy?"
+2. **Unit tests** (60 seconds) → "Do individual components work?"
+3. **Integration tests** (5 minutes) → "Do components work together?"
+4. **Contract tests** (fast) → "Are HTTP contracts correct?"
+
+This organization ensures:
+- Fast feedback on common issues
+- Early failure on infrastructure problems
+- Efficient use of CI/CD resources
+- Clear separation of concerns
+
 ## Test Type Decision Tree
 
 ```
 Are you testing HTTP interface contracts (status codes, auth)?
 ├── Yes → Contract Test (tests/contract/)
 └── No
-    Are you testing cross-service interactions or database operations?
-    ├── Yes → Integration Test (tests/integration/)
-    └── No → Unit Test (tests/unit/)
+    Are you testing deployment readiness (imports, config, startup)?
+    ├── Yes → Sanity Test (tests/sanity/)
+    └── No
+        Are you testing cross-service interactions or database operations?
+        ├── Yes → Integration Test (tests/integration/)
+        └── No → Unit Test (tests/unit/)
 ```
+
+**Summary:**
+- **Sanity tests**: Deployment readiness ("can it deploy?")
+- **Contract tests**: HTTP invariants (401 without auth, error formats)
+- **Integration tests**: Service-to-service, database operations
+- **Unit tests**: Everything else (individual functions, classes)
 
 **Summary:**
 - **Contract tests**: HTTP invariants (401 without auth, error formats)
