@@ -389,11 +389,11 @@ def patch_campus_python() -> None:
 
     # Store original for cleanup
     if not hasattr(campus_python.json_client, "_original_CampusRequest"):
-        campus_python.json_client._original_CampusRequest = (
+        campus_python.json_client._original_CampusRequest = (  # type: ignore[reportAttributeAccessIssue]
             campus_python.json_client.CampusRequest
         )
     if not hasattr(campus_python, "_original_CampusRequest"):
-        campus_python._original_CampusRequest = getattr(
+        campus_python._original_CampusRequest = getattr(  # type: ignore[reportAttributeAccessIssue]
             campus_python, "CampusRequest", None
         )
 
@@ -412,12 +412,14 @@ def unpatch_campus_python() -> None:
 
     if hasattr(campus_python.json_client, "_original_CampusRequest"):
         campus_python.json_client.CampusRequest = (
-            campus_python.json_client._original_CampusRequest
+            campus_python.json_client._original_CampusRequest  # type: ignore[reportAttributeAccessIssue]
         )
         delattr(campus_python.json_client, "_original_CampusRequest")
     if hasattr(campus_python, "_original_CampusRequest"):
-        if campus_python._original_CampusRequest is not None:
-            campus_python.CampusRequest = campus_python._original_CampusRequest
+        if campus_python._original_CampusRequest is not None:  # type: ignore[reportAttributeAccessIssue]
+            campus_python.CampusRequest = getattr(
+                campus_python, "_original_CampusRequest"
+            )
         else:
             delattr(campus_python, "CampusRequest")
         delattr(campus_python, "_original_CampusRequest")

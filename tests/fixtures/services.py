@@ -144,24 +144,11 @@ class ServiceManager:
         flask_test.register_test_app("https://campus.test", self.auth_app, path_prefix="/auth")
 
         # Configure AuditClient to use TestJsonClient for testing
-        # This must happen AFTER auth.init() so CLIENT_ID/CLIENT_SECRET are set
+        # TestJsonClient loads credentials from environment dynamically,
+        # just like FlaskTestClient/TestCampusRequest
         from campus.audit.client import AuditClient
 
-        # Capture credentials at configuration time
-        # TestJsonClient will use these for authentication
-        client_id = env.CLIENT_ID
-        client_secret = env.CLIENT_SECRET
-
-        # Create a factory class that captures credentials
-        class TestJsonClientFactory(flask_test.TestJsonClient):
-            """Factory class that creates TestJsonClient with captured credentials."""
-            def __new__(cls, base_url: str):
-                return flask_test.TestJsonClient(
-                    base_url=base_url,
-                    _credentials=(client_id, client_secret)
-                )
-
-        AuditClient.json_client_class = TestJsonClientFactory
+        AuditClient.json_client_class = flask_test.TestJsonClient
 
         # Initialize storage connections
         storage.init()
