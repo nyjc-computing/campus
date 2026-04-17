@@ -8,10 +8,10 @@ Tests for routes without trailing slashes are omitted since they would trigger
 
 import unittest
 
-from tests.integration.base import IntegrationTestCase
+from tests.integration.base import CleanIntegrationTestCase
 
 
-class TestLoginRoutesTrailingSlash(IntegrationTestCase):
+class TestLoginRoutesTrailingSlash(CleanIntegrationTestCase):
     """Test login routes handle trailing slashes correctly."""
 
     @classmethod
