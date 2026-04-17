@@ -58,8 +58,20 @@ class ServiceManager:
     def setup(self):
         """Initialize all Campus services for integration testing.
 
+        **Lifecycle Phase**: Class Setup (once per test class)
+        **Ownership**: Primary owner of service initialization
+        **Cleanup**: Handled by close() method
+
         Performs environment setup, database configuration, and service
         initialization in proper dependency order: auth → storage → yapper → api.
+
+        Phase Details:
+        - Configures test environment variables (ENV, STORAGE_MODE, HOSTNAME)
+        - Resets test storage for clean state
+        - Patches campus_python for test routing
+        - Initializes services in dependency order
+        - Creates Flask apps for auth, api, and audit
+        - Registers test apps for URL routing
 
         Note:
             With shared=False (the default), creates fresh Flask apps with
@@ -68,6 +80,8 @@ class ServiceManager:
 
         Returns:
             ServiceManager: Self for method chaining
+
+        See: #518 - Test lifecycle documentation
         """
         # Reset test storage at start of setup for clean state
         # This ensures test classes don't pollute each other's storage
@@ -194,12 +208,22 @@ class ServiceManager:
         This method clears all test storage (SQLite in-memory DB, memory collections)
         and re-initializes services. Use this in tearDown() for per-test isolation.
 
+        ⚠️ WARNING: Brittle Pattern - Manual Resource Reinit Required
+        This method destroys table structure, requiring tests to manually call
+        Resource.init_storage() after reset. This order-dependent pattern is
+        error-prone and will be replaced by ServiceManager.clear_test_data()
+        which preserves schema (see #518).
+
         WARNING: This clears auth credentials, so tests using bearer tokens will need
         to re-create their tokens after calling this method.
 
         For tests that use authentication, consider using unique identifiers per test
         (e.g., filtering by created_by) instead of full reset, or re-create the token
         in setUp() after calling this in tearDown().
+
+        Migration Path:
+        - Current: reset_test_data() → manual Resource.init_storage()
+        - Future (#518): clear_test_data() → no manual reinit needed
         """
         import campus.storage.testing
 
@@ -214,8 +238,25 @@ class ServiceManager:
     def close(self):
         """Clean up service instances and resources.
 
+        **Lifecycle Phase**: Class Teardown (once per test class)
+        **Ownership**: Primary owner of resource cleanup
+        **Cleans Up**:
+        - Background threads (tracing middleware executor)
+        - Auth client (test client record)
+        - Environment credentials (CLIENT_ID, CLIENT_SECRET)
+        - Audit client configuration
+        - Flask apps (if not shared mode)
+
+        Cleanup Order Matters:
+        1. Threads are shut down FIRST to avoid race conditions with background tasks
+        2. Auth client is cleaned up SECOND while credentials are still available
+        3. Credentials are cleared THIRD to prevent use after cleanup
+        4. Flask apps are cleaned up LAST (if not shared)
+
         Always cleans up auth client and credentials. With shared=False,
         also cleans up Flask apps for full isolation.
+
+        Note: Does NOT reset storage - next test class will handle that in setup()
         """
         # Shut down tracing middleware's background thread pool FIRST
         # This must happen BEFORE clearing credentials and storage to avoid
@@ -266,14 +307,27 @@ class ServiceManager:
     def shutdown_threads(self):
         """Shutdown background threads idempotently.
 
+        **Lifecycle Phase**: Test Teardown (after each test) OR Class Teardown
+        **Ownership**: Delegates to tracing module's shutdown logic
+        **Cleans Up**: Tracing middleware background thread pool
+
         Safely shuts down the tracing middleware's thread pool if it's running.
         This method is idempotent - safe to call multiple times without errors.
 
-        Use this in tearDown() to wait for async operations to complete.
-        The ServiceManager.close() method also calls this automatically.
+        Usage:
+        - Optional: Call in tearDown() to wait for async operations before assertions
+        - Automatic: Called by close() during class teardown
+        - Safe: Multiple calls are no-ops after first shutdown
+
+        Thread Safety:
+        - Waits for pending tasks to complete (wait=True)
+        - Prevents new tasks from being submitted after shutdown
+        - Idempotent via exception handling (RuntimeError from double shutdown)
 
         Note: This does not set the executor to None, allowing tests to
         recreate it if needed for the next test.
+
+        See: #520 - Discussion of executor idempotency patterns
         """
         try:
             from campus.audit.middleware import tracing
@@ -291,11 +345,31 @@ class ServiceManager:
     def cleanup_shared(cls):
         """Clean up shared service instances and reset storage.
 
+        **Lifecycle Phase**: End of Test Run (global cleanup)
+        **Ownership**: Final cleanup for shared service manager instances
+        **Cleans Up**:
+        - Shared service manager instance
+        - campus_python test patches
+        - Test app routing configuration
+        - Auth client and credentials
+        - Background threads (via close())
+
         Should be called at the end of test runs to ensure clean state.
+        Used in test fixtures and finalizers to clean up after all tests complete.
 
         Note: Does not call reset_test_storage() here to avoid redundant cleanup.
         The close() method already handles cleanup, and any subsequent test runs
-        will reset storage in their setup() calls.
+        will reset storage in their setup() calls via ServiceManager.setup().
+
+        Cleanup Order:
+        1. Unpatch campus_python and clear test app routing
+        2. Clean up auth client from shared instance
+        3. Close shared instance (shuts down threads, clears credentials)
+        4. Clear environment credentials (redundant but safe)
+
+        Usage:
+            Typically called in test finalizers or atexit handlers rather than
+            in individual test classes, which use close() instead.
         """
         # Unpatch campus_python and clear test apps
         from tests import flask_test
