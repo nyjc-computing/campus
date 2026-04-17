@@ -50,22 +50,15 @@ class BookingsResource:
     
     def new(
             self,
-            metadata: dict[str, typing.Any],
-            lessongroups: typing.List[dict[str, typing.Any]],
-    ) -> model.Timetable:
-        """Create a new timetable with metadata and entries.
-
-        `lessongroups` is a list of dicts following the schema:
-        - label [str]
-        - members list[str]
-        - entries list[dict]
-
-        Each entry has:
-        - venue Optional[str]
-        - weekday [str]
-        - timeslot [str]
-        """
-
+            user_id: schema.UserID,
+            venue_id: schema.CampusID,
+            description: schema.String,
+            start_time: schema.Time,
+            end_time: schema.Time,
+            date: schema.Date,
+    ) -> model.VenueBooking:
+        """Create a new venue booking."""
+        pass
 
 
 class BookingResource:
@@ -84,6 +77,7 @@ class BookingResource:
         Raises:
             ConflictError: If the booking does not exist.
         """
+        pass
 
     
     def update(self, **updates: typing.Any) -> None:
@@ -92,6 +86,7 @@ class BookingResource:
         Args:
             **updates: Fields to update in the venue booking record.
         """
+        pass
 
 
     def delete(self) -> None:
@@ -100,5 +95,6 @@ class BookingResource:
         Raises:
             ConflictError: If the booking does not exist.
         """
+        pass
 
 
