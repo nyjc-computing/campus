@@ -72,18 +72,18 @@ def delete_by_user(
 def get_by_user(
         provider: str,
         user_id: schema.UserID,
+        client_id: schema.CampusID | None,
 ) -> flask_campus.JsonResponse:
     """Get credentials for a specific provider and user ID.
 
     GET /credentials/{provider}/{user_id}
     Query Params: {
-        "token_id": "optional_token_id"
+        "client_id": <optional_client_id>
     }
-    Returns: {
-        "credentials": { ... }
-    }
+    Returns: { ... }
     """
-    client_id = flask.g.current_client.id
+    client_id = client_id or flask.g.current_client.id
+    assert client_id  # Authorization already done by this point
     credentials = creds_resource[provider][user_id].get(client_id)
     return credentials.to_resource(), 200
 

@@ -77,7 +77,7 @@ def main(deployment: str | None = None):
     )
     # Development server configuration
     if not env.get("DEPLOY"):
-        env.DEPLOY = deployment
+        env.set('DEPLOY', deployment)
     # Create app instance for development server
     app = create_app(deployment)
     devops.deploy.configure_for_development(app)

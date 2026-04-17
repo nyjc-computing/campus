@@ -111,7 +111,7 @@ campus.auth.root.authenticate(client_id="...", client_secret="...")
 secret = campus.auth.vaults["deployment"]["DATABASE_URL"]
 
 # Type hints
-from campus import model
+import campus.model as model
 def process(user: model.User): ...
 ```
 

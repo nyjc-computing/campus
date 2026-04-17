@@ -27,7 +27,7 @@ def configure_for_testing(app: flask.Flask) -> None:
     app.config['DEBUG'] = True
 
     # Configure test storage backends
-    env.STORAGE_MODE = "1"
+    env.set('STORAGE_MODE', "1")
 
     # Disable CSRF for easier testing
     app.config['WTF_CSRF_ENABLED'] = False

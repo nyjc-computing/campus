@@ -10,7 +10,7 @@ import typing
 from campus.common import env, schema
 from campus.common.errors import auth_errors
 from campus.common.utils import secret, uid
-import campus.model
+import campus.model as model
 import campus.storage
 
 client_storage = campus.storage.get_table("vault_clients")
@@ -20,9 +20,9 @@ access_storage = campus.storage.get_table("vault_access")
 def _from_record(
         record: dict[str, typing.Any],
         permissions: dict[str, int] | None = None
-) -> campus.model.Client:
+) -> model.Client:
     """Convert a storage record to a Client model instance."""
-    return campus.model.Client(
+    return model.Client(
         id=schema.CampusID(record["id"]),
         created_at=schema.DateTime(
             record.get("created_at", schema.DateTime.utcnow())
@@ -34,7 +34,9 @@ def _from_record(
     )
 
 
-def _get_client_permissions(client_id: schema.CampusID) -> dict[str, int]:
+def _get_client_permissions(
+        client_id: schema.CampusID | str
+) -> dict[str, int]:
     """Get a client's vault access permissions.
 
     Args:
@@ -79,14 +81,14 @@ class ClientsResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for client authentication."""
-        client_storage.init_from_model("vault_clients", campus.model.Client)
+        client_storage.init_from_model("vault_clients", model.Client)
         access_storage.init_from_model(
-            "vault_access", campus.model.ClientAccess
+            "vault_access", model.ClientAccess
         )
 
     def __getitem__(
             self,
-            client_id: schema.CampusID
+            client_id: schema.CampusID | str
     ) -> "ClientResource":
         """Get a client resource by client ID.
 
@@ -96,11 +98,11 @@ class ClientsResource:
         Returns:
             ClientResource instance
         """
-        return ClientResource(client_id)
+        return ClientResource(schema.CampusID(client_id))
 
     def is_valid_credentials(
             self,
-            client_id: schema.CampusID,
+            client_id: schema.CampusID | str,
             client_secret: str
     ) -> bool:
         """Check if client credentials are valid.
@@ -111,7 +113,7 @@ class ClientsResource:
         Returns:
             True if credentials are valid, False otherwise
         """
-        client = self[client_id].get()
+        client = self[schema.CampusID(client_id)].get()
         if not client.secret_hash:
             raise auth_errors.ServerError(
                 "Invalid configuration",
@@ -119,13 +121,13 @@ class ClientsResource:
             )
         expected_hash = secret.hash_client_secret(
             client_secret,
-            env.getsecret("SECRET_KEY", env.DEPLOY)
+            env.getsecret("SECRET_KEY")
         )
         return client.secret_hash == expected_hash
 
     def raise_for_authentication(
             self,
-            client_id: schema.CampusID,
+            client_id: schema.CampusID | str,
             client_secret: str
     ) -> None:
         """Authenticate a client using their ID and secret.
@@ -139,13 +141,14 @@ class ClientsResource:
         Raises:
             UnauthorizedError: If client not found or client secret is invalid
         """
+        client_id = schema.CampusID(client_id)
         if not self.is_valid_credentials(client_id, client_secret):
             raise auth_errors.UnauthorizedClientError(
                 "Invalid credentials",
                 client_id=client_id
             )
 
-    def list_all(self) -> list[campus.model.Client]:
+    def list_all(self) -> list[model.Client]:
         """List all clients.
 
         Returns:
@@ -155,7 +158,7 @@ class ClientsResource:
         access = _get_all_client_permissions()
         clients = []
         for record in records:
-            client = campus.model.Client.from_storage(record)
+            client = model.Client.from_storage(record)
             client.permissions = access.get(client.id, {})
             clients.append(client)
         return clients
@@ -163,7 +166,7 @@ class ClientsResource:
     def new(
             self,
             **kwargs: typing.Any
-    ) -> campus.model.Client:
+    ) -> model.Client:
         """Create a new client and return it.
 
         Args:
@@ -172,7 +175,7 @@ class ClientsResource:
         Returns:
             Client instance
         """
-        client = campus.model.Client(**kwargs)
+        client = model.Client(**kwargs)
         client_storage.insert_one(client.to_storage())
         return client
 
@@ -180,8 +183,8 @@ class ClientsResource:
 class ClientResource:
     """Represents a single client in Campus API Schema."""
 
-    def __init__(self, client_id: schema.CampusID):
-        self.client_id = client_id
+    def __init__(self, client_id: schema.CampusID | str):
+        self.client_id = schema.CampusID(client_id)
 
     @property
     def access(self) -> "ClientAccessResource":
@@ -196,7 +199,7 @@ class ClientResource:
         """Delete the client record."""
         client_storage.delete_by_id(self.client_id)
 
-    def get(self) -> campus.model.Client:
+    def get(self) -> model.Client:
         """Get the client record.
 
         Returns:
@@ -240,7 +243,7 @@ class ClientResource:
         Args:
             **updates: Fields to update (name, description)
         """
-        campus.model.Client.validate_update(updates)
+        model.Client.validate_update(updates)
         client_storage.update_by_id(self.client_id, updates)
 
 

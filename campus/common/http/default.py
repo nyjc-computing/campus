@@ -3,14 +3,15 @@
 Default implementation for JsonClient and JsonResponse, using `requests`.
 """
 
-import os
 import logging
+import os
 
 from typing import Any, Callable, Iterable, Mapping, Optional, Self, TypedDict
 from urllib.parse import urljoin
 
 import requests
 
+from campus.common import env
 from campus.common.utils import secret
 from .errors import (
     AuthenticationError,
@@ -46,9 +47,9 @@ def _load_credentials_from_env() -> tuple[str, str] | str:
     Raises:
         AuthenticationError: If required environment variables are absent.
     """
-    if (value := os.getenv("ACCESS_TOKEN")):
+    if (value := env.get("ACCESS_TOKEN")):
         return value
-    id_, secret = os.getenv("CLIENT_ID"), os.getenv("CLIENT_SECRET")
+    id_, secret = env.get("CLIENT_ID"), env.get("CLIENT_SECRET")
     if id_ and secret:
         return id_, secret
     raise AuthenticationError(
@@ -65,7 +66,7 @@ def check_env_var(var_name: str) -> str:
     Raises:
         AuthenticationError: If the environment variable is not set.
     """
-    value = os.getenv(var_name)
+    value = env.get(var_name)
     if not value:
         raise AuthenticationError(f"Missing {var_name} environment variable")
     return value

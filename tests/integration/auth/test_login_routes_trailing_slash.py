@@ -8,17 +8,16 @@ Tests for routes without trailing slashes are omitted since they would trigger
 
 import unittest
 
-from tests.fixtures import services
+from tests.integration.base import IntegrationTestCase
 
 
-class TestLoginRoutesTrailingSlash(unittest.TestCase):
+class TestLoginRoutesTrailingSlash(IntegrationTestCase):
     """Test login routes handle trailing slashes correctly."""
 
     @classmethod
     def setUpClass(cls):
         """Set up local services once for the entire test class."""
-        cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        super().setUpClass()
 
         # Get the auth app from the service manager
         # Login routes are in campus.auth, not campus.api
@@ -28,28 +27,6 @@ class TestLoginRoutesTrailingSlash(unittest.TestCase):
             raise RuntimeError("Expected Flask app from service manager")
 
         cls.app = auth_app
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up services after all tests in the class."""
-        if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
-
-        # Reset test storage to clear SQLite in-memory database
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-
-    def setUp(self):
-        """Set up test environment before each test."""
-        self.client = self.app.test_client()
-
-        # Set up test context
-        self.app_context = self.app.app_context()
-        self.app_context.push()
-
-    def tearDown(self):
-        """Clean up after each test."""
-        self.app_context.pop()
 
     def test_post_logins_with_trailing_slash(self):
         """Test POST /auth/v1/logins/ with trailing slash works."""

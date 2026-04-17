@@ -39,8 +39,43 @@ class TableInterface(ABC):
         ...
 
     @abstractmethod
-    def get_matching(self, query: dict) -> list[dict]:
-        """Retrieve rows matching a query."""
+    def get_matching(
+        self,
+        query: dict,
+        *,
+        order_by: str | None = None,
+        ascending: bool = True,
+        limit: int | None = None,
+        offset: int = 0
+    ) -> list[dict]:
+        """Retrieve rows matching a query.
+
+        Args:
+            query: Dictionary of field to value mappings for filtering.
+                   Values can be exact matches or Operator instances for
+                   comparison queries (gt, gte, lt, lte).
+                   Multiple fields are treated as implicit AND (all conditions must match).
+            order_by: Field name to sort by. If None, results are unordered.
+            ascending: Sort direction. True for ascending, False for descending.
+            limit: Maximum number of rows to return. If None, all matching rows are returned.
+            offset: Number of rows to skip before returning results.
+
+        Returns:
+            List of matching rows as dictionaries.
+
+        Example:
+            # Simple exact match
+            get_matching({"user_id": "user_123"})
+
+            # With operators
+            get_matching({"duration_ms": gt(1000)})
+
+            # Multiple fields (implicit AND)
+            get_matching({"user_id": "user_123", "status": "active"})
+
+            # With sorting and pagination
+            get_matching({"status": "active"}, order_by="created_at", ascending=False, limit=10, offset=0)
+        """
         ...
 
     @abstractmethod
@@ -76,7 +111,8 @@ class TableInterface(ABC):
         # Retry while errors remain and max_retries not reached
         retries = 1
         while 0 < retries <= max_retries and errors:
-            for i, e in errors.items():
+            # Convert to list to avoid RuntimeError: dictionary changed size during iteration
+            for i, e in list(errors.items()):
                 try:
                     self.insert_one(rows[i])
                 except Exception as e:

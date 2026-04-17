@@ -8,8 +8,6 @@ from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
 
 import flask
 
-from campus.common import env
-
 
 def create_url(
         *,
@@ -42,6 +40,9 @@ def full_url_for(
         **kwargs: Additional arguments to build the URL. Passed to
                   `url_for`.
     """
+    # Import env only at runtime to avoid capturing module instead of
+    # EnvironmentProxy
+    from campus.common import env
     hostname = hostname or env.HOSTNAME
     # Validate that endpoint does not contain scheme or domain
     if urlparse(endpoint).scheme or urlparse(endpoint).netloc:

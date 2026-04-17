@@ -10,7 +10,7 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.common import env, schema, webauth
+from campus.common import schema, webauth
 from campus.common.errors import auth_errors
 import campus.config
 
@@ -18,8 +18,13 @@ from .. import base
 from ... import resources
 
 PROVIDER = "github"
-REDIRECT_URI = schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
 SCOPE_SEP = " "
+
+
+def _get_redirect_uri() -> schema.Url:
+    """Get redirect URI with runtime env access."""
+    from campus.common import env
+    return schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
 
 
 def get_proxy() -> "GitHubAuthProxy":
@@ -35,22 +40,24 @@ class GitHubAuthProxy(base.AuthProxy):
         "OAuth2 authentication endpoints for GitHub integration with Campus")
     version = "2022-11-28"
     openapi_version = "3.0.3"
-    _oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
-        provider=PROVIDER,
-        client_id=env.CLIENT_ID,
-        redirect_uri=REDIRECT_URI,
-        authorization_url=schema.Url(
-            "https://github.com/login/oauth/authorize"),
-        token_url=schema.Url(
-            "https://github.com/login/oauth/access_token"),
-        user_info_url=schema.Url("https://api.github.com/user"),
-        scopes=["read:user", "read:email"],
-        headers={"Accept": "application/json"},
-    )
     _PROMPT_OPTIONS = Literal["select_account"] | None
 
     def __init__(self) -> None:
         super().__init__()
+        # Import env at runtime and create OAuth2 scheme
+        from campus.common import env
+        self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
+            provider=PROVIDER,
+            client_id=env.CLIENT_ID,
+            redirect_uri=_get_redirect_uri(),
+            authorization_url=schema.Url(
+                "https://github.com/login/oauth/authorize"),
+            token_url=schema.Url(
+                "https://github.com/login/oauth/access_token"),
+            user_info_url=schema.Url("https://api.github.com/user"),
+            scopes=["read:user", "read:email"],
+            headers={"Accept": "application/json"},
+        )
 
     @property
     def authorization_url(self) -> schema.Url:
@@ -80,7 +87,7 @@ class GitHubAuthProxy(base.AuthProxy):
         """Redirect to GitHub OAuth2 authorization endpoint."""
         authsession = self.init_authsession(
             expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-            redirect_uri=REDIRECT_URI,
+            redirect_uri=_get_redirect_uri(),
             scopes=self._oauth2.scopes,
             target=target
         )

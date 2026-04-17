@@ -7,11 +7,11 @@ This module manages device codes for CLI and other device authentication.
 
 import typing
 
-from campus import config
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, secret
-import campus.model
+import campus.config as config
+import campus.model as model
 import campus.storage
 
 device_code_storage = campus.storage.get_collection("device_codes")
@@ -20,7 +20,7 @@ device_code_storage = campus.storage.get_collection("device_codes")
 def init_storage() -> None:
     """Initialize storage for device code resource."""
     device_code_storage.init_from_model(
-        "device_codes", campus.model.DeviceCode
+        "device_codes", model.DeviceCode
     )
 
 
@@ -31,15 +31,15 @@ class DeviceCodeResource:
     def init_storage() -> None:
         """Initialize storage for device code resource."""
         device_code_storage.init_from_model(
-            "device_codes", campus.model.DeviceCode
+            "device_codes", model.DeviceCode
         )
 
     def create(
             self,
             *,
-            client_id: schema.CampusID,
+            client_id: schema.CampusID | str,
             scopes: list[str] | None = None,
-    ) -> campus.model.DeviceCode:
+    ) -> model.DeviceCode:
         """Create a new device code.
 
         Args:
@@ -60,7 +60,7 @@ class DeviceCodeResource:
             "id": device_code_id,
             "device_code": device_code_str,
             "user_code": user_code,
-            "client_id": client_id,
+            "client_id": schema.CampusID(client_id),
             "scopes": scopes or [],
             "expiry_seconds": config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS,
             "interval": config.DEFAULT_DEVICE_CODE_POLL_INTERVAL,
@@ -78,7 +78,7 @@ class DeviceCodeResource:
     def get_by_device_code(
             self,
             device_code: str,
-    ) -> campus.model.DeviceCode:
+    ) -> model.DeviceCode:
         """Get a device code by device code string.
 
         Args:
@@ -119,7 +119,7 @@ class DeviceCodeResource:
     def get_by_user_code(
             self,
             user_code: str,
-    ) -> campus.model.DeviceCode:
+    ) -> model.DeviceCode:
         """Get a device code by user code string.
 
         Args:
@@ -160,9 +160,9 @@ class DeviceCodeResource:
 
     def update(
             self,
-            device_code_id: schema.CampusID,
+            device_code_id: schema.CampusID | str,
             **updates: typing.Any,
-    ) -> campus.model.DeviceCode:
+    ) -> model.DeviceCode:
         """Update a device code.
 
         Args:
@@ -172,6 +172,7 @@ class DeviceCodeResource:
         Returns:
             Updated DeviceCode instance
         """
+        device_code_id = schema.CampusID(device_code_id)
         try:
             device_code_storage.update_by_id(device_code_id, updates)
         except campus.storage.errors.NotFoundError as e:
@@ -186,8 +187,8 @@ class DeviceCodeResource:
 
     def get_by_id(
             self,
-            device_code_id: schema.CampusID,
-    ) -> campus.model.DeviceCode:
+            device_code_id: schema.CampusID | str,
+    ) -> model.DeviceCode:
         """Get a device code by ID.
 
         Args:
@@ -199,6 +200,7 @@ class DeviceCodeResource:
         Raises:
             api_errors.NotFoundError: If device code not found
         """
+        device_code_id = schema.CampusID(device_code_id)
         record = device_code_storage.get_by_id(device_code_id)
         if not record:
             raise api_errors.NotFoundError(
@@ -209,13 +211,14 @@ class DeviceCodeResource:
 
     def delete(
             self,
-            device_code_id: schema.CampusID,
+            device_code_id: schema.CampusID | str,
     ) -> None:
         """Delete a device code.
 
         Args:
             device_code_id: The device code ID
         """
+        device_code_id = schema.CampusID(device_code_id)
         try:
             device_code_storage.delete_by_id(device_code_id)
         except campus.storage.errors.NotFoundError:
@@ -233,7 +236,7 @@ class DeviceCodeResource:
         Returns the number of deleted device codes.
         """
         expired_records = (
-            campus.model.DeviceCode.from_storage(r)
+            model.DeviceCode.from_storage(r)
             for r in device_code_storage.get_matching({})
         )
         expired_codes = (
@@ -248,7 +251,7 @@ class DeviceCodeResource:
 
 def _from_record(
         record: dict[str, typing.Any],
-) -> campus.model.DeviceCode:
+) -> model.DeviceCode:
     """Convert a storage record to a DeviceCode model instance."""
     args: dict[str, typing.Any] = {}
     if "id" in record:
@@ -273,7 +276,7 @@ def _from_record(
     if "state" in record:
         args["state"] = record["state"]
 
-    result = campus.model.DeviceCode(**args)
+    result = model.DeviceCode(**args)
     return result
 
 

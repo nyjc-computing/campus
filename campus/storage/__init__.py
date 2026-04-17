@@ -24,6 +24,13 @@ __all__ = [
     "purge_buckets",
     "purge_collections",
     "purge_tables",
+    # Query operators
+    "gt",
+    "gte",
+    "lt",
+    "lte",
+    "between",
+    "is_operator",
 ]
 
 from campus.common import devops
@@ -39,6 +46,7 @@ from .errors import (
     NotFoundError,
     NoChangesAppliedError
 )
+from .query import gt, gte, lt, lte, between, is_operator
 
 
 def get_table(name: str) -> TableInterface:

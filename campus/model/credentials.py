@@ -71,6 +71,26 @@ class OAuthToken(Model):
             if scope not in requested_scopes
         ]
 
+    @classmethod
+    def from_storage(cls, record: dict) -> "OAuthToken":
+        """Create OAuthToken from storage record, properly deserializing DateTime fields.
+
+        Args:
+            record: Storage record dictionary
+
+        Returns:
+            OAuthToken instance with DateTime fields properly deserialized
+        """
+        # Convert string datetime values to schema.DateTime objects
+        processed = record.copy()
+        if "expires_at" in processed and isinstance(processed["expires_at"], str):
+            processed["expires_at"] = schema.DateTime(processed["expires_at"])
+        if "refresh_token_expires_at" in processed and isinstance(processed["refresh_token_expires_at"], str):
+            processed["refresh_token_expires_at"] = schema.DateTime(processed["refresh_token_expires_at"])
+        if "created_at" in processed and isinstance(processed["created_at"], str):
+            processed["created_at"] = schema.DateTime(processed["created_at"])
+        return super().from_storage(processed)
+
 
 @dataclass(eq=False, kw_only=True)
 class UserCredentials(Model):

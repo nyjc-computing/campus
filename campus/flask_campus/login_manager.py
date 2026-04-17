@@ -47,8 +47,8 @@ def _create_bp(
         """
         # Validate and store destination to prevent open redirect attacks
         if next and not _is_safe_redirect(next):
-            next = flask.url_for(default_endpoint)
-        flask.session['login_next'] = next or flask.url_for(default_endpoint)
+            next = url.full_url_for(default_endpoint)
+        flask.session['login_next'] = next or url.full_url_for(default_endpoint)
 
         # Use /finalize_login as the OAuth callback
         # Use url.full_url_for to get proper public URL (not localhost/internal host)
@@ -94,7 +94,7 @@ def _create_bp(
     def logout():
         """Sign Out of Campus Admin Portal."""
         campus.auth.logout()
-        resp = flask.redirect(flask.url_for(default_endpoint))
+        resp = flask.redirect(url.full_url_for(default_endpoint))
         return resp
 
     return bp

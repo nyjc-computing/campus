@@ -58,7 +58,7 @@ from campus.api import resources
 # Common utilities
 from campus.common import utils, devops
 import campus.storage
-from campus import model
+import campus.model as model
 
 # Use through module namespaces
 user_id = utils.uid()
