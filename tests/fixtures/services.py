@@ -280,7 +280,7 @@ class ServiceManager:
         """Shutdown background threads idempotently.
 
         **Lifecycle Phase**: Test Teardown (after each test) OR Class Teardown
-        **Ownership**: Delegates to tracing module's shutdown logic
+        **Ownership**: Delegates to tracing module's ExecutorManager
         **Cleans Up**: Tracing middleware background thread pool
 
         Safely shuts down the tracing middleware's thread pool if it's running.
@@ -294,24 +294,19 @@ class ServiceManager:
         Thread Safety:
         - Waits for pending tasks to complete (wait=True)
         - Prevents new tasks from being submitted after shutdown
-        - Idempotent via exception handling (RuntimeError from double shutdown)
+        - Idempotent by design (ExecutorManager tracks state explicitly)
 
-        Note: This does not set the executor to None, allowing tests to
-        recreate it if needed for the next test.
+        Implementation Notes:
+        - Uses ExecutorManager.shutdown() which is inherently idempotent
+        - No exception handling needed for normal flow
+        - Tests can call recreate_executor() to create fresh executors
 
         See: #520 - Discussion of executor idempotency patterns
         """
-        try:
-            from campus.audit.middleware import tracing
-            # Check if executor exists and hasn't been shut down yet
-            if hasattr(tracing, '_ingestion_executor') and tracing._ingestion_executor is not None:
-                # Try to shutdown - if already shut down, this will raise an exception
-                # which we catch, making this idempotent
-                tracing._ingestion_executor.shutdown(wait=True)
-        except Exception:
-            # Executor already shut down or other error - this is fine
-            # This makes the method idempotent
-            pass
+        from campus.audit.middleware import tracing
+        # ExecutorManager.shutdown() is idempotent by design
+        # No exception handling needed - it handles state tracking internally
+        tracing._ingestion_executor_manager.shutdown(wait=True)
 
     @classmethod
     def cleanup_shared(cls):
