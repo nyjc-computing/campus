@@ -458,3 +458,24 @@ class SQLiteTable(TableInterface):
         if cls._connection:
             cls._connection.close()
             cls._connection = None
+
+    @classmethod
+    def clear_database(cls):
+        """Clear all data from all tables while preserving table structure.
+
+        This is faster than reset_database() for per-test cleanup since it
+        doesn't require recreating tables. Useful for test isolation.
+        """
+        if cls._connection is None:
+            return  # No database to clear
+
+        cursor = cls._connection.cursor()
+        # Get all table names
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
+
+        # Delete all rows from each table
+        for table in tables:
+            cursor.execute(f'DELETE FROM "{table}"')
+
+        cls._connection.commit()

@@ -264,3 +264,14 @@ class MemoryCollection(CollectionInterface):
     def reset_storage(cls):
         """Reset the in-memory storage. Useful for testing."""
         cls._storage.clear()
+
+    @classmethod
+    def clear_storage(cls):
+        """Clear all documents from all collections while preserving collection structure.
+
+        This is faster than reset_storage() for per-test cleanup since it
+        doesn't require recreating collections. Useful for test isolation.
+        """
+        # Clear all documents from each collection
+        for collection_name in cls._storage:
+            cls._storage[collection_name].clear()
