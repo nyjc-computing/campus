@@ -17,10 +17,122 @@ from campus.common.utils import uid
 
 logger = logging.getLogger(__name__)
 
-# Thread pool for async ingestion (avoid blocking requests)
-_ingestion_executor = concurrent.futures.ThreadPoolExecutor(
-    max_workers=2, thread_name_prefix="audit_ingest"
+class ExecutorManager:
+    """Manages executor lifecycle with clear ownership and state tracking.
+
+    This class provides:
+    - Explicit state tracking (created, running, shut down)
+    - Idempotent shutdown operations
+    - Safe executor recreation for tests
+    - Clear error messages for lifecycle violations
+
+    Lifecycle States:
+    - Created: Manager exists but executor not yet initialized
+    - Running: Executor is accepting tasks
+    - Shut down: Executor has been shut down and won't accept new tasks
+
+    Example:
+        manager = ExecutorManager()
+        executor = manager.get_executor()
+        manager.shutdown(wait=True)
+        manager.recreate()  # For tests that need a fresh executor
+    """
+
+    def __init__(self, max_workers: int = 2, thread_name_prefix: str = "audit_ingest"):
+        """Initialize the executor manager.
+
+        Args:
+            max_workers: Maximum number of worker threads
+            thread_name_prefix: Prefix for thread names
+        """
+        self._executor: concurrent.futures.ThreadPoolExecutor | None = None
+        self._shutdown = False
+        self._max_workers = max_workers
+        self._thread_name_prefix = thread_name_prefix
+
+    def get_executor(self) -> concurrent.futures.ThreadPoolExecutor:
+        """Get or create the thread pool executor.
+
+        Returns:
+            ThreadPoolExecutor instance for submitting tasks
+
+        Raises:
+            RuntimeError: If executor has been shut down
+        """
+        if self._shutdown:
+            raise RuntimeError(
+                "Executor has been shut down. Call recreate() to create a new executor."
+            )
+
+        if self._executor is None:
+            self._executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=self._max_workers,
+                thread_name_prefix=self._thread_name_prefix
+            )
+
+        return self._executor
+
+    def shutdown(self, wait: bool = True) -> None:
+        """Shutdown the executor idempotently.
+
+        This method is safe to call multiple times. After the first call,
+        subsequent calls are no-ops.
+
+        Args:
+            wait: If True, wait for pending tasks to complete
+        """
+        if self._executor is not None and not self._shutdown:
+            self._executor.shutdown(wait=wait)
+            self._shutdown = True
+
+    def recreate(self) -> None:
+        """Recreate the executor after shutdown.
+
+        This is primarily useful for tests that need a fresh executor.
+        If the executor is currently running, this will shut it down first.
+
+        Raises:
+            RuntimeError: If shutdown fails during recreation
+        """
+        # Shutdown existing executor if it's running
+        if self._executor is not None and not self._shutdown:
+            self.shutdown(wait=True)
+
+        # Create new executor and reset shutdown state
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._max_workers,
+            thread_name_prefix=self._thread_name_prefix
+        )
+        self._shutdown = False
+
+    @property
+    def is_shutdown(self) -> bool:
+        """Check if the executor has been shut down.
+
+        Returns:
+            True if executor has been shut down, False otherwise
+        """
+        return self._shutdown
+
+    @property
+    def is_initialized(self) -> bool:
+        """Check if the executor has been initialized.
+
+        Returns:
+            True if executor has been created, False otherwise
+        """
+        return self._executor is not None
+
+
+# Thread pool manager for async ingestion (avoid blocking requests)
+_ingestion_executor_manager = ExecutorManager(
+    max_workers=2,
+    thread_name_prefix="audit_ingest"
 )
+
+# Backward compatibility: expose the executor directly
+# This is deprecated - use _ingestion_executor_manager instead
+_ingestion_executor: concurrent.futures.ThreadPoolExecutor | None = None
 
 # Client singleton (lazy initialized)
 _audit_client: AuditClient | None = None
@@ -300,7 +412,8 @@ def _ingest_span_async(span: dict) -> None:
             logger.warning(f"Failed to ingest trace span: {e}")
 
     try:
-        _ingestion_executor.submit(_do_ingest)
+        executor = _ingestion_executor_manager.get_executor()
+        executor.submit(_do_ingest)
     except RuntimeError as e:
         # Executor has been shut down (e.g., during test cleanup)
         # Log and continue - don't break the application
@@ -317,3 +430,56 @@ def ingest_span(span: dict) -> None:
         span: Span data dictionary to ingest
     """
     _ingest_span_async(span)
+
+
+def shutdown_executor(wait: bool = True) -> None:
+    """Shutdown the trace ingestion executor.
+
+    This is primarily useful for tests that need to wait for async operations
+    to complete before making assertions. The shutdown is idempotent - safe
+    to call multiple times.
+
+    Args:
+        wait: If True, wait for pending tasks to complete
+
+    Note:
+        This is typically called automatically during test cleanup.
+        Manual calls are only needed when you need to synchronize with async operations.
+    """
+    _ingestion_executor_manager.shutdown(wait=wait)
+
+
+def recreate_executor() -> None:
+    """Recreate the trace ingestion executor after shutdown.
+
+    This is primarily useful for tests that need a fresh executor.
+    If the executor is currently running, it will be shut down first.
+
+    Example:
+        # In test setup
+        recreate_executor()
+
+        # Run test that uses tracing
+        # ...
+
+        # In test teardown
+        shutdown_executor(wait=True)
+
+    Warning:
+        This should only be used in tests, not in production code.
+    """
+    _ingestion_executor_manager.recreate()
+
+
+def get_executor_state() -> dict:
+    """Get the current state of the executor for debugging/testing.
+
+    Returns:
+        Dictionary with keys:
+        - 'initialized': True if executor has been created
+        - 'shutdown': True if executor has been shut down
+    """
+    return {
+        'initialized': _ingestion_executor_manager.is_initialized,
+        'shutdown': _ingestion_executor_manager.is_shutdown,
+    }

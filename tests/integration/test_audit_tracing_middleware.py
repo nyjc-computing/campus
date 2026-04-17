@@ -115,14 +115,8 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
-        # Re-create the executor for next test
-        # This is safe even though shutdown_threads() set it to None
-        tracing._ingestion_executor = typing.cast(
-            typing.Any,
-            concurrent.futures.ThreadPoolExecutor(
-                max_workers=2, thread_name_prefix="audit_ingest"
-            )
-        )
+        # Re-create the executor for next test using the new API
+        tracing.recreate_executor()
 
     # Test: Graceful Degradation (does NOT require span ingestion)
     def test_request_succeeds_when_audit_unavailable(self):
@@ -232,23 +226,14 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
             )
 
         # CRITICAL FIX: Use a fresh executor for dependency check
-        # The global tracing._ingestion_executor may be in a corrupted state
-        # from previous test classes' tearDown() methods. Creating a fresh
-        # executor ensures clean state for this dependency check.
+        # The ExecutorManager handles proper lifecycle management, ensuring
+        # clean state for this dependency check.
         from campus.audit.middleware import tracing
-        original_executor = tracing._ingestion_executor
 
-        # CRITICAL: Wait for the original executor to finish all pending
-        # tasks before replacing it. This prevents issue #496 where
-        # pending tasks from the previous test class are still
-        # processing when we create the fresh executor, causing those
-        # tasks to fail when the original executor is restored and shut
-        # down.
-        original_executor.shutdown(wait=True)
-
-        tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=2, thread_name_prefix="dependency_check_ingest"
-        )
+        # Use the new API: recreate() handles shutdown and creation atomically
+        # This prevents issue #496 where pending tasks from previous test classes
+        # could cause "cannot schedule new futures after shutdown" errors.
+        tracing.recreate_executor()
 
         try:
             # Make a test request to generate a span
@@ -301,20 +286,9 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
             )
 
         finally:
-            # Clean up the temporary executor
-            # Use wait=True to ensure all pending tasks complete before
-            # shutdown
-            # This prevents issue #496 where spans fail to ingest with
-            # "cannot schedule new futures after shutdown" error
-            tracing._ingestion_executor.shutdown(wait=True)
-
-            # CRITICAL: Recreate the original executor instead of
-            # restoring the shut-down executor. We already shut down the
-            # original executor before creating the fresh one, so we
-            # need to recreate it here.
-            tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=2, thread_name_prefix="audit_ingest"
-            )
+            # Clean up: Restore fresh executor state for the actual tests
+            # Using the new API ensures proper lifecycle management
+            tracing.recreate_executor()
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
@@ -357,14 +331,8 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
-        # Re-create the executor for next test
-        # This is safe even though shutdown_threads() set it to None
-        tracing._ingestion_executor = typing.cast(
-            typing.Any,
-            concurrent.futures.ThreadPoolExecutor(
-                max_workers=2, thread_name_prefix="audit_ingest"
-            )
-        )
+        # Re-create the executor for next test using the new API
+        tracing.recreate_executor()
 
     def _get_span_by_trace_id(self, trace_id: str) -> dict | None:
         """Query audit service to retrieve span by trace_id.
