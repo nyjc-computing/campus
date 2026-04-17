@@ -31,80 +31,6 @@ class DependencyError(RuntimeError):
     pass
 
 
-class LegacyIntegrationTestCase(unittest.TestCase):
-    """Base class for integration tests using the legacy lifecycle API.
-
-    ⚠️ DEPRECATED: This class uses the old lifecycle API (setup/reset_test_data/close).
-    For new tests, use IntegrationTestCase which uses the cleaner new API.
-
-    This class is kept for backwards compatibility with existing tests that
-    cannot be migrated to the new API (e.g., tests with complex storage
-    initialization requirements).
-
-    This class provides:
-    - Automatic service manager setup/teardown
-    - Storage reset in setUp() for per-test isolation
-    - Flask app context management
-    - Proper cleanup of resources
-
-    Example:
-        class TestTracing(LegacyIntegrationTestCase):
-            @classmethod
-            def setUpClass(cls):
-                super().setUpClass()
-                cls.app = cls.service_manager.apps_app
-
-            def test_something(self):
-                response = self.client.get('/api/v1/traces/')
-                self.assertEqual(response.status_code, 200)
-
-    See: IntegrationTestCase for the recommended new API
-    """
-
-    service_manager: ClassVar[services.ServiceManager]
-    app: ClassVar[Any]
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up service manager for the test class.
-
-        Subclasses MUST call super().setUpClass() and then set cls.app to
-        the appropriate Flask app (auth_app, apps_app, or audit_app).
-        """
-        cls.service_manager = services.create_service_manager(shared=True)
-        cls.service_manager.setup()
-
-    def setUp(self):
-        """Set up test client and reset storage for per-test isolation.
-
-        Automatically resets storage before each test to ensure tests don't
-        pollute each other's state. No need for test_00_* prefixes.
-        """
-        if hasattr(self, 'app'):
-            self.client = self.app.test_client()
-            self.app_context = self.app.app_context()
-            self.app_context.push()
-
-        # Reset storage for per-test isolation
-        if hasattr(self, 'service_manager'):
-            self.service_manager.reset_test_data()
-
-    def tearDown(self):
-        """Clean up Flask app context after each test."""
-        if hasattr(self, 'app_context'):
-            self.app_context.pop()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up service manager.
-
-        Note: Does not call reset_test_storage() here to avoid redundant cleanup.
-        The next test class will reset storage in its setup() method.
-        """
-        if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
-
-
 class IsolatedIntegrationTestCase(unittest.TestCase):
     """Base class for isolated integration tests with fresh Flask apps.
 
@@ -259,11 +185,12 @@ class IntegrationTestCase(unittest.TestCase):
     - No manual Resource.init_storage() needed (schema preserved)
     - Explicit async operation handling
     - Clearer lifecycle ownership
+    - Shared Flask apps across test classes for better performance
 
-    **When to use LegacyIntegrationTestCase instead**:
-    - Tests with complex storage initialization requirements
-    - Tests that need to destroy and recreate schema between tests
-    - Tests that cannot be migrated to the new API
+    **When to use IsolatedIntegrationTestCase instead**:
+    - Tests that modify Flask app configuration
+    - Tests that need complete isolation from other test classes
+    - Tests with background threads or async operations
 
     Example:
         class TestAssignments(IntegrationTestCase):
