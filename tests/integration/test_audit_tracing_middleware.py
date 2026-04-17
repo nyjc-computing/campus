@@ -19,6 +19,7 @@ File: tests/integration/test_audit_tracing_middleware.py
 Issue: #428
 """
 
+import concurrent.futures
 import re
 import time
 import typing
@@ -118,16 +119,18 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
     def tearDown(self):
         """Clean up after each test."""
         # Wait for async ingestion to complete
-        from campus.audit.middleware import tracing
-        tracing._ingestion_executor.shutdown(wait=True)
+        # Use manager's idempotent shutdown method
+        self.manager.shutdown_threads()
 
         # Reset the audit client singleton so next test gets a fresh one
+        from campus.audit.middleware import tracing
         tracing._audit_client = None
 
         # Re-create the executor for next test
+        # This is safe even though shutdown_threads() set it to None
         tracing._ingestion_executor = typing.cast(
             typing.Any,
-            type(tracing._ingestion_executor)(
+            concurrent.futures.ThreadPoolExecutor(
                 max_workers=2, thread_name_prefix="audit_ingest"
             )
         )
@@ -371,16 +374,18 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     def tearDown(self):
         """Clean up after each test."""
         # Wait for async ingestion to complete
-        from campus.audit.middleware import tracing
-        tracing._ingestion_executor.shutdown(wait=True)
+        # Use manager's idempotent shutdown method
+        self.manager.shutdown_threads()
 
         # Reset the audit client singleton so next test gets a fresh one
+        from campus.audit.middleware import tracing
         tracing._audit_client = None
 
         # Re-create the executor for next test
+        # This is safe even though shutdown_threads() set it to None
         tracing._ingestion_executor = typing.cast(
             typing.Any,
-            type(tracing._ingestion_executor)(
+            concurrent.futures.ThreadPoolExecutor(
                 max_workers=2, thread_name_prefix="audit_ingest"
             )
         )
