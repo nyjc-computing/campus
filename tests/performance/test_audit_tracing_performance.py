@@ -77,19 +77,14 @@ class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCh
         The base class tearDown() only handles Flask app context, so we need
         to add the executor shutdown logic here.
         """
-        # Wait for async ingestion to complete
-        tracing._ingestion_executor.shutdown(wait=True)
+        # Wait for async ingestion to complete using the new API
+        tracing.shutdown_executor(wait=True)
 
         # Reset the audit client singleton so next test gets a fresh one
         tracing._audit_client = None
 
-        # Re-create the executor for next test
-        tracing._ingestion_executor = typing.cast(
-            typing.Any,
-            type(tracing._ingestion_executor)(
-                max_workers=2, thread_name_prefix="audit_ingest"
-            )
-        )
+        # Re-create the executor for next test using the new API
+        tracing.recreate_executor()
 
     def _benchmark_requests(
         self,
