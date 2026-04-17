@@ -254,3 +254,85 @@ class DependencyCheckedTestCase(unittest.TestCase):
 
         # Fail this test with clear error message
         self.fail(f"Dependency check failed: {reason}")
+
+
+class CleanIntegrationTestCase(unittest.TestCase):
+    """Base class for integration tests using the new clean lifecycle API.
+
+    This class uses the new ServiceManager API from issue #518:
+    - initialize() instead of setup()
+    - clear_test_data() instead of reset_test_data()
+    - flush_async() after each test for async operations
+    - cleanup() instead of close()
+
+    **Benefits over IntegrationTestCase**:
+    - Faster per-test cleanup (clear_all_data vs reset_test_storage)
+    - No manual Resource.init_storage() needed (schema preserved)
+    - Explicit async operation handling
+    - Clearer lifecycle ownership
+
+    **Migration Status**: This is the new recommended base class for integration tests.
+    Existing tests using IntegrationTestCase continue to work and can be migrated
+    incrementally to this new base class.
+
+    Example:
+        class TestAssignments(CleanIntegrationTestCase):
+            @classmethod
+            def setUpClass(cls):
+                super().setUpClass()
+                cls.app = cls.service_manager.apps_app
+                cls.user_id = UserID("test@example.com")
+
+            def test_list_assignments(self):
+                response = self.client.get('/api/v1/assignments/')
+                self.assertEqual(response.status_code, 200)
+
+    See: #518 - Proposal: Saner Integration Test Lifecycle
+    """
+
+    service_manager: ClassVar[services.ServiceManager]
+    app: ClassVar[Any]
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up service manager using the new API.
+
+        Subclasses MUST call super().setUpClass() and then set cls.app to
+        the appropriate Flask app (auth_app, apps_app, or audit_app).
+        """
+        cls.service_manager = services.create_service_manager(shared=True)
+        cls.service_manager.initialize()  # NEW API: initialize() instead of setup()
+
+    def setUp(self):
+        """Set up test client and clear data for per-test isolation.
+
+        Automatically clears data before each test using the new API.
+        No need for test_00_* prefixes or manual Resource.init_storage() calls.
+        """
+        if hasattr(self, 'app'):
+            self.client = self.app.test_client()
+            self.app_context = self.app.app_context()
+            self.app_context.push()
+
+        # Clear data using new API (faster, no schema destroy)
+        if hasattr(self, 'service_manager'):
+            self.service_manager.clear_test_data()  # NEW API: clear_test_data() instead of reset_test_data()
+
+    def tearDown(self):
+        """Clean up Flask app context and flush async operations after each test."""
+        if hasattr(self, 'app_context'):
+            self.app_context.pop()
+
+        # Flush async operations after each test
+        if hasattr(self, 'service_manager'):
+            self.service_manager.flush_async()  # NEW API: explicit async flush
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up service manager using the new API.
+
+        Note: Does not call reset_test_storage() here to avoid redundant cleanup.
+        The next test class will reset storage in its initialize() method.
+        """
+        if hasattr(cls, 'service_manager'):
+            cls.service_manager.cleanup()  # NEW API: cleanup() instead of close()
