@@ -55,56 +55,16 @@ class ServiceManager:
             self.audit_app = ServiceManager._shared_instance.audit_app
             self._setup_done = ServiceManager._shared_setup_done
 
-    def setup(self):
-        """Initialize all Campus services for integration testing.
+    def _do_initialize(self):
+        """Core initialization logic for all services.
 
-        DEPRECATED: Use initialize() instead.
-
-        This method is deprecated and will be removed in a future version.
-        Please use the new initialize() method which provides a cleaner lifecycle.
-        See: #518 - Test lifecycle documentation
-
-        **Lifecycle Phase**: Class Setup (once per test class)
-        **Ownership**: Primary owner of service initialization
-        **Cleanup**: Handled by close() method
-
-        Performs environment setup, database configuration, and service
-        initialization in proper dependency order: auth → storage → yapper → api.
-
-        Phase Details:
-        - Configures test environment variables (ENV, STORAGE_MODE, HOSTNAME)
-        - Resets test storage for clean state
-        - Patches campus_python for test routing
-        - Initializes services in dependency order
-        - Creates Flask apps for auth, api, and audit
-        - Registers test apps for URL routing
-
-        Note:
-            With shared=False (the default), creates fresh Flask apps with
-            fresh blueprints for each test class. This ensures full test
-            isolation at the cost of slightly slower test execution.
+        This method contains the actual initialization logic without storage reset.
+        It's called by both setup() (which resets storage first) and initialize()
+        (which doesn't reset storage).
 
         Returns:
             ServiceManager: Self for method chaining
-
-        Migration Guide:
-            Old: manager.setup()
-            New: manager.initialize()
-
-        See: #518 - Test lifecycle documentation
         """
-        import warnings
-        warnings.warn(
-            "setup() is deprecated, use initialize() instead. See #518.",
-            DeprecationWarning,
-            stacklevel=2
-        )
-
-        # Reset test storage at start of setup for clean state
-        # This ensures test classes don't pollute each other's storage
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-
         # Ensure we're running in testing mode
         # env.ENV is mutable and can be set for testing purposes
         if env.get("ENV") != devops.TESTING:
@@ -219,6 +179,59 @@ class ServiceManager:
 
         return self
 
+    def setup(self):
+        """Initialize all Campus services for integration testing.
+
+        DEPRECATED: Use initialize() instead.
+
+        This method is deprecated and will be removed in a future version.
+        Please use the new initialize() method which provides a cleaner lifecycle.
+        See: #518 - Test lifecycle documentation
+
+        **Lifecycle Phase**: Class Setup (once per test class)
+        **Ownership**: Primary owner of service initialization
+        **Cleanup**: Handled by close() method
+
+        Performs environment setup, database configuration, and service
+        initialization in proper dependency order: auth → storage → yapper → api.
+
+        Phase Details:
+        - Configures test environment variables (ENV, STORAGE_MODE, HOSTNAME)
+        - Resets test storage for clean state
+        - Patches campus_python for test routing
+        - Initializes services in dependency order
+        - Creates Flask apps for auth, api, and audit
+        - Registers test apps for URL routing
+
+        Note:
+            With shared=False (the default), creates fresh Flask apps with
+            fresh blueprints for each test class. This ensures full test
+            isolation at the cost of slightly slower test execution.
+
+        Returns:
+            ServiceManager: Self for method chaining
+
+        Migration Guide:
+            Old: manager.setup()
+            New: manager.initialize()
+
+        See: #518 - Test lifecycle documentation
+        """
+        import warnings
+        warnings.warn(
+            "setup() is deprecated, use initialize() instead. See #518.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
+        # Reset test storage at start of setup for clean state
+        # This ensures test classes don't pollute each other's storage
+        import campus.storage.testing
+        campus.storage.testing.reset_test_storage()
+
+        # Call the core initialization logic
+        return self._do_initialize()
+
     def reset_test_data(self):
         """Reset test storage for per-test isolation.
 
@@ -266,6 +279,49 @@ class ServiceManager:
         auth.init()
         yapper.init()
 
+    def _do_cleanup(self):
+        """Core cleanup logic for all services.
+
+        This method contains the actual cleanup logic. It's called by both
+        close() (deprecated) and cleanup() (new API).
+
+        Cleans up:
+        - Background threads (tracing middleware executor)
+        - Auth client (test client record)
+        - Environment credentials (CLIENT_ID, CLIENT_SECRET)
+        - Audit client configuration
+        - Flask apps (if not shared mode)
+        """
+        # Shut down tracing middleware's background thread pool FIRST
+        # This must happen BEFORE clearing credentials and storage to avoid
+        # race conditions where background threads try to access cleared resources
+        self.shutdown_threads()
+
+        # Always clean up auth client regardless of shared mode
+        self._cleanup_auth_client()
+
+        # Always clear credentials from environment
+        if env.contains("CLIENT_ID"):
+            env.delete("CLIENT_ID")
+        if env.contains("CLIENT_SECRET"):
+            env.delete("CLIENT_SECRET")
+
+        # Clean up audit client configuration
+        from campus.audit.client import AuditClient
+        AuditClient.json_client_class = None  # Reset to None
+
+        # For non-shared instances, clean up apps for full isolation
+        # This is now the default behavior
+        if not self._shared:
+            if self.auth_app is not None:
+                self.auth_app = None
+            if self.apps_app is not None:
+                self.apps_app = None
+            if self.audit_app is not None:
+                self.audit_app = None
+
+        self._setup_done = False
+
     def close(self):
         """Clean up service instances and resources.
 
@@ -307,35 +363,7 @@ class ServiceManager:
             DeprecationWarning,
             stacklevel=2
         )
-        # Shut down tracing middleware's background thread pool FIRST
-        # This must happen BEFORE clearing credentials and storage to avoid
-        # race conditions where background threads try to access cleared resources
-        self.shutdown_threads()
-
-        # Always clean up auth client regardless of shared mode
-        self._cleanup_auth_client()
-
-        # Always clear credentials from environment
-        if env.contains("CLIENT_ID"):
-            env.delete("CLIENT_ID")
-        if env.contains("CLIENT_SECRET"):
-            env.delete("CLIENT_SECRET")
-
-        # Clean up audit client configuration
-        from campus.audit.client import AuditClient
-        AuditClient.json_client_class = None  # Reset to None
-
-        # For non-shared instances, clean up apps for full isolation
-        # This is now the default behavior
-        if not self._shared:
-            if self.auth_app is not None:
-                self.auth_app = None
-            if self.apps_app is not None:
-                self.apps_app = None
-            if self.audit_app is not None:
-                self.audit_app = None
-
-        self._setup_done = False
+        self._do_cleanup()
 
     def _cleanup_auth_client(self):
         """Clean up the test client from auth service.
@@ -449,20 +477,21 @@ class ServiceManager:
 
         This is the new recommended method for service initialization.
 
-        ⚠️ TECHNICAL DEBT: Currently delegates to setup() which calls
-        reset_test_storage(). This defeats the performance benefits of the
-        new API. Should be refactored to avoid schema destruction.
+        Key Difference from setup():
+        - Does NOT reset test storage (no schema destruction)
+        - Storage reset only happens once in setup() for backwards compatibility
+        - clear_test_data() handles per-test data cleanup without schema destruction
+        - Faster than setup() because it preserves table structure
 
-        TODO: Refactor to separate service initialization from storage reset.
-        - Storage should only be reset once at test class setup
- - clear_test_data() should handle per-test data cleanup without schema destruction
+        This method initializes services without destroying the database schema,
+        which is the core performance improvement of the new lifecycle API.
 
         Returns:
             ServiceManager: Self for method chaining
 
         See: #518 - Proposal: Saner Integration Test Lifecycle
         """
-        return self.setup()
+        return self._do_initialize()
 
     def clear_test_data(self):
         """Clear test data while preserving table/collection structure.
@@ -522,16 +551,20 @@ class ServiceManager:
 
         This is the new recommended method for resource cleanup.
 
-        ⚠️ TECHNICAL DEBT: Currently just a wrapper around close().
-        Should have distinct behavior or be consolidated as part of
-        the new API refactoring.
+        Cleans up:
+        - Background threads (tracing middleware executor)
+        - Auth client (test client record)
+        - Environment credentials (CLIENT_ID, CLIENT_SECRET)
+        - Audit client configuration
+        - Flask apps (if not shared mode)
 
-        TODO: Evaluate if cleanup() should have different behavior
-        than close(), or if they should be consolidated.
+        This method and close() now share the same implementation via
+        _do_cleanup(). The distinction is maintained for API clarity and
+        migration purposes.
 
         See: #518 - Proposal: Saner Integration Test Lifecycle
         """
-        self.close()
+        self._do_cleanup()
 
     def __enter__(self):
         """Context manager entry.
