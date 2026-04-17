@@ -292,6 +292,10 @@ class ServiceManager:
         """Clean up shared service instances and reset storage.
 
         Should be called at the end of test runs to ensure clean state.
+
+        Note: Does not call reset_test_storage() here to avoid redundant cleanup.
+        The close() method already handles cleanup, and any subsequent test runs
+        will reset storage in their setup() calls.
         """
         # Unpatch campus_python and clear test apps
         from tests import flask_test
@@ -308,10 +312,6 @@ class ServiceManager:
             env.delete("CLIENT_ID")
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
-
-        # Reset test storage
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def __enter__(self):
         """Context manager entry."""
