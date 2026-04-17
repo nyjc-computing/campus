@@ -115,6 +115,12 @@ class IsolatedIntegrationTestCase(unittest.TestCase):
     - Tests use shared state that could conflict
     - Tests modify Flask app configuration
 
+    ⚠️ WARNING: Brittle Pattern
+    The manual Resource.init_storage() pattern shown below is brittle and
+    will be replaced when ServiceManager.initialize() auto-registers all
+    resources. This pattern requires precise ordering and manual reinit
+    after reset_test_data().
+
     Example:
         class TestTracing(IsolatedIntegrationTestCase):
             @classmethod
@@ -129,6 +135,8 @@ class IsolatedIntegrationTestCase(unittest.TestCase):
                 # Reinitialize storage after reset
                 from campus.audit.resources.traces import TracesResource
                 TracesResource.init_storage()
+
+    See: #518 - Proposal: Saner Integration Test Lifecycle
     """
 
     manager: ClassVar[services.ServiceManager]
@@ -148,6 +156,11 @@ class IsolatedIntegrationTestCase(unittest.TestCase):
 
         Subclasses should call super().setUp() and then reinitialize
         any storage resources that were initialized in setUpClass().
+
+        ⚠️ WARNING: Manual Resource Reinit Required
+        reset_test_data() destroys table structure, so resources MUST be
+        reinitialized manually. This brittle pattern will be replaced by
+        ServiceManager.clear_test_data() which preserves schema.
         """
         # Reset storage (destroys in-memory SQLite tables)
         self.manager.reset_test_data()
@@ -157,6 +170,9 @@ class IsolatedIntegrationTestCase(unittest.TestCase):
         # Example:
         #   super().setUp()
         #   TracesResource.init_storage()
+        #
+        # TODO: Replace with ServiceManager.clear_test_data() (see #518)
+        # which preserves table structure and doesn't require manual reinit
 
     @classmethod
     def tearDownClass(cls):
