@@ -38,6 +38,7 @@ class VenueBooking(Model):
     # Overlap checking must still be conducted separately
     __constraints__ = constraints.Unique("venue_id", "date", "start_time", "end_time")
 
+
 @dataclass(eq=False, kw_only=True)
 class Venue(Model):
     """
@@ -55,3 +56,4 @@ class Venue(Model):
     ))
     venue_name: schema.String
     venue_type: schema.String
+  
