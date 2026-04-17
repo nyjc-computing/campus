@@ -58,6 +58,12 @@ class ServiceManager:
     def setup(self):
         """Initialize all Campus services for integration testing.
 
+        DEPRECATED: Use initialize() instead.
+
+        This method is deprecated and will be removed in a future version.
+        Please use the new initialize() method which provides a cleaner lifecycle.
+        See: #518 - Test lifecycle documentation
+
         **Lifecycle Phase**: Class Setup (once per test class)
         **Ownership**: Primary owner of service initialization
         **Cleanup**: Handled by close() method
@@ -81,8 +87,19 @@ class ServiceManager:
         Returns:
             ServiceManager: Self for method chaining
 
+        Migration Guide:
+            Old: manager.setup()
+            New: manager.initialize()
+
         See: #518 - Test lifecycle documentation
         """
+        import warnings
+        warnings.warn(
+            "setup() is deprecated, use initialize() instead. See #518.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
         # Reset test storage at start of setup for clean state
         # This ensures test classes don't pollute each other's storage
         import campus.storage.testing
@@ -205,10 +222,16 @@ class ServiceManager:
     def reset_test_data(self):
         """Reset test storage for per-test isolation.
 
+        DEPRECATED: Use clear_test_data() instead.
+
+        This method is deprecated and will be removed in a future version.
+        Please use the new clear_test_data() method which preserves schema
+        and is faster. See: #518 - Test lifecycle documentation
+
         This method clears all test storage (SQLite in-memory DB, memory collections)
         and re-initializes services. Use this in tearDown() for per-test isolation.
 
-        ⚠️ WARNING: Brittle Pattern - Manual Resource Reinit Required
+        WARNING: Brittle Pattern - Manual Resource Reinit Required
         This method destroys table structure, requiring tests to manually call
         Resource.init_storage() after reset. This order-dependent pattern is
         error-prone and will be replaced by ServiceManager.clear_test_data()
@@ -222,9 +245,17 @@ class ServiceManager:
         in setUp() after calling this in tearDown().
 
         Migration Path:
-        - Current: reset_test_data() → manual Resource.init_storage()
-        - Future (#518): clear_test_data() → no manual reinit needed
+            Old: manager.reset_test_data() -> manual Resource.init_storage()
+            New: manager.clear_test_data() -> no manual reinit needed
+
+        See: #518 - Test lifecycle documentation
         """
+        import warnings
+        warnings.warn(
+            "reset_test_data() is deprecated, use clear_test_data() instead. See #518.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         import campus.storage.testing
 
         # Reset storage (clears SQLite in-memory DB and memory collections)
@@ -237,6 +268,12 @@ class ServiceManager:
 
     def close(self):
         """Clean up service instances and resources.
+
+        DEPRECATED: Use cleanup() instead.
+
+        This method is deprecated and will be removed in a future version.
+        Please use the new cleanup() method which provides cleaner lifecycle.
+        See: #518 - Test lifecycle documentation
 
         **Lifecycle Phase**: Class Teardown (once per test class)
         **Ownership**: Primary owner of resource cleanup
@@ -256,8 +293,20 @@ class ServiceManager:
         Always cleans up auth client and credentials. With shared=False,
         also cleans up Flask apps for full isolation.
 
-        Note: Does NOT reset storage - next test class will handle that in setup()
+        Note: Does NOT reset storage - next test class will handle that in initialize()
+
+        Migration Guide:
+            Old: manager.close()
+            New: manager.cleanup()
+
+        See: #518 - Test lifecycle documentation
         """
+        import warnings
+        warnings.warn(
+            "close() is deprecated, use cleanup() instead. See #518.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # Shut down tracing middleware's background thread pool FIRST
         # This must happen BEFORE clearing credentials and storage to avoid
         # race conditions where background threads try to access cleared resources
