@@ -36,7 +36,7 @@ class TestYapper(IntegrationTestCase):
         encoded = base64.b64encode(credentials.encode()).decode()
         headers = {"Authorization": f"Basic {encoded}"}
 
-        response = self.client.get("/auth/v1/vaults/yapper/YAPPERDB_URI", headers=headers)
+        response = self.client.get("/auth/v1/vaults/campus.yapper/YAPPERDB_URI", headers=headers)
 
         # Should get a successful response with the YAPPERDB_URI value
         self.assertEqual(response.status_code, 200,
