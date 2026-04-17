@@ -31,10 +31,10 @@ from campus.audit.resources.traces import TracesResource
 from campus.audit.middleware import tracing
 from tests.fixtures import services
 from tests.fixtures.tokens import get_basic_auth_headers, get_bearer_auth_headers, create_test_token
-from tests.integration.base import DependencyCheckedTestCase
+from tests.integration.base import DependencyCheckedTestCase, LegacyIntegrationTestCase
 
 
-class TestTracingMiddlewareBasic(unittest.TestCase):
+class TestTracingMiddlewareBasic(LegacyIntegrationTestCase):
     """Basic tests for tracing middleware that don't require span ingestion.
 
     These tests verify middleware behavior without relying on the audit service's

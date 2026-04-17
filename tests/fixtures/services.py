@@ -58,6 +58,12 @@ class ServiceManager:
     def setup(self):
         """Initialize all Campus services for integration testing.
 
+        DEPRECATED: Use initialize() instead.
+
+        This method is deprecated and will be removed in a future version.
+        Please use the new initialize() method which provides a cleaner lifecycle.
+        See: #518 - Test lifecycle documentation
+
         **Lifecycle Phase**: Class Setup (once per test class)
         **Ownership**: Primary owner of service initialization
         **Cleanup**: Handled by close() method
@@ -81,8 +87,19 @@ class ServiceManager:
         Returns:
             ServiceManager: Self for method chaining
 
+        Migration Guide:
+            Old: manager.setup()
+            New: manager.initialize()
+
         See: #518 - Test lifecycle documentation
         """
+        import warnings
+        warnings.warn(
+            "setup() is deprecated, use initialize() instead. See #518.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
         # Reset test storage at start of setup for clean state
         # This ensures test classes don't pollute each other's storage
         import campus.storage.testing
@@ -205,10 +222,16 @@ class ServiceManager:
     def reset_test_data(self):
         """Reset test storage for per-test isolation.
 
+        DEPRECATED: Use clear_test_data() instead.
+
+        This method is deprecated and will be removed in a future version.
+        Please use the new clear_test_data() method which preserves schema
+        and is faster. See: #518 - Test lifecycle documentation
+
         This method clears all test storage (SQLite in-memory DB, memory collections)
         and re-initializes services. Use this in tearDown() for per-test isolation.
 
-        ⚠️ WARNING: Brittle Pattern - Manual Resource Reinit Required
+        WARNING: Brittle Pattern - Manual Resource Reinit Required
         This method destroys table structure, requiring tests to manually call
         Resource.init_storage() after reset. This order-dependent pattern is
         error-prone and will be replaced by ServiceManager.clear_test_data()
@@ -222,9 +245,17 @@ class ServiceManager:
         in setUp() after calling this in tearDown().
 
         Migration Path:
-        - Current: reset_test_data() → manual Resource.init_storage()
-        - Future (#518): clear_test_data() → no manual reinit needed
+            Old: manager.reset_test_data() -> manual Resource.init_storage()
+            New: manager.clear_test_data() -> no manual reinit needed
+
+        See: #518 - Test lifecycle documentation
         """
+        import warnings
+        warnings.warn(
+            "reset_test_data() is deprecated, use clear_test_data() instead. See #518.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         import campus.storage.testing
 
         # Reset storage (clears SQLite in-memory DB and memory collections)
@@ -237,6 +268,12 @@ class ServiceManager:
 
     def close(self):
         """Clean up service instances and resources.
+
+        DEPRECATED: Use cleanup() instead.
+
+        This method is deprecated and will be removed in a future version.
+        Please use the new cleanup() method which provides cleaner lifecycle.
+        See: #518 - Test lifecycle documentation
 
         **Lifecycle Phase**: Class Teardown (once per test class)
         **Ownership**: Primary owner of resource cleanup
@@ -256,8 +293,20 @@ class ServiceManager:
         Always cleans up auth client and credentials. With shared=False,
         also cleans up Flask apps for full isolation.
 
-        Note: Does NOT reset storage - next test class will handle that in setup()
+        Note: Does NOT reset storage - next test class will handle that in initialize()
+
+        Migration Guide:
+            Old: manager.close()
+            New: manager.cleanup()
+
+        See: #518 - Test lifecycle documentation
         """
+        import warnings
+        warnings.warn(
+            "close() is deprecated, use cleanup() instead. See #518.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # Shut down tracing middleware's background thread pool FIRST
         # This must happen BEFORE clearing credentials and storage to avoid
         # race conditions where background threads try to access cleared resources
@@ -386,6 +435,92 @@ class ServiceManager:
             env.delete("CLIENT_ID")
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
+
+    # === NEW LIFECYCLE API (Issue #518) ===
+    # These methods provide a cleaner, more predictable lifecycle for integration tests.
+    # They coexist with the old API (setup/reset_test_data/close) during migration.
+
+    def initialize(self):
+        """One-time initialization of all services.
+
+        **Lifecycle Phase**: Class Setup (once per test class)
+        **New API**: Use this instead of setup() for new test code
+        **Ownership**: Primary owner of service initialization
+
+        This is the new recommended method for service initialization.
+        For now, it delegates to the existing setup() method to ensure
+        compatibility while we migrate tests incrementally.
+
+        Returns:
+            ServiceManager: Self for method chaining
+
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
+        return self.setup()
+
+    def clear_test_data(self):
+        """Clear test data while preserving table/collection structure.
+
+        **Lifecycle Phase**: Test Setup (once per test)
+        **New API**: Use this instead of reset_test_data() for new test code
+        **Ownership**: Primary owner of per-test data cleanup
+
+        This is the new recommended method for per-test data cleanup.
+        Unlike reset_test_data(), this method:
+        - Uses clear_all_data() which preserves schema structure
+        - Is faster (no table/collection recreation)
+        - Doesn't require manual Resource.init_storage() calls
+
+        Migration Path:
+        - Old: reset_test_data() → manual Resource.init_storage()
+        - New: clear_test_data() → no manual reinit needed
+
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
+        import campus.storage.testing
+
+        # Clear data without destroying schema (faster than reset_test_storage)
+        campus.storage.testing.clear_all_data()
+
+        # Re-initialize auth and yapper services
+        # These are idempotent and will recreate necessary data
+        auth.init()
+        yapper.init()
+
+    def flush_async(self):
+        """Wait for async operations to complete.
+
+        **Lifecycle Phase**: Test Teardown (after each test)
+        **New API**: Call this in tearDown() to ensure async operations complete
+        **Ownership**: Delegates to tracing module's shutdown logic
+
+        This ensures background operations (like tracing middleware ingestion)
+        complete before the next test starts. Prevents race conditions where
+        async operations from one test affect the next test.
+
+        Usage:
+            def tearDown(self):
+                super().tearDown()
+                self.service_manager.flush_async()
+
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
+        self.shutdown_threads()
+
+    def cleanup(self):
+        """Clean up all resources.
+
+        **Lifecycle Phase**: Class Teardown (once per test class)
+        **New API**: Use this instead of close() for new test code
+        **Ownership**: Primary owner of resource cleanup
+
+        This is the new recommended method for resource cleanup.
+        For now, it delegates to the existing close() method to ensure
+        compatibility while we migrate tests incrementally.
+
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
+        self.close()
 
     def __enter__(self):
         """Context manager entry."""
