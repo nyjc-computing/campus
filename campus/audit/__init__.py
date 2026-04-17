@@ -108,7 +108,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     global campus
     campus = campus_python.Campus(timeout=60)
 
-    from . import routes
+    from . import routes, web
 
     # Create route blueprints using create_blueprint() for test isolation
     traces_blueprint = routes.traces.create_blueprint()
@@ -128,6 +128,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     bp.register_blueprint(health_blueprint)
 
     app.register_blueprint(bp)
+
+    # Register web UI blueprint (no authentication required for browsing)
+    ui_blueprint = web.ui.create_blueprint()
+    app.register_blueprint(ui_blueprint)
 
     if isinstance(app, flask.Flask):
         app.secret_key = env.getsecret("SECRET_KEY")
