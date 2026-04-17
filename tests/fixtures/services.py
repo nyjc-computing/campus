@@ -220,12 +220,7 @@ class ServiceManager:
         # Shut down tracing middleware's background thread pool FIRST
         # This must happen BEFORE clearing credentials and storage to avoid
         # race conditions where background threads try to access cleared resources
-        try:
-            from campus.audit.middleware import tracing
-            tracing._ingestion_executor.shutdown(wait=True)
-        except Exception:
-            # If tracing module isn't loaded or executor already shut down, continue
-            pass
+        self.shutdown_threads()
 
         # Always clean up auth client regardless of shared mode
         self._cleanup_auth_client()
@@ -266,6 +261,30 @@ class ServiceManager:
             from campus.auth import resources as auth_resources
             auth_resources.client[client_id].delete()
         except Exception:
+            pass
+
+    def shutdown_threads(self):
+        """Shutdown background threads idempotently.
+
+        Safely shuts down the tracing middleware's thread pool if it's running.
+        This method is idempotent - safe to call multiple times without errors.
+
+        Use this in tearDown() to wait for async operations to complete.
+        The ServiceManager.close() method also calls this automatically.
+
+        Note: This does not set the executor to None, allowing tests to
+        recreate it if needed for the next test.
+        """
+        try:
+            from campus.audit.middleware import tracing
+            # Check if executor exists and hasn't been shut down yet
+            if hasattr(tracing, '_ingestion_executor') and tracing._ingestion_executor is not None:
+                # Try to shutdown - if already shut down, this will raise an exception
+                # which we catch, making this idempotent
+                tracing._ingestion_executor.shutdown(wait=True)
+        except Exception:
+            # Executor already shut down or other error - this is fine
+            # This makes the method idempotent
             pass
 
     @classmethod
