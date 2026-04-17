@@ -162,45 +162,29 @@ class TestTracing(IsolatedIntegrationTestCase):
 - ✅ Easier to understand test intent
 - ✅ Centralized fixes apply to all tests
 
-#### Migration Guide
+#### Using Integration Test Base Classes
 
-**Before** (Error-prone):
+**Example:**
 ```python
-class TestMyFeature(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
-        cls.app = cls.service_manager.apps_app
+from tests.integration.base import IntegrationTestCase
 
-    def setUp(self):
-        self.client = self.app.test_client()
-        self.app_context = self.app.app_context()
-        self.app_context.push()
-        # Easy to forget: storage reset
-
-    def tearDown(self):
-        self.app_context.pop()
-        # Easy to forget: storage reset
-
-    @classmethod
-    def tearDownClass(cls):
-        if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-```
-
-**After** (Safe and concise):
-```python
 class TestMyFeature(IntegrationTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.app = cls.service_manager.apps_app
 
-    # No need to override setUp or tearDown!
+    def test_something(self):
+        # self.client and self.app_context are ready to use
+        response = self.client.get('/api/v1/endpoint')
+        self.assertEqual(response.status_code, 200)
 ```
+
+**What you DON'T need to write:**
+- ❌ `setUpClass`: service manager setup
+- ❌ `setUp`: test client and app context
+- ❌ `tearDown`: app context cleanup
+- ❌ `tearDownClass`: service manager cleanup and storage reset
 
 #### Advanced: Combining Base Classes
 
@@ -468,20 +452,15 @@ class TestMyFeature(unittest.TestCase):
 ```python
 from tests.fixtures import services
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
+from tests.integration.base import IntegrationTestCase
 
-class TestMyIntegration(unittest.TestCase):
+class TestMyIntegration(IntegrationTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        super().setUpClass()  # Sets up service_manager
+        cls.app = cls.service_manager.apps_app
         cls.token = create_test_token("test@example.com")
         cls.auth_headers = get_bearer_auth_headers(cls.token)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.service_manager.close()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 ```
 
 ### Contract Tests
@@ -512,78 +491,6 @@ def test_create_resource(self):
     """Runs after test_00_list_is_empty."""
     # ... creates a resource
 ```
-
-## Storage Re-initialization After Reset
-
-**Critical Pattern:** When tests use SQLite in-memory storage and call `reset_test_storage()` in `tearDownClass()`, you **must reinitialize storage tables in `setUp()`**.
-
-### Why This Is Necessary
-
-SQLite in-memory databases (`:memory:`) are completely destroyed when the connection closes. The `reset_test_storage()` function closes the connection to clear data, which also destroys all table schemas.
-
-### The Pattern
-
-```python
-from tests.fixtures import services
-from campus.audit.resources.traces import TracesResource
-
-class TestMyFeature(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.service_manager = services.create_service_manager(shared=False)
-        cls.service_manager.setup()
-
-        # Initialize storage schema (creates tables)
-        TracesResource.init_storage()
-
-    @classmethod
-    def tearDownClass(cls):
-        # Reset storage (closes SQLite connection, destroys tables)
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-        cls.service_manager.close()
-
-    def setUp(self):
-        """Reinitialize storage after tearDownClass reset."""
-        # CRITICAL: Reinitialize schema after reset
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-        TracesResource.init_storage()
-
-        # ... rest of setup
-```
-
-### Common Pitfalls
-
-❌ **Wrong:** Only initialize in `setUpClass()`
-```python
-@classmethod
-def setUpClass(cls):
-    TracesResource.init_storage()  # Table created
-
-def setUp(self):
-    # ❌ Missing reinitialization!
-    # Table doesn't exist after tearDownClass() reset
-    storage.delete_matching({})  # ERROR: no such table
-```
-
-✅ **Correct:** Reinitialize in `setUp()` after reset
-```python
-def setUp(self):
-    # Reset and reinitialize
-    campus.storage.testing.reset_test_storage()
-    TracesResource.init_storage()  # Table recreated
-    # Now safe to use storage
-```
-
-### When To Apply This Pattern
-
-Apply this pattern when:
-1. Tests call `<Resource>.init_storage()` in `setUpClass()`
-2. Tests call `reset_test_storage()` in `tearDownClass()`
-3. Tests manipulate storage directly (insert, delete, query)
-
-**Reference Implementation:** See `tests/integration/auth/resources/test_user.py` for a working example.
 
 ## Test Skipping Principles
 
@@ -664,16 +571,16 @@ Use this pattern when:
 Create separate test classes based on dependency requirements:
 
 ```python
-from tests.integration.base import DependencyCheckedTestCase
+from tests.integration.base import DependencyCheckedTestCase, IsolatedIntegrationTestCase
 
 # Tests that DON'T require the dependency
-class TestMyFeatureBasic(unittest.TestCase):
+class TestMyFeatureBasic(IsolatedIntegrationTestCase):
     """Tests that don't require span ingestion."""
 
     @classmethod
     def setUpClass(cls):
-        cls.manager = services.create_service_manager(shared=False)
-        cls.manager.setup()
+        super().setUpClass()
+        # Setup without dependency checking
 
     def test_graceful_degradation(self):
         """Test works even when dependency is unavailable."""
@@ -681,21 +588,14 @@ class TestMyFeatureBasic(unittest.TestCase):
         pass
 
 # Tests that DO require the dependency
-class TestMyFeatureWithDependency(DependencyCheckedTestCase):
+class TestMyFeatureWithDependency(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
     """Tests that require functional span ingestion."""
 
     @classmethod
     def setUpClass(cls):
-        try:
-            cls.manager = services.create_service_manager(shared=False)
-            cls.manager.setup()
-
-            # CRITICAL: Verify dependency before running any tests
-            cls._check_dependencies()
-        except unittest.SkipTest:
-            raise
-        except Exception as e:
-            raise unittest.SkipTest(f"Setup failed: {e}")
+        super().setUpClass()
+        # CRITICAL: Verify dependency before running any tests
+        cls._check_dependencies()
 
     @classmethod
     def _check_dependencies(cls) -> None:

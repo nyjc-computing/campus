@@ -50,17 +50,16 @@ poetry run python -m unittest tests.unit.apps.test_client -v
 
 ### Integration Tests
 - Integration tests test package as a whole including DB, API, cross-package interactions
-- Use tests.fixtures.setup for environment setup
+- Use `tests.fixtures.services.create_service_manager()` for environment setup
 - Located in tests/integration/<package>/
 - Test real implementations with actual dependencies
-- **Storage re-initialization**: When tests use `reset_test_storage()` in `tearDownClass()`, they must reinitialize storage schemas in `setUp()`. See [docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md#storage-re-initialization-after-reset) for details.
+- Use base classes from `tests/integration/base.py` for consistent setup/teardown
 
 ### Contract Tests
 - Contract tests verify HTTP interface contracts (status codes, response formats, authentication)
 - Test behavioral invariants of the API surface
 - Located in tests/contract/
 - No mocks for internal interfaces - test real HTTP behavior
-- **Storage re-initialization**: Applied to ensure proper test isolation between tests. See [docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md#storage-re-initialization-after-reset) for details.
 - See [tests/contract/README.md](contract/README.md) for invariants tested
 
 ## Directory Structure
