@@ -6,10 +6,10 @@ with both JSON and form-encoded requests per RFC 8628.
 
 import unittest
 
-from tests.integration.base import CleanIntegrationTestCase
+from tests.integration.base import IntegrationTestCase
 
 
-class TestOAuthIntegration(CleanIntegrationTestCase):
+class TestOAuthIntegration(IntegrationTestCase):
     """Integration tests for the OAuth routes in campus.auth."""
 
     @classmethod

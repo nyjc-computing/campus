@@ -6,10 +6,10 @@ endpoints function correctly without returning 404 errors.
 
 import unittest
 
-from tests.integration.base import CleanIntegrationTestCase
+from tests.integration.base import IntegrationTestCase
 
 
-class TestVaultIntegration(CleanIntegrationTestCase):
+class TestVaultIntegration(IntegrationTestCase):
     """Integration tests for the vault routes in campus.auth."""
 
     @classmethod

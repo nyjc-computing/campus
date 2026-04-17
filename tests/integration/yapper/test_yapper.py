@@ -1,10 +1,10 @@
 import unittest
 
 from campus.common import env
-from tests.integration.base import CleanIntegrationTestCase
+from tests.integration.base import IntegrationTestCase
 
 
-class TestYapper(CleanIntegrationTestCase):
+class TestYapper(IntegrationTestCase):
     """Integration tests for Yapper service."""
 
     @classmethod

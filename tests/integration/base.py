@@ -31,8 +31,15 @@ class DependencyError(RuntimeError):
     pass
 
 
-class IntegrationTestCase(unittest.TestCase):
-    """Base class for standard integration tests with service manager.
+class LegacyIntegrationTestCase(unittest.TestCase):
+    """Base class for integration tests using the legacy lifecycle API.
+
+    ⚠️ DEPRECATED: This class uses the old lifecycle API (setup/reset_test_data/close).
+    For new tests, use IntegrationTestCase which uses the cleaner new API.
+
+    This class is kept for backwards compatibility with existing tests that
+    cannot be migrated to the new API (e.g., tests with complex storage
+    initialization requirements).
 
     This class provides:
     - Automatic service manager setup/teardown
@@ -40,19 +47,18 @@ class IntegrationTestCase(unittest.TestCase):
     - Flask app context management
     - Proper cleanup of resources
 
-    This is the DEFAULT base class for most integration tests.
-
     Example:
-        class TestAssignments(IntegrationTestCase):
+        class TestTracing(LegacyIntegrationTestCase):
             @classmethod
             def setUpClass(cls):
                 super().setUpClass()
                 cls.app = cls.service_manager.apps_app
-                cls.user_id = UserID("test@example.com")
 
-            def test_list_assignments(self):
-                response = self.client.get('/api/v1/assignments/')
+            def test_something(self):
+                response = self.client.get('/api/v1/traces/')
                 self.assertEqual(response.status_code, 200)
+
+    See: IntegrationTestCase for the recommended new API
     """
 
     service_manager: ClassVar[services.ServiceManager]
@@ -237,8 +243,8 @@ class DependencyCheckedTestCase(unittest.TestCase):
         self.fail(f"Dependency check failed: {reason}")
 
 
-class CleanIntegrationTestCase(unittest.TestCase):
-    """Base class for integration tests using the new clean lifecycle API.
+class IntegrationTestCase(unittest.TestCase):
+    """Base class for standard integration tests with service manager.
 
     This class uses the new ServiceManager API from issue #518:
     - initialize() instead of setup()
@@ -246,18 +252,21 @@ class CleanIntegrationTestCase(unittest.TestCase):
     - flush_async() after each test for async operations
     - cleanup() instead of close()
 
-    **Benefits over IntegrationTestCase**:
+    This is the DEFAULT and RECOMMENDED base class for integration tests.
+
+    **Benefits**:
     - Faster per-test cleanup (clear_all_data vs reset_test_storage)
     - No manual Resource.init_storage() needed (schema preserved)
     - Explicit async operation handling
     - Clearer lifecycle ownership
 
-    **Migration Status**: This is the new recommended base class for integration tests.
-    Existing tests using IntegrationTestCase continue to work and can be migrated
-    incrementally to this new base class.
+    **When to use LegacyIntegrationTestCase instead**:
+    - Tests with complex storage initialization requirements
+    - Tests that need to destroy and recreate schema between tests
+    - Tests that cannot be migrated to the new API
 
     Example:
-        class TestAssignments(CleanIntegrationTestCase):
+        class TestAssignments(IntegrationTestCase):
             @classmethod
             def setUpClass(cls):
                 super().setUpClass()

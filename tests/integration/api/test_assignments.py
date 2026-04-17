@@ -8,10 +8,10 @@ import unittest
 
 from campus.common import schema
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
-from tests.integration.base import CleanIntegrationTestCase
+from tests.integration.base import IntegrationTestCase
 
 
-class TestAssignmentsIntegration(CleanIntegrationTestCase):
+class TestAssignmentsIntegration(IntegrationTestCase):
     """Integration tests for the assignments resource in campus.api."""
 
     @classmethod
