@@ -90,11 +90,13 @@ class IntegrationTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up service manager and reset test storage."""
+        """Clean up service manager.
+
+        Note: Does not call reset_test_storage() here to avoid redundant cleanup.
+        The next test class will reset storage in its setup() method.
+        """
         if hasattr(cls, 'service_manager'):
             cls.service_manager.close()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
 
 class IsolatedIntegrationTestCase(unittest.TestCase):

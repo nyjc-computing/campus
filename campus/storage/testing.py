@@ -59,3 +59,20 @@ def reset_test_storage():
 
         SQLiteTable.reset_database()
         MemoryCollection.reset_storage()
+
+
+def clear_all_data():
+    """Clear all data from test storage while preserving table/collection structure.
+
+    This is faster than reset_test_storage() for per-test cleanup since it
+    doesn't require recreating tables and collections. Only works in test mode.
+
+    Use this in setUp() for per-test isolation when you want to clear data
+    but preserve the schema defined in setUpClass().
+    """
+    if is_test_mode():
+        from campus.storage.tables.backend.sqlite import SQLiteTable
+        from campus.storage.documents.backend.memory import MemoryCollection
+
+        SQLiteTable.clear_database()
+        MemoryCollection.clear_storage()
