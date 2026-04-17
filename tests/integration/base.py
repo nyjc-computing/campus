@@ -111,14 +111,10 @@ class DependencyCheckedTestCase(unittest.TestCase):
     Example:
         class TestMyFeature(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
             @classmethod
-            def setUpClass(cls):
-                super().setUpClass()
-                cls.manager.setup()
-
-            def test_000_dependencies(self):
+            def _check_dependencies(cls):
                 \"\"\"Verify that required dependencies are available.\"\"\"
-                if not self._verify_feature_works():
-                    self.fail_dependency(
+                if not cls._verify_feature_works():
+                    cls._skip_dependency(
                         "Feature X is not working. See: https://github.com/user/repo/issues/123"
                     )
 
