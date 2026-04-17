@@ -448,8 +448,14 @@ class ServiceManager:
         **Ownership**: Primary owner of service initialization
 
         This is the new recommended method for service initialization.
-        For now, it delegates to the existing setup() method to ensure
-        compatibility while we migrate tests incrementally.
+
+        ⚠️ TECHNICAL DEBT: Currently delegates to setup() which calls
+        reset_test_storage(). This defeats the performance benefits of the
+        new API. Should be refactored to avoid schema destruction.
+
+        TODO: Refactor to separate service initialization from storage reset.
+        - Storage should only be reset once at test class setup
+ - clear_test_data() should handle per-test data cleanup without schema destruction
 
         Returns:
             ServiceManager: Self for method chaining
@@ -515,15 +521,42 @@ class ServiceManager:
         **Ownership**: Primary owner of resource cleanup
 
         This is the new recommended method for resource cleanup.
-        For now, it delegates to the existing close() method to ensure
-        compatibility while we migrate tests incrementally.
+
+        ⚠️ TECHNICAL DEBT: Currently just a wrapper around close().
+        Should have distinct behavior or be consolidated as part of
+        the new API refactoring.
+
+        TODO: Evaluate if cleanup() should have different behavior
+        than close(), or if they should be consolidated.
 
         See: #518 - Proposal: Saner Integration Test Lifecycle
         """
         self.close()
 
     def __enter__(self):
-        """Context manager entry."""
+        """Context manager entry.
+
+        DEPRECATED: This context manager is not recommended for new test code.
+
+        Use IntegrationTestCase or IsolatedIntegrationTestCase base classes instead,
+        which provide proper lifecycle management for integration tests.
+
+        If you need manual ServiceManager usage, use the new API:
+            manager = ServiceManager()
+            manager.initialize()
+            try:
+                # use manager.auth_app, manager.apps_app, etc.
+            finally:
+                manager.cleanup()
+        """
+        import warnings
+        warnings.warn(
+            "ServiceManager context manager is deprecated. "
+            "Use IntegrationTestCase or IsolatedIntegrationTestCase base classes instead. "
+            "See: #518",
+            DeprecationWarning,
+            stacklevel=2
+        )
         return self.setup()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -535,17 +568,30 @@ class ServiceManager:
 def init():
     """Context manager for Campus service initialization and cleanup.
 
-    Provides convenient setup and teardown of services for integration testing.
-    Ensures proper cleanup even if exceptions occur.
+    DEPRECATED: This context manager is not recommended for new test code.
 
-    Usage:
-        with services.init() as manager:
-            auth_client = manager.auth_app.test_client()
-            api_client = manager.apps_app.test_client()
+    Use IntegrationTestCase or IsolatedIntegrationTestCase base classes instead,
+    which provide proper lifecycle management for integration tests.
 
-    Yields:
-        ServiceManager: Configured service manager with Flask applications
+    If you need manual ServiceManager usage, use the new API:
+        manager = ServiceManager()
+        manager.initialize()
+        try:
+            # use manager.auth_app, manager.apps_app, etc.
+        finally:
+            manager.cleanup()
+
+    Deprecated: See #518 - Saner Integration Test Lifecycle
     """
+    import warnings
+    warnings.warn(
+        "services.init() context manager is deprecated. "
+        "Use IntegrationTestCase or IsolatedIntegrationTestCase base classes instead. "
+        "See: #518",
+        DeprecationWarning,
+        stacklevel=2
+    )
+
     manager = ServiceManager()
     try:
         yield manager.setup()
