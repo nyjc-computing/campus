@@ -22,7 +22,7 @@ class TestWSGI(unittest.TestCase):
     def setUpClass(cls):
         """Set up local services once for the entire test class."""
         cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        cls.service_manager.initialize()
         # Save original environment
         cls._original_env = dict(os.environ)
 
@@ -30,7 +30,7 @@ class TestWSGI(unittest.TestCase):
     def tearDownClass(cls):
         """Clean up services after all tests in the class."""
         if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
+            cls.service_manager.cleanup()
 
         # Reset test storage to clear SQLite in-memory database
         import campus.storage.testing

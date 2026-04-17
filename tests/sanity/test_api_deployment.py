@@ -32,13 +32,13 @@ class TestAPIDeployment(unittest.TestCase):
     def setUpClass(cls):
         """Set up test services for deployment tests."""
         cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        cls.service_manager.initialize()
 
     @classmethod
     def tearDownClass(cls):
         """Clean up test services."""
         if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
+            cls.service_manager.cleanup()
 
         # Reset test storage to clear SQLite in-memory database
         import campus.storage.testing
