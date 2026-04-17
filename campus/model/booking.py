@@ -56,4 +56,4 @@ class Venue(Model):
     ))
     venue_name: schema.String
     venue_type: schema.String
-  
+
