@@ -45,11 +45,14 @@ __all__ = [
     "User",
     "UserCredentials",
     "Vault",
+    "Venue",
+    "VenueBooking",
 ]
 
 from .assignment import Assignment, ClassroomLink, Question
 from .audit import TraceSpan, TraceSummary, TraceTree, TraceTreeNode
 from .base import InternalModel, Model
+from .booking import Venue, VenueBooking
 from .circle import Circle
 from .client import Client, ClientAccess
 from .credentials import OAuthToken, UserCredentials
