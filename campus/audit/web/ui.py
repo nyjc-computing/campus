@@ -33,4 +33,12 @@ def create_blueprint() -> flask.Blueprint:
         """
         return flask.render_template('base.html')
 
+    @bp.route('/traces')
+    def trace_list() -> str:
+        """Render the trace list page.
+
+        This page displays a list of audit traces with filtering capabilities.
+        """
+        return flask.render_template('trace_list.html')
+
     return bp
