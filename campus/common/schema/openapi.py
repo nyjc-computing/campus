@@ -103,8 +103,8 @@ class String(str):
 class Date(String):
     """Emulates Python datetime.date behavior.
 
-    Since date-time is considered a string format in OpenAPI 3, for future
-    compatibility we have Date subclass str.
+    Since date-time is considered a string format in OpenAPI 3, for
+    future compatibility we have Date subclass str.
     This class 
     """
 
@@ -159,9 +159,10 @@ class Date(String):
 class DateTime(String):
     """Emulates Python datetime.datetime behavior.
 
-    Since date-time is considered a string format in OpenAPI 3, for future
-    compatibility we have DateTime subclass str.
-    However, we emulate the most common datetime operations required by Campus.
+    Since date-time is considered a string format in OpenAPI 3, for
+    future compatibility we have DateTime subclass str.
+    However, we emulate the most common datetime operations required by
+    Campus.
     """
 
     def __new__(cls, value: str):
@@ -256,10 +257,11 @@ class Email(String):
 
 
 class Time(String):
-    """HHMM (24-hr) representation of time, without seconds or microseconds.
+    """HHMM (24-hr) representation of time, without seconds or
+    microseconds.
 
-    `time` is not a defined string format in OpenAPI 3, but `format` is an open value
-    so we define time as a string format.
+    `time` is not a defined string format in OpenAPI 3, but `format` is
+    an open value so we define time as a string format.
     """
 
     def __new__(cls, value: str):
