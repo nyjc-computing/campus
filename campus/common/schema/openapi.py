@@ -115,6 +115,11 @@ class Date(String):
         return f"DateTime({self})"
 
     @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
+
+    @classmethod
     def from_date(cls: Type[Self], d: utc_time.date) -> Self:
         """Create a Date string from a UTC date object."""
         return cls(utc_time.to_rfc3339(d))
@@ -170,6 +175,11 @@ class DateTime(String):
 
     def __repr__(self) -> str:
         return f"DateTime({self})"
+
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
 
     @classmethod
     def from_datetime(cls: Type[Self], dt: utc_time.datetime) -> Self:
@@ -245,6 +255,11 @@ class Email(String):
     def __repr__(self) -> str:
         return f"Email({self})"
 
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
+
     @property
     def user(self) -> str:
         """Get the local part of the email (before the @)."""
@@ -279,6 +294,11 @@ class Time(String):
     def __repr__(self) -> str:
         return f"Time('{self!s}')"
 
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
+
     def to_time(self) -> utc_time.time:
         """Convert the DateTime string to a UTC date object."""
         return utc_time.time(hour=self.hour, minute=self.minute)
@@ -305,6 +325,11 @@ class Url(String):
 
     def __str__(self) -> str:
         return super().__str__()
+
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
 
     @property
     def scheme(self) -> str:
