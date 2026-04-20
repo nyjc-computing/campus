@@ -3,8 +3,8 @@
 OpenAPI schema definitions for Campus.
 
 These schema follow OpenAPI 3 for easy generation of API documentation.
-These datatype classes also subclass the most appropriate Python type, for easy
-compatibility with schema validation.
+These datatype classes also subclass the most appropriate Python type,
+for easy compatibility with schema validation.
 - __str__() returns a JSON string representation of the value
 
 See: https://swagger.io/specification/v3/#data-types
@@ -25,8 +25,8 @@ class BooleanMeta(type):
 class Boolean(int, metaclass=BooleanMeta):
     """Emulates Python bool behavior.
 
-    Python bool is marked as final and cannot be subclassed. Thus, Boolean
-    emulates bool behavior.
+    Python bool is marked as final and cannot be subclassed. Thus,
+    Boolean emulates bool behavior.
     """
 
     def __new__(cls, value: bool):
@@ -51,6 +51,11 @@ class Boolean(int, metaclass=BooleanMeta):
             TypeError(f"__eq__ not implemented for {type(other)}")
         ) from None
 
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
+
 
 class Integer(int):
     """Emulates Python int behavior."""
@@ -58,12 +63,22 @@ class Integer(int):
     def __new__(cls, value: int):
         return super().__new__(cls, value)
 
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
+
 
 class Number(float):
     """Emulates Python float behavior."""
 
     def __new__(cls, value: float):
         return super().__new__(cls, value)
+
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
 
 
 class String(str):
@@ -78,6 +93,11 @@ class String(str):
 
     def __str__(self) -> str:
         return super().__str__()
+
+    @classmethod
+    def raise_for_validation(cls, value: Any) -> None:
+        # Add a docstring
+        pass
 
 
 class Date(String):
