@@ -5,7 +5,6 @@ Utility functions for generating unique identifiers (UIDs).
 
 import uuid
 
-from campus.common import schema
 
 def generate_uid(length: int = 16) -> str:
     """Generate a unique identifier of specified length (default: 16 bytes).
@@ -23,7 +22,7 @@ def generate_category_uid(
         category: str,
         *,
         length: int = 16
-) -> schema.CampusID:
+) -> str:
     """Generate a unique identifier of specified length (default: 16 bytes).
 
     Args:
@@ -32,10 +31,10 @@ def generate_category_uid(
     Returns:
         A string containing the generated UID.
     """
-    return schema.CampusID(f"uid-{category}-{generate_uid(length)}")
+    return f"uid-{category}-{generate_uid(length)}"
 
 
-def generate_user_uid(email: str) -> schema.UserID:
+def generate_user_uid(email: str) -> str:
     """Generate a unique identifier for a user based on their email.
 
     User UIDs are different from other UIDs since they are not arbitrarily
@@ -48,7 +47,7 @@ def generate_user_uid(email: str) -> schema.UserID:
         A string containing the generated UID.
     """
     user_id, _ = email.split('@')
-    return schema.UserID(user_id)
+    return user_id
 
 
 def generate_trace_id() -> str:
