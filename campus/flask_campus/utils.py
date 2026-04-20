@@ -1,4 +1,20 @@
-import inspect
+"""flask_campus.utils
+
+This module provides utility functions for the Flask application,
+including request parsing, validation, and response formatting.
+"""
+
+__all__ = [
+    "get_request_headers",
+    "get_request_payload",
+    "get_user_agent",
+    "unpack_into",
+    "unpack_request",
+    "validate_request_and_extract_json",
+    "validate_request_and_extract_urlparams",
+    "validate_json_response",
+]
+
 from functools import wraps
 from json import JSONDecodeError
 from typing import (
@@ -15,15 +31,6 @@ from campus.common.errors import api_errors, ValidationError, FieldError
 from campus.common.validation import record
 
 from . import parameter, types
-
-
-def get_user_agent() -> str:
-    """Get the User-Agent from the Flask request."""
-    if not flask.has_request_context():
-        raise (
-            RuntimeError("No Flask request context available")
-        ) from None
-    return flask.request.headers.get("User-Agent", "Unknown")
 
 
 def get_request_headers() -> campus.model.HttpHeader:
@@ -62,6 +69,15 @@ def get_request_payload() -> dict[str, Any]:
     return json_payload
 
 
+def get_user_agent() -> str:
+    """Get the User-Agent from the Flask request."""
+    if not flask.has_request_context():
+        raise (
+            RuntimeError("No Flask request context available")
+        ) from None
+    return flask.request.headers.get("User-Agent", "Unknown")
+
+
 def unpack_into(
         func: Callable[..., Any],
         **request_args: Any,
@@ -79,14 +95,13 @@ def unpack_into(
     field_errors: list[FieldError] = []
 
     # Check if function accepts **kwargs
-    func_params = inspect.signature(func).parameters
-    has_var_keyword = any(
-        p.kind == inspect.Parameter.VAR_KEYWORD
-        for p in func_params.values()
+    has_kwargs = any(
+        parameter.is_kwargs(p)
+        for p in parameter.get_func_parameters(func)
     )
 
     # Only raise error for extra arguments if function doesn't have **kwargs
-    if extra_args and not has_var_keyword:
+    if extra_args and not has_kwargs:
         field_errors.extend([
             FieldError(
                 field=param,
@@ -130,22 +145,22 @@ def unpack_request(
         raise (
             ValueError(f"Function {func.__name__} missing type annotations")
         ) from None
-    incompatible_params = [
-        param for param in inspect.signature(func).parameters.values()
-        if not parameter.is_keyword_supported(param)
+    kwarg_incompatible_params = [
+        p for p in parameter.get_func_parameters(func)
+        if not parameter.is_keyword_supported(p)
     ]
-    if incompatible_params:
+    if kwarg_incompatible_params:
         raise ValueError(
-            f"Parameters {incompatible_params} must be "
+            f"Parameters {kwarg_incompatible_params} must be "
             "keyword-argument-compatible"
         ) from None
 
     @wraps(func)
-    def wrappervf(*args, **kwargs) -> Any:
+    def wrappervf(*args, **flask_vf_pathparams) -> Any:
         """The view function presented to Flask"""
         assert not args, f"Positional arguments not supported: {args}"
         request_args = get_request_payload()
-        return unpack_into(func, **kwargs, **request_args)
+        return unpack_into(func, **flask_vf_pathparams, **request_args)
 
     return wrappervf
 

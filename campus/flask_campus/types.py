@@ -1,6 +1,7 @@
-"""campus.flask_campus
+"""flask_campus.types
 
-Common utility functions for validation of flask requests and responses.
+This module defines type annotations for the Flask application,
+including view functions, responses, and error handlers.
 """
 
 from typing import (

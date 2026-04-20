@@ -1,11 +1,28 @@
-"""campus.common.flask.validation
+"""flask_campus.parameter
 
-This module provides utilities for validation of arguments against
-parameters.
+This module provides utilities for working with function parameters.
 """
+
+__all__ = [
+    "get_func_parameters",
+    "has_default",
+    "is_keyword_supported",
+    "is_kwargs",
+    "is_kwarg_only",
+    "is_optional",
+    "is_variadic",
+    "reconcile",
+]
 
 import inspect
 import typing
+
+
+def get_func_parameters(
+        func: typing.Callable[..., typing.Any]
+) -> list[inspect.Parameter]:
+    """Get the parameters of a function as a dictionary."""
+    return list(inspect.signature(func).parameters.values())
 
 
 def has_default(parameter: inspect.Parameter) -> bool:
@@ -19,6 +36,18 @@ def is_keyword_supported(parameter: inspect.Parameter) -> bool:
         inspect.Parameter.POSITIONAL_OR_KEYWORD,
         inspect.Parameter.KEYWORD_ONLY,
     )
+
+
+def is_kwargs(parameter: inspect.Parameter) -> bool:
+    """Check if a parameter is an unbound keyword parameter (i.e. **kwargs)"""
+    return parameter.kind == inspect.Parameter.VAR_KEYWORD
+
+
+def is_kwarg_only(parameter: inspect.Parameter) -> bool:
+    """Check if a parameter is keyword-only (i.e., must be passed as a
+    keyword argument).
+    """
+    return parameter.kind == inspect.Parameter.KEYWORD_ONLY
 
 
 def is_optional(parameter: inspect.Parameter) -> bool:
