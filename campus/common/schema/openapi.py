@@ -65,7 +65,15 @@ class Integer(int):
 
     @classmethod
     def raise_for_validation(cls, value: Any) -> None:
-        # Add a docstring
+        """Raise a Type error if value is not a valid int.
+
+        Arguments:
+        - value: Any
+            The value to validate
+
+        Raises:
+            TypeError if value is not an int
+        """
         pass
 
 
