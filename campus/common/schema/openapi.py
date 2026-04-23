@@ -53,7 +53,15 @@ class Boolean(int, metaclass=BooleanMeta):
 
     @classmethod
     def raise_for_validation(cls, value: Any) -> None:
-        # Add a docstring
+        """Raise a TypeError if value is not a bool.
+
+        Arguments:
+        - value: Any
+            The value to validate
+
+        Raises:
+            TypeError if value is not a bool
+        """
         pass
 
 
