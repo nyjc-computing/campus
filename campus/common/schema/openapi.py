@@ -85,7 +85,15 @@ class Number(float):
 
     @classmethod
     def raise_for_validation(cls, value: Any) -> None:
-        # Add a docstring
+        """Raises a TypeError if value is not a float.
+
+        Arguments:
+        - value: Any
+            The value to validate
+
+        Raises:
+            TypeError if value is not a float
+        """
         pass
 
 
