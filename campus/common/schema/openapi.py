@@ -112,7 +112,15 @@ class String(str):
 
     @classmethod
     def raise_for_validation(cls, value: Any) -> None:
-        # Add a docstring
+        """Raises a TypeError if the value passed in is not a string.
+
+        Arguments:
+            value: Any
+                The value to a variable
+        
+        Raises:
+            TypeError if the value passed in is not a string.
+        """
         pass
 
 
