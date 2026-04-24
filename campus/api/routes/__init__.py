@@ -9,6 +9,7 @@ __all__ = [
     "emailotp",
     "assignments",
     "submissions",
+    "timetable",
 ]
 
 from . import (
@@ -17,4 +18,5 @@ from . import (
     emailotp,
     assignments,
     submissions,
+    timetable,
 )
