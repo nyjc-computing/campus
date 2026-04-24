@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Audit Traces{% endblock %}</title>
+
+    <!-- CSS link placeholders -->
+    <link rel="stylesheet" href="/audit/static/css/main.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation header -->
+    <header class="audit-header">
+        <div class="header-container">
+            <h1 class="site-title">Audit Traces</h1>
+            <nav class="main-nav">
+                <ul class="nav-list">
+                    <li><a href="/audit/">Home</a></li>
+                    <li><a href="/audit/traces">Traces</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main content area -->
+    <main class="audit-content">
+        {% block content %}
+        <div class="welcome-section">
+            <h2>Welcome to Audit Traces</h2>
+            <p>Explore and monitor audit traces across Campus services.</p>
+        </div>
+        {% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="audit-footer">
+        <div class="footer-container">
+            <p>&copy; 2026 Campus Audit Service. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Script tag placeholders -->
+    <script src="/audit/static/js/main.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

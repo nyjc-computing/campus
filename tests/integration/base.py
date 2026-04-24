@@ -31,82 +31,19 @@ class DependencyError(RuntimeError):
     pass
 
 
-class IntegrationTestCase(unittest.TestCase):
-    """Base class for standard integration tests with service manager.
-
-    This class provides:
-    - Automatic service manager setup/teardown
-    - Storage reset in setUp() for per-test isolation
-    - Flask app context management
-    - Proper cleanup of resources
-
-    This is the DEFAULT base class for most integration tests.
-
-    Example:
-        class TestAssignments(IntegrationTestCase):
-            @classmethod
-            def setUpClass(cls):
-                super().setUpClass()
-                cls.app = cls.service_manager.apps_app
-                cls.user_id = UserID("test@example.com")
-
-            def test_list_assignments(self):
-                response = self.client.get('/api/v1/assignments/')
-                self.assertEqual(response.status_code, 200)
-    """
-
-    service_manager: ClassVar[services.ServiceManager]
-    app: ClassVar[Any]
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up service manager for the test class.
-
-        Subclasses MUST call super().setUpClass() and then set cls.app to
-        the appropriate Flask app (auth_app, apps_app, or audit_app).
-        """
-        cls.service_manager = services.create_service_manager(shared=True)
-        cls.service_manager.setup()
-
-    def setUp(self):
-        """Set up test client and reset storage for per-test isolation.
-
-        Automatically resets storage before each test to ensure tests don't
-        pollute each other's state. No need for test_00_* prefixes.
-        """
-        if hasattr(self, 'app'):
-            self.client = self.app.test_client()
-            self.app_context = self.app.app_context()
-            self.app_context.push()
-
-        # Reset storage for per-test isolation
-        if hasattr(self, 'service_manager'):
-            self.service_manager.reset_test_data()
-
-    def tearDown(self):
-        """Clean up Flask app context after each test."""
-        if hasattr(self, 'app_context'):
-            self.app_context.pop()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up service manager and reset test storage."""
-        if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-
-
 class IsolatedIntegrationTestCase(unittest.TestCase):
     """Base class for isolated integration tests with fresh Flask apps.
 
     This class uses shared=False to create fresh Flask apps per test class,
     ensuring complete isolation from other test classes.
 
+    **UPDATED**: Now uses the new clean lifecycle API from issue #518.
+
     Provides:
     - Fresh service manager (shared=False)
-    - Automatic storage reset and reinitialization
-    - Support for tests that need custom storage initialization
+    - Fast per-test data cleanup (preserves schema)
+    - No manual Resource.init_storage() needed
+    - Explicit async operation handling
 
     Use this when:
     - Tests need complete isolation from other test classes
@@ -118,52 +55,47 @@ class IsolatedIntegrationTestCase(unittest.TestCase):
             @classmethod
             def setUpClass(cls):
                 super().setUpClass()
-                from campus.audit.resources.traces import TracesResource
-                TracesResource.init_storage()
                 cls.audit_app = cls.manager.audit_app
 
-            def setUp(self):
-                super().setUp()
-                # Reinitialize storage after reset
-                from campus.audit.resources.traces import TracesResource
-                TracesResource.init_storage()
+            def test_something(self):
+                # No manual storage reinit needed!
+                response = self.client.get('/audit/v1/traces')
+
+    See: #518 - Proposal: Saner Integration Test Lifecycle
     """
 
     manager: ClassVar[services.ServiceManager]
 
     @classmethod
     def setUpClass(cls):
-        """Set up fresh service manager for isolated testing.
+        """Set up fresh service manager for isolated testing using new API.
 
-        Subclasses MUST call super().setUpClass() and then initialize
-        any required storage resources.
+        Subclasses MUST call super().setUpClass() and then set cls.app/cls.audit_app
+        to the appropriate Flask app.
         """
         cls.manager = services.create_service_manager(shared=False)
-        cls.manager.setup()
+        cls.manager.initialize()  # NEW API: initialize() instead of setup()
 
     def setUp(self):
-        """Reset and reinitialize storage before each test.
+        """Set up test client and clear data using new API.
 
-        Subclasses should call super().setUp() and then reinitialize
-        any storage resources that were initialized in setUpClass().
+        Uses clear_test_data() which preserves schema structure, eliminating
+        the need for manual Resource.init_storage() calls.
         """
-        # Reset storage (destroys in-memory SQLite tables)
-        self.manager.reset_test_data()
+        if hasattr(self, 'manager'):
+            # Clear data using new API (faster, no schema destroy)
+            self.manager.clear_test_data()  # NEW API: clear_test_data() instead of reset_test_data()
 
-        # CRITICAL: Reinitialize storage resources after reset
-        # Subclasses must call super().setUp() first, then reinitialize
-        # Example:
-        #   super().setUp()
-        #   TracesResource.init_storage()
+    def tearDown(self):
+        """Flush async operations after each test using new API."""
+        if hasattr(self, 'manager'):
+            self.manager.flush_async()  # NEW API: explicit async flush
 
     @classmethod
     def tearDownClass(cls):
-        """Clean up service manager and reset test storage."""
+        """Clean up service manager using new API."""
         if hasattr(cls, 'manager'):
-            cls.manager.reset_test_data()
-            cls.manager.close()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
+            cls.manager.cleanup()  # NEW API: cleanup() instead of close()
 
 
 class DependencyCheckedTestCase(unittest.TestCase):
@@ -179,14 +111,10 @@ class DependencyCheckedTestCase(unittest.TestCase):
     Example:
         class TestMyFeature(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
             @classmethod
-            def setUpClass(cls):
-                super().setUpClass()
-                cls.manager.setup()
-
-            def test_000_dependencies(self):
+            def _check_dependencies(cls):
                 \"\"\"Verify that required dependencies are available.\"\"\"
-                if not self._verify_feature_works():
-                    self.fail_dependency(
+                if not cls._verify_feature_works():
+                    cls._skip_dependency(
                         "Feature X is not working. See: https://github.com/user/repo/issues/123"
                     )
 
@@ -235,3 +163,89 @@ class DependencyCheckedTestCase(unittest.TestCase):
 
         # Fail this test with clear error message
         self.fail(f"Dependency check failed: {reason}")
+
+
+class IntegrationTestCase(unittest.TestCase):
+    """Base class for standard integration tests with service manager.
+
+    This class uses the new ServiceManager API from issue #518:
+    - initialize() instead of setup()
+    - clear_test_data() instead of reset_test_data()
+    - flush_async() after each test for async operations
+    - cleanup() instead of close()
+
+    This is the DEFAULT and RECOMMENDED base class for integration tests.
+
+    **Benefits**:
+    - Faster per-test cleanup (clear_all_data vs reset_test_storage)
+    - No manual Resource.init_storage() needed (schema preserved)
+    - Explicit async operation handling
+    - Clearer lifecycle ownership
+    - Shared Flask apps across test classes for better performance
+
+    **When to use IsolatedIntegrationTestCase instead**:
+    - Tests that modify Flask app configuration
+    - Tests that need complete isolation from other test classes
+    - Tests with background threads or async operations
+
+    Example:
+        class TestAssignments(IntegrationTestCase):
+            @classmethod
+            def setUpClass(cls):
+                super().setUpClass()
+                cls.app = cls.service_manager.apps_app
+                cls.user_id = UserID("test@example.com")
+
+            def test_list_assignments(self):
+                response = self.client.get('/api/v1/assignments/')
+                self.assertEqual(response.status_code, 200)
+
+    See: #518 - Proposal: Saner Integration Test Lifecycle
+    """
+
+    service_manager: ClassVar[services.ServiceManager]
+    app: ClassVar[Any]
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up service manager using the new API.
+
+        Subclasses MUST call super().setUpClass() and then set cls.app to
+        the appropriate Flask app (auth_app, apps_app, or audit_app).
+        """
+        cls.service_manager = services.create_service_manager(shared=True)
+        cls.service_manager.initialize()  # NEW API: initialize() instead of setup()
+
+    def setUp(self):
+        """Set up test client and clear data for per-test isolation.
+
+        Automatically clears data before each test using the new API.
+        No need for test_00_* prefixes or manual Resource.init_storage() calls.
+        """
+        if hasattr(self, 'app'):
+            self.client = self.app.test_client()
+            self.app_context = self.app.app_context()
+            self.app_context.push()
+
+        # Clear data using new API (faster, no schema destroy)
+        if hasattr(self, 'service_manager'):
+            self.service_manager.clear_test_data()  # NEW API: clear_test_data() instead of reset_test_data()
+
+    def tearDown(self):
+        """Clean up Flask app context and flush async operations after each test."""
+        if hasattr(self, 'app_context'):
+            self.app_context.pop()
+
+        # Flush async operations after each test
+        if hasattr(self, 'service_manager'):
+            self.service_manager.flush_async()  # NEW API: explicit async flush
+
+    @classmethod
+    def tearDownClass(cls):
+        """Clean up service manager using the new API.
+
+        Note: Does not call reset_test_storage() here to avoid redundant cleanup.
+        The next test class will reset storage in its initialize() method.
+        """
+        if hasattr(cls, 'service_manager'):
+            cls.service_manager.cleanup()  # NEW API: cleanup() instead of close()

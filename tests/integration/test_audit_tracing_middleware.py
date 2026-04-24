@@ -19,32 +19,34 @@ File: tests/integration/test_audit_tracing_middleware.py
 Issue: #428
 """
 
+import concurrent.futures
 import re
 import time
 import typing
 import unittest
 from unittest.mock import patch
 
-from campus.common import env, schema
+from campus.common import env
 from campus.audit.resources.traces import TracesResource
-from campus.audit.middleware import tracing
-from tests.fixtures import services
-from tests.fixtures.tokens import get_basic_auth_headers, get_bearer_auth_headers, create_test_token
-from tests.integration.base import DependencyCheckedTestCase
+from tests.fixtures.tokens import get_basic_auth_headers
+from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
 
 
-class TestTracingMiddlewareBasic(unittest.TestCase):
+class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
     """Basic tests for tracing middleware that don't require span ingestion.
 
     These tests verify middleware behavior without relying on the audit service's
     span ingestion functionality.
+
+    Migration: Now uses new lifecycle API (IsolatedIntegrationTestCase).
+    Solution: Call TracesResource.init_storage() once in setUpClass() and
+    let clear_test_data() preserve the schema.
     """
 
     @classmethod
     def setUpClass(cls):
-        """Set up services for the test class."""
-        cls.manager = services.create_service_manager(shared=False)
-        cls.manager.setup()
+        """Set up services for the test class using new API."""
+        super().setUpClass()  # Uses new API: initialize()
 
         # Get the auth and audit apps
         cls.auth_app = cls.manager.auth_app
@@ -52,6 +54,11 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
 
         # Get audit client credentials for authenticated requests
         cls.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # SOLUTION: Initialize traces storage ONCE per test class
+        # Since init_from_model uses CREATE TABLE IF NOT EXISTS, this is idempotent
+        # The table will be preserved by clear_test_data() during setUp()
+        TracesResource.init_storage()
 
         # Reset audit client singleton to ensure fresh client for this test class
         # This is important because the singleton persists across test classes
@@ -61,14 +68,9 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         """Clean up services."""
-        cls.manager.reset_test_data()  # This already calls reset_test_storage() internally
-        cls.manager.close()
+        super().tearDownClass()  # Uses new API: cleanup()
 
-        # Reset audit client singleton after storage reset to avoid
-        # stale credentials
-        # This prevents the next test class from using an audit client
-        # with credentials that no longer exist after reset_test_data()
-        # recreates the client
+        # Reset audit client singleton after cleanup to avoid stale credentials
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
@@ -76,21 +78,10 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
         """Set up test client and clear storage before each test."""
         # CRITICAL: Call parent setUp first to check dependencies
         # This ensures tests are skipped if dependencies failed
-        super().setUp()
+        super().setUp()  # Uses new API: clear_test_data() preserves schema
 
-        # Initialize traces storage BEFORE resetting test data
-        # This ensures the spans table exists before reset_test_data() closes the connection
-        TracesResource.init_storage()
-
-        # Reinitialize storage after tearDownClass reset
-        # CRITICAL: Use manager.reset_test_data() to properly reset
-        # storage AND reinitialize auth/yapper service tables
-        # This will close the connection, so we need to reinitialize traces storage AFTER
-        self.manager.reset_test_data()
-
-        # Reinitialize traces storage AFTER reset_test_data()
-        # This ensures the spans table exists in the new connection
-        TracesResource.init_storage()
+        # SOLUTION: No need to call TracesResource.init_storage() here anymore!
+        # The table already exists and clear_test_data() preserves it
 
         assert self.auth_app, "Auth app not initialized in setUp"
         assert self.audit_app, "Audit app not initialized in setUp"
@@ -117,20 +108,15 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after each test."""
-        # Wait for async ingestion to complete
-        from campus.audit.middleware import tracing
-        tracing._ingestion_executor.shutdown(wait=True)
+        # Call parent to use new API: flush_async()
+        super().tearDown()
 
         # Reset the audit client singleton so next test gets a fresh one
+        from campus.audit.middleware import tracing
         tracing._audit_client = None
 
-        # Re-create the executor for next test
-        tracing._ingestion_executor = typing.cast(
-            typing.Any,
-            type(tracing._ingestion_executor)(
-                max_workers=2, thread_name_prefix="audit_ingest"
-            )
-        )
+        # Re-create the executor for next test using the new API
+        tracing.recreate_executor()
 
     # Test: Graceful Degradation (does NOT require span ingestion)
     def test_request_succeeds_when_audit_unavailable(self):
@@ -159,7 +145,7 @@ class TestTracingMiddlewareBasic(unittest.TestCase):
             self.assertIsNotNone(trace_id)
 
 
-class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
+class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
     """Integration tests for tracing middleware that require functional span ingestion.
 
     These tests verify end-to-end span recording and retrieval. They are automatically
@@ -175,15 +161,20 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     The check is about test hygiene and clean output, NOT about gating on specific
     issues. Even when issue #459 is fixed, we want to keep this check to avoid
     running 11 dependent tests when the prerequisite (span ingestion) fails.
+
+    Migration: Now uses new lifecycle API (IsolatedIntegrationTestCase).
+    Solution: Call TracesResource.init_storage() once in setUpClass() and
+    let clear_test_data() preserve the schema.
     """
 
     @classmethod
     def setUpClass(cls):
-        """Set up services for the test class."""
-        cls.manager = services.create_service_manager(shared=False)
-        cls.manager.setup()
+        """Set up services for the test class using new API."""
+        super().setUpClass()  # Uses new API: initialize()
 
-        # Initialize traces storage
+        # SOLUTION: Initialize traces storage ONCE per test class
+        # Since init_from_model uses CREATE TABLE IF NOT EXISTS, this is idempotent
+        # The table will be preserved by clear_test_data() during setUp()
         TracesResource.init_storage()
 
         # Get the auth and audit apps
@@ -201,11 +192,9 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
     @classmethod
     def tearDownClass(cls):
         """Clean up services."""
-        cls.manager.reset_test_data()  # This already calls reset_test_storage() internally
-        cls.manager.close()
+        super().tearDownClass()  # Uses new API: cleanup()
 
-        # Reset audit client singleton after storage reset to avoid
-        # stale credentials
+        # Reset audit client singleton after cleanup to avoid stale credentials
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
@@ -237,23 +226,14 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
             )
 
         # CRITICAL FIX: Use a fresh executor for dependency check
-        # The global tracing._ingestion_executor may be in a corrupted state
-        # from previous test classes' tearDown() methods. Creating a fresh
-        # executor ensures clean state for this dependency check.
+        # The ExecutorManager handles proper lifecycle management, ensuring
+        # clean state for this dependency check.
         from campus.audit.middleware import tracing
-        original_executor = tracing._ingestion_executor
 
-        # CRITICAL: Wait for the original executor to finish all pending
-        # tasks before replacing it. This prevents issue #496 where
-        # pending tasks from the previous test class are still
-        # processing when we create the fresh executor, causing those
-        # tasks to fail when the original executor is restored and shut
-        # down.
-        original_executor.shutdown(wait=True)
-
-        tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=2, thread_name_prefix="dependency_check_ingest"
-        )
+        # Use the new API: recreate() handles shutdown and creation atomically
+        # This prevents issue #496 where pending tasks from previous test classes
+        # could cause "cannot schedule new futures after shutdown" errors.
+        tracing.recreate_executor()
 
         try:
             # Make a test request to generate a span
@@ -306,42 +286,18 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
             )
 
         finally:
-            # Clean up the temporary executor
-            # Use wait=True to ensure all pending tasks complete before
-            # shutdown
-            # This prevents issue #496 where spans fail to ingest with
-            # "cannot schedule new futures after shutdown" error
-            tracing._ingestion_executor.shutdown(wait=True)
-
-            # CRITICAL: Recreate the original executor instead of
-            # restoring the shut-down executor. We already shut down the
-            # original executor before creating the fresh one, so we
-            # need to recreate it here.
-            tracing._ingestion_executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=2, thread_name_prefix="audit_ingest"
-            )
+            # Clean up: Restore fresh executor state for the actual tests
+            # Using the new API ensures proper lifecycle management
+            tracing.recreate_executor()
 
     def setUp(self):
         """Set up test client and clear storage before each test."""
         # CRITICAL: Call parent setUp first to check dependencies
         # This ensures tests are skipped if dependencies failed
-        super().setUp()
+        super().setUp()  # Uses new API: clear_test_data() preserves schema
 
-        # Initialize traces storage BEFORE resetting test data
-        # This ensures the spans table exists before reset closes the
-        # connection
-        TracesResource.init_storage()
-
-        # Reinitialize storage after tearDownClass reset
-        # CRITICAL: Use manager.reset_test_data() to properly reset
-        # storage AND reinitialize auth/yapper service tables
-        # This will close the connection, so we need to reinitialize
-        # traces storage AFTER
-        self.manager.reset_test_data()
-
-        # Reinitialize traces storage AFTER reset_test_data()
-        # This ensures the spans table exists in the new connection
-        TracesResource.init_storage()
+        # SOLUTION: No need to call TracesResource.init_storage() here anymore!
+        # The table already exists and clear_test_data() preserves it
 
         assert self.auth_app, "Auth app not initialized in setUp"
         assert self.audit_app, "Audit app not initialized in setUp"
@@ -351,14 +307,12 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
         # Create auth headers for authenticated requests to auth service
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
-        # Reset audit client singleton to ensure fresh client for each
-        # test
+        # Reset audit client singleton to ensure fresh client for each test
         from campus.audit.middleware import tracing
         tracing._audit_client = None
 
         # Clear trace storage between tests for isolation
-        # Use the module-level traces_storage to avoid creating a new
-        # instance
+        # Use the module-level traces_storage to avoid creating a new instance
         import campus.storage
         from campus.audit.resources.traces import traces_storage
         # Use delete_matching with empty query to delete all spans
@@ -370,20 +324,15 @@ class TestTracingMiddlewareSpanIngestion(DependencyCheckedTestCase):
 
     def tearDown(self):
         """Clean up after each test."""
-        # Wait for async ingestion to complete
-        from campus.audit.middleware import tracing
-        tracing._ingestion_executor.shutdown(wait=True)
+        # Call parent to use new API: flush_async()
+        super().tearDown()
 
         # Reset the audit client singleton so next test gets a fresh one
+        from campus.audit.middleware import tracing
         tracing._audit_client = None
 
-        # Re-create the executor for next test
-        tracing._ingestion_executor = typing.cast(
-            typing.Any,
-            type(tracing._ingestion_executor)(
-                max_workers=2, thread_name_prefix="audit_ingest"
-            )
-        )
+        # Re-create the executor for next test using the new API
+        tracing.recreate_executor()
 
     def _get_span_by_trace_id(self, trace_id: str) -> dict | None:
         """Query audit service to retrieve span by trace_id.

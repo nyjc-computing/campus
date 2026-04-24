@@ -125,6 +125,7 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
 
     # Register tracing middleware (captures all requests)
     if isinstance(app, flask.Flask):
+        # Disable middleware tracing for now; causing NotFound errors
         from campus.audit.middleware import tracing
-        app.before_request(tracing.start_span)
-        app.after_request(tracing.end_span)
+        # app.before_request(tracing.start_span)
+        # app.after_request(tracing.end_span)

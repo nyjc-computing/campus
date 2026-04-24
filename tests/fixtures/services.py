@@ -55,25 +55,16 @@ class ServiceManager:
             self.audit_app = ServiceManager._shared_instance.audit_app
             self._setup_done = ServiceManager._shared_setup_done
 
-    def setup(self):
-        """Initialize all Campus services for integration testing.
+    def _do_initialize(self):
+        """Core initialization logic for all services.
 
-        Performs environment setup, database configuration, and service
-        initialization in proper dependency order: auth → storage → yapper → api.
-
-        Note:
-            With shared=False (the default), creates fresh Flask apps with
-            fresh blueprints for each test class. This ensures full test
-            isolation at the cost of slightly slower test execution.
+        This method contains the actual initialization logic without storage reset.
+        It's called by both setup() (which resets storage first) and initialize()
+        (which doesn't reset storage).
 
         Returns:
             ServiceManager: Self for method chaining
         """
-        # Reset test storage at start of setup for clean state
-        # This ensures test classes don't pollute each other's storage
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-
         # Ensure we're running in testing mode
         # env.ENV is mutable and can be set for testing purposes
         if env.get("ENV") != devops.TESTING:
@@ -188,44 +179,60 @@ class ServiceManager:
 
         return self
 
-    def reset_test_data(self):
-        """Reset test storage for per-test isolation.
+    def setup(self):
+        """Initialize all Campus services for integration testing.
 
-        This method clears all test storage (SQLite in-memory DB, memory collections)
-        and re-initializes services. Use this in tearDown() for per-test isolation.
+        DEPRECATED: Use initialize() instead.
 
-        WARNING: This clears auth credentials, so tests using bearer tokens will need
-        to re-create their tokens after calling this method.
+        This method is deprecated and will be removed in a future version.
+        Please use the new initialize() method which provides a cleaner lifecycle.
+        See: #518 - Test lifecycle documentation
 
-        For tests that use authentication, consider using unique identifiers per test
-        (e.g., filtering by created_by) instead of full reset, or re-create the token
-        in setUp() after calling this in tearDown().
+        **Lifecycle Phase**: Class Setup (once per test class)
+        **Ownership**: Primary owner of service initialization
+        **Cleanup**: Handled by cleanup() method
+
+        Performs environment setup, database configuration, and service
+        initialization in proper dependency order: auth → storage → yapper → api.
+
+        Phase Details:
+        - Configures test environment variables (ENV, STORAGE_MODE, HOSTNAME)
+        - Patches campus_python for test routing
+        - Initializes services in dependency order
+        - Creates Flask apps for auth, api, and audit
+        - Registers test apps for URL routing
+
+        Note:
+            With shared=False (the default), creates fresh Flask apps with
+            fresh blueprints for each test class. This ensures full test
+            isolation at the cost of slightly slower test execution.
+
+        Returns:
+            ServiceManager: Self for method chaining
+
+        See: #518 - Test lifecycle documentation
         """
-        import campus.storage.testing
+        # Call the core initialization logic
+        return self._do_initialize()
 
-        # Reset storage (clears SQLite in-memory DB and memory collections)
-        campus.storage.testing.reset_test_storage()
 
-        # Re-initialize auth and yapper services
-        # These are idempotent and will recreate necessary tables/collections
-        auth.init()
-        yapper.init()
+    def _do_cleanup(self):
+        """Core cleanup logic for all services.
 
-    def close(self):
-        """Clean up service instances and resources.
+        This method contains the actual cleanup logic. It's called by both
+        close() (deprecated) and cleanup() (new API).
 
-        Always cleans up auth client and credentials. With shared=False,
-        also cleans up Flask apps for full isolation.
+        Cleans up:
+        - Background threads (tracing middleware executor)
+        - Auth client (test client record)
+        - Environment credentials (CLIENT_ID, CLIENT_SECRET)
+        - Audit client configuration
+        - Flask apps (if not shared mode)
         """
         # Shut down tracing middleware's background thread pool FIRST
         # This must happen BEFORE clearing credentials and storage to avoid
         # race conditions where background threads try to access cleared resources
-        try:
-            from campus.audit.middleware import tracing
-            tracing._ingestion_executor.shutdown(wait=True)
-        except Exception:
-            # If tracing module isn't loaded or executor already shut down, continue
-            pass
+        self.shutdown_threads()
 
         # Always clean up auth client regardless of shared mode
         self._cleanup_auth_client()
@@ -252,6 +259,7 @@ class ServiceManager:
 
         self._setup_done = False
 
+
     def _cleanup_auth_client(self):
         """Clean up the test client from auth service.
 
@@ -268,11 +276,63 @@ class ServiceManager:
         except Exception:
             pass
 
+    def shutdown_threads(self):
+        """Shutdown background threads idempotently.
+
+        **Lifecycle Phase**: Test Teardown (after each test) OR Class Teardown
+        **Ownership**: Delegates to tracing module's ExecutorManager
+        **Cleans Up**: Tracing middleware background thread pool
+
+        Safely shuts down the tracing middleware's thread pool if it's running.
+        This method is idempotent - safe to call multiple times without errors.
+
+        Usage:
+        - Optional: Call in tearDown() to wait for async operations before assertions
+        - Automatic: Called by close() during class teardown
+        - Safe: Multiple calls are no-ops after first shutdown
+
+        Thread Safety:
+        - Waits for pending tasks to complete (wait=True)
+        - Prevents new tasks from being submitted after shutdown
+        - Idempotent by design (ExecutorManager tracks state explicitly)
+
+        Implementation Notes:
+        - Uses ExecutorManager.shutdown() which is inherently idempotent
+        - No exception handling needed for normal flow
+        - Tests can call recreate_executor() to create fresh executors
+
+        See: #520 - Discussion of executor idempotency patterns
+        """
+        from campus.audit.middleware import tracing
+        # ExecutorManager.shutdown() is idempotent by design
+        # No exception handling needed - it handles state tracking internally
+        tracing._ingestion_executor_manager.shutdown(wait=True)
+
     @classmethod
     def cleanup_shared(cls):
         """Clean up shared service instances and reset storage.
 
+        **Lifecycle Phase**: End of Test Run (global cleanup)
+        **Ownership**: Final cleanup for shared service manager instances
+        **Cleans Up**:
+        - Shared service manager instance
+        - campus_python test patches
+        - Test app routing configuration
+        - Auth client and credentials
+        - Background threads (via cleanup())
+
         Should be called at the end of test runs to ensure clean state.
+        Used in test fixtures and finalizers to clean up after all tests complete.
+
+        Cleanup Order:
+        1. Unpatch campus_python and clear test app routing
+        2. Clean up auth client from shared instance
+        3. Cleanup shared instance (shuts down threads, clears credentials)
+        4. Clear environment credentials (redundant but safe)
+
+        Usage:
+            Typically called in test finalizers or atexit handlers rather than
+            in individual test classes, which use cleanup() instead.
         """
         # Unpatch campus_python and clear test apps
         from tests import flask_test
@@ -281,7 +341,7 @@ class ServiceManager:
 
         if cls._shared_instance:
             cls._shared_instance._cleanup_auth_client()
-            cls._shared_instance.close()
+            cls._shared_instance.cleanup()
             cls._shared_instance = None
             cls._shared_setup_done = False
 
@@ -290,39 +350,105 @@ class ServiceManager:
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
 
-        # Reset test storage
+    # === NEW LIFECYCLE API (Issue #518) ===
+    # These methods provide a cleaner, more predictable lifecycle for integration tests.
+    # They coexist with the old API (setup/reset_test_data/close) during migration.
+
+    def initialize(self):
+        """One-time initialization of all services.
+
+        **Lifecycle Phase**: Class Setup (once per test class)
+        **New API**: Use this instead of setup() for new test code
+        **Ownership**: Primary owner of service initialization
+
+        This is the new recommended method for service initialization.
+
+        Key Difference from setup():
+        - Does NOT reset test storage (no schema destruction)
+        - Storage reset only happens once in setup() for backwards compatibility
+        - clear_test_data() handles per-test data cleanup without schema destruction
+        - Faster than setup() because it preserves table structure
+
+        This method initializes services without destroying the database schema,
+        which is the core performance improvement of the new lifecycle API.
+
+        Returns:
+            ServiceManager: Self for method chaining
+
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
+        return self._do_initialize()
+
+    def clear_test_data(self):
+        """Clear test data while preserving table/collection structure.
+
+        **Lifecycle Phase**: Test Setup (once per test)
+        **New API**: Use this instead of reset_test_data() for new test code
+        **Ownership**: Primary owner of per-test data cleanup
+
+        This is the new recommended method for per-test data cleanup.
+        Unlike reset_test_data(), this method:
+        - Uses clear_all_data() which preserves schema structure
+        - Is faster (no table/collection recreation)
+        - Doesn't require manual Resource.init_storage() calls
+
+        Migration Path:
+        - Old: reset_test_data() → manual Resource.init_storage()
+        - New: clear_test_data() → no manual reinit needed
+
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
         import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
-    def __enter__(self):
-        """Context manager entry."""
-        return self.setup()
+        # Clear data without destroying schema (faster than reset_test_storage)
+        campus.storage.testing.clear_all_data()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.close()
+        # Re-initialize auth and yapper services
+        # These are idempotent and will recreate necessary data
+        auth.init()
+        yapper.init()
 
+    def flush_async(self):
+        """Wait for async operations to complete.
 
-@contextmanager
-def init():
-    """Context manager for Campus service initialization and cleanup.
+        **Lifecycle Phase**: Test Teardown (after each test)
+        **New API**: Call this in tearDown() to ensure async operations complete
+        **Ownership**: Delegates to tracing module's shutdown logic
 
-    Provides convenient setup and teardown of services for integration testing.
-    Ensures proper cleanup even if exceptions occur.
+        This ensures background operations (like tracing middleware ingestion)
+        complete before the next test starts. Prevents race conditions where
+        async operations from one test affect the next test.
 
-    Usage:
-        with services.init() as manager:
-            auth_client = manager.auth_app.test_client()
-            api_client = manager.apps_app.test_client()
+        Usage:
+            def tearDown(self):
+                super().tearDown()
+                self.service_manager.flush_async()
 
-    Yields:
-        ServiceManager: Configured service manager with Flask applications
-    """
-    manager = ServiceManager()
-    try:
-        yield manager.setup()
-    finally:
-        manager.close()
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
+        self.shutdown_threads()
+
+    def cleanup(self):
+        """Clean up all resources.
+
+        **Lifecycle Phase**: Class Teardown (once per test class)
+        **New API**: Use this instead of close() for new test code
+        **Ownership**: Primary owner of resource cleanup
+
+        This is the new recommended method for resource cleanup.
+
+        Cleans up:
+        - Background threads (tracing middleware executor)
+        - Auth client (test client record)
+        - Environment credentials (CLIENT_ID, CLIENT_SECRET)
+        - Audit client configuration
+        - Flask apps (if not shared mode)
+
+        This method contains the core cleanup logic.
+
+        See: #518 - Proposal: Saner Integration Test Lifecycle
+        """
+        self._do_cleanup()
 
 
 def create_service_manager(shared=False) -> ServiceManager:

@@ -49,11 +49,18 @@ __all__ = [
     "VenueBooking",
 ]
 
-from .assignment import Assignment, ClassroomLink, Question
 from .audit import TraceSpan, TraceSummary, TraceTree, TraceTreeNode
 from .base import InternalModel, Model
 from .booking import Venue, VenueBooking
 from .circle import Circle
+from .classroom import (
+    Assignment,
+    ClassroomLink,
+    Feedback,
+    Question,
+    Response,
+    Submission,
+)
 from .client import Client, ClientAccess
 from .credentials import OAuthToken, UserCredentials
 from .device_code import DeviceCode
@@ -61,7 +68,6 @@ from .emailotp import EmailOTP
 from .http.header import HttpHeader, HttpHeaderWithAuth
 from .login import LoginSession
 from .session import AuthSession
-from .submission import Feedback, Response, Submission
 from .timetable import (
     LessonGroup,
     LessonGroupMember,

@@ -28,14 +28,14 @@ class TestAuthUsersContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.manager = services.create_service_manager()
-        cls.manager.setup()
+        cls.manager.initialize()
         cls.app = cls.manager.auth_app
 
         # User storage is initialized by auth.init(), no need to re-init
 
     @classmethod
     def tearDownClass(cls):
-        cls.manager.close()
+        cls.manager.cleanup()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
 
