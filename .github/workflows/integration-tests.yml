@@ -12,11 +12,17 @@ env:
 
 jobs:
   integration-tests:
+    name: Integration Tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    # Run integration tests for all target branches
-    # Required to pass for staging/main, optional for weekly
-    continue-on-error: ${{ github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
+    # Run integration tests for both supported versions.
+    # Python 3.12 remains visible-but-optional during the migration window.
+    # Weekly branch integration failures remain non-blocking as before.
+    continue-on-error: ${{ matrix.python-version == '3.12' || github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
     env:
       ENV: testing
     steps:
@@ -24,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
       - name: Install Poetry
         run: |
           python -m pip install --upgrade pip

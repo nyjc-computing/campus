@@ -12,14 +12,20 @@ env:
 
 jobs:
   sanity-check:
+    name: Sanity Check (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    continue-on-error: ${{ matrix.python-version == '3.12' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python-version }}
       - name: Install Poetry
         run: |
           python -m pip install --upgrade pip
@@ -29,4 +35,4 @@ jobs:
       - name: Install Campus Suite
         run: poetry install --no-root
       - name: Run Sanity Checks
-        run: poetry run tests/run_tests.py sanity
+        run: poetry run python tests/run_tests.py sanity
