@@ -96,3 +96,55 @@ class TestString(unittest.TestCase):
             schema.String.raise_for_validation(False)
         with self.assertRaises(TypeError):
             schema.String.raise_for_validation(None)
+
+
+class TestDateTime(unittest.TestCase):
+    """Tests for the DateTime class."""
+
+    @unittest.skip("Not implemented")
+    def test_boolean_validation(self) -> None:
+        """Response should raise TypeError when a non-datetime value is
+        passed.
+        """
+        with self.assertRaises(TypeError):
+            schema.DateTime.raise_for_validation("123")
+        with self.assertRaises(TypeError):
+            schema.DateTime.raise_for_validation("1.5")
+        with self.assertRaises(TypeError):
+            schema.DateTime.raise_for_validation("1")
+        with self.assertRaises(TypeError):
+            schema.DateTime.raise_for_validation("1234")
+
+
+class TestTime(unittest.TestCase):
+
+    @unittest.skip("Not implemented")
+    def test_string_validation(self) -> None:
+        """Response should raise ValueError when a non-HHMM string is
+        passed.
+        """
+        # Valid time; should not raise an error
+        schema.String.raise_for_validation("1234")
+        with self.assertRaises(ValueError):
+            schema.String.raise_for_validation("9876")
+        with self.assertRaises(ValueError):
+            schema.String.raise_for_validation("12")
+        with self.assertRaises(ValueError):
+            schema.String.raise_for_validation("0")
+
+
+class TestEmail(unittest.TestCase):
+
+    @unittest.skip("Not implemented")
+    def test_email_validation(self) -> None:
+        """Response should raise ValueError when a non-valid email is
+        passed.
+        """
+        with self.assertRaises(ValueError):
+            schema.Email.raise_for_validation("example.com")
+        with self.assertRaises(ValueError):
+            schema.Email.raise_for_validation("@example.com")
+        with self.assertRaises(ValueError):
+            schema.Email.raise_for_validation("123")
+        with self.assertRaises(ValueError):
+            schema.Email.raise_for_validation("user")
