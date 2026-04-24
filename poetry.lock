@@ -616,12 +616,14 @@ files = []
 develop = false
 
 [package.dependencies]
-campus-suite = {path = "../campus"}
+campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
 flask = "^3.0.0"
 
 [package.source]
-type = "directory"
-url = "../campus-api-python"
+type = "git"
+url = "https://github.com/nyjc-computing/campus-api-python.git"
+reference = "main"
+resolved_reference = "9cc0e68763e5ee21f973ea547846b690f061dc7f"
 
 [[package]]
 name = "certifi"
@@ -1874,4 +1876,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.14"
-content-hash = "605ee0ad12976eb64742834b20c4f22953dbbc744171c2d16f69b307e55cf308"
+content-hash = "c6850ddbf570461a91385b52678e43510e7eab6786e65c58fb30fea6649685ae"
