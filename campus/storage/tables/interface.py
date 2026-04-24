@@ -124,7 +124,11 @@ class TableInterface(ABC):
 
     @abstractmethod
     def update_by_id(self, row_id: str, update: dict):
-        """Update a row in the specified table."""
+        """Update a row in the specified table.
+
+        Raises:
+            storage_errors.NotFoundError: If no row exists with the given ID
+        """
         ...
 
     @abstractmethod
@@ -134,7 +138,11 @@ class TableInterface(ABC):
 
     @abstractmethod
     def delete_by_id(self, row_id: str):
-        """Delete a row from the specified table."""
+        """Delete a row from the specified table.
+
+        Raises:
+            storage_errors.NotFoundError: If no row exists with the given ID
+        """
         ...
 
     @abstractmethod
