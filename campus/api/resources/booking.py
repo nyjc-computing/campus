@@ -50,9 +50,24 @@ class BookingsResource:
             end_time: schema.Time,
             date: schema.Date,
     ) -> model.VenueBooking:
-        """
-            Create a new venue booking
-            Updates the storage with the new venue booking
+        """Create a new venue booking
+        
+        Arguments:
+            user_id (schema.UserID)
+                ID of the user making the booking.
+            venue_id (schema.CampusID)
+                ID of the venue being booked.
+            description (schema.String)
+                Description of the booking.
+            start_time (schema.Time)
+                Start time of the booking, HHMM format.
+            end_time (schema.Time)
+                End time of the booking, HHMM format.
+            date (schema.Date)
+                Date of the booking, ISO8601 format.
+
+        Returns:
+            model.VenueBooking: The created venue booking.
         """
         venue_booking = model.VenueBooking(
             id=schema.CampusID(
@@ -81,8 +96,7 @@ class BookingResource:
         self.booking_id = booking_id
 
     def get(self) -> model.VenueBooking:
-        """
-        Get a full VenueBooking by ID.
+        """Get a full VenueBooking by ID.
 
         Returns:
             model.VenueBooking: The venue booking.
@@ -107,9 +121,13 @@ class BookingResource:
     
     def update(self, **updates: typing.Any) -> None:
         """Update fields of the booking.
+        For now, only the description can be updated.
+        To update other fields, the booking must be deleted and
+        re-created with the new values.
 
         Args:
-            **updates: Fields to update in the venue booking record.
+            description (schema.String):
+            The new description for the booking.
 
         Raises:
             ConflictError: If the booking does not exist.
