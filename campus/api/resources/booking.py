@@ -119,7 +119,7 @@ class BookingResource:
                 id=self.booking_id
             ) from None
     
-    def update(self, **updates: typing.Any) -> None:
+    def update(self, description: schema.String) -> None:
         """Update fields of the booking.
         For now, only the description can be updated.
         To update other fields, the booking must be deleted and
@@ -133,17 +133,17 @@ class BookingResource:
             ConflictError: If the booking does not exist.
         """
         try:
-            model.VenueBooking.validate_update(updates)
+            model.VenueBooking.validate_update(
+                {"description": description}
+            )
+        except ValueError as e:
+            raise api_errors.InvalidRequestError(str(e)) from e
 
-            record = venue_booking_table.get_by_id(self.booking_id)
-            if record is None:
-                raise api_errors.ConflictError(
-                    "Booking not found",
-                    id=self.booking_id
-                )
-
-            updated_record = {**record, **updates}
-            venue_booking_table.update_by_id(self.booking_id, updated_record)
+        try:
+            venue_booking_table.update_by_id(
+                self.booking_id,
+                {"description": description}
+            )
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Booking not found",
