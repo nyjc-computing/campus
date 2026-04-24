@@ -14,7 +14,6 @@ import campus.storage
 venue_booking_table = campus.storage.get_table("venue_bookings")
 venue_table = campus.storage.get_table("venues")
 
-
 # Interface
 # campus.api.booking.new()
 # campus.api.booking[booking_id].get()
@@ -57,8 +56,28 @@ class BookingsResource:
             end_time: schema.Time,
             date: schema.Date,
     ) -> model.VenueBooking:
-        """Create a new venue booking."""
-        pass
+        """
+            Create a new venue booking
+            Updates the storage with the new venue booking
+        """
+        venue_booking = model.VenueBooking(
+            id=schema.CampusID(
+                uid.generate_category_uid("booking", length=8)
+            ),
+            user_id=schema.UserID(user_id),
+            venue_id=schema.CampusID(venue_id),
+            description=schema.String(description),
+            start_time=schema.Time(start_time),
+            end_time=schema.Time(end_time),
+            date=schema.Date(date)
+        )
+        try:
+            venue_booking_table.insert_one(venue_booking.to_storage())
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
+        return venue_booking
+        
 
 
 class BookingResource:
@@ -77,16 +96,48 @@ class BookingResource:
         Raises:
             ConflictError: If the booking does not exist.
         """
-        pass
-
+        try:
+            record = venue_booking_table.get_by_id(self.booking_id)
+            if record is None:
+                raise api_errors.ConflictError(
+                    "Booking not found",
+                    id=self.booking_id
+                )
+            venue_booking = model.VenueBooking.from_storage(record)
+            return venue_booking
+        except campus.storage.errors.NotFoundError:
+            raise api_errors.ConflictError(
+                "Booking not found",
+                id=self.booking_id
+            ) from None
     
     def update(self, **updates: typing.Any) -> None:
         """Update fields of the booking.
 
         Args:
             **updates: Fields to update in the venue booking record.
+
+        Raises:
+            ConflictError: If the booking does not exist.
         """
-        pass
+        try:
+            model.VenueBooking.validate_update(updates)
+
+            record = venue_booking_table.get_by_id(self.booking_id)
+            if record is None:
+                raise api_errors.ConflictError(
+                    "Booking not found",
+                    id=self.booking_id
+                )
+
+            updated_record = {**record, **updates}
+            venue_booking_table.update_by_id(self.booking_id, updated_record)
+        except campus.storage.errors.NotFoundError:
+            raise api_errors.ConflictError(
+                "Booking not found",
+                id=self.booking_id
+            ) from None
+
 
 
     def delete(self) -> None:
@@ -95,6 +146,11 @@ class BookingResource:
         Raises:
             ConflictError: If the booking does not exist.
         """
-        pass
-
+        try:
+            venue_booking_table.delete_by_id(self.booking_id)
+        except campus.storage.errors.NotFoundError:
+            raise api_errors.ConflictError(
+                "Booking not found",
+                id=self.booking_id
+            ) from None
 
