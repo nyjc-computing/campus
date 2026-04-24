@@ -115,6 +115,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
     routes.submissions.init_app(bp)
+    routes.timetable.init_app(bp)
 
     # Apply authentication to all API routes
     bp.before_request(campus_authenticator.authenticate)
