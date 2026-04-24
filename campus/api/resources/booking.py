@@ -3,8 +3,6 @@
 Booking resource for Campus API.
 """
 
-import typing
-
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
@@ -51,7 +49,7 @@ class BookingsResource:
             date: schema.Date,
     ) -> model.VenueBooking:
         """Create a new venue booking
-        
+
         Arguments:
             user_id (schema.UserID)
                 ID of the user making the booking.
@@ -91,7 +89,7 @@ class BookingsResource:
 
 class BookingResource:
     """Represents a single booking."""
-    
+
     def __init__(self, booking_id: schema.CampusID):
         self.booking_id = booking_id
 
@@ -150,11 +148,9 @@ class BookingResource:
                 id=self.booking_id
             ) from None
 
-
-
     def delete(self) -> None:
         """Delete the booking and all associated entries.
-    
+
         Raises:
             ConflictError: If the booking does not exist.
         """
@@ -165,4 +161,3 @@ class BookingResource:
                 "Booking not found",
                 id=self.booking_id
             ) from None
-
