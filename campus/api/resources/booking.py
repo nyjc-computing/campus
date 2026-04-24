@@ -110,12 +110,13 @@ class BookingResource:
                     id=self.booking_id
                 )
             venue_booking = model.VenueBooking.from_storage(record)
-            return venue_booking
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Booking not found",
                 id=self.booking_id
             ) from None
+        else:
+            return venue_booking
     
     def update(self, description: schema.String) -> None:
         """Update fields of the booking.
