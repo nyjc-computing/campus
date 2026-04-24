@@ -122,9 +122,3 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     # causing confusing 401 errors on authenticated endpoints.
     if isinstance(app, flask.Flask):
         app.url_map.strict_slashes = True
-
-    # Register tracing middleware (captures all requests)
-    if isinstance(app, flask.Flask):
-        from campus.audit.middleware import tracing
-        app.before_request(tracing.start_span)
-        app.after_request(tracing.end_span)
