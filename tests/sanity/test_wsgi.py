@@ -9,6 +9,11 @@ from campus.common import env
 class TestWSGI(unittest.TestCase):
     """Test WSGI entry point with fresh Flask apps per test class.
 
+    NOTE: This test does NOT use IntegrationTestCase base class because:
+    - It requires custom environment variable management (saving/restoring os.environ)
+    - It needs special module cleanup (deleting 'wsgi' from sys.modules)
+    - It tests deployment-specific behavior that differs from standard integration tests
+
     Previously skipped due to blueprint re-registration issues.
     Fixed by creating fresh blueprints in init_app() (Option B).
     """
@@ -17,7 +22,7 @@ class TestWSGI(unittest.TestCase):
     def setUpClass(cls):
         """Set up local services once for the entire test class."""
         cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        cls.service_manager.initialize()
         # Save original environment
         cls._original_env = dict(os.environ)
 
@@ -25,7 +30,7 @@ class TestWSGI(unittest.TestCase):
     def tearDownClass(cls):
         """Clean up services after all tests in the class."""
         if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
+            cls.service_manager.cleanup()
 
         # Reset test storage to clear SQLite in-memory database
         import campus.storage.testing
@@ -38,7 +43,7 @@ class TestWSGI(unittest.TestCase):
 
     def test_wsgi_import(self):
         for deploy_mode in ("campus.api", "campus.auth"):
-            env.DEPLOY = deploy_mode
+            env.set('DEPLOY', deploy_mode)
 
             # Import wsgi after service setup to avoid connection issues
             import wsgi

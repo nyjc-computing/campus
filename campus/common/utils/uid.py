@@ -49,3 +49,25 @@ def generate_user_uid(email: str) -> schema.UserID:
     """
     user_id, _ = email.split('@')
     return schema.UserID(user_id)
+
+
+def generate_trace_id() -> str:
+    """Generate a 32-char hex trace ID (OpenTelemetry-compatible).
+
+    OpenTelemetry trace IDs are 128-bit values represented as 32 lowercase hex characters.
+
+    Returns:
+        A 32-character hexadecimal string.
+    """
+    return uuid.uuid4().hex
+
+
+def generate_span_id() -> str:
+    """Generate a 16-char hex span ID (OpenTelemetry-compatible).
+
+    OpenTelemetry span IDs are 64-bit values represented as 16 lowercase hex characters.
+
+    Returns:
+        A 16-character hexadecimal string.
+    """
+    return uuid.uuid4().hex[:16]

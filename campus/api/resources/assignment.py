@@ -9,16 +9,16 @@ from dataclasses import asdict
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model
+import campus.model as model
 import campus.storage
 
 assignment_storage = campus.storage.get_collection("assignments")
 
 
-def _from_record(record: dict) -> campus.model.Assignment:
+def _from_record(record: dict) -> model.Assignment:
     """Convert a storage record to an Assignment model instance."""
     questions = [
-        campus.model.Question(
+        model.Question(
             id=q["id"],
             prompt=q["prompt"],
             question=q["question"]
@@ -27,7 +27,7 @@ def _from_record(record: dict) -> campus.model.Assignment:
     ]
 
     classroom_links = [
-        campus.model.ClassroomLink(
+        model.ClassroomLink(
             course_id=l["course_id"],
             coursework_id=l["coursework_id"],
             attachment_id=l.get("attachment_id"),
@@ -36,7 +36,7 @@ def _from_record(record: dict) -> campus.model.Assignment:
         for l in record.get("classroom_links", [])
     ]
 
-    return campus.model.Assignment(
+    return model.Assignment(
         id=schema.CampusID(record['id']),
         created_at=schema.DateTime(record['created_at']),
         title=record['title'],
@@ -59,7 +59,7 @@ class AssignmentsResource:
     def __getitem__(self, assignment_id: schema.CampusID) -> "AssignmentResource":
         return AssignmentResource(assignment_id)
 
-    def list(self, **filters: typing.Any) -> list[campus.model.Assignment]:
+    def list(self, **filters: typing.Any) -> list[model.Assignment]:
         """List all assignments matching filters."""
         try:
             records = assignment_storage.get_matching(filters)
@@ -67,9 +67,9 @@ class AssignmentsResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
 
-    def new(self, **fields: typing.Any) -> campus.model.Assignment:
+    def new(self, **fields: typing.Any) -> model.Assignment:
         """Create a new assignment."""
-        assignment = campus.model.Assignment(
+        assignment = model.Assignment(
             id=schema.CampusID(
                 uid.generate_category_uid("assignment", length=8)
             ),
@@ -77,13 +77,13 @@ class AssignmentsResource:
             title=fields["title"],
             description=fields.get("description", ""),
             questions=[
-                campus.model.Question(**q)
+                model.Question(**q)
                 for q in fields.get("questions", [])
             ],
             created_by=schema.UserID(fields["created_by"]),
             updated_at=schema.DateTime.utcnow(),
             classroom_links=[
-                campus.model.ClassroomLink(**l)
+                model.ClassroomLink(**l)
                 for l in fields.get("classroom_links", [])
             ]
         )
@@ -102,7 +102,7 @@ class AssignmentResource:
     def __init__(self, assignment_id: schema.CampusID):
         self.assignment_id = assignment_id
 
-    def get(self) -> campus.model.Assignment:
+    def get(self) -> model.Assignment:
         """Get the assignment record."""
         try:
             record = assignment_storage.get_by_id(self.assignment_id)
@@ -125,12 +125,12 @@ class AssignmentResource:
         # Handle nested updates for questions and classroom_links
         if "questions" in updates:
             updates["questions"] = [
-                asdict(q) if isinstance(q, campus.model.Question) else q
+                asdict(q) if isinstance(q, model.Question) else q
                 for q in updates["questions"]
             ]
         if "classroom_links" in updates:
             updates["classroom_links"] = [
-                asdict(l) if isinstance(l, campus.model.ClassroomLink) else l
+                asdict(l) if isinstance(l, model.ClassroomLink) else l
                 for l in updates["classroom_links"]
             ]
 

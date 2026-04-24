@@ -6,17 +6,16 @@ with both JSON and form-encoded requests per RFC 8628.
 
 import unittest
 
-from tests.fixtures import services
+from tests.integration.base import IntegrationTestCase
 
 
-class TestOAuthIntegration(unittest.TestCase):
+class TestOAuthIntegration(IntegrationTestCase):
     """Integration tests for the OAuth routes in campus.auth."""
 
     @classmethod
     def setUpClass(cls):
         """Set up local services once for the entire test class."""
-        cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        super().setUpClass()
 
         # Get the auth app from the service manager
         # OAuth routes are registered on the auth app, not the apps (API) app
@@ -26,28 +25,6 @@ class TestOAuthIntegration(unittest.TestCase):
             raise RuntimeError("Expected Flask app from service manager")
 
         cls.app = auth_app
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up services after all tests in the class."""
-        if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
-
-        # Reset test storage to clear SQLite in-memory database
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-
-    def setUp(self):
-        """Set up test environment before each test."""
-        self.client = self.app.test_client()
-
-        # Set up test context
-        self.app_context = self.app.app_context()
-        self.app_context.push()
-
-    def tearDown(self):
-        """Clean up after each test."""
-        self.app_context.pop()
 
     def test_oauth_device_authorize_with_json(self):
         """Test device authorization endpoint with JSON request."""

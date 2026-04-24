@@ -4,6 +4,7 @@
 Quick validation tests to catch common issues before running full test suite:
 - Lockfile desync (poetry.lock out of sync with pyproject.toml)
 - Module import failures (campus.api and campus.auth must be importable)
+- Deployment smoke tests (can modules be imported and configured?)
 
 These tests are designed to run early in the CI/CD pipeline to fail fast
 on common issues that would prevent deployment.
@@ -224,6 +225,32 @@ class TestFixturesImportable(unittest.TestCase):
             self.fail(
                 f"Unexpected error importing test fixtures: {e}"
             )
+
+
+# Import deployment smoke tests from tests/sanity directory
+# These tests verify that modules can be deployed (imported, configured, started)
+try:
+    # Add parent directory to path for relative imports
+    import sys
+    tests_dir = Path(__file__).parent
+    if str(tests_dir) not in sys.path:
+        sys.path.insert(0, str(tests_dir))
+
+    from sanity.test_auth_deployment import TestAuthDeployment
+    from sanity.test_api_deployment import TestAPIDeployment
+    from sanity.test_wsgi import TestWSGI
+
+    # Verify classes were imported successfully
+    assert TestAuthDeployment is not None, "TestAuthDeployment import failed"
+    assert TestAPIDeployment is not None, "TestAPIDeployment import failed"
+    assert TestWSGI is not None, "TestWSGI import failed"
+
+except ImportError as e:
+    # Deployment tests may not be available yet during initial setup
+    print(f"Warning: Could not import deployment tests: {e}")
+    TestAuthDeployment = None
+    TestAPIDeployment = None
+    TestWSGI = None
 
 
 if __name__ == '__main__':

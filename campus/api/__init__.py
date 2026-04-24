@@ -12,8 +12,8 @@ from typing import Any
 import campus_python
 import flask
 
-from campus import flask_campus
-from campus.common import env
+from campus.auth.middleware import Authenticator
+from campus.common import schema
 from campus.common.errors import auth_errors
 
 # Other local imports are intentionally omitted to avoid circular
@@ -22,74 +22,105 @@ from campus.common.errors import auth_errors
 # Lazily initialized campus client - set in init_app() after test fixtures are ready
 # This prevents connection to external services during module import in tests
 # Type: ignore because we initialize these in init_app() before first use
+
 campus: campus_python.Campus = None  # type: ignore
-campus_auth: Any = None  # type: ignore
-auth_root: Any = None  # type: ignore
+
+
+def _api_getsecret(name: str) -> str:
+    """Get secret from vault for campus.api deployment.
+
+    This function is registered with env.register_getsecret() to provide
+    deployment-specific vault access for campus.api.
+
+    Args:
+        name: Name of the secret to retrieve
+
+    Returns:
+        The secret value from the vault
+
+    Raises:
+        OSError: If DEPLOY environment variable is not set
+        api_errors.InternalError: If the secret is not found in the vault
+    """
+    from campus.common import env
+    from campus.common.errors import api_errors
+
+    deployment = env.get("DEPLOY")
+    if deployment is None:
+        raise OSError("Environment variable 'DEPLOY' required")
+
+    import campus_python
+    campus_auth = campus_python.Campus(timeout=60).auth
+    try:
+        return campus_auth.vaults[deployment][name]
+    except KeyError:
+        raise api_errors.InternalError(
+            f"Vault secret '{name}' not found in label '{deployment}'"
+        )
+
+
+def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
+    """Authenticate using HTTP Basic Authentication."""
+    try:
+        auth_result = campus.auth.root.authenticate(
+            client_id=schema.CampusID(client_id),
+            client_secret=client_secret
+        )
+    except campus_python.errors.AuthenticationError:
+        raise auth_errors.UnauthorizedClientError(
+            "Invalid client credentials"
+        )
+    return {
+        "client": auth_result["client"],
+        "user": None,
+    }
+
+def bearer_authenticate(token: str) -> dict[str, Any]:
+    """Authenticate using HTTP Bearer Authentication."""
+    try:
+        auth_result = campus.auth.root.authenticate(token=token)
+    except campus_python.errors.AuthenticationError:
+        raise auth_errors.UnauthorizedClientError(
+            "Invalid access token"
+        )
+    return {
+        "client": auth_result["client"],
+        "user": auth_result.get("user"),
+    }
+
+# Create authenticator using campus_python
+campus_authenticator = Authenticator(
+    basic_authenticator=basic_authenticate,
+    bearer_authenticator=bearer_authenticate,
+)
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
-    global campus, campus_auth, auth_root
+    from campus.common import env
+
+    # Register deployment-specific getsecret function
+    env.register_getsecret(_api_getsecret)
 
     # Initialize campus client after test fixtures have set up the vault
+    global campus
     campus = campus_python.Campus(timeout=60)
-    campus_auth = campus.auth
-    auth_root = campus.auth.root
-
-    from campus.common import webauth
 
     from . import routes
 
     # Organise API routes under api blueprint
     bp = flask.Blueprint('api_v1', __name__, url_prefix='/api/v1')
-    # Users need to be initialised first as other blueprints
-    # rely on user table
+    routes.assignments.init_app(bp)
+    routes.bookings.init_app(bp)
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
-    routes.assignments.init_app(bp)
     routes.submissions.init_app(bp)
 
-    @bp.before_request
-    def authenticate():
-        """Check request header for authorization credentials.
-
-        Push credential information to flask.g for use in route
-        handlers.
-        """
-        httpauth = webauth.http.HttpAuthenticationScheme.with_header(
-            provider="campus",
-            http_header=flask_campus.get_request_headers()
-        )
-        match httpauth.header.authorization.scheme:
-            case "basic":
-                client_id, client_secret = (
-                    httpauth.header.authorization.credentials()
-                )
-                try:
-                    auth_result = campus_auth.root.authenticate(
-                        client_id=client_id,  # type: ignore[arg-type]
-                        client_secret=client_secret  # type: ignore[arg-type]
-                    )
-                except campus_python.errors.AuthenticationError:
-                    auth_errors.UnauthorizedClientError(
-                        "No Authorization header present"
-                    )
-                else:
-                    flask.g.current_client = auth_result["client"]
-            case "bearer":
-                access_token = httpauth.header.authorization.token
-                try:
-                    auth_result = campus_auth.root.authenticate(
-                        token=access_token)
-                except campus_python.errors.AuthenticationError:
-                    auth_errors.UnauthorizedClientError(
-                        "No Authorization header present"
-                    )
-                else:
-                    flask.g.current_client = auth_result["client"]
-                    flask.g.current_user = auth_result["user"]
+    # Apply authentication to all API routes
+    bp.before_request(campus_authenticator.authenticate)
 
     app.register_blueprint(bp)
 
     if isinstance(app, flask.Flask):
-        app.secret_key = env.getsecret("SECRET_KEY", env.DEPLOY)
+        from campus.common import env
+        app.secret_key = env.getsecret("SECRET_KEY")

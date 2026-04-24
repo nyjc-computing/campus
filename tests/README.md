@@ -50,9 +50,10 @@ poetry run python -m unittest tests.unit.apps.test_client -v
 
 ### Integration Tests
 - Integration tests test package as a whole including DB, API, cross-package interactions
-- Use tests.fixtures.setup for environment setup
+- Use `tests.fixtures.services.create_service_manager()` for environment setup
 - Located in tests/integration/<package>/
 - Test real implementations with actual dependencies
+- Use base classes from `tests/integration/base.py` for consistent setup/teardown
 
 ### Contract Tests
 - Contract tests verify HTTP interface contracts (status codes, response formats, authentication)

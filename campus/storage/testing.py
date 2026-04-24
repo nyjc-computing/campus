@@ -8,13 +8,13 @@ instead of requiring full database connections.
 
 from typing import Type
 
-from campus.common import env
 from campus.storage.tables.interface import TableInterface
 from campus.storage.documents.interface import CollectionInterface
 
 
 def is_test_mode() -> bool:
     """Check if storage should use test backends based on STORAGE_MODE."""
+    from campus.common import env
     storage_mode = env.get("STORAGE_MODE", "0")
     if storage_mode is None:
         return False
@@ -26,8 +26,9 @@ def is_test_mode() -> bool:
 
 def configure_test_storage():
     """Configure storage to use test backends."""
+    from campus.common import env
     # Set environment variable to indicate test mode
-    env.STORAGE_MODE = "1"  # type: ignore[attr-defined]
+    env.set('STORAGE_MODE', "1")
 
 
 def get_table_backend() -> Type[TableInterface]:
@@ -58,3 +59,20 @@ def reset_test_storage():
 
         SQLiteTable.reset_database()
         MemoryCollection.reset_storage()
+
+
+def clear_all_data():
+    """Clear all data from test storage while preserving table/collection structure.
+
+    This is faster than reset_test_storage() for per-test cleanup since it
+    doesn't require recreating tables and collections. Only works in test mode.
+
+    Use this in setUp() for per-test isolation when you want to clear data
+    but preserve the schema defined in setUpClass().
+    """
+    if is_test_mode():
+        from campus.storage.tables.backend.sqlite import SQLiteTable
+        from campus.storage.documents.backend.memory import MemoryCollection
+
+        SQLiteTable.clear_database()
+        MemoryCollection.clear_storage()

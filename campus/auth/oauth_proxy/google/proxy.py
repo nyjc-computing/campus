@@ -10,7 +10,7 @@ from typing import Literal
 import flask
 import werkzeug
 
-from campus.common import env, schema, webauth
+from campus.common import schema, webauth
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
 import campus.config
@@ -20,8 +20,13 @@ from .. import base
 from ... import resources
 
 PROVIDER = "google"
-REDIRECT_URI = schema.Url(f"https://{env.HOSTNAME}/auth/v1/{PROVIDER}/callback")
 SCOPE_SEP = " "
+
+
+def _get_redirect_uri() -> schema.Url:
+    """Get redirect URI with runtime env access."""
+    from campus.common import env
+    return schema.Url(f"https://{env.HOSTNAME}/auth/v1/{PROVIDER}/callback")
 
 
 def get_proxy() -> "GoogleAuthProxy":
@@ -49,7 +54,7 @@ class GoogleAuthProxy(base.AuthProxy):
         self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
             provider=PROVIDER,
             client_id=self._CLIENT_ID,
-            redirect_uri=REDIRECT_URI,
+            redirect_uri=_get_redirect_uri(),
             authorization_url=schema.Url(
                 "https://accounts.google.com/o/oauth2/v2/auth"
             ),
@@ -84,7 +89,7 @@ class GoogleAuthProxy(base.AuthProxy):
     def scopes(self) -> list[str]:
         return self._oauth2.scopes
 
-    def redirect_for_authorization(
+    def redirect_for_authorization(  # pyright: ignore [reportIncompatibleMethodOverride]
             self,
             target: schema.Url,
             *,
@@ -95,7 +100,7 @@ class GoogleAuthProxy(base.AuthProxy):
         """Redirect to Google OAuth2 authorization endpoint."""
         authsession = self.init_authsession(
             expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
-            redirect_uri=REDIRECT_URI,
+            redirect_uri=_get_redirect_uri(),
             scopes=self._oauth2.scopes,
             target=target
         )
@@ -134,6 +139,8 @@ class GoogleAuthProxy(base.AuthProxy):
         Returns:
             Updated UserCredentials instance
         """
+        # Import env at runtime for WORKSPACE_DOMAIN access
+        from campus.common import env
         authsession = self.get_authsession()
         self.validate_authsession(authsession, state)
         # Retrieve access token from Google
@@ -159,11 +166,6 @@ class GoogleAuthProxy(base.AuthProxy):
                 domain=user_email.domain
             )
         user_id = schema.UserID(userinfo["email"])
-        # Ensure user exists (auto-provision)
-        resources.user.get_or_create(
-            email=user_email,
-            name=userinfo.get("name", "")
-        )
         # Store/update token
         credentials = resources.credentials[PROVIDER][user_id].update(
             client_id=self._CLIENT_ID,

@@ -44,6 +44,7 @@ from campus.common import schema
 from campus.common.errors import auth_errors
 
 from . import proxy
+from .proxy import get_proxy
 
 logger = logging.getLogger(__name__)
 

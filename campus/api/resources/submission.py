@@ -9,16 +9,16 @@ from dataclasses import asdict
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model
+import campus.model as model
 import campus.storage
 
 submission_storage = campus.storage.get_collection("submissions")
 
 
-def _from_record(record: dict) -> campus.model.Submission:
+def _from_record(record: dict) -> model.Submission:
     """Convert a storage record to a Submission model instance."""
     responses = [
-        campus.model.Response(
+        model.Response(
             question_id=r["question_id"],
             response_text=r["response_text"]
         )
@@ -26,7 +26,7 @@ def _from_record(record: dict) -> campus.model.Submission:
     ]
 
     feedback = [
-        campus.model.Feedback(
+        model.Feedback(
             question_id=f["question_id"],
             feedback_text=f["feedback_text"],
             teacher_id=schema.UserID(f["teacher_id"]),
@@ -35,7 +35,7 @@ def _from_record(record: dict) -> campus.model.Submission:
         for f in record.get("feedback", [])
     ]
 
-    return campus.model.Submission(
+    return model.Submission(
         id=schema.CampusID(record['id']),
         created_at=schema.DateTime(record['created_at']),
         assignment_id=schema.CampusID(record['assignment_id']),
@@ -60,7 +60,7 @@ class SubmissionsResource:
     def __getitem__(self, submission_id: schema.CampusID) -> "SubmissionResource":
         return SubmissionResource(submission_id)
 
-    def list(self, **filters: typing.Any) -> list[campus.model.Submission]:
+    def list(self, **filters: typing.Any) -> list[model.Submission]:
         """List all submissions matching filters."""
         try:
             records = submission_storage.get_matching(filters)
@@ -68,9 +68,9 @@ class SubmissionsResource:
             raise api_errors.InternalError.from_exception(e) from e
         return [_from_record(record) for record in records]
 
-    def new(self, **fields: typing.Any) -> campus.model.Submission:
+    def new(self, **fields: typing.Any) -> model.Submission:
         """Create a new submission."""
-        submission = campus.model.Submission(
+        submission = model.Submission(
             id=schema.CampusID(
                 uid.generate_category_uid("submission", length=8)
             ),
@@ -79,11 +79,11 @@ class SubmissionsResource:
             student_id=schema.UserID(fields["student_id"]),
             course_id=fields["course_id"],
             responses=[
-                campus.model.Response(**r)
+                model.Response(**r)
                 for r in fields.get("responses", [])
             ],
             feedback=[
-                campus.model.Feedback(**f)
+                model.Feedback(**f)
                 for f in fields.get("feedback", [])
             ],
             submitted_at=schema.DateTime(fields["submitted_at"]) if fields.get(
@@ -105,7 +105,7 @@ class SubmissionResource:
     def __init__(self, submission_id: schema.CampusID):
         self.submission_id = submission_id
 
-    def get(self) -> campus.model.Submission:
+    def get(self) -> model.Submission:
         """Get the submission record."""
         try:
             record = submission_storage.get_by_id(self.submission_id)
@@ -128,12 +128,12 @@ class SubmissionResource:
         # Handle nested updates for responses and feedback
         if "responses" in updates:
             updates["responses"] = [
-                asdict(r) if isinstance(r, campus.model.Response) else r
+                asdict(r) if isinstance(r, model.Response) else r
                 for r in updates["responses"]
             ]
         if "feedback" in updates:
             updates["feedback"] = [
-                asdict(f) if isinstance(f, campus.model.Feedback) else f
+                asdict(f) if isinstance(f, model.Feedback) else f
                 for f in updates["feedback"]
             ]
 

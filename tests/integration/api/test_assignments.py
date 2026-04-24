@@ -7,18 +7,17 @@ functionality works end-to-end.
 import unittest
 
 from campus.common import schema
-from tests.fixtures import services
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
+from tests.integration.base import IntegrationTestCase
 
 
-class TestAssignmentsIntegration(unittest.TestCase):
+class TestAssignmentsIntegration(IntegrationTestCase):
     """Integration tests for the assignments resource in campus.api."""
 
     @classmethod
     def setUpClass(cls):
         """Set up local services once for the entire test class."""
-        cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        super().setUpClass()
 
         # Get the api app from the service manager
         import flask
@@ -31,38 +30,12 @@ class TestAssignmentsIntegration(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment before each test."""
-        self.client = self.app.test_client()
-
-        # Set up test context
-        self.app_context = self.app.app_context()
-        self.app_context.push()
+        super().setUp()
 
         # Create test user token for bearer auth
-        # Re-create before each test since tearDown() resets storage
+        # Re-create before each test since setUp() resets storage
         self.token = create_test_token(self.user_id)
         self.auth_headers = get_bearer_auth_headers(self.token)
-
-    def tearDown(self):
-        """Clean up after each test.
-
-        Resets storage for per-test isolation, ensuring tests don't pollute
-        each other's state. This eliminates the need for test_00_* prefixes.
-        """
-        self.app_context.pop()
-
-        # Reset storage for per-test isolation
-        if hasattr(self, 'service_manager'):
-            self.service_manager.reset_test_data()
-
-    @classmethod
-    def tearDownClass(cls):
-        """Clean up services after all tests in the class."""
-        if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
-
-        # Reset test storage to clear database
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def test_list_assignments_empty(self):
         """GET /assignments should return empty list initially."""

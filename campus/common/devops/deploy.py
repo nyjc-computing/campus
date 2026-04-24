@@ -30,7 +30,10 @@ class AppModule(Protocol):
 
 def is_codespace() -> bool:
     """Check if running in a GitHub Codespace environment."""
-    return env.CODESPACES is not None and env.CODESPACES.lower() == "true"
+    return (
+        env.get("CODESPACES") is not None
+        and env.CODESPACES.lower() == "true"
+    )
 
 
 def configure_for_codespace(app: flask.Flask) -> None:
@@ -38,10 +41,10 @@ def configure_for_codespace(app: flask.Flask) -> None:
 
     - sets HOSTNAME from Codespace environment variables
     """
-    env.PORT = env.get("PORT", "5000")
+    env.set('PORT', env.get("PORT", "5000"))
     assert env.CODESPACE_NAME and env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN, \
         "CODESPACE_NAME and GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN must be set."
-    env.HOSTNAME = f"{env.CODESPACE_NAME}-{env.PORT}.{env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}"
+    env.set('HOSTNAME', f"{env.CODESPACE_NAME}-{env.PORT}.{env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}")
 
 
 def configure_for_development(app: flask.Flask) -> None:
@@ -115,4 +118,11 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
     for module in appmodules:
         module.init_app(app)
     campus.common.errors.init_app(app)
+
+    # Register tracing middleware for auth/api deployments
+    # campus.audit handles ingestion but doesn't trace its own requests
+    if env.DEPLOY in ('campus.auth', 'campus.api'):
+        from campus.audit import middleware
+        middleware.init_app(app)
+
     return app

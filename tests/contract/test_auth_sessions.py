@@ -28,20 +28,20 @@ class TestAuthSessionsContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.manager = services.create_service_manager()
-        cls.manager.setup()
+        cls.manager.initialize()
         cls.app = cls.manager.auth_app
-
-        # Initialize session storage (not done by auth.init())
-        from campus.auth.resources import session as session_resource
-        session_resource.init_storage()
 
     @classmethod
     def tearDownClass(cls):
-        cls.manager.close()
+        cls.manager.cleanup()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Clear test data - no manual resource initialization needed
+        self.manager.clear_test_data()
+
+        assert self.app
         self.client = self.app.test_client()
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
         self.test_provider = "campus"
@@ -122,7 +122,6 @@ class TestAuthSessionsContract(unittest.TestCase):
         self.assertIn("id", data)
         self.assertEqual(data["user_id"], str(user_id))
 
-    @unittest.skip("API BUG: Missing redirect_uri returns 500 instead of 400")
     def test_create_provider_session_missing_redirect_uri(self):
         """POST /sessions/{provider}/ without redirect_uri returns error."""
         response = self.client.post(

@@ -230,7 +230,7 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
             "/auth/v1/sessions/test",
             headers={"Accept": "application/json"}
         ):
-            from campus.common.errors import handle_authorization_error
+            from campus.common.errors.handlers import handle_authorization_error
             response, status_code = handle_authorization_error(err)
 
             self.assertEqual(status_code, 400)
@@ -246,7 +246,7 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
             "/auth/v1/clients/test",
             headers={"Accept": "text/html"}  # Not JSON, but path is API
         ):
-            from campus.common.errors import handle_authorization_error
+            from campus.common.errors.handlers import handle_authorization_error
             response, status_code = handle_authorization_error(err)
 
             self.assertEqual(status_code, 400)
@@ -264,7 +264,7 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
             "/oauth/authorize",  # Not an API path
             headers={"Accept": "text/html"}
         ):
-            from campus.common.errors import handle_authorization_error
+            from campus.common.errors.handlers import handle_authorization_error
             response = handle_authorization_error(err)
 
             # Should be a Flask redirect response
@@ -281,7 +281,7 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
             "/some/unknown/path",
             headers={"Accept": "text/html"}
         ):
-            from campus.common.errors import handle_authorization_error
+            from campus.common.errors.handlers import handle_authorization_error
             from werkzeug.exceptions import BadRequest
 
             with self.assertRaises(BadRequest) as context:
@@ -302,7 +302,7 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
                 "/some/unknown/path",
                 headers={"Accept": "text/html"}
             ):
-                from campus.common.errors import handle_authorization_error
+                from campus.common.errors.handlers import handle_authorization_error
                 response, status_code = handle_authorization_error(err)
 
                 self.assertEqual(status_code, 400)

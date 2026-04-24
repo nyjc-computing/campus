@@ -2,7 +2,7 @@
 
 import unittest
 
-from campus.model.submission import Submission, Response, Feedback
+from campus.model import Submission, Response, Feedback
 from campus.common import schema
 
 

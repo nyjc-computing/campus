@@ -32,6 +32,7 @@ from campus.common import devops
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors as storage_errors
+from campus.storage.query import gt, gte, is_operator, lt, lte
 from ..interface import TableInterface, PK
 
 
@@ -256,39 +257,87 @@ class SQLiteTable(TableInterface):
             raise storage_errors.NotFoundError(row_id, self.name)
         return row
 
-    def get_matching(self, query: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Retrieve rows matching a query."""
-        cursor = self.get_connection().cursor()
+    @staticmethod
+    def _build_where_clause(query: Dict[str, Any]) -> tuple[str, list]:
+        """Build WHERE clause from query dictionary.
 
+        Handles exact matches and comparison operators (gt, gte, lt, lte, between).
+        Uses ? placeholders for SQLite parameter binding.
+        """
         if not query:
-            # Return all rows if no query
-            cursor.execute(f"SELECT * FROM {self.name}")
-            return [row for row in (self._deserialize_row(row) for row in cursor.fetchall()) if row is not None]
+            return "", []
 
-        # Simple query handling - exact matches only for this implementation
-        rows = []
-        cursor.execute(f"SELECT * FROM {self.name}")
-        for sqlite_row in cursor.fetchall():
-            row = self._deserialize_row(sqlite_row)
-            if row and self._matches_query(row, query):  # Skip None/empty rows
-                rows.append(row)
+        conditions = []
+        params = []
 
-        return rows
-        rows = []
-        cursor.execute(f"SELECT * FROM {self.name}")
-        for sqlite_row in cursor.fetchall():
-            row = self._deserialize_row(sqlite_row)
-            if row and self._matches_query(row, query):  # Skip empty rows
-                rows.append(row)
-
-        return rows
-
-    def _matches_query(self, row: Dict[str, Any], query: Dict[str, Any]) -> bool:
-        """Check if a row matches a query."""
+        from campus.storage.query import between as between_op
         for key, value in query.items():
-            if key not in row or row[key] != value:
-                return False
-        return True
+            if is_operator(value):
+                # Handle comparison operators
+                if isinstance(value, gt):
+                    conditions.append(f'"{key}" > ?')
+                    params.append(value.value)
+                elif isinstance(value, gte):
+                    conditions.append(f'"{key}" >= ?')
+                    params.append(value.value)
+                elif isinstance(value, lt):
+                    conditions.append(f'"{key}" < ?')
+                    params.append(value.value)
+                elif isinstance(value, lte):
+                    conditions.append(f'"{key}" <= ?')
+                    params.append(value.value)
+                elif isinstance(value, between_op):
+                    # BETWEEN operator: key >= min AND key <= max
+                    min_val, max_val = value.value
+                    conditions.append(f'("{key}" >= ? AND "{key}" <= ?)')
+                    params.extend([min_val, max_val])
+                else:
+                    # Unknown operator, fall back to exact match
+                    conditions.append(f'"{key}" = ?')
+                    params.append(value.value)
+            else:
+                # Exact match
+                conditions.append(f'"{key}" = ?')
+                params.append(value)
+
+        return f"WHERE {' AND '.join(conditions)}", params
+
+    def get_matching(
+        self,
+        query: Dict[str, Any],
+        *,
+        order_by: str | None = None,
+        ascending: bool = True,
+        limit: int | None = None,
+        offset: int = 0
+    ) -> List[Dict[str, Any]]:
+        """Retrieve rows matching a query.
+
+        Supports exact matches, comparison operators (gt, gte, lt, lte),
+        sorting, and pagination.
+        """
+        cursor = self.get_connection().cursor()
+        where_clause, params = self._build_where_clause(query)
+        sql = f"SELECT * FROM {self.name} {where_clause}"
+
+        # Add ORDER BY clause if specified
+        if order_by is not None:
+            direction = "ASC" if ascending else "DESC"
+            sql += f' ORDER BY "{order_by}" {direction}'
+
+        # Add LIMIT clause (SQLite requires LIMIT when using OFFSET)
+        # If offset is specified but limit is not, use a very large limit
+        if limit is None and offset > 0:
+            limit = -1  # SQLite uses -1 to mean "no limit"
+        if limit is not None:
+            sql += f" LIMIT {limit}"
+
+        # Add OFFSET clause if specified
+        if offset > 0:
+            sql += f" OFFSET {offset}"
+
+        cursor.execute(sql, params)
+        return [row for row in (self._deserialize_row(row) for row in cursor.fetchall()) if row is not None]
 
     def insert_one(self, row: Dict[str, Any]):
         """Insert a row into the table using actual table columns."""
@@ -409,3 +458,24 @@ class SQLiteTable(TableInterface):
         if cls._connection:
             cls._connection.close()
             cls._connection = None
+
+    @classmethod
+    def clear_database(cls):
+        """Clear all data from all tables while preserving table structure.
+
+        This is faster than reset_database() for per-test cleanup since it
+        doesn't require recreating tables. Useful for test isolation.
+        """
+        if cls._connection is None:
+            return  # No database to clear
+
+        cursor = cls._connection.cursor()
+        # Get all table names
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
+
+        # Delete all rows from each table
+        for table in tables:
+            cursor.execute(f'DELETE FROM "{table}"')
+
+        cls._connection.commit()

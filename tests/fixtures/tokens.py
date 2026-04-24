@@ -38,7 +38,7 @@ def create_test_token(
 
     # Ensure we're in test mode
     if env.get("ENV") != devops.TESTING:
-        env.ENV = devops.TESTING
+        env.set('ENV', devops.TESTING)
 
     client_id = env.CLIENT_ID
 
@@ -60,8 +60,6 @@ def create_test_token(
         # User doesn't exist, create it
         name = user_id.split('@')[0] if '@' in str(user_id) else str(user_id)
         auth_resources.user.new(
-            id=str(user_id),
-            created_at=schema.DateTime.utcnow(),
             email=str(user_id),
             name=name,
             activated_at=schema.DateTime.utcnow()  # Activate the user

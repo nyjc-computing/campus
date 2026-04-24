@@ -36,12 +36,8 @@ class TestApiSubmissionsContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
         cls.manager = services.create_service_manager()
-        cls.manager.setup()
+        cls.manager.initialize()
         cls.app = cls.manager.apps_app
-
-        # Initialize submission storage (not done by default)
-        from campus.api.resources import submission as submission_resource
-        submission_resource.init_storage()
 
         # Create test user and token for bearer auth
         cls.user_id = schema.UserID("test.user@campus.test")
@@ -55,11 +51,14 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.manager.close()
+        cls.manager.cleanup()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        # Clear test data - no manual resource initialization needed
+        self.manager.clear_test_data()
+
         self.client = self.app.test_client()
 
     def _create_test_submission(self, **overrides):

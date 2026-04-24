@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test Flask test client strategy with storage backends"""
 
-from tests.flask_test import FlaskTestClient, create_test_app
+from tests.flask_test import TestCampusRequest, register_test_app, create_test_app
 import campus.auth
 
 
@@ -18,17 +18,21 @@ def test_auth_with_storage():
     for rule in app.url_map.iter_rules():
         print(f"  {rule.rule} -> {rule.endpoint}")
 
-    # Test with FlaskTestClient
-    with FlaskTestClient(app) as client:
-        # Test the test health endpoint we added
-        response = client.get("/test/health")
-        print(f"Test health endpoint: {response.status_code}")
-        print(f"Response: {response.json()}")
+    # Register app for TestCampusRequest
+    register_test_app("https://campus.test", app, path_prefix="")
 
-        if response.status_code == 200:
-            print("✅ Auth service with test storage works! (Health check passed)")
-        else:
-            print(f"❌ Unexpected status code: {response.status_code}")
+    # Test with TestCampusRequest
+    client = TestCampusRequest(base_url="https://campus.test")
+
+    # Test the test health endpoint we added
+    response = client.get("/test/health")
+    print(f"Test health endpoint: {response.status_code}")
+    print(f"Response: {response.json()}")
+
+    if response.status_code == 200:
+        print("✅ Auth service with test storage works! (Health check passed)")
+    else:
+        print(f"❌ Unexpected status code: {response.status_code}")
 
 
 if __name__ == "__main__":

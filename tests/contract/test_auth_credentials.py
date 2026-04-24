@@ -24,7 +24,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.manager = services.create_service_manager()
-        cls.manager.setup()
+        cls.manager.initialize()
         cls.app = cls.manager.auth_app
 
         # Create a test user with bearer token
@@ -33,7 +33,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.manager.close()
+        cls.manager.cleanup()
         import campus.storage.testing
         campus.storage.testing.reset_test_storage()
 

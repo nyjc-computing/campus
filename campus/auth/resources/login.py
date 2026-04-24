@@ -7,11 +7,11 @@ import typing
 
 import flask
 
-import campus.config
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
-import campus.model
+import campus.config as config
+import campus.model as model
 import campus.storage
 
 PROVIDER = "campus"
@@ -30,12 +30,12 @@ class LoginSessionsResource:
     def init_storage() -> None:
         """Initialize storage for login resource."""
         login_storage.init_from_model(
-            "login_sessions", campus.model.LoginSession
+            "login_sessions", model.LoginSession
         )
 
     def __getitem__(
             self,
-            session_id: schema.CampusID
+            session_id: schema.CampusID | str
     ) -> "LoginSessionResource":
         """Get a login session resource.
 
@@ -48,18 +48,17 @@ class LoginSessionsResource:
             self,
             *,
             # expiry_seconds: int,
-            client_id: schema.CampusID,
+            client_id: schema.CampusID | str,
             user_id: schema.UserID | None = None,
             device_id: str | None = None,
             agent_string: str,
-    ) -> campus.model.LoginSession:
+    ) -> model.LoginSession:
         """Create a new session.
 
         Any existing session will be revoked.
         """
         login_expiry_seconds = (
-            campus.config.DEFAULT_LOGIN_EXPIRY_DAYS
-            * utc_time.DAY_SECONDS
+            config.DEFAULT_LOGIN_EXPIRY_DAYS * utc_time.DAY_SECONDS
         )
         # Delete any existing session
         if (existing_session_id := _check_existing_id()):
@@ -84,8 +83,8 @@ class LoginSessionsResource:
 class LoginSessionResource:
     """Represents a login session resource in Campus API Schema."""
 
-    def __init__(self, session_id: schema.CampusID | None = None):
-        self.session_id = session_id
+    def __init__(self, session_id: schema.CampusID | str | None = None):
+        self.session_id = schema.CampusID(session_id) if session_id else None
 
     def delete(self, sync_client: bool = True) -> None:
         """Delete this auth session."""
@@ -113,7 +112,7 @@ class LoginSessionResource:
             if sync_client and _session_key(PROVIDER) in flask.session:
                 del flask.session[_session_key(PROVIDER)]
 
-    def get(self) -> campus.model.LoginSession:
+    def get(self) -> model.LoginSession:
         """Get the login session record.
 
         Returns:
@@ -128,7 +127,7 @@ class LoginSessionResource:
             )
         return _from_record(record)
 
-    def update(self, **update) -> campus.model.LoginSession:
+    def update(self, **update) -> model.LoginSession:
         """Update an existing session."""
         session_id = self.session_id
         if not session_id:
@@ -164,7 +163,7 @@ class LoginSessionResource:
 
 def _from_record(
         record: dict[str, typing.Any],
-) -> campus.model.LoginSession:
+) -> model.LoginSession:
     """Convert a storage record to a LoginSession model instance."""
     args: dict[str, typing.Any] = {}
     if "id" in record:
@@ -180,7 +179,7 @@ def _from_record(
         args["user_id"] = schema.UserID(record["user_id"])
     args["device_id"] = record.get("device_id")
     args["agent_string"] = record["agent_string"]
-    return campus.model.LoginSession(**args)
+    return model.LoginSession(**args)
 
 
 def _session_key(provider: str) -> str:
@@ -223,7 +222,7 @@ def _check_existing_id() -> schema.CampusID | None:
 
 
 def _verify_session_id(
-        session_id: schema.CampusID
+        session_id: schema.CampusID | str
 ) -> schema.CampusID:
     """Verify the session ID against the stored session.
     Raises:
@@ -233,6 +232,7 @@ def _verify_session_id(
     This avoids accidental deletion of a session that does not
     belong to the client.
     """
+    session_id = schema.CampusID(session_id)
     client_session_id = _check_existing_id()
     if client_session_id and session_id != client_session_id:
         raise api_errors.ConflictError(

@@ -19,19 +19,26 @@ from tests.fixtures import services
 
 
 class TestAPIDeployment(unittest.TestCase):
-    """Smoke tests for API module deployment."""
+    """Smoke tests for API module deployment.
+
+    NOTE: This test does NOT use IntegrationTestCase base class because:
+    - It's a deployment smoke test, not a functional integration test
+    - It tests deployability (imports, app creation) not API behavior
+    - It uses create_app() directly rather than service manager apps
+    - It needs to stay simple to survive API changes during pre-MVP development
+    """
 
     @classmethod
     def setUpClass(cls):
         """Set up test services for deployment tests."""
         cls.service_manager = services.create_service_manager()
-        cls.service_manager.setup()
+        cls.service_manager.initialize()
 
     @classmethod
     def tearDownClass(cls):
         """Clean up test services."""
         if hasattr(cls, 'service_manager'):
-            cls.service_manager.close()
+            cls.service_manager.cleanup()
 
         # Reset test storage to clear SQLite in-memory database
         import campus.storage.testing

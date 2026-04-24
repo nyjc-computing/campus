@@ -24,7 +24,7 @@ def init():
     same database file.
     """
     global _yapper_db_path
-    require.env("testing")
+    require.require_env("testing")
     client_id = require.envvar("CLIENT_ID")
     require.envvar("CLIENT_SECRET")
 
@@ -38,10 +38,10 @@ def init():
 
     # Give test client access to vault
     client_resource = auth_resources.client[client_id]
-    client_resource.access.grant("yapper", ClientAccess.ALL)
+    client_resource.access.grant("campus.yapper", ClientAccess.ALL)
 
     # Set up vault with database URI as a secret
-    yapper_vault = auth_resources.vault["yapper"]
+    yapper_vault = auth_resources.vault["campus.yapper"]
 
     # Check if already initialized (idempotent)
     if _yapper_db_path is not None:

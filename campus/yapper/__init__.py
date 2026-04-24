@@ -69,13 +69,24 @@ def create(**kwargs) -> YapperInterface:
     # to avoid connecting to external services
     if storage_mode == "1":
         from campus.auth import resources as auth_resources
-        yapper_vault = auth_resources.vault["yapper"]
+        yapper_vault = auth_resources.vault["campus.yapper"]
         yapperdb_uri = yapper_vault["YAPPERDB_URI"]
         yapper = SQLiteYapper(db=yapperdb_uri, client_id=client_id, **kwargs)
         yapper._init_db()
         return yapper
 
-    # For production/staging, use campus_python to connect to remote vault
+    # For campus.auth deployment, use local resources to avoid circular dependency
+    # (service trying to call its own HTTP API during initialization)
+    deploy = os.getenv("DEPLOY")
+    if deploy == "campus.auth":
+        from campus.auth import resources as auth_resources
+        yapper_vault = auth_resources.vault["campus.yapper"]
+        yapperdb_uri = yapper_vault["YAPPERDB_URI"]
+        yapper = PostgreSQLYapper(db_uri=yapperdb_uri, client_id=client_id, **kwargs)
+        yapper._init_db()
+        return yapper
+
+    # For other deployments, use campus_python to connect to remote vault
     # Create Campus client for vault access
     campus = campus_python.Campus(timeout=60)
 

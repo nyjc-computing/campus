@@ -9,8 +9,6 @@ This module sets up the backend resources needed by campus.auth:
 - Access permissions
 """
 
-from campus.common import env
-
 from . import require
 
 
@@ -36,7 +34,8 @@ def init():
     - ENV must be 'testing'
     - PostgreSQL environment variables must be configured
     """
-    require.env("testing")
+    from campus.common import env
+    require.require_env("testing")
 
     # Initialize storage-backed resources for the auth service
     from campus.auth import resources as auth_resources
@@ -57,7 +56,7 @@ def init():
     auth_resources.vault["campus.auth"]["SECRET_KEY"] = "vault-secret-key"
 
     # Also set in environment for code that reads env.SECRET_KEY directly
-    env.SECRET_KEY = "vault-secret-key"
+    env.set('SECRET_KEY', "vault-secret-key")
 
     # Create a test client for authentication in tests
     # Check if client already exists to make this function idempotent
@@ -79,8 +78,8 @@ def init():
         secret = client_resource.revoke()
 
     # Set client credentials in environment for test authentication
-    env.CLIENT_ID = client_id
-    env.CLIENT_SECRET = secret
+    env.set('CLIENT_ID', client_id)
+    env.set('CLIENT_SECRET', secret)
 
     # Grant the test client full access to the 'vault' label
     client_resource.access.grant("vault", ClientAccess.ALL)
@@ -116,7 +115,7 @@ def give_vault_access(
         - ENV must be 'testing'
         - CLIENT_ID environment variable must be set
     """
-    require.env("testing")
+    require.require_env("testing")
     client_id = require.envvar("CLIENT_ID")
 
     # Validate that 'all' is not combined with specific access levels

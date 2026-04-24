@@ -29,7 +29,7 @@ def check_environment() -> bool:
 
     # Use fixtures.require for consistent environment checking
     try:
-        require.env("testing")
+        require.require_env("testing")
         print("✅ Environment confirmed: testing")
         print("✅ Testing environment variables configured")
         return True

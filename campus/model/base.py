@@ -48,23 +48,6 @@ class InternalModel(typing.Protocol):
     def fields(cls) -> dict[str, dataclasses.Field]:  # type: ignore[override]
         return {field.name: field for field in dataclasses.fields(cls)}
 
-
-@dataclass(kw_only=True)
-class Model(typing.Protocol):
-    """Base class for all public models in Campus.
-    
-    Public models are queryable through Campus API endpoints,
-    and may be returned by the Python API.
-    """
-    id: schema.CampusID | schema.UserID
-    created_at: schema.DateTime = dataclasses.field(
-        default_factory=schema.DateTime.utcnow
-    )
-
-    @classmethod
-    def fields(cls) -> dict[str, dataclasses.Field]:  # type: ignore[override]
-        return {field.name: field for field in dataclasses.fields(cls)}
-
     @classmethod
     def validate_update(cls, update: dict[str, typing.Any]) -> None:
         """Validate an update dictionary against the model's mutable
@@ -105,9 +88,24 @@ class Model(typing.Protocol):
             record: dict[str, typing.Any]
     ) -> typing.Self:
         """Create a model instance from a storage record dictionary."""
+        def get_value(f: dataclasses.Field) -> typing.Any:
+            """Get value from record, falling back to field default if missing."""
+            if f.name in record:
+                return record[f.name]
+            # Key not in record - use field default if available
+            if f.default is not dataclasses.MISSING:
+                return f.default
+            if f.default_factory is not dataclasses.MISSING:  # type: ignore[attr-defined]
+                return f.default_factory()  # type: ignore[attr-defined]
+            # No default available - raise KeyError with clear message
+            raise KeyError(
+                f"Required field '{f.name}' not found in storage record "
+                f"for model '{cls.__name__}'"
+            )
+
         return cls(
             **{
-                field.name: record[field.name]
+                field.name: get_value(field)
                 for field in cls.fields().values()
                 if field.metadata.get("storage", True)
             }
@@ -128,3 +126,16 @@ class Model(typing.Protocol):
             for field in self.fields().values()
             if field.metadata.get("storage", True)
         }
+
+
+@dataclass(kw_only=True)
+class Model(InternalModel):
+    """Base class for all public models in Campus.
+    
+    Public models are queryable through Campus API endpoints,
+    and may be returned by the Python API.
+    """
+    id: schema.CampusID | schema.UserID
+    created_at: schema.DateTime = dataclasses.field(
+        default_factory=schema.DateTime.utcnow
+    )

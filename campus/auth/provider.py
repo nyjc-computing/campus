@@ -33,6 +33,8 @@ Legend:
     Google's token endpoint for user profile.
 """
 
+import logging
+
 import flask
 import werkzeug
 
@@ -43,6 +45,8 @@ from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import secret, url, utc_time
 
 from . import resources
+
+logger = logging.getLogger(__name__)
 
 PROVIDER = "campus"
 INVALIDATED = "INVALIDATED"  # Marker for used authorization codes
@@ -255,23 +259,29 @@ def token(
     user_credentials_resource = (
         campus_cred_resource[authsession.user_id]
     )
-    credentials = user_credentials_resource.get(authsession.client_id)
-    # Create token if not existing
-    if credentials.token and not credentials.token.is_expired():
+
+    # Try to get existing credentials
+    credentials = None
+    try:
+        credentials = user_credentials_resource.get(authsession.client_id)
+    except api_errors.NotFoundError:
+        pass
+
+    # Use existing token if available and not expired, otherwise create new
+    if (
+        credentials is not None
+        and credentials.token is not None
+        and not credentials.token.is_expired()
+    ):
         token = credentials.token
     else:
         token = user_credentials_resource.new(
-            client_id=client_id,
-            # TODO: user consent screen for scope grant
+            client_id=authsession.client_id,
             scopes=authsession.scopes,
             expiry_seconds=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
                 * utc_time.DAY_SECONDS
             ),
-        )
-        user_credentials_resource.update(
-            client_id=credentials.client_id,
-            token=token
         )
     return token.to_resource(), 200
 
@@ -310,10 +320,11 @@ def verify_login_and_redirect(
             domain=user.domain
         )
 
-    # Verify user has valid Google credential
+    # Verify user has valid Google credential and get userinfo for provisioning
     google_client_id = resources.vault["google"]["CLIENT_ID"]
+    google_cred = None
     try:
-        google_cred_resource[user].get(google_client_id)
+        google_cred = google_cred_resource[user].get(google_client_id)
     except api_errors.NotFoundError:
         # User does not have a valid Google credential/sign-in
         # TODO: Display error page
@@ -321,6 +332,46 @@ def verify_login_and_redirect(
             "No valid Google credential found for user",
             user_id=user
         ) from None
+
+    # Get userinfo from Google to provision user record
+    # Import at runtime to avoid circular dependency - type: ignore for pyright
+    from campus.auth.oauth_proxy.google import get_proxy  # type: ignore
+    proxy = get_proxy()
+
+    # Refresh Google token if expired before fetching userinfo
+    token = google_cred.token
+    if not token:
+        raise auth_errors.AuthorizationError(
+            "Google credential exists but has no access token. Please re-authenticate with Google.",
+            user_id=user
+        )
+    if token.is_expired():
+        token = proxy._oauth2.refresh_token(
+            token,
+            client_id=proxy._CLIENT_ID,
+            client_secret=proxy._CLIENT_SECRET
+        )
+        # Update the stored credential with refreshed token
+        resources.credentials["google"][user].update(
+            client_id=proxy._CLIENT_ID,
+            token=token,
+        )
+
+    userinfo = proxy._oauth2.get_user_info(token.access_token)  # type: ignore[arg-type]
+
+    # Provision user record (auto-create if not exists)
+    user_name = userinfo.get("name", "")
+    if not user_name:
+        # Fallback to email localpart if name is empty
+        user_name = str(user).split("@")[0]
+        logger.warning(
+            "Google userinfo missing 'name' field for user %s, using email localpart '%s' as fallback",
+            user, user_name
+        )
+    resources.user.get_or_create(
+        email=schema.Email(user),
+        name=user_name
+    )
 
     # Generate authorization code AFTER successful Google authentication
     authorization_code = secret.generate_authorization_code()
@@ -331,16 +382,8 @@ def verify_login_and_redirect(
         authorization_code=authorization_code
     )
 
-    # Issue Campus token and update credentials
-    # Token will be exchanged by app with auth code thru /token endpoint
-    resources.credentials[PROVIDER][user].new(
-        client_id=authsession.client_id,
-        scopes=authsession.scopes,
-        expiry_seconds=(
-            campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
-            * utc_time.DAY_SECONDS
-        ),
-    )
+    # NOTE: Token creation is now handled by /token endpoint
+    # This endpoint only creates the authorization code for the app to exchange
     
     # Redirect to app callback (redirect_uri, not final target)
     assert authsession.state and authsession.authorization_code

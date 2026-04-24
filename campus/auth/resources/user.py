@@ -6,7 +6,7 @@ Implements Campus API for user access.
 import typing
 from campus.common import schema
 from campus.common.errors import api_errors
-import campus.model
+import campus.model as model
 import campus.storage
 
 user_storage = campus.storage.get_table("users")
@@ -14,9 +14,9 @@ user_storage = campus.storage.get_table("users")
 
 def _from_record(
         record: dict[str, typing.Any],
-) -> campus.model.User:
+) -> model.User:
     """Convert a storage record to a User model instance."""
-    return campus.model.User(
+    return model.User(
         id=schema.UserID(record['id']),
         created_at=schema.DateTime(record['created_at']),
         email=record['email'],
@@ -33,9 +33,9 @@ class UsersResource:
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for user authentication."""
-        user_storage.init_from_model("users", campus.model.User)
+        user_storage.init_from_model("users", model.User)
 
-    def __getitem__(self, user_id: schema.UserID) -> "UserResource":
+    def __getitem__(self, user_id: schema.UserID | str) -> "UserResource":
         """Get a user record by user ID.
 
         Args:
@@ -44,9 +44,9 @@ class UsersResource:
         Returns:
             UserResource instance
         """
-        return UserResource(user_id)
+        return UserResource(schema.UserID(user_id))
 
-    def list(self) -> list[campus.model.User]:
+    def list(self) -> list[model.User]:
         """Get all users.
 
         Returns:
@@ -57,10 +57,10 @@ class UsersResource:
 
     def new(
             self,
-            email: schema.Email,
+            email: schema.Email | str,
             name: str,
             activated_at: schema.DateTime | None = None,
-    ) -> campus.model.User:
+    ) -> model.User:
         """Create a new Campus user.
 
         Args:
@@ -74,7 +74,7 @@ class UsersResource:
         # Create user record with email as id
         record = {
             "id": schema.UserID(email),
-            "email": email,
+            "email": schema.Email(email),
             "name": name,
             "created_at": schema.DateTime.utcnow(),
             "activated_at": activated_at,
@@ -85,9 +85,9 @@ class UsersResource:
 
     def get_or_create(
             self,
-            email: schema.Email,
+            email: schema.Email | str,
             name: str,
-    ) -> campus.model.User:
+    ) -> model.User:
         """Get a user by email, creating them if they don't exist.
 
         This is the primary method for user auto-provisioning during
@@ -110,8 +110,8 @@ class UsersResource:
 class UserResource:
     """Represents a single user in Campus API Schema."""
 
-    def __init__(self, user_id: schema.UserID):
-        self.user_id = user_id
+    def __init__(self, user_id: schema.UserID | str):
+        self.user_id = schema.UserID(user_id)
 
     def activate(self) -> None:
         """Activate a user account.
@@ -138,7 +138,7 @@ class UserResource:
         """
         user_storage.delete_by_id(self.user_id)
 
-    def get(self) -> campus.model.User:
+    def get(self) -> model.User:
         """Get a user by ID.
 
         Args:
@@ -169,5 +169,5 @@ class UserResource:
         Raises:
             NotFoundError: If user not found
         """
-        campus.model.User.validate_update(updates)
+        model.User.validate_update(updates)
         user_storage.update_by_id(self.user_id, updates)
