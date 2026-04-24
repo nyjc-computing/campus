@@ -143,7 +143,7 @@ class BookingResource:
                 {"description": description}
             )
         except campus.storage.errors.NotFoundError:
-            raise api_errors.ConflictError(
+            raise api_errors.NotFoundError(
                 "Booking not found",
                 id=self.booking_id
             ) from None
@@ -157,7 +157,7 @@ class BookingResource:
         try:
             venue_booking_table.delete_by_id(self.booking_id)
         except campus.storage.errors.NotFoundError:
-            raise api_errors.ConflictError(
+            raise api_errors.NotFoundError(
                 "Booking not found",
                 id=self.booking_id
             ) from None
