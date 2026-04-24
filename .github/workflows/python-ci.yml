@@ -1,0 +1,43 @@
+name: Python CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Python CI (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    # Keep 3.12 visible in CI while upstream Campus dependencies finish their own migration.
+    continue-on-error: ${{ matrix.python-version == '3.12' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install project dependencies
+        run: poetry install --no-root
+
+      - name: Run sanity checks
+        run: poetry run python tests/run_tests.py sanity
+
+      - name: Run unit tests
+        run: poetry run python tests/run_tests.py unit
+
+      - name: Run Ruff
+        run: poetry run ruff check .
+
+      - name: Run Pyright
+        run: poetry run python tests/run_tests.py type
