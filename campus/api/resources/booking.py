@@ -100,18 +100,13 @@ class BookingResource:
             model.VenueBooking: The venue booking.
 
         Raises:
-            ConflictError: If the booking does not exist.
+            NotFoundError: If the booking does not exist.
         """
         try:
             record = venue_booking_table.get_by_id(self.booking_id)
-            if record is None:
-                raise api_errors.ConflictError(
-                    "Booking not found",
-                    id=self.booking_id
-                )
             venue_booking = model.VenueBooking.from_storage(record)
         except campus.storage.errors.NotFoundError:
-            raise api_errors.ConflictError(
+            raise api_errors.NotFoundError(
                 "Booking not found",
                 id=self.booking_id
             ) from None
@@ -129,7 +124,7 @@ class BookingResource:
             The new description for the booking.
 
         Raises:
-            ConflictError: If the booking does not exist.
+            NotFoundError: If the booking does not exist.
         """
         try:
             model.VenueBooking.validate_update(
@@ -153,7 +148,7 @@ class BookingResource:
         """Delete the booking and all associated entries.
 
         Raises:
-            ConflictError: If the booking does not exist.
+            NotFoundError: If the booking does not exist.
         """
         try:
             venue_booking_table.delete_by_id(self.booking_id)
