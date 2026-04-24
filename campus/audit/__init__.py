@@ -13,7 +13,6 @@ import campus_python
 import flask
 
 from campus.auth.middleware import Authenticator
-from campus.common import env
 from campus.common import schema
 from campus.common.errors import auth_errors
 
@@ -24,39 +23,6 @@ from campus.common.errors import auth_errors
 # This prevents connection to external services during module import in tests
 # Type: ignore because we initialize these in init_app() before first use
 campus: campus_python.Campus = None  # type: ignore
-
-
-def _audit_getsecret(name: str) -> str:
-    """Get secret from vault for campus.audit deployment.
-
-    This function is registered with env.register_getsecret() to provide
-    deployment-specific vault access for campus.audit.
-
-    Args:
-        name: Name of the secret to retrieve
-
-    Returns:
-        The secret value from the vault
-
-    Raises:
-        OSError: If DEPLOY environment variable is not set
-        api_errors.InternalError: If the secret is not found in the vault
-    """
-    from campus.common import env
-    from campus.common.errors import api_errors
-
-    deployment = env.get("DEPLOY")
-    if deployment is None:
-        raise OSError("Environment variable 'DEPLOY' required")
-
-    import campus_python
-    campus_auth = campus_python.Campus(timeout=60).auth
-    try:
-        return campus_auth.vaults[deployment][name]
-    except KeyError:
-        raise api_errors.InternalError(
-            f"Vault secret '{name}' not found in label '{deployment}'"
-        )
 
 
 def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
@@ -101,8 +67,9 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
     from campus.common import env
 
-    # Register deployment-specific getsecret function
-    env.register_getsecret(_audit_getsecret)
+    # campus.audit does not rely on campus.auth to avoid circular
+    # dependency. This means it does not use campus.auth vaults to store
+    # secrets, using only environment variables.
 
     # Initialize campus client after test fixtures have set up the vault
     global campus
