@@ -18,7 +18,7 @@ class LoginSession(Model):
     """Dataclass representation of a login session record."""
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("login_session", length=16)
-    ))
+    ))  # type: ignore
     # created_at inherited from BaseRecord
     expiry_seconds: InitVar[int | None] = None
     expires_at: schema.DateTime = None  # type: ignore
