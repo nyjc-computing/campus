@@ -161,7 +161,7 @@ class TestPythonVersionCompatibility(unittest.TestCase):
                     "Could not find python requirement in pyproject.toml"
                 )
 
-            # Parse version constraint (e.g., ">=3.11.0,<3.12")
+            # Parse version constraint (e.g., ">=3.11.0,<3.13")
             runtime_version = sys.version_info
             runtime_version_str = f"{runtime_version.major}.{runtime_version.minor}.{runtime_version.micro}"
 
