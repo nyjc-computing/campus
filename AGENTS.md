@@ -9,19 +9,22 @@ Essential reminders for working on the Campus codebase. This guide applies to bo
 Campus uses pyenv for Python version management and pipx for Poetry installation.
 
 **Prerequisites:**
-- pyenv with Python 3.11 installed
+- pyenv with Python 3.11 and/or 3.12 installed
 - pipx with Poetry installed
 - `~/.local/bin` and pyenv shims in PATH (configured in `~/.bashrc`)
 
 **Installation:**
 ```bash
 # Install pyenv (via package manager)
-# Install Python 3.11
+# Install supported Python versions
 pyenv install 3.11.11
-pyenv local 3.11.11
+pyenv install 3.12.0
 
-# Install Poetry via pipx (user-level, isolated)
-pipx install --python python3.11 poetry
+# Prefer 3.12 for new setups; 3.11 remains supported
+pyenv local 3.12.0
+
+# Install Poetry via pipx using the active interpreter
+pipx install poetry
 ```
 
 ### 2. Running Python Commands
