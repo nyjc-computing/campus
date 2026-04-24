@@ -14,12 +14,6 @@ import campus.storage
 venue_booking_table = campus.storage.get_table("venue_bookings")
 venue_table = campus.storage.get_table("venues")
 
-# Interface
-# campus.api.booking.new()
-# campus.api.booking[booking_id].get()
-# campus.api.booking[booking_id].update()
-# campus.api.booking[booking_id].delete()
-
 
 class BookingsResource:
     """Represents the bookings resource."""
