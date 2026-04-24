@@ -208,6 +208,8 @@ class DateTime(String):
     future compatibility we have DateTime subclass str.
     However, we emulate the most common datetime operations required by
     Campus.
+
+    DateTime should be a RFC3339 string with timezone +0000.
     """
 
     def __new__(cls, value: str):
@@ -218,7 +220,15 @@ class DateTime(String):
 
     @classmethod
     def raise_for_validation(cls, value: Any) -> None:
-        # Add a docstring
+        """Raises a TypeError if the value passed is not a string.
+
+        Arguments:
+            value: Any
+                The value to a variable
+        
+        Raises:
+            TypeError if the value passed in is not a string.
+        """
         pass
 
     @classmethod
@@ -286,6 +296,7 @@ class DateTime(String):
         return self.to_datetime().second
 
 
+
 class Email(String):
     """Emulates Python str behavior for Emails."""
 
@@ -297,7 +308,15 @@ class Email(String):
 
     @classmethod
     def raise_for_validation(cls, value: Any) -> None:
-        # Add a docstring
+        """Raises a ValueError if the value passed in is not a valid email.
+        
+        Arguments:
+            value: Any
+                The value to a variable
+        
+        Raises:
+            ValueError if the value passed in is not a valid email.
+        """
         pass
 
     @property
@@ -337,6 +356,16 @@ class Time(String):
     @classmethod
     def raise_for_validation(cls, value: Any) -> None:
         # Add a docstring
+        """
+        Raises a ValueError if the value passed is not a valid time.
+
+        Arguments:
+            value: Any
+                The value to a variable
+
+        Raises:
+            ValueError if the value passed in is not a valid time.
+        """
         pass
 
     def to_time(self) -> utc_time.time:
