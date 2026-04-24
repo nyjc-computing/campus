@@ -123,6 +123,7 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
     # campus.audit handles ingestion but doesn't trace its own requests
     if env.DEPLOY in ('campus.auth', 'campus.api'):
         from campus.audit import middleware
-        middleware.init_app(app)
+        # Disable for now; causing NotFoundError
+        # middleware.init_app(app)
 
     return app
