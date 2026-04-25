@@ -76,4 +76,6 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(ui_blueprint)
 
     if isinstance(app, flask.Flask):
+        # Lazy import to allow env setup
+        from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY")
