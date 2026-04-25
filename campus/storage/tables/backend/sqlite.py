@@ -26,7 +26,7 @@ table.delete_by_id("123")
 import dataclasses
 import json
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from campus.common import devops
 from campus.common.utils import datacls
@@ -185,7 +185,7 @@ class SQLiteTable(TableInterface):
             cls._connection.row_factory = sqlite3.Row
         return cls._connection
 
-    def _get_table_columns(self) -> List[str]:
+    def _get_table_columns(self) -> list[str]:
         """Get the list of column names for this table.
 
         Returns an empty list if the table doesn't exist yet.
@@ -200,7 +200,7 @@ class SQLiteTable(TableInterface):
             # Table doesn't exist yet
             return []
 
-    def _serialize_row(self, row: Dict[str, Any]) -> tuple:
+    def _serialize_row(self, row: dict[str, Any]) -> tuple:
         """Serialize a row for storage using actual table columns.
 
         This method gets the actual columns from the table and creates a tuple
@@ -216,7 +216,7 @@ class SQLiteTable(TableInterface):
             values.append(value)
         return tuple(values)
 
-    def _deserialize_row(self, sqlite_row) -> Dict[str, Any] | None:
+    def _deserialize_row(self, sqlite_row) -> dict[str, Any] | None:
         """Deserialize a row from storage using actual table columns.
 
         TODO: Type conversion issue - SQLite returns all values as strings in row_factory mode.
@@ -243,7 +243,7 @@ class SQLiteTable(TableInterface):
 
         return row
 
-    def get_by_id(self, row_id: str) -> Dict[str, Any]:
+    def get_by_id(self, row_id: str) -> dict[str, Any]:
         """Retrieve a row by its ID.
 
         Raises:
@@ -258,7 +258,7 @@ class SQLiteTable(TableInterface):
         return row
 
     @staticmethod
-    def _build_where_clause(query: Dict[str, Any]) -> tuple[str, list]:
+    def _build_where_clause(query: dict[str, Any]) -> tuple[str, list]:
         """Build WHERE clause from query dictionary.
 
         Handles exact matches and comparison operators (gt, gte, lt, lte, between).
@@ -304,13 +304,13 @@ class SQLiteTable(TableInterface):
 
     def get_matching(
         self,
-        query: Dict[str, Any],
+        query: dict[str, Any],
         *,
         order_by: str | None = None,
         ascending: bool = True,
         limit: int | None = None,
         offset: int = 0
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve rows matching a query.
 
         Supports exact matches, comparison operators (gt, gte, lt, lte),
@@ -339,7 +339,7 @@ class SQLiteTable(TableInterface):
         cursor.execute(sql, params)
         return [row for row in (self._deserialize_row(row) for row in cursor.fetchall()) if row is not None]
 
-    def insert_one(self, row: Dict[str, Any]):
+    def insert_one(self, row: dict[str, Any]):
         """Insert a row into the table using actual table columns."""
         conn = self.get_connection()
         columns = self._get_table_columns()
@@ -365,7 +365,7 @@ class SQLiteTable(TableInterface):
         )
         conn.commit()
 
-    def update_by_id(self, row_id: str, update: Dict[str, Any]):
+    def update_by_id(self, row_id: str, update: dict[str, Any]):
         """Update a row by its ID using actual table columns."""
         # Get the existing row
         existing_row = self.get_by_id(row_id)
@@ -405,7 +405,7 @@ class SQLiteTable(TableInterface):
         )
         conn.commit()
 
-    def update_matching(self, query: Dict[str, Any], update: Dict[str, Any]):
+    def update_matching(self, query: dict[str, Any], update: dict[str, Any]):
         """Update rows matching a query."""
         matching_rows = self.get_matching(query)
         for row in matching_rows:
@@ -418,7 +418,7 @@ class SQLiteTable(TableInterface):
         cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
         conn.commit()
 
-    def delete_matching(self, query: Dict[str, Any]):
+    def delete_matching(self, query: dict[str, Any]):
         """Delete rows matching a query."""
         matching_rows = self.get_matching(query)
         for row in matching_rows:
