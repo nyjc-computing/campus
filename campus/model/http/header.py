@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 from base64 import b64decode, b64encode
-from typing import Mapping
+from typing import Mapping, cast
 
 
 class HttpAuthProperty(str):
@@ -37,7 +37,7 @@ class HttpAuthProperty(str):
             raise ValueError("Only Bearer authentication has a direct value")
         return key.strip()
 
-    def credentials(self, sep: str = ":") -> tuple[str, ...]:
+    def credentials(self, sep: str = ":") -> tuple[str, str]:
         """Decode Base64-encoded credentials."""
         scheme, key = self.split(" ", 1)
         if scheme.lower() != "basic":
@@ -46,7 +46,12 @@ class HttpAuthProperty(str):
         assert sep in decoded, (
             f"Credentials must contain '{sep}' separator, got: {decoded}"
         )
-        return tuple(decoded.split(sep))
+        # cast for type-checking
+        creds = cast(
+            tuple[str, str],
+            tuple(decoded.split(sep, 1))
+        )
+        return creds
 
     @classmethod
     def for_basic(
