@@ -22,11 +22,14 @@ from . import resources
 def _authenticate_audit_api_key() -> None:
     """Validate API key for audit endpoints using webauth.
 
-    Self-contained authentication:
-    - Validates API key format (audit_v1_...)
-    - Verifies hash against allowed keys (from env, or skips in dev)
+    This function does not use campus.auth to avoid circular
+    dependencies.
 
     Sets flask.g.api_key_id for tracing middleware.
+
+    Raises:
+        UnauthorizedClientError: if API key is invalid
+
     """
     httpauth = webauth.http.HttpAuthenticationScheme.with_header(
         provider="campus",
@@ -39,10 +42,10 @@ def _authenticate_audit_api_key() -> None:
         raise auth_errors.UnauthorizedClientError(
             f"Invalid API key format. Expected: audit_v1_<22-char-base64url>"
         )
-    api_key_hash = secret.hash_api_key(api_key)
-    # TODO: Verify hash against allowed keys using resources.apikeys
-    logger.warning("TODO: Implement database lookup for API key verification")
-    flask.g.api_key_id = api_key_hash
+    api_key_id = resources.apikeys[api_key].verify(api_key)
+    if not api_key_id:
+        raise auth_errors.UnauthorizedClientError("Invalid API key")
+    flask.g.api_key_id = api_key_id
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
@@ -57,9 +60,9 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     traces_blueprint.before_request(_authenticate_audit_api_key)
     bp.register_blueprint(traces_blueprint)
 
-    # apikeys_blueprint = routes.apikeys.create_blueprint()
-    # apikeys_blueprint.before_request(_authenticate_audit_api_key)
-    # bp.register_blueprint(apikeys_blueprint)
+    apikeys_blueprint = routes.apikeys.create_blueprint()
+    apikeys_blueprint.before_request(_authenticate_audit_api_key)
+    bp.register_blueprint(apikeys_blueprint)
 
     # Register public health routes WITHOUT authentication
     import campus.flask_campus as flask_campus

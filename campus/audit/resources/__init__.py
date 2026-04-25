@@ -8,10 +8,13 @@ External clients should access resources via API endpoints.
 """
 
 __all__ = [
+    "apikeys",
     "traces",
 ]
 
+from .apikeys import APIKeysResource
 from .traces import TracesResource
 
 # Initialize resource instances for internal use
 traces = TracesResource()
+apikeys = APIKeysResource()
