@@ -125,7 +125,15 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     bp.register_blueprint(traces_blueprint)
 
     # Register public health routes WITHOUT authentication
-    bp.register_blueprint(health_blueprint)
+    @bp.get("/health")
+    def health_check() -> flask_campus.JsonResponse:
+        """Health check endpoint (no authentication required).
+
+        Returns:
+            - 200 OK with {"status": "ok"} for JSON Accept header
+            - 200 OK with "OK" plain text for text/plain Accept header
+        """
+        return {"status": "ok"}, 200
 
     app.register_blueprint(bp)
 
