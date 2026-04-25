@@ -76,7 +76,7 @@ class APIKeysResource:
             scopes: str,
             rate_limit: int | None = None,
             expires_at: schema.DateTime | None = None
-    ) -> model.APIKey:
+    ) -> tuple[model.APIKey, str]:
         """Create a new API key.
 
         Args:
@@ -89,19 +89,27 @@ class APIKeysResource:
         Returns:
             The created API key (including the plaintext key value)
         """
+        apikey_value = secret.generate_audit_api_key()
         record = {
             "name": schema.String(name),
             "owner_id": schema.UserID(owner_id),
             "scopes": schema.String(scopes),
-            "key_hash": secret.generate_audit_api_key(),
+            "key_hash": secret.hash_api_key(apikey_value),
         }
         if rate_limit is not None:
             record["rate_limit"] = schema.Integer(rate_limit)
         if expires_at is not None:
             record["expires_at"] = schema.DateTime(expires_at)
         api_key = model.APIKey(**record)
-        apikeys_storage.insert_one(api_key.to_storage())
-        return api_key
+        try:
+            apikeys_storage.insert_one(api_key.to_storage())
+        except storage_errors.ConflictError as e:
+            raise api_errors.ConflictError(
+                f"Conflict while inserting api_key to db: "
+                f"{api_key.to_resource()}"
+            )
+        else:
+            return api_key, apikey_value
 
 
 class APIKeyResource:

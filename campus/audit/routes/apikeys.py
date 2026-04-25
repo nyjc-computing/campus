@@ -44,14 +44,16 @@ def new(
         201 Created with the API key (only shown once) and key details
         400 Bad Request on invalid input
     """
-    api_key = resources.apikeys.new(
+    api_key, apikey_value = resources.apikeys.new(
         name=name,
         owner_id=owner_id,
         scopes=",".join(scopes),
         rate_limit=rate_limit,
         expires_at=expires_at,
     )
-    return api_key.to_resource(), 201
+    record = api_key.to_resource()
+    record["api_key"] = apikey_value
+    return record, 201
 
 
 @bp.get("/")
