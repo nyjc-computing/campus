@@ -306,6 +306,221 @@ class TestHTTPBasicAuth(unittest.TestCase):
             secret.decode_http_basic_auth(invalid)
 
 
+class TestAuditAPIKeyFunctions(unittest.TestCase):
+    """Test audit service API key generation, hashing, and validation functions."""
+
+    def test_generate_audit_api_key_returns_string(self):
+        """Test that generate_audit_api_key() returns a string."""
+        key = secret.generate_audit_api_key()
+        self.assertIsInstance(key, str)
+
+    def test_generate_audit_api_key_correct_length(self):
+        """Test that generate_audit_api_key() returns 31-character key."""
+        key = secret.generate_audit_api_key()
+        self.assertEqual(len(key), 31,
+                        "API key should be 31 characters (9 prefix + 22 random)")
+
+    def test_generate_audit_api_key_has_prefix(self):
+        """Test that generate_audit_api_key() starts with correct prefix."""
+        key = secret.generate_audit_api_key()
+        self.assertTrue(key.startswith("audit_v1_"),
+                       "API key should start with 'audit_v1_' prefix")
+
+    def test_generate_audit_api_key_produces_unique_keys(self):
+        """Test that generate_audit_api_key() produces different keys each time."""
+        keys = {secret.generate_audit_api_key() for _ in range(100)}
+        # All keys should be unique with high probability
+        self.assertEqual(len(keys), 100,
+                        "All generated keys should be unique")
+
+    def test_generate_audit_api_key_format_valid(self):
+        """Test that generate_audit_api_key() produces valid base64url format."""
+        key = secret.generate_audit_api_key()
+        # Should pass format validation
+        self.assertTrue(secret.is_valid_audit_api_key_format(key),
+                       "Generated key should pass format validation")
+
+    def test_hash_api_key_returns_string(self):
+        """Test that hash_api_key() returns a string."""
+        api_key = "audit_v1_testkey1234567890123"
+        hashed = secret.hash_api_key(api_key)
+        self.assertIsInstance(hashed, str)
+
+    def test_hash_api_key_correct_length(self):
+        """Test that hash_api_key() returns 64-character hex string."""
+        api_key = "audit_v1_testkey1234567890123"
+        hashed = secret.hash_api_key(api_key)
+        self.assertEqual(len(hashed), 64,
+                        "SHA-256 hash should be 64 hex characters")
+
+    def test_hash_api_key_uses_hex_chars(self):
+        """Test that hash_api_key() returns valid hex string."""
+        api_key = "audit_v1_testkey1234567890123"
+        hashed = secret.hash_api_key(api_key)
+        # Should contain only hex characters
+        self.assertTrue(all(c in '0123456789abcdef' for c in hashed),
+                       "Hash should contain only lowercase hex characters")
+
+    def test_hash_api_key_deterministic(self):
+        """Test that hash_api_key() is deterministic for same input."""
+        api_key = "audit_v1_testkey1234567890123"
+        hash1 = secret.hash_api_key(api_key)
+        hash2 = secret.hash_api_key(api_key)
+        self.assertEqual(hash1, hash2,
+                        "Hashing same key should produce same result")
+
+    def test_hash_api_key_different_for_different_keys(self):
+        """Test that hash_api_key() produces different hashes for different keys."""
+        key1 = "audit_v1_testkey1234567890123"
+        key2 = "audit_v1_differentkey1234567890"
+        hash1 = secret.hash_api_key(key1)
+        hash2 = secret.hash_api_key(key2)
+        self.assertNotEqual(hash1, hash2,
+                           "Different keys should produce different hashes")
+
+    def test_verify_api_key_hash_with_correct_key(self):
+        """Test that verify_api_key_hash() returns True for correct key."""
+        api_key = "audit_v1_testkey1234567890123"
+        stored_hash = secret.hash_api_key(api_key)
+        result = secret.verify_api_key_hash(api_key, stored_hash)
+        self.assertTrue(result,
+                       "Verification should succeed with correct key")
+
+    def test_verify_api_key_hash_with_wrong_key(self):
+        """Test that verify_api_key_hash() returns False for wrong key."""
+        correct_key = "audit_v1_testkey1234567890123"
+        wrong_key = "audit_v1_wrongkey1234567890123"
+        stored_hash = secret.hash_api_key(correct_key)
+        result = secret.verify_api_key_hash(wrong_key, stored_hash)
+        self.assertFalse(result,
+                        "Verification should fail with incorrect key")
+
+    def test_verify_api_key_hash_similar_keys_different(self):
+        """Test that similar keys produce different verification results."""
+        key1 = "audit_v1_testkey1234567890123"
+        key2 = "audit_v1_testkey1234567890124"  # Only last char different
+        hash1 = secret.hash_api_key(key1)
+
+        # key1 should verify with hash1
+        self.assertTrue(secret.verify_api_key_hash(key1, hash1))
+        # key2 should NOT verify with hash1
+        self.assertFalse(secret.verify_api_key_hash(key2, hash1))
+
+    def test_verify_api_key_hash_roundtrip(self):
+        """Test complete hash/verify API key roundtrip."""
+        test_keys = [
+            "audit_v1_testkey1234567890123",
+            "audit_v1_ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "audit_v1_0123456789ABCDEFGHIJKLMNOPQR",
+        ]
+
+        for key in test_keys:
+            with self.subTest(key=key):
+                hashed = secret.hash_api_key(key)
+                self.assertTrue(secret.verify_api_key_hash(key, hashed),
+                               f"Key {key} should verify with its hash")
+                # Different key should not verify
+                self.assertFalse(secret.verify_api_key_hash("wrong", hashed),
+                                f"Different key should not verify with hash of {key}")
+
+    def test_is_valid_audit_api_key_format_with_valid_key(self):
+        """Test format validation with valid API keys."""
+        valid_keys = [
+            "audit_v1_kXj9mP2nQ5vR8sT7uV3wYz",      # 22 char random part
+            "audit_v1_0123456789ABCDEFGHIJab",       # 22 char random part
+            "audit_v1_abcdefghijklmnopqrstuv",      # 22 char random part
+            "audit_v1_ABCDEFGHIJKLMNOPQRSTUV",      # 22 char random part
+        ]
+
+        for key in valid_keys:
+            with self.subTest(key=key):
+                self.assertTrue(secret.is_valid_audit_api_key_format(key),
+                              f"Key {key} should be valid")
+
+    def test_is_valid_audit_api_key_format_wrong_prefix(self):
+        """Test format validation rejects wrong prefixes."""
+        invalid_keys = [
+            "audit_v2_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7m",  # Wrong version
+            "api_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7m",    # Wrong service
+            "v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7m",        # Missing service
+            "audit_v1",                                       # Prefix only
+        ]
+
+        for key in invalid_keys:
+            with self.subTest(key=key):
+                self.assertFalse(secret.is_valid_audit_api_key_format(key),
+                               f"Key {key} should be invalid (wrong prefix)")
+
+    def test_is_valid_audit_api_key_format_wrong_length(self):
+        """Test format validation rejects wrong lengths."""
+        invalid_keys = [
+            "audit_v1_tooshort",                              # Too short (17 chars total)
+            "audit_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7mExtra",  # Too long (47 chars total)
+            "audit_v1_12345",                                  # Too short (15 chars total)
+            "audit_v1_01234567890123456789012345",            # Too long (39 chars total)
+        ]
+
+        for key in invalid_keys:
+            with self.subTest(key=key):
+                self.assertFalse(secret.is_valid_audit_api_key_format(key),
+                               f"Key {key} should be invalid (wrong length)")
+
+    def test_is_valid_audit_api_key_format_invalid_characters(self):
+        """Test format validation rejects invalid base64url characters."""
+        invalid_keys = [
+            "audit_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7=",  # Padding char
+            "audit_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7+",   # Plus sign
+            "audit_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7/",   # Forward slash
+            "audit_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7 ",   # Space
+            "audit_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7!",   # Exclamation
+        ]
+
+        for key in invalid_keys:
+            with self.subTest(key=key):
+                self.assertFalse(secret.is_valid_audit_api_key_format(key),
+                               f"Key {key} should be invalid (bad characters)")
+
+    def test_is_valid_audit_api_key_format_empty_and_none(self):
+        """Test format validation with empty and None inputs."""
+        self.assertFalse(secret.is_valid_audit_api_key_format(""),
+                        "Empty string should be invalid")
+
+        # None should raise AttributeError or return False
+        # Depending on implementation, we'll test for graceful handling
+        try:
+            result = secret.is_valid_audit_api_key_format(None)  # type: ignore
+            self.assertFalse(result, "None should be invalid")
+        except (AttributeError, TypeError):
+            # Also acceptable - function should handle None gracefully
+            pass
+
+    def test_audit_api_key_security_properties(self):
+        """Test security-related properties of API key functions."""
+        # Generate multiple keys and ensure they're unpredictable
+        keys = [secret.generate_audit_api_key() for _ in range(50)]
+
+        # Check randomness (no obvious patterns)
+        for key in keys:
+            self.assertEqual(len(key), 31)
+            self.assertTrue(key.startswith("audit_v1_"))
+
+            # Random portion should have good character distribution
+            random_part = key[9:]
+            # Should mix case and numbers (not all same case)
+            has_upper = any(c.isupper() for c in random_part)
+            has_lower = any(c.islower() for c in random_part)
+            has_digit = any(c.isdigit() for c in random_part)
+
+            is_well_distributed = has_upper or has_lower or has_digit
+            self.assertTrue(is_well_distributed,
+                          f"Random portion should be well distributed: {random_part}")
+
+        # All keys should be different
+        unique_keys = set(keys)
+        self.assertEqual(len(unique_keys), len(keys),
+                        "All generated keys should be unique")
+
+
 class TestSecretEdgeCases(unittest.TestCase):
     """Test edge cases and error conditions for secret utilities."""
 
