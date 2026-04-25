@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import typing
 
 from campus.common import schema
-from campus.common.utils import uid, secret
+from campus.common.utils import uid
 from campus.model.base import InternalModel, Model
 
 __all__ = [
@@ -25,16 +25,16 @@ __all__ = [
 @dataclass(eq=False, kw_only=True)
 class APIKey(Model):
     # TODO: Docstring
-    id: str = field(default_factory=(  # pyright: ignore[reportIncompatibleVariableOverride]
+    id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("apikey", length=16)
     ))
     # created_at: schema.DateTime is inherited from Model
     # key_hash is stored in place of plaintext key for security
     # and is not exposed via API resources
-    key_hash: str = field(metadata={"resource": False})
-    name: str
+    key_hash: schema.String = field(metadata={"resource": False})
+    name: schema.String
     owner_id: schema.UserID
-    scopes: list[str] = field(default_factory=list)
+    scopes: list[schema.String] = field(default_factory=list)
     # expires_at, revoked_at, and last_used are immutable audit fields
     # They can be set through internal resource but not via the API.
     expires_at: schema.DateTime | None = field(
