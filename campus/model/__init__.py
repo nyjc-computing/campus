@@ -15,6 +15,7 @@ kept out of models.
 """
 
 __all__ = [
+    "APIKey",
     "Assignment",
     "AuthSession",
     "Circle",
@@ -49,7 +50,7 @@ __all__ = [
     "VenueBooking",
 ]
 
-from .audit import TraceSpan, TraceSummary, TraceTree, TraceTreeNode
+from .audit import APIKey, TraceSpan, TraceSummary, TraceTree, TraceTreeNode
 from .base import InternalModel, Model
 from .booking import Venue, VenueBooking
 from .circle import Circle
