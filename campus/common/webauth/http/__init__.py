@@ -14,7 +14,7 @@ __all__ = [
 
 from typing import Literal
 
-from campus.common.errors import api_errors, token_errors
+from campus.common.errors import api_errors, auth_errors, token_errors
 import campus.model
 
 from .. import base
@@ -40,7 +40,7 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             header: campus.model.HttpHeaderWithAuth
     ):
         super().__init__(provider)
-        self.scheme = scheme  # type: ignore[assignment]
+        self.scheme = scheme
         self.header = header
 
     @classmethod
@@ -56,13 +56,8 @@ class HttpAuthenticationScheme(base.SecurityScheme):
         header = campus.model.HttpHeader.from_header(http_header)
 
         if not isinstance(header, campus.model.HttpHeaderWithAuth):
-            header_keys = (
-                list(header.keys()) if isinstance(header, dict) else 'N/A'
-            )
-            logger.warning(
-                f"Missing Authorization header. Header keys: {header_keys}"
-            )
-            raise api_errors.UnauthorizedError(
+            logger.warning("Missing Authorization header.")
+            raise auth_errors.AuthorizationError(
                 "Missing Authorization header."
             )
         match header.authorization.scheme:
@@ -73,6 +68,35 @@ class HttpAuthenticationScheme(base.SecurityScheme):
         raise token_errors.InvalidClientError(
             f"Unsupported HTTP scheme: {header.authorization.scheme}"
         )
+
+    @property
+    def credentials(self) -> tuple[str, str]:
+        """Return the client_id and client_secret for Basic
+        Authentication.
+
+        Raises:
+            InvalidRequestError: If the scheme is not Basic or if the
+                Authorization header is missing.
+        """
+        if self.scheme != "basic":
+            raise api_errors.InvalidRequestError(
+                "Credentials only available for Basic Authentication."
+            )
+        return self.header.authorization.credentials()
+
+    @property
+    def token(self) -> str:
+        """Return the token for Bearer Authentication.
+
+        Raises:
+            InvalidRequestError: If the scheme is not Bearer or if the
+                Authorization header is missing.
+        """
+        if self.scheme != "bearer":
+            raise api_errors.InvalidRequestError(
+                "Token only available for Bearer Authentication."
+            )
+        return self.header.authorization.token
 
     def verify_credentials(
             self,

@@ -12,7 +12,6 @@ dynamically. This allows creating fresh blueprints for test isolation.
 
 __all__ = [
     "traces",
-    "health",
 ]
 
-from . import health, traces
+from . import traces
