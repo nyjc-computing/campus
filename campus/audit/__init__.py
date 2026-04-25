@@ -49,13 +49,17 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
     from . import routes, web
 
+    # Organise audit routes under audit blueprint
+    bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
+
     # Create route blueprints using create_blueprint() for test isolation
     traces_blueprint = routes.traces.create_blueprint()
     traces_blueprint.before_request(_authenticate_audit_api_key)
-
-    # Organise audit routes under audit blueprint
-    bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
     bp.register_blueprint(traces_blueprint)
+
+    # apikeys_blueprint = routes.apikeys.create_blueprint()
+    # apikeys_blueprint.before_request(_authenticate_audit_api_key)
+    # bp.register_blueprint(apikeys_blueprint)
 
     # Register public health routes WITHOUT authentication
     import campus.flask_campus as flask_campus
