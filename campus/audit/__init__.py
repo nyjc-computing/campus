@@ -7,6 +7,8 @@ Audit service for tracing and monitoring Campus services.
 # use within campus.audit only.
 __all__ = ["init_app"]
 
+import logging
+logger = logging.getLogger(__name__)
 
 import flask
 
@@ -39,6 +41,7 @@ def _authenticate_audit_api_key() -> None:
         )
     api_key_hash = secret.hash_api_key(api_key)
     # TODO: Verify hash against allowed keys using resources.apikeys
+    logger.warning("TODO: Implement database lookup for API key verification")
     flask.g.api_key_id = api_key_hash
 
 
