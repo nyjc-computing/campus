@@ -91,8 +91,23 @@ def _get_base_type(field_type):
     """Get the base Python type for a field type.
 
     Returns one of: bool, int, float, str (or None if not a recognized type).
-    Handles both built-in types and schema types (which are subclasses).
+    Handles both built-in types, schema types (which are subclasses),
+    and Union/Optional types (e.g., int | None, Optional[int]).
     """
+    import types
+    import typing
+
+    # Handle Union/Optional types (e.g., int | None, Optional[int])
+    # Check for both typing.Union (old syntax) and types.UnionType (Python 3.10+ syntax)
+    origin = typing.get_origin(field_type)
+    if origin is typing.Union or origin is types.UnionType:
+        args = typing.get_args(field_type)
+        # Recursively get the base type of the first non-None argument
+        for arg in args:
+            if arg is not type(None):
+                return _get_base_type(arg)
+        return None  # All arguments were None
+
     # If it's already a base type, return it directly
     if field_type in (bool, int, float, str):
         return field_type
