@@ -67,7 +67,7 @@ class InternalModel(typing.Protocol):
                 raise ValueError(
                     f"Field '{field_name}' does not exist in model"
                 )
-            if not field.metadata.get("mutable", False):
+            if not field.metadata.get("mutable", True):
                 raise ValueError(f"Field '{field_name}' is not mutable")
 
     @classmethod
