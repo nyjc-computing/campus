@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 import flask
 
 from campus.common import webauth
-from campus.common.errors import auth_errors
+from campus.common.errors import auth_errors, api_errors
 from campus.common.utils import secret
 
 from . import resources
@@ -28,29 +28,35 @@ def _authenticate_audit_api_key() -> None:
     Sets flask.g.api_key_id for tracing middleware.
 
     Raises:
-        UnauthorizedClientError: if API key is invalid
+        UnauthorizedError: if API key is invalid or missing
 
     """
-    httpauth = webauth.http.HttpAuthenticationScheme.with_header(
-        provider="campus",
-        http_header=dict(flask.request.headers)
-    )
+    try:
+        httpauth = webauth.http.HttpAuthenticationScheme.with_header(
+            provider="campus",
+            http_header=dict(flask.request.headers)
+        )
+    except auth_errors.AuthorizationError:
+        # No Authorization header present - raise proper error for 401 response
+        raise api_errors.UnauthorizedError("Missing API key")
+
     # Extract API key from Bearer token
     api_key = httpauth.token
     # Validate format
     if not secret.is_valid_audit_api_key_format(api_key):
-        raise auth_errors.UnauthorizedClientError(
+        raise api_errors.UnauthorizedError(
             f"Invalid API key format. Expected: audit_v1_<22-char-base64url>"
         )
     api_key_id = resources.apikeys.verify(api_key)
     if not api_key_id:
-        raise auth_errors.UnauthorizedClientError("Invalid API key")
+        raise api_errors.UnauthorizedError("Invalid API key")
     flask.g.api_key_id = api_key_id
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
     from . import routes, web
+    from campus.common.errors import handlers
 
     # Organise audit routes under audit blueprint
     bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
@@ -83,6 +89,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(ui_blueprint)
 
     if isinstance(app, flask.Flask):
+        # Register error handlers for proper error responses
+        handlers.init_app(app)
         # Lazy import to allow env setup
         from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY")
