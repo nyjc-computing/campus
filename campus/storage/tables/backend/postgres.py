@@ -25,6 +25,7 @@ table.delete_by_id("123")
 """
 
 import dataclasses
+from typing import Any
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -222,7 +223,7 @@ class PostgreSQLTable(TableInterface):
 
         return ", ".join(set_parts), params
 
-    def get_by_id(self, row_id: str) -> dict:
+    def get_by_id(self, row_id: str) -> dict[str, Any]:
         """Retrieve a row by its ID."""
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -297,7 +298,12 @@ class PostgreSQLTable(TableInterface):
                     conn.commit()
 
     def update_by_id(self, row_id: str, update: dict) -> None:
-        """Update a row in the specified table."""
+        """Update a row in the specified table.
+        
+        Raises:
+            NotFoundError: If the row with the specified ID does not
+            exist
+        """
         if not update:
             return
 

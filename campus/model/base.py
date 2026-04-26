@@ -45,7 +45,7 @@ class InternalModel(typing.Protocol):
     """
 
     @classmethod
-    def fields(cls) -> dict[str, dataclasses.Field]:  # type: ignore[override]
+    def fields(cls) -> dict[str, dataclasses.Field]:
         return {field.name: field for field in dataclasses.fields(cls)}
 
     @classmethod
@@ -59,6 +59,8 @@ class InternalModel(typing.Protocol):
         Raises:
             ValueError: If any field in the update is not mutable
         """
+        if not update:
+            raise ValueError("No fields provided for update validation")
         for field_name in update.keys():
             field = cls.fields().get(field_name)
             if field is None:
