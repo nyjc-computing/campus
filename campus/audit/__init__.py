@@ -42,7 +42,7 @@ def _authenticate_audit_api_key() -> None:
         raise auth_errors.UnauthorizedClientError(
             f"Invalid API key format. Expected: audit_v1_<22-char-base64url>"
         )
-    api_key_id = resources.apikeys[api_key].verify(api_key)
+    api_key_id = resources.apikeys.verify(api_key)
     if not api_key_id:
         raise auth_errors.UnauthorizedClientError("Invalid API key")
     flask.g.api_key_id = api_key_id

@@ -111,6 +111,41 @@ class APIKeysResource:
         else:
             return api_key, apikey_value
 
+    def verify(self, api_key: str) -> schema.CampusID | None:
+        """Verify if the provided API key is valid and return its ID.
+
+        This method scans all API keys to find a matching hash, since
+        requests contain the API key value, not the ID.
+
+        Args:
+            api_key: The plaintext API key to verify
+
+        Returns:
+            The ID of the API key if valid and active, None otherwise
+        """
+        api_key_hash = secret.hash_api_key(api_key)
+
+        # Query for active (non-revoked) API keys with matching hash
+        query = {
+            "key_hash": api_key_hash,
+            "revoked_at": None
+        }
+
+        try:
+            results = apikeys_storage.get_matching(query, limit=1)
+            if results:
+                key_record = model.APIKey.from_storage(results[0])
+                # Update last_used timestamp for audit trail
+                apikeys_storage.update_by_id(
+                    key_record.id,
+                    {"last_used": schema.DateTime.utcnow()}
+                )
+                return key_record.id
+        except (storage_errors.NotFoundError, IndexError):
+            pass
+
+        return None
+
 
 class APIKeyResource:
     """Represents a single API key resource."""
@@ -189,24 +224,3 @@ class APIKeyResource:
                 f"API key {self.api_key_id} not found"
             ) from None
         # TODO: audit campus.apikeys.update
-
-    def verify(self, api_key: str) -> schema.CampusID | None:
-        """Verify if the provided API key matches this resource.
-        API key ID is returned for purposes of audit.
-
-        Args:
-            api_key: The plaintext API key to verify
-
-        Returns:
-            The id of the API key if it matches, None otherwise
-        """
-        this_api_key = self.get()
-        if not this_api_key:
-            return None
-        # TODO: audit campus.apikeys.verify
-        # Audit is manually invoked here since there is no API endpoint
-        self.update(last_used=schema.DateTime.utcnow())
-        api_key_hash = secret.hash_api_key(api_key)
-        if api_key_hash == this_api_key.key_hash:
-            return this_api_key.id
-        return None
