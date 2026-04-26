@@ -296,9 +296,12 @@ class SQLiteTable(TableInterface):
                     conditions.append(f'"{key}" = ?')
                     params.append(value.value)
             else:
-                # Exact match
-                conditions.append(f'"{key}" = ?')
-                params.append(value)
+                # Exact match - handle NULL values correctly using IS NULL
+                if value is None:
+                    conditions.append(f'"{key}" IS NULL')
+                else:
+                    conditions.append(f'"{key}" = ?')
+                    params.append(value)
 
         return f"WHERE {' AND '.join(conditions)}", params
 

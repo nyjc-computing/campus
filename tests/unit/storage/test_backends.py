@@ -222,6 +222,187 @@ class TestSQLiteBackend(unittest.TestCase):
         self.assertIn(results[1]["id"], ["trace2", "trace3"])
 
 
+class TestNullComparisons(unittest.TestCase):
+    """Test NULL value comparisons in get_matching() queries.
+
+    These tests ensure that TableInterface implementations correctly handle
+    NULL values in WHERE clauses using IS NULL instead of = NULL.
+
+    This is critical for SQL compliance: NULL = NULL always evaluates to FALSE.
+    The correct syntax is: WHERE column IS NULL
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up test table with NULL values."""
+        cls.apikeys_table = get_table("test_apikeys")
+        # Create table with nullable fields
+        cls.apikeys_table.init_from_schema(
+            'CREATE TABLE IF NOT EXISTS "test_apikeys" ('
+            '"id" TEXT PRIMARY KEY, '
+            '"created_at" TEXT NOT NULL, '
+            '"key_hash" TEXT NOT NULL, '
+            '"name" TEXT NOT NULL, '
+            '"revoked_at" TEXT, '  # Nullable field
+            '"expires_at" TEXT, '  # Nullable field
+            '"last_used" TEXT);'  # Nullable field
+        )
+
+        # Insert test data with various NULL combinations
+        test_keys = [
+            {
+                "id": "key1",
+                "created_at": "2023-01-01T10:00:00Z",
+                "key_hash": "hash1",
+                "name": "Active Key 1",
+                "revoked_at": None,  # Not revoked
+                "expires_at": "2024-01-01T10:00:00Z",
+                "last_used": "2023-06-01T10:00:00Z"
+            },
+            {
+                "id": "key2",
+                "created_at": "2023-01-01T11:00:00Z",
+                "key_hash": "hash2",
+                "name": "Revoked Key",
+                "revoked_at": "2023-06-15T10:00:00Z",  # Revoked
+                "expires_at": None,  # No expiration
+                "last_used": None
+            },
+            {
+                "id": "key3",
+                "created_at": "2023-01-01T12:00:00Z",
+                "key_hash": "hash3",
+                "name": "Active Key 2",
+                "revoked_at": None,  # Not revoked
+                "expires_at": None,  # No expiration
+                "last_used": "2023-06-01T11:00:00Z"
+            },
+            {
+                "id": "key4",
+                "created_at": "2023-01-01T13:00:00Z",
+                "key_hash": "hash4",
+                "name": "Unused Key",
+                "revoked_at": None,  # Not revoked
+                "expires_at": "2024-06-01T10:00:00Z",
+                "last_used": None  # Never used
+            },
+        ]
+
+        # Clear any existing data and insert fresh test data
+        try:
+            for key in test_keys:
+                cls.apikeys_table.insert_one(key)
+        except Exception:
+            pass  # Ignore if already exists
+
+    def test_query_null_field_single_condition(self):
+        """Query for rows where a nullable field IS NULL.
+
+        This test catches the bug: WHERE revoked_at = NULL (wrong)
+        Should be: WHERE revoked_at IS NULL (correct)
+        """
+        results = self.apikeys_table.get_matching({"revoked_at": None})
+
+        # Should find 3 keys where revoked_at is NULL (key1, key3, key4)
+        self.assertEqual(len(results), 3,
+            "Should find 3 keys with revoked_at=NULL")
+
+        # Verify all results actually have NULL revoked_at
+        for r in results:
+            self.assertIsNone(r["revoked_at"],
+                f"Key {r['id']} should have revoked_at=NULL")
+
+        # Verify we have the correct keys
+        result_ids = {r["id"] for r in results}
+        self.assertEqual(result_ids, {"key1", "key3", "key4"})
+
+    def test_query_null_field_multiple_conditions(self):
+        """Query with multiple conditions including NULL field.
+
+        Tests: WHERE revoked_at IS NULL AND expires_at IS NOT NULL
+        """
+        results = self.apikeys_table.get_matching({
+            "revoked_at": None,
+            "expires_at": "2024-01-01T10:00:00Z"
+        })
+
+        # Should find only key1: not revoked AND has specific expiration
+        self.assertEqual(len(results), 1,
+            "Should find 1 key with revoked_at=NULL and specific expires_at")
+        self.assertEqual(results[0]["id"], "key1")
+        self.assertIsNone(results[0]["revoked_at"])
+        self.assertEqual(results[0]["expires_at"], "2024-01-01T10:00:00Z")
+
+    def test_query_multiple_null_fields(self):
+        """Query with multiple NULL fields (all must be NULL).
+
+        Tests: WHERE revoked_at IS NULL AND expires_at IS NULL
+        """
+        results = self.apikeys_table.get_matching({
+            "revoked_at": None,
+            "expires_at": None
+        })
+
+        # Should find only key3: both revoked_at and expires_at are NULL
+        self.assertEqual(len(results), 1,
+            "Should find 1 key with both revoked_at=NULL AND expires_at=NULL")
+        self.assertEqual(results[0]["id"], "key3")
+        self.assertIsNone(results[0]["revoked_at"])
+        self.assertIsNone(results[0]["expires_at"])
+
+    def test_query_null_and_non_null_fields_mixed(self):
+        """Query mixing NULL and non-NULL field conditions.
+
+        Tests: WHERE revoked_at IS NULL AND last_used IS NULL
+        """
+        results = self.apikeys_table.get_matching({
+            "revoked_at": None,
+            "last_used": None
+        })
+
+        # Should find only key4: not revoked AND never used
+        self.assertEqual(len(results), 1,
+            "Should find 1 key with revoked_at=NULL AND last_used=NULL")
+        self.assertEqual(results[0]["id"], "key4")
+        self.assertIsNone(results[0]["revoked_at"])
+        self.assertIsNone(results[0]["last_used"])
+
+    def test_query_non_null_value_excludes_null(self):
+        """Query that matches non-NULL values should exclude NULL values.
+
+        When querying for revoked_at = '2023-06-15T10:00:00Z',
+        it should only find key2, not keys with NULL revoked_at.
+        """
+        results = self.apikeys_table.get_matching({
+            "revoked_at": "2023-06-15T10:00:00Z"
+        })
+
+        # Should find only key2 with the specific revoked timestamp
+        self.assertEqual(len(results), 1,
+            "Should find 1 key with specific revoked_at value")
+        self.assertEqual(results[0]["id"], "key2")
+        self.assertEqual(results[0]["revoked_at"], "2023-06-15T10:00:00Z")
+
+    def test_query_with_string_value_excludes_null(self):
+        """Query for string value should not match NULL values.
+
+        Ensures exact match doesn't accidentally match NULL values.
+        """
+        results = self.apikeys_table.get_matching({
+            "expires_at": "2024-01-01T10:00:00Z"
+        })
+
+        # Should find only key1 with this exact expiration
+        self.assertEqual(len(results), 1,
+            "Should find 1 key with specific expires_at value")
+        self.assertEqual(results[0]["id"], "key1")
+
+        # Verify key3 and key2 (which have NULL expires_at) are not included
+        result_ids = {r["id"] for r in results}
+        self.assertNotIn("key2", result_ids)
+        self.assertNotIn("key3", result_ids)
+
+
 class TestMemoryBackend(unittest.TestCase):
     """Test the memory collection backend."""
 
