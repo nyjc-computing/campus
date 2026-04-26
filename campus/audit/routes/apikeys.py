@@ -216,6 +216,6 @@ def create_blueprint() -> flask.Blueprint:
     new_bp.add_url_rule("/<api_key_id>/", "get", get, methods=["GET"])
     new_bp.add_url_rule("/<api_key_id>/", "update", update, methods=["PATCH"])
     new_bp.add_url_rule("/<api_key_id>/", "revoke", revoke, methods=["DELETE"])
-    new_bp.add_url_rule("/<api_key_id>/regenerate/", "regenerate", regenerate, methods=["POST"])
+    new_bp.add_url_rule("/<api_key_id>/regenerate", "regenerate", regenerate, methods=["POST"])
 
     return new_bp
