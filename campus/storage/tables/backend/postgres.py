@@ -89,12 +89,54 @@ def _validate_field_metadata(field: dataclasses.Field) -> None:
                 )
 
 
+def _get_base_type(field_type):
+    """Get the base Python type for a field type.
+
+    Returns one of: bool, int, float, str (or str as default if not recognized).
+    Handles both built-in types, schema types (which are subclasses),
+    and Union/Optional types (e.g., int | None, Optional[int]).
+    """
+    import types
+    import typing
+
+    # Handle Union/Optional types (e.g., int | None, Optional[int])
+    # Check for both typing.Union (old syntax) and types.UnionType (Python 3.10+ syntax)
+    origin = typing.get_origin(field_type)
+    if origin is typing.Union or origin is types.UnionType:
+        args = typing.get_args(field_type)
+        # Recursively get the base type of the first non-None argument
+        for arg in args:
+            if arg is not type(None):
+                return _get_base_type(arg)
+        return str  # All arguments were None, default to str
+
+    # If it's already a base type, return it directly
+    if field_type in (bool, int, float, str):
+        return field_type
+
+    try:
+        # Check in order: bool, int, float, str (bool is subclass of int)
+        if issubclass(field_type, bool):
+            return bool
+        if issubclass(field_type, int):
+            return int
+        if issubclass(field_type, float):
+            return float
+        if issubclass(field_type, str):
+            return str
+    except TypeError:
+        # issubclass() raises TypeError if field_type is not a class
+        pass
+    return str  # Default to str if not recognized
+
+
 def _field_to_sql_schema(field: dataclasses.Field) -> str:
     """Convert a dataclass field to a SQL column definition."""
     _validate_field_metadata(field)
     field_name = field.name
     field_type = field.type
-    sql_type = _TYPEMAP.get(field_type, "TEXT")
+    base_type = _get_base_type(field_type)
+    sql_type = _TYPEMAP.get(base_type, "TEXT")
     sql_field_constraints = []
 
     if field_name == "__constraints__":
