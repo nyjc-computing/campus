@@ -14,14 +14,11 @@ API Keys Endpoints Reference:
 
 import unittest
 
-from campus.common import env, schema
+from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, secret
 import campus.storage
 from tests.fixtures import services
-from tests.fixtures.tokens import get_basic_auth_headers
-
-apikeys_storage = campus.storage.tables.get_db("apikeys")
 
 
 class TestAuditAPIKeysCreateContract(unittest.TestCase):
@@ -69,6 +66,8 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
             "owner_id": "test-user",
             "scopes": ["admin"],
         }
+        # Lazy import storage to avoid initializing before test mode
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
         apikeys_storage.insert_one(test_key_record)
 
         # Use the raw API key for authentication (will be hashed and compared)
@@ -233,6 +232,8 @@ class TestAuditAPIKeysListContract(unittest.TestCase):
             "owner_id": "test-user",
             "scopes": ["admin"],
         }
+        # Lazy import storage to avoid initializing before test mode
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
         apikeys_storage.insert_one(test_key_record)
 
         # Use the raw API key for authentication
@@ -353,6 +354,8 @@ class TestAuditAPIKeyGetContract(unittest.TestCase):
             "owner_id": "test-user",
             "scopes": ["admin"],
         }
+        # Lazy import storage to avoid initializing before test mode
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
         apikeys_storage.insert_one(test_key_record)
 
         # Use the raw API key for authentication
@@ -441,6 +444,8 @@ class TestAuditAPIKeyUpdateContract(unittest.TestCase):
             "owner_id": "test-user",
             "scopes": ["admin"],
         }
+        # Lazy import storage to avoid initializing before test mode
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
         apikeys_storage.insert_one(test_key_record)
 
         # Use the raw API key for authentication
@@ -559,10 +564,24 @@ class TestAuditAPIKeyRevokeContract(unittest.TestCase):
         )
         assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(
-            env.CLIENT_ID,
-            env.CLIENT_SECRET
-        )
+
+        # Create a test audit API key for authentication
+        raw_api_key = secret.generate_audit_api_key()
+        api_key_id = uid.generate_category_uid("apikey", length=16)
+        test_key_record = {
+            "id": api_key_id,
+            "created_at": schema.DateTime.utcnow(),
+            "key_hash": secret.hash_api_key(raw_api_key),
+            "name": "Test Auth Key",
+            "owner_id": "test-user",
+            "scopes": ["admin"],
+        }
+        # Lazy import storage to avoid initializing before test mode
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        apikeys_storage.insert_one(test_key_record)
+
+        # Use the raw API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {raw_api_key}"}
 
     def test_revoke_api_key_requires_authentication(self):
         """DELETE /audit/v1/apikeys/<id> requires authentication."""
@@ -654,10 +673,24 @@ class TestAuditAPIKeyRegenerateContract(unittest.TestCase):
         )
         assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(
-            env.CLIENT_ID,
-            env.CLIENT_SECRET
-        )
+
+        # Create a test audit API key for authentication
+        raw_api_key = secret.generate_audit_api_key()
+        api_key_id = uid.generate_category_uid("apikey", length=16)
+        test_key_record = {
+            "id": api_key_id,
+            "created_at": schema.DateTime.utcnow(),
+            "key_hash": secret.hash_api_key(raw_api_key),
+            "name": "Test Auth Key",
+            "owner_id": "test-user",
+            "scopes": ["admin"],
+        }
+        # Lazy import storage to avoid initializing before test mode
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        apikeys_storage.insert_one(test_key_record)
+
+        # Use the raw API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {raw_api_key}"}
 
     def test_regenerate_api_key_requires_authentication(self):
         """POST /audit/v1/apikeys/<id>/regenerate requires authentication."""
