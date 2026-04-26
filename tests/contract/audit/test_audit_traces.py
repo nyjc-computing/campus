@@ -15,10 +15,13 @@ Audit Endpoints Reference:
 
 import unittest
 
-from campus.common import env, schema
+from campus.common import schema
+from campus.common.utils import uid, secret
 from campus.model import TraceSpan
+import campus.storage
 from tests.fixtures import services
-from tests.fixtures.tokens import get_basic_auth_headers
+
+apikeys_storage = campus.storage.tables.get_db("apikeys")
 
 
 class TestAuditHealthContract(unittest.TestCase):
@@ -38,6 +41,7 @@ class TestAuditHealthContract(unittest.TestCase):
         campus.storage.testing.reset_test_storage()
 
     def setUp(self):
+        assert self.app
         self.client = self.app.test_client()
 
     def test_health_check_no_auth_required(self):
@@ -66,6 +70,10 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.audit_app
 
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
@@ -75,9 +83,19 @@ class TestAuditTracesIngestContract(unittest.TestCase):
     def setUp(self):
         # Clear test data - no manual resource initialization needed
         self.manager.clear_test_data()
-
+        assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="admin",
+        )
+
+        # Use the audit API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
 
     def _make_test_span(self, **overrides):
         """Helper to create a test span dict."""
@@ -176,6 +194,10 @@ class TestAuditTracesListContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.audit_app
 
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
@@ -185,9 +207,19 @@ class TestAuditTracesListContract(unittest.TestCase):
     def setUp(self):
         # Clear test data - no manual resource initialization needed
         self.manager.clear_test_data()
-
+        assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="admin",
+        )
+
+        # Use the audit API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
 
     def test_list_traces_requires_authentication(self):
         """GET /audit/v1/traces/ requires authentication."""
@@ -257,6 +289,10 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.audit_app
 
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
@@ -266,9 +302,19 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
     def setUp(self):
         # Clear test data - no manual resource initialization needed
         self.manager.clear_test_data()
-
+        assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="admin",
+        )
+
+        # Use the audit API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
 
     def test_get_trace_requires_authentication(self):
         """GET /audit/v1/traces/<id> requires authentication."""
@@ -342,6 +388,10 @@ class TestAuditSpansListContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.audit_app
 
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
@@ -351,9 +401,19 @@ class TestAuditSpansListContract(unittest.TestCase):
     def setUp(self):
         # Clear test data - no manual resource initialization needed
         self.manager.clear_test_data()
-
+        assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="admin",
+        )
+
+        # Use the audit API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
 
     def test_list_spans_requires_authentication(self):
         """GET /audit/v1/traces/<id>/spans requires authentication."""
@@ -414,6 +474,10 @@ class TestAuditSpanGetContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.audit_app
 
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
@@ -423,9 +487,19 @@ class TestAuditSpanGetContract(unittest.TestCase):
     def setUp(self):
         # Clear test data - no manual resource initialization needed
         self.manager.clear_test_data()
-
+        assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="admin",
+        )
+
+        # Use the audit API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
 
     def test_get_span_requires_authentication(self):
         """GET /audit/v1/traces/<id>/spans/<span_id> requires authentication."""
@@ -513,6 +587,10 @@ class TestAuditTracesSearchContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.audit_app
 
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
@@ -522,9 +600,19 @@ class TestAuditTracesSearchContract(unittest.TestCase):
     def setUp(self):
         # Clear test data - no manual resource initialization needed
         self.manager.clear_test_data()
-
+        assert self.app
         self.client = self.app.test_client()
-        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="admin",
+        )
+
+        # Use the audit API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
 
     def test_search_requires_authentication(self):
         """GET /audit/v1/traces/search requires authentication."""
