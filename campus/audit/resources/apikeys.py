@@ -93,7 +93,7 @@ class APIKeysResource:
         record = {
             "name": schema.String(name),
             "owner_id": schema.UserID(owner_id),
-            "scopes": schema.String(scopes),
+            "scopes": [schema.String(scope) for scope in scopes.split(",")],
             "key_hash": secret.hash_api_key(apikey_value),
         }
         if rate_limit is not None:
