@@ -99,7 +99,7 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         data = response.get_json()
         self.assertIn("id", data)
-        self.assertIn("key_hash", data)
+        self.assertIn("api_key", data)  # Plaintext key returned once at creation
         self.assertEqual(data["name"], "Test Key")
         self.assertEqual(data["owner_id"], "user123")
 
@@ -123,8 +123,8 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
         self.assertEqual(data["expires_at"], "2025-12-31T23:59:59Z")
         self.assertEqual(data["scopes"], ["read", "write"])
 
-    def test_create_api_key_missing_name_returns_400(self):
-        """POST /audit/v1/apikeys/ without name returns 400."""
+    def test_create_api_key_missing_name_returns_422(self):
+        """POST /audit/v1/apikeys/ without name returns 422."""
         response = self.client.post(
             "/audit/v1/apikeys/",
             json={
@@ -134,10 +134,10 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
-    def test_create_api_key_missing_owner_id_returns_400(self):
-        """POST /audit/v1/apikeys/ without owner_id returns 400."""
+    def test_create_api_key_missing_owner_id_returns_422(self):
+        """POST /audit/v1/apikeys/ without owner_id returns 422."""
         response = self.client.post(
             "/audit/v1/apikeys/",
             json={
@@ -147,7 +147,7 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
     def test_create_api_key_returns_unique_id(self):
         """POST /audit/v1/apikeys/ returns unique ID for each key."""
