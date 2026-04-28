@@ -80,6 +80,8 @@ class ServiceManager:
         try:
             import campus.storage.testing
             campus.storage.testing.configure_test_storage()
+            # Configure file-based test database for debugging
+            campus.storage.testing.configure_test_db()
         except Exception:
             # If for some reason the testing helper can't be imported,
             # continue; downstream storage.init() may still handle test mode.

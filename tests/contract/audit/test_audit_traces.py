@@ -37,8 +37,6 @@ class TestAuditHealthContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         assert self.app
@@ -77,8 +75,6 @@ class TestAuditTracesIngestContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed
@@ -201,8 +197,6 @@ class TestAuditTracesListContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed
@@ -296,8 +290,6 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed
@@ -395,8 +387,6 @@ class TestAuditSpansListContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed
@@ -481,8 +471,6 @@ class TestAuditSpanGetContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed
@@ -594,8 +582,6 @@ class TestAuditTracesSearchContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed

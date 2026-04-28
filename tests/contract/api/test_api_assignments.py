@@ -28,8 +28,6 @@ class TestApiAssignmentsContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Reset storage before starting tests to ensure clean state
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
         cls.manager = services.create_service_manager()
         cls.manager.initialize()
@@ -43,8 +41,6 @@ class TestApiAssignmentsContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed

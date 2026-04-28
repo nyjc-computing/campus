@@ -41,8 +41,6 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         self.manager.clear_test_data()
@@ -213,8 +211,6 @@ class TestAuditAPIKeysListContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         assert self.app
@@ -335,8 +331,6 @@ class TestAuditAPIKeyGetContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         assert self.app
@@ -425,8 +419,6 @@ class TestAuditAPIKeyUpdateContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         assert self.app
@@ -551,8 +543,6 @@ class TestAuditAPIKeyRevokeContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Create a fresh key for each test
@@ -660,8 +650,6 @@ class TestAuditAPIKeyRegenerateContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Create a fresh key for each test
