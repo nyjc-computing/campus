@@ -25,6 +25,7 @@ table.delete_by_id("123")
 
 import dataclasses
 import json
+import os
 import sqlite3
 from typing import Any, Optional
 
@@ -182,23 +183,60 @@ class SQLiteTable(TableInterface):
     This implementation uses the full schema defined by the model, storing each
     field as a separate column in the SQLite table. This allows SQLite to enforce
     constraints properly during testing.
+
+    Each instance manages its own database connection. Multiple instances
+    can share the same database file for cross-table operations.
     """
 
-    # Class-level connection to ensure all tables share the same in-memory database
-    _connection: Optional[sqlite3.Connection] = None
+    # Class-level registry of all instances for reset_database()
+    _instances: list['SQLiteTable'] = []
 
-    def __init__(self, name: str):
-        """Initialize the SQLite table interface."""
+    def __init__(self, name: str, db_path: str | None = None):
+        """Initialize the SQLite table interface.
+
+        Args:
+            name: Table name
+            db_path: Database file path or ':memory:' for in-memory database.
+                     If None, auto-detects from test context (for testing only).
+        """
         super().__init__(name)
 
-    @classmethod
-    def get_connection(cls) -> sqlite3.Connection:
+        # Auto-detect db_path in test context if not provided
+        if db_path is None:
+            # Check if configure_test_db() set a specific path
+            from campus.common import env
+            db_path = env.get('SQLITE_URI')
+            if not db_path:
+                # Fall back to auto-detection
+                from campus.storage.testing import get_test_db_path
+                db_path = get_test_db_path()
+
+        self._initial_db_path: str = db_path
+        self._connection: Optional[sqlite3.Connection] = None
+
+        # Register this instance for reset_database()
+        SQLiteTable._instances.append(self)
+
+    @property
+    def db_path(self) -> str:
+        """Get the current database path.
+
+        This property checks the environment variable each time to ensure
+        that we use the correct path after reset_test_storage().
+        """
+        from campus.common import env
+        current_path = env.get('SQLITE_URI')
+        if current_path:
+            return current_path
+        return self._initial_db_path
+
+    def get_connection(self) -> sqlite3.Connection:
         """Get the database connection, establishing it if needed."""
-        if cls._connection is None:
-            cls._connection = sqlite3.connect(
-                ":memory:", check_same_thread=False)
-            cls._connection.row_factory = sqlite3.Row
-        return cls._connection
+        if self._connection is None:
+            self._connection = sqlite3.connect(
+                self.db_path, check_same_thread=False)
+            self._connection.row_factory = sqlite3.Row
+        return self._connection
 
     def _get_table_columns(self) -> list[str]:
         """Get the list of column names for this table.
@@ -470,12 +508,51 @@ class SQLiteTable(TableInterface):
         cursor.execute(schema)
         conn.commit()
 
+    def close(self):
+        """Close the database connection for this instance.
+
+        This should be called when the table instance is no longer needed.
+        For file-based databases, the connection can be reopened later.
+        """
+        if self._connection:
+            self._connection.close()
+            self._connection = None
+
     @classmethod
     def reset_database(cls):
-        """Reset the in-memory database. Useful for testing."""
-        if cls._connection:
-            cls._connection.close()
-            cls._connection = None
+        """Reset the test database file.
+
+        For file-based databases, deletes the temp file and resets the
+        environment variable so the next test class gets a fresh path.
+        For in-memory databases, this is a no-op.
+
+        Note: This is a class method that operates on the database file itself,
+        not on specific instances. All instances with connections to the same
+        file will need to close and reopen their connections after calling this.
+        """
+        # Close all connections from all instances
+        for instance in cls._instances:
+            if instance._connection:
+                instance._connection.close()
+                instance._connection = None
+
+        # Get the current test database path
+        from campus.storage.testing import get_test_db_path
+        db_path = get_test_db_path()
+
+        # Delete temp file if it exists
+        if db_path and db_path != ":memory:":
+            try:
+                os.unlink(db_path)
+            except FileNotFoundError:
+                pass  # File doesn't exist, no problem
+
+        # Clear the instance registry
+        cls._instances.clear()
+
+        # Reset the environment variable so the next test class starts fresh
+        if 'SQLITE_URI' in os.environ:
+            del os.environ['SQLITE_URI']
 
     @classmethod
     def clear_database(cls):
@@ -483,17 +560,30 @@ class SQLiteTable(TableInterface):
 
         This is faster than reset_database() for per-test cleanup since it
         doesn't require recreating tables. Useful for test isolation.
+
+        Note: This is a class method that operates on the database file itself.
+        It creates a temporary connection to clear all tables.
         """
-        if cls._connection is None:
-            return  # No database to clear
+        from campus.storage.testing import get_test_db_path
+        db_path = get_test_db_path()
 
-        cursor = cls._connection.cursor()
-        # Get all table names
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [row[0] for row in cursor.fetchall()]
+        if db_path == ":memory:":
+            return  # Can't clear shared in-memory database
 
-        # Delete all rows from each table
-        for table in tables:
-            cursor.execute(f'DELETE FROM "{table}"')
+        try:
+            # Create a temporary connection to clear all tables
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
 
-        cls._connection.commit()
+            # Get all table names
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+
+            # Delete all rows from each table
+            for table in tables:
+                cursor.execute(f'DELETE FROM "{table}"')
+
+            conn.commit()
+            conn.close()
+        except sqlite3.OperationalError:
+            pass  # Database doesn't exist yet

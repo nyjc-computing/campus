@@ -95,9 +95,10 @@ Use for **most integration tests** that need Flask apps and service manager.
 
 **Provides:**
 - ✅ Automatic service manager setup/teardown
-- ✅ Storage reset in `setUp()` for per-test isolation
+- ✅ Data clearing in `setUp()` via `clear_test_data()` for per-test isolation
 - ✅ Flask app context management
 - ✅ Proper cleanup of resources
+- ✅ Shared database across test classes (aligns with production)
 
 **Example:**
 ```python
@@ -423,6 +424,59 @@ Storage backends in test mode:
 - **Documents:** Python dicts
 - **Vault:** In-memory storage
 
+## Test Assumptions
+
+The testing environment is designed to closely match production deployment assumptions:
+
+### Database Lifecycle
+
+**Production Assumption:**
+- Each app deployment uses a **single database** of each type (PostgreSQL, MongoDB, SQLite)
+- The database path/URL does **not change** during the deployment lifecycle
+- The database is **not closed or reset** while the app is running
+- Multiple requests share the same database connections
+
+**Test Environment Alignment:**
+- ✅ **Single shared database** for all test classes (fixed path: `/tmp/campus_test.db`)
+- ✅ **Database path stable** across test execution (no per-test-class files)
+- ✅ **Database persists** across test classes (not reset between classes)
+- ✅ **Module-level storage instances** are reused (like production connection pools)
+- ✅ **Per-test data isolation** via `clear_test_data()` (like transaction rollback in production)
+
+### Why This Matters
+
+This alignment prevents a class of bugs that only occur in production but not in tests:
+
+**Example Bug (Prevented):**
+```python
+# Production: Module-level storage created once at import
+client_storage = campus.storage.get_table("vault_clients")
+
+# If tests reset storage and reload modules, this works fine:
+#   - Each test gets fresh module-level storage
+# But in production:
+#   - Module-level storage created once at startup
+#   - Database path never changes
+#   - Connections persist for app lifetime
+```
+
+By matching production assumptions in tests, we catch these issues early.
+
+### Test Isolation Strategy
+
+Instead of resetting databases between test classes, we:
+
+1. **Share database** across test classes (like production shares a DB)
+2. **Clear data** between tests via `clear_test_data()` (like production transactions)
+3. **Reuse module-level storage instances** (like production connection pools)
+4. **Reset once at test run end** via atexit handler
+
+**Benefits:**
+- ✅ Tests match production behavior
+- ✅ No "readonly database" errors from stale references
+- ✅ Faster test execution (no DB file creation/deletion overhead)
+- ✅ Simpler test code (no module reload complexity)
+
 ## Test Fixtures
 
 Key fixtures in `tests/fixtures/`:
@@ -476,21 +530,26 @@ def test_endpoint_requires_auth(self):
 
 ## Test Isolation Notes
 
-Integration tests use `setUpClass()`/`tearDownClass()` for performance. Data persists between tests in a class.
+### Integration Tests
 
-**Workaround:** Name tests that depend on empty state with `test_00_*` prefix to ensure they run first.
+Integration tests use `setUpClass()`/`tearDownClass()` for performance. The database persists across tests in a class, with data cleared via `clear_test_data()` in `setUp()`.
 
-Example:
+**Note:** The `clear_test_data()` method clears all tables and collections while preserving schema structure. This is faster than `reset_test_storage()` and aligns with production transaction behavior.
+
+**Legacy Pattern (No Longer Needed):**
+Previously, tests that depended on empty initial state used `test_00_*` prefix to run first. With the new `clear_test_data()` approach, every test starts with clean data, so this workaround is rarely needed.
+
+Example (legacy pattern for reference):
 ```python
 def test_00_list_is_empty(self):
-    """Must run first to verify empty initial state."""
+    """Legacy: Must run first when using shared state without clear_test_data()."""
     response = self.client.get("/api/v1/resources")
     assert response.get_json()["data"] == []
-
-def test_create_resource(self):
-    """Runs after test_00_list_is_empty."""
-    # ... creates a resource
 ```
+
+### Contract Tests
+
+Contract tests use `clear_test_data()` in `setUp()` to ensure each test starts with a clean state, while sharing the database file across all test classes (matching production assumptions).
 
 ## Test Skipping Principles
 
@@ -636,10 +695,10 @@ See [tests/integration/test_audit_tracing_middleware.py](../tests/integration/te
 ## Known Gotchas
 
 See [AGENTS.md](../AGENTS.md) for common testing pitfalls:
-- Storage initialization order (lazy imports required)
+- Storage initialization order (lazy imports required for service initialization)
 - Flask blueprint registration (shared across test classes)
 - Test cleanup requirements
-- **Storage re-initialization after reset** (see above)
+- **Module-level storage instances** - created at import time, reused across tests (like production)
 
 ## External Testing
 

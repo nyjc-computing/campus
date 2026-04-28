@@ -20,6 +20,7 @@ CODESPACES: str  # 'true' if running in GitHub Codespaces
 CODESPACE_NAME: str  # name of the Codespace
 GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str  # domain for port forwarding in Codespaces
 
+# Deployment environment variables
 CLIENT_ID: str  # Campus client ID
 CLIENT_SECRET: str  # Campus client secret
 DEPLOY: str  # Campus deployment, (campus.auth, campus.api, campus.audit)
@@ -29,6 +30,12 @@ PORT: str  # port for running development server
 SECRET_KEY: str  # secret key for signing sessions and tokens
 WORKSPACE_DOMAIN: str  # Google Workspace domain
 
+# Database environment variables
+MONGODB_URI: str
+POSTGRESDB_URI: str
+SQLITE_URI: str
+
+# OAuth environment variables
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
 # Type stub for getsecret function

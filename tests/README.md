@@ -54,6 +54,8 @@ poetry run python -m unittest tests.unit.apps.test_client -v
 - Located in tests/integration/<package>/
 - Test real implementations with actual dependencies
 - Use base classes from `tests/integration/base.py` for consistent setup/teardown
+- **Single shared database** across all test classes (aligns with production deployment)
+- **Per-test data isolation** via `clear_test_data()` in setUp()
 
 ### Contract Tests
 - Contract tests verify HTTP interface contracts (status codes, response formats, authentication)
