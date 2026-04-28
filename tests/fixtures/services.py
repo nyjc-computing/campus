@@ -176,6 +176,32 @@ class ServiceManager:
         # Audit routes are at /audit/v1/*
         flask_test.register_test_app("https://campus.test", self.audit_app, path_prefix="/audit")
 
+        # Create audit API key for tracing middleware span ingestion
+        # The audit service requires Bearer token authentication (audit API keys)
+        # instead of Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services
+        from campus.audit.resources.apikeys import APIKeysResource
+
+        # Initialize audit API keys storage (creates table if needed)
+        APIKeysResource.init_storage()
+
+        # Create an audit API key for span ingestion
+        apikey_resource = APIKeysResource()
+        api_key_model, plaintext_key = apikey_resource.new(
+            name="test-tracing-key",
+            owner_id=str(env.CLIENT_ID),  # Use test client ID as owner
+            scopes="traces:ingest,traces:read,traces:search"
+        )
+
+        # Set ACCESS_TOKEN so TestJsonClient uses Bearer authentication
+        # TestJsonClient._auth_headers() checks ACCESS_TOKEN first before falling
+        # back to CLIENT_ID/CLIENT_SECRET Basic auth
+        env.set('ACCESS_TOKEN', plaintext_key)
+
+        # Reset audit client singleton to pick up the new ACCESS_TOKEN
+        # Note: We don't reset json_client_class as that would break TestJsonClient injection
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None  # Clear singleton so it recreates with new token
+
         self._setup_done = True
 
         # Store as shared instance if using shared mode
@@ -248,10 +274,16 @@ class ServiceManager:
             env.delete("CLIENT_ID")
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
+        if env.contains("ACCESS_TOKEN"):
+            env.delete("ACCESS_TOKEN")
 
         # Clean up audit client configuration
         from campus.audit.client import AuditClient
         AuditClient.json_client_class = None  # Reset to None
+
+        # Clear audit client singleton
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
 
         # For non-shared instances, clean up apps for full isolation
         # This is now the default behavior
@@ -355,6 +387,8 @@ class ServiceManager:
             env.delete("CLIENT_ID")
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
+        if env.contains("ACCESS_TOKEN"):
+            env.delete("ACCESS_TOKEN")
 
     # === NEW LIFECYCLE API (Issue #518) ===
     # These methods provide a cleaner, more predictable lifecycle for integration tests.
