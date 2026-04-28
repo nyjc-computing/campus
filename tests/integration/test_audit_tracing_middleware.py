@@ -27,7 +27,6 @@ import unittest
 from unittest.mock import patch
 
 from campus.common import env
-from campus.audit.resources.traces import TracesResource
 from tests.fixtures.tokens import get_basic_auth_headers
 from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
 
@@ -55,7 +54,13 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
         # Get audit client credentials for authenticated requests
         cls.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
-        # SOLUTION: Initialize traces storage ONCE per test class
+        # CRITICAL: Lazy import TracesResource AFTER test mode is configured
+        # Importing before test mode is configured causes PostgreSQL backend to be
+        # used instead of SQLite, leading to connection errors and missing secrets.
+        # See AGENTS.md - Storage Initialization Order
+        from campus.audit.resources.traces import TracesResource
+
+        # Initialize traces storage ONCE per test class
         # Since init_from_model uses CREATE TABLE IF NOT EXISTS, this is idempotent
         # The table will be preserved by clear_test_data() during setUp()
         TracesResource.init_storage()
@@ -172,7 +177,13 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         """Set up services for the test class using new API."""
         super().setUpClass()  # Uses new API: initialize()
 
-        # SOLUTION: Initialize traces storage ONCE per test class
+        # CRITICAL: Lazy import TracesResource AFTER test mode is configured
+        # Importing before test mode is configured causes PostgreSQL backend to be
+        # used instead of SQLite, leading to connection errors and missing secrets.
+        # See AGENTS.md - Storage Initialization Order
+        from campus.audit.resources.traces import TracesResource
+
+        # Initialize traces storage ONCE per test class
         # Since init_from_model uses CREATE TABLE IF NOT EXISTS, this is idempotent
         # The table will be preserved by clear_test_data() during setUp()
         TracesResource.init_storage()

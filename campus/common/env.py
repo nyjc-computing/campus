@@ -38,6 +38,9 @@ SQLITE_URI: str
 # OAuth environment variables
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
+# Audit tracing middleware
+AUDIT_TRACING_ENABLED: str  # Enable audit tracing middleware ("1" or "0")
+
 # Type stub for getsecret function
 GetSecretFunc = Callable[[str], str]
 _getsecret_func: GetSecretFunc | None = None

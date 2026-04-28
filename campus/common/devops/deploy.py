@@ -121,9 +121,13 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
 
     # Register tracing middleware for auth/api deployments
     # campus.audit handles ingestion but doesn't trace its own requests
+    # Controlled by AUDIT_TRACING_ENABLED environment variable (default: enabled)
     if env.DEPLOY in ('campus.auth', 'campus.api'):
         from campus.audit import middleware
-        # Disable for now; causing NotFoundError
-        # middleware.init_app(app)
+
+        # Check if tracing is enabled (default: enabled for safety)
+        tracing_enabled = env.get("AUDIT_TRACING_ENABLED", "1")
+        if tracing_enabled == "1":
+            middleware.init_app(app)
 
     return app

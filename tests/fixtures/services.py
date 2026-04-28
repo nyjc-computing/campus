@@ -94,6 +94,10 @@ class ServiceManager:
         # We use a fake hostname that we'll map to Flask test apps
         env.set('HOSTNAME', "campus.test")
 
+        # Enable audit tracing middleware in tests (default: enabled)
+        # This can be disabled per-test by setting env.set('AUDIT_TRACING_ENABLED', '0')
+        env.set('AUDIT_TRACING_ENABLED', '1')
+
         # Patch campus_python to use TestCampusRequest (Flask test client)
         # This MUST happen before any campus_python.Campus instances are created
         # Moved here to ensure patching happens before early returns below
