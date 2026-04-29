@@ -45,7 +45,8 @@ class TestLoginRoutesTrailingSlash(IntegrationTestCase):
             f"POST /auth/v1/logins/ returned 308 redirect. Response: {response.data}"
         )
 
-        # Should return 200 or an auth error (401/403), but not 404
+        # Should return 200 or an auth error (400/401/403), but not 404
+        # 400 = missing auth header, 401 = invalid credentials, 403 = insufficient permissions
         self.assertNotEqual(
             response.status_code, 404,
             f"POST /auth/v1/logins/ returned 404. Response: {response.data}"
@@ -63,9 +64,10 @@ class TestLoginRoutesTrailingSlash(IntegrationTestCase):
             f"Response: {response.data}"
         )
 
-        # Should return 200, 404, or an auth error (401/403)
+        # Should return 200, 404, or an auth error (400/401/403)
+        # 400 = missing auth header, 401 = invalid credentials, 403 = insufficient permissions
         self.assertIn(
-            response.status_code, [200, 401, 403, 404],
+            response.status_code, [200, 400, 401, 403, 404],
             f"GET /auth/v1/logins/{session_id}/ returned unexpected status "
             f"{response.status_code}. Response: {response.data}"
         )
@@ -82,9 +84,10 @@ class TestLoginRoutesTrailingSlash(IntegrationTestCase):
             f"Response: {response.data}"
         )
 
-        # Should return 200, 404, or an auth error (401/403)
+        # Should return 200, 404, or an auth error (400/401/403)
+        # 400 = missing auth header, 401 = invalid credentials, 403 = insufficient permissions
         self.assertIn(
-            response.status_code, [200, 401, 403, 404],
+            response.status_code, [200, 400, 401, 403, 404],
             f"DELETE /auth/v1/logins/{session_id}/ returned unexpected status "
             f"{response.status_code}. Response: {response.data}"
         )
@@ -104,9 +107,10 @@ class TestLoginRoutesTrailingSlash(IntegrationTestCase):
             f"Response: {response.data}"
         )
 
-        # Should return 200, 404, or an auth error (401/403)
+        # Should return 200, 404, or an auth error (400/401/403)
+        # 400 = missing auth header, 401 = invalid credentials, 403 = insufficient permissions
         self.assertIn(
-            response.status_code, [200, 401, 403, 404],
+            response.status_code, [200, 400, 401, 403, 404],
             f"PATCH /auth/v1/logins/{session_id}/ returned unexpected status "
             f"{response.status_code}. Response: {response.data}"
         )

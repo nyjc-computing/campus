@@ -38,6 +38,12 @@ SQLITE_URI: str
 # OAuth environment variables
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
+# Audit tracing middleware
+AUDIT_TRACING_ENABLED: str  # Enable audit tracing middleware ("1" or "0")
+
+# Test modes
+STORAGE_MODE: str  # "1" if using test storage backend, "0" if using deployment
+
 # Type stub for getsecret function
 GetSecretFunc = Callable[[str], str]
 _getsecret_func: GetSecretFunc | None = None
@@ -111,6 +117,51 @@ def get(name: str, default: str | None = None) -> str | None:
         When a non-None default is provided, the return type is str.
     """
     return os.getenv(name, default)
+
+
+def get_flag(name: str, default: bool = False) -> bool:
+    """Get boolean environment variable.
+
+    Converts string environment variables to boolean values.
+    Only accepts "1" (True) or "0"/None (False) for safety.
+
+    Args:
+        name: Name of the environment variable.
+        default: Default value if not set (defaults to False).
+
+    Returns:
+        bool: True if value is "1", False if value is "0"/None/missing.
+
+    Raises:
+        OSError: If value is set but not "0" or "1".
+
+    Examples:
+        >>> env.get_flag("AUDIT_TRACING_ENABLED")
+        False
+
+        >>> env.get_flag("AUDIT_TRACING_ENABLED", True)
+        True
+
+        >>> env.set("AUDIT_TRACING_ENABLED", "1")
+        >>> env.get_flag("AUDIT_TRACING_ENABLED")
+        True
+    """
+    value = os.getenv(name)
+
+    # Handle unset
+    if value is None:
+        return default
+
+    # Validate and convert
+    if value == "1":
+        return True
+    elif value == "0":
+        return False
+    else:
+        raise OSError(
+            f"Invalid boolean flag value for {name!r}: {value!r}. "
+            f"Must be '0' (disabled) or '1' (enabled)."
+        )
 
 
 def set(name: str, value: str) -> None:

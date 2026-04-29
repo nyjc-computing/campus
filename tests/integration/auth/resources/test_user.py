@@ -14,19 +14,30 @@ from campus.common import schema
 
 
 class TestUsersResourceGetOrCreate(unittest.TestCase):
-    """Integration tests for UsersResource.get_or_create() method."""
+    """Integration tests for UsersResource.get_or_create() method.
+
+    These tests use the tmpfile-based SQLite pattern for reliable test isolation.
+    The database file persists across tests with clear_all_data() providing per-test
+    cleanup without destroying the schema or causing "readonly database" errors.
+    """
 
     @classmethod
     def setUpClass(cls):
         """Configure test storage and import resources once before all tests."""
-        # MUST configure test storage BEFORE importing auth resources
         import campus.storage.testing
+        from campus.common import env
+
+        # Configure test mode first
         campus.storage.testing.configure_test_storage()
+
+        # Configure tmpfile-based database (fixed path, avoids readonly errors)
+        # This sets SQLITE_URI to a fixed path like /tmp/campus_test.db
+        campus.storage.testing.configure_test_db()
 
         # Lazy import after test mode is configured
         from campus.auth.resources.user import UsersResource
 
-        # Initialize storage schema
+        # Initialize storage schema (creates tables in the tmpfile database)
         UsersResource.init_storage()
 
         cls.UsersResource = UsersResource
@@ -36,14 +47,17 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
     def tearDownClass(cls):
         """Clean up test storage after all tests."""
         import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
+        # Only clear data, don't reset database (preserves connections)
+        campus.storage.testing.clear_all_data()
 
     def setUp(self):
-        """Clean and reinitialize storage before each test."""
+        """Clean storage before each test without destroying schema."""
         import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-        # Reinitialize table schema after reset
-        self.UsersResource.init_storage()
+        # Use clear_all_data() instead of reset_test_storage() to avoid:
+        # - "readonly database" errors from stale module-level storage refs
+        # - Unnecessary database file recreation
+        # - Connection closure issues
+        campus.storage.testing.clear_all_data()
 
     def test_get_or_create_creates_new_user_when_not_exists(self):
         """Should create a new user record when email doesn't exist in database."""
@@ -111,19 +125,30 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
 
 
 class TestUserResource(unittest.TestCase):
-    """Integration tests for UserResource methods."""
+    """Integration tests for UserResource methods.
+
+    These tests use the tmpfile-based SQLite pattern for reliable test isolation.
+    The database file persists across tests with clear_all_data() providing per-test
+    cleanup without destroying the schema or causing "readonly database" errors.
+    """
 
     @classmethod
     def setUpClass(cls):
         """Configure test storage and import resources once before all tests."""
-        # MUST configure test storage BEFORE importing auth resources
         import campus.storage.testing
+        from campus.common import env
+
+        # Configure test mode first
         campus.storage.testing.configure_test_storage()
+
+        # Configure tmpfile-based database (fixed path, avoids readonly errors)
+        # This sets SQLITE_URI to a fixed path like /tmp/campus_test.db
+        campus.storage.testing.configure_test_db()
 
         # Lazy import after test mode is configured
         from campus.auth.resources.user import UsersResource
 
-        # Initialize storage schema
+        # Initialize storage schema (creates tables in the tmpfile database)
         UsersResource.init_storage()
 
         cls.UsersResource = UsersResource
@@ -133,14 +158,17 @@ class TestUserResource(unittest.TestCase):
     def tearDownClass(cls):
         """Clean up test storage after all tests."""
         import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
+        # Only clear data, don't reset database (preserves connections)
+        campus.storage.testing.clear_all_data()
 
     def setUp(self):
-        """Clean and reinitialize storage before each test."""
+        """Clean storage before each test without destroying schema."""
         import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
-        # Reinitialize table schema after reset
-        self.UsersResource.init_storage()
+        # Use clear_all_data() instead of reset_test_storage() to avoid:
+        # - "readonly database" errors from stale module-level storage refs
+        # - Unnecessary database file recreation
+        # - Connection closure issues
+        campus.storage.testing.clear_all_data()
 
     def test_activate_sets_activated_at(self):
         """Should set activated_at timestamp when activating a user."""
