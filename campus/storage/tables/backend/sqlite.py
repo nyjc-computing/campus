@@ -246,6 +246,7 @@ class SQLiteTable(TableInterface):
         conflicts. All SQLiteTable instances accessing the same database file
         share the same connection and lock.
         """
+        # Check if we need to establish or refresh the connection
         if self._connection is None:
             # Use global connection cache to share connections across instances
             with _global_lock:
@@ -270,6 +271,15 @@ class SQLiteTable(TableInterface):
                     _connection_locks[self.db_path] = threading.Lock()
 
                 self._connection = _connections[self.db_path]
+        else:
+            # Verify the connection is still open (may have been closed by reset_database)
+            try:
+                # Execute a simple query to check if connection is alive
+                self._connection.execute("SELECT 1")
+            except sqlite3.ProgrammingError:
+                # Connection is closed, clear it and get a new one
+                self._connection = None
+                return self.get_connection()
 
         return self._connection
 
