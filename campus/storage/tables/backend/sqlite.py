@@ -27,6 +27,7 @@ import dataclasses
 import json
 import os
 import sqlite3
+import threading
 from typing import Any, Optional
 
 from campus.common import devops
@@ -35,6 +36,14 @@ from campus.model import InternalModel, Model, constraints
 from campus.storage import errors as storage_errors
 from campus.storage.query import gt, gte, is_operator, lt, lte
 from ..interface import TableInterface, PK
+
+
+# Global connection cache and lock for thread-safe SQLite access
+# This ensures all SQLiteTable instances share a single connection per database,
+# preventing concurrent write conflicts that cause "database is locked" errors.
+_connections: dict[str, sqlite3.Connection] = {}
+_connection_locks: dict[str, threading.Lock] = {}
+_global_lock = threading.Lock()  # Protects the above dictionaries
 
 
 # Valid field constraint names
@@ -231,11 +240,47 @@ class SQLiteTable(TableInterface):
         return self._initial_db_path
 
     def get_connection(self) -> sqlite3.Connection:
-        """Get the database connection, establishing it if needed."""
+        """Get the database connection, establishing it if needed.
+
+        Uses a shared connection per database path to prevent concurrent write
+        conflicts. All SQLiteTable instances accessing the same database file
+        share the same connection and lock.
+        """
+        # Check if we need to establish or refresh the connection
         if self._connection is None:
-            self._connection = sqlite3.connect(
-                self.db_path, check_same_thread=False)
-            self._connection.row_factory = sqlite3.Row
+            # Use global connection cache to share connections across instances
+            with _global_lock:
+                # Get or create connection for this database path
+                if self.db_path not in _connections:
+                    conn = sqlite3.connect(
+                        self.db_path,
+                        check_same_thread=False,
+                        timeout=10.0  # Wait up to 10 seconds for locked database
+                    )
+                    conn.row_factory = sqlite3.Row
+                    # Enable WAL mode for better concurrency
+                    # This allows readers and writers to work simultaneously
+                    cursor = conn.cursor()
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                    # Set synchronous mode to NORMAL for better performance
+                    # WAL provides durability even with NORMAL synchronous mode
+                    cursor.execute("PRAGMA synchronous=NORMAL")
+                    cursor.close()
+
+                    _connections[self.db_path] = conn
+                    _connection_locks[self.db_path] = threading.Lock()
+
+                self._connection = _connections[self.db_path]
+        else:
+            # Verify the connection is still open (may have been closed by reset_database)
+            try:
+                # Execute a simple query to check if connection is alive
+                self._connection.execute("SELECT 1")
+            except sqlite3.ProgrammingError:
+                # Connection is closed, clear it and get a new one
+                self._connection = None
+                return self.get_connection()
+
         return self._connection
 
     def _get_table_columns(self) -> list[str]:
@@ -414,12 +459,14 @@ class SQLiteTable(TableInterface):
                 value = json.dumps(value)
             values.append(value)
 
-        cursor = conn.cursor()
-        cursor.execute(
-            f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
-            tuple(values)
-        )
-        conn.commit()
+        # Acquire lock for this database to prevent concurrent writes
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
+                tuple(values)
+            )
+            conn.commit()
 
     def update_by_id(self, row_id: str, update: dict[str, Any]):
         """Update a row by its ID using actual table columns."""
@@ -454,12 +501,14 @@ class SQLiteTable(TableInterface):
         values.append(row_id)  # For the WHERE clause
         set_sql = ", ".join(set_clauses)
 
-        cursor = conn.cursor()
-        cursor.execute(
-            f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
-            tuple(values)
-        )
-        conn.commit()
+        # Acquire lock for this database to prevent concurrent writes
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
+                tuple(values)
+            )
+            conn.commit()
 
     def update_matching(self, query: dict[str, Any], update: dict[str, Any]):
         """Update rows matching a query."""
@@ -470,9 +519,11 @@ class SQLiteTable(TableInterface):
     def delete_by_id(self, row_id: str):
         """Delete a row by its ID."""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
-        conn.commit()
+        # Acquire lock for this database to prevent concurrent writes
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
+            conn.commit()
 
     def delete_matching(self, query: dict[str, Any]):
         """Delete rows matching a query."""
@@ -530,10 +581,19 @@ class SQLiteTable(TableInterface):
         not on specific instances. All instances with connections to the same
         file will need to close and reopen their connections after calling this.
         """
-        # Close all connections from all instances
-        for instance in cls._instances:
-            if instance._connection:
-                instance._connection.close()
+        # Close all connections from all instances and clear shared connections
+        with _global_lock:
+            # Close all shared connections
+            for db_path, conn in _connections.items():
+                try:
+                    conn.close()
+                except Exception:
+                    pass  # Ignore errors during cleanup
+            _connections.clear()
+            _connection_locks.clear()
+
+            # Clear instance connections
+            for instance in cls._instances:
                 instance._connection = None
 
         # Get the current test database path
@@ -562,7 +622,7 @@ class SQLiteTable(TableInterface):
         doesn't require recreating tables. Useful for test isolation.
 
         Note: This is a class method that operates on the database file itself.
-        It creates a temporary connection to clear all tables.
+        It uses the shared connection with proper locking to clear all tables.
         """
         from campus.storage.testing import get_test_db_path
         db_path = get_test_db_path()
@@ -571,19 +631,30 @@ class SQLiteTable(TableInterface):
             return  # Can't clear shared in-memory database
 
         try:
-            # Create a temporary connection to clear all tables
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
+            # Use shared connection if available, otherwise create temporary one
+            with _global_lock:
+                if db_path in _connections:
+                    conn = _connections[db_path]
+                    lock = _connection_locks[db_path]
+                else:
+                    # Create temporary connection with lock
+                    conn = sqlite3.connect(db_path, timeout=10.0)
+                    lock = threading.Lock()
+                    _connections[db_path] = conn
+                    _connection_locks[db_path] = lock
 
-            # Get all table names
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in cursor.fetchall()]
+            # Use lock to prevent concurrent writes during clear
+            with lock:
+                cursor = conn.cursor()
 
-            # Delete all rows from each table
-            for table in tables:
-                cursor.execute(f'DELETE FROM "{table}"')
+                # Get all table names
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cursor.fetchall()]
 
-            conn.commit()
-            conn.close()
+                # Delete all rows from each table
+                for table in tables:
+                    cursor.execute(f'DELETE FROM "{table}"')
+
+                conn.commit()
         except sqlite3.OperationalError:
             pass  # Database doesn't exist yet
