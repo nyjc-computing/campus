@@ -120,16 +120,9 @@ def _is_tracing_enabled() -> bool:
     """
     from campus.common import env
 
-    tracing_enabled = env.get("AUDIT_TRACING_ENABLED", "1")
-
-    # Validate the value before comparing
-    if tracing_enabled not in ("0", "1"):
-        raise OSError(
-            f"Invalid AUDIT_TRACING_ENABLED value: {tracing_enabled!r}. "
-            f"Must be '0' (disabled) or '1' (enabled)."
-        )
-
-    return tracing_enabled == "1"
+    # Use get_flag() for automatic "1"/"0" to bool conversion with validation
+    # Default to enabled (True) for safety - tracing is critical for observability
+    return env.get_flag("AUDIT_TRACING_ENABLED", True)
 
 
 def create_app(*appmodules: AppModule) -> flask.Flask:
