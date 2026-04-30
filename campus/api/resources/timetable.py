@@ -150,6 +150,17 @@ class TimetablesResource:
         entries = []
 
         for lessongroup in lessongroups:
+            # HACK: hardcoded key validation
+            # TODO: create a model or TypedDict for validation
+            missing_keys = []
+            for key in ("label", "members", "entries"):
+                if key not in lessongroup:
+                    missing_keys.append(key)
+            if missing_keys:
+                raise api_errors.InvalidRequestError(
+                    "'lessongroup' object requires missing properties: "
+                    f"{', '.join(missing_keys)}"
+                )
             lg = model.LessonGroup(
                 timetable_id=timetable_meta.id,
                 label = lessongroup["label"]
