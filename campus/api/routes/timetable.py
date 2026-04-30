@@ -136,14 +136,10 @@ def new(
             "'data' object requires 'lessongroups' property",
             **details
         )
-    try:
-        timetable = timetable_resource.new(
-            metadata=metadata,
-            lessongroups=data["lessongroups"]
-        )
-    except Exception as e:
-        return {'error': e}, 400
-
+    timetable = timetable_resource.new(
+        metadata=metadata,
+        lessongroups=data["lessongroups"]
+    )
     return {"data": timetable.to_resource()}, 200
 
 @bp.get('/<timetable_id>/')
