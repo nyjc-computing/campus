@@ -125,11 +125,21 @@ def new(
         400 Bad Request: dict
             {"error": error message}
     """
-
+    if "lessongroups" not in data:
+        details = {}
+        if "lesson_groups" in data:
+            details["suggestion"] = (
+                "Hint: 'lesson_groups' should be renamed to "
+                "'lessongroups'"
+            )
+        raise api_errors.InvalidRequestError(
+            "'data' object requires 'lessongroups' property",
+            **details
+        )
     try:
         timetable = timetable_resource.new(
             metadata=metadata,
-            lessongroups=data['lessongroups']
+            lessongroups=data["lessongroups"]
         )
     except Exception as e:
         return {'error': e}, 400
