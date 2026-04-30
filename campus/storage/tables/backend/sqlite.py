@@ -624,8 +624,14 @@ class SQLiteTable(TableInterface):
         Note: This is a class method that operates on the database file itself.
         It uses the shared connection with proper locking to clear all tables.
         """
-        from campus.storage.testing import get_test_db_path
-        db_path = get_test_db_path()
+        # Use the same path resolution as the db_path property
+        # to ensure we clear the correct database file
+        from campus.common import env
+        db_path = env.get('SQLITE_URI')
+        if not db_path:
+            # Fall back to auto-detection if SQLITE_URI not set
+            from campus.storage.testing import get_test_db_path
+            db_path = get_test_db_path()
 
         if db_path == ":memory:":
             return  # Can't clear shared in-memory database
