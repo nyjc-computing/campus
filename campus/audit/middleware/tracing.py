@@ -137,7 +137,9 @@ _ingestion_executor: concurrent.futures.ThreadPoolExecutor | None = None
 # Client singleton (lazy initialized)
 _audit_client: AuditClient | None = None
 # Track credentials used to create the client, for detecting when they change
-_client_credentials: tuple[str, str] | None = None
+# Includes (client_id, client_secret, access_token) to detect when audit
+# API key changes
+_client_credentials: tuple[str, str, str | None] | None = None
 
 
 def _get_audit_client() -> AuditClient:
