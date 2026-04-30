@@ -130,6 +130,13 @@ class ServiceManager:
         auth.init()
         import campus.auth
 
+        # CRITICAL: Create audit API key BEFORE creating Flask apps!
+        # The tracing middleware is registered during create_app(), and any
+        # requests made during initialization will trigger span ingestion.
+        # If ACCESS_TOKEN isn't set yet, those requests will fail with
+        # "Token only available for Bearer Authentication."
+        self._ensure_audit_api_key()
+
         self.auth_app = devops.deploy.create_app(campus.auth)
         flask_test.configure_for_testing(self.auth_app)
 
@@ -451,7 +458,6 @@ class ServiceManager:
 
         See: #518 - Proposal: Saner Integration Test Lifecycle
         """
-        """
         import campus.storage.testing
 
         # Clear data without destroying schema (faster than reset_test_storage)
@@ -466,32 +472,6 @@ class ServiceManager:
         # Since clear_all_data() deletes all rows, the API key created during
         # _do_initialize() is gone and needs to be recreated for each test
         self._ensure_audit_api_key()
-
-        **Lifecycle Phase**: Test Setup (once per test)
-        **New API**: Use this instead of reset_test_data() for new test code
-        **Ownership**: Primary owner of per-test data cleanup
-
-        This is the new recommended method for per-test data cleanup.
-        Unlike reset_test_data(), this method:
-        - Uses clear_all_data() which preserves schema structure
-        - Is faster (no table/collection recreation)
-        - Doesn't require manual Resource.init_storage() calls
-
-        Migration Path:
-        - Old: reset_test_data() - manual Resource.init_storage()
-        - New: clear_test_data() - no manual reinit needed
-
-        See: #518 - Proposal: Saner Integration Test Lifecycle
-        """
-        import campus.storage.testing
-
-        # Clear data without destroying schema (faster than reset_test_storage)
-        campus.storage.testing.clear_all_data()
-
-        # Re-initialize auth and yapper services
-        # These are idempotent and will recreate necessary data
-        auth.init()
-        yapper.init()
 
     def flush_async(self):
         """Wait for async operations to complete.

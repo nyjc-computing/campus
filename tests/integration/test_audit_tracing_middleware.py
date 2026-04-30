@@ -27,7 +27,7 @@ import unittest
 from unittest.mock import patch
 
 from campus.common import env
-from tests.fixtures.tokens import get_basic_auth_headers
+from tests.fixtures.tokens import get_basic_auth_headers, get_bearer_auth_headers
 from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
 
 
@@ -95,6 +95,11 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
 
         # Create auth headers for authenticated requests to auth service
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create Bearer auth headers for audit service (requires audit API key)
+        # The audit service uses Bearer token authentication (ACCESS_TOKEN) instead of
+        # Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services
+        self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
 
         # Reset audit client singleton to ensure fresh client for each test
         from campus.audit.middleware import tracing
@@ -318,6 +323,11 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         # Create auth headers for authenticated requests to auth service
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
+        # Create Bearer auth headers for audit service (requires audit API key)
+        # The audit service uses Bearer token authentication (ACCESS_TOKEN) instead of
+        # Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services
+        self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
+
         # Reset audit client singleton to ensure fresh client for each test
         from campus.audit.middleware import tracing
         tracing._audit_client = None
@@ -356,7 +366,7 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         """
         response = self.audit_client.get(
             f"/audit/v1/traces/{trace_id}/spans/",
-            headers=self.auth_headers
+            headers=self.audit_headers  # Use Bearer auth for audit service
         )
         if response.status_code != 200:
             return None
