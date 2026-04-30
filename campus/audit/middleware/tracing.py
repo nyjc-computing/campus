@@ -167,7 +167,10 @@ def _get_audit_client() -> AuditClient:
             "to create audit client"
         )
 
-    current_credentials = (client_id, client_secret)
+    # Include ACCESS_TOKEN in credential tracking so the client is recreated
+    # when clear_test_data() deletes and recreates the audit API key
+    access_token = env.get("ACCESS_TOKEN")
+    current_credentials = (client_id, client_secret, access_token)
 
     # Recreate client if credentials have changed or client doesn't exist
     if _audit_client is None or _client_credentials != current_credentials:
