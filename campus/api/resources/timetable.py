@@ -144,11 +144,7 @@ class TimetablesResource:
         - weekday [str]
         - timeslot [str]
         """
-        timetable_meta = model.TimetableMetadata(
-            filename=metadata["filename"],
-            start_date=metadata["start"],
-            end_date=metadata["end"],
-        )
+        timetable_meta = model.TimetableMetadata(**metadata)
         groups: list[model.LessonGroup] = []
         members = []
         entries = []

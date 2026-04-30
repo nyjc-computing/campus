@@ -127,7 +127,10 @@ def new(
     """
 
     try:
-        timetable = timetable_resource.new(**metadata, lessongroups=data['lessongroups'])
+        timetable = timetable_resource.new(
+            metadata=metadata,
+            lessongroups=data['lessongroups']
+        )
     except Exception as e:
         return {'error': e}, 400
 
