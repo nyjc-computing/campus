@@ -29,21 +29,24 @@ def get_audit_spans(event_type: str | None = None, limit: int = 50) -> list[dict
     from campus.audit.resources.traces import traces_storage
 
     # Build query for audit events
-    # Audit events have path starting with "campus.apikeys." or "campus.traces." etc.
+    # Audit events have path equal to event type (exact match)
     if event_type:
         query = {"path": event_type}
     else:
-        # Get all audit events (paths starting with "campus.")
-        query = {"path": campus.storage.startswith("campus.")}
+        # Get all spans - will filter for audit events in Python
+        query = {}
 
     try:
         spans = traces_storage.get_matching(
             query,
             order_by="started_at",
             ascending=False,
-            limit=limit
+            limit=limit * 10  # Get more to filter for audit events
         )
-        return spans
+        # Filter to only audit events (path starts with "campus.")
+        if not event_type:
+            spans = [s for s in spans if s.get("path", "").startswith("campus.")]
+        return spans[:limit]
     except campus.storage.errors.StorageError:
         return []
 
@@ -61,14 +64,16 @@ def get_audit_events_by_api_key(api_key_id: str, limit: int = 50) -> list[dict[s
     from campus.audit.resources.traces import traces_storage
 
     try:
-        # Query spans where api_key_id matches and path starts with "campus."
+        # Query all spans for this API key, then filter for audit events
         spans = traces_storage.get_matching(
-            {"api_key_id": api_key_id, "path": campus.storage.startswith("campus.")},
+            {"api_key_id": api_key_id},
             order_by="started_at",
             ascending=False,
-            limit=limit
+            limit=limit * 10  # Get more to filter for audit events
         )
-        return spans
+        # Filter to only audit events (path starts with "campus.")
+        audit_events = [s for s in spans if s.get("path", "").startswith("campus.")]
+        return audit_events[:limit]
     except campus.storage.errors.StorageError:
         return []
 
