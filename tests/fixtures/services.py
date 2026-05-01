@@ -98,6 +98,10 @@ class ServiceManager:
         # This can be disabled per-test by setting env.set('AUDIT_TRACING_ENABLED', '0')
         env.set('AUDIT_TRACING_ENABLED', '1')
 
+        # Enable audit events in tests (default: disabled for safety)
+        # This can be disabled per-test by setting env.set('AUDIT_EVENTS_ENABLED', '0')
+        env.set('AUDIT_EVENTS_ENABLED', '1')
+
         # Patch campus_python to use TestCampusRequest (Flask test client)
         # This MUST happen before any campus_python.Campus instances are created
         # Moved here to ensure patching happens before early returns below

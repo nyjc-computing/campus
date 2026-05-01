@@ -14,18 +14,15 @@ from campus.common import env
 from campus.common import schema
 from campus.common.utils import uid
 from campus.common.errors import api_errors
-
-# Feature flag: can be set via environment variable
-# Default: enabled for all routes unless explicitly disabled
-AUDIT_EVENTS_ENABLED = env.get("AUDIT_EVENTS_ENABLED", "true").lower() == "true"
+import campus.model as model
 
 
 def emit_audit_event(
-    event_type: str,
-    data: dict,
-    api_key_id: str | None = None,
-    client_ip: str | None = None,
-    method: str = "AUDIT",
+        event_type: str,
+        data: dict,
+        api_key_id: str | None = None,
+        client_ip: str | None = None,
+        method: str = "AUDIT",
 ) -> None:
     """Emit an audit event directly to the traces table.
 
@@ -40,17 +37,15 @@ def emit_audit_event(
         method: HTTP method for the span (default: "AUDIT" to distinguish from HTTP requests)
     """
     # Early exit if disabled
-    if not AUDIT_EVENTS_ENABLED:
+    if not env.get_flag("AUDIT_EVENTS_ENABLED", False):
         return
 
-    from campus.audit.resources.traces import traces_storage
-    import campus.model as model
+    # Lazy-import resources to enable test monkey-patching
+    from campus.audit.resources import traces as traces_resource
 
     # Get data from Flask context if not provided
-    if api_key_id is None:
-        api_key_id = flask.g.get('api_key_id')
-    if client_ip is None:
-        client_ip = flask.request.remote_addr
+    api_key_id = api_key_id or flask.g.get('api_key_id')
+    client_ip = client_ip or flask.request.remote_addr
 
     # Create audit span record
     audit_span = model.TraceSpan(
@@ -75,19 +70,18 @@ def emit_audit_event(
         error_message=None,
         tags=data  # Event metadata goes here
     )
-
     # Ingest the audit event
     try:
-        traces_storage.insert_one(audit_span.to_storage())
+        traces_resource.ingest([audit_span])
     except Exception:
         # Fail silently - don't break operations if audit logging fails
         pass
 
 
 def audit_event(
-    event_type: str,
-    data_func: typing.Callable[..., dict[str, typing.Any]] | None = None,
-) -> typing.Callable[..., flask_campus.JsonResponse]:
+        event_type: str,
+        data_func: typing.Callable[..., dict[str, typing.Any]] | None = None,
+) -> flask_campus.ViewFunctionDecorator:
     """Decorator to emit audit events for route functions.
 
     Enables audit logging for specific routes with automatic data capture.
@@ -95,8 +89,8 @@ def audit_event(
 
     Args:
         event_type: Event type (e.g., "campus.apikeys.new")
-        data_func: Optional function to extract event data from route result
-                  Takes (result, response_dict) and returns event data dict.
+        data_func: Optional function to extract event data from route response.
+                  Takes response_dict and returns event data dict.
                   If None, only basic metadata is captured.
 
     Example:
@@ -107,7 +101,7 @@ def audit_event(
             return {"id": key_id, "name": name}, 201
 
         # With custom data extraction:
-        @audit_event("campus.apikeys.new", lambda r, d: {"api_key_id": r["id"]})
+        @audit_event("campus.apikeys.new", lambda resp: {"api_key_id": resp["id"]})
         def create_api_key(**kwargs):
             # ... route logic ...
             return {"id": key_id, "name": name}, 201
@@ -115,65 +109,44 @@ def audit_event(
     Returns:
         Decorator function
     """
-    def decorator(func: typing.Callable[..., flask_campus.JsonResponse]) -> typing.Callable[..., flask_campus.JsonResponse]:
+    def decorator(
+            func: flask_campus.JsonViewFunction
+    ) -> flask_campus.JsonViewFunction:
+        # If audit disabled, return original function unchanged
+        if not env.get_flag("AUDIT_EVENTS_ENABLED", False):
+            return func
+
+        # Only apply the decorator if audit is enabled
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> flask_campus.JsonResponse:
             # Call the original route function
             result = func(*args, **kwargs)
 
-            # Extract response data if result is a tuple (response, status_code)
-            response_dict = {}
-            if isinstance(result, tuple) and len(result) >= 1:
-                response_dict = result[0] if isinstance(result[0], dict) else {}
-            elif isinstance(result, dict):
-                response_dict = result
+            # Extract response data
+            response_dict, status_code = result
+
+            # TODO: Validate status_code before building event data
+            # (e.g., only emit audit events for 2XX responses)
 
             # Build event data
             event_data = {}
             if data_func is not None:
                 try:
-                    event_data = data_func(result, response_dict)
+                    event_data = data_func(response_dict)
                 except Exception:
                     # If data_func fails, log with basic data only
                     pass
-
             # Add request metadata
             event_data.update({
                 "endpoint": flask.request.endpoint,
                 "method": flask.request.method,
                 "path": flask.request.path,
             })
-
             # Emit the audit event
             emit_audit_event(
                 event_type=event_type,
                 data=event_data
             )
-
             return result
-
         return wrapper
-
-    # Only apply the decorator if audit is enabled
-    if AUDIT_EVENTS_ENABLED:
-        return decorator
-    else:
-        # If audit disabled, return original function unchanged
-        return func
-
-
-def disable_audit_for_route(f: typing.Callable[..., flask_campus.JsonResponse]) -> typing.Callable[..., flask_campus.JsonResponse]:
-    """Decorator to explicitly disable audit logging for a specific route.
-
-    Use this to opt-out specific routes from audit logging even when
-    AUDIT_EVENTS_ENABLED is true.
-
-    Example:
-        @bp.get("/health")
-        @disable_audit_for_route
-        def health_check():
-            return {"status": "ok"}, 200
-    """
-    # Mark function as audit-disabled
-    f._audit_disabled = True  # type: ignore[attr-defined]
-    return f
+    return decorator
