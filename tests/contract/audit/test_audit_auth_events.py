@@ -53,11 +53,25 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
         self.api_key_id = api_key_model.id
         self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
 
+        # Clear audit events generated during setup (API key creation)
+        from tests.fixtures.audit_events import get_audit_spans
+        import campus.storage
+        from campus.audit.resources.traces import traces_storage
+
+        # Get all audit events and delete them
+        all_spans = traces_storage.get_matching({}, limit=1000)
+        audit_spans = [s for s in all_spans if s.get("path", "").startswith("campus.")]
+        for span in audit_spans:
+            try:
+                traces_storage.delete_by_id(span["id"])
+            except campus.storage.errors.NotFoundError:
+                pass
+
     def test_successful_authentication_emits_audit_event(self):
         """Successful API key authentication emits campus.apikeys.auth.success event."""
-        # Make authenticated request
+        # Make authenticated request to protected endpoint
         response = self.client.get(
-            "/audit/v1/health",
+            "/audit/v1/traces/",
             headers=self.auth_headers
         )
         self.assertEqual(response.status_code, 200)
@@ -83,25 +97,27 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
 
     def test_successful_authentication_includes_api_key_id(self):
         """Auth success event includes the authenticated API key ID."""
-        # Make authenticated request
+        # Make authenticated request to protected endpoint
         response = self.client.get(
-            "/audit/v1/health",
+            "/audit/v1/traces/",
             headers=self.auth_headers
         )
         self.assertEqual(response.status_code, 200)
 
         # Verify event includes api_key_id
         events = get_audit_spans("campus.apikeys.auth.success")
-        self.assertGreater(len(events), 0)
+        self.assertGreater(len(events), 0, "No auth.success events found")
 
-        data = parse_audit_span_data(events[0])
+        # Get the most recent event
+        event = events[0]
+        data = parse_audit_span_data(event)
         self.assertEqual(data["api_key_id"], self.api_key_id)
 
     def test_successful_authentication_includes_client_ip(self):
         """Auth success event includes client IP address."""
-        # Make authenticated request
+        # Make authenticated request to protected endpoint
         response = self.client.get(
-            "/audit/v1/health",
+            "/audit/v1/traces/",
             headers=self.auth_headers
         )
         self.assertEqual(response.status_code, 200)

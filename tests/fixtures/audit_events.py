@@ -81,13 +81,22 @@ def get_audit_events_by_api_key(api_key_id: str, limit: int = 50) -> list[dict[s
 def parse_audit_span_data(span: dict[str, Any]) -> dict[str, Any]:
     """Extract audit event data from a TraceSpan record.
 
-    Audit events store their metadata in the tags field.
+    Audit events store metadata in both TraceSpan fields (client_ip, api_key_id)
+    and the tags field (event-specific data).
 
     Args:
         span: TraceSpan record from traces storage
 
     Returns:
-        Parsed audit event data from tags field
+        Combined dict with tags data plus important TraceSpan fields
     """
-    # Audit event data is stored in the tags field
-    return span.get("tags", {})
+    # Start with tags (event-specific data)
+    data = span.get("tags", {}).copy()
+
+    # Add important fields from the span itself
+    if "client_ip" in span:
+        data["client_ip"] = span["client_ip"]
+    if "api_key_id" in span:
+        data["api_key_id"] = span["api_key_id"]
+
+    return data
