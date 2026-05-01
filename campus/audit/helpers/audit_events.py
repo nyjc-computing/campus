@@ -86,8 +86,8 @@ def emit_audit_event(
 
 def audit_event(
     event_type: str,
-    data_func: typing.Callable[[typing.Any, dict[str, typing.Any]], dict] | None = None,
-) -> typing.Callable:
+    data_func: typing.Callable[..., dict[str, typing.Any]] | None = None,
+) -> typing.Callable[..., flask_campus.JsonResponse]:
     """Decorator to emit audit events for route functions.
 
     Enables audit logging for specific routes with automatic data capture.
@@ -115,7 +115,7 @@ def audit_event(
     Returns:
         Decorator function
     """
-    def decorator(func: typing.Callable) -> typing.Callable:
+    def decorator(func: typing.Callable[..., flask_campus.JsonResponse]) -> typing.Callable[..., flask_campus.JsonResponse]:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> flask_campus.JsonResponse:
             # Call the original route function
@@ -159,10 +159,10 @@ def audit_event(
         return decorator
     else:
         # If audit disabled, return original function unchanged
-        return data_func
+        return func
 
 
-def disable_audit_for_route(f: typing.Callable) -> typing.Callable:
+def disable_audit_for_route(f: typing.Callable[..., flask_campus.JsonResponse]) -> typing.Callable[..., flask_campus.JsonResponse]:
     """Decorator to explicitly disable audit logging for a specific route.
 
     Use this to opt-out specific routes from audit logging even when
@@ -172,7 +172,7 @@ def disable_audit_for_route(f: typing.Callable) -> typing.Callable:
         @bp.get("/health")
         @disable_audit_for_route
         def health_check():
-            return {"status": "ok"}
+            return {"status": "ok"}, 200
     """
     # Mark function as audit-disabled
     f._audit_disabled = True  # type: ignore[attr-defined]
