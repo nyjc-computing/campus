@@ -342,14 +342,21 @@ def _extract_request_body(request: flask.Request) -> dict | str | None:
     return None
 
 
-def _extract_response_body(response: flask.Response) -> dict | str | None:
-    """Extract response body with 64KB truncation.
+def _extract_response_body(response: flask.Response) -> dict | None:
+    """Extract response body as JSON with 64KB truncation.
+
+    Campus API and auth endpoints only return JSON dict responses,
+    so we expect JSON-parseable bodies.
+
+    Truncated responses have a special "_truncated" key appended with
+    the original size, e.g. {"_truncated": "[128000 ...]"}
 
     Args:
         response: The Flask response object.
 
     Returns:
-        Response body truncated to 64KB, or None if not applicable.
+        Response body as dict, or None if not applicable (streaming,
+        no data, or invalid JSON).
     """
     # Don't try to extract from streaming responses
     if response.is_streamed:
@@ -374,27 +381,29 @@ def _extract_response_body(response: flask.Response) -> dict | str | None:
         else:
             data = typing.cast(bytes, response.response)
 
-        # Decode if possible
+        # Decode bytes to string
         if isinstance(data, bytes):
             try:
                 data = data.decode("utf-8")
             except UnicodeDecodeError:
-                return "<binary data>"
+                return None
 
-        # Truncate to 64KB
+        # Truncate to 64KB before parsing
         max_size = 64 * 1024
-        if len(data) > max_size:
+        original_size = len(data) if isinstance(data, str) else 0
+        if isinstance(data, str) and len(data) > max_size:
             data = data[:max_size]
 
-        # Try to parse as JSON for structured logging
+        # Parse as JSON (campus.api and campus.auth always return dicts)
         if isinstance(data, str):
-            try:
-                return json.loads(data)
-            except json.JSONDecodeError:
-                return data
+            body = json.loads(data)
+            # Add truncation marker if we truncated
+            if original_size > max_size and isinstance(body, dict):
+                body["_truncated"] = f"[{original_size} ...]"
+            return body
 
-        return data
-    except Exception:
+        return None
+    except (json.JSONDecodeError, UnicodeDecodeError, Exception):
         return None
 
 
