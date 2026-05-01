@@ -81,13 +81,17 @@ class APIKeysResource:
 
         Args:
             name: Name for the API key
-            owner_id: ID of the user owning the key
+            owner_id: ID of the account owning the key (for organizational purposes)
             scopes: Comma-separated string of scopes/permissions
             rate_limit: Optional rate limit for the key
             expires_at: Optional expiration datetime for the key
 
         Returns:
             The created API key (including the plaintext key value)
+
+        Note:
+            campus.audit is a standalone service with no users/clients.
+            owner_id is for organizational purposes only.
         """
         apikey_value = secret.generate_audit_api_key()
         record = {
@@ -109,6 +113,8 @@ class APIKeysResource:
                 f"{api_key.to_resource()}"
             )
         else:
+            # TODO: Log audit event for campus.apikeys.new (see #567)
+            # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return api_key, apikey_value
 
     def verify(self, api_key: str) -> schema.CampusID | None:
@@ -185,6 +191,8 @@ class APIKeyResource:
                 f"API key {self.api_key_id} not found"
             ) from None
         else:
+            # TODO: Log audit event for campus.apikeys.regenerate (see #567)
+            # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return new_key
 
     def revoke(self) -> bool:
@@ -197,6 +205,8 @@ class APIKeyResource:
         except storage_errors.NotFoundError:
             return False
         else:
+            # TODO: Log audit event for campus.apikeys.revoke (see #567)
+            # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return True
 
     def update(self, **updates: Any) -> None:
@@ -223,4 +233,6 @@ class APIKeyResource:
             raise api_errors.NotFoundError(
                 f"API key {self.api_key_id} not found"
             ) from None
-        # TODO: audit campus.apikeys.update
+
+        # TODO: Log audit event for campus.apikeys.update (see #567)
+        # Note: No actor tracking - campus.audit is standalone service with no users/clients

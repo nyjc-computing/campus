@@ -747,5 +747,268 @@ class TestAuditAPIKeyRegenerateContract(unittest.TestCase):
         self.assertEqual(key.scopes, ["read"])
 
 
+@unittest.skip("https://github.com/nyjc-computing/campus/issues/569 - Input validation bugs")
+class TestAuditAPIKeysEdgeCases(unittest.TestCase):
+    """HTTP contract tests for edge cases and error conditions.
+
+    Tests duplicate keys, invalid inputs, and boundary conditions.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.initialize()
+        cls.app = cls.manager.audit_app
+
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+        assert self.app
+        self.client = self.app.test_client()
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        from campus.common.utils import secret
+        APIKeysResource.init_storage()
+
+        raw_api_key = secret.generate_audit_api_key()
+        api_key_id = uid.generate_category_uid("apikey", length=16)
+        test_key_record = {
+            "id": api_key_id,
+            "created_at": schema.DateTime.utcnow(),
+            "key_hash": secret.hash_api_key(raw_api_key),
+            "name": "Test Auth Key",
+            "owner_id": "test-user",
+            "scopes": ["admin"],
+        }
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        apikeys_storage.insert_one(test_key_record)
+
+        self.auth_headers = {"Authorization": f"Bearer {raw_api_key}"}
+
+    def test_create_api_key_invalid_format_returns_401(self):
+        """POST /audit/v1/apikeys/ with invalid API key format returns 401."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Test Key",
+                "owner_id": "user123",
+                "scopes": ["read"],
+            },
+            headers={"Authorization": "Bearer invalid_key_format"}
+        )
+
+        self.assertEqual(response.status_code, 401)
+        data = response.get_json()
+        self.assertIn("error", data)
+
+    def test_create_api_key_expired_key_returns_401(self):
+        """POST /audit/v1/apikeys/ with expired API key returns 401."""
+        from campus.common.utils import secret
+        import campus.storage
+
+        # Create an expired API key
+        expired_key_value = secret.generate_audit_api_key()
+        expired_key_id = uid.generate_category_uid("apikey", length=16)
+        from datetime import datetime, timedelta
+        expired_record = {
+            "id": expired_key_id,
+            "created_at": schema.DateTime.utcnow(),
+            "key_hash": secret.hash_api_key(expired_key_value),
+            "name": "Expired Key",
+            "owner_id": "test-user",
+            "scopes": ["admin"],
+            "expires_at": schema.DateTime.utcnow() - timedelta(days=1),  # Expired
+        }
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        apikeys_storage.insert_one(expired_record)
+
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Test Key",
+                "owner_id": "user123",
+                "scopes": ["read"],
+            },
+            headers={"Authorization": f"Bearer {expired_key_value}"}
+        )
+
+        # Should return 401 (expired keys are invalid)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_api_key_revoked_key_returns_401(self):
+        """POST /audit/v1/apikeys/ with revoked API key returns 401."""
+        from campus.common.utils import secret
+        import campus.storage
+
+        # Create a revoked API key
+        revoked_key_value = secret.generate_audit_api_key()
+        revoked_key_id = uid.generate_category_uid("apikey", length=16)
+        revoked_record = {
+            "id": revoked_key_id,
+            "created_at": schema.DateTime.utcnow(),
+            "key_hash": secret.hash_api_key(revoked_key_value),
+            "name": "Revoked Key",
+            "owner_id": "test-user",
+            "scopes": ["admin"],
+            "revoked_at": schema.DateTime.utcnow(),  # Revoked
+        }
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        apikeys_storage.insert_one(revoked_record)
+
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Test Key",
+                "owner_id": "user123",
+                "scopes": ["read"],
+            },
+            headers={"Authorization": f"Bearer {revoked_key_value}"}
+        )
+
+        # Should return 401 (revoked keys are invalid)
+        self.assertEqual(response.status_code, 401)
+
+    def test_create_api_key_empty_name_returns_422(self):
+        """POST /audit/v1/apikeys/ with empty name returns 422."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "",
+                "owner_id": "user123",
+                "scopes": ["read"],
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_api_key_empty_owner_id_returns_422(self):
+        """POST /audit/v1/apikeys/ with empty owner_id returns 422."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Test Key",
+                "owner_id": "",
+                "scopes": ["read"],
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_api_key_empty_scopes_returns_422(self):
+        """POST /audit/v1/apikeys/ with empty scopes returns 422."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Test Key",
+                "owner_id": "user123",
+                "scopes": [],
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_api_key_invalid_scopes_type_returns_422(self):
+        """POST /audit/v1/apikeys/ with non-array scopes returns 422."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Test Key",
+                "owner_id": "user123",
+                "scopes": "read",  # Should be array, not string
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_create_api_key_invalid_rate_limit_type_returns_422(self):
+        """POST /audit/v1/apikeys/ with non-integer rate_limit returns 422."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Test Key",
+                "owner_id": "user123",
+                "scopes": ["read"],
+                "rate_limit": "unlimited",  # Should be int, not string
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_update_api_key_empty_name_returns_422(self):
+        """PATCH /audit/v1/apikeys/<id> with empty name returns 422."""
+        from campus.audit.resources import apikeys
+        test_key, _ = apikeys.new(name="Test", owner_id="user123", scopes="read")
+
+        response = self.client.patch(
+            f"/audit/v1/apikeys/{test_key.id}/",
+            json={"name": ""},
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_update_api_key_empty_scopes_returns_422(self):
+        """PATCH /audit/v1/apikeys/<id> with empty scopes returns 422."""
+        from campus.audit.resources import apikeys
+        test_key, _ = apikeys.new(name="Test", owner_id="user123", scopes="read")
+
+        response = self.client.patch(
+            f"/audit/v1/apikeys/{test_key.id}/",
+            json={"scopes": []},
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_update_revoked_key_fails(self):
+        """PATCH /audit/v1/apikeys/<id> on revoked key should fail."""
+        from campus.audit.resources import apikeys
+        test_key, _ = apikeys.new(name="Test", owner_id="user123", scopes="read")
+
+        # Revoke the key
+        apikeys[test_key.id].revoke()
+
+        # Try to update it
+        response = self.client.patch(
+            f"/audit/v1/apikeys/{test_key.id}/",
+            json={"name": "New Name"},
+            headers=self.auth_headers
+        )
+
+        # Should fail (404 or 403 depending on implementation)
+        self.assertIn(response.status_code, [404, 403])
+
+    def test_list_with_invalid_limit_returns_400(self):
+        """GET /audit/v1/apikeys/?limit=invalid with non-integer limit returns 400."""
+        response = self.client.get(
+            "/audit/v1/apikeys/?limit=notanumber",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_get_with_invalid_id_format_returns_404(self):
+        """GET /audit/v1/apikeys/<id> with invalid ID format returns 404."""
+        response = self.client.get(
+            "/audit/v1/apikeys/invalid-id-format/",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()
