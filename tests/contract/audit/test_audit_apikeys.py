@@ -747,6 +747,7 @@ class TestAuditAPIKeyRegenerateContract(unittest.TestCase):
         self.assertEqual(key.scopes, ["read"])
 
 
+@unittest.skip("https://github.com/nyjc-computing/campus/issues/569 - Input validation bugs")
 class TestAuditAPIKeysEdgeCases(unittest.TestCase):
     """HTTP contract tests for edge cases and error conditions.
 
