@@ -1,7 +1,7 @@
 """HTTP contract tests for campus.audit authentication audit events.
 
 These tests verify that authentication operations emit proper audit events
-to the yapper events table for security monitoring and compliance.
+to the traces table for security monitoring and compliance.
 
 Audit Events Tested:
 - campus.apikeys.auth.success - Valid API key authentication
