@@ -4,8 +4,8 @@ These tests verify that authentication operations emit proper audit events
 to the traces table for security monitoring and compliance.
 
 Audit Events Tested:
-- campus.apikeys.auth.success - Valid API key authentication
-- campus.apikeys.auth.failed - Invalid/missing API key
+- audit.apikeys.auth.success - Valid API key authentication
+- audit.apikeys.auth.failed - Invalid/missing API key
 
 File: tests/contract/audit/test_audit_auth_events.py
 Issue: #567
@@ -19,7 +19,7 @@ from tests.fixtures.audit_events import get_audit_spans, parse_audit_span_data
 
 
 class TestAuditAuthSuccessEvent(unittest.TestCase):
-    """Contract tests for campus.apikeys.auth.success audit event."""
+    """Contract tests for audit.apikeys.auth.success audit event."""
 
     @classmethod
     def setUpClass(cls):
@@ -68,7 +68,7 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
                 pass
 
     def test_successful_authentication_emits_audit_event(self):
-        """Successful API key authentication emits campus.apikeys.auth.success event."""
+        """Successful API key authentication emits audit.apikeys.auth.success event."""
         # Make authenticated request to protected endpoint
         response = self.client.get(
             "/audit/v1/traces/",
@@ -77,14 +77,14 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         # Verify audit event was emitted
-        events = get_audit_spans("campus.apikeys.auth.success")
+        events = get_audit_spans("audit.apikeys.auth.success")
         self.assertGreater(len(events), 0, "No auth.success events found")
 
         # Get the most recent event
         event = events[0]
 
         # Verify event structure (TraceSpan with audit event data)
-        self.assertEqual(event["path"], "campus.apikeys.auth.success")
+        self.assertEqual(event["path"], "audit.apikeys.auth.success")
         self.assertIn("id", event)
         self.assertIn("started_at", event)
         self.assertIn("tags", event)
@@ -105,7 +105,7 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         # Verify event includes api_key_id
-        events = get_audit_spans("campus.apikeys.auth.success")
+        events = get_audit_spans("audit.apikeys.auth.success")
         self.assertGreater(len(events), 0, "No auth.success events found")
 
         # Get the most recent event
@@ -123,7 +123,7 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
         # Verify event includes client_ip
-        events = get_audit_spans("campus.apikeys.auth.success")
+        events = get_audit_spans("audit.apikeys.auth.success")
         self.assertGreater(len(events), 0)
 
         data = parse_audit_span_data(events[0])
@@ -133,7 +133,7 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
 
 
 class TestAuditAuthFailedEvent(unittest.TestCase):
-    """Contract tests for campus.apikeys.auth.failed audit event."""
+    """Contract tests for audit.apikeys.auth.failed audit event."""
 
     @classmethod
     def setUpClass(cls):
@@ -157,18 +157,18 @@ class TestAuditAuthFailedEvent(unittest.TestCase):
         self.client = self.app.test_client()
 
     def test_missing_api_key_emits_audit_event(self):
-        """Missing API key emits campus.apikeys.auth.failed event."""
+        """Missing API key emits audit.apikeys.auth.failed event."""
         # Make request without authentication
         response = self.client.get("/audit/v1/traces/")
         self.assertEqual(response.status_code, 401)
 
         # Verify audit event was emitted
-        events = get_audit_spans("campus.apikeys.auth.failed")
+        events = get_audit_spans("audit.apikeys.auth.failed")
         self.assertGreater(len(events), 0, "No auth.failed events found")
 
         # Verify event structure
         event = events[0]
-        self.assertEqual(event["path"], "campus.apikeys.auth.failed")
+        self.assertEqual(event["path"], "audit.apikeys.auth.failed")
 
         # Parse and verify event data from tags
         data = parse_audit_span_data(event)
@@ -177,7 +177,7 @@ class TestAuditAuthFailedEvent(unittest.TestCase):
         self.assertIn("client_ip", data)
 
     def test_invalid_api_key_format_emits_audit_event(self):
-        """Invalid API key format emits campus.apikeys.auth.failed event."""
+        """Invalid API key format emits audit.apikeys.auth.failed event."""
         # Make request with malformed API key
         response = self.client.get(
             "/audit/v1/traces/",
@@ -186,7 +186,7 @@ class TestAuditAuthFailedEvent(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
         # Verify audit event was emitted
-        events = get_audit_spans("campus.apikeys.auth.failed")
+        events = get_audit_spans("audit.apikeys.auth.failed")
         self.assertGreater(len(events), 0)
 
         # Parse and verify event data from tags
@@ -206,7 +206,7 @@ class TestAuditAuthFailedEvent(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
         # Verify audit event was emitted
-        events = get_audit_spans("campus.apikeys.auth.failed")
+        events = get_audit_spans("audit.apikeys.auth.failed")
         self.assertGreater(len(events), 0)
 
         # Parse and verify event data from tags
@@ -221,7 +221,7 @@ class TestAuditAuthFailedEvent(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
         # Verify event includes client_ip
-        events = get_audit_spans("campus.apikeys.auth.failed")
+        events = get_audit_spans("audit.apikeys.auth.failed")
         self.assertGreater(len(events), 0)
 
         data = parse_audit_span_data(events[0])
@@ -235,7 +235,7 @@ class TestAuditAuthFailedEvent(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
         # Verify event includes reason
-        events = get_audit_spans("campus.apikeys.auth.failed")
+        events = get_audit_spans("audit.apikeys.auth.failed")
         self.assertGreater(len(events), 0)
 
         data = parse_audit_span_data(events[0])

@@ -41,7 +41,7 @@ def _authenticate_audit_api_key() -> None:
     except auth_errors.AuthorizationError:
         # No Authorization header present - emit audit event and raise proper error for 401 response
         emit_audit_event(
-            event_type="campus.apikeys.auth.failed",
+            event_type="audit.apikeys.auth.failed",
             data={"reason": "Missing API key"},
             client_ip=flask.request.remote_addr
         )
@@ -53,7 +53,7 @@ def _authenticate_audit_api_key() -> None:
     # Validate format
     if not secret.is_valid_audit_api_key_format(api_key):
         emit_audit_event(
-            event_type="campus.apikeys.auth.failed",
+            event_type="audit.apikeys.auth.failed",
             data={"reason": "Invalid API key format"},
             client_ip=flask.request.remote_addr
         )
@@ -65,7 +65,7 @@ def _authenticate_audit_api_key() -> None:
     api_key_id = resources.apikeys.verify(api_key)
     if not api_key_id:
         emit_audit_event(
-            event_type="campus.apikeys.auth.failed",
+            event_type="audit.apikeys.auth.failed",
             data={"reason": "Invalid API key"},
             client_ip=flask.request.remote_addr
         )
@@ -73,7 +73,7 @@ def _authenticate_audit_api_key() -> None:
 
     # Success - emit audit event
     emit_audit_event(
-        event_type="campus.apikeys.auth.success",
+        event_type="audit.apikeys.auth.success",
         data={"api_key_id": api_key_id},
         api_key_id=api_key_id,
         client_ip=flask.request.remote_addr

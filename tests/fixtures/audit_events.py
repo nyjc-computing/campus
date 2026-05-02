@@ -17,10 +17,10 @@ def get_audit_spans(event_type: str | None = None, limit: int = 50) -> list[dict
     """Query traces table for audit event spans.
 
     Audit events are TraceSpan records where path contains the event type
-    (e.g., "campus.apikeys.new", "campus.apikeys.auth.success").
+    (e.g., "audit.apikeys.new", "audit.apikeys.auth.success").
 
     Args:
-        event_type: Optional event type to filter by (e.g., "campus.apikeys.new")
+        event_type: Optional event type to filter by (e.g., "audit.apikeys.new")
         limit: Maximum number of spans to return
 
     Returns:
@@ -43,9 +43,9 @@ def get_audit_spans(event_type: str | None = None, limit: int = 50) -> list[dict
             ascending=False,
             limit=limit * 10  # Get more to filter for audit events
         )
-        # Filter to only audit events (path starts with "campus.")
+        # Filter to only audit events (path starts with "audit.")
         if not event_type:
-            spans = [s for s in spans if s.get("path", "").startswith("campus.")]
+            spans = [s for s in spans if s.get("path", "").startswith("audit.")]
         return spans[:limit]
     except campus.storage.errors.StorageError:
         return []
@@ -71,8 +71,8 @@ def get_audit_events_by_api_key(api_key_id: str, limit: int = 50) -> list[dict[s
             ascending=False,
             limit=limit * 10  # Get more to filter for audit events
         )
-        # Filter to only audit events (path starts with "campus.")
-        audit_events = [s for s in spans if s.get("path", "").startswith("campus.")]
+        # Filter to only audit events (path starts with "audit.")
+        audit_events = [s for s in spans if s.get("path", "").startswith("audit.")]
         return audit_events[:limit]
     except campus.storage.errors.StorageError:
         return []

@@ -30,7 +30,7 @@ def emit_audit_event(
     fields to distinguish them from regular HTTP request traces.
 
     Args:
-        event_type: Event type (e.g., "campus.apikeys.new")
+        event_type: Event type (e.g., "audit.apikeys.new")
         data: Event metadata (will be stored in tags field)
         api_key_id: API key identifier (optional, pulled from flask.g if not provided)
         client_ip: Client IP (optional, pulled from request if not provided)
@@ -88,20 +88,20 @@ def audit_event(
     Can be applied to any route function to enable/disable audit tracking.
 
     Args:
-        event_type: Event type (e.g., "campus.apikeys.new")
+        event_type: Event type (e.g., "audit.apikeys.new")
         data_func: Optional function to extract event data from route response.
                   Takes response_dict and returns event data dict.
                   If None, only basic metadata is captured.
 
     Example:
         @bp.post("/")
-        @audit_event("campus.apikeys.new")
+        @audit_event("audit.apikeys.new")
         def create_api_key(**kwargs):
             # ... route logic ...
             return {"id": key_id, "name": name}, 201
 
         # With custom data extraction:
-        @audit_event("campus.apikeys.new", lambda resp: {"api_key_id": resp["id"]})
+        @audit_event("audit.apikeys.new", lambda resp: {"api_key_id": resp["id"]})
         def create_api_key(**kwargs):
             # ... route logic ...
             return {"id": key_id, "name": name}, 201
