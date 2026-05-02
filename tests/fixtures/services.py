@@ -419,10 +419,15 @@ class ServiceManager:
         instead of Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services.
         """
         from campus.audit.resources.apikeys import APIKeysResource
+        from campus.audit.resources.traces import TracesResource
 
         # Initialize audit API keys storage (creates table if needed)
         # This is idempotent and safe to call multiple times
         APIKeysResource.init_storage()
+
+        # Initialize traces storage (creates table if needed)
+        # This is idempotent and safe to call multiple times
+        TracesResource.init_storage()
 
         # Create an audit API key for span ingestion
         apikey_resource = APIKeysResource()
