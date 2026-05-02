@@ -139,7 +139,7 @@ def list_submissions_by_student(
     return {"data": [submission.to_resource() for submission in result]}, 200
 
 
-@bp.get('/<string:submission_id>')
+@bp.get('/<string:submission_id>/')
 def get_submission(submission_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Get a single submission by ID.
@@ -155,7 +155,7 @@ def get_submission(submission_id: str) -> flask_campus.JsonResponse:
     return submission.to_resource(), 200
 
 
-@bp.patch('/<string:submission_id>')
+@bp.patch('/<string:submission_id>/')
 @flask_campus.unpack_request
 def update_submission(
     *,
@@ -199,7 +199,7 @@ def update_submission(
     return {}, 200
 
 
-@bp.delete('/<string:submission_id>')
+@bp.delete('/<string:submission_id>/')
 def delete_submission(submission_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Delete a submission.

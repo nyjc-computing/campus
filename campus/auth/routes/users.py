@@ -66,7 +66,7 @@ def activate(user_id: schema.UserID) -> flask_campus.JsonResponse:
     return activated_user.to_resource(), 200
 
 
-@bp.delete("/<user_id>")
+@bp.delete("/<user_id>/")
 @flask_campus.unpack_request
 def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Delete a user
@@ -79,7 +79,7 @@ def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
     return {}, 200
 
 
-@bp.get("/<user_id>")
+@bp.get("/<user_id>/")
 @flask_campus.unpack_request
 def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Get details of a specific user
@@ -95,7 +95,7 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
     return user.to_resource(), 200
 
 
-@bp.patch("/<user_id>")
+@bp.patch("/<user_id>/")
 @flask_campus.unpack_request
 def update() -> flask_campus.JsonResponse:
     """Update a user
@@ -119,8 +119,8 @@ def create_blueprint() -> flask.Blueprint:
     new_bp.add_url_rule("/", "get_all", get_all, methods=["GET"])
     new_bp.add_url_rule("/", "new", new, methods=["POST"])
     new_bp.add_url_rule("/<user_id>/activate", "activate", activate, methods=["POST"])
-    new_bp.add_url_rule("/<user_id>", "delete_user", delete_user, methods=["DELETE"])
-    new_bp.add_url_rule("/<user_id>", "get", get, methods=["GET"])
-    new_bp.add_url_rule("/<user_id>", "update", update, methods=["PATCH"])
+    new_bp.add_url_rule("/<user_id>/", "delete_user", delete_user, methods=["DELETE"])
+    new_bp.add_url_rule("/<user_id>/", "get", get, methods=["GET"])
+    new_bp.add_url_rule("/<user_id>/", "update", update, methods=["PATCH"])
 
     return new_bp
