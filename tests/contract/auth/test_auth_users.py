@@ -9,9 +9,9 @@ This is enforced via before_request hook in the auth blueprint.
 Users Endpoints Reference:
 - GET    /users/                    - List all users (requires auth)
 - POST   /users/                    - Create new user (requires auth)
-- GET    /users/{user_id}           - Get specific user (requires auth)
-- PATCH  /users/{user_id}           - Update user (requires auth, returns 501)
-- DELETE /users/{user_id}           - Delete user (requires auth)
+- GET    /users/{user_id}/          - Get specific user (requires auth)
+- PATCH  /users/{user_id}/          - Update user (requires auth, returns 501)
+- DELETE /users/{user_id}/          - Delete user (requires auth)
 - POST   /users/{user_id}/activate  - Activate a user (requires auth)
 """
 
@@ -126,7 +126,7 @@ class TestAuthUsersContract(unittest.TestCase):
         user_id = self._create_test_user("get.by.id@example.com", "Get By ID User")
 
         response = self.client.get(
-            f"/auth/v1/users/{user_id}",
+            f"/auth/v1/users/{user_id}/",
             headers=self.auth_headers
         )
 
@@ -151,7 +151,7 @@ class TestAuthUsersContract(unittest.TestCase):
         user_id = self._create_test_user("patch.test@example.com", "Patch Test User")
 
         response = self.client.patch(
-            f"/auth/v1/users/{user_id}",
+            f"/auth/v1/users/{user_id}/",
             json={"name": "Updated Name"},
             headers=self.auth_headers
         )
@@ -164,7 +164,7 @@ class TestAuthUsersContract(unittest.TestCase):
 
         # Delete the user
         del_response = self.client.delete(
-            f"/auth/v1/users/{user_id}",
+            f"/auth/v1/users/{user_id}/",
             json={},
             headers=self.auth_headers
         )
@@ -172,7 +172,7 @@ class TestAuthUsersContract(unittest.TestCase):
 
         # Verify it's gone
         get_response = self.client.get(
-            f"/auth/v1/users/{user_id}",
+            f"/auth/v1/users/{user_id}/",
             headers=self.auth_headers
         )
         self.assertIn(get_response.status_code, (404, 400))
@@ -184,7 +184,7 @@ class TestAuthUsersContract(unittest.TestCase):
 
         # Delete without JSON body
         del_response = self.client.delete(
-            f"/auth/v1/users/{user_id}",
+            f"/auth/v1/users/{user_id}/",
             headers=self.auth_headers
         )
         # unpack_request decorator requires JSON

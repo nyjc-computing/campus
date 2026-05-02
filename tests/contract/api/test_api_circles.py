@@ -9,14 +9,14 @@ This is enforced via before_request hook in the API blueprint.
 Circles Endpoints Reference:
 - GET    /circles/                              - List all circles with optional tag filter
 - POST   /circles/                              - Create a new circle
-- GET    /circles/{circle_id}                   - Get a single circle
-- PATCH  /circles/{circle_id}                   - Update a circle (name, description)
-- DELETE /circles/{circle_id}                   - Delete a circle
+- GET    /circles/{circle_id}/                  - Get a single circle
+- PATCH  /circles/{circle_id}/                  - Update a circle (name, description)
+- DELETE /circles/{circle_id}/                  - Delete a circle
 - POST   /circles/{circle_id}/move              - Move circle (not implemented - 501)
-- GET    /circles/{circle_id}/members           - Get circle members
+- GET    /circles/{circle_id}/members/          - Get circle members
 - POST   /circles/{circle_id}/members/add       - Add a member to a circle
 - DELETE /circles/{circle_id}/members/remove    - Remove a member from a circle
-- PATCH  /circles/{circle_id}/members           - Update member access level
+- PATCH  /circles/{circle_id}/members/          - Update member access level
 - GET    /circles/{circle_id}/users             - Get users in circle (not implemented - 501)
 """
 
@@ -221,11 +221,11 @@ class TestApiCirclesContract(unittest.TestCase):
     # Get Circle Tests
 
     def test_get_circle_by_id(self):
-        """GET /circles/{circle_id} returns the circle."""
+        """GET /circles/{circle_id}/ returns the circle."""
         circle_id = self._create_test_circle(name="Get Test Circle")
 
         response = self.client.get(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             headers=self.auth_headers
         )
 
@@ -239,8 +239,8 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertIn("sources", data)
 
     def test_get_circle_requires_auth(self):
-        """GET /circles/{circle_id} without auth returns 401."""
-        response = self.client.get("/api/v1/circles/some_id")
+        """GET /circles/{circle_id}/ without auth returns 401."""
+        response = self.client.get("/api/v1/circles/some_id/")
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
@@ -249,9 +249,9 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_get_missing_circle_returns_error(self):
-        """GET /circles/{circle_id} for non-existent circle returns 409."""
+        """GET /circles/{circle_id}/ for non-existent circle returns 409."""
         response = self.client.get(
-            "/api/v1/circles/nonexistent_id",
+            "/api/v1/circles/nonexistent_id/",
             headers=self.auth_headers
         )
 
@@ -263,13 +263,13 @@ class TestApiCirclesContract(unittest.TestCase):
 
     # Update Circle Tests
 
-    @unittest.skip("API BUG: PATCH /circles/{id} returns 500 for all update operations")
+    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations")
     def test_update_circle_name(self):
-        """PATCH /circles/{circle_id} updates name."""
+        """PATCH /circles/{circle_id}/ updates name."""
         circle_id = self._create_test_circle(name="Original Name")
 
         response = self.client.patch(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             json={"name": "Updated Name"},
             headers=self.auth_headers
         )
@@ -280,32 +280,32 @@ class TestApiCirclesContract(unittest.TestCase):
 
         # Verify the update
         get_response = self.client.get(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             headers=self.auth_headers
         )
         circle_data = get_response.get_json()
         self.assertEqual(circle_data["name"], "Updated Name")
 
-    @unittest.skip("API BUG: PATCH /circles/{id} returns 500 for all update operations")
+    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations")
     def test_update_circle_description(self):
-        """PATCH /circles/{circle_id} updates description."""
+        """PATCH /circles/{circle_id}/ updates description."""
         circle_id = self._create_test_circle(description="Original Description")
 
         response = self.client.patch(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             json={"description": "Updated Description"},
             headers=self.auth_headers
         )
 
         self.assertEqual(response.status_code, 200)
 
-    @unittest.skip("API BUG: PATCH /circles/{id} returns 500 for all update operations")
+    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations")
     def test_update_circle_both_fields(self):
-        """PATCH /circles/{circle_id} updates both name and description."""
+        """PATCH /circles/{circle_id}/ updates both name and description."""
         circle_id = self._create_test_circle()
 
         response = self.client.patch(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             json={
                 "name": "New Name",
                 "description": "New Description",
@@ -315,13 +315,13 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    @unittest.skip("API BUG: PATCH /circles/{id} returns 500 for all update operations (including empty body)")
+    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations (including empty body)")
     def test_update_circle_empty_body_returns_error(self):
-        """PATCH /circles/{circle_id} without updates returns 400."""
+        """PATCH /circles/{circle_id}/ without updates returns 400."""
         circle_id = self._create_test_circle()
 
         response = self.client.patch(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             json={},
             headers=self.auth_headers
         )
@@ -333,21 +333,21 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(data["error"]["code"], "INVALID_REQUEST")
 
     def test_update_circle_requires_auth(self):
-        """PATCH /circles/{circle_id} without auth returns 401."""
+        """PATCH /circles/{circle_id}/ without auth returns 401."""
         circle_id = self._create_test_circle()
 
         response = self.client.patch(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             json={"name": "Updated Name"}
         )
 
         self.assertEqual(response.status_code, 401)
 
-    @unittest.skip("API BUG: PATCH /circles/{id} returns 500 for all update operations (including missing circle)")
+    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations (including missing circle)")
     def test_update_missing_circle_returns_error(self):
-        """PATCH /circles/{circle_id} for non-existent circle returns 409."""
+        """PATCH /circles/{circle_id}/ for non-existent circle returns 409."""
         response = self.client.patch(
-            "/api/v1/circles/nonexistent_id",
+            "/api/v1/circles/nonexistent_id/",
             json={"name": "Updated Name"},
             headers=self.auth_headers
         )
@@ -357,11 +357,11 @@ class TestApiCirclesContract(unittest.TestCase):
     # Delete Circle Tests
 
     def test_delete_circle(self):
-        """DELETE /circles/{circle_id} removes the circle."""
+        """DELETE /circles/{circle_id}/ removes the circle."""
         circle_id = self._create_test_circle(name="To Be Deleted")
 
         response = self.client.delete(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             headers=self.auth_headers
         )
 
@@ -371,26 +371,26 @@ class TestApiCirclesContract(unittest.TestCase):
 
         # Verify it's deleted
         get_response = self.client.get(
-            f"/api/v1/circles/{circle_id}",
+            f"/api/v1/circles/{circle_id}/",
             headers=self.auth_headers
         )
         self.assertEqual(get_response.status_code, 409)
 
     def test_delete_circle_requires_auth(self):
-        """DELETE /circles/{circle_id} without auth returns 401."""
+        """DELETE /circles/{circle_id}/ without auth returns 401."""
         circle_id = self._create_test_circle()
 
         response = self.client.delete(
-            f"/api/v1/circles/{circle_id}"
+            f"/api/v1/circles/{circle_id}/"
         )
 
         self.assertEqual(response.status_code, 401)
 
-    @unittest.skip("API BUG: DELETE /circles/{id} for non-existent circle returns 200 instead of 409")
+    @unittest.skip("API BUG: DELETE /circles/{id}/ for non-existent circle returns 200 instead of 409")
     def test_delete_missing_circle_returns_error(self):
-        """DELETE /circles/{circle_id} for non-existent circle returns 409."""
+        """DELETE /circles/{circle_id}/ for non-existent circle returns 409."""
         response = self.client.delete(
-            "/api/v1/circles/nonexistent_id",
+            "/api/v1/circles/nonexistent_id/",
             headers=self.auth_headers
         )
 
@@ -415,11 +415,11 @@ class TestApiCirclesContract(unittest.TestCase):
     # Circle Members Tests
 
     def test_get_circle_members(self):
-        """GET /circles/{circle_id}/members returns members dict."""
+        """GET /circles/{circle_id}/members/ returns members dict."""
         circle_id = self._create_test_circle()
 
         response = self.client.get(
-            f"/api/v1/circles/{circle_id}/members",
+            f"/api/v1/circles/{circle_id}/members/",
             headers=self.auth_headers
         )
 
@@ -428,19 +428,19 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertIsInstance(data, dict)
 
     def test_get_circle_members_requires_auth(self):
-        """GET /circles/{circle_id}/members without auth returns 401."""
+        """GET /circles/{circle_id}/members/ without auth returns 401."""
         circle_id = self._create_test_circle()
 
         response = self.client.get(
-            f"/api/v1/circles/{circle_id}/members"
+            f"/api/v1/circles/{circle_id}/members/"
         )
 
         self.assertEqual(response.status_code, 401)
 
     def test_get_members_missing_circle_returns_error(self):
-        """GET /circles/{circle_id}/members for non-existent circle returns 409."""
+        """GET /circles/{circle_id}/members/ for non-existent circle returns 409."""
         response = self.client.get(
-            "/api/v1/circles/nonexistent_id/members",
+            "/api/v1/circles/nonexistent_id/members/",
             headers=self.auth_headers
         )
 
@@ -467,7 +467,7 @@ class TestApiCirclesContract(unittest.TestCase):
 
         # Verify member was added
         members_response = self.client.get(
-            f"/api/v1/circles/{parent_id}/members",
+            f"/api/v1/circles/{parent_id}/members/",
             headers=self.auth_headers
         )
         members_data = members_response.get_json()
@@ -547,7 +547,7 @@ class TestApiCirclesContract(unittest.TestCase):
 
         # Verify member was removed
         members_response = self.client.get(
-            f"/api/v1/circles/{parent_id}/members",
+            f"/api/v1/circles/{parent_id}/members/",
             headers=self.auth_headers
         )
         members_data = members_response.get_json()
@@ -587,7 +587,7 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 409)
 
     def test_patch_circle_member_access(self):
-        """PATCH /circles/{circle_id}/members updates member access level."""
+        """PATCH /circles/{circle_id}/members/ updates member access level."""
         # Create two circles and add member relationship
         parent_id = self._create_test_circle(name="Parent Circle Patch")
         child_id = self._create_test_circle(name="Child Circle Patch")
@@ -604,7 +604,7 @@ class TestApiCirclesContract(unittest.TestCase):
 
         # Update the access level
         response = self.client.patch(
-            f"/api/v1/circles/{parent_id}/members",
+            f"/api/v1/circles/{parent_id}/members/",
             json={
                 "member_id": child_id,
                 "access_value": 10,
@@ -616,18 +616,18 @@ class TestApiCirclesContract(unittest.TestCase):
 
         # Verify access was updated
         members_response = self.client.get(
-            f"/api/v1/circles/{parent_id}/members",
+            f"/api/v1/circles/{parent_id}/members/",
             headers=self.auth_headers
         )
         members_data = members_response.get_json()
         self.assertEqual(members_data[child_id], 10)
 
     def test_patch_circle_member_requires_auth(self):
-        """PATCH /circles/{circle_id}/members without auth returns 401."""
+        """PATCH /circles/{circle_id}/members/ without auth returns 401."""
         circle_id = self._create_test_circle()
 
         response = self.client.patch(
-            f"/api/v1/circles/{circle_id}/members",
+            f"/api/v1/circles/{circle_id}/members/",
             json={
                 "member_id": "some-member-id",
                 "access_value": 10,
@@ -637,9 +637,9 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_patch_member_for_missing_circle_returns_error(self):
-        """PATCH /circles/{circle_id}/members for non-existent circle returns 409."""
+        """PATCH /circles/{circle_id}/members/ for non-existent circle returns 409."""
         response = self.client.patch(
-            "/api/v1/circles/nonexistent_id/members",
+            "/api/v1/circles/nonexistent_id/members/",
             json={
                 "member_id": "some-member-id",
                 "access_value": 10,
