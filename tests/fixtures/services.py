@@ -98,6 +98,10 @@ class ServiceManager:
         # This can be disabled per-test by setting env.set('AUDIT_TRACING_ENABLED', '0')
         env.set('AUDIT_TRACING_ENABLED', '1')
 
+        # Enable audit events in tests (default: disabled for safety)
+        # This can be disabled per-test by setting env.set('AUDIT_EVENTS_ENABLED', '0')
+        env.set('AUDIT_EVENTS_ENABLED', '1')
+
         # Patch campus_python to use TestCampusRequest (Flask test client)
         # This MUST happen before any campus_python.Campus instances are created
         # Moved here to ensure patching happens before early returns below
@@ -415,10 +419,15 @@ class ServiceManager:
         instead of Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services.
         """
         from campus.audit.resources.apikeys import APIKeysResource
+        from campus.audit.resources.traces import TracesResource
 
         # Initialize audit API keys storage (creates table if needed)
         # This is idempotent and safe to call multiple times
         APIKeysResource.init_storage()
+
+        # Initialize traces storage (creates table if needed)
+        # This is idempotent and safe to call multiple times
+        TracesResource.init_storage()
 
         # Create an audit API key for span ingestion
         apikey_resource = APIKeysResource()

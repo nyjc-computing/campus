@@ -11,9 +11,11 @@ environment variables, or use the get() function for default values.
 """
 
 import os
-from typing import Callable, overload
+from typing import Any, Callable, cast, overload
 
 # Expected environment variables (for type checking)
+# `bool` type env vars accept only a "0" or "1".
+# OSError raised for invalid value
 
 # Codespaces environment variables
 CODESPACES: str  # 'true' if running in GitHub Codespaces
@@ -39,7 +41,8 @@ SQLITE_URI: str
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
 # Audit tracing middleware
-AUDIT_TRACING_ENABLED: str  # Enable audit tracing middleware ("1" or "0")
+AUDIT_EVENTS_ENABLED: bool  # Trace campus.audit internal API calls
+AUDIT_TRACING_ENABLED: bool  # Enable audit tracing middleware ("1" or "0")
 
 # Test modes
 STORAGE_MODE: str  # "1" if using test storage backend, "0" if using deployment
@@ -105,7 +108,7 @@ def get(name: str, default: str) -> str: ...
 @overload
 def get(name: str, default: str | None) -> str | None: ...
 
-def get(name: str, default: str | None = None) -> str | None:
+def get(name: str, default: str | None = None) -> Any:
     """Get environment variable by name.
 
     Args:
@@ -116,8 +119,16 @@ def get(name: str, default: str | None = None) -> str | None:
         str | None: Value of the environment variable, or default if not set.
         When a non-None default is provided, the return type is str.
     """
-    return os.getenv(name, default)
-
+    var = os.getenv(name, default)
+    annotations = cast(dict, locals().get("__annotations__", {}))
+    if not annotations or name not in annotations:
+        return var
+    # Type-specific handling
+    match annotations[name]:
+        case bool():
+            return get_flag(name)
+        case _:
+            return var
 
 def get_flag(name: str, default: bool = False) -> bool:
     """Get boolean environment variable.
@@ -242,8 +253,9 @@ def __getattr__(name: str) -> str:
     Raises:
         AttributeError: If the environment variable is not set.
     """
-    if name in os.environ:
-        return os.environ[name]
+    if contains(name):
+        if var := get(name):
+            return var
     raise AttributeError(
         f"module '{__name__}' has no attribute '{name}' "
         f"and environment variable '{name}' is not set"

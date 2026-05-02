@@ -31,25 +31,54 @@ def _authenticate_audit_api_key() -> None:
         UnauthorizedError: if API key is invalid or missing
 
     """
+    from .helpers.audit_events import emit_audit_event
+
     try:
         httpauth = webauth.http.HttpAuthenticationScheme.with_header(
             provider="campus",
             http_header=dict(flask.request.headers)
         )
     except auth_errors.AuthorizationError:
-        # No Authorization header present - raise proper error for 401 response
+        # No Authorization header present - emit audit event and raise proper error for 401 response
+        emit_audit_event(
+            event_type="audit.apikeys.auth.failed",
+            data={"reason": "Missing API key"},
+            client_ip=flask.request.remote_addr
+        )
         raise api_errors.UnauthorizedError("Missing API key")
 
     # Extract API key from Bearer token
     api_key = httpauth.token
+
     # Validate format
     if not secret.is_valid_audit_api_key_format(api_key):
+        emit_audit_event(
+            event_type="audit.apikeys.auth.failed",
+            data={"reason": "Invalid API key format"},
+            client_ip=flask.request.remote_addr
+        )
         raise api_errors.UnauthorizedError(
             f"Invalid API key format. Expected: audit_v1_<22-char-base64url>"
         )
+
+    # Verify against database
     api_key_id = resources.apikeys.verify(api_key)
     if not api_key_id:
+        emit_audit_event(
+            event_type="audit.apikeys.auth.failed",
+            data={"reason": "Invalid API key"},
+            client_ip=flask.request.remote_addr
+        )
         raise api_errors.UnauthorizedError("Invalid API key")
+
+    # Success - emit audit event
+    emit_audit_event(
+        event_type="audit.apikeys.auth.success",
+        data={"api_key_id": api_key_id},
+        api_key_id=api_key_id,
+        client_ip=flask.request.remote_addr
+    )
+
     flask.g.api_key_id = api_key_id
 
 
