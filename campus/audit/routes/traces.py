@@ -21,6 +21,7 @@ bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
 
 @bp.post("/")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.traces.ingest")
 def ingest_spans(
         *,
         spans: list[dict[str, Any]],
@@ -63,13 +64,14 @@ def ingest_spans(
         201 Created with span IDs on success
         207 Multi-Status on partial failure
         400 Bad Request on invalid input
+
+    Note:
+        Audit events are emitted for both successful ingestions (201/207)
+        and validation failures (400) via the @audit_event decorator.
+        The decorator uses flask.after_this_request to capture the final
+        response after error handlers run, so failed ingestions are logged
+        with error details.
     """
-    from campus.common import schema
-    import time
-
-    started_at = schema.DateTime.utcnow()
-    start_ns = time.perf_counter_ns()
-
     # Convert dicts to TraceSpan models with validation
     import campus.model as model
     try:
@@ -78,54 +80,9 @@ def ingest_spans(
             for span_dict in spans
         ]
     except (KeyError, TypeError, ValueError) as e:
-        # Emit failed audit event for invalid input
-        duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
-        request_context = audit_events._extract_request_context(flask.request)
-
-        # Create minimal response context for error
-        response_context: audit_events.FlaskResponseContext = {
-            "status_code": 400,
-            "headers": {},
-            "body": {},
-        }
-
-        audit_events.emit_audit_event(
-            data={
-                "event_type": "audit.traces.ingest.failed",
-                "error": str(e),
-                "span_count": len(spans),
-            },
-            api_key_id=flask.g.get("api_key_id"),
-            parent_span_id=flask.g.get("span_id"),
-            started_at=started_at,
-            duration_ms=duration_ms,
-            request_context=request_context,
-            response_context=response_context,
-        )
         raise api_errors.InvalidRequestError(f"Invalid span data: {e}")
 
     result = traces_resource.ingest(span_models)
-
-    # Emit success audit event for successful ingestions
-    duration_ms = (time.perf_counter_ns() - start_ns) / 1_000_000
-    request_context = audit_events._extract_request_context(flask.request)
-    response_context = audit_events._extract_response_context(
-        flask.make_response(result, 201)
-    )
-
-    audit_events.emit_audit_event(
-        data={
-            "event_type": "audit.traces.ingest.success",
-            "span_count": len(span_models),
-        },
-        api_key_id=flask.g.get("api_key_id"),
-        parent_span_id=flask.g.get("span_id"),
-        started_at=started_at,
-        duration_ms=duration_ms,
-        request_context=request_context,
-        response_context=response_context,
-    )
-
     return result, 201
 
 
