@@ -113,7 +113,7 @@ class APIKeysResource:
                 f"{api_key.to_resource()}"
             )
         else:
-            # TODO: Log audit event for campus.apikeys.new (see #567)
+            # Audit event logged at routes layer (campus/audit/routes/apikeys.py)
             # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return api_key, apikey_value
 
@@ -191,7 +191,7 @@ class APIKeyResource:
                 f"API key {self.api_key_id} not found"
             ) from None
         else:
-            # TODO: Log audit event for campus.apikeys.regenerate (see #567)
+            # Audit event logged at routes layer (campus/audit/routes/apikeys.py)
             # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return new_key
 
@@ -205,7 +205,7 @@ class APIKeyResource:
         except storage_errors.NotFoundError:
             return False
         else:
-            # TODO: Log audit event for campus.apikeys.revoke (see #567)
+            # Audit event logged at routes layer (campus/audit/routes/apikeys.py)
             # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return True
 
@@ -234,5 +234,5 @@ class APIKeyResource:
                 f"API key {self.api_key_id} not found"
             ) from None
 
-        # TODO: Log audit event for campus.apikeys.update (see #567)
+        # Audit event logged at routes layer (campus/audit/routes/apikeys.py)
         # Note: No actor tracking - campus.audit is standalone service with no users/clients

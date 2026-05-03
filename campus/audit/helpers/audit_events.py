@@ -210,8 +210,19 @@ def audit_event(
     - Duration, API key ID, parent span ID
     - Client IP and user agent
 
-    Only emits events for 2XX and 3XX responses. Error responses are
-    captured from error handler output via flask.after_this_request.
+    ## Error Handling Architecture
+
+    This decorator uses `flask.after_this_request()` to capture the **final**
+    response after all error handlers have executed. This means:
+
+    1. Route function runs → may raise exception
+    2. Error handler catches → converts exception to HTTP response (e.g., 400, 500)
+    3. `after_this_request` callback runs → sees the **final response** from error handler
+    4. Audit event emitted with full error context
+
+    **Key insight:** The decorator sees BOTH success responses (2XX/3XX) AND
+    error responses (4XX/5XX) because it hooks into the response pipeline
+    after error handlers run.
 
     Args:
         event_type: Event type (e.g., "audit.apikeys.new")
@@ -256,24 +267,24 @@ def audit_event(
                 duration_ms = _calculate_duration_ns(request_start_ns, units="ms")
                 status_code = response.status_code
 
-                # Only emit audit events for 2XX and 3XX responses
-                if 200 <= status_code < 400:
-                    event_data = {
-                        "endpoint": flask.request.endpoint,
-                        "method": flask.request.method,
-                        "path": flask.request.path,
-                        "status_code": status_code,
-                    }
+                # Emit audit events for ALL responses (success and error)
+                # Error handlers have already run, so 4XX/5XX responses are captured
+                event_data = {
+                    "endpoint": flask.request.endpoint,
+                    "method": flask.request.method,
+                    "path": flask.request.path,
+                    "status_code": status_code,
+                }
 
-                    emit_from_flask(
-                        flask.request,
-                        response,
-                        event_type=event_type,
-                        data=event_data,
-                        api_key_id=flask.g.api_key_id,
-                        started_at=started_at,
-                        duration_ms=duration_ms,
-                    )
+                emit_from_flask(
+                    flask.request,
+                    response,
+                    event_type=event_type,
+                    data=event_data,
+                    api_key_id=flask.g.api_key_id,
+                    started_at=started_at,
+                    duration_ms=duration_ms,
+                )
 
                 event_emitted = True
                 return response
