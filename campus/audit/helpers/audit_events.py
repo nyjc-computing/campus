@@ -10,7 +10,6 @@ import typing
 
 import flask
 
-import campus.flask_campus as flask_campus
 from campus.common import env
 from campus.common import schema
 from campus.common.utils import uid
@@ -202,7 +201,7 @@ def emit_audit_event(
 
 def audit_event(
         event_type: str,
-) -> typing.Callable[[flask_campus.JsonViewFunction], typing.Callable[..., flask.Response]]:
+) -> typing.Callable[[typing.Any], typing.Any]:
     """Decorator to emit audit events for route functions.
 
     Automatically captures request/response context including:
@@ -225,14 +224,14 @@ def audit_event(
             return {"id": key_id, "name": name}, 201
 
     Returns:
-        Decorator function that returns flask.Response (required for after_this_request)
+        Decorator function that preserves the wrapped function's signature
     """
     def decorator(
-            func: flask_campus.JsonViewFunction
-    ) -> typing.Callable[..., flask.Response]:
+            func: typing.Any
+    ) -> typing.Any:
         # If audit disabled, return original function unchanged
         if not env.get_flag("AUDIT_EVENTS_ENABLED", False):
-            return func  # type: ignore[return-value]
+            return func
 
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> flask.Response:
