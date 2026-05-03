@@ -14,6 +14,7 @@ from campus.common import schema
 from campus.common.errors import api_errors
 
 from .. import resources
+from ..helpers import audit_events
 
 # Create blueprint for API key routes
 bp = flask.Blueprint('apikeys', __name__, url_prefix='/apikeys')
@@ -21,6 +22,7 @@ bp = flask.Blueprint('apikeys', __name__, url_prefix='/apikeys')
 
 @bp.post("/")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.apikeys.new")
 def new(
         *,
         name: str,
@@ -107,6 +109,7 @@ def get(
 
 @bp.patch("/<api_key_id>/")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.apikeys.update")
 def update(
         api_key_id: schema.CampusID,
         *,
@@ -154,6 +157,7 @@ def update(
     return api_key.to_resource(), 200
 
 @bp.delete("/<api_key_id>/")
+@audit_events.audit_event("audit.apikeys.revoke")
 def revoke(
         api_key_id: schema.CampusID
 ) -> flask_campus.JsonResponse:
@@ -178,6 +182,7 @@ def revoke(
 
 
 @bp.post("/<api_key_id>/regenerate")
+@audit_events.audit_event("audit.apikeys.regenerate")
 def regenerate(
         api_key_id: schema.CampusID
 ) -> flask_campus.JsonResponse:
