@@ -17,6 +17,7 @@ from campus.common.errors import auth_errors, api_errors
 from campus.common.utils import secret
 
 from . import resources
+from .helpers import audit_events
 
 
 def _authenticate_audit_api_key() -> None:
@@ -31,7 +32,21 @@ def _authenticate_audit_api_key() -> None:
         UnauthorizedError: if API key is invalid or missing
 
     """
-    from .helpers.audit_events import emit_audit_event
+    from .helpers.audit_events import _extract_request_context, emit_audit_event, FlaskResponseContext
+    from campus.common import schema
+    import time
+
+    request_context = _extract_request_context(flask.request)
+    started_at = schema.DateTime.utcnow()
+    start_ns = time.perf_counter_ns()
+
+    # Create minimal response context for auth events (no real response yet)
+    def make_response_context(status_code: int) -> FlaskResponseContext:
+        return {
+            "status_code": status_code,
+            "headers": {},
+            "body": {},
+        }
 
     try:
         httpauth = webauth.http.HttpAuthenticationScheme.with_header(
@@ -41,9 +56,13 @@ def _authenticate_audit_api_key() -> None:
     except auth_errors.AuthorizationError:
         # No Authorization header present - emit audit event and raise proper error for 401 response
         emit_audit_event(
-            event_type="audit.apikeys.auth.failed",
-            data={"reason": "Missing API key"},
-            client_ip=flask.request.remote_addr
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Missing API key"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
         )
         raise api_errors.UnauthorizedError("Missing API key")
 
@@ -53,9 +72,13 @@ def _authenticate_audit_api_key() -> None:
     # Validate format
     if not secret.is_valid_audit_api_key_format(api_key):
         emit_audit_event(
-            event_type="audit.apikeys.auth.failed",
-            data={"reason": "Invalid API key format"},
-            client_ip=flask.request.remote_addr
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Invalid API key format"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
         )
         raise api_errors.UnauthorizedError(
             f"Invalid API key format. Expected: audit_v1_<22-char-base64url>"
@@ -65,18 +88,25 @@ def _authenticate_audit_api_key() -> None:
     api_key_id = resources.apikeys.verify(api_key)
     if not api_key_id:
         emit_audit_event(
-            event_type="audit.apikeys.auth.failed",
-            data={"reason": "Invalid API key"},
-            client_ip=flask.request.remote_addr
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Invalid API key"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
         )
         raise api_errors.UnauthorizedError("Invalid API key")
 
     # Success - emit audit event
     emit_audit_event(
-        event_type="audit.apikeys.auth.success",
-        data={"api_key_id": api_key_id},
+        data={"event_type": "audit.apikeys.auth.success", "api_key_id": api_key_id},
         api_key_id=api_key_id,
-        client_ip=flask.request.remote_addr
+        parent_span_id=None,
+        started_at=started_at,
+        duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+        request_context=request_context,
+        response_context=make_response_context(200),
     )
 
     flask.g.api_key_id = api_key_id
@@ -102,7 +132,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # Register public health routes WITHOUT authentication
     import campus.flask_campus as flask_campus
     @bp.get("/health")
-    def health_check() -> flask_campus.JsonResponse:
+    @audit_events.audit_event("audit.health.check")
+    def health_check(**_) -> flask_campus.JsonResponse:
         """Health check endpoint (no authentication required).
 
         Returns:
