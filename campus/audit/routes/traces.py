@@ -13,6 +13,7 @@ import campus.flask_campus as flask_campus
 from campus.common.errors import api_errors
 
 from ..resources import traces as traces_resource
+from ..helpers import audit_events
 
 # Create blueprint for trace routes
 bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
@@ -20,6 +21,7 @@ bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
 
 @bp.post("/")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.traces.ingest")
 def ingest_spans(
     *,
     spans: list[dict[str, Any]],
@@ -79,6 +81,7 @@ def ingest_spans(
 
 @bp.get("/")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.traces.list")
 def list_traces(
     *,
     since: str | None = None,
@@ -110,6 +113,7 @@ def list_traces(
 
 
 @bp.get("/<trace_id>")
+@audit_events.audit_event("audit.traces.get")
 def get_trace(trace_id: str) -> flask_campus.JsonResponse:
     """Get full trace tree with child spans.
 
@@ -131,6 +135,7 @@ def get_trace(trace_id: str) -> flask_campus.JsonResponse:
 
 
 @bp.get("/<trace_id>/spans")
+@audit_events.audit_event("audit.traces.spans.list")
 def list_spans(trace_id: str) -> flask_campus.JsonResponse:
     """List all spans in a trace (flat list).
 
@@ -147,6 +152,7 @@ def list_spans(trace_id: str) -> flask_campus.JsonResponse:
 
 
 @bp.get("/<trace_id>/spans/<span_id>")
+@audit_events.audit_event("audit.traces.spans.get")
 def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
     """Get single span detail including full headers and bodies.
 
@@ -167,6 +173,7 @@ def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
 
 @bp.get("/search")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.traces.search")
 def search_traces(
     *,
     path: str | None = None,
