@@ -25,6 +25,8 @@ collection.delete_by_id("123")
 ```
 """
 
+from typing import Any
+
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
@@ -40,6 +42,8 @@ from campus.storage.errors import (
     StorageError
 )
 from campus.storage.query import gt, gte, is_operator, lt, lte
+
+JsonObject = dict[str, Any]
 
 MONGO_PK = "_id"  # MongoDB uses _id as the primary key
 
@@ -82,24 +86,24 @@ class MongoRecord(dict):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def from_mongo(cls, mongo_doc: dict) -> "MongoRecord":
+    def from_mongo(cls, mongo_doc: JsonObject) -> "MongoRecord":
         """Create a MongoRecord from a MongoDB document."""
         record = mongo_doc.copy()
         record[PK] = record.pop(MONGO_PK)
         return cls(record)
 
     @classmethod
-    def from_record(cls, record: dict) -> "MongoRecord":
+    def from_record(cls, record: JsonObject) -> "MongoRecord":
         """Create a MongoRecord from an API document."""
         return cls(record)
 
-    def to_mongo(self) -> dict:
+    def to_mongo(self) -> JsonObject:
         """Convert the MongoRecord to a MongoDB document."""
         mongo_doc = dict(self)
         mongo_doc[MONGO_PK] = mongo_doc.pop(PK)
         return mongo_doc
 
-    def to_record(self) -> dict:
+    def to_record(self) -> JsonObject:
         """Convert the MongoRecord to an API document."""
         return dict(self)
 
@@ -151,7 +155,7 @@ class MongoDBCollection(CollectionInterface):
         return self._collection
 
     @staticmethod
-    def _build_mongo_query(query: dict) -> dict:
+    def _build_mongo_query(query: JsonObject) -> JsonObject:
         """Build MongoDB query from query dictionary.
 
         Translates Campus operators to MongoDB query syntax:
@@ -180,7 +184,7 @@ class MongoDBCollection(CollectionInterface):
                 mongo_query[key] = value
         return mongo_query
 
-    def get_by_id(self, doc_id: str) -> dict:
+    def get_by_id(self, doc_id: str) -> JsonObject | None:
         """Retrieve a document by its ID."""
         try:
             mongo_doc = self.collection.find_one({MONGO_PK: doc_id})
@@ -190,17 +194,17 @@ class MongoDBCollection(CollectionInterface):
             ) from None
         if mongo_doc:
             return MongoRecord.from_mongo(mongo_doc).to_record()
-        return {}
+        return None
 
     def get_matching(
         self,
-        query: dict,
+        query: JsonObject,
         *,
         order_by: str | None = None,
         ascending: bool = True,
         limit: int | None = None,
         offset: int = 0
-    ) -> list[dict]:
+    ) -> list[JsonObject]:
         """Retrieve documents matching a query.
 
         Supports exact matches, comparison operators (gt, gte, lt, lte),
@@ -233,7 +237,7 @@ class MongoDBCollection(CollectionInterface):
             for mongo_doc in cursor
         ]
 
-    def insert_one(self, record: dict) -> None:  # type: ignore
+    def insert_one(self, record: JsonObject) -> None:  # type: ignore
         """Insert a document into the collection."""
         mongo_doc = MongoRecord.from_record(record).to_mongo()
         try:
@@ -249,7 +253,7 @@ class MongoDBCollection(CollectionInterface):
                 ) from None
             raise
 
-    def update_by_id(self, doc_id: str, update: dict) -> None:
+    def update_by_id(self, doc_id: str, update: JsonObject) -> None:
         """Update a document in the collection.
         Keys where the associated value is None are considered unset.
         """
@@ -274,7 +278,7 @@ class MongoDBCollection(CollectionInterface):
         if result.matched_count == 0:
             raise NotFoundError(doc_id, self.name) from None
 
-    def update_matching(self, query: dict, update: dict) -> None:
+    def update_matching(self, query: JsonObject, update: JsonObject) -> None:
         """Update documents matching a query in the collection."""
         assert 'id' not in query, "Matching by 'id' is not allowed"
         if not update:
@@ -310,7 +314,7 @@ class MongoDBCollection(CollectionInterface):
         if result.deleted_count == 0:
             raise NotFoundError(doc_id, self.name)
 
-    def delete_matching(self, query: dict) -> None:
+    def delete_matching(self, query: JsonObject) -> None:
         """Delete documents matching a query in the collection."""
         assert 'id' not in query, "Matching by 'id' is not allowed"
         try:
