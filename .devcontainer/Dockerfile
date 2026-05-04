@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/python:3.11
+FROM mcr.microsoft.com/devcontainers/python:3.12
 
 # Remove any problematic third-party apt source (yarn) added by the base image
 # so `apt-get update` does not fail due to a missing GPG key, then install gh
