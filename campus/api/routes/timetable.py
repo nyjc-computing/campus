@@ -5,22 +5,19 @@ API routes for the Timetable resource.
 
 import flask
 
-import campus.model.timetable as tt
-import campus.yapper
 from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
 from ..resources import timetable as timetable_resource
 
-import campus.storage
-import campus.model
-
 bp = flask.Blueprint('timetable', __name__, url_prefix='/timetable')
+
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise timetable routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
+
 
 @bp.get('/current')
 @flask_campus.unpack_request
