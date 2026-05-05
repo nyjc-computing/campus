@@ -229,6 +229,11 @@ def _handle_device_code_grant(
         raise token_errors.InvalidGrantError(
             "Invalid or expired device code"
         )
+    except api_errors.InvalidRequestError:
+        # Device code has expired
+        raise token_errors.ExpiredTokenError(
+            "The device code has expired"
+        )
 
     # Check the state of the device code
     if dc.state == "pending":
