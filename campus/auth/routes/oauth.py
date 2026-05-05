@@ -229,6 +229,11 @@ def _handle_device_code_grant(
         raise token_errors.InvalidGrantError(
             "Invalid or expired device code"
         )
+    except api_errors.InvalidRequestError:
+        # Device code has expired
+        raise token_errors.ExpiredTokenError(
+            "The device code has expired"
+        )
 
     # Check the state of the device code
     if dc.state == "pending":
@@ -352,31 +357,24 @@ def device_verification(user_code: str | None = None):
     GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
     POST /device - Handles form submission for non-JS clients
     """
-    from flask import render_template_string, request, redirect, session, url_for
+    from flask import render_template_string, request, redirect, session
     import html
 
     # Check if user is authenticated (for both GET and POST)
-    # First check Flask session, then check query param (from Google OAuth callback)
+    # User must be logged in to authorize a device code
     user_id = session.get('user_id')
     if not user_id:
-        # Check if user_id is in query params (from Google OAuth callback)
-        user_param = request.args.get('user')
-        if user_param:
-            # Set the session for subsequent requests
-            session['user_id'] = user_param
-            user_id = user_param
-        else:
-            # User not logged in - redirect to Google OAuth login
-            # After login, they'll return to this page to authorize the device
-            login_callback = url_for('auth.oauth.device_verification', _external=True)
-            if user_code:
-                login_callback += f"/{user_code}"
-            oauth_authorize_url = url_for(
-                'auth.google.authorize',
-                _external=True,
-                target=login_callback
-            )
-            return redirect(oauth_authorize_url)
+        # User not logged in - redirect to Google OAuth login
+        # After login, they'll return to this page to authorize the device
+        login_callback = flask.url_for('auth.oauth.device_verification', _external=True)
+        if user_code:
+            login_callback += f"/{user_code}"
+        oauth_authorize_url = flask.url_for(
+            'auth.google.authorize',
+            _external=True,
+            target=login_callback
+        )
+        return flask.redirect(oauth_authorize_url)
 
     # Handle POST for non-JS fallback
     if request.method == "POST":
