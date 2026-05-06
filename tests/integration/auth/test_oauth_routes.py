@@ -370,6 +370,23 @@ class TestOAuthIntegration(IntegrationTestCase):
             error_data = authorize_response.get_json()
             self.assertIn("error", error_data)
 
+    def test_users_me_endpoint_returns_current_user_from_session(self):
+        """Test that /oauth/users/me returns the current user from Flask session."""
+        # Test without session - should return 401
+        response = self.client.get("/auth/v1/oauth/users/me")
+        self.assertEqual(response.status_code, 401)
+
+        # Test with session - should return user data
+        with self.app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess['user_id'] = 'test@example.com'
+
+            response = client.get("/auth/v1/oauth/users/me")
+            self.assertEqual(response.status_code, 200)
+            data = response.get_json()
+            self.assertIn("user", data)
+            self.assertEqual(data["user"]["id"], "test@example.com")
+
 
 if __name__ == '__main__':
     unittest.main()
