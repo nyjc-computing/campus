@@ -7,6 +7,7 @@ application.
 from typing import Protocol, runtime_checkable
 
 import flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from campus.common import devops, env, introspect
 import campus.common.errors
@@ -137,6 +138,17 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
     for module in appmodules:
         module.init_app(app)
     campus.common.errors.init_app(app)
+
+    # Fix scheme/redirect issues when behind reverse proxy (Railway, Nginx, etc.)
+    # Railway sends X-Forwarded-Proto, X-Forwarded-Host, X-Forwarded-For headers
+    # ProxyFix ensures Flask url_for() generates correct https URLs
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=1,          # X-Forwarded-For (client IP)
+        x_proto=1,        # X-Forwarded-Proto (scheme) <-- fixes http/https
+        x_host=1,         # X-Forwarded-Host (original host)
+        x_prefix=1,       # X-Forwarded-Prefix (if using subpaths)
+    )
 
     # Register tracing middleware for auth/api deployments
     # campus.audit handles ingestion but doesn't trace its own requests
