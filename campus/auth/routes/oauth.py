@@ -742,7 +742,8 @@ def device_verification(user_code: str | None = None):
                 }
 
                 // Check if user is logged in
-                const response = await fetch('/api/v1/users/me', {
+                // Use relative path since /users/me is now under /oauth/
+                const response = await fetch('./users/me', {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -765,7 +766,7 @@ def device_verification(user_code: str | None = None):
                 submitBtn.innerHTML = 'Processing <span class="spinner"></span>';
 
                 try {
-                    const authResponse = await fetch('/api/v1/oauth/device/authorize', {
+                    const authResponse = await fetch('./authorize', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -989,6 +990,26 @@ def device_authorize_submit(
     return {"success": True}, 200
 
 
+@bp.get("/users/me")
+def users_me() -> flask_campus.JsonResponse:
+    """Get the current authenticated user from session.
+
+    GET /oauth/users/me
+    Returns: User
+
+    This endpoint is used by the device verification page to check if
+    the user is authenticated. It returns the user from the Flask session
+    without requiring additional authentication headers.
+    """
+    user_id = flask.session.get('user_id')
+    if not user_id:
+        raise api_errors.UnauthorizedError(
+            "Not authenticated",
+            error_code="NOT_AUTHENTICATED"
+        )
+    return {"user": {"id": str(user_id)}}, 200
+
+
 def create_blueprint() -> flask.Blueprint:
     """Create a fresh blueprint with OAuth routes for test isolation.
 
@@ -1003,5 +1024,6 @@ def create_blueprint() -> flask.Blueprint:
     new_bp.add_url_rule("/device", "device_verification", device_verification, methods=["GET", "POST"])
     new_bp.add_url_rule("/device/<user_code>", "device_verification_prefilled", device_verification, methods=["GET", "POST"])
     new_bp.add_url_rule("/device/authorize", "device_authorize_submit", device_authorize_submit, methods=["POST"])
+    new_bp.add_url_rule("/users/me", "users_me", users_me, methods=["GET"])
 
     return new_bp
