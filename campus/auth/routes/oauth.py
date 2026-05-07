@@ -766,7 +766,7 @@ def device_verification(user_code: str | None = None):
                 submitBtn.innerHTML = 'Processing <span class="spinner"></span>';
 
                 try {
-                    const authResponse = await fetch('./authorize', {
+                    const authResponse = await fetch('./device/authorize', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
