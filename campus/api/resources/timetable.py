@@ -4,10 +4,10 @@ Timetable resource for Campus API.
 """
 
 import typing
+from collections import defaultdict
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid
 import campus.model as model
 import campus.storage
 from campus.storage.documents.interface import PK
@@ -30,6 +30,7 @@ def _from_record(record: dict) -> model.TimetableMetadata:
     """
     return model.TimetableMetadata(
         id=schema.CampusID(record["id"]),
+        created_at=schema.DateTime(record["created_at"]),
         filename=record["filename"],
         start_date=schema.DateTime(record["start_date"]),
         end_date=schema.DateTime(record["end_date"]),
@@ -46,6 +47,7 @@ def _entry_from_record(record: dict) -> model.TimetableEntry:
     """
     return model.TimetableEntry(
         id=schema.CampusID(record["id"]),
+        created_at=schema.DateTime(record["created_at"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         lessongroup_id=schema.CampusID(record["lessongroup_id"]),
         weekday = schema.String(record["weekday"]),
@@ -54,10 +56,40 @@ def _entry_from_record(record: dict) -> model.TimetableEntry:
     )
 
 def _lessongroup_from_record(record: dict) -> model.LessonGroup:
+    """Convert a storage record into a LessonGroup model."""
     return model.LessonGroup(
+        id=schema.CampusID(record["id"]),
+        created_at=schema.DateTime(record["created_at"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         label = schema.String(record["label"])
     )
+
+
+def _build_lessongroups(
+        lessongroup_records: list[dict[str, typing.Any]],
+        member_records: list[dict[str, typing.Any]],
+        entry_records: list[dict[str, typing.Any]],
+) -> list[model.LessonGroup]:
+    """Assemble lesson groups with nested members and entries."""
+    groups = [_lessongroup_from_record(record) for record in lessongroup_records]
+
+    members_by_group: dict[schema.CampusID, list[schema.String]] = defaultdict(list)
+    for member_record in member_records:
+        group_id = schema.CampusID(member_record["lessongroup_id"])
+        members_by_group[group_id].append(
+            schema.String(member_record["ade_participant"])
+        )
+
+    entries_by_group: dict[schema.CampusID, list[model.TimetableEntry]] = defaultdict(list)
+    for entry_record in entry_records:
+        entry = _entry_from_record(entry_record)
+        entries_by_group[entry.lessongroup_id].append(entry)
+
+    for group in groups:
+        group.members.extend(members_by_group.get(group.id, []))
+        group.entries.extend(entries_by_group.get(group.id, []))
+
+    return groups
 
 
 def _upsert(table, key: str, data: dict) -> None:
@@ -132,7 +164,7 @@ class TimetablesResource:
             metadata: dict[str, typing.Any],
             lessongroups: typing.List[dict[str, typing.Any]],
     ) -> model.Timetable:
-        """Create a new timetable with metadata and entries.
+        """Create a new timetable with metadata and nested lesson groups.
 
         `lessongroups` is a list of dicts following the schema:
         - label [str]
@@ -163,7 +195,11 @@ class TimetablesResource:
                 )
             lg = model.LessonGroup(
                 timetable_id=timetable_meta.id,
-                label = lessongroup["label"]
+                label = lessongroup["label"],
+                members=[
+                    schema.String(ade_participant)
+                    for ade_participant in lessongroup["members"]
+                ],
             )
             groups.append(lg)
             for ade_participant in lessongroup["members"]:
@@ -182,13 +218,16 @@ class TimetablesResource:
                     venue = entry_data["venue"],
                 )
                 entries.append(entry)
+                lg.entries.append(entry)
 
         timetable = model.Timetable(
             id=timetable_meta.id,
+            created_at=timetable_meta.created_at,
             filename=timetable_meta.filename,
             start_date=timetable_meta.start_date,
             end_date=timetable_meta.end_date,
             entries=entries,
+            lessongroups=groups,
         )
         try:
             # TODO: Atomic transactions across multiple storage objects
@@ -289,15 +328,18 @@ class TimetableResource:
 
     def get(self) -> model.Timetable:
         """
-        Get a full Timetable (metadata + entries) by ID.
-        Assembles the Timetable model from the three storage collections:
-          timetable_collection, timetable_entry_storage, timetable_lessongroup_collection.
+        Get a full Timetable by ID.
+
+        Assembles the API model from:
+        - timetable metadata
+        - flat timetable entries
+        - lesson groups with nested members and entries
 
         Returns:
-            model.TimetableMetadata: The timetable metadata.
+            model.Timetable: Timetable metadata, entries, and lesson groups.
 
         Raises:
-            ConflictError: If the timetable does not exist.
+            NotFoundError: If the timetable does not exist.
         """
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
@@ -319,12 +361,30 @@ class TimetableResource:
 
         entries = [_entry_from_record(r) for r in entry_records]
 
+        try:
+            lessongroup_records = timetable_lessongroup_collection.get_matching(
+                {"timetable_id": self.timetable_id}
+            )
+            member_records = timetable_lessongroupmembers_table.get_matching(
+                {"timetable_id": self.timetable_id}
+            )
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
+        lessongroups = _build_lessongroups(
+            lessongroup_records=lessongroup_records,
+            member_records=member_records,
+            entry_records=entry_records,
+        )
+
         return model.Timetable(
             id=schema.CampusID(record["id"]),
+            created_at=schema.DateTime(record["created_at"]),
             filename=record["filename"],
             start_date=schema.DateTime(record["start_date"]),
             end_date=schema.DateTime(record["end_date"]),
             entries=entries,
+            lessongroups=lessongroups,
         )
 
 

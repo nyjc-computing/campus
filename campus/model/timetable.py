@@ -61,13 +61,34 @@ class LessonGroup(Model):
     Fields:
       timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       label (String): Label brought over from xml, like 2527-COM
+      members (list[String]): API-only list of lesson group members
+      entries (list[TimetableEntry]): API-only list of entries for this group
     """
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("lesson-group", length=8)
     ))
     timetable_id: schema.CampusID 
     label: schema.String
+    members: list[schema.String] = field(
+        default_factory=list,
+        metadata={"storage": False}
+    )
+    entries: list["TimetableEntry"] = field(
+        default_factory=list,
+        metadata={"storage": False}
+    )
     __constraints__ = constraints.Unique("timetable_id", "label")
+
+    def to_resource(self) -> dict[str, Any]:
+        """Convert the LessonGroup to an API resource response."""
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "timetable_id": self.timetable_id,
+            "label": self.label,
+            "members": list(self.members),
+            "entries": [entry.to_resource() for entry in self.entries],
+        }
 
 
 @dataclass(eq=False, kw_only=True)
@@ -147,11 +168,15 @@ class TimetableMetadata(Model):
 @dataclass(eq=False, kw_only=True)
 class Timetable(TimetableMetadata):
     """
-    Model representing timetable metadata and entries.
+    API representation of a timetable allocation.
 
-    This model is meant for API representation, not for storage
+    This model is meant for API representation, not for storage.
+    It combines timetable metadata with:
+    - a flat list of all timetable entries
+    - a nested list of lesson groups, each with members and entries
     """
-    entries: list[TimetableEntry]
+    entries: list[TimetableEntry] = field(default_factory=list)
+    lessongroups: list[LessonGroup] = field(default_factory=list)
 
     # prevent accidental use of from_storage and to_storage
     @classmethod
@@ -166,3 +191,18 @@ class Timetable(TimetableMetadata):
             "Timetable.to_storage() is not supported. "
             "Use TimetableMetadata and TimetableEntry models instead."
         )
+
+    def to_resource(self) -> dict[str, Any]:
+        """Convert the Timetable to an API resource response."""
+        return {
+            "id": self.id,
+            "created_at": self.created_at,
+            "filename": self.filename,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "entries": [entry.to_resource() for entry in self.entries],
+            "lessongroups": [
+                lessongroup.to_resource()
+                for lessongroup in self.lessongroups
+            ],
+        }

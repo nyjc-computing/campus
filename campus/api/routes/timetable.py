@@ -113,11 +113,11 @@ def new(
             Metadata for the timetable, e.g. start and end date.
 
         data: dict
-            The actual timetable data, e.g. entries.
+            The actual timetable data, including `lessongroups`.
 
     Responses:
         200 OK: dict
-           {"data": timetable resource}
+           {"data": timetable resource with entries and lessongroups}
 
         400 Bad Request: dict
             {"error": error message}
@@ -143,7 +143,7 @@ def new(
 @flask_campus.unpack_request
 def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
-        Returns timetable metadata and entries in a single JSON object.
+        Returns timetable metadata, entries, and lesson groups in a single JSON object.
     Method:
         GET /timetable/<timetable_id>/
     Path Parameters:
