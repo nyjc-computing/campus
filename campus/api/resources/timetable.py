@@ -7,7 +7,6 @@ import typing
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid
 import campus.model as model
 import campus.storage
 from campus.storage.documents.interface import PK
@@ -30,6 +29,7 @@ def _from_record(record: dict) -> model.TimetableMetadata:
     """
     return model.TimetableMetadata(
         id=schema.CampusID(record["id"]),
+        created_at=schema.DateTime(record["created_at"]),
         filename=record["filename"],
         start_date=schema.DateTime(record["start_date"]),
         end_date=schema.DateTime(record["end_date"]),
@@ -46,6 +46,7 @@ def _entry_from_record(record: dict) -> model.TimetableEntry:
     """
     return model.TimetableEntry(
         id=schema.CampusID(record["id"]),
+        created_at=schema.DateTime(record["created_at"]),
         timetable_id=schema.CampusID(record["timetable_id"]),
         lessongroup_id=schema.CampusID(record["lessongroup_id"]),
         weekday = schema.String(record["weekday"]),
@@ -72,7 +73,6 @@ def _get_lessongroup_labels(
         schema.CampusID(record["id"]): schema.String(record["label"])
         for record in records
     }
-
 
 def _upsert(table, key: str, data: dict) -> None:
     """Insert or update a record in a table.
@@ -200,6 +200,7 @@ class TimetablesResource:
 
         timetable = model.Timetable(
             id=timetable_meta.id,
+            created_at=timetable_meta.created_at,
             filename=timetable_meta.filename,
             start_date=timetable_meta.start_date,
             end_date=timetable_meta.end_date,
@@ -335,13 +336,14 @@ class TimetableResource:
             raise api_errors.InternalError.from_exception(e) from e
 
         entries = []
-        for record in entry_records:
-            entry = _entry_from_record(record)
+        for entry_record in entry_records:
+            entry = _entry_from_record(entry_record)
             entry.label = lessongroup_labels.get(entry.lessongroup_id)
             entries.append(entry)
 
         return model.Timetable(
             id=schema.CampusID(record["id"]),
+            created_at=schema.DateTime(record["created_at"]),
             filename=record["filename"],
             start_date=schema.DateTime(record["start_date"]),
             end_date=schema.DateTime(record["end_date"]),

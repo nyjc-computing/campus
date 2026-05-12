@@ -151,7 +151,7 @@ class Timetable(TimetableMetadata):
     """
     Model representing timetable metadata and entries.
 
-    This model is meant for API representation, not for storage
+    This model is meant for API representation, not for storage.
     """
     entries: list[TimetableEntry]
 
