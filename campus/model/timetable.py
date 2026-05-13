@@ -110,6 +110,7 @@ class TimetableEntry(Model):
       timetable_id (CampusID): FK referencing the timetable this lessongroup is relevant to
       lessongroup_id (CampusID): FK referencing a LessonGroup.id
       venuetimeslot_id (Integer): FK referencing a VenueTimeSlot.id
+      label (String | None): API-only lesson group label, such as 2527-COM
     """
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("timetable-entry", length=16)
@@ -119,6 +120,7 @@ class TimetableEntry(Model):
     venue: schema.String  # e.g. "5-64"
     weekday: schema.String  # e.g. "Mon A"
     timeslot: schema.String  # e.g. "0800"
+    label: schema.String | None = field(default=None, metadata={"storage": False})
     __constraints__ = constraints.Unique("lessongroup_id", "venuetimeslot_id", "timetable_id")
 
 
@@ -149,7 +151,7 @@ class Timetable(TimetableMetadata):
     """
     Model representing timetable metadata and entries.
 
-    This model is meant for API representation, not for storage
+    This model is meant for API representation, not for storage.
     """
     entries: list[TimetableEntry]
 
