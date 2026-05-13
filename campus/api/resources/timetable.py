@@ -27,13 +27,8 @@ def _from_record(record: dict) -> model.TimetableMetadata:
     Returns:
         model.TimetableMetadata: Parsed timetable metadata object.
     """
-    return model.TimetableMetadata(
-        id=schema.CampusID(record["id"]),
-        created_at=schema.DateTime(record["created_at"]),
-        filename=record["filename"],
-        start_date=schema.DateTime(record["start_date"]),
-        end_date=schema.DateTime(record["end_date"]),
-    )
+    return model.TimetableMetadata.from_storage(record)
+
 
 def _entry_from_record(record: dict) -> model.TimetableEntry:
     """Convert a storage record into a TimetableEntry model.
@@ -44,22 +39,12 @@ def _entry_from_record(record: dict) -> model.TimetableEntry:
     Returns:
         model.TimetableEntry: Parsed timetable entry object.
     """
-    return model.TimetableEntry(
-        id=schema.CampusID(record["id"]),
-        created_at=schema.DateTime(record["created_at"]),
-        timetable_id=schema.CampusID(record["timetable_id"]),
-        lessongroup_id=schema.CampusID(record["lessongroup_id"]),
-        weekday = schema.String(record["weekday"]),
-        timeslot = schema.String(record["timeslot"]),
-        venue = schema.String(record["venue"]),
-    )
+    return model.TimetableEntry.from_storage(record)
+
 
 def _lessongroup_from_record(record: dict) -> model.LessonGroup:
     """Convert a storage record into a LessonGroup model."""
-    return model.LessonGroup(
-        timetable_id=schema.CampusID(record["timetable_id"]),
-        label = schema.String(record["label"])
-    )
+    return model.LessonGroup.from_storage(record)
 
 
 def _get_lessongroup_labels(
