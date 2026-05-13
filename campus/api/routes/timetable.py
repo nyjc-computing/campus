@@ -19,6 +19,26 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(bp)
 
 
+@bp.get('/')
+@flask_campus.unpack_request
+def list_timetables() -> flask_campus.JsonResponse:
+    """Summary:
+        List all timetable metadata records.
+
+    Method:
+        GET /timetable/
+
+    Query Parameters:
+        None
+
+    Responses:
+        200 OK: dict
+            {"data": [timetable metadata resources]}
+    """
+    result = timetable_resource.list()
+    return {"data": [timetable.to_resource() for timetable in result]}, 200
+
+
 @bp.get('/current')
 @flask_campus.unpack_request
 def get_current() -> flask_campus.JsonResponse:
