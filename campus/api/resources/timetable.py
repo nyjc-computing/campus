@@ -29,7 +29,6 @@ def _from_record(record: dict) -> model.TimetableMetadata:
     """
     return model.TimetableMetadata.from_storage(record)
 
-
 def _entry_from_record(record: dict) -> model.TimetableEntry:
     """Convert a storage record into a TimetableEntry model.
 
@@ -40,12 +39,6 @@ def _entry_from_record(record: dict) -> model.TimetableEntry:
         model.TimetableEntry: Parsed timetable entry object.
     """
     return model.TimetableEntry.from_storage(record)
-
-
-def _lessongroup_from_record(record: dict) -> model.LessonGroup:
-    """Convert a storage record into a LessonGroup model."""
-    return model.LessonGroup.from_storage(record)
-
 
 def _get_lessongroup_labels(
         timetable_id: schema.CampusID
@@ -74,27 +67,6 @@ def _upsert(table, key: str, data: dict) -> None:
         table.update_by_id(key, data)
     except campus.storage.errors.NotFoundError:
         table.insert_one({PK: key, **data})
-
-
-def _extract_metadata_timetable_id(
-    value: typing.Any,
-) -> schema.CampusID | None:
-    """Extract a timetable ID from metadata storage.
-
-    The metadata document may store the timetable reference directly as a
-    string/CampusID, or in the legacy nested ``{"timetable_id": ...}`` form.
-
-    Args:
-        value: Stored metadata value for the current or next timetable.
-
-    Returns:
-        The parsed timetable ID, or None when no timetable is set.
-    """
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        value = value.get("timetable_id")
-    return schema.CampusID(value) if value else None
 
 class TimetablesResource:
     """Represents the timetables resource."""
@@ -145,11 +117,7 @@ class TimetablesResource:
             records = timetable_collection.get_matching(filters)
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
-        return [
-            _from_record(record)
-            for record in records
-            if record.get("id") != "@metadata"
-        ]
+        return [_from_record(record) for record in records]
     
     def new(
             self,
@@ -253,7 +221,9 @@ class TimetablesResource:
             if metadata is None:
                 return None
 
-            return _extract_metadata_timetable_id(metadata.get("current"))
+            record = metadata.get("current")
+            timetable_id = record.get("timetable_id") if record else None
+            return schema.CampusID(timetable_id) if timetable_id else None
         except campus.storage.errors.NotFoundError:
             return None
         except campus.storage.errors.StorageError as e:
@@ -284,7 +254,9 @@ class TimetablesResource:
             if metadata is None:
                 return None
 
-            return _extract_metadata_timetable_id(metadata.get("next"))
+            record = metadata.get("next")
+            timetable_id = record.get("timetable_id") if record else None
+            return schema.CampusID(timetable_id) if timetable_id else None
 
         except campus.storage.errors.NotFoundError:
             return None
