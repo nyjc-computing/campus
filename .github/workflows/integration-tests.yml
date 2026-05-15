@@ -15,14 +15,13 @@ jobs:
     name: Integration Tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    # Run integration tests for both supported versions.
-    # Python 3.12 remains visible-but-optional during the migration window.
+    # Run integration tests for all supported Python versions.
     # Weekly branch integration failures remain non-blocking as before.
-    continue-on-error: ${{ matrix.python-version == '3.12' || github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
+    continue-on-error: ${{ github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12']
+        python-version: ['3.11', '3.12', '3.13']
     env:
       ENV: testing
     steps:
