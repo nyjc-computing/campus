@@ -119,6 +119,8 @@ class TimetablesResource:
         Returns:
             list[model.TimetableMetadata]: Matching timetable metadata objects.
         """
+        # Exclude metadata document
+        filters["id"] = campus.storage.query.ne("@metadata")
         try:
             records = timetable_collection.get_matching(filters)
         except campus.storage.errors.StorageError as e:
