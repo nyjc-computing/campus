@@ -6,7 +6,7 @@ These operators enable more expressive queries while maintaining backward
 compatibility with simple exact-match queries.
 
 Example:
-    from campus.storage.query import gt, gte, lt, lte, between
+    from campus.storage.query import gt, gte, lt, lte, ne, between
 
     # Simple exact match (backward compatible)
     storage.get_matching({"user_id": "user_123"})
@@ -15,6 +15,7 @@ Example:
     storage.get_matching({"duration_ms": gt(1000)})
     storage.get_matching({"started_at": gte("2024-01-01")})
     storage.get_matching({"status_code": lt(500)})
+    storage.get_matching({"id": ne("@metadata")})
     storage.get_matching({"started_at": between("2024-01-01", "2024-12-31")})
 """
 
@@ -61,6 +62,14 @@ class lte(Operator):
 
     Example:
         {"retries": lte(3)}  # retries <= 3
+    """
+
+
+class ne(Operator):
+    """Not equal comparison.
+
+    Example:
+        {"id": ne("@metadata")}  # id != "@metadata"
     """
 
 
