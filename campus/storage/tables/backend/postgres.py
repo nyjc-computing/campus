@@ -34,7 +34,7 @@ from campus.common import devops, env
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors
-from campus.storage.query import gt, gte, is_operator, lt, lte
+from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 
 from ..interface import PK, TableInterface
 
@@ -213,7 +213,7 @@ class PostgreSQLTable(TableInterface):
     def _build_where_clause(query: dict) -> tuple[str, list]:
         """Build WHERE clause from query dictionary.
 
-        Handles exact matches and comparison operators (gt, gte, lt, lte).
+        Handles exact matches and comparison operators (gt, gte, lt, lte, ne).
         """
         if not query:
             return "", []
@@ -226,16 +226,27 @@ class PostgreSQLTable(TableInterface):
                 # Handle comparison operators
                 if isinstance(value, gt):
                     conditions.append(f'"{key}" > %s')
+                    params.append(value.value)
                 elif isinstance(value, gte):
                     conditions.append(f'"{key}" >= %s')
+                    params.append(value.value)
                 elif isinstance(value, lt):
                     conditions.append(f'"{key}" < %s')
+                    params.append(value.value)
                 elif isinstance(value, lte):
                     conditions.append(f'"{key}" <= %s')
+                    params.append(value.value)
+                elif isinstance(value, ne):
+                    # Not equal: handle NULL values correctly using IS NOT NULL
+                    if value.value is None:
+                        conditions.append(f'"{key}" IS NOT NULL')
+                    else:
+                        conditions.append(f'"{key}" != %s')
+                        params.append(value.value)
                 else:
                     # Unknown operator, fall back to exact match
                     conditions.append(f'"{key}" = %s')
-                params.append(value.value)
+                    params.append(value.value)
             else:
                 # Exact match - handle NULL values correctly using IS NULL
                 if value is None:
