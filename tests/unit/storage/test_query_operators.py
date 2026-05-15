@@ -48,14 +48,23 @@ class TestQueryOperators(unittest.TestCase):
         self.assertEqual(op.value, 3)
         self.assertTrue(is_operator(op))
 
+    def test_ne_operator(self):
+        """ne operator stores value correctly."""
+        from campus.storage.query import ne, is_operator
+
+        op = ne("@metadata")
+        self.assertEqual(op.value, "@metadata")
+        self.assertTrue(is_operator(op))
+
     def test_is_operator_returns_true_for_operators(self):
         """is_operator returns True for all operator types."""
-        from campus.storage.query import gt, gte, lt, lte, is_operator
+        from campus.storage.query import gt, gte, lt, lte, ne, is_operator
 
         self.assertTrue(is_operator(gt(100)))
         self.assertTrue(is_operator(gte(100)))
         self.assertTrue(is_operator(lt(100)))
         self.assertTrue(is_operator(lte(100)))
+        self.assertTrue(is_operator(ne(100)))
 
     def test_is_operator_returns_false_for_non_operators(self):
         """is_operator returns False for regular values."""
@@ -85,7 +94,7 @@ class TestQueryOperators(unittest.TestCase):
 
     def test_operators_with_different_types(self):
         """Operators should work with various value types."""
-        from campus.storage.query import gt, lt, gte, lte, is_operator
+        from campus.storage.query import gt, lt, gte, lte, ne, is_operator
         from datetime import datetime
 
         # Integer
@@ -101,32 +110,39 @@ class TestQueryOperators(unittest.TestCase):
         dt = datetime(2024, 1, 1)
         self.assertTrue(is_operator(lte(dt)))
 
+        # String with ne
+        self.assertTrue(is_operator(ne("@metadata")))
+
     def test_operator_type_checking(self):
         """Operator instances are identified by their type."""
-        from campus.storage.query import gt, gte, lt, lte, is_operator, Operator
+        from campus.storage.query import gt, gte, lt, lte, ne, is_operator, Operator
 
         gt_op = gt(100)
         gte_op = gte(100)
         lt_op = lt(100)
         lte_op = lte(100)
+        ne_op = ne(100)
 
         # All are operators
         self.assertTrue(is_operator(gt_op))
         self.assertTrue(is_operator(gte_op))
         self.assertTrue(is_operator(lt_op))
         self.assertTrue(is_operator(lte_op))
+        self.assertTrue(is_operator(ne_op))
 
         # Each is a different type
         self.assertIsInstance(gt_op, gt)
         self.assertIsInstance(gte_op, gte)
         self.assertIsInstance(lt_op, lt)
         self.assertIsInstance(lte_op, lte)
+        self.assertIsInstance(ne_op, ne)
 
         # All inherit from Operator
         self.assertIsInstance(gt_op, Operator)
         self.assertIsInstance(gte_op, Operator)
         self.assertIsInstance(lt_op, Operator)
         self.assertIsInstance(lte_op, Operator)
+        self.assertIsInstance(ne_op, Operator)
 
 
 if __name__ == "__main__":

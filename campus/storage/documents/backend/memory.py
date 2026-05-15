@@ -34,7 +34,7 @@ from typing import Any, Dict, List
 from campus.common import devops
 from campus.model import Model
 from campus.storage.documents.interface import CollectionInterface, PK
-from campus.storage.query import gt, gte, is_operator, lt, lte
+from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 
 
 class MemoryCollection(CollectionInterface):
@@ -79,7 +79,7 @@ class MemoryCollection(CollectionInterface):
     ) -> List[Dict[str, Any]]:
         """Retrieve documents matching a query.
 
-        Supports exact matches, comparison operators (gt, gte, lt, lte),
+        Supports exact matches, comparison operators (gt, gte, lt, lte, ne),
         sorting, and pagination.
         """
         collection = self._get_collection()
@@ -114,7 +114,7 @@ class MemoryCollection(CollectionInterface):
     def _matches_query(self, doc: Dict[str, Any], query: Dict[str, Any]) -> bool:
         """Check if a document matches a query.
 
-        Handles exact matches and comparison operators (gt, gte, lt, lte).
+        Handles exact matches and comparison operators (gt, gte, lt, lte, ne).
         """
         for key, value in query.items():
             if key not in doc:
@@ -135,6 +135,9 @@ class MemoryCollection(CollectionInterface):
                         return False
                 elif isinstance(value, lte):
                     if not (doc_value <= value.value):
+                        return False
+                elif isinstance(value, ne):
+                    if not (doc_value != value.value):
                         return False
                 else:
                     # Unknown operator, fall back to exact match

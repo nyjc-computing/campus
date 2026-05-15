@@ -34,7 +34,7 @@ from campus.common import devops
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors as storage_errors
-from campus.storage.query import gt, gte, is_operator, lt, lte
+from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 from ..interface import TableInterface, PK
 
 
@@ -359,7 +359,7 @@ class SQLiteTable(TableInterface):
     def _build_where_clause(query: dict[str, Any]) -> tuple[str, list]:
         """Build WHERE clause from query dictionary.
 
-        Handles exact matches and comparison operators (gt, gte, lt, lte, between).
+        Handles exact matches and comparison operators (gt, gte, lt, lte, ne, between).
         Uses ? placeholders for SQLite parameter binding.
         """
         if not query:
@@ -384,6 +384,13 @@ class SQLiteTable(TableInterface):
                 elif isinstance(value, lte):
                     conditions.append(f'"{key}" <= ?')
                     params.append(value.value)
+                elif isinstance(value, ne):
+                    # Not equal: handle NULL values correctly using IS NOT NULL
+                    if value.value is None:
+                        conditions.append(f'"{key}" IS NOT NULL')
+                    else:
+                        conditions.append(f'"{key}" != ?')
+                        params.append(value.value)
                 elif isinstance(value, between_op):
                     # BETWEEN operator: key >= min AND key <= max
                     min_val, max_val = value.value

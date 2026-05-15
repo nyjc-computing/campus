@@ -41,7 +41,7 @@ from campus.storage.errors import (
     NotFoundError,
     StorageError
 )
-from campus.storage.query import gt, gte, is_operator, lt, lte
+from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 
 JsonObject = dict[str, Any]
 
@@ -163,6 +163,7 @@ class MongoDBCollection(CollectionInterface):
         - gte(value) → {"field": {"$gte": value}}
         - lt(value) → {"field": {"$lt": value}}
         - lte(value) → {"field": {"$lte": value}}
+        - ne(value) → {"field": {"$ne": value}}
         - exact match → {"field": value}
         """
         mongo_query = {}
@@ -176,6 +177,8 @@ class MongoDBCollection(CollectionInterface):
                     mongo_query[key] = {"$lt": value.value}
                 elif isinstance(value, lte):
                     mongo_query[key] = {"$lte": value.value}
+                elif isinstance(value, ne):
+                    mongo_query[key] = {"$ne": value.value}
                 else:
                     # Unknown operator, fall back to exact match
                     mongo_query[key] = value.value
