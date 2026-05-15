@@ -378,6 +378,35 @@ poetry run python -m unittest tests.unit.auth.test_resources.TestAuthResource.te
 poetry run python -m unittest discover -s tests/contract -p "test_*.py"
 ```
 
+## CI Python Version Matrix
+
+Campus supports every Python version allowed by `pyproject.toml`.
+
+```toml
+python = ">=3.11.0,<3.14"
+```
+
+GitHub Actions must run the core validation workflows against each supported
+minor version:
+
+| Workflow | Test type | Python versions |
+|----------|-----------|-----------------|
+| `.github/workflows/sanity-check.yml` | Sanity checks | 3.11, 3.12, 3.13 |
+| `.github/workflows/unit-tests.yml` | Unit tests | 3.11, 3.12, 3.13 |
+| `.github/workflows/integration-tests.yml` | Integration tests | 3.11, 3.12, 3.13 |
+| `.github/workflows/type-check.yml` | Pyright type checks | 3.11, 3.12, 3.13 |
+
+When changing the supported Python range, update these CI matrices in the same
+PR as `pyproject.toml`. Sanity tests include
+`test_python_version_matches_requirements`, which verifies that the runtime
+Python version satisfies the package requirement; the matrix ensures that this
+compatibility check is exercised for every supported minor version.
+
+All supported Python versions are treated as required in CI. Weekly branch
+integration failures remain non-blocking because that branch is used for active
+development, but version-specific failures on staging/main should be fixed
+before merging.
+
 ## Test Scope
 
 ### What We Test
