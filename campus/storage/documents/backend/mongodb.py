@@ -210,7 +210,9 @@ class MongoDBCollection(CollectionInterface):
         Supports exact matches, comparison operators (gt, gte, lt, lte),
         sorting, and pagination.
         """
-        assert 'id' not in query, "Matching by 'id' is not allowed"
+        if "id" in query:
+            # TODO: warn about using "id"
+            pass
         try:
             mongo_query = self._build_mongo_query(query)
             cursor = self.collection.find(mongo_query)
