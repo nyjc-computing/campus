@@ -106,7 +106,7 @@ def new_circle(
     return resource, 201
 
 
-@bp.delete('/<string:circle_id>')
+@bp.delete('/<string:circle_id>/')
 def delete_circle(circle_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Delete a circle by its unique ID.
@@ -146,7 +146,7 @@ def delete_circle(circle_id: str) -> flask_campus.JsonResponse:
     return {}, 200
 
 
-@bp.get('/<string:circle_id>')
+@bp.get('/<string:circle_id>/')
 def get_circle_details(circle_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Retrieve detailed information about a specific circle.
@@ -195,7 +195,7 @@ def get_circle_details(circle_id: str) -> flask_campus.JsonResponse:
     return resource, 200
 
 
-@bp.patch('/<string:circle_id>')
+@bp.patch('/<string:circle_id>/')
 @flask_campus.unpack_request
 def edit_circle(
         *,
@@ -257,7 +257,7 @@ def move_circle(circle_id: str) -> flask_campus.JsonResponse:
     return {"message": "Not implemented"}, 501
 
 
-@bp.get('/<string:circle_id>/members')
+@bp.get('/<string:circle_id>/members/')
 def get_circle_members(circle_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Retrieve the member IDs of a circle along with their access values.
@@ -405,7 +405,7 @@ def remove_circle_member(
 # TODO: Redesign for clearer access update: circles can have multiple parentage paths
 
 
-@bp.patch('/<string:circle_id>/members')
+@bp.patch('/<string:circle_id>/members/')
 @flask_campus.unpack_request
 def patch_circle_member(
         *,

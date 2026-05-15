@@ -7,7 +7,6 @@ import typing
 
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid
 import campus.model as model
 import campus.storage
 from campus.storage.documents.interface import PK
@@ -28,12 +27,13 @@ def _from_record(record: dict) -> model.TimetableMetadata:
     Returns:
         model.TimetableMetadata: Parsed timetable metadata object.
     """
-    return model.TimetableMetadata(
-        id=schema.CampusID(record["id"]),
-        filename=record["filename"],
-        start_date=schema.DateTime(record["start_date"]),
-        end_date=schema.DateTime(record["end_date"]),
-    )
+    try:
+        return model.TimetableMetadata.from_storage(record)
+    except KeyError as e:
+        raise api_errors.InternalError(
+            e.args[0],
+            record=record
+        ) from e
 
 def _entry_from_record(record: dict) -> model.TimetableEntry:
     """Convert a storage record into a TimetableEntry model.
@@ -44,21 +44,19 @@ def _entry_from_record(record: dict) -> model.TimetableEntry:
     Returns:
         model.TimetableEntry: Parsed timetable entry object.
     """
-    return model.TimetableEntry(
-        id=schema.CampusID(record["id"]),
-        timetable_id=schema.CampusID(record["timetable_id"]),
-        lessongroup_id=schema.CampusID(record["lessongroup_id"]),
-        weekday = schema.String(record["weekday"]),
-        timeslot = schema.String(record["timeslot"]),
-        venue = schema.String(record["venue"]),
-    )
+    return model.TimetableEntry.from_storage(record)
 
-def _lessongroup_from_record(record: dict) -> model.LessonGroup:
-    return model.LessonGroup(
-        timetable_id=schema.CampusID(record["timetable_id"]),
-        label = schema.String(record["label"])
+def _get_lessongroup_labels(
+        timetable_id: schema.CampusID
+) -> dict[schema.CampusID, schema.String]:
+    """Get a mapping of lesson group IDs to labels for one timetable."""
+    records = timetable_lessongroup_collection.get_matching(
+        {"timetable_id": timetable_id}
     )
-
+    return {
+        schema.CampusID(record["id"]): schema.String(record["label"])
+        for record in records
+    }
 
 def _upsert(table, key: str, data: dict) -> None:
     """Insert or update a record in a table.
@@ -121,6 +119,8 @@ class TimetablesResource:
         Returns:
             list[model.TimetableMetadata]: Matching timetable metadata objects.
         """
+        # Exclude metadata document
+        filters["id"] = campus.storage.query.ne("@metadata")
         try:
             records = timetable_collection.get_matching(filters)
         except campus.storage.errors.StorageError as e:
@@ -132,7 +132,7 @@ class TimetablesResource:
             metadata: dict[str, typing.Any],
             lessongroups: typing.List[dict[str, typing.Any]],
     ) -> model.Timetable:
-        """Create a new timetable with metadata and entries.
+        """Create a new timetable with metadata and labeled entries.
 
         `lessongroups` is a list of dicts following the schema:
         - label [str]
@@ -144,16 +144,23 @@ class TimetablesResource:
         - weekday [str]
         - timeslot [str]
         """
-        timetable_meta = model.TimetableMetadata(
-            filename=metadata["filename"],
-            start_date=metadata["start"],
-            end_date=metadata["end"],
-        )
+        timetable_meta = model.TimetableMetadata(**metadata)
         groups: list[model.LessonGroup] = []
         members = []
         entries = []
 
         for lessongroup in lessongroups:
+            # HACK: hardcoded key validation
+            # TODO: create a model or TypedDict for validation
+            missing_keys = []
+            for key in ("label", "members", "entries"):
+                if key not in lessongroup:
+                    missing_keys.append(key)
+            if missing_keys:
+                raise api_errors.InvalidRequestError(
+                    "'lessongroup' object requires missing properties: "
+                    f"{', '.join(missing_keys)}"
+                )
             lg = model.LessonGroup(
                 timetable_id=timetable_meta.id,
                 label = lessongroup["label"]
@@ -173,11 +180,13 @@ class TimetablesResource:
                     weekday = entry_data["weekday"],
                     timeslot = entry_data["timeslot"],
                     venue = entry_data["venue"],
+                    label = lessongroup["label"],
                 )
                 entries.append(entry)
 
         timetable = model.Timetable(
             id=timetable_meta.id,
+            created_at=timetable_meta.created_at,
             filename=timetable_meta.filename,
             start_date=timetable_meta.start_date,
             end_date=timetable_meta.end_date,
@@ -281,16 +290,13 @@ class TimetableResource:
         self.timetable_id = timetable_id
 
     def get(self) -> model.Timetable:
-        """
-        Get a full Timetable (metadata + entries) by ID.
-        Assembles the Timetable model from the three storage collections:
-          timetable_collection, timetable_entry_storage, timetable_lessongroup_collection.
+        """Get a full Timetable (metadata + labeled entries) by ID.
 
         Returns:
-            model.TimetableMetadata: The timetable metadata.
+            model.Timetable: The timetable metadata and entries.
 
         Raises:
-            ConflictError: If the timetable does not exist.
+            NotFoundError: If the timetable does not exist.
         """
         try:
             record = timetable_collection.get_by_id(self.timetable_id)
@@ -310,10 +316,20 @@ class TimetableResource:
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
 
-        entries = [_entry_from_record(r) for r in entry_records]
+        try:
+            lessongroup_labels = _get_lessongroup_labels(self.timetable_id)
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
+        entries = []
+        for entry_record in entry_records:
+            entry = _entry_from_record(entry_record)
+            entry.label = lessongroup_labels.get(entry.lessongroup_id)
+            entries.append(entry)
 
         return model.Timetable(
             id=schema.CampusID(record["id"]),
+            created_at=schema.DateTime(record["created_at"]),
             filename=record["filename"],
             start_date=schema.DateTime(record["start_date"]),
             end_date=schema.DateTime(record["end_date"]),
@@ -390,12 +406,19 @@ class TimetableEntriesResource:
         """List all entries belonging to the timetable.
 
         Returns:
-            list[model.TimetableEntry]: Timetable entries.
+            list[model.TimetableEntry]: Timetable entries with lesson group labels.
         """
         records = timetable_entry_storage.get_matching({
             "timetable_id": self.timetable_id
         })
-        return [_entry_from_record(r) for r in records]
+        lessongroup_labels = _get_lessongroup_labels(self.timetable_id)
+
+        entries = []
+        for record in records:
+            entry = _entry_from_record(record)
+            entry.label = lessongroup_labels.get(entry.lessongroup_id)
+            entries.append(entry)
+        return entries
 
 class TimetableMetadataResource:
     """Represents metadata for a single timetable."""

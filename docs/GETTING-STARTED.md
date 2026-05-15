@@ -33,7 +33,7 @@ For those deploying or using Campus:
 
 ### Prerequisites
 - **pyenv** for Python version management
-- **Python 3.11** (managed via pyenv)
+- **Python 3.11, 3.12, or 3.13** (managed via pyenv; prefer 3.13 for new setups)
 - **pipx** for installing Poetry
 - **Poetry** for dependency management (installed via pipx)
 - PostgreSQL (for auth service database)
@@ -43,14 +43,18 @@ For those deploying or using Campus:
 
 ```bash
 # 1. Install pyenv (Arch: pacman -S python-pyenv)
-# 2. Install Python 3.11
+# 2. Install supported Python versions
 pyenv install 3.11.11
-pyenv local 3.11.11
+pyenv install 3.12.0
+pyenv install 3.13.0
 
-# 3. Install Poetry via pipx (user-level, isolated)
-pipx install --python python3.11 poetry
+# 3. Select the interpreter for this repo (3.13 preferred; 3.11 and 3.12 also supported)
+pyenv local 3.13.0
 
-# 4. Configure PATH in ~/.bashrc:
+# 4. Install Poetry via pipx (user-level, isolated)
+pipx install poetry
+
+# 5. Configure PATH in ~/.bashrc:
 export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/shims:$PATH"  # pyenv shims first
 export PATH="$HOME/.local/bin:$PATH"    # pipx binaries

@@ -80,6 +80,8 @@ class ServiceManager:
         try:
             import campus.storage.testing
             campus.storage.testing.configure_test_storage()
+            # Configure file-based test database for debugging
+            campus.storage.testing.configure_test_db()
         except Exception:
             # If for some reason the testing helper can't be imported,
             # continue; downstream storage.init() may still handle test mode.
@@ -91,6 +93,14 @@ class ServiceManager:
         # When DEPLOY="campus.auth", it uses base_url = f"https://{env.HOSTNAME}"
         # We use a fake hostname that we'll map to Flask test apps
         env.set('HOSTNAME', "campus.test")
+
+        # Enable audit tracing middleware in tests (default: enabled)
+        # This can be disabled per-test by setting env.set('AUDIT_TRACING_ENABLED', '0')
+        env.set('AUDIT_TRACING_ENABLED', '1')
+
+        # Enable audit events in tests (default: disabled for safety)
+        # This can be disabled per-test by setting env.set('AUDIT_EVENTS_ENABLED', '0')
+        env.set('AUDIT_EVENTS_ENABLED', '1')
 
         # Patch campus_python to use TestCampusRequest (Flask test client)
         # This MUST happen before any campus_python.Campus instances are created
@@ -123,6 +133,13 @@ class ServiceManager:
         # This is safe to call multiple times as it's idempotent
         auth.init()
         import campus.auth
+
+        # CRITICAL: Create audit API key BEFORE creating Flask apps!
+        # The tracing middleware is registered during create_app(), and any
+        # requests made during initialization will trigger span ingestion.
+        # If ACCESS_TOKEN isn't set yet, those requests will fail with
+        # "Token only available for Bearer Authentication."
+        self._ensure_audit_api_key()
 
         self.auth_app = devops.deploy.create_app(campus.auth)
         flask_test.configure_for_testing(self.auth_app)
@@ -242,10 +259,16 @@ class ServiceManager:
             env.delete("CLIENT_ID")
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
+        if env.contains("ACCESS_TOKEN"):
+            env.delete("ACCESS_TOKEN")
 
         # Clean up audit client configuration
         from campus.audit.client import AuditClient
         AuditClient.json_client_class = None  # Reset to None
+
+        # Clear audit client singleton
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
 
         # For non-shared instances, clean up apps for full isolation
         # This is now the default behavior
@@ -349,6 +372,8 @@ class ServiceManager:
             env.delete("CLIENT_ID")
         if env.contains("CLIENT_SECRET"):
             env.delete("CLIENT_SECRET")
+        if env.contains("ACCESS_TOKEN"):
+            env.delete("ACCESS_TOKEN")
 
     # === NEW LIFECYCLE API (Issue #518) ===
     # These methods provide a cleaner, more predictable lifecycle for integration tests.
@@ -377,7 +402,50 @@ class ServiceManager:
 
         See: #518 - Proposal: Saner Integration Test Lifecycle
         """
-        return self._do_initialize()
+        self._do_initialize()
+        # Ensure audit API key exists after initialization
+        # This must be called after _do_initialize() so the audit app is ready
+        self._ensure_audit_api_key()
+        return self
+
+    def _ensure_audit_api_key(self) -> None:
+        """Ensure audit API key exists for tracing middleware span ingestion.
+
+        Creates a fresh audit API key if one doesn't exist (e.g., after
+        clear_test_data() deletes all rows). This should be called after any
+        operation that clears the database.
+
+        The audit service requires Bearer token authentication (audit API keys)
+        instead of Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services.
+        """
+        from campus.audit.resources.apikeys import APIKeysResource
+        from campus.audit.resources.traces import TracesResource
+
+        # Initialize audit API keys storage (creates table if needed)
+        # This is idempotent and safe to call multiple times
+        APIKeysResource.init_storage()
+
+        # Initialize traces storage (creates table if needed)
+        # This is idempotent and safe to call multiple times
+        TracesResource.init_storage()
+
+        # Create an audit API key for span ingestion
+        apikey_resource = APIKeysResource()
+        api_key_model, plaintext_key = apikey_resource.new(
+            name="test-tracing-key",
+            owner_id=str(env.CLIENT_ID),  # Use test client ID as owner
+            scopes="traces:ingest,traces:read,traces:search"
+        )
+
+        # Set ACCESS_TOKEN so TestJsonClient uses Bearer authentication
+        # TestJsonClient._auth_headers() checks ACCESS_TOKEN first before falling
+        # back to CLIENT_ID/CLIENT_SECRET Basic auth
+        env.set('ACCESS_TOKEN', plaintext_key)
+
+        # Reset audit client singleton to pick up the new ACCESS_TOKEN
+        # Note: We don't reset json_client_class as that would break TestJsonClient injection
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None  # Clear singleton so it recreates with new token
 
     def clear_test_data(self):
         """Clear test data while preserving table/collection structure.
@@ -391,10 +459,11 @@ class ServiceManager:
         - Uses clear_all_data() which preserves schema structure
         - Is faster (no table/collection recreation)
         - Doesn't require manual Resource.init_storage() calls
+        - Recreates audit API key after clearing (since clear_all_data() deletes it)
 
         Migration Path:
-        - Old: reset_test_data() → manual Resource.init_storage()
-        - New: clear_test_data() → no manual reinit needed
+        - Old: reset_test_data() - manual Resource.init_storage()
+        - New: clear_test_data() - no manual reinit needed
 
         See: #518 - Proposal: Saner Integration Test Lifecycle
         """
@@ -407,6 +476,11 @@ class ServiceManager:
         # These are idempotent and will recreate necessary data
         auth.init()
         yapper.init()
+
+        # Recreate audit API key after clearing data
+        # Since clear_all_data() deletes all rows, the API key created during
+        # _do_initialize() is gone and needs to be recreated for each test
+        self._ensure_audit_api_key()
 
     def flush_async(self):
         """Wait for async operations to complete.

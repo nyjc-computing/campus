@@ -11,15 +11,18 @@ environment variables, or use the get() function for default values.
 """
 
 import os
-from typing import Callable, overload
+from typing import Any, Callable, cast, overload
 
 # Expected environment variables (for type checking)
+# `bool` type env vars accept only a "0" or "1".
+# OSError raised for invalid value
 
 # Codespaces environment variables
 CODESPACES: str  # 'true' if running in GitHub Codespaces
 CODESPACE_NAME: str  # name of the Codespace
 GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str  # domain for port forwarding in Codespaces
 
+# Deployment environment variables
 CLIENT_ID: str  # Campus client ID
 CLIENT_SECRET: str  # Campus client secret
 DEPLOY: str  # Campus deployment, (campus.auth, campus.api, campus.audit)
@@ -29,7 +32,20 @@ PORT: str  # port for running development server
 SECRET_KEY: str  # secret key for signing sessions and tokens
 WORKSPACE_DOMAIN: str  # Google Workspace domain
 
+# Database environment variables
+MONGODB_URI: str
+POSTGRESDB_URI: str
+SQLITE_URI: str
+
+# OAuth environment variables
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
+
+# Audit tracing middleware
+AUDIT_EVENTS_ENABLED: bool  # Trace campus.audit internal API calls
+AUDIT_TRACING_ENABLED: bool  # Enable audit tracing middleware ("1" or "0")
+
+# Test modes
+STORAGE_MODE: str  # "1" if using test storage backend, "0" if using deployment
 
 # Type stub for getsecret function
 GetSecretFunc = Callable[[str], str]
@@ -92,7 +108,7 @@ def get(name: str, default: str) -> str: ...
 @overload
 def get(name: str, default: str | None) -> str | None: ...
 
-def get(name: str, default: str | None = None) -> str | None:
+def get(name: str, default: str | None = None) -> Any:
     """Get environment variable by name.
 
     Args:
@@ -103,7 +119,60 @@ def get(name: str, default: str | None = None) -> str | None:
         str | None: Value of the environment variable, or default if not set.
         When a non-None default is provided, the return type is str.
     """
-    return os.getenv(name, default)
+    var = os.getenv(name, default)
+    annotations = cast(dict, locals().get("__annotations__", {}))
+    if not annotations or name not in annotations:
+        return var
+    # Type-specific handling
+    match annotations[name]:
+        case bool():
+            return get_flag(name)
+        case _:
+            return var
+
+def get_flag(name: str, default: bool = False) -> bool:
+    """Get boolean environment variable.
+
+    Converts string environment variables to boolean values.
+    Only accepts "1" (True) or "0"/None (False) for safety.
+
+    Args:
+        name: Name of the environment variable.
+        default: Default value if not set (defaults to False).
+
+    Returns:
+        bool: True if value is "1", False if value is "0"/None/missing.
+
+    Raises:
+        OSError: If value is set but not "0" or "1".
+
+    Examples:
+        >>> env.get_flag("AUDIT_TRACING_ENABLED")
+        False
+
+        >>> env.get_flag("AUDIT_TRACING_ENABLED", True)
+        True
+
+        >>> env.set("AUDIT_TRACING_ENABLED", "1")
+        >>> env.get_flag("AUDIT_TRACING_ENABLED")
+        True
+    """
+    value = os.getenv(name)
+
+    # Handle unset
+    if value is None:
+        return default
+
+    # Validate and convert
+    if value == "1":
+        return True
+    elif value == "0":
+        return False
+    else:
+        raise OSError(
+            f"Invalid boolean flag value for {name!r}: {value!r}. "
+            f"Must be '0' (disabled) or '1' (enabled)."
+        )
 
 
 def set(name: str, value: str) -> None:
@@ -184,8 +253,9 @@ def __getattr__(name: str) -> str:
     Raises:
         AttributeError: If the environment variable is not set.
     """
-    if name in os.environ:
-        return os.environ[name]
+    if contains(name):
+        if var := get(name):
+            return var
     raise AttributeError(
         f"module '{__name__}' has no attribute '{name}' "
         f"and environment variable '{name}' is not set"

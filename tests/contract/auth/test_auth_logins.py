@@ -32,8 +32,6 @@ class TestAuthLoginsContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed

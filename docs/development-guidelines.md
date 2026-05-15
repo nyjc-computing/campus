@@ -284,6 +284,59 @@ class SMTPSender(EmailSender):
 - Easier testing with mock implementations
 - Clear contracts between components
 
+### Audit Event Logging
+
+Audit events provide a comprehensive trail of all operations in the audit service.
+The `@audit_event` decorator automatically captures request/response context for
+both successful operations and errors.
+
+#### How It Works
+
+The decorator uses `flask.after_this_request()` to capture the **final response**
+after error handlers have executed:
+
+```python
+from campus.audit.helpers import audit_events
+
+@bp.post("/apikeys")
+@audit_events.audit_event("audit.apikeys.new")
+def create_apikey(**kwargs):
+    # May raise api_errors.InvalidRequestError
+    return apikey, 201
+
+# Flow:
+# 1. Route function runs → raises InvalidRequestError
+# 2. Error handler catches → returns 400 response
+# 3. after_this_request callback runs → sees 400 response
+# 4. Audit event emitted with status_code=400
+```
+
+#### Key Architectural Points
+
+1. **Error handlers run before the callback** - The decorator sees the final
+   HTTP response (400, 500, etc.) not the original exception.
+
+2. **All responses are logged** - Both successful (2XX/3XX) and error (4XX/5XX)
+   responses are captured automatically.
+
+3. **Context is captured automatically** - Request headers, body, client IP,
+   user agent, response status, timing, and API key ID are included.
+
+4. **No manual error handling needed** - Don't catch exceptions just to log them.
+   The decorator handles both success and failure paths.
+
+#### When to Use
+
+- **Route functions** - Use `@audit_event` for all HTTP endpoints
+- **Authentication** - Use for auth success/failure events
+- **CRUD operations** - Use for create, update, delete operations
+
+#### When NOT to Use
+
+- **Background jobs** - Use `emit_audit_event()` directly
+- **Custom event types** - If you need different event types for success vs failure,
+  use manual calls to `emit_audit_event()`
+
 ## Common Pitfalls
 
 ### Storage Initialization Order

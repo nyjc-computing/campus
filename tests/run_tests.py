@@ -9,17 +9,18 @@ Recommended usage (all platforms):
     poetry run python tests/run_tests.py unit              # unit tests
     poetry run python tests/run_tests.py integration       # integration tests
     poetry run python tests/run_tests.py performance       # performance tests
+    poetry run python tests/run_tests.py contract          # contract tests
     poetry run python tests/run_tests.py sanity            # sanity checks
     poetry run python tests/run_tests.py type              # type checks (pyright)
     poetry run python tests/run_tests.py all               # all tests
 
     # With timeout
     poetry run python tests/run_tests.py unit --timeout 60
-    poetry run python tests/run_tests.py all --timeout 60  # applies to unit/integration/performance only
+    poetry run python tests/run_tests.py all --timeout 60  # applies to unit/integration/performance/contract only
 
     # Other options
     poetry run python tests/run_tests.py unit --module common -v   # specific module, verbose
-    poetry run python tests/run_tests.py unit --silent            # minimal output
+    poetry run python tests/run_tests.py contract --silent         # minimal output
 
 Exit Codes:
     0   - All tests passed
@@ -45,7 +46,7 @@ DEFAULT_INTEGRATION_TIMEOUT = 300
 DEFAULT_PERFORMANCE_TIMEOUT = 600
 
 # Test categories
-TEST_CATEGORIES = ["unit", "integration", "performance", "sanity", "type", "all"]
+TEST_CATEGORIES = ["unit", "integration", "performance", "contract", "sanity", "type", "all"]
 MODULE_CHOICES = ["apps", "vault", "yapper", "common", "client"]
 
 # Platform detection
@@ -226,6 +227,7 @@ Examples:
   poetry run python tests/run_tests.py unit                # Unit tests
   poetry run python tests/run_tests.py integration         # Integration tests
   poetry run python tests/run_tests.py performance         # Performance tests
+  poetry run python tests/run_tests.py contract            # Contract tests
   poetry run python tests/run_tests.py sanity              # Sanity checks
   poetry run python tests/run_tests.py type                # Type checks
   poetry run python tests/run_tests.py all                 # All tests
@@ -291,7 +293,7 @@ Exit codes:
     if not args.no_timeout:
         if args.timeout:
             timeout = args.timeout
-        elif args.test_type in ("unit", "all"):
+        elif args.test_type in ("unit", "contract", "all"):
             timeout = DEFAULT_UNIT_TIMEOUT
         elif args.test_type == "integration":
             timeout = DEFAULT_INTEGRATION_TIMEOUT
@@ -332,6 +334,12 @@ Exit codes:
             "performance", args.module, args.verbose, timeout, args.silent
         )
 
+    # Contract tests
+    elif args.test_type == "contract":
+        exit_code = run_unittest_discover(
+            "contract", args.module, args.verbose, timeout, args.silent
+        )
+
     # Sanity checks
     elif args.test_type == "sanity":
         exit_code = run_sanity_checks(args.silent)
@@ -346,8 +354,8 @@ Exit codes:
             print("Error: --module cannot be used with 'all' test type")
             return 1
 
-        # Run in order: sanity → type → unit → integration
-        # (sanity/type are fast, unit/integration may have external deps)
+        # Run in order: sanity → type → unit → integration → contract → performance
+        # (sanity/type are fast, unit/integration/contract/performance may have external deps)
 
         run_category("sanity checks", lambda: run_sanity_checks(args.silent))
         run_category("type checks", lambda: run_type_checks(args.silent))
@@ -364,6 +372,15 @@ Exit codes:
             lambda: run_unittest_discover(
                 "integration", None, args.verbose,
                 timeout or DEFAULT_INTEGRATION_TIMEOUT, args.silent
+            )
+        )
+
+        # Contract tests (with timeout)
+        run_category(
+            "contract tests",
+            lambda: run_unittest_discover(
+                "contract", None, args.verbose,
+                timeout or DEFAULT_UNIT_TIMEOUT, args.silent
             )
         )
 

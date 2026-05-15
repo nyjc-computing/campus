@@ -25,15 +25,25 @@ table.delete_by_id("123")
 
 import dataclasses
 import json
+import os
 import sqlite3
-from typing import Any, Dict, List, Optional
+import threading
+from typing import Any, Optional
 
 from campus.common import devops
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors as storage_errors
-from campus.storage.query import gt, gte, is_operator, lt, lte
+from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 from ..interface import TableInterface, PK
+
+
+# Global connection cache and lock for thread-safe SQLite access
+# This ensures all SQLiteTable instances share a single connection per database,
+# preventing concurrent write conflicts that cause "database is locked" errors.
+_connections: dict[str, sqlite3.Connection] = {}
+_connection_locks: dict[str, threading.Lock] = {}
+_global_lock = threading.Lock()  # Protects the above dictionaries
 
 
 # Valid field constraint names
@@ -91,8 +101,23 @@ def _get_base_type(field_type):
     """Get the base Python type for a field type.
 
     Returns one of: bool, int, float, str (or None if not a recognized type).
-    Handles both built-in types and schema types (which are subclasses).
+    Handles both built-in types, schema types (which are subclasses),
+    and Union/Optional types (e.g., int | None, Optional[int]).
     """
+    import types
+    import typing
+
+    # Handle Union/Optional types (e.g., int | None, Optional[int])
+    # Check for both typing.Union (old syntax) and types.UnionType (Python 3.10+ syntax)
+    origin = typing.get_origin(field_type)
+    if origin is typing.Union or origin is types.UnionType:
+        args = typing.get_args(field_type)
+        # Recursively get the base type of the first non-None argument
+        for arg in args:
+            if arg is not type(None):
+                return _get_base_type(arg)
+        return None  # All arguments were None
+
     # If it's already a base type, return it directly
     if field_type in (bool, int, float, str):
         return field_type
@@ -167,25 +192,98 @@ class SQLiteTable(TableInterface):
     This implementation uses the full schema defined by the model, storing each
     field as a separate column in the SQLite table. This allows SQLite to enforce
     constraints properly during testing.
+
+    Each instance manages its own database connection. Multiple instances
+    can share the same database file for cross-table operations.
     """
 
-    # Class-level connection to ensure all tables share the same in-memory database
-    _connection: Optional[sqlite3.Connection] = None
+    # Class-level registry of all instances for reset_database()
+    _instances: list['SQLiteTable'] = []
 
-    def __init__(self, name: str):
-        """Initialize the SQLite table interface."""
+    def __init__(self, name: str, db_path: str | None = None):
+        """Initialize the SQLite table interface.
+
+        Args:
+            name: Table name
+            db_path: Database file path or ':memory:' for in-memory database.
+                     If None, auto-detects from test context (for testing only).
+        """
         super().__init__(name)
 
-    @classmethod
-    def get_connection(cls) -> sqlite3.Connection:
-        """Get the database connection, establishing it if needed."""
-        if cls._connection is None:
-            cls._connection = sqlite3.connect(
-                ":memory:", check_same_thread=False)
-            cls._connection.row_factory = sqlite3.Row
-        return cls._connection
+        # Auto-detect db_path in test context if not provided
+        if db_path is None:
+            # Check if configure_test_db() set a specific path
+            from campus.common import env
+            db_path = env.get('SQLITE_URI')
+            if not db_path:
+                # Fall back to auto-detection
+                from campus.storage.testing import get_test_db_path
+                db_path = get_test_db_path()
 
-    def _get_table_columns(self) -> List[str]:
+        self._initial_db_path: str = db_path
+        self._connection: Optional[sqlite3.Connection] = None
+
+        # Register this instance for reset_database()
+        SQLiteTable._instances.append(self)
+
+    @property
+    def db_path(self) -> str:
+        """Get the current database path.
+
+        This property checks the environment variable each time to ensure
+        that we use the correct path after reset_test_storage().
+        """
+        from campus.common import env
+        current_path = env.get('SQLITE_URI')
+        if current_path:
+            return current_path
+        return self._initial_db_path
+
+    def get_connection(self) -> sqlite3.Connection:
+        """Get the database connection, establishing it if needed.
+
+        Uses a shared connection per database path to prevent concurrent write
+        conflicts. All SQLiteTable instances accessing the same database file
+        share the same connection and lock.
+        """
+        # Check if we need to establish or refresh the connection
+        if self._connection is None:
+            # Use global connection cache to share connections across instances
+            with _global_lock:
+                # Get or create connection for this database path
+                if self.db_path not in _connections:
+                    conn = sqlite3.connect(
+                        self.db_path,
+                        check_same_thread=False,
+                        timeout=10.0  # Wait up to 10 seconds for locked database
+                    )
+                    conn.row_factory = sqlite3.Row
+                    # Enable WAL mode for better concurrency
+                    # This allows readers and writers to work simultaneously
+                    cursor = conn.cursor()
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                    # Set synchronous mode to NORMAL for better performance
+                    # WAL provides durability even with NORMAL synchronous mode
+                    cursor.execute("PRAGMA synchronous=NORMAL")
+                    cursor.close()
+
+                    _connections[self.db_path] = conn
+                    _connection_locks[self.db_path] = threading.Lock()
+
+                self._connection = _connections[self.db_path]
+        else:
+            # Verify the connection is still open (may have been closed by reset_database)
+            try:
+                # Execute a simple query to check if connection is alive
+                self._connection.execute("SELECT 1")
+            except sqlite3.ProgrammingError:
+                # Connection is closed, clear it and get a new one
+                self._connection = None
+                return self.get_connection()
+
+        return self._connection
+
+    def _get_table_columns(self) -> list[str]:
         """Get the list of column names for this table.
 
         Returns an empty list if the table doesn't exist yet.
@@ -200,7 +298,7 @@ class SQLiteTable(TableInterface):
             # Table doesn't exist yet
             return []
 
-    def _serialize_row(self, row: Dict[str, Any]) -> tuple:
+    def _serialize_row(self, row: dict[str, Any]) -> tuple:
         """Serialize a row for storage using actual table columns.
 
         This method gets the actual columns from the table and creates a tuple
@@ -216,7 +314,7 @@ class SQLiteTable(TableInterface):
             values.append(value)
         return tuple(values)
 
-    def _deserialize_row(self, sqlite_row) -> Dict[str, Any] | None:
+    def _deserialize_row(self, sqlite_row) -> dict[str, Any] | None:
         """Deserialize a row from storage using actual table columns.
 
         TODO: Type conversion issue - SQLite returns all values as strings in row_factory mode.
@@ -243,7 +341,7 @@ class SQLiteTable(TableInterface):
 
         return row
 
-    def get_by_id(self, row_id: str) -> Dict[str, Any]:
+    def get_by_id(self, row_id: str) -> dict[str, Any]:
         """Retrieve a row by its ID.
 
         Raises:
@@ -258,10 +356,10 @@ class SQLiteTable(TableInterface):
         return row
 
     @staticmethod
-    def _build_where_clause(query: Dict[str, Any]) -> tuple[str, list]:
+    def _build_where_clause(query: dict[str, Any]) -> tuple[str, list]:
         """Build WHERE clause from query dictionary.
 
-        Handles exact matches and comparison operators (gt, gte, lt, lte, between).
+        Handles exact matches and comparison operators (gt, gte, lt, lte, ne, between).
         Uses ? placeholders for SQLite parameter binding.
         """
         if not query:
@@ -286,6 +384,13 @@ class SQLiteTable(TableInterface):
                 elif isinstance(value, lte):
                     conditions.append(f'"{key}" <= ?')
                     params.append(value.value)
+                elif isinstance(value, ne):
+                    # Not equal: handle NULL values correctly using IS NOT NULL
+                    if value.value is None:
+                        conditions.append(f'"{key}" IS NOT NULL')
+                    else:
+                        conditions.append(f'"{key}" != ?')
+                        params.append(value.value)
                 elif isinstance(value, between_op):
                     # BETWEEN operator: key >= min AND key <= max
                     min_val, max_val = value.value
@@ -296,21 +401,24 @@ class SQLiteTable(TableInterface):
                     conditions.append(f'"{key}" = ?')
                     params.append(value.value)
             else:
-                # Exact match
-                conditions.append(f'"{key}" = ?')
-                params.append(value)
+                # Exact match - handle NULL values correctly using IS NULL
+                if value is None:
+                    conditions.append(f'"{key}" IS NULL')
+                else:
+                    conditions.append(f'"{key}" = ?')
+                    params.append(value)
 
         return f"WHERE {' AND '.join(conditions)}", params
 
     def get_matching(
         self,
-        query: Dict[str, Any],
+        query: dict[str, Any],
         *,
         order_by: str | None = None,
         ascending: bool = True,
         limit: int | None = None,
         offset: int = 0
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Retrieve rows matching a query.
 
         Supports exact matches, comparison operators (gt, gte, lt, lte),
@@ -339,7 +447,7 @@ class SQLiteTable(TableInterface):
         cursor.execute(sql, params)
         return [row for row in (self._deserialize_row(row) for row in cursor.fetchall()) if row is not None]
 
-    def insert_one(self, row: Dict[str, Any]):
+    def insert_one(self, row: dict[str, Any]):
         """Insert a row into the table using actual table columns."""
         conn = self.get_connection()
         columns = self._get_table_columns()
@@ -358,14 +466,16 @@ class SQLiteTable(TableInterface):
                 value = json.dumps(value)
             values.append(value)
 
-        cursor = conn.cursor()
-        cursor.execute(
-            f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
-            tuple(values)
-        )
-        conn.commit()
+        # Acquire lock for this database to prevent concurrent writes
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
+                tuple(values)
+            )
+            conn.commit()
 
-    def update_by_id(self, row_id: str, update: Dict[str, Any]):
+    def update_by_id(self, row_id: str, update: dict[str, Any]):
         """Update a row by its ID using actual table columns."""
         # Get the existing row
         existing_row = self.get_by_id(row_id)
@@ -398,14 +508,16 @@ class SQLiteTable(TableInterface):
         values.append(row_id)  # For the WHERE clause
         set_sql = ", ".join(set_clauses)
 
-        cursor = conn.cursor()
-        cursor.execute(
-            f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
-            tuple(values)
-        )
-        conn.commit()
+        # Acquire lock for this database to prevent concurrent writes
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
+                tuple(values)
+            )
+            conn.commit()
 
-    def update_matching(self, query: Dict[str, Any], update: Dict[str, Any]):
+    def update_matching(self, query: dict[str, Any], update: dict[str, Any]):
         """Update rows matching a query."""
         matching_rows = self.get_matching(query)
         for row in matching_rows:
@@ -414,11 +526,13 @@ class SQLiteTable(TableInterface):
     def delete_by_id(self, row_id: str):
         """Delete a row by its ID."""
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
-        conn.commit()
+        # Acquire lock for this database to prevent concurrent writes
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
+            conn.commit()
 
-    def delete_matching(self, query: Dict[str, Any]):
+    def delete_matching(self, query: dict[str, Any]):
         """Delete rows matching a query."""
         matching_rows = self.get_matching(query)
         for row in matching_rows:
@@ -452,12 +566,60 @@ class SQLiteTable(TableInterface):
         cursor.execute(schema)
         conn.commit()
 
+    def close(self):
+        """Close the database connection for this instance.
+
+        This should be called when the table instance is no longer needed.
+        For file-based databases, the connection can be reopened later.
+        """
+        if self._connection:
+            self._connection.close()
+            self._connection = None
+
     @classmethod
     def reset_database(cls):
-        """Reset the in-memory database. Useful for testing."""
-        if cls._connection:
-            cls._connection.close()
-            cls._connection = None
+        """Reset the test database file.
+
+        For file-based databases, deletes the temp file and resets the
+        environment variable so the next test class gets a fresh path.
+        For in-memory databases, this is a no-op.
+
+        Note: This is a class method that operates on the database file itself,
+        not on specific instances. All instances with connections to the same
+        file will need to close and reopen their connections after calling this.
+        """
+        # Close all connections from all instances and clear shared connections
+        with _global_lock:
+            # Close all shared connections
+            for db_path, conn in _connections.items():
+                try:
+                    conn.close()
+                except Exception:
+                    pass  # Ignore errors during cleanup
+            _connections.clear()
+            _connection_locks.clear()
+
+            # Clear instance connections
+            for instance in cls._instances:
+                instance._connection = None
+
+        # Get the current test database path
+        from campus.storage.testing import get_test_db_path
+        db_path = get_test_db_path()
+
+        # Delete temp file if it exists
+        if db_path and db_path != ":memory:":
+            try:
+                os.unlink(db_path)
+            except FileNotFoundError:
+                pass  # File doesn't exist, no problem
+
+        # Clear the instance registry
+        cls._instances.clear()
+
+        # Reset the environment variable so the next test class starts fresh
+        if 'SQLITE_URI' in os.environ:
+            del os.environ['SQLITE_URI']
 
     @classmethod
     def clear_database(cls):
@@ -465,17 +627,47 @@ class SQLiteTable(TableInterface):
 
         This is faster than reset_database() for per-test cleanup since it
         doesn't require recreating tables. Useful for test isolation.
+
+        Note: This is a class method that operates on the database file itself.
+        It uses the shared connection with proper locking to clear all tables.
         """
-        if cls._connection is None:
-            return  # No database to clear
+        # Use the same path resolution as the db_path property
+        # to ensure we clear the correct database file
+        from campus.common import env
+        db_path = env.get('SQLITE_URI')
+        if not db_path:
+            # Fall back to auto-detection if SQLITE_URI not set
+            from campus.storage.testing import get_test_db_path
+            db_path = get_test_db_path()
 
-        cursor = cls._connection.cursor()
-        # Get all table names
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = [row[0] for row in cursor.fetchall()]
+        if db_path == ":memory:":
+            return  # Can't clear shared in-memory database
 
-        # Delete all rows from each table
-        for table in tables:
-            cursor.execute(f'DELETE FROM "{table}"')
+        try:
+            # Use shared connection if available, otherwise create temporary one
+            with _global_lock:
+                if db_path in _connections:
+                    conn = _connections[db_path]
+                    lock = _connection_locks[db_path]
+                else:
+                    # Create temporary connection with lock
+                    conn = sqlite3.connect(db_path, timeout=10.0)
+                    lock = threading.Lock()
+                    _connections[db_path] = conn
+                    _connection_locks[db_path] = lock
 
-        cls._connection.commit()
+            # Use lock to prevent concurrent writes during clear
+            with lock:
+                cursor = conn.cursor()
+
+                # Get all table names
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cursor.fetchall()]
+
+                # Delete all rows from each table
+                for table in tables:
+                    cursor.execute(f'DELETE FROM "{table}"')
+
+                conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Database doesn't exist yet

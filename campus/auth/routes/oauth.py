@@ -229,6 +229,11 @@ def _handle_device_code_grant(
         raise token_errors.InvalidGrantError(
             "Invalid or expired device code"
         )
+    except api_errors.InvalidRequestError:
+        # Device code has expired
+        raise token_errors.ExpiredTokenError(
+            "The device code has expired"
+        )
 
     # Check the state of the device code
     if dc.state == "pending":
@@ -352,23 +357,24 @@ def device_verification(user_code: str | None = None):
     GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
     POST /device - Handles form submission for non-JS clients
     """
-    from flask import render_template_string, request, redirect, session, url_for
+    from flask import render_template_string, request, redirect, session
     import html
 
     # Check if user is authenticated (for both GET and POST)
+    # User must be logged in to authorize a device code
     user_id = session.get('user_id')
     if not user_id:
         # User not logged in - redirect to Google OAuth login
         # After login, they'll return to this page to authorize the device
-        login_callback = url_for('auth.oauth.device_verification', _external=True)
+        login_callback = flask.url_for('auth.oauth.device_verification', _external=True)
         if user_code:
             login_callback += f"/{user_code}"
-        oauth_authorize_url = url_for(
+        oauth_authorize_url = flask.url_for(
             'auth.google.authorize',
             _external=True,
             target=login_callback
         )
-        return redirect(oauth_authorize_url)
+        return flask.redirect(oauth_authorize_url)
 
     # Handle POST for non-JS fallback
     if request.method == "POST":
@@ -736,7 +742,8 @@ def device_verification(user_code: str | None = None):
                 }
 
                 // Check if user is logged in
-                const response = await fetch('/api/v1/users/me', {
+                // Use relative path since /users/me is now under /oauth/
+                const response = await fetch('./users/me', {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -759,7 +766,7 @@ def device_verification(user_code: str | None = None):
                 submitBtn.innerHTML = 'Processing <span class="spinner"></span>';
 
                 try {
-                    const authResponse = await fetch('/api/v1/oauth/device/authorize', {
+                    const authResponse = await fetch('./device/authorize', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -983,6 +990,26 @@ def device_authorize_submit(
     return {"success": True}, 200
 
 
+@bp.get("/users/me")
+def users_me() -> flask_campus.JsonResponse:
+    """Get the current authenticated user from session.
+
+    GET /oauth/users/me
+    Returns: User
+
+    This endpoint is used by the device verification page to check if
+    the user is authenticated. It returns the user from the Flask session
+    without requiring additional authentication headers.
+    """
+    user_id = flask.session.get('user_id')
+    if not user_id:
+        raise api_errors.UnauthorizedError(
+            "Not authenticated",
+            error_code="NOT_AUTHENTICATED"
+        )
+    return {"user": {"id": str(user_id)}}, 200
+
+
 def create_blueprint() -> flask.Blueprint:
     """Create a fresh blueprint with OAuth routes for test isolation.
 
@@ -997,5 +1024,6 @@ def create_blueprint() -> flask.Blueprint:
     new_bp.add_url_rule("/device", "device_verification", device_verification, methods=["GET", "POST"])
     new_bp.add_url_rule("/device/<user_code>", "device_verification_prefilled", device_verification, methods=["GET", "POST"])
     new_bp.add_url_rule("/device/authorize", "device_authorize_submit", device_authorize_submit, methods=["POST"])
+    new_bp.add_url_rule("/users/me", "users_me", users_me, methods=["GET"])
 
     return new_bp

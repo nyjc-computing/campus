@@ -7,6 +7,7 @@ application.
 from typing import Protocol, runtime_checkable
 
 import flask
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from campus.common import devops, env, introspect
 import campus.common.errors
@@ -106,6 +107,25 @@ def configure_for_deployment(app: flask.Flask) -> None:
     return
 
 
+def _is_tracing_enabled() -> bool:
+    """Check if audit tracing middleware is enabled.
+
+    Reads AUDIT_TRACING_ENABLED environment variable and validates it.
+    Defaults to enabled (True) for safety - tracing is critical for observability.
+
+    Returns:
+        True if tracing is enabled, False if explicitly disabled
+
+    Raises:
+        OSError: If AUDIT_TRACING_ENABLED has an invalid value (not "0" or "1")
+    """
+    from campus.common import env
+
+    # Use get_flag() for automatic "1"/"0" to bool conversion with validation
+    # Default to enabled (True) for safety - tracing is critical for observability
+    return env.get_flag("AUDIT_TRACING_ENABLED", True)
+
+
 def create_app(*appmodules: AppModule) -> flask.Flask:
     """Single entrypoint for creating a deployment app.
 
@@ -119,11 +139,25 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
         module.init_app(app)
     campus.common.errors.init_app(app)
 
+    # Fix scheme/redirect issues when behind reverse proxy (Railway, Nginx, etc.)
+    # Railway sends X-Forwarded-Proto, X-Forwarded-Host, X-Forwarded-For headers
+    # ProxyFix ensures Flask url_for() generates correct https URLs
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=1,          # X-Forwarded-For (client IP)
+        x_proto=1,        # X-Forwarded-Proto (scheme) <-- fixes http/https
+        x_host=1,         # X-Forwarded-Host (original host)
+        x_prefix=1,       # X-Forwarded-Prefix (if using subpaths)
+    )
+
     # Register tracing middleware for auth/api deployments
     # campus.audit handles ingestion but doesn't trace its own requests
+    # Controlled by AUDIT_TRACING_ENABLED environment variable (default: enabled)
     if env.DEPLOY in ('campus.auth', 'campus.api'):
         from campus.audit import middleware
-        # Disable for now; causing NotFoundError
-        # middleware.init_app(app)
+
+        # Check if tracing is enabled (default: enabled for safety)
+        if _is_tracing_enabled():
+            middleware.init_app(app)
 
     return app

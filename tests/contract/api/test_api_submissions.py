@@ -11,9 +11,9 @@ Submissions Endpoints Reference:
 - POST   /submissions/                              - Create a new submission
 - GET    /submissions/by-assignment/{assignment_id} - List submissions by assignment
 - GET    /submissions/by-student/{student_id}       - List submissions by student
-- GET    /submissions/{submission_id}               - Get a single submission
-- PATCH  /submissions/{submission_id}               - Update a submission
-- DELETE /submissions/{submission_id}               - Delete a submission
+- GET    /submissions/{submission_id}/              - Get a single submission
+- PATCH  /submissions/{submission_id}/              - Update a submission
+- DELETE /submissions/{submission_id}/              - Delete a submission
 - POST   /submissions/{submission_id}/responses     - Add a response to a submission
 - POST   /submissions/{submission_id}/feedback      - Add feedback to a submission (requires user context)
 - POST   /submissions/{submission_id}/submit        - Finalize/submit a submission
@@ -32,8 +32,6 @@ class TestApiSubmissionsContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Reset storage before starting tests to ensure clean state
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
         cls.manager = services.create_service_manager()
         cls.manager.initialize()
@@ -52,8 +50,6 @@ class TestApiSubmissionsContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed
@@ -239,7 +235,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
         submission_id = self._create_test_submission()
 
         response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
 
@@ -252,7 +248,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
     def test_get_missing_submission_returns_error(self):
         """GET /submissions/{submission_id} for non-existent submission returns error."""
         response = self.client.get(
-            "/api/v1/submissions/nonexistent_id",
+            "/api/v1/submissions/nonexistent_id/",
             headers=self.auth_headers
         )
 
@@ -266,7 +262,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
             {"question_id": "q1", "response_text": "Updated answer"},
         ]
         response = self.client.patch(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             json={"responses": new_responses},
             headers=self.auth_headers
         )
@@ -277,7 +273,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         # Verify the update
         get_response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
         submission_data = get_response.get_json()
@@ -291,7 +287,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
             {"question_id": "q1", "feedback_text": "Good answer!", "teacher_id": str(self.user_id)},
         ]
         response = self.client.patch(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             json={"feedback": new_feedback},
             headers=self.auth_headers
         )
@@ -308,7 +304,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
         submitted_at = datetime.now(timezone.utc).isoformat()
 
         response = self.client.patch(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             json={"submitted_at": submitted_at},
             headers=self.auth_headers
         )
@@ -322,7 +318,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
         submission_id = self._create_test_submission()
 
         response = self.client.patch(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             json={},
             headers=self.auth_headers
         )
@@ -341,7 +337,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
         intentional (idempotent updates) or a bug.
         """
         response = self.client.patch(
-            "/api/v1/submissions/nonexistent_id",
+            "/api/v1/submissions/nonexistent_id/",
             json={"responses": [{"question_id": "q1", "response_text": "Answer"}]},
             headers=self.auth_headers
         )
@@ -356,7 +352,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
         submission_id = self._create_test_submission()
 
         response = self.client.delete(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
 
@@ -366,7 +362,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         # Verify it's deleted
         get_response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
         self.assertIn(get_response.status_code, (404, 409))
@@ -374,7 +370,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
     def test_delete_missing_submission_returns_error(self):
         """DELETE /submissions/{submission_id} for non-existent submission returns error."""
         response = self.client.delete(
-            "/api/v1/submissions/nonexistent_id",
+            "/api/v1/submissions/nonexistent_id/",
             headers=self.auth_headers
         )
 
@@ -399,7 +395,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         # Verify the response was added
         get_response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
         submission_data = get_response.get_json()
@@ -427,7 +423,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         # Verify the response was updated (not duplicated)
         get_response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
         submission_data = get_response.get_json()
@@ -454,7 +450,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         # Verify the feedback was added
         get_response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
         submission_data = get_response.get_json()
@@ -491,7 +487,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         # Verify the feedback was updated (not duplicated)
         get_response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
         submission_data = get_response.get_json()
@@ -514,7 +510,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
 
         # Verify the submission was marked as submitted
         get_response = self.client.get(
-            f"/api/v1/submissions/{submission_id}",
+            f"/api/v1/submissions/{submission_id}/",
             headers=self.auth_headers
         )
         submission_data = get_response.get_json()

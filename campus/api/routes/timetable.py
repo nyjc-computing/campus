@@ -5,22 +5,39 @@ API routes for the Timetable resource.
 
 import flask
 
-import campus.model.timetable as tt
-import campus.yapper
 from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
 from ..resources import timetable as timetable_resource
 
-import campus.storage
-import campus.model
-
 bp = flask.Blueprint('timetable', __name__, url_prefix='/timetable')
+
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise timetable routes with the given Flask app/blueprint."""
     app.register_blueprint(bp)
+
+
+@bp.get('/')
+@flask_campus.unpack_request
+def list_timetables() -> flask_campus.JsonResponse:
+    """Summary:
+        List all timetable metadata records.
+
+    Method:
+        GET /timetable/
+
+    Query Parameters:
+        None
+
+    Responses:
+        200 OK: dict
+            {"data": [timetable metadata resources]}
+    """
+    result = timetable_resource.list()
+    return {"data": [timetable.to_resource() for timetable in result]}, 200
+
 
 @bp.get('/current')
 @flask_campus.unpack_request
@@ -116,28 +133,37 @@ def new(
             Metadata for the timetable, e.g. start and end date.
 
         data: dict
-            The actual timetable data, e.g. entries.
+            The actual timetable data, e.g. lesson groups and entries.
 
     Responses:
         200 OK: dict
-           {"data": timetable resource}
+           {"data": timetable resource with labeled entries}
 
         400 Bad Request: dict
             {"error": error message}
     """
-
-    try:
-        timetable = timetable_resource.new(**metadata, lessongroups=data['lessongroups'])
-    except Exception as e:
-        return {'error': e}, 400
-
+    if "lessongroups" not in data:
+        details = {}
+        if "lesson_groups" in data:
+            details["suggestion"] = (
+                "Hint: 'lesson_groups' should be renamed to "
+                "'lessongroups'"
+            )
+        raise api_errors.InvalidRequestError(
+            "'data' object requires 'lessongroups' property",
+            **details
+        )
+    timetable = timetable_resource.new(
+        metadata=metadata,
+        lessongroups=data["lessongroups"]
+    )
     return {"data": timetable.to_resource()}, 200
 
 @bp.get('/<timetable_id>/')
 @flask_campus.unpack_request
 def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Summary:
-        Returns timetable metadata and entries in a single JSON object.
+        Returns timetable metadata and labeled entries in a single JSON object.
     Method:
         GET /timetable/<timetable_id>/
     Path Parameters:
@@ -166,7 +192,7 @@ def get_timetable_entries(timetable_id: schema.CampusID) -> flask_campus.JsonRes
 
     Responses:
         200 OK: dict
-            {"entries": [timetable entry resources]}
+            {"entries": [timetable entry resources with labels]}
     """
     result = timetable_resource[timetable_id].entries.list()
     return {'entries': [entry.to_resource() for entry in result]}, 200

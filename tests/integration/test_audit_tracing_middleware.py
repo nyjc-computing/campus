@@ -27,8 +27,7 @@ import unittest
 from unittest.mock import patch
 
 from campus.common import env
-from campus.audit.resources.traces import TracesResource
-from tests.fixtures.tokens import get_basic_auth_headers
+from tests.fixtures.tokens import get_basic_auth_headers, get_bearer_auth_headers
 from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
 
 
@@ -55,7 +54,13 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
         # Get audit client credentials for authenticated requests
         cls.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
-        # SOLUTION: Initialize traces storage ONCE per test class
+        # CRITICAL: Lazy import TracesResource AFTER test mode is configured
+        # Importing before test mode is configured causes PostgreSQL backend to be
+        # used instead of SQLite, leading to connection errors and missing secrets.
+        # See AGENTS.md - Storage Initialization Order
+        from campus.audit.resources.traces import TracesResource
+
+        # Initialize traces storage ONCE per test class
         # Since init_from_model uses CREATE TABLE IF NOT EXISTS, this is idempotent
         # The table will be preserved by clear_test_data() during setUp()
         TracesResource.init_storage()
@@ -90,6 +95,11 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
 
         # Create auth headers for authenticated requests to auth service
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+
+        # Create Bearer auth headers for audit service (requires audit API key)
+        # The audit service uses Bearer token authentication (ACCESS_TOKEN) instead of
+        # Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services
+        self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
 
         # Reset audit client singleton to ensure fresh client for each test
         from campus.audit.middleware import tracing
@@ -172,7 +182,13 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         """Set up services for the test class using new API."""
         super().setUpClass()  # Uses new API: initialize()
 
-        # SOLUTION: Initialize traces storage ONCE per test class
+        # CRITICAL: Lazy import TracesResource AFTER test mode is configured
+        # Importing before test mode is configured causes PostgreSQL backend to be
+        # used instead of SQLite, leading to connection errors and missing secrets.
+        # See AGENTS.md - Storage Initialization Order
+        from campus.audit.resources.traces import TracesResource
+
+        # Initialize traces storage ONCE per test class
         # Since init_from_model uses CREATE TABLE IF NOT EXISTS, this is idempotent
         # The table will be preserved by clear_test_data() during setUp()
         TracesResource.init_storage()
@@ -307,6 +323,11 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         # Create auth headers for authenticated requests to auth service
         self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
 
+        # Create Bearer auth headers for audit service (requires audit API key)
+        # The audit service uses Bearer token authentication (ACCESS_TOKEN) instead of
+        # Basic auth (CLIENT_ID/CLIENT_SECRET) used by auth/api services
+        self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
+
         # Reset audit client singleton to ensure fresh client for each test
         from campus.audit.middleware import tracing
         tracing._audit_client = None
@@ -345,7 +366,7 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         """
         response = self.audit_client.get(
             f"/audit/v1/traces/{trace_id}/spans/",
-            headers=self.auth_headers
+            headers=self.audit_headers  # Use Bearer auth for audit service
         )
         if response.status_code != 200:
             return None

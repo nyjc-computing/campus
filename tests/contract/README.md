@@ -15,7 +15,9 @@ its HTTP interface:
 
 ## Test Files
 
-### Auth Service Contracts
+Contract tests are organized by service area into subdirectories:
+
+### Auth Service Contracts (`auth/`)
 
 | File | Invariants Tested |
 |------|-------------------|
@@ -26,7 +28,7 @@ its HTTP interface:
 | `test_auth_users.py` | User CRUD, activation flows |
 | `test_auth_logins.py` | Login endpoint redirects, error handling |
 
-### API Service Contracts
+### API Service Contracts (`api/`)
 
 | File | Invariants Tested |
 |------|-------------------|
@@ -34,6 +36,13 @@ its HTTP interface:
 | `test_api_circles.py` | Circle CRUD, member management |
 | `test_api_submissions.py` | Submission CRUD, classroom link handling |
 | `test_api_emailotp.py` | Email OTP generation, validation |
+
+### Audit Service Contracts (`audit/`)
+
+| File | Invariants Tested |
+|------|-------------------|
+| `test_audit_traces.py` | Audit trace creation, retrieval, filtering |
+| `test_audit_apikeys.py` | API key audit logging, validation |
 
 ## HTTP Invariants by Service
 
@@ -74,8 +83,13 @@ All endpoints must:
 # Run all contract tests
 poetry run python -m unittest discover -s tests/contract -p "test_*.py"
 
+# Run specific service area tests
+poetry run python -m unittest discover -s tests/contract/api -p "test_*.py"
+poetry run python -m unittest discover -s tests/contract/auth -p "test_*.py"
+poetry run python -m unittest discover -s tests/contract/audit -p "test_*.py"
+
 # Run specific contract test
-poetry run python -m unittest tests.contract.test_auth_vault -v
+poetry run python -m unittest tests.contract.auth.test_auth_vault -v
 
 # Run with verbose output
 poetry run python -m unittest discover -s tests/contract -v

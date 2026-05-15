@@ -23,8 +23,6 @@ class TestAuthVaultContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         self.client = self.app.test_client()

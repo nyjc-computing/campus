@@ -7,6 +7,8 @@ from .login_manager import OAuthLoginManager
 from .types import (
     HtmlResponse,
     JsonResponse,
+    JsonViewFunction,
+    ViewFunctionDecorator,
 )
 from .utils import (
     get_request_headers,
@@ -22,7 +24,9 @@ from .utils import (
 __all__ = [
     "HtmlResponse",
     "JsonResponse",
+    "JsonViewFunction",
     "OAuthLoginManager",
+    "ViewFunctionDecorator",
     "get_user_agent",
     "get_request_headers",
     "get_request_payload",

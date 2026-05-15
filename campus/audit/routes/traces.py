@@ -13,6 +13,7 @@ import campus.flask_campus as flask_campus
 from campus.common.errors import api_errors
 
 from ..resources import traces as traces_resource
+from ..helpers import audit_events
 
 # Create blueprint for trace routes
 bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
@@ -20,9 +21,10 @@ bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
 
 @bp.post("/")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.traces.ingest")
 def ingest_spans(
-    *,
-    spans: list[dict[str, Any]],
+        *,
+        spans: list[dict[str, Any]],
 ) -> flask_campus.JsonResponse:
     """Ingest trace spans (batch or single).
 
@@ -62,24 +64,36 @@ def ingest_spans(
         201 Created with span IDs on success
         207 Multi-Status on partial failure
         400 Bad Request on invalid input
+
+    Note:
+        Audit events are emitted for both successful ingestions (201/207)
+        and validation failures (400) via the @audit_event decorator.
+        The decorator uses flask.after_this_request to capture the final
+        response after error handlers run, so failed ingestions are logged
+        with error details.
     """
-    # Convert dicts to TraceSpan models
+    # Convert dicts to TraceSpan models with validation
     import campus.model as model
-    span_models = [
-        model.TraceSpan.from_resource(span_dict)
-        for span_dict in spans
-    ]
+    try:
+        span_models = [
+            model.TraceSpan.from_resource(span_dict)
+            for span_dict in spans
+        ]
+    except (KeyError, TypeError, ValueError) as e:
+        raise api_errors.InvalidRequestError(f"Invalid span data: {e}")
+
     result = traces_resource.ingest(span_models)
     return result, 201
 
 
 @bp.get("/")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.traces.list")
 def list_traces(
-    *,
-    since: str | None = None,
-    until: str | None = None,
-    limit: int = 50,
+        *,
+        since: str | None = None,
+        until: str | None = None,
+        limit: str | int = 50,
 ) -> flask_campus.JsonResponse:
     """List recent traces, newest first.
 
@@ -96,14 +110,17 @@ def list_traces(
         JSON: {"traces": [...], "cursor": {"next": "...", "has_more": true}}
         Text: Compact trace list with pagination hint
     """
-    summaries = traces_resource.list(since=since, until=until, limit=limit)
+    # Convert limit to int if it's a string from query parameters
+    limit_int = int(limit) if isinstance(limit, str) else limit
+    summaries = traces_resource.list(since=since, until=until, limit=limit_int)
     return {
         "traces": [s.to_resource() for s in summaries],
         "cursor": {"next": None, "has_more": False}
     }, 200
 
 
-@bp.get("/<trace_id>/")
+@bp.get("/<trace_id>")
+@audit_events.audit_event("audit.traces.get")
 def get_trace(trace_id: str) -> flask_campus.JsonResponse:
     """Get full trace tree with child spans.
 
@@ -124,7 +141,8 @@ def get_trace(trace_id: str) -> flask_campus.JsonResponse:
     return tree.to_resource(), 200
 
 
-@bp.get("/<trace_id>/spans/")
+@bp.get("/<trace_id>/spans")
+@audit_events.audit_event("audit.traces.spans.list")
 def list_spans(trace_id: str) -> flask_campus.JsonResponse:
     """List all spans in a trace (flat list).
 
@@ -140,7 +158,8 @@ def list_spans(trace_id: str) -> flask_campus.JsonResponse:
     }, 200
 
 
-@bp.get("/<trace_id>/spans/<span_id>/")
+@bp.get("/<trace_id>/spans/<span_id>")
+@audit_events.audit_event("audit.traces.spans.get")
 def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
     """Get single span detail including full headers and bodies.
 
@@ -161,16 +180,17 @@ def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
 
 @bp.get("/search")
 @flask_campus.unpack_request
+@audit_events.audit_event("audit.traces.search")
 def search_traces(
-    *,
-    path: str | None = None,
-    status: int | None = None,
-    api_key_id: str | None = None,
-    client_id: str | None = None,
-    user_id: str | None = None,
-    since: str | None = None,
-    until: str | None = None,
-    limit: int = 50,
+        *,
+        path: str | None = None,
+        status: str | int | None = None,
+        api_key_id: str | None = None,
+        client_id: str | None = None,
+        user_id: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: str | int = 50,
 ) -> flask_campus.JsonResponse:
     """Filter and search traces.
 
@@ -189,15 +209,19 @@ def search_traces(
     Returns:
         Filtered trace list matching criteria
     """
+    # Convert parameters to int if they're strings from query parameters
+    limit_int = int(limit) if isinstance(limit, str) else limit
+    status_int = int(status) if isinstance(status, str) else status
+
     summaries = traces_resource.search(
         path=path,
-        status=status,
+        status=status_int,
         api_key_id=api_key_id,
         client_id=client_id,
         user_id=user_id,
         since=since,
         until=until,
-        limit=limit,
+        limit=limit_int,
     )
     return {
         "traces": [s.to_resource() for s in summaries],

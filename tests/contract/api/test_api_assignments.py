@@ -9,9 +9,9 @@ This is enforced via before_request hook in the API blueprint.
 Assignments Endpoints Reference:
 - GET    /assignments/                      - List all assignments with optional filters
 - POST   /assignments/                      - Create a new assignment
-- GET    /assignments/{assignment_id}       - Get a single assignment
-- PATCH  /assignments/{assignment_id}       - Update an assignment
-- DELETE /assignments/{assignment_id}       - Delete an assignment
+- GET    /assignments/{assignment_id}/      - Get a single assignment
+- PATCH  /assignments/{assignment_id}/      - Update an assignment
+- DELETE /assignments/{assignment_id}/      - Delete an assignment
 - POST   /assignments/{assignment_id}/links - Add a Classroom link
 """
 
@@ -28,8 +28,6 @@ class TestApiAssignmentsContract(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Reset storage before starting tests to ensure clean state
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
         cls.manager = services.create_service_manager()
         cls.manager.initialize()
@@ -43,8 +41,6 @@ class TestApiAssignmentsContract(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.manager.cleanup()
-        import campus.storage.testing
-        campus.storage.testing.reset_test_storage()
 
     def setUp(self):
         # Clear test data - no manual resource initialization needed
@@ -195,7 +191,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.get(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             headers=self.auth_headers
         )
 
@@ -220,7 +216,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
     def test_get_missing_assignment_returns_error(self):
         """GET /assignments/{assignment_id} for non-existent assignment returns error."""
         response = self.client.get(
-            "/api/v1/assignments/nonexistent_id",
+            "/api/v1/assignments/nonexistent_id/",
             headers=self.auth_headers
         )
 
@@ -231,7 +227,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.patch(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             json={"title": "Updated Title"},
             headers=self.auth_headers
         )
@@ -242,7 +238,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         # Verify the update
         get_response = self.client.get(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             headers=self.auth_headers
         )
         assignment_data = get_response.get_json()
@@ -253,7 +249,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.patch(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             json={"description": "Updated description"},
             headers=self.auth_headers
         )
@@ -271,7 +267,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
             {"id": "q2", "prompt": "p2", "question": "New question 2"},
         ]
         response = self.client.patch(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             json={"questions": new_questions},
             headers=self.auth_headers
         )
@@ -283,7 +279,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.patch(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             json={
                 "title": "New Title",
                 "description": "New Description",
@@ -295,7 +291,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         # Verify both updates
         get_response = self.client.get(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             headers=self.auth_headers
         )
         assignment_data = get_response.get_json()
@@ -307,7 +303,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.patch(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             json={},
             headers=self.auth_headers
         )
@@ -323,7 +319,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.patch(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             json={"title": "Updated Title"},
         )
 
@@ -341,7 +337,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         intentional (idempotent updates) or a bug.
         """
         response = self.client.patch(
-            "/api/v1/assignments/nonexistent_id",
+            "/api/v1/assignments/nonexistent_id/",
             json={"title": "Updated Title"},
             headers=self.auth_headers
         )
@@ -356,7 +352,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.delete(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             headers=self.auth_headers
         )
 
@@ -366,7 +362,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         # Verify it's deleted
         get_response = self.client.get(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             headers=self.auth_headers
         )
         self.assertIn(get_response.status_code, (404, 409))
@@ -376,7 +372,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         assignment_id = self._create_test_assignment()
 
         response = self.client.delete(
-            f"/api/v1/assignments/{assignment_id}"
+            f"/api/v1/assignments/{assignment_id}/"
         )
 
         self.assertEqual(response.status_code, 401)
@@ -388,7 +384,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
     def test_delete_missing_assignment_returns_error(self):
         """DELETE /assignments/{assignment_id} for non-existent assignment returns error."""
         response = self.client.delete(
-            "/api/v1/assignments/nonexistent_id",
+            "/api/v1/assignments/nonexistent_id/",
             headers=self.auth_headers
         )
 
@@ -414,7 +410,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
 
         # Verify the link was added
         get_response = self.client.get(
-            f"/api/v1/assignments/{assignment_id}",
+            f"/api/v1/assignments/{assignment_id}/",
             headers=self.auth_headers
         )
         assignment_data = get_response.get_json()

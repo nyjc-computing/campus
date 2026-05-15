@@ -100,7 +100,7 @@ def create_assignment(
     return resource, 201
 
 
-@bp.get('/<string:assignment_id>')
+@bp.get('/<string:assignment_id>/')
 def get_assignment(assignment_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Get a single assignment by ID.
@@ -116,7 +116,7 @@ def get_assignment(assignment_id: str) -> flask_campus.JsonResponse:
     return assignment.to_resource(), 200
 
 
-@bp.patch('/<string:assignment_id>')
+@bp.patch('/<string:assignment_id>/')
 @flask_campus.unpack_request
 def update_assignment(
     *,
@@ -163,7 +163,7 @@ def update_assignment(
     return {}, 200
 
 
-@bp.delete('/<string:assignment_id>')
+@bp.delete('/<string:assignment_id>/')
 def delete_assignment(assignment_id: str) -> flask_campus.JsonResponse:
     """Summary:
         Delete an assignment.

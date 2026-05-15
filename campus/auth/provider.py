@@ -290,7 +290,6 @@ def token(
 @flask_campus.unpack_request
 def verify_login_and_redirect(
         state: schema.CampusID,  # session id
-        user: schema.UserID | str  # May come as string from query param
 ) -> werkzeug.Response:
     """Verify if the user is logged in. Default callback handler after
     Google auth
@@ -303,15 +302,18 @@ def verify_login_and_redirect(
 
     Query Parameters:
         state: CampusID - Campus session ID (preserved through Google flow)
-        user: UserID - User ID from Google authentication
 
     Responses:
         302 Found: Redirect to app callback (redirect_uri) with authorization code
         401 Not authenticated: User domain not allowed or no valid Google credential
     """
-    # Ensure user is a UserID object (convert from string if needed)
-    if isinstance(user, str):
-        user = schema.UserID(user)
+    # Get user from Flask session (set by Google OAuth callback)
+    user_str = flask.session.get('user_id')
+    if not user_str:
+        raise auth_errors.AuthorizationError(
+            "User not found in session - authentication required",
+        )
+    user = schema.UserID(user_str)
 
     # Verify domain is permitted
     if not user.domain == env.WORKSPACE_DOMAIN:

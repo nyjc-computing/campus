@@ -7,125 +7,140 @@ Audit service for tracing and monitoring Campus services.
 # use within campus.audit only.
 __all__ = ["init_app"]
 
-from typing import Any
+import logging
+logger = logging.getLogger(__name__)
 
-import campus_python
 import flask
 
-from campus.auth.middleware import Authenticator
-from campus.common import env
-from campus.common import schema
-from campus.common.errors import auth_errors
+from campus.common import webauth
+from campus.common.errors import auth_errors, api_errors
+from campus.common.utils import secret
 
-# Other local imports are intentionally omitted to avoid circular
-# dependencies.
-
-# Lazily initialized campus client - set in init_app() after test fixtures are ready
-# This prevents connection to external services during module import in tests
-# Type: ignore because we initialize these in init_app() before first use
-campus: campus_python.Campus = None  # type: ignore
+from . import resources
+from .helpers import audit_events
 
 
-def _audit_getsecret(name: str) -> str:
-    """Get secret from vault for campus.audit deployment.
+def _authenticate_audit_api_key() -> None:
+    """Validate API key for audit endpoints using webauth.
 
-    This function is registered with env.register_getsecret() to provide
-    deployment-specific vault access for campus.audit.
+    This function does not use campus.auth to avoid circular
+    dependencies.
 
-    Args:
-        name: Name of the secret to retrieve
-
-    Returns:
-        The secret value from the vault
+    Sets flask.g.api_key_id for tracing middleware.
 
     Raises:
-        OSError: If DEPLOY environment variable is not set
-        api_errors.InternalError: If the secret is not found in the vault
+        UnauthorizedError: if API key is invalid or missing
+
     """
-    from campus.common import env
-    from campus.common.errors import api_errors
+    from .helpers.audit_events import _extract_request_context, emit_audit_event, FlaskResponseContext
+    from campus.common import schema
+    import time
 
-    deployment = env.get("DEPLOY")
-    if deployment is None:
-        raise OSError("Environment variable 'DEPLOY' required")
+    request_context = _extract_request_context(flask.request)
+    started_at = schema.DateTime.utcnow()
+    start_ns = time.perf_counter_ns()
 
-    import campus_python
-    campus_auth = campus_python.Campus(timeout=60).auth
+    # Create minimal response context for auth events (no real response yet)
+    def make_response_context(status_code: int) -> FlaskResponseContext:
+        return {
+            "status_code": status_code,
+            "headers": {},
+            "body": {},
+        }
+
     try:
-        return campus_auth.vaults[deployment][name]
-    except KeyError:
-        raise api_errors.InternalError(
-            f"Vault secret '{name}' not found in label '{deployment}'"
+        httpauth = webauth.http.HttpAuthenticationScheme.with_header(
+            provider="campus",
+            http_header=dict(flask.request.headers)
+        )
+    except auth_errors.AuthorizationError:
+        # No Authorization header present - emit audit event and raise proper error for 401 response
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Missing API key"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
+        )
+        raise api_errors.UnauthorizedError("Missing API key")
+
+    # Extract API key from Bearer token
+    api_key = httpauth.token
+
+    # Validate format
+    if not secret.is_valid_audit_api_key_format(api_key):
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Invalid API key format"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
+        )
+        raise api_errors.UnauthorizedError(
+            f"Invalid API key format. Expected: audit_v1_<22-char-base64url>"
         )
 
-
-def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
-    """Authenticate using HTTP Basic Authentication."""
-    try:
-        auth_result = campus.auth.root.authenticate(
-            client_id=schema.CampusID(client_id),
-            client_secret=client_secret
+    # Verify against database
+    api_key_id = resources.apikeys.verify(api_key)
+    if not api_key_id:
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Invalid API key"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
         )
-    except campus_python.errors.AuthenticationError:
-        raise auth_errors.UnauthorizedClientError(
-            "Invalid client credentials"
-        )
-    return {
-        "client": auth_result["client"],
-        "user": None,
-    }
+        raise api_errors.UnauthorizedError("Invalid API key")
 
+    # Success - emit audit event
+    emit_audit_event(
+        data={"event_type": "audit.apikeys.auth.success", "api_key_id": api_key_id},
+        api_key_id=api_key_id,
+        parent_span_id=None,
+        started_at=started_at,
+        duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+        request_context=request_context,
+        response_context=make_response_context(200),
+    )
 
-def bearer_authenticate(token: str) -> dict[str, Any]:
-    """Authenticate using HTTP Bearer Authentication."""
-    try:
-        auth_result = campus.auth.root.authenticate(token=token)
-    except campus_python.errors.AuthenticationError:
-        raise auth_errors.UnauthorizedClientError(
-            "Invalid access token"
-        )
-    return {
-        "client": auth_result["client"],
-        "user": auth_result.get("user"),
-    }
-
-
-# Create authenticator using campus_python (same as campus.api)
-audit_authenticator = Authenticator(
-    basic_authenticator=basic_authenticate,
-    bearer_authenticator=bearer_authenticate,
-)
+    flask.g.api_key_id = api_key_id
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
-    from campus.common import env
-
-    # Register deployment-specific getsecret function
-    env.register_getsecret(_audit_getsecret)
-
-    # Initialize campus client after test fixtures have set up the vault
-    global campus
-    campus = campus_python.Campus(timeout=60)
-
     from . import routes, web
-
-    # Create route blueprints using create_blueprint() for test isolation
-    traces_blueprint = routes.traces.create_blueprint()
-    health_blueprint = routes.health.create_blueprint()
+    from campus.common.errors import handlers
 
     # Organise audit routes under audit blueprint
     bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
 
-    # Apply authentication to the traces blueprint (before registering)
-    # This ensures only trace routes require auth, not health routes
-    traces_blueprint.before_request(audit_authenticator.authenticate)
-
-    # Register authenticated routes (traces)
+    # Create route blueprints using create_blueprint() for test isolation
+    traces_blueprint = routes.traces.create_blueprint()
+    traces_blueprint.before_request(_authenticate_audit_api_key)
     bp.register_blueprint(traces_blueprint)
 
+    apikeys_blueprint = routes.apikeys.create_blueprint()
+    apikeys_blueprint.before_request(_authenticate_audit_api_key)
+    bp.register_blueprint(apikeys_blueprint)
+
     # Register public health routes WITHOUT authentication
-    bp.register_blueprint(health_blueprint)
+    import campus.flask_campus as flask_campus
+    @bp.get("/health")
+    @audit_events.audit_event("audit.health.check")
+    def health_check(**_) -> flask_campus.JsonResponse:
+        """Health check endpoint (no authentication required).
+
+        Returns:
+            - 200 OK with {"status": "ok"} for JSON Accept header
+            - 200 OK with "OK" plain text for text/plain Accept header
+        """
+        return {"status": "ok"}, 200
 
     app.register_blueprint(bp)
 
@@ -134,4 +149,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(ui_blueprint)
 
     if isinstance(app, flask.Flask):
+        # Register error handlers for proper error responses
+        handlers.init_app(app)
+        # Lazy import to allow env setup
+        from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY")

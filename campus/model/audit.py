@@ -11,14 +11,85 @@ import typing
 
 from campus.common import schema
 from campus.common.utils import uid
-from campus.model.base import InternalModel
+from campus.model.base import InternalModel, Model
 
 __all__ = [
+    "APIKey",
     "TraceSpan",
     "TraceTreeNode",
     "TraceTree",
     "TraceSummary",
 ]
+
+
+@dataclass(eq=False, kw_only=True)
+class APIKey(Model):
+    # TODO: Docstring
+    id: schema.CampusID = field(default_factory=(
+        lambda: uid.generate_category_uid("apikey", length=16)
+    ))
+    # created_at: schema.DateTime is inherited from Model
+    # key_hash is stored in place of plaintext key for security
+    # and is not exposed via API resources
+    key_hash: schema.String = field(metadata={"resource": False})
+    name: schema.String
+    owner_id: schema.UserID
+    scopes: list[schema.String] = field(default_factory=list)
+    # expires_at, revoked_at, and last_used are immutable audit fields
+    # They can be set through internal resource but not via the API.
+    expires_at: schema.DateTime | None = field(
+        default=None,
+        metadata={"mutable": False}
+    )
+    revoked_at: schema.DateTime | None = field(
+        default=None,
+        metadata={"mutable": False}
+    )
+    last_used: schema.DateTime | None = field(
+        default=None,
+        metadata={"mutable": False}
+    )
+    # Requests per minute, None for unlimited
+    rate_limit: schema.Integer | None = None
+
+    def is_active(self) -> bool:
+        """Check if the API key is currently active (not expired or
+        revoked).
+        
+        Returns:
+            bool: True if the API key is active, False otherwise.
+        """
+        return not self.is_expired() and not self.is_revoked()
+
+    def is_expired(self) -> bool:
+        """Check if the API key is expired.
+        
+        Returns:
+            bool: True if the API key is expired, False otherwise.
+        """
+        raise NotImplementedError("APIKey.is_expired() is not implemented yet.")
+    
+    def is_revoked(self) -> bool:
+        """Check if the API key is revoked.
+        
+        Returns:
+            bool: True if the API key is revoked, False otherwise.
+        """
+        raise NotImplementedError("APIKey.is_revoked() is not implemented yet.")
+
+    def has_scope(self, scope: str) -> bool:
+        """Check if the API key has a specific scope.
+
+        Args:
+            scope (str): The scope to check for.
+
+        Returns:
+            bool: True if the API key has the scope, False otherwise.
+
+        Raises:
+            TypeError: If the scope is not a string.
+        """
+        raise NotImplementedError("APIKey.has_scope() is not implemented yet.")
 
 
 @dataclass(eq=False, kw_only=True)

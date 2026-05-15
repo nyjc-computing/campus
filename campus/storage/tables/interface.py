@@ -8,6 +8,7 @@ Each row in the table is assumed to have:
 """
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from campus.model import InternalModel, Model
 from campus.storage import errors as storage_errors
@@ -24,7 +25,7 @@ class TableInterface(ABC):
         self.name = name
 
     @abstractmethod
-    def get_by_id(self, row_id: str) -> dict:
+    def get_by_id(self, row_id: str) -> dict[str, Any]:
         """Retrieve a row by its ID.
 
         Args:
@@ -124,7 +125,11 @@ class TableInterface(ABC):
 
     @abstractmethod
     def update_by_id(self, row_id: str, update: dict):
-        """Update a row in the specified table."""
+        """Update a row in the specified table.
+
+        Raises:
+            storage_errors.NotFoundError: If no row exists with the given ID
+        """
         ...
 
     @abstractmethod
@@ -134,7 +139,11 @@ class TableInterface(ABC):
 
     @abstractmethod
     def delete_by_id(self, row_id: str):
-        """Delete a row from the specified table."""
+        """Delete a row from the specified table.
+
+        Raises:
+            storage_errors.NotFoundError: If no row exists with the given ID
+        """
         ...
 
     @abstractmethod

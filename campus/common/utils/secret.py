@@ -225,3 +225,88 @@ def verify_otp(plain_otp: str, hashed_otp: str) -> bool:
     plain_bytes = plain_otp.encode('utf-8')
     hashed_bytes = hashed_otp.encode('utf-8')
     return bcrypt.checkpw(plain_bytes, hashed_bytes)
+
+
+def generate_audit_api_key() -> str:
+    """Generate an audit service API key with version prefix.
+
+    The API key uses the format: audit_v1_<22-char-base64url>
+    Total length: 31 characters with ~132-bit entropy.
+
+    Example:
+        audit_v1_kXj9mP2nQ5vR8sT7uV3wY4zX5cV6bN7m
+
+    Returns:
+        str: API key with audit_v1_ prefix and cryptographically secure
+             random component.
+    """
+    random_part = secrets.token_urlsafe(16)  # 22 chars, ~132-bit entropy
+    return f"audit_v1_{random_part}"
+
+
+def hash_api_key(api_key: str) -> str:
+    """Hash an API key using SHA-256 for secure storage.
+
+    Args:
+        api_key: The raw API key to hash.
+
+    Returns:
+        str: Hex-encoded SHA-256 hash (64 characters).
+    """
+    api_key_bytes = api_key.encode('utf-8')
+    hash_bytes = hashlib.sha256(api_key_bytes).hexdigest()
+    return hash_bytes
+
+
+def verify_api_key_hash(raw_key: str, stored_hash: str) -> bool:
+    """Verify an API key against its stored hash using constant-time comparison.
+
+    This function uses hmac.compare_digest() to prevent timing attacks,
+    which is important for security-sensitive comparisons like API key
+    verification.
+
+    Args:
+        raw_key: The raw API key to verify.
+        stored_hash: The stored hash to compare against.
+
+    Returns:
+        True if the key matches the hash, False otherwise.
+    """
+    computed_hash = hash_api_key(raw_key)
+    return hmac.compare_digest(computed_hash.encode('utf-8'),
+                               stored_hash.encode('utf-8'))
+
+
+def is_valid_audit_api_key_format(api_key: str) -> bool:
+    """Validate the format of an audit service API key.
+
+    Checks that the API key:
+    - Starts with the required 'audit_v1_' prefix
+    - Has the correct total length (31 characters)
+    - Contains only valid base64url characters in the random portion
+
+    Args:
+        api_key: The API key to validate.
+
+    Returns:
+        True if format is valid, False otherwise.
+    """
+    # Check prefix
+    if not api_key.startswith("audit_v1_"):
+        return False
+
+    # Check total length (9 chars prefix + 22 chars random = 31 total)
+    if len(api_key) != 31:
+        return False
+
+    # Extract random portion
+    random_part = api_key[9:]  # Skip "audit_v1_" prefix
+
+    # Check random portion length
+    if len(random_part) != 22:
+        return False
+
+    # Validate base64url character set
+    # base64url uses: A-Z, a-z, 0-9, -, _ (no +, /, = padding)
+    valid_chars = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+    return all(char in valid_chars for char in random_part)
