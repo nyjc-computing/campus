@@ -2,7 +2,7 @@
 """Test the new storage backends for Flask test client strategy."""
 
 import unittest
-from campus.storage import get_table, get_collection, gt, gte, lt, lte
+from campus.storage import get_table, get_collection, gt, gte, lt, lte, ne
 from campus.storage import errors as storage_errors
 from campus.common import env
 
@@ -128,6 +128,25 @@ class TestSQLiteBackend(unittest.TestCase):
         self.assertEqual(len(results), 2)
         for r in results:
             self.assertLessEqual(r["duration_ms"], 500)
+
+    def test_get_matching_with_ne_operator(self):
+        """get_matching() with ne (not equal) operator."""
+        results = self.traces_table.get_matching({"status_code": ne(200)})
+        self.assertEqual(len(results), 2)
+        for r in results:
+            self.assertNotEqual(r["status_code"], 200)
+        # Should return trace3 and trace4 with status_code 500
+        result_ids = {r["id"] for r in results}
+        self.assertEqual(result_ids, {"trace3", "trace4"})
+
+    def test_get_matching_with_ne_operator_string(self):
+        """get_matching() with ne operator on string field."""
+        results = self.traces_table.get_matching({"id": ne("trace1")})
+        self.assertEqual(len(results), 3)
+        for r in results:
+            self.assertNotEqual(r["id"], "trace1")
+        result_ids = {r["id"] for r in results}
+        self.assertEqual(result_ids, {"trace2", "trace3", "trace4"})
 
     def test_get_matching_with_multiple_operators(self):
         """get_matching() with multiple operator conditions (implicit AND)."""
@@ -492,6 +511,16 @@ class TestMemoryBackend(unittest.TestCase):
         self.assertEqual(len(results), 2)
         for r in results:
             self.assertLessEqual(r["value"], 500)
+
+    def test_get_matching_with_ne_operator(self):
+        """get_matching() with ne (not equal) operator."""
+        results = self.metrics_collection.get_matching({"score": ne(200)})
+        self.assertEqual(len(results), 2)
+        for r in results:
+            self.assertNotEqual(r["score"], 200)
+        # Should return metric3 and metric4 with score 500
+        result_ids = {r["id"] for r in results}
+        self.assertEqual(result_ids, {"metric3", "metric4"})
 
     def test_get_matching_with_multiple_operators(self):
         """get_matching() with multiple operator conditions (implicit AND)."""
