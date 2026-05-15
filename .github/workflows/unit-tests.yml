@@ -15,11 +15,10 @@ jobs:
     name: Unit Tests (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    continue-on-error: ${{ matrix.python-version == '3.12' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12']
+        python-version: ['3.11', '3.12', '3.13']
     env:
       ENV: testing
     steps:

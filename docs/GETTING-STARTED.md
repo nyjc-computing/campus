@@ -33,7 +33,7 @@ For those deploying or using Campus:
 
 ### Prerequisites
 - **pyenv** for Python version management
-- **Python 3.11 or 3.12** (managed via pyenv; prefer 3.12 for new setups)
+- **Python 3.11, 3.12, or 3.13** (managed via pyenv; prefer 3.13 for new setups)
 - **pipx** for installing Poetry
 - **Poetry** for dependency management (installed via pipx)
 - PostgreSQL (for auth service database)
@@ -46,9 +46,10 @@ For those deploying or using Campus:
 # 2. Install supported Python versions
 pyenv install 3.11.11
 pyenv install 3.12.0
+pyenv install 3.13.0
 
-# 3. Select the interpreter for this repo (3.12 preferred; 3.11 also supported)
-pyenv local 3.12.0
+# 3. Select the interpreter for this repo (3.13 preferred; 3.11 and 3.12 also supported)
+pyenv local 3.13.0
 
 # 4. Install Poetry via pipx (user-level, isolated)
 pipx install poetry
