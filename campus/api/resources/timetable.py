@@ -27,7 +27,13 @@ def _from_record(record: dict) -> model.TimetableMetadata:
     Returns:
         model.TimetableMetadata: Parsed timetable metadata object.
     """
-    return model.TimetableMetadata.from_storage(record)
+    try:
+        return model.TimetableMetadata.from_storage(record)
+    except KeyError as e:
+        raise api_errors.InternalError(
+            e.args[0],
+            record=record
+        ) from e
 
 def _entry_from_record(record: dict) -> model.TimetableEntry:
     """Convert a storage record into a TimetableEntry model.
