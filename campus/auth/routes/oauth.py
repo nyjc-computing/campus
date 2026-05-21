@@ -862,10 +862,14 @@ def device_verification(user_code: str | None = None):
 
                     if (seconds <= 0) {
                         clearInterval(window.deviceAuthCountdown);
-                        countdownText.textContent = 'Closing window...';
-                        setTimeout(function() {
+                        // Note: window.close() may not work due to browser security restrictions
+                        // Windows not opened by JavaScript cannot be closed programmatically
+                        countdownText.textContent = 'You can safely close this window and return to your CLI application.';
+                        try {
                             window.close();
-                        }, 500);
+                        } catch (e) {
+                            // Ignore errors - window will be closed manually by user
+                        }
                     }
                 }, 1000);
             }
