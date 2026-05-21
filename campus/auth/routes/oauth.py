@@ -14,8 +14,8 @@ import campus.config
 import campus.model
 from campus import flask_campus
 from campus.common import schema
-from campus.common.errors import api_errors, auth_errors, token_errors
-from campus.common.utils import uid, secret
+from campus.common.errors import api_errors, token_errors
+from campus.common.utils import secret
 
 from .. import get_yapper
 from ..resources import device_code as device_code_resource
@@ -87,20 +87,18 @@ def device_authorize(
     Reference: https://datatracker.ietf.org/doc/html/rfc8628#section-3.1
     """
     # Validate the client
-    # "guest" is a special public client type for CLI/device apps
-    # It doesn't exist in the database and has no inherent permissions
-    # All access comes from the user's credentials during the OAuth flow
-    if client_id == campus.config.PUBLIC_OAUTH_CLIENT_ID:
-        # Skip database validation for public guest clients
-        pass
-    else:
-        # For regular clients, verify they exist in the database
-        try:
-            client_resource[client_id].get()
-        except api_errors.NotFoundError:
+    # All clients (public or confidential) must exist in the database
+    try:
+        client = client_resource[client_id].get()
+        # Verify public client configuration
+        if client.is_public and client.secret_hash:
             raise token_errors.InvalidClientError(
-                "Invalid client_id"
+                "Invalid client configuration - public client should not have a secret"
             )
+    except api_errors.NotFoundError:
+        raise token_errors.InvalidClientError(
+            "Invalid client_id"
+        )
 
     # Create device code
     device_code = device_code_resource.create(
@@ -191,14 +189,18 @@ def token(
     }
     """
     # Validate the client
-    # "guest" is a special public client type - no database validation needed
-    if client_id != campus.config.PUBLIC_OAUTH_CLIENT_ID:
-        try:
-            client_resource[client_id].get()
-        except api_errors.NotFoundError:
+    # All clients (public or confidential) must exist in the database
+    try:
+        client = client_resource[client_id].get()
+        # Verify public client configuration
+        if client.is_public and client.secret_hash:
             raise token_errors.InvalidClientError(
-                "Invalid client_id"
+                "Invalid client configuration - public client should not have a secret"
             )
+    except api_errors.NotFoundError:
+        raise token_errors.InvalidClientError(
+            "Invalid client_id"
+        )
 
     # Route to appropriate handler based on grant_type
     if grant_type == "urn:ietf:params:oauth:grant-type:device_code":

@@ -29,8 +29,10 @@ def _from_record(
         ),
         name=record["name"],
         description=record["description"],
+        is_public=record.get("is_public", False),
+        redirect_uris=record.get("redirect_uris", []),
         permissions=permissions or {},
-        secret_hash=record["secret_hash"],
+        secret_hash=record.get("secret_hash"),
     )
 
 
@@ -103,20 +105,36 @@ class ClientsResource:
     def is_valid_credentials(
             self,
             client_id: schema.CampusID | str,
-            client_secret: str
+            client_secret: str | None = None
     ) -> bool:
         """Check if client credentials are valid.
 
         Args:
             client_id: The client identifier
-            client_secret: The client secret
+            client_secret: The client secret (optional for public clients)
         Returns:
             True if credentials are valid, False otherwise
         """
         client = self[schema.CampusID(client_id)].get()
+
+        # Public clients (CLI, mobile) are validated by client_id only
+        if client.is_public:
+            if client_secret is not None:
+                raise auth_errors.UnauthorizedClientError(
+                    "Public client should not provide a secret",
+                    client_id=client_id
+                )
+            return True
+
+        # Confidential clients must have a valid secret
         if not client.secret_hash:
             raise auth_errors.ServerError(
-                "Invalid configuration",
+                "Invalid configuration - confidential client missing secret_hash",
+                client_id=client_id
+            )
+        if client_secret is None:
+            raise auth_errors.UnauthorizedClientError(
+                "Confidential client requires a secret",
                 client_id=client_id
             )
         expected_hash = secret.hash_client_secret(
@@ -223,9 +241,17 @@ class ClientResource:
 
         Returns:
             The generated client secret
+
+        Raises:
+            auth_errors.InvalidRequestError: If client is public (no secret to revoke)
         """
         # Check if client exists first
-        self.get()
+        client = self.get()
+        if client.is_public:
+            raise auth_errors.InvalidRequestError(
+                "Public clients do not have a secret to revoke",
+                client_id=self.client_id
+            )
         new_secret = secret.generate_client_secret()
         secret_hash = secret.hash_client_secret(
             secret=new_secret,

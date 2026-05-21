@@ -23,25 +23,41 @@ bp = flask.Blueprint('clients', __name__, url_prefix='/clients')
 
 @bp.post("/")
 @flask_campus.unpack_request
-def new(name: str, description: str) -> flask_campus.JsonResponse:
+def new(
+        name: str,
+        description: str,
+        is_public: bool = False,
+        redirect_uris: list[str] | None = None
+) -> flask_campus.JsonResponse:
     """Create a new vault client.
 
-    POST /client
+    POST /clients/
     Body: {
         "name": "Client Name",
-        "description": "Client description"
+        "description": "Client description",
+        "is_public": false,  # Optional: true for CLI/mobile apps
+        "redirect_uris": []  # Optional: OAuth redirect URIs
     }
 
     Returns: {
         "id": "client_abc123",
         "name": "Client Name",
         "description": "Client description",
+        "is_public": false,
+        "redirect_uris": [],
         "created_at": "2025-07-20T10:30:00Z"
     }
+
+    Public clients (is_public=true) don't have a client_secret and are used
+    for CLI, mobile apps, and native applications that cannot securely store
+    credentials per RFC 6749 Section 2.1.
     """
-    # Note that no client_secret is generated here
-    # Apps are expected to generate the secret separately
-    client = client_resource.new(name=name, description=description)
+    client = client_resource.new(
+        name=name,
+        description=description,
+        is_public=is_public,
+        redirect_uris=redirect_uris or []
+    )
     get_yapper().emit('campus.clients.create', {"client_id": client.id})
     return client.to_resource(), 200
 
@@ -124,27 +140,35 @@ def revoke_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
 def update_client(
         client_id: schema.CampusID,
         name: str | None = None,
-        description: str | None = None
+        description: str | None = None,
+        redirect_uris: list[str] | None = None
 ) -> flask_campus.JsonResponse:
     """Update a client's details.
 
     PATCH /clients/{client_id}
     Body: {
         "name": "New Client Name",
-        "description": "New description"
+        "description": "New description",
+        "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"]  # Optional
     }
     Returns: {
         "id": "client_abc123",
         "name": "New Client Name",
         "description": "New description",
+        "is_public": false,
+        "redirect_uris": [],
         "created_at": "2025-07-20T10:30:00Z"
     }
+
+    Note: is_public cannot be changed after client creation.
     """
     updates = {}
     if name is not None:
         updates["name"] = name
     if description is not None:
         updates["description"] = description
+    if redirect_uris is not None:
+        updates["redirect_uris"] = redirect_uris
     if not updates:
         raise api_errors.InvalidRequestError(
             "No updates provided",

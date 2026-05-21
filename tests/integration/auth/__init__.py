@@ -1,1 +1,1 @@
-# Integration tests for campus.auth package
+# tests.integration.auth
