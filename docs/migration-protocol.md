@@ -1,0 +1,1127 @@
+# Campus Storage Migration Protocol
+
+## Overview
+
+This document defines the storage migration protocol for Campus. Migrations are versioned changes to database schemas and data that evolve the storage layer over time while maintaining data integrity and enabling rollback.
+
+**Design Philosophy**: Simple, explicit, and auditable. For ~2000 users, we prioritize clarity over automation complexity.
+
+---
+
+## Architecture Decision: Separate Admin Storage
+
+**Final Decision:** Auditing & migrations live in `campus-admin` as separate apps with their own schema and storage layer.
+
+### Architecture
+
+```
+┌───────────────────────────────────────────────────────────┐
+│                  Campus Applications                      │
+├───────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌──────────────────┐         ┌─────────────────┐         │
+│  │   campus.auth    │         │   campus.api    │         │
+│  │                  │         │                 │         │
+│  │  Users           │         │  Assignments    │         │
+│  │  Sessions        │         │  Submissions    │         │
+│  │  OAuth Clients   │         │  Circles        │         │
+│  │                  │         │  Timetables     │         │
+│  └────────┬─────────┘         └────────┬────────┘         │
+│           │                            │                  │
+│           └────────────┬───────────────┘                  │
+│                        ▼                                  │
+│          ┌───────────────────────────────┐                │
+│          │   Campus Storage Layer        │                │
+│          │   (PostgreSQL + MongoDB)      │                │
+│          └───────────────────────────────┘                │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────┐
+│                campus-admin (Separate)                    │
+├───────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌──────────────────┐         ┌──────────────────┐        │
+│  │   Migrations     │         │     Audit        │        │
+│  │                  │         │                  │        │
+│  │  _migrations     │         │  _audit_log      │        │
+│  │  State tracking  │         │  API traces      │        │
+│  │  Rollback        │         │  Event history   │        │
+│  └────────┬─────────┘         └────────┬─────────┘        │
+│           │                            │                  │
+│           └────────────┬───────────────┘                  │
+│                        ▼                                  │
+│         ┌────────────────────────────────┐                │
+│         │   Admin Storage Layer          │                │
+│         │   (Separate PostgreSQL DB)     │                │
+│         │   - Separate schema            │                │
+│         │   - Optimized for high volume  │                │
+│         └────────────────────────────────┘                │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+```
+
+### Key Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Separate apps** | Migrations/audit are operational concerns, not domain models |
+| **Separate storage** | Campus schema focuses on business data, admin on operational data |
+| **campus-admin package** | Clear boundary: campus = user features, admin = operational control |
+| **`admin` CLI** | Separate command-line tool for admin operations |
+
+### Benefits of Separation
+
+1. **Clear concern boundaries** - Domain models vs operational infrastructure
+2. **Independent deployment** - Admin changes don't require Campus deployment
+3. **Different storage optimization** - Admin optimized for high-volume writes, Campus for queries
+4. **Security isolation** - Admin data protected separately from user data
+5. **Development velocity** - Campus team can ship features without worrying about admin schema
+
+### Storage Separation
+
+| Aspect | Campus Storage | Admin Storage |
+|--------|---------------|---------------|
+| **Database** | Separate DBs for auth/api | Dedicated admin DB |
+| **Schema** | Business domain models | Operational infrastructure |
+| **Access pattern** | Query-heavy (user requests) | Write-heavy (audit/ migrations) |
+| **Optimization** | Indexed for reads | Optimized for bulk inserts |
+| **Connection** | Via `campus.storage` | Direct to admin DB |
+| **Tables** | users, sessions, assignments... | _migrations, _audit_log |
+| **Package** | `campus/storage/` | `campus-admin/storage/` (separate module) |
+
+**Important:** `campus-admin` creates its own storage module at `campus-admin/storage/`. It is NOT part of `campus.storage` and does NOT share the `campus.common.devops.deploy` infrastructure.
+
+---
+
+## Requirements
+
+Per [issue #27](https://github.com/nyjc-computing/campus/issues/27):
+
+1. **Initialize the app** - Apply pending migrations on deployment
+2. **Update existing data** - Transform data when schemas change
+3. **Cross-database migration** - Support PostgreSQL tables and MongoDB documents
+4. **Rollback/restore** - Ability to revert migrations
+5. **Audit logging** - Record all migration actions for investigation
+
+**Implementation:** All requirements implemented in `campus-admin` package.
+
+---
+
+## Architecture
+
+### Campus Storage Types
+
+| Storage Type | Backend | Use Case |
+|-------------|---------|----------|
+| **Tables** | PostgreSQL | Relational data with fixed schema (users, sessions, clients) |
+| **Documents** | MongoDB | Flexible JSON-like objects (assignments, submissions) |
+| **Objects** | S3-compatible | Binary blobs (files, attachments) |
+
+### Admin Storage Structure
+
+```
+campus-admin/
+├── storage/
+│   ├── __init__.py           # Admin storage interface
+│   ├── migrations/
+│   │   ├── __init__.py        # Migration runner interface
+│   │   ├── state.py           # Migration state tracking
+│   │   ├── runner.py          # Main migration execution logic
+│   │   └── migrations/
+│   │       ├── 001_init_assignments.py
+│   │       ├── 002_init_submissions.py
+│   │       └── ...
+│   └── audit/
+│       ├── __init__.py        # Audit logging interface
+│       ├── log.py             # High-volume audit writer
+│       └── queries.py         # Audit query helpers
+└── main.py                    # `admin` CLI entry point
+```
+
+### Migration Structure (Updated)
+
+**Migrations run from campus-admin, operate on Campus data:**
+
+```
+campus-admin/
+├── storage/
+│   ├── __init__.py
+│   ├── migrations/
+│   │   ├── __init__.py           # Migration runner interface
+│   │   ├── state.py              # State tracking (in admin DB)
+│   │   ├── runner.py             # Executes migrations
+│   │   └── migrations/
+│   │       ├── 001_init_assignments.py      # Operates on campus.api
+│   │       ├── 002_init_submissions.py      # Operates on campus.api
+│   │       ├── 003_add_response_timestamps.py
+│   │       └── ...
+│   └── audit/
+│       ├── __init__.py
+│       ├── log.py                 # High-volume audit writer
+│       └── queries.py             # Audit query helpers
+├── __init__.py
+└── main.py                        # `admin` CLI entry point
+```
+
+**Key point:** Migration files live in `campus-admin` but import from `campus.api.resources` or `campus.auth.resources` to operate on Campus data.
+
+---
+
+## Transaction Strategy
+
+### Design Decision: Autocommit per Migration, Atomic Within
+
+Each migration file commits independently, but operations within a single migration are atomic.
+
+```python
+# Each migration is ONE transaction boundary
+def upgrade():
+    """All operations in this migration commit together."""
+    with PostgreSQLTransaction():
+        # Multiple statements execute atomically
+        cursor.execute("ALTER TABLE submissions ADD COLUMN status TEXT")
+        cursor.execute("UPDATE submissions SET status = 'pending'")
+        # If anything fails, entire upgrade() rolls back
+```
+
+**Transaction boundary = migration file**, not individual statements.
+
+### Why This Approach?
+
+| Factor | Autocommit per Migration | Single Atomic Transaction |
+|--------|-------------------------|---------------------------|
+| **Failure recovery** | Manual rollback via `downgrade()` | Automatic rollback |
+| **Large datasets** | ✅ Handles 10k+ rows with batching | ❌ Transaction timeout |
+| **Cross-storage** | ✅ Works with PostgreSQL + MongoDB | ❌ No cross-DB transactions |
+| **Intermediate states** | ⚠️ Partial if migration fails | ✅ Always consistent |
+| **Testing** | ⚠️ Must test downgrade path | ✅ Simpler error handling |
+
+### Trade-off Analysis
+
+**Autocommit with Downgrade (Chosen)**
+
+*Pros:*
+- Resilient to partial failures - failed migration leaves earlier migrations intact
+- Works with large datasets - no single transaction timeout for bulk updates
+- Cross-database compatible - MongoDB and PostgreSQL can migrate independently
+- Progress visibility - `_migrations` table shows exactly what's been applied
+- Safe for long-running operations - data backfills won't hit transaction limits
+
+*Cons:*
+- No automatic atomic rollback - if migration fails, database in intermediate state
+- Manual cleanup required - must run `campus rollback` to reverse failed migrations
+- Potential inconsistency - app could start mid-migration if deploy continues unchecked
+- Harder testing - must explicitly test `downgrade()` path
+
+**Alternative: All-or-Nothing Transaction**
+
+*Pros:*
+- Automatic safety - any failure rolls back entire migration
+- No intermediate states - database always in consistent schema
+- Simpler error handling - just let transaction fail
+
+*Cons:*
+- Transaction limits - PostgreSQL has size/duration constraints
+- Fails with large datasets - updating thousands of rows times out
+- Not cross-storage compatible - can't atomically update PostgreSQL + MongoDB
+- Blocks longer - tables locked during entire transaction
+- Memory pressure - large transactions consume connection resources
+
+### For Campus (~2000 users)
+
+The hybrid approach balances safety with practicality:
+
+1. **One migration = one logical change** - Natural atomic boundary
+2. **Manageable transaction sizes** - ~2000 users means reasonable single-migration volume
+3. **Clear rollback semantics** - `downgrade()` reverses at same boundary
+4. **Matches existing patterns** - `init_from_schema()` already uses explicit transactions
+
+### For Large Migrations
+
+Document batched approach for operations that exceed single transaction limits:
+
+```python
+def upgrade():
+    """For very large tables, process in batches."""
+    batch_size = 100
+    for offset in range(0, total_rows, batch_size):
+        with PostgreSQLTransaction():
+            # Each batch is atomic
+            for row in get_batch(offset, batch_size):
+                transform_and_update(row)
+        # Commits between batches
+```
+
+This pattern provides atomicity at the batch level while avoiding transaction timeouts.
+
+---
+
+## Migration File Format
+
+Each migration is a Python module with:
+
+1. **Revision ID** - Sequential 3-digit number
+2. **Description** - Human-readable change summary
+3. **upgrade()** - Forward transformation
+4. **downgrade()** - Reverse transformation
+5. **Storage type** - One of: `table`, `document`, `object`
+
+### Accessing Storage in Migrations
+
+Migrations should import from resource modules for type safety:
+
+```python
+from campus.api.resources import SubmissionsResource
+
+def upgrade():
+    """Access collection through resource - no typos possible."""
+    submissions = SubmissionsResource._storage  # Internal storage access
+```
+
+**Benefits:**
+- ✅ No typos in collection/table names
+- ✅ IDE autocomplete and type checking
+- ✅ Single source of truth for storage configuration
+
+### Example Migration
+
+```python
+"""Add response timestamps to submissions.
+
+Revision ID: 003
+Create Date: 2025-03-13
+Storage Type: document
+"""
+
+from datetime import datetime, UTC
+from campus.api.resources import SubmissionsResource
+
+
+REVISION_ID = "003"
+DESCRIPTION = "Add response timestamps to submissions"
+STORAGE_TYPE = "document"
+
+
+def upgrade():
+    """Add created_at field to existing responses."""
+    submissions = SubmissionsResource._storage
+
+    # Get all submissions with responses
+    all_docs = submissions.get_matching({})
+
+    for doc in all_docs:
+        updated_responses = []
+        for response in doc.get("responses", []):
+            # Add timestamp if not present
+            if "created_at" not in response:
+                response["created_at"] = datetime.now(UTC).isoformat()
+            updated_responses.append(response)
+
+        # Update document
+        if updated_responses:
+            submissions.update_by_id(doc["id"], {"responses": updated_responses})
+
+
+def downgrade():
+    """Remove created_at field from responses."""
+    submissions = SubmissionsResource._storage
+
+    all_docs = submissions.get_matching({})
+
+    for doc in all_docs:
+        updated_responses = []
+        for response in doc.get("responses", []):
+            # Strip out created_at
+            response.pop("created_at", None)
+            updated_responses.append(response)
+
+        submissions.update_by_id(doc["id"], {"responses": updated_responses})
+```
+
+### One-Step Revision Policy
+
+Each migration's `upgrade()` and `downgrade()` functions transform **exactly one revision step**.
+
+- `upgrade()` transforms schema from version *N-1* to *N*
+- `downgrade()` transforms schema from version *N* to *N-1*
+- Never skip versions - migrations run sequentially
+
+This ensures:
+- Predictable transformation chain
+- Easy rollback of any single migration
+- Clear dependency order
+```
+
+---
+
+## Migration State Tracking
+
+Migrations track their state using the storage layer itself:
+
+### PostgreSQL Schema (for state tracking)
+
+```sql
+CREATE TABLE IF NOT EXISTS "_migrations" (
+    "id" TEXT PRIMARY KEY,           -- Revision ID (e.g., "001", "002")
+    "description" TEXT NOT NULL,     -- Human-readable description
+    "storage_type" TEXT NOT NULL,    -- "table", "document", "object"
+    "status" TEXT NOT NULL,          -- "pending", "applied", "rolled_back", "failed"
+    "applied_at" TIMESTAMP NOT NULL, -- When migration was applied
+    "rollback_at" TIMESTAMP NULL,    -- When migration was rolled back (if applicable)
+    "error_message" TEXT NULL        -- Error details if status is "failed"
+);
+```
+
+### Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Discovered but not yet applied |
+| `applied` | Successfully applied to database |
+| `rolled_back` | Reversed via `downgrade()` |
+| `failed` | Migration execution failed (see `error_message`) |
+
+### Archival Strategy
+
+The `_migrations` table **is** the permanent audit log. For long-term archival:
+
+1. **Primary**: Keep `_migrations` table indefinitely (small, low overhead)
+2. **Secondary**: Yapper events provide real-time streaming to external systems
+3. **Optional**: Export to object storage via bucket backup scripts
+
+PostgreSQL table is preferred over JSON/bucket storage because:
+- Queryable for status checks (`SELECT * FROM _migrations WHERE status = 'failed'`)
+- Transactional consistency with schema changes
+- Supports joins and aggregations for reporting
+
+### Database Placement Strategy
+
+**Decision:** Dedicated admin/audit database for `campus-admin`.
+
+```
+PostgreSQL Instances:
+├── campus_auth_db     (campus.auth users, sessions, clients)
+├── campus_api_db      (campus.api assignments, submissions, circles)
+└── campus_admin_db    (campus-admin _migrations, _audit_log)
+```
+
+### Rationale for Separate Admin Database
+
+| Consideration | Decision | Reasoning |
+|---------------|----------|-----------|
+| **Concern separation** | ✅ Separate DB | Domain data vs operational infrastructure |
+| **Performance isolation** | ✅ Separate DB | Admin write-heavy won't impact Campus queries |
+| **Backup policies** | ✅ Separate DB | Different retention: admin longer, business data GDPR |
+| **Deployment coupling** | ✅ Separate DB | Campus updates don't depend on admin schema |
+| **Cross-service audit** | ✅ Separate DB | Single audit trail across auth + API + future services |
+| **Infrastructure cost** | ⚠️ Additional DB | Managed via Railway/RDS, minimal overhead |
+| **Query complexity** | ⚠️ No cross-DB joins | Not needed - audit is append-only log |
+
+### Storage Interface Separation
+
+**Campus storage layer:**
+- Package: `campus/storage/`
+- Accessed via `from campus.storage import get_table`
+- Optimized for domain queries
+- Validates against Campus models
+
+**Admin storage layer:**
+- Package: `campus-admin/storage/` (separate module, not under campus/)
+- Accessed via `from campus_admin.storage import get_table`
+- Optimized for high-volume writes (audit)
+- Separate connection pool
+- May use raw SQL for bulk inserts (audit logging optimization)
+- Does NOT use `campus.common.devops.deploy` (manual deployment)
+
+```python
+# Campus app uses campus storage
+from campus.storage import get_table
+users = get_table("users")
+
+# Admin app uses campus-admin storage (separate module)
+from campus_admin.storage import get_table
+migrations = get_table("_migrations")
+
+# High-volume audit uses optimized writer
+from campus_admin.storage.audit import AuditWriter
+audit = AuditWriter()
+audit.bulk_log(events)  # Uses executemany for performance
+```
+
+**Module structure:**
+```
+campus/storage/              → Campus domain storage
+campus-admin/storage/       → Admin operational storage (separate repo)
+```
+
+### State Interface
+
+Located in `campus-admin/storage/migrations/state.py`:
+
+```python
+# campus-admin/storage/migrations/state.py
+
+from campus_admin.storage import get_table
+from datetime import datetime, UTC
+
+class MigrationState:
+    """Track migration application state."""
+
+    def __init__(self):
+        self._table = get_table("_migrations")
+
+    def init_state_table(self):
+        """Initialize the _migrations table if not exists."""
+        sql = '''CREATE TABLE IF NOT EXISTS "_migrations" (
+            "id" TEXT PRIMARY KEY,
+            "description" TEXT NOT NULL,
+            "storage_type" TEXT NOT NULL,
+            "status" TEXT NOT NULL,
+            "applied_at" TIMESTAMP NOT NULL,
+            "rollback_at" TIMESTAMP NULL,
+            "error_message" TEXT NULL
+        );'''
+        from campus.storage.tables.backend.postgres import PostgreSQLTable
+        table = PostgreSQLTable("_migrations")
+        table.init_from_schema(sql)
+
+    def record_migration(self, revision_id: str, description: str, storage_type: str):
+        """Record a successful migration."""
+        self._table.insert_one({
+            "id": revision_id,
+            "description": description,
+            "storage_type": storage_type,
+            "status": "applied",
+            "applied_at": datetime.now(UTC).isoformat(),
+            "rollback_at": None,
+            "error_message": None
+        })
+
+    def record_failure(self, revision_id: str, description: str, storage_type: str, error: str):
+        """Record a failed migration attempt."""
+        self._table.insert_one({
+            "id": revision_id,
+            "description": description,
+            "storage_type": storage_type,
+            "status": "failed",
+            "applied_at": datetime.now(UTC).isoformat(),
+            "rollback_at": None,
+            "error_message": error
+        })
+
+    def get_applied_migrations(self) -> set[str]:
+        """Get set of successfully applied migration IDs."""
+        return {row["id"] for row in self._table.get_matching({"status": "applied"})}
+
+    def mark_rollback(self, revision_id: str):
+        """Mark a migration as rolled back."""
+        self._table.update_by_id(revision_id, {
+            "status": "rolled_back",
+            "rollback_at": datetime.now(UTC).isoformat()
+        })
+
+    def is_applied(self, revision_id: str) -> bool:
+        """Check if a migration has been successfully applied."""
+        try:
+            row = self._table.get_by_id(revision_id)
+            return row["status"] == "applied"
+        except NotFoundError:
+            return False
+```
+
+### Storage Interface for Migrations
+
+**Decision:** Migrations use dedicated `campus_admin.storage` interface.
+
+```python
+# campus-admin/storage/migrations/state.py
+
+from campus_admin.storage import get_table
+
+class MigrationState:
+    def __init__(self):
+        # Connects to campus_admin_db, not campus databases
+        self._table = get_table("_migrations")
+```
+
+**Why dedicated interface:**
+- **Separation of concerns** - Admin infrastructure independent of Campus domain models
+- **Independent deployment** - Campus schema changes don't break admin/migrations
+- **Different optimization** - Admin optimized for audit writes, Campus for queries
+- **Clear ownership** - `campus_admin` package owns its storage, not `campus.storage`
+
+**Migration runners still operate on Campus data:**
+```python
+# campus-admin/storage/migrations/migrations/001_init_assignments.py
+
+from campus.api.resources import AssignmentsResource
+
+def upgrade():
+    """Migrate Campus schema via Campus resources."""
+    assignments = AssignmentsResource._storage
+    # Operate on Campus data using Campus resources
+```
+
+**State tracking stays in admin DB:**
+```python
+# campus-admin tracks migration state
+from campus_admin.storage import get_table
+state_table = get_table("_migrations")
+state_table.insert_one({"id": "001", "status": "applied", ...})
+```
+
+### High-Volume Audit Logging
+
+**Decision:** Admin storage uses optimized bulk inserts for audit.
+
+```python
+# campus-admin/storage/audit/log.py
+
+class AuditWriter:
+    """High-volume audit logging for admin database."""
+
+    def __init__(self):
+        # Direct connection for performance
+        self._conn = psycopg2.connect(get_admin_postgres_url())
+
+    def bulk_insert(self, rows: list[dict]) -> None:
+        """Batch insert for audit - optimized for high volume."""
+        with self._conn.cursor() as cursor:
+            cursor.executemany(
+                "INSERT INTO _audit_log (event_type, data, created_at) VALUES (%s, %s, %s)",
+                [(r["event_type"], json.dumps(r["data"]), r["created_at"]) for r in rows]
+            )
+            self._conn.commit()
+```
+
+**Why raw queries for audit:**
+- **Performance** - Traces every API call (high volume)
+- **Write pattern** - Append-only, no read-modify-write
+- **No validation needed** - Audit data structure controlled internally
+- **Different pattern** - Audit is infrastructure, not domain model
+
+**Campus domain models still use campus.storage:**
+- Domain entities (users, assignments) use validated storage layer
+- Only admin/audit infrastructure uses optimized direct access
+- Clear boundary enforced by package separation
+
+```python
+# campus-admin/storage/migrations/runner.py
+
+import importlib
+from pathlib import Path
+from campus_admin.yapper import Yapper
+from .state import MigrationState
+
+class MigrationRunner:
+    """Execute and track migrations."""
+
+    def __init__(self, migrations_dir: Path):
+        self.migrations_dir = migrations_dir
+        self.state = MigrationState()
+        self.logger = Yapper()
+
+    def discover_migrations(self) -> list[dict]:
+        """Find all migration files and return sorted list."""
+        migrations = []
+        for file in self.migrations_dir.glob("*.py"):
+            if file.name.startswith("_"):
+                continue
+
+            module = importlib.import_module(f".migrations.{file.stem}", package="campus.storage")
+            migrations.append({
+                "id": module.REVISION_ID,
+                "description": module.DESCRIPTION,
+                "storage_type": module.STORAGE_TYPE,
+                "module": module,
+                "path": file
+            })
+
+        return sorted(migrations, key=lambda m: m["id"])
+
+    def upgrade(self, target: str | None = None):
+        """Apply pending migrations up to target revision."""
+        self.state.init_state_table()
+        applied = self.state.get_applied_migrations()
+        migrations = self.discover_migrations()
+
+        for migration in migrations:
+            if migration["id"] in applied:
+                continue
+            if target and migration["id"] > target:
+                break
+
+            print(f"Applying {migration['id']}: {migration['description']}")
+            migration["module"].upgrade()
+            self.state.record_migration(
+                migration["id"],
+                migration["description"],
+                migration["storage_type"]
+            )
+
+            # Log migration event via Yapper
+            self.logger.emit("migration.applied", {
+                "revision_id": migration["id"],
+                "description": migration["description"],
+                "storage_type": migration["storage_type"]
+            })
+            print(f"  ✓ Applied {migration['id']}")
+
+    def downgrade(self, target: str):
+        """Rollback migrations back to target revision."""
+        self.state.init_state_table()
+        applied = self.state.get_applied_migrations()
+        migrations = list(reversed(self.discover_migrations()))
+
+        for migration in migrations:
+            if migration["id"] not in applied:
+                continue
+            if migration["id"] <= target:
+                break
+
+            print(f"Rolling back {migration['id']}: {migration['description']}")
+            migration["module"].downgrade()
+            self.state.mark_rollback(migration["id"])
+
+            # Log rollback event via Yapper
+            self.logger.emit("migration.rolled_back", {
+                "revision_id": migration["id"],
+                "description": migration["description"],
+                "storage_type": migration["storage_type"]
+            })
+            print(f"  ✓ Rolled back {migration['id']}")
+```
+
+---
+
+## CLI Interface
+
+### Admin CLI vs User CLI
+
+**Campus CLI (`campus`) = User features**
+- End-user commands for interacting with Campus services
+- Example: `campus auth login`, `campus api list`
+
+**Admin CLI (`admin`) = Operational control**
+- Database migrations, health checks, configuration
+- Example: `admin migrate`, `admin status`
+
+**Separation rationale:**
+- User CLI should not expose dangerous admin operations
+- Admin commands require different authentication/authorization
+- Clear boundary prevents accidental misuse
+- Separate package/project, not bundled with campus
+
+### Admin CLI Implementation
+
+Located in `campus-admin/main.py`:
+
+```python
+# campus-admin/main.py
+
+def migrate(target: str | None = None):
+    """Run database migrations."""
+    from campus_admin.storage.migrations import MigrationRunner
+    from pathlib import Path
+
+    migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
+    runner = MigrationRunner(migrations_dir)
+    runner.upgrade(target)
+    print("Migration complete.")
+
+
+def rollback(target: str):
+    """Rollback to a specific migration."""
+    from campus_admin.storage.migrations import MigrationRunner
+    from pathlib import Path
+
+    migrations_dir = Path(__file__).parent / "storage" / "migrations" / "migrations"
+    runner = MigrationRunner(migrations_dir)
+    runner.downgrade(target)
+    print("Rollback complete.")
+
+
+def status():
+    """Show current migration state."""
+    from campus_admin.storage.migrations import MigrationState
+
+    state = MigrationState()
+    state.init_state_table()
+    applied = state.get_applied_migrations()
+
+    print(f"Applied migrations: {len(applied)}")
+    for mid in sorted(applied):
+        print(f"  ✓ {mid}")
+```
+
+### When is Admin CLI Needed?
+
+**Automated deployment (primary):**
+- Staging/production: migrations run automatically on app startup
+- PR validation: migrations tested against backup database
+- CI/CD: status reported via deployment checks
+
+**Admin CLI (secondary, for manual operations):**
+- Local development: apply migrations during feature development
+- Staging manual run: re-run migrations after fixing failures
+- Rollback: manual `rollback` when deployment needs quick revert
+- Status check: query migration state without starting app
+- Recovery: repair failed migration states
+
+### Usage
+
+```bash
+# Apply all pending migrations
+admin migrate
+
+# Apply up to specific revision
+admin migrate 003
+
+# Rollback to specific revision
+admin rollback 002
+
+# Show migration state
+admin status
+```
+
+---
+
+## Deployment Integration
+
+### Deployment Approach
+
+**Current: Manual deployment for campus-admin**
+
+Migrations are run manually via the `admin` CLI. There is NO automatic migration trigger from Campus apps.
+
+```bash
+# Manual migration workflow
+1. ssh into server
+2. cd /path/to/campus-admin
+3. admin migrate          # Apply pending migrations
+4. admin status           # Verify success
+```
+
+**Future: Optional auto-run (if needed)**
+
+Campus apps could potentially trigger migrations, but this is NOT implemented initially. If added, it would require:
+
+1. Campus app depends on campus-admin as a submodule
+2. Import from campus-admin.storage.migrations
+3. Handle campus-admin not being installed
+4. Manual approval before running migrations
+
+**Recommendation:** Keep manual migrations initially. Auto-run adds complexity and failure modes that aren't justified for ~2000 users.
+
+### Manual Deployment Steps
+
+```bash
+# 1. Deploy campus-admin code
+git pull campus-admin main
+poetry install
+
+# 2. Run migrations manually
+admin migrate
+
+# 3. Verify success
+admin status
+
+# 4. Deploy Campus app (if needed)
+# Campus deployment is separate from campus-admin deployment
+```
+
+### Pre-Deployment Checks (Built into MigrationRunner)
+
+The migration runner should validate before executing:
+
+```python
+# campus-admin/storage/migrations/runner.py
+
+class MigrationRunner:
+    """Execute and track migrations."""
+
+    def pre_flight_checks(self) -> list[str]:
+        """Validate environment before running migrations.
+        Returns list of warnings (empty if all checks pass).
+        """
+        warnings = []
+
+        # 1. Check if running in production
+        if os.getenv("ENV") == "production":
+            warnings.append("Running in PRODUCTION - ensure database backup exists")
+
+        # 2. Verify downgrade() exists for applied migrations
+        for mid in self.state.get_applied_migrations():
+            module = self._load_migration_module(mid)
+            if not hasattr(module, 'downgrade'):
+                warnings.append(f"Migration {mid} has no downgrade()")
+
+        # 3. Check for pending migrations
+        applied = self.state.get_applied_migrations()
+        available = {m["id"] for m in self.discover_migrations()}
+        pending = available - applied
+        if pending:
+            warnings.append(f"Pending migrations: {sorted(pending)}")
+
+        return warnings
+
+    def upgrade(self, target: str | None = None):
+        """Apply pending migrations with pre-flight checks."""
+        # Run pre-flight checks
+        for warning in self.pre_flight_checks():
+            print(f"⚠️  {warning}")
+
+        # Confirm if in production
+        if os.getenv("ENV") == "production":
+            response = input("Continue with migration? (yes/no): ")
+            if response.lower() != "yes":
+                raise RuntimeError("Migration cancelled by user")
+
+        # ... rest of upgrade logic
+```
+
+### Deployment Checklist
+
+| Check | Built-in | Manual |
+|-------|----------|--------|
+| Database backup exists | ⚠️ Warning only | ✅ Verify backup completed |
+| Downgrade logic exists | ✅ Validates in code | |
+| Pending migrations count | ✅ Shows in pre-flight | |
+| Test on staging first | | ✅ PR validation required |
+| Monitor Yapper events | ✅ Auto-emits events | ✅ Confirm delivery |
+| Health check after deploy | | ✅ Verify application status |
+
+---
+
+## Best Practices
+
+### 1. Idempotent Migrations
+
+Migrations should be safe to run multiple times:
+
+```python
+def upgrade():
+    """Add index if not exists."""
+    table = get_table("submissions")
+    # Check before creating
+    try:
+        table.execute('CREATE INDEX idx_submissions_course ON "submissions"("course_id")')
+    except psycopg2.errors.DuplicateTable:
+        pass  # Index already exists
+```
+
+### 2. Zero-Downtime for Schema Changes
+
+For PostgreSQL schema changes with active users:
+
+1. **Add columns** as nullable first
+2. **Backfill data** in separate migration
+3. **Add constraints** only after backfill complete
+4. **Drop old columns** only after verifying usage
+
+### 3. Data Migration Batching
+
+For large collections, process in batches:
+
+```python
+def upgrade():
+    """Backfill data for all users."""
+    users = get_table("users")
+    batch_size = 100
+    offset = 0
+
+    while True:
+        batch = users.get_matching({}).skip(offset).limit(batch_size)
+        if not batch:
+            break
+
+        for user in batch:
+            # Transform data
+            users.update_by_id(user["id"], {...})
+
+        offset += batch_size
+```
+
+### 4. Transaction Safety
+
+Wrap related changes in transactions. See [Transaction Strategy](#transaction-strategy) for rationale.
+
+```python
+def upgrade():
+    """Make multiple related changes atomically within this migration."""
+    from campus.storage.tables.backend.postgres import PostgreSQLTable
+
+    table = PostgreSQLTable("assignments")
+    with table._get_connection() as conn:
+        with conn.cursor() as cursor:
+            # These statements commit together as one unit
+            cursor.execute("ALTER TABLE assignments ADD COLUMN new_field TEXT")
+            cursor.execute("UPDATE assignments SET new_field = default_value")
+            conn.commit()
+            # If either fails, both roll back automatically
+```
+
+**Key principle:** Each `upgrade()`/`downgrade()` function is its own transaction boundary. Don't commit mid-migration.
+
+---
+
+## Migration Types
+
+### Type 1: Schema Migration (DDL)
+
+Changes to table/collection structure:
+
+```python
+# PostgreSQL - Add column
+def upgrade():
+    table = PostgreSQLTable("users")
+    table.init_from_schema(
+        'ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "display_name" TEXT;'
+    )
+
+def downgrade():
+    table = PostgreSQLTable("users")
+    table.init_from_schema(
+        'ALTER TABLE "users" DROP COLUMN IF EXISTS "display_name";'
+    )
+```
+
+### Type 2: Data Migration (DML)
+
+Transform existing data:
+
+```python
+def upgrade():
+    users = get_table("users")
+    all_users = users.get_matching({})
+
+    for user in all_users:
+        if "email" in user and "@" not in user["email"]:
+            # Fix malformed emails
+            users.update_by_id(user["id"], {"email": None})
+```
+
+### Type 3: Cross-Storage Migration
+
+Move data between storage types:
+
+```python
+def upgrade():
+    """Migrate from table to document storage."""
+    old_table = get_table("sessions")
+    new_collection = get_collection("sessions")
+
+    for session in old_table.get_matching({}):
+        new_collection.insert_one(session)
+```
+
+---
+
+## Rollback Protocol
+
+### Pre-Rollback Checklist
+
+1. **Backup current state** - Export data before rollback
+2. **Verify downgrade logic** - Test on staging first
+3. **Check dependencies** - Ensure no later migrations depend on this one
+4. **Plan forward migration** - Know how you'll re-apply after rollback
+
+### Rollback Execution
+
+```bash
+# 1. Check current state
+admin status
+
+# 2. Backup production data
+pg_dump $POSTGRESDB_URI > backup_$(date +%Y%m%d).sql
+
+# 3. Rollback to safe revision
+admin rollback 002
+
+# 4. Verify application health
+curl -f https://api.campus.nyjc.app/health || exit 1
+```
+
+---
+
+## Event Logging via Yapper
+
+All migrations emit events for audit and monitoring:
+
+```python
+# Events emitted:
+logger.emit("migration.applied", {
+    "revision_id": "003",
+    "description": "Add response timestamps",
+    "storage_type": "document",
+    "applied_at": "2025-03-13T10:30:00Z"
+})
+
+logger.emit("migration.rolled_back", {
+    "revision_id": "003",
+    "description": "Add response timestamps",
+    "storage_type": "document",
+    "rolled_back_at": "2025-03-13T11:00:00Z"
+})
+
+logger.emit("migration.failed", {
+    "revision_id": "004",
+    "error": "Duplicate key violation",
+    "traceback": "..."
+})
+```
+
+### Consuming Migration Events
+
+```python
+from campus_admin.yapper import Yapper
+
+yapper = Yapper()
+
+@yapper.on_event("migration.applied")
+def log_migration(event):
+    """Send migration notification to admins."""
+    send_alert(f"Migration {event.data['revision_id']} applied: {event.data['description']}")
+```
+
+---
+
+## Appendix: Migration Template
+
+```python
+"""{Description}.
+
+Revision ID: {XXX}
+Create Date: {YYYY-MM-DD}
+Storage Type: {table/document/object}
+"""
+
+from campus.storage import {{get_table, get_collection}}
+
+REVISION_ID = "{XXX}"
+DESCRIPTION = "{Description}"
+STORAGE_TYPE = "{table/document/object}"
+
+
+def upgrade():
+    """Apply this migration."""
+    # TODO: Implement forward migration
+    pass
+
+
+def downgrade():
+    """Reverse this migration."""
+    # TODO: Implement rollback
+    pass
+```
+
+---
+
+## References
+
+- [Issue #27: Storage Migration Protocol](https://github.com/nyjc-computing/campus/issues/27)
+- [Campus Storage Architecture](../architecture.md)
+- [PostgreSQL Table Backend](../campus/storage/tables/backend/postgres.py)
+- [MongoDB Document Backend](../campus/storage/documents/backend/mongodb.py)
+- [Yapper Event Framework](../campus/yapper/base.py)
