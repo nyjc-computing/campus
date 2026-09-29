@@ -177,9 +177,13 @@ class TestAuthUsersContract(unittest.TestCase):
         )
         self.assertIn(get_response.status_code, (404, 400))
 
-    @unittest.skip("ERROR: Response serialization issue with error handling")
-    def test_delete_user_requires_json_body(self):
-        """DELETE /users/{user_id} requires JSON body."""
+    def test_delete_user_without_body(self):
+        """DELETE /users/{user_id} without a JSON body deletes the user.
+
+        Regression test for #612: campus_python/campus-cli send DELETE
+        with no body and no Content-Type; this used to crash response
+        serialization with a bytes payload (500).
+        """
         user_id = self._create_test_user("delete.json.body@example.com", "JSON Body User")
 
         # Delete without JSON body
@@ -187,8 +191,14 @@ class TestAuthUsersContract(unittest.TestCase):
             f"/auth/v1/users/{user_id}/",
             headers=self.auth_headers
         )
-        # unpack_request decorator requires JSON
-        self.assertIn(del_response.status_code, (400, 401))
+        self.assertEqual(del_response.status_code, 200)
+
+        # Verify it's gone
+        get_response = self.client.get(
+            f"/auth/v1/users/{user_id}/",
+            headers=self.auth_headers
+        )
+        self.assertIn(get_response.status_code, (404, 400))
 
     def test_activate_user(self):
         """POST /users/{user_id}/activate activates a user account."""

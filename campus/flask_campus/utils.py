@@ -47,12 +47,19 @@ def get_request_payload() -> dict[str, Any]:
     if flask.request.method == "GET":
         return dict(flask.request.args)
 
+    # Bodyless requests (no Content-Type, empty body) are common for
+    # DELETE calls from API clients (campus_python/campus-cli send
+    # DELETE without a body), so treat them as an empty payload.
+    if not flask.request.get_data(cache=True):
+        return {}
+
     json_payload = flask.request.get_json(silent=True)
     if json_payload is None:
         raise api_errors.InvalidRequestError(
             message="Malformed JSON payload",
             error_code="MALFORMED_REQUEST",
-            body=flask.request.data,
+            # Error details must stay JSON-serializable; the raw body is bytes
+            body=flask.request.data.decode("utf-8", errors="replace"),
         ) from None
     if not isinstance(json_payload, dict):
         raise api_errors.InvalidRequestError(
