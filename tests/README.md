@@ -49,6 +49,12 @@ listed in its `UNREACHABLE_ALLOWLIST` with a reason.
 
 ### Fixture Lifecycle Gotchas
 
+For the full picture of how cross-service test requests are routed
+(transport patching, `register_test_app`, auth-header precedence), see
+**"How Cross-Service Test Requests Are Routed"** in
+[docs/TESTING-GUIDE.md](../docs/TESTING-GUIDE.md), including a minimal
+probe-script skeleton.
+
 - `ServiceManager.clear_test_data()` (called in per-test `setUp`) **wipes the
   credentials storage**. Bearer tokens created once in `setUpClass` are dead
   from the second test on — create tokens in `setUp`, *after* the clear
