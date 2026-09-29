@@ -41,8 +41,15 @@ from ..interface import TableInterface, PK
 # Global connection cache and lock for thread-safe SQLite access
 # This ensures all SQLiteTable instances share a single connection per database,
 # preventing concurrent write conflicts that cause "database is locked" errors.
+# The per-path locks are RLocks because composite operations (update_by_id's
+# read-modify-write) re-acquire the lock through the methods they call, and
+# they must serialize ALL statement execution on the shared connection -
+# reads included. Statement interleaving from concurrent threads on one
+# sqlite3.Connection is undefined behaviour and previously produced
+# "Could not decode to UTF-8" torn reads and "another row available"
+# errors (see #557 and its residual CI flakiness).
 _connections: dict[str, sqlite3.Connection] = {}
-_connection_locks: dict[str, threading.Lock] = {}
+_connection_locks: dict[str, threading.RLock] = {}
 _global_lock = threading.Lock()  # Protects the above dictionaries
 
 
@@ -268,7 +275,7 @@ class SQLiteTable(TableInterface):
                     cursor.close()
 
                     _connections[self.db_path] = conn
-                    _connection_locks[self.db_path] = threading.Lock()
+                    _connection_locks[self.db_path] = threading.RLock()
 
                 self._connection = _connections[self.db_path]
         else:
@@ -288,15 +295,19 @@ class SQLiteTable(TableInterface):
 
         Returns an empty list if the table doesn't exist yet.
         """
-        cursor = self.get_connection().cursor()
-        try:
-            cursor.execute(f"PRAGMA table_info({self.name})")
-            # row[1] is the column name
-            columns = [row[1] for row in cursor.fetchall()]
-            return columns
-        except sqlite3.OperationalError:
-            # Table doesn't exist yet
-            return []
+        # Serialize against other statements on the shared connection
+        with _connection_locks[self.db_path]:
+            cursor = self.get_connection().cursor()
+            try:
+                cursor.execute(f"PRAGMA table_info({self.name})")
+                # row[1] is the column name
+                columns = [row[1] for row in cursor.fetchall()]
+                return columns
+            except sqlite3.OperationalError:
+                # Table doesn't exist yet
+                return []
+            finally:
+                cursor.close()
 
     def _serialize_row(self, row: dict[str, Any]) -> tuple:
         """Serialize a row for storage using actual table columns.
@@ -347,9 +358,18 @@ class SQLiteTable(TableInterface):
         Raises:
             storage_errors.NotFoundError: If no row exists with the given ID
         """
-        cursor = self.get_connection().cursor()
-        cursor.execute(f"SELECT * FROM {self.name} WHERE id = ?", (row_id,))
-        sqlite_row = cursor.fetchone()
+        # Serialize the full statement lifecycle (execute + fetch + close)
+        # against other threads sharing this connection. Closing the cursor
+        # in finally resets any unfinished statement, so a decode error part
+        # way through fetching cannot leave a dangling statement that trips
+        # the next operation with "another row available".
+        with _connection_locks[self.db_path]:
+            cursor = self.get_connection().cursor()
+            try:
+                cursor.execute(f"SELECT * FROM {self.name} WHERE id = ?", (row_id,))
+                sqlite_row = cursor.fetchone()
+            finally:
+                cursor.close()
         row = self._deserialize_row(sqlite_row)
         if row is None:
             raise storage_errors.NotFoundError(row_id, self.name)
@@ -424,7 +444,6 @@ class SQLiteTable(TableInterface):
         Supports exact matches, comparison operators (gt, gte, lt, lte),
         sorting, and pagination.
         """
-        cursor = self.get_connection().cursor()
         where_clause, params = self._build_where_clause(query)
         sql = f"SELECT * FROM {self.name} {where_clause}"
 
@@ -444,8 +463,20 @@ class SQLiteTable(TableInterface):
         if offset > 0:
             sql += f" OFFSET {offset}"
 
-        cursor.execute(sql, params)
-        return [row for row in (self._deserialize_row(row) for row in cursor.fetchall()) if row is not None]
+        # Serialize the full statement lifecycle against other threads
+        # sharing this connection (see get_by_id).
+        with _connection_locks[self.db_path]:
+            cursor = self.get_connection().cursor()
+            try:
+                cursor.execute(sql, params)
+                rows = [
+                    row
+                    for row in (self._deserialize_row(r) for r in cursor.fetchall())
+                    if row is not None
+                ]
+            finally:
+                cursor.close()
+        return rows
 
     def insert_one(self, row: dict[str, Any]):
         """Insert a row into the table using actual table columns."""
@@ -466,7 +497,7 @@ class SQLiteTable(TableInterface):
                 value = json.dumps(value)
             values.append(value)
 
-        # Acquire lock for this database to prevent concurrent writes
+        # Serialize against other statements on the shared connection
         with _connection_locks[self.db_path]:
             cursor = conn.cursor()
             try:
@@ -484,49 +515,56 @@ class SQLiteTable(TableInterface):
                     group_name=self.name,
                     details={"row": row, "error": str(e)}
                 ) from e
+            finally:
+                cursor.close()
             conn.commit()
 
     def update_by_id(self, row_id: str, update: dict[str, Any]):
         """Update a row by its ID using actual table columns."""
-        # Get the existing row
-        existing_row = self.get_by_id(row_id)
-        if not existing_row:  # Empty dict means not found
-            return
-
-        # Merge the update
-        updated_row = existing_row.copy()
-        updated_row.update(update)
-
-        # Build UPDATE statement for only the columns being updated
-        conn = self.get_connection()
-        columns = self._get_table_columns()
-
-        # Filter to only columns that exist in the table and are in the updated row
-        set_clauses = []
-        values = []
-        for col in columns:
-            if col != PK and col in updated_row:  # Don't update the primary key
-                set_clauses.append(f'"{col}" = ?')
-                value = updated_row[col]
-                # Convert complex types to JSON strings for storage
-                if value is not None and not isinstance(value, (str, int, float, bool, type(None))):
-                    value = json.dumps(value)
-                values.append(value)
-
-        if not set_clauses:
-            return  # Nothing to update
-
-        values.append(row_id)  # For the WHERE clause
-        set_sql = ", ".join(set_clauses)
-
-        # Acquire lock for this database to prevent concurrent writes
+        # Hold the lock across the whole read-modify-write so the operation
+        # is atomic with respect to other threads. The RLock permits the
+        # nested acquisition inside get_by_id.
         with _connection_locks[self.db_path]:
+            # Get the existing row
+            existing_row = self.get_by_id(row_id)
+            if not existing_row:  # Empty dict means not found
+                return
+
+            # Merge the update
+            updated_row = existing_row.copy()
+            updated_row.update(update)
+
+            # Build UPDATE statement for only the columns being updated
+            conn = self.get_connection()
+            columns = self._get_table_columns()
+
+            # Filter to only columns that exist in the table and are in the updated row
+            set_clauses = []
+            values = []
+            for col in columns:
+                if col != PK and col in updated_row:  # Don't update the primary key
+                    set_clauses.append(f'"{col}" = ?')
+                    value = updated_row[col]
+                    # Convert complex types to JSON strings for storage
+                    if value is not None and not isinstance(value, (str, int, float, bool, type(None))):
+                        value = json.dumps(value)
+                    values.append(value)
+
+            if not set_clauses:
+                return  # Nothing to update
+
+            values.append(row_id)  # For the WHERE clause
+            set_sql = ", ".join(set_clauses)
+
             cursor = conn.cursor()
-            cursor.execute(
-                f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
-                tuple(values)
-            )
-            conn.commit()
+            try:
+                cursor.execute(
+                    f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
+                    tuple(values)
+                )
+                conn.commit()
+            finally:
+                cursor.close()
 
     def update_matching(self, query: dict[str, Any], update: dict[str, Any]):
         """Update rows matching a query."""
@@ -537,10 +575,13 @@ class SQLiteTable(TableInterface):
     def delete_by_id(self, row_id: str):
         """Delete a row by its ID."""
         conn = self.get_connection()
-        # Acquire lock for this database to prevent concurrent writes
+        # Serialize against other statements on the shared connection
         with _connection_locks[self.db_path]:
             cursor = conn.cursor()
-            cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
+            try:
+                cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
+            finally:
+                cursor.close()
             conn.commit()
 
     def delete_matching(self, query: dict[str, Any]):
@@ -554,12 +595,13 @@ class SQLiteTable(TableInterface):
         """Initialize the table from a Campus model definition."""
         conn = self.get_connection()
         create_table_sql = _model_to_sql_schema(name, model)
-        cursor = conn.cursor()
-        try:
-            cursor.execute(create_table_sql)
-        except Exception as e:
-            raise
-        else:
+        # Serialize against other statements on the shared connection
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(create_table_sql)
+            finally:
+                cursor.close()
             conn.commit()
 
     @devops.block_env(devops.PRODUCTION)
@@ -573,9 +615,14 @@ class SQLiteTable(TableInterface):
             schema: SQL CREATE TABLE statement defining the table structure.
         """
         conn = self.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(schema)
-        conn.commit()
+        # Serialize against other statements on the shared connection
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(schema)
+            finally:
+                cursor.close()
+            conn.commit()
 
     def close(self):
         """Close the database connection for this instance.
@@ -663,7 +710,7 @@ class SQLiteTable(TableInterface):
                 else:
                     # Create temporary connection with lock
                     conn = sqlite3.connect(db_path, timeout=10.0)
-                    lock = threading.Lock()
+                    lock = threading.RLock()
                     _connections[db_path] = conn
                     _connection_locks[db_path] = lock
 
