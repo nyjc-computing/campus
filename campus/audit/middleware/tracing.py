@@ -124,9 +124,15 @@ class ExecutorManager:
         return self._executor is not None
 
 
-# Thread pool manager for async ingestion (avoid blocking requests)
+# Ingestion executor (async, avoids blocking requests).
+# Single worker so span ingestions are processed serially (FIFO), per the
+# #557 resolution: multiple ingestion workers contended for the storage
+# layer. This alone does not make the shared test-mode SQLite connection
+# safe (the serving thread also uses it) - the storage backend's
+# per-connection statement locking handles that - but it keeps ingestion
+# ordered and halves the concurrency.
 _ingestion_executor_manager = ExecutorManager(
-    max_workers=2,
+    max_workers=1,
     thread_name_prefix="audit_ingest"
 )
 
