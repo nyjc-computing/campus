@@ -69,12 +69,46 @@ def get_request_payload() -> dict[str, Any]:
     return json_payload
 
 
+_BOOL_LITERALS: dict[str, bool] = {
+    "true": True,
+    "false": False,
+    "1": True,
+    "0": False,
+}
+
+
+def _coerce_str_value(value: Any, annotation: Any) -> Any:
+    """Coerce a string request value to the annotated scalar type.
+
+    Query and path parameters always arrive as strings, so handlers
+    annotating them as int/float/bool would otherwise receive strings.
+    Non-string values and other annotations pass through unchanged.
+
+    Raises ValueError if the string is not a valid literal for the type.
+    """
+    if not isinstance(value, str):
+        return value
+    if annotation is int:
+        return int(value)
+    if annotation is float:
+        return float(value)
+    if annotation is bool:
+        try:
+            return _BOOL_LITERALS[value.strip().lower()]
+        except KeyError:
+            raise ValueError(f"invalid boolean: {value!r}") from None
+    return value
+
+
 def unpack_into(
         func: Callable[..., Any],
         **request_args: Any,
 ) -> Any:
     """Unpack request arguments into the given function's arguments,
     based on its signature.
+
+    String values (query/path parameters) are coerced to the annotated
+    int/float/bool type; a failed coercion is reported as a field error.
 
     Raises ValidationError with structured field errors for any issues.
     """
@@ -112,6 +146,19 @@ def unpack_into(
             )
             for param in missing_params
         ])
+
+    for name, value in reconciled.items():
+        param = func_params.get(name)
+        if param is None or parameter.is_variadic(param):
+            continue
+        try:
+            reconciled[name] = _coerce_str_value(value, param.annotation)
+        except ValueError:
+            field_errors.append(FieldError(
+                field=name,
+                code="INVALID_TYPE",
+                message=f"Expected {param.annotation.__name__} for field: {name}"
+            ))
 
     if field_errors:
         raise ValidationError(
