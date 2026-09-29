@@ -10,6 +10,7 @@ import flask
 import campus.model
 from campus import flask_campus
 from campus.common import schema
+from campus.common.errors import api_errors, FieldError, ValidationError
 
 from .. import get_yapper
 from ..resources import credentials as creds_resource
@@ -93,7 +94,7 @@ def get_by_user(
 def update_credentials(
         provider: str,
         user_id: schema.UserID,
-        token: campus.model.OAuthToken,
+        token: dict,
 ) -> flask_campus.JsonResponse:
     """Update credentials for a specific provider and user ID.
 
@@ -105,9 +106,22 @@ def update_credentials(
     Returns: {}
     """
     client_id = flask.g.current_client.id
+    try:
+        # The body arrives as a plain dict; the resource layer expects
+        # an OAuthToken model.
+        oauth_token = campus.model.OAuthToken(**token)
+    except (TypeError, ValueError) as e:
+        raise ValidationError(
+            "token must be a valid token object",
+            errors=[FieldError(
+                field="token",
+                code="INVALID_FORMAT",
+                message=str(e)
+            )]
+        ) from e
     creds_resource[provider][user_id].update(
         client_id,
-        token
+        oauth_token
     )
     return {}, 200
 

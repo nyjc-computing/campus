@@ -139,7 +139,6 @@ class TestAuthCredentialsContract(unittest.TestCase):
         self.assertIn("error", data)
         self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
 
-    @unittest.skip("API BUG #325: PATCH /credentials/{provider}/{user_id} returns 500")
     def test_update_credentials(self):
         """PATCH /credentials/{provider}/{user_id} updates credentials."""
         import campus.model
@@ -157,6 +156,25 @@ class TestAuthCredentialsContract(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+
+    def test_update_credentials_invalid_token_returns_422(self):
+        """PATCH /credentials/{provider}/{user_id} with an invalid token
+        object returns 422, not 500.
+
+        Regression test for #325: a malformed token payload used to
+        surface as an unhandled error (500).
+        """
+        response = self.client.patch(
+            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            json={"token": {}},  # No expires_at or expiry_seconds
+            headers=self.bearer_auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
+        fields = {e["field"] for e in data["error"]["errors"]}
+        self.assertIn("token", fields)
 
     def test_delete_credentials(self):
         """DELETE /credentials/{provider}/{user_id} deletes credentials."""
