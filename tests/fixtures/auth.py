@@ -159,31 +159,15 @@ def ensure_public_oauth_client():
 
     The client_id is 'guest' as defined in campus.config.PUBLIC_OAUTH_CLIENT_ID.
 
+    Delegates to the production seed (campus.auth.resources.client.
+    ensure_public_client) so tests exercise the same code path that runs
+    at service startup.
+
     Prerequisites:
         - ENV must be 'testing'
         - Storage tables must be initialized
     """
-    from campus.auth import resources as auth_resources
-    from campus.auth.resources.client import client_storage
-    from campus.common import schema
-    import campus.config
+    from campus.auth.resources.client import ensure_public_client
 
     require.require_env("testing")
-
-    # Check if public client already exists
-    client_id = schema.CampusID(campus.config.PUBLIC_OAUTH_CLIENT_ID)
-    try:
-        client_storage.get_by_id(client_id)
-        return  # Already exists
-    except Exception:
-        pass  # Client doesn't exist, create it
-
-    # Create the public client
-    auth_resources.client.new(
-        id=client_id,
-        name="Public CLI Client",
-        description="Public OAuth client for CLI and device applications",
-        is_public=True,
-        redirect_uris=["urn:ietf:wg:oauth:2.0:oob"],  # RFC 8628 out-of-band URI
-        secret_hash=None  # Public clients have no secret
-    )
+    ensure_public_client()
