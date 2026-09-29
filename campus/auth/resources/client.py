@@ -11,7 +11,7 @@ import logging
 
 import campus.config
 from campus.common import env, schema
-from campus.common.errors import auth_errors
+from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import secret, uid
 import campus.model as model
 import campus.storage
@@ -295,9 +295,19 @@ class ClientsResource:
 
         Returns:
             Client instance
+
+        Raises:
+            api_errors.ConflictError: If a client with the same name
+                already exists (vault_clients.name is UNIQUE).
         """
         client = model.Client(**kwargs)
-        client_storage.insert_one(client.to_storage())
+        try:
+            client_storage.insert_one(client.to_storage())
+        except campus.storage.errors.ConflictError as e:
+            raise api_errors.ConflictError(
+                message=f"Client name '{client.name}' already exists",
+                name=client.name
+            ) from e
         return client
 
 
