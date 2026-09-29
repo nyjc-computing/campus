@@ -66,7 +66,16 @@ def handle_authorization_error(
     # Determine if this is an API request (expects JSON) or OAuth browser flow (expects redirect)
     accept_header = flask.request.headers.get("Accept", "")
     is_json_accept = "application/json" in accept_header
-    is_api_path = flask.request.path.startswith("/auth/v1/")
+    # All Campus services serve JSON under their versioned path prefixes.
+    # API clients (e.g. campus_python) do not send an Accept header, so
+    # without these prefixes every authorization error on campus.api /
+    # campus.audit would hit the ambiguous-request guard below and come
+    # back as 400 instead of its real status (#614).
+    is_api_path = flask.request.path.startswith((
+        "/auth/v1/",
+        "/api/v1/",
+        "/audit/v1/",
+    ))
     has_redirect_uri = err.redirect_uri is not None
 
     # API request detection: JSON Accept header or API path prefix

@@ -55,46 +55,37 @@ class FlaskTestResponse:
     def raise_for_status(self) -> None:
         """Raises an exception if the response status code indicates an error.
 
+        Mirrors campus_python's production JsonClient.raise_for_status():
+        the error is built via APIError.with_status_code() so callers see
+        exactly the same exception classes (campus_python.errors.*) under
+        the Flask test routing as they would over a real connection.
+
         Raises:
+            BadRequestError: If the status code is 400
             AuthenticationError: If the status code is 401
             AccessDeniedError: If the status code is 403
             NotFoundError: If the status code is 404
             ConflictError: If the status code is 409
-            InvalidRequestError: If the status code is 400 or 422
-            HttpClientError: For other 4xx or 5xx status codes
+            ValidationError: If the status code is 422
+            APIError: For other 4xx/5xx status codes
         """
-        from campus.common.http.errors import (
-            AuthenticationError,
-            AccessDeniedError,
-            NotFoundError,
-            ConflictError,
-            InvalidRequestError,
-            HttpClientError,
-        )
+        from campus_python import errors as campus_python_errors
 
         if not (self.client_error() or self.server_error()):
             return
 
-        status = self.status_code
-        message = self.text
+        try:
+            response_data = self.json()
+        except Exception:
+            response_data = None
+        if not isinstance(response_data, (dict, str)):
+            response_data = self.text
 
-        match status:
-            case 400:
-                raise InvalidRequestError(f"{status} Bad Request: {message}")
-            case 401:
-                raise AuthenticationError(f"{status} Unauthorized: {message}")
-            case 403:
-                raise AccessDeniedError(f"{status} Forbidden: {message}")
-            case 404:
-                raise NotFoundError(f"{status} Not Found: {message}")
-            case 409:
-                raise ConflictError(f"{status} Conflict: {message}")
-            case 422:
-                raise InvalidRequestError(
-                    f"{status} Unprocessable Entity: {message}")
-            case _:
-                # Generic error for other 4xx/5xx codes
-                raise HttpClientError(f"{status} HTTP Error: {message}")
+        error = campus_python_errors.APIError.with_status_code(
+            self.status_code, response_data
+        )
+        if error is not None:
+            raise error from None
 
     def json(self) -> Any:
         """Returns the response body as JSON."""

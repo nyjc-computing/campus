@@ -37,10 +37,9 @@ class TestApiSubmissionsContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.apps_app
 
-        # Create test user and token for bearer auth
+        # Create test user; the bearer token is re-created per test in
+        # setUp() because clear_test_data() wipes the credentials storage.
         cls.user_id = schema.UserID("test.user@campus.test")
-        cls.token = create_test_token(cls.user_id)
-        cls.auth_headers = get_bearer_auth_headers(cls.token)
 
         # Test data
         cls.test_assignment_id = "assignment_123"
@@ -56,6 +55,11 @@ class TestApiSubmissionsContract(unittest.TestCase):
         self.manager.clear_test_data()
 
         self.client = self.app.test_client()
+
+        # Re-create the bearer token after the clear: the token lives in
+        # credentials storage, which clear_test_data() wipes.
+        self.token = create_test_token(self.user_id)
+        self.auth_headers = get_bearer_auth_headers(self.token)
 
     def _create_test_submission(self, **overrides):
         """Helper to create a test submission via API.
