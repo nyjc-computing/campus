@@ -80,7 +80,6 @@ class TestAuthUsersContract(unittest.TestCase):
         self.assertIn("users", data)
         self.assertIsInstance(data["users"], list)
 
-    @unittest.skip("API BUG: POST /users/ returns 500 - _from_record expects id/created_at")
     def test_create_user_success(self):
         """POST /users/ creates a new user and returns user resource."""
         response = self.client.post(
@@ -99,7 +98,6 @@ class TestAuthUsersContract(unittest.TestCase):
         self.assertEqual(data["name"], "New User")
         self.assertIn("created_at", data)
 
-    @unittest.skip("API BUG: POST /users/ returns 500 - _from_record expects id/created_at")
     def test_create_user_missing_email_returns_error(self):
         """POST /users/ without email returns error."""
         response = self.client.post(
@@ -110,7 +108,6 @@ class TestAuthUsersContract(unittest.TestCase):
 
         self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG: POST /users/ returns 500 - _from_record expects id/created_at")
     def test_create_user_missing_name_returns_error(self):
         """POST /users/ without name returns error."""
         response = self.client.post(
