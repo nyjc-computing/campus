@@ -14,7 +14,7 @@ Clients Endpoints Reference:
 - DELETE /clients/{id}/               - Delete client (requires auth)
 - POST   /clients/{id}/revoke         - Revoke client secret (requires auth)
 - GET    /clients/{id}/access/        - Get client access (requires auth)
-- GET    /clients/{id}/access/check   - Check client access (API BUG: query params not coerced)
+- GET    /clients/{id}/access/check   - Check client access (requires auth)
 - POST   /clients/{id}/access/grant   - Grant client access (requires auth)
 - POST   /clients/{id}/access/revoke  - Revoke client access (requires auth)
 - PATCH  /clients/{id}/access/        - Update client access (requires auth)
@@ -256,7 +256,6 @@ class TestAuthClientsContract(unittest.TestCase):
         self.assertEqual(data["vault"], "test_vault")
         self.assertIn("access", data)
 
-    @unittest.skip("API BUG: GET query params not coerced to int - permission comes as string")
     def test_check_client_access(self):
         """GET /clients/{id}/access/check returns access boolean."""
         from campus.model import ClientAccess
@@ -271,6 +270,20 @@ class TestAuthClientsContract(unittest.TestCase):
         data = response.get_json()
         self.assertIn("vault", data)
         self.assertIn("permission", data)
+
+    def test_check_client_access_invalid_permission_returns_422(self):
+        """GET /clients/{id}/access/check with non-int permission returns 422."""
+        response = self.client.get(
+            f"/auth/v1/clients/{self.test_client_id}/access/check"
+            "?vault=test_vault&permission=notanint",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
+        fields = {e["field"] for e in data["error"]["errors"]}
+        self.assertIn("permission", fields)
 
     def test_grant_client_access(self):
         """POST /clients/{id}/access/grant grants vault access."""
