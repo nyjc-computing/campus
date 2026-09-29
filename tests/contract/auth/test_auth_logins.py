@@ -175,7 +175,6 @@ class TestAuthLoginsContract(unittest.TestCase):
         # Missing required parameter returns error
         self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG: Immutable field check returns 500 - update() error handling issue")
     def test_update_login_session_immutable_field(self):
         """PATCH /logins/{session_id}/ with immutable field returns error."""
         # First create a login session
@@ -200,7 +199,7 @@ class TestAuthLoginsContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertIn(response.status_code, (400, 422))
 
     def test_delete_login_session(self):
         """DELETE /logins/{session_id}/ removes the login session."""

@@ -151,7 +151,6 @@ class TestApiSubmissionsContract(unittest.TestCase):
         self.assertEqual(data["responses"][0]["question_id"], "q1")
         self.assertEqual(data["responses"][0]["response_text"], "Answer 1")
 
-    @unittest.skip("API BUG: Missing params returns 500 instead of 400 (same as bug #324)")
     def test_create_submission_missing_required_field(self):
         """POST /submissions/ without required field returns error."""
         response = self.client.post(
@@ -434,7 +433,6 @@ class TestApiSubmissionsContract(unittest.TestCase):
         self.assertEqual(len(submission_data["responses"]), 1)
         self.assertEqual(submission_data["responses"][0]["response_text"], "Updated answer")
 
-    @unittest.skip("API BUG: current_user is User object but code uses .get('id') (similar to assignments bug)")
     def test_add_feedback_to_submission(self):
         """POST /submissions/{submission_id}/feedback adds feedback (requires user context)."""
         submission_id = self._create_test_submission()
@@ -462,7 +460,6 @@ class TestApiSubmissionsContract(unittest.TestCase):
         self.assertEqual(submission_data["feedback"][0]["question_id"], "q1")
         self.assertEqual(submission_data["feedback"][0]["feedback_text"], "Great work!")
 
-    @unittest.skip("API BUG: current_user is User object but code uses .get('id') (similar to assignments bug)")
     def test_add_feedback_updates_existing(self):
         """POST /submissions/{submission_id}/feedback updates existing feedback."""
         submission_id = self._create_test_submission()

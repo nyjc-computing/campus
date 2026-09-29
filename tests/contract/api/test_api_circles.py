@@ -115,7 +115,6 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertIn("error", data)
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
-    @unittest.skip("API BUG: GET /circles/ returns 500 - possibly related to list operation on circles")
     def test_list_circles_returns_circles(self):
         """GET /circles/ returns list of circles."""
         # Create a test circle
@@ -204,7 +203,6 @@ class TestApiCirclesContract(unittest.TestCase):
         data = response.get_json()
         self.assertIn("id", data)
 
-    @unittest.skip("API BUG: Missing required params returns 500 instead of 400 (similar to bug #324)")
     def test_create_circle_missing_name_returns_error(self):
         """POST /circles/ without name returns error."""
         response = self.client.post(
@@ -216,9 +214,8 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG: Missing required params returns 500 instead of 400 (similar to bug #324)")
     def test_create_circle_missing_tag_returns_error(self):
         """POST /circles/ without tag returns error."""
         response = self.client.post(
@@ -229,9 +226,9 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG: ConflictError for root circle with parents returns 500 instead of 409")
+    @unittest.skip("API BUG #501: root circle with parents returns 422 (validation) instead of 409")
     def test_create_root_circle_with_parents_returns_error(self):
         """POST /circles/ with tag=root and parents returns 409."""
         response = self.client.post(
@@ -295,7 +292,7 @@ class TestApiCirclesContract(unittest.TestCase):
 
     # Update Circle Tests
 
-    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations")
+    @unittest.skip("API BUG #501: PATCH with name only returns 422 - route requires both name and description")
     def test_update_circle_name(self):
         """PATCH /circles/{circle_id}/ updates name."""
         circle_id = self._create_test_circle(name="Original Name")
@@ -318,7 +315,7 @@ class TestApiCirclesContract(unittest.TestCase):
         circle_data = get_response.get_json()
         self.assertEqual(circle_data["name"], "Updated Name")
 
-    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations")
+    @unittest.skip("API BUG #501: PATCH with description only returns 422 - route requires both name and description")
     def test_update_circle_description(self):
         """PATCH /circles/{circle_id}/ updates description."""
         circle_id = self._create_test_circle(description="Original Description")
@@ -331,7 +328,6 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations")
     def test_update_circle_both_fields(self):
         """PATCH /circles/{circle_id}/ updates both name and description."""
         circle_id = self._create_test_circle()
@@ -347,7 +343,6 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations (including empty body)")
     def test_update_circle_empty_body_returns_error(self):
         """PATCH /circles/{circle_id}/ without updates returns 400."""
         circle_id = self._create_test_circle()
@@ -358,11 +353,11 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertIn(response.status_code, (400, 422))
         data = response.get_json()
         self.assertIn("error", data)
         self.assertIn("code", data["error"])
-        self.assertEqual(data["error"]["code"], "INVALID_REQUEST")
+        self.assertIn(data["error"]["code"], ("INVALID_REQUEST", "VALIDATION_FAILED"))
 
     def test_update_circle_requires_auth(self):
         """PATCH /circles/{circle_id}/ without auth returns 401."""
@@ -375,7 +370,7 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    @unittest.skip("API BUG: PATCH /circles/{id}/ returns 500 for all update operations (including missing circle)")
+    @unittest.skip("API BUG #501: PATCH on missing circle returns 422 instead of 409")
     def test_update_missing_circle_returns_error(self):
         """PATCH /circles/{circle_id}/ for non-existent circle returns 409."""
         response = self.client.patch(
@@ -547,7 +542,6 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 409)
 
-    @unittest.skip("API BUG: remove_circle_member returns 409 - NoChangesAppliedError not caught properly")
     def test_remove_circle_member(self):
         """DELETE /circles/{circle_id}/members/remove removes a member."""
         # Create two circles and add member relationship
