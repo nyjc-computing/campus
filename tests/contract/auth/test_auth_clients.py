@@ -185,6 +185,53 @@ class TestAuthClientsContract(unittest.TestCase):
         )
         self.assertIn(get_response.status_code, (400, 404, 409, 302))
 
+    def test_delete_client_without_body(self):
+        """DELETE /clients/{id}/ without a JSON body deletes the client.
+
+        Regression test for #612: campus_python/campus-cli send DELETE
+        with no body and no Content-Type. The malformed-payload error
+        carried the raw bytes body in its details, which crashed JSON
+        serialization and turned every bodyless DELETE into a 500.
+        """
+        create_response = self.client.post(
+            "/auth/v1/clients/",
+            json={"name": "client-to-delete-no-body", "description": "Will be deleted"},
+            headers=self.auth_headers
+        )
+        client_id = create_response.get_json()["id"]
+
+        # No json kwarg: no body, no Content-Type header
+        del_response = self.client.delete(
+            f"/auth/v1/clients/{client_id}/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(del_response.status_code, 200)
+
+        # Verify it's gone
+        get_response = self.client.get(
+            f"/auth/v1/clients/{client_id}/",
+            headers=self.auth_headers
+        )
+        self.assertIn(get_response.status_code, (400, 404, 409, 302))
+
+    def test_create_client_malformed_json_returns_400(self):
+        """POST /clients/ with a malformed JSON body returns 400, not 500.
+
+        Regression test for #612: the error details used to embed the
+        raw bytes body, which is not JSON serializable.
+        """
+        response = self.client.post(
+            "/auth/v1/clients/",
+            data="{not json",
+            content_type="application/json",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "MALFORMED_REQUEST")
+        self.assertEqual(data["error"]["details"]["body"], "{not json")
+
     def test_get_client_access_list(self):
         """GET /clients/{id}/access/ returns access list."""
         response = self.client.get(
