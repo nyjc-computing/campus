@@ -286,8 +286,15 @@ class TestOAuthIntegration(IntegrationTestCase):
         expiry_seconds = campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS
 
         # Create a device code in the "past" by mocking time during creation
-        # The device code's expires_at will be set based on the mocked time
-        past_time = utc_time.now() - timedelta(seconds=expiry_seconds + 1)
+        # The device code's expires_at will be set based on the mocked time.
+        # The margin must exceed expiry_seconds by MORE than is_expired()'s
+        # 1-second threshold: is_expired() requires (now - expires_at) > 1
+        # strictly, so a margin of exactly +1 makes the verdict depend on the
+        # clock advancing between this read and the server's check. When the
+        # whole round trip lands inside one OS clock tick (~15ms on Windows),
+        # (now - expires_at) is exactly 1.0 and the code reads as pending,
+        # flaking this test.
+        past_time = utc_time.now() - timedelta(seconds=expiry_seconds + 2)
 
         with mock.patch('campus.common.utils.utc_time.now', return_value=past_time):
             # Create device code (will have expires_at in the past relative to real time)
