@@ -106,7 +106,7 @@ class SQLiteYapper(YapperInterface):
         event_id = self._execute(
             "INSERT INTO events (label, data) VALUES (?, ?) RETURNING id",
             (label, str(data))
-        )["fetchall"][0]
+        )["fetchall"][0]["id"]
         # Get subscriptions
         subscriptions = [
             row["client_id"] for row in self._execute(
@@ -116,8 +116,8 @@ class SQLiteYapper(YapperInterface):
         ]
         # Notify subscriptions
         self._executemany(
-            "INSERT INTO unread (client_id, event_id) VALUES (?, ?)",
-            [(client_id, event_id) for client_id in subscriptions]
+            "INSERT INTO unread (client_id, label, event_id) VALUES (?, ?, ?)",
+            [(client_id, label, event_id) for client_id in subscriptions]
         )
 
     def subscribe(self, label: EventLabel) -> None:

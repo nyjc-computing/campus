@@ -129,8 +129,8 @@ class PostgreSQLYapper(YapperInterface):
         # Notify subscriptions
         if subscriptions:
             self._executemany(
-                "INSERT INTO unread (client_id, event_id) VALUES (%s, %s)",
-                [(client_id, event_id) for client_id in subscriptions]
+                "INSERT INTO unread (client_id, label, event_id) VALUES (%s, %s, %s)",
+                [(client_id, label, event_id) for client_id in subscriptions]
             )
 
     def subscribe(self, label: EventLabel) -> None:
