@@ -51,8 +51,10 @@ DEFAULT_TOKEN_EXPIRY_DAYS = 7
 DEFAULT_DEVICE_CODE_EXPIRY_SECONDS = 600  # 10 minutes
 DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 
-# Public OAuth client ID for CLI/device apps (no database entry required)
-# This client type skips database validation and relies entirely on user credentials
+# Public OAuth client ID for CLI/device apps (RFC 6749 Section 2.1)
+# Stored in the database as a client with is_public=True and no secret;
+# seeded at auth service startup (see campus.auth.resources.client.
+# ensure_public_client) so it cannot be missing after a database reset.
 PUBLIC_OAUTH_CLIENT_ID = "guest"
 
 SUPPORTED_OAUTH2_GRANT_TYPES = ("code", "device_code")

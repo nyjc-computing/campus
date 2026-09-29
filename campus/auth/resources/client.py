@@ -7,6 +7,7 @@ __all__ = []
 
 import typing
 
+import campus.config
 from campus.common import env, schema
 from campus.common.errors import auth_errors
 from campus.common.utils import secret, uid
@@ -75,6 +76,55 @@ def _get_all_client_permissions() -> dict[str, dict[str, int]]:
             permissions[client_id] = {}
         permissions[client_id][label] = access_flag
     return permissions
+
+
+def ensure_public_client() -> bool:
+    """Ensure the public OAuth client for CLI/device apps exists.
+
+    Creates the public client identified by
+    campus.config.PUBLIC_OAUTH_CLIENT_ID if it is missing from storage.
+    This is the client used for the OAuth 2.0 Device Authorization Flow
+    (RFC 8628) by CLI, mobile and native applications that cannot
+    securely store client credentials (RFC 6749 Section 2.1 public
+    clients). It has no secret and is validated by client_id only.
+
+    This seed cannot go through the HTTP API: creating a client requires
+    an authenticated token, which requires completing the device flow,
+    which requires this client to exist (chicken-and-egg). It must be
+    applied directly against storage.
+
+    Idempotent: safe to re-run on every startup and deployment. An
+    existing record is never modified.
+
+    Returns:
+        True if the client was created, False if it already existed.
+
+    Raises:
+        campus.storage.errors.StorageError: If the client record cannot
+            be read or created.
+    """
+    client_id = schema.CampusID(campus.config.PUBLIC_OAUTH_CLIENT_ID)
+    try:
+        client_storage.get_by_id(client_id)
+        return False
+    except campus.storage.errors.NotFoundError:
+        pass
+
+    client = model.Client(
+        id=client_id,
+        name="Public CLI Client",
+        description="Public OAuth client for CLI and device applications",
+        is_public=True,
+        # RFC 8628 out-of-band redirect URI for device flow clients
+        redirect_uris=["urn:ietf:wg:oauth:2.0:oob"],
+    )
+    try:
+        client_storage.insert_one(client.to_storage())
+    except campus.storage.ConflictError:
+        # Seeded concurrently by another worker; the client now exists
+        # with the intended values, which is the desired end state.
+        return False
+    return True
 
 
 class ClientsResource:

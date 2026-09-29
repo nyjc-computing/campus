@@ -11,6 +11,8 @@ integrations.
 # use within campus.auth only.
 __all__ = ["init_app", "get_yapper"]
 
+import logging
+
 import flask
 from typing import TYPE_CHECKING
 
@@ -19,6 +21,8 @@ if TYPE_CHECKING:
 
 # Module-level yapper instance shared across all routes
 _yapper_instance: "YapperInterface | None" = None
+
+logger = logging.getLogger(__name__)
 
 
 def get_yapper() -> "YapperInterface":
@@ -122,3 +126,45 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     # causing confusing 401 errors on authenticated endpoints.
     if isinstance(app, flask.Flask):
         app.url_map.strict_slashes = True
+
+    # Ensure the public OAuth client ('guest') exists so device-flow
+    # login works out of the box. Runs on every startup (idempotent) so
+    # a database reset self-heals on the next deploy instead of silently
+    # breaking the device flow with client-facing 400s (#605).
+    _seed_public_client()
+
+
+def _seed_public_client() -> None:
+    """Seed the public OAuth client, logging loudly on failure.
+
+    The public client cannot be created through the authenticated HTTP
+    API (chicken-and-egg: authentication requires it to exist), so it
+    must be seeded directly against storage at startup.
+
+    Failure to seed is logged at ERROR level with the recovery command
+    but does not abort startup, so an unrelated seed failure does not
+    take down the rest of the auth service.
+    """
+    import campus.config
+    from campus.common import devops
+
+    # Ensure the clients tables exist before seeding (no-op if present).
+    # In production, schema management is handled by migrations/scripts,
+    # so table initialization is blocked there.
+    try:
+        if devops.ENV != devops.PRODUCTION:
+            from .resources.client import ClientsResource
+            ClientsResource.init_storage()
+        from .resources.client import ensure_public_client
+        if ensure_public_client():
+            logger.info(
+                "Seeded public OAuth client '%s'",
+                campus.config.PUBLIC_OAUTH_CLIENT_ID
+            )
+    except Exception:
+        logger.exception(
+            "Failed to seed public OAuth client '%s': device-flow login "
+            "will fail until the client exists. Recover with: "
+            "python scripts/seed_public_oauth_client.py",
+            campus.config.PUBLIC_OAUTH_CLIENT_ID
+        )
