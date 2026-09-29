@@ -78,7 +78,6 @@ class TestAuthLoginsContract(unittest.TestCase):
         self.assertIn("id", data)
         self.assertEqual(data["device_id"], "test-device-123")
 
-    @unittest.skip("API BUG: Missing params returns 500 instead of 400 - unpack_into KeyError")
     def test_create_login_session_missing_agent_string(self):
         """POST /logins/ without agent_string returns error."""
         response = self.client.post(
@@ -152,7 +151,6 @@ class TestAuthLoginsContract(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["id"], session_id)
 
-    @unittest.skip("API BUG: Missing params returns 500 instead of 400 - unpack_into KeyError")
     def test_update_login_session_missing_expiry(self):
         """PATCH /logins/{session_id}/ without expiry_seconds returns error."""
         # First create a login session
