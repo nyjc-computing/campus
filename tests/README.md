@@ -25,6 +25,45 @@ poetry run python tests/run_tests.py all
 - **Cross-platform compatible**: Tests run on Windows, Linux, and macOS via the test runner.
 - **Tests should ideally be invoked through `tests/run_tests.py`** for consistent environment and cross-platform executable detection.
 
+### Which Suites Run Where
+
+| Suite | Runs in CI? | Notes |
+|-------|------------|-------|
+| sanity | Yes | incl. the discovery guard (`tests/sanity/test_discovery.py`) |
+| type | Yes | pyright |
+| unit | Yes | `unittest discover tests/unit` |
+| integration | Yes | `unittest discover tests/integration` |
+| contract | **No — local only** | Compare against the current `weekly` baseline; failures = real bugs |
+| performance | No (manual) | `tests/run_tests.py performance` |
+
+CI never runs the contract suite, so a green PR check does **not** mean the
+HTTP contracts pass — run it locally before merging endpoint changes.
+
+### Test-File Reachability
+
+unittest discovery silently skips directories without `__init__.py`, and the
+sanity runner only executes what `tests/sanity_check.py` imports. The sanity
+guard (`tests/sanity/test_discovery.py`) fails when a `tests/**/test_*.py`
+file is unreachable by any runner. Deliberately-unreachable files must be
+listed in its `UNREACHABLE_ALLOWLIST` with a reason.
+
+### Fixture Lifecycle Gotchas
+
+- `ServiceManager.clear_test_data()` (called in per-test `setUp`) **wipes the
+  credentials storage**. Bearer tokens created once in `setUpClass` are dead
+  from the second test on — create tokens in `setUp`, *after* the clear
+  (see the api contract fixtures for the pattern).
+- Test doubles must mirror production exactly: `tests/flask_test/response.py`
+  raises the same `campus_python.errors` classes (via
+  `APIError.with_status_code`) that the production client raises, so product
+  error-handling code behaves identically under test routing and over the wire.
+
+### Auditing Skip Markers
+
+`python scripts/audit_skipped_tests.py [--reason "API BUG"]` runs skipped
+tests with the skip neutralized and reports PASS (stale marker) vs FAIL
+(still live). See the Testing Guide's "Skip Markers" policy.
+
 ### Poetry Usage Example
 
 To run tests using the Poetry environment, use:
