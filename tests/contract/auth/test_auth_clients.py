@@ -65,6 +65,36 @@ class TestAuthClientsContract(unittest.TestCase):
         self.assertEqual(data["description"], "Test client for contract testing")
         self.assertIn("created_at", data)
 
+    def test_create_duplicate_client_name_returns_409(self):
+        """POST /clients/ with a duplicate name returns 409, not 500.
+
+        Regression test for #185: vault_clients.name is UNIQUE, and the
+        storage-level conflict used to propagate unhandled out of
+        ClientsResource.new() as a 500.
+        """
+        first = self.client.post(
+            "/auth/v1/clients/",
+            json={
+                "name": "duplicate-name-client",
+                "description": "First client with this name"
+            },
+            headers=self.auth_headers
+        )
+        self.assertEqual(first.status_code, 200)
+
+        second = self.client.post(
+            "/auth/v1/clients/",
+            json={
+                "name": "duplicate-name-client",
+                "description": "Second client with the same name"
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(second.status_code, 409)
+        data = second.get_json()
+        self.assertEqual(data["error"]["code"], "CONFLICT")
+
     def test_list_clients_requires_auth(self):
         """GET /clients without auth returns 401."""
         response = self.client.get("/auth/v1/clients/")
