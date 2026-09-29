@@ -14,10 +14,11 @@ def has_default(parameter: inspect.Parameter) -> bool:
 
 
 def is_keyword_supported(parameter: inspect.Parameter) -> bool:
-    """Check if a parameter can be passed as a keyword argument."""
+    """Check if a function parameter can be passed as a keyword argument."""
     return parameter.kind in (
         inspect.Parameter.POSITIONAL_OR_KEYWORD,
         inspect.Parameter.KEYWORD_ONLY,
+        inspect.Parameter.VAR_KEYWORD,
     )
 
 

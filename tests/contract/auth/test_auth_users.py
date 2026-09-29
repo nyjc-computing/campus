@@ -143,7 +143,6 @@ class TestAuthUsersContract(unittest.TestCase):
 
         self.assertIn(response.status_code, (404, 400))
 
-    @unittest.skip("API BUG: PATCH /users/ returns 500 - user_id kwarg not handled")
     def test_update_user_returns_501(self):
         """PATCH /users/{user_id} returns 501 (not implemented)."""
         user_id = self._create_test_user("patch.test@example.com", "Patch Test User")
