@@ -88,7 +88,6 @@ class TestApiEmailOtpContract(unittest.TestCase):
         self.assertIn("message", data)
         self.assertEqual(data["message"], "OTP sent")
 
-    @unittest.skip("API BUG: Missing required params returns KeyError (500) instead of 400 (similar to bug #324)")
     def test_request_otp_missing_email_returns_error(self):
         """POST /emailotp/request without email returns error."""
         response = self.client.post(
@@ -97,9 +96,9 @@ class TestApiEmailOtpContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG: Email sender error (KeyError: SMTP_USERNAME) returns 500 instead of 400")
+    @unittest.skip("API BUG #502: empty email passes validation and resources.emailotp.request() 500s - emailotp storage table is not initialised in the test harness")
     def test_request_otp_empty_email_returns_error(self):
         """POST /emailotp/request with empty email returns error."""
         response = self.client.post(
@@ -138,7 +137,6 @@ class TestApiEmailOtpContract(unittest.TestCase):
         self.assertIn("code", data["error"])
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
-    @unittest.skip("API BUG: Missing required params returns KeyError (500) instead of 400 (similar to bug #324)")
     def test_verify_otp_missing_email_returns_error(self):
         """POST /emailotp/verify without email returns error."""
         response = self.client.post(
@@ -147,9 +145,8 @@ class TestApiEmailOtpContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG: Missing required params returns KeyError (500) instead of 400 (similar to bug #324)")
     def test_verify_otp_missing_otp_returns_error(self):
         """POST /emailotp/verify without OTP returns error."""
         response = self.client.post(
@@ -158,7 +155,7 @@ class TestApiEmailOtpContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertIn(response.status_code, (400, 422))
 
     def test_verify_otp_not_found_returns_error(self):
         """POST /emailotp/verify for email with no OTP returns 409."""

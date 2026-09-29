@@ -119,18 +119,25 @@ class TestAuthCredentialsContract(unittest.TestCase):
         self.assertIn("id", data)
         self.assertIn("scopes", data)
 
-    @unittest.skip("API BUG: Missing params returns KeyError (500) instead of InvalidRequestError (400)")
-    def test_create_credentials_missing_fields_returns_400(self):
-        """POST /credentials/{provider}/{user_id} without required fields returns 400."""
+    def test_create_credentials_missing_fields_returns_422(self):
+        """POST /credentials/{provider}/{user_id} without required fields returns 422.
+
+        Missing request fields raise the structured ValidationError
+        (422 VALIDATION_FAILED) from unpack_into, per the error-handling
+        convention introduced by #347.
+        """
         response = self.client.post(
             f"/auth/v1/credentials/campus/{self.test_user_id}",
             json={},  # Missing scopes and expiry_seconds
             headers=self.bearer_auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
 
-    @unittest.skip("API BUG: Update credentials returns 500 - possibly needs OAuth token object")
+    @unittest.skip("API BUG #325: PATCH /credentials/{provider}/{user_id} returns 500")
     def test_update_credentials(self):
         """PATCH /credentials/{provider}/{user_id} updates credentials."""
         import campus.model

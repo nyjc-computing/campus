@@ -112,7 +112,6 @@ class TestApiAssignmentsContract(unittest.TestCase):
         self.assertIn("data", data)
         self.assertGreater(len(data["data"]), 0)
 
-    @unittest.skip("API BUG: current_user is User object but code uses .get('id') at assignments.py:85")
     def test_create_assignment(self):
         """POST /assignments/ creates a new assignment."""
         response = self.client.post(
@@ -130,7 +129,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
         self.assertIn("title", data)
         self.assertEqual(data["title"], "New Assignment")
 
-    @unittest.skip("API BUG: current_user is User object but code uses .get('id') at assignments.py:85")
+    @unittest.skip("API BUG #328: POST /assignments/ with questions returns 500")
     def test_create_assignment_with_questions(self):
         """POST /assignments/ with questions creates assignment with questions."""
         questions = [
@@ -151,7 +150,6 @@ class TestApiAssignmentsContract(unittest.TestCase):
         self.assertIn("questions", data)
         self.assertGreater(len(data["questions"]), 0)
 
-    @unittest.skip("API BUG: current_user is User object but code uses .get('id') at assignments.py:85")
     def test_create_assignment_with_classroom_links(self):
         """POST /assignments/ with classroom_links creates assignment with links."""
         classroom_links = [
