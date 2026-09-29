@@ -109,6 +109,40 @@ class TestEnsurePublicClient(unittest.TestCase):
         self.assertEqual(record["name"], "Pre-existing Client")
         self.assertEqual(record["description"], "Created before the seed ran")
 
+    def test_seed_reports_name_collision_without_raising(self):
+        """A different client holding the seed name is reported, not crashed.
+
+        The seed insert conflicts on the UNIQUE name constraint; the
+        guest row stays absent and the caller gets False rather than an
+        exception, with remediation logged.
+        """
+        import campus.config
+        from campus.auth.resources.client import client_storage
+
+        # Pre-create a confidential client occupying the seed's name
+        self.ClientsResource().new(
+            name="Public CLI Client",
+            description="Unrelated client that took the name",
+        )
+
+        created = self._get_seed()()
+
+        self.assertFalse(created)
+        with self.assertRaises(Exception):
+            client_storage.get_by_id(campus.config.PUBLIC_OAUTH_CLIENT_ID)
+
+    def test_schema_alignment_is_noop_in_testing(self):
+        """ensure_public_client_schema() skips test-mode storage.
+
+        Test tables are created fresh from the model and SQLite does not
+        support ADD COLUMN IF NOT EXISTS, so the function must bail out
+        before issuing SQL in the testing environment.
+        """
+        from campus.auth.resources.client import ensure_public_client_schema
+
+        # Must not raise despite the SQLite backend
+        self.assertIsNone(ensure_public_client_schema())
+
     def test_seeded_client_passes_resource_get(self):
         """The seeded record is readable through the client resource."""
         import campus.config

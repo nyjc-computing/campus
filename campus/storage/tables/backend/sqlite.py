@@ -469,10 +469,21 @@ class SQLiteTable(TableInterface):
         # Acquire lock for this database to prevent concurrent writes
         with _connection_locks[self.db_path]:
             cursor = conn.cursor()
-            cursor.execute(
-                f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
-                tuple(values)
-            )
+            try:
+                cursor.execute(
+                    f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
+                    tuple(values)
+                )
+            except sqlite3.IntegrityError as e:
+                # Match the PostgreSQL backend's error contract so callers
+                # see the same exception type on unique constraint
+                # violations regardless of backend.
+                conn.rollback()
+                raise storage_errors.ConflictError(
+                    message="Conflict occurred during insert",
+                    group_name=self.name,
+                    details={"row": row, "error": str(e)}
+                ) from e
             conn.commit()
 
     def update_by_id(self, row_id: str, update: dict[str, Any]):
