@@ -148,13 +148,18 @@ def _seed_public_client() -> None:
     import campus.config
     from campus.common import devops
 
-    # Ensure the clients tables exist before seeding (no-op if present).
+    # Ensure the clients tables exist and their schema is aligned for
+    # public client support before seeding (both no-ops if up to date).
     # In production, schema management is handled by migrations/scripts,
     # so table initialization is blocked there.
     try:
         if devops.ENV != devops.PRODUCTION:
-            from .resources.client import ClientsResource
+            from .resources.client import (
+                ClientsResource,
+                ensure_public_client_schema,
+            )
             ClientsResource.init_storage()
+            ensure_public_client_schema()
         from .resources.client import ensure_public_client
         if ensure_public_client():
             logger.info(

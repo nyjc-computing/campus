@@ -155,3 +155,12 @@ class TableInterface(ABC):
     def init_from_model(self, name: str, model: type[InternalModel | Model]) -> None:
         """Initialize the table from a Campus model definition."""
         ...
+
+    @abstractmethod
+    def init_from_schema(self, schema: str) -> None:
+        """Initialize the table with the given SQL schema.
+
+        Both backends implement this; production-schema management
+        conventions may restrict its use (see backend implementations).
+        """
+        ...

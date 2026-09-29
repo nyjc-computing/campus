@@ -30,7 +30,10 @@ if 'POSTGRESDB_URI' not in os.environ:
     print("WARNING: POSTGRESDB_URI not set in environment")
     print("Proceeding - the storage backend will fail if unconfigured")
 
-from campus.auth.resources.client import ensure_public_client
+from campus.auth.resources.client import (
+    ensure_public_client,
+    ensure_public_client_schema,
+)
 import campus.config
 
 print("=" * 80)
@@ -38,6 +41,9 @@ print("SEEDING PUBLIC OAUTH CLIENT")
 print("=" * 80)
 
 try:
+    # Align the table schema first (no-op where not applicable), so the
+    # seed works on databases whose vault_clients table predates PR #604
+    ensure_public_client_schema()
     created = ensure_public_client()
 except Exception as e:
     print(f"✗ Error seeding public OAuth client: {e}")
