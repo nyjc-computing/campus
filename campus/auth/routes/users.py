@@ -9,6 +9,7 @@ Authentication is handled in a global routes.before_request hook.
 """
 
 import flask
+from typing import Any
 
 from campus import flask_campus
 from campus.common import schema
@@ -97,11 +98,11 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
 
 @bp.patch("/<user_id>/")
 @flask_campus.unpack_request
-def update() -> flask_campus.JsonResponse:
+def update(user_id: schema.UserID, **updates: Any) -> flask_campus.JsonResponse:
     """Update a user
 
     PATCH /users/{user_id}
-    Body: {}  (unsupported for now)
+    Body: any (ignored; update not implemented yet)
     Returns: User
     """
     return {}, 501
