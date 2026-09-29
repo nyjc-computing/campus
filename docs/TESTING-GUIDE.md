@@ -205,6 +205,63 @@ class TestMyFeature(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
             cls._skip_dependency("Service not available. See: #123")
 ```
 
+### How Cross-Service Test Requests Are Routed (tests/flask_test)
+
+Integration and contract tests run several Campus services in one process
+and route cross-service calls through Flask test clients instead of real
+HTTP. When debugging "works locally but not in the harness" (or the
+reverse), this is the machinery involved:
+
+- **Transport patching:** `tests/fixtures/services.py` calls
+  `flask_test.patch_campus_python()`, replacing campus_python's HTTP
+  transport with `TestCampusRequest`. From that point, every
+  `campus.auth.root.authenticate(...)`-style call made by service code
+  goes to a registered Flask app, not the network.
+- **URL routing:** each Flask app is registered with
+  `flask_test.register_test_app("https://campus.test", app,
+  path_prefix="/auth" | "/api" | "/audit")`. campus_python builds its
+  base URL from the `HOSTNAME` env var, which the fixture sets to
+  `campus.test`; the path prefix selects the app.
+- **Outgoing auth headers:** `TestCampusRequest` attaches credentials in
+  this precedence: `ACCESS_TOKEN` (Bearer) first, then
+  `CLIENT_ID`/`CLIENT_SECRET` (Basic). The fixture sets `ACCESS_TOKEN`
+  to the audit API key so the audit client can ingest spans.
+- **Error fidelity:** `tests/flask_test/response.py` raises the same
+  `campus_python.errors` classes as production `raise_for_status()`
+  (via `APIError.with_status_code`). If you change one, change both.
+- **`ServiceManager` lifecycle:** `initialize()` order is env vars →
+  test storage mode → transport patch → `auth.init()` → audit API key →
+  Flask apps. `clear_test_data()` (per-test `setUp`) wipes all storage,
+  then re-creates the default client and audit key — **credentials and
+  bearer tokens minted before the clear are gone**, so create tokens in
+  `setUp` *after* calling it.
+
+Minimal probe skeleton (adapt as needed; keep probes out of commits):
+
+```python
+import sys
+sys.path.insert(0, ".")  # repo root
+from campus.common import env, schema
+from tests.fixtures import services
+from tests.fixtures.tokens import (
+    create_test_token, get_basic_auth_headers, get_bearer_auth_headers,
+)
+
+mgr = services.create_service_manager()
+mgr.initialize()
+client = mgr.apps_app.test_client()          # or mgr.auth_app / mgr.audit_app
+
+# Basic auth (service client)
+r = client.get("/api/v1/circles/",
+               headers=get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET))
+# Bearer auth (user token, registered in credentials storage)
+token = create_test_token(schema.UserID("probe@campus.test"))
+r = client.get("/api/v1/circles/", headers=get_bearer_auth_headers(token))
+print(r.status_code, r.get_json())
+
+mgr.cleanup()
+```
+
 ### Contract Tests
 
 **Purpose:** Verify HTTP interface contracts.

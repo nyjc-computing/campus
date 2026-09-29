@@ -126,6 +126,29 @@ from campus.common.utils import uid, utc_time
 
 See [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md) for complete import guidelines.
 
+### Verification & Debugging
+
+When fixing bugs or touching endpoints, verify with these (see
+[docs/TESTING-GUIDE.md](docs/TESTING-GUIDE.md) for details):
+
+```bash
+poetry run python tests/run_tests.py unit          # fast signal
+poetry run python tests/run_tests.py integration   # CI gate
+poetry run python tests/run_tests.py contract      # HTTP contracts (local-only, CI does NOT run it)
+```
+
+- **The contract suite should be green** (all remaining failures are skips
+  that cite their issue). A new contract failure is a regression you
+  introduced. Every skip marker must cite an issue number; re-verify
+  markers with `python scripts/audit_skipped_tests.py`.
+- **Before debugging test oddities** (auth failures, 500s that only happen
+  in tests, tokens that "should work"), read the gotchas in
+  [tests/README.md](tests/README.md) and the "How Cross-Service Test
+  Requests Are Routed" section of the Testing Guide — the harness routes
+  requests through Flask test clients and has known lifecycle traps
+  (`clear_test_data()` wipes credentials; test doubles must mirror
+  production error classes).
+
 ## Before You Start
 
 - [ ] Have you read the relevant documentation?
