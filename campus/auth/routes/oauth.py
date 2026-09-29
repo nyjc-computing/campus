@@ -641,9 +641,9 @@ def device_verification(user_code: str | None = None):
                 <p>Your device has been successfully authorized.</p>
                 <p style="margin-top: 12px;">You can now return to your CLI application.</p>
                 <div class="countdown">
-                    <span id="countdownText">This window will close in <span id="countdownTimer">5</span> seconds...</span>
+                    <span id="countdownText">Returning to your CLI in <span id="countdownTimer">5</span> seconds...</span>
                 </div>
-                <button type="button" class="btn" onclick="window.close()" style="margin-top: 16px;">
+                <button type="button" class="btn" id="closeWindowBtn" onclick="attemptClose()" style="margin-top: 16px;">
                     Close Window
                 </button>
             </div>
@@ -864,16 +864,26 @@ def device_verification(user_code: str | None = None):
 
                     if (seconds <= 0) {
                         clearInterval(window.deviceAuthCountdown);
-                        // Note: window.close() may not work due to browser security restrictions
-                        // Windows not opened by JavaScript cannot be closed programmatically
+                        // window.close() is silently blocked for tabs not opened by
+                        // script (device-flow clients open the URL via the OS browser),
+                        // so the text swap below is the real user guidance.
                         countdownText.textContent = 'You can safely close this window and return to your CLI application.';
-                        try {
-                            window.close();
-                        } catch (e) {
-                            // Ignore errors - window will be closed manually by user
-                        }
+                        window.close();
                     }
                 }, 1000);
+            }
+
+            function attemptClose() {
+                window.close();
+                // window.close() does not throw when blocked; if the page is still
+                // visible shortly after the call the browser refused the close, so
+                // swap the button for guidance text instead of leaving a dead button.
+                setTimeout(function() {
+                    if (!document.hidden) {
+                        document.getElementById('closeWindowBtn').outerHTML =
+                            '<p style="margin-top: 16px;">You can close this tab now and return to your CLI application.</p>';
+                    }
+                }, 150);
             }
 
             // Auto-focus on the input
