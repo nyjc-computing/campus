@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any, Self
 
 from campus.common import schema
+from campus.common.errors import ValidationError, FieldError
 from campus.common.utils import uid
 
 from .base import Model
@@ -141,9 +142,25 @@ class TimetableMetadata(Model):
         lambda: uid.generate_category_uid("timetable", length=8)
     ))
     filename: schema.String
-    start_date: schema.DateTime 
-    end_date: schema.DateTime 
+    start_date: schema.DateTime
+    end_date: schema.DateTime
     __constraints__ = constraints.Unique("filename")
+
+    def __post_init__(self) -> None:
+        """Validate that filename is a non-empty string.
+
+        An empty filename identifies no XML allocation file, so such a
+        timetable can never be resolved to real data (#600).
+        """
+        if not self.filename:
+            raise ValidationError(
+                "Timetable filename must be a non-empty string",
+                errors=[FieldError(
+                    field="filename",
+                    code="MISSING",
+                    message="filename must be a non-empty string"
+                )]
+            )
 
 
 @dataclass(eq=False, kw_only=True)
