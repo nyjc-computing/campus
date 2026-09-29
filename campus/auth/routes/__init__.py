@@ -35,7 +35,6 @@ _AUTHENTICATED_ROUTE_MODULES = [
     clients,
     credentials,
     logins,
-    root,
     sessions,
     users,
     vaults,
@@ -88,3 +87,12 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # These routes are publicly accessible for device authorization
     oauth_blueprint = oauth.create_blueprint()
     app.register_blueprint(oauth_blueprint)
+
+    # Register root blueprint WITHOUT authentication.
+    # /root/authenticate is itself the authentication endpoint: requiring a
+    # pre-existing valid credential on it is a chicken-and-egg problem for
+    # callers that only hold the credentials they are trying to validate
+    # (e.g. campus.api's request middleware). Like the OAuth routes, it only
+    # ever confirms the validity of the credentials in the request body (#614).
+    root_blueprint = root.create_blueprint()
+    app.register_blueprint(root_blueprint)

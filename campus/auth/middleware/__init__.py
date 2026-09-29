@@ -9,7 +9,7 @@ import flask
 
 from campus import flask_campus
 from campus.common import schema, webauth
-from campus.common.errors import auth_errors
+from campus.common.errors import api_errors, auth_errors
 
 
 # Type stubs
@@ -59,7 +59,9 @@ class Authenticator:
             http_header=flask_campus.get_request_headers()
         )
         if not httpauth.header.authorization:
-            raise auth_errors.InvalidRequestError(
+            # RFC 7235: a request missing its authentication credentials
+            # is Unauthorized (401), not a malformed request (#614).
+            raise api_errors.UnauthorizedError(
                 "Missing Authorization property in HTTP header"
             )
         match httpauth.scheme:

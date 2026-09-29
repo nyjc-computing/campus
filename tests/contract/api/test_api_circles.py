@@ -38,10 +38,9 @@ class TestApiCirclesContract(unittest.TestCase):
         cls.manager.initialize()
         cls.app = cls.manager.apps_app
 
-        # Create test user and token for bearer auth
+        # Create test user; the bearer token is re-created per test in
+        # setUp() because clear_test_data() wipes the credentials storage.
         cls.user_id = schema.UserID("test.user@campus.test")
-        cls.token = create_test_token(cls.user_id)
-        cls.auth_headers = get_bearer_auth_headers(cls.token)
 
     @classmethod
     def tearDownClass(cls):
@@ -52,6 +51,11 @@ class TestApiCirclesContract(unittest.TestCase):
         self.manager.clear_test_data()
 
         self.client = self.app.test_client()
+
+        # Re-create the bearer token after the clear: the token lives in
+        # credentials storage, which clear_test_data() wipes.
+        self.token = create_test_token(self.user_id)
+        self.auth_headers = get_bearer_auth_headers(self.token)
 
     def _create_test_circle(self, **overrides):
         """Helper to create a test circle via resource layer.
@@ -81,6 +85,34 @@ class TestApiCirclesContract(unittest.TestCase):
         data = response.get_json()
         self.assertIn("error", data)
         self.assertIn("code", data["error"])
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
+
+    def test_list_circles_unknown_token_returns_401(self):
+        """GET /circles/ with an unknown bearer token returns 401 (#614)."""
+        response = self.client.get(
+            "/api/v1/circles/",
+            headers={"Authorization": "Bearer not-a-real-token"}
+        )
+
+        self.assertEqual(response.status_code, 401)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
+
+    def test_list_circles_unknown_client_returns_401(self):
+        """GET /circles/ with unknown Basic credentials returns 401 (#614)."""
+        import base64
+        credentials = base64.b64encode(
+            b"no-such-client:no-such-secret").decode()
+
+        response = self.client.get(
+            "/api/v1/circles/",
+            headers={"Authorization": f"Basic {credentials}"}
+        )
+
+        self.assertEqual(response.status_code, 401)
+        data = response.get_json()
+        self.assertIn("error", data)
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     @unittest.skip("API BUG: GET /circles/ returns 500 - possibly related to list operation on circles")

@@ -14,7 +14,7 @@ import flask
 
 from campus.auth.middleware import Authenticator
 from campus.common import schema
-from campus.common.errors import auth_errors
+from campus.common.errors import api_errors
 
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
@@ -59,6 +59,21 @@ def _api_getsecret(name: str) -> str:
         )
 
 
+# Any 4xx from campus.auth's /root/authenticate endpoint means the
+# presented credentials were rejected (unknown client, unknown/expired
+# token, bad secret — surfaced by campus_python as various APIError
+# subclasses depending on the status campus.auth returned). All of them
+# are authentication failures and must surface as 401, never a 500 (#614).
+_REJECTED_CREDENTIAL_ERRORS = (
+    campus_python.errors.BadRequestError,
+    campus_python.errors.AuthenticationError,
+    campus_python.errors.AccessDeniedError,
+    campus_python.errors.NotFoundError,
+    campus_python.errors.ConflictError,
+    campus_python.errors.ValidationError,
+)
+
+
 def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
     """Authenticate using HTTP Basic Authentication."""
     try:
@@ -66,10 +81,10 @@ def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
             client_id=schema.CampusID(client_id),
             client_secret=client_secret
         )
-    except campus_python.errors.AuthenticationError:
-        raise auth_errors.UnauthorizedClientError(
+    except _REJECTED_CREDENTIAL_ERRORS:
+        raise api_errors.UnauthorizedError(
             "Invalid client credentials"
-        )
+        ) from None
     return {
         "client": auth_result["client"],
         "user": None,
@@ -79,10 +94,10 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
     """Authenticate using HTTP Bearer Authentication."""
     try:
         auth_result = campus.auth.root.authenticate(token=token)
-    except campus_python.errors.AuthenticationError:
-        raise auth_errors.UnauthorizedClientError(
+    except _REJECTED_CREDENTIAL_ERRORS:
+        raise api_errors.UnauthorizedError(
             "Invalid access token"
-        )
+        ) from None
     return {
         "client": auth_result["client"],
         "user": auth_result.get("user"),

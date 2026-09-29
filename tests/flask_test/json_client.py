@@ -13,7 +13,7 @@ from urllib.parse import urljoin
 import flask
 
 from campus.common.http.interface import JsonDict, JsonResponse
-from campus.common.http.errors import AuthenticationError
+from campus_python.errors import AuthenticationError
 from campus.model import HttpHeader
 from campus.common import env
 

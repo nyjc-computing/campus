@@ -14,7 +14,7 @@ __all__ = [
 
 from typing import Literal
 
-from campus.common.errors import api_errors, auth_errors, token_errors
+from campus.common.errors import api_errors, token_errors
 import campus.model
 
 from .. import base
@@ -57,7 +57,9 @@ class HttpAuthenticationScheme(base.SecurityScheme):
 
         if not isinstance(header, campus.model.HttpHeaderWithAuth):
             logger.warning("Missing Authorization header.")
-            raise auth_errors.AuthorizationError(
+            # RFC 7235: a request missing its authentication credentials
+            # is Unauthorized (401), not an OAuth flow error (#614).
+            raise api_errors.UnauthorizedError(
                 "Missing Authorization header."
             )
         match header.authorization.scheme:
