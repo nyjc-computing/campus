@@ -231,14 +231,16 @@ class TestSQLiteBackend(unittest.TestCase):
     def test_get_matching_with_between_operator_string_field(self):
         """get_matching() with between operator on string/timestamp field."""
         from campus.storage import between
-        # Query for traces created between 11:00 and 13:00
+        # Query for traces created between 11:00 and 13:00 (inclusive,
+        # matching the documented between() semantics asserted by the
+        # numeric between test above)
         results = self.traces_table.get_matching({
             "created_at": between("2023-01-01T11:00:00Z", "2023-01-01T13:00:00Z")
         })
-        self.assertEqual(len(results), 2)
-        # Should return trace2 (11:00) and trace3 (12:00)
-        self.assertIn(results[0]["id"], ["trace2", "trace3"])
-        self.assertIn(results[1]["id"], ["trace2", "trace3"])
+        self.assertEqual(len(results), 3)
+        # Should return trace2 (11:00), trace3 (12:00) and trace4 (13:00)
+        result_ids = {r["id"] for r in results}
+        self.assertEqual(result_ids, {"trace2", "trace3", "trace4"})
 
 
 class TestNullComparisons(unittest.TestCase):

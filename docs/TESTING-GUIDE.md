@@ -212,6 +212,7 @@ class TestMyFeature(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
 - **Location:** `tests/contract/`
 - **Dependencies:** Flask test client (not real HTTP)
 - **Speed:** Fast
+- **Runs in CI:** No — the contract suite currently runs **locally only**. CI gates are sanity, type, unit, and integration. When validating a change locally, compare contract failure counts/test IDs against the current `weekly` baseline rather than expecting green; contract failures today indicate real endpoint bugs tracked in issues.
 - **Examples:**
   - Auth requirements (401 without credentials)
   - Error response formats (409, 400)
@@ -219,6 +220,21 @@ class TestMyFeature(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
   - HTTP status code correctness
 
 See [tests/contract/README.md](../tests/contract/README.md) for specific invariants tested.
+
+#### Skip Markers ("API BUG") Policy
+
+Skip markers rot: the bug gets fixed but the marker stays. Rules:
+
+- A skip that documents a bug **must cite the issue number** in its reason and describe the *current* failure mode (status code observed, not a guess).
+- Re-verify markers periodically with the audit tool:
+
+  ```bash
+  python scripts/audit_skipped_tests.py                 # all skipped tests in tests/contract
+  python scripts/audit_skipped_tests.py --reason "API BUG"
+  ```
+
+  It runs skipped tests with the skip neutralized and reports PASS (stale marker — delete it and update the issue) or FAIL (still live).
+- Do not "neutralize" `@unittest.skip` by hand for ad-hoc checks: flipping `__unittest_skip__` does **not** work — the decorator wraps the test in a `skip_wrapper` that raises `SkipTest` at call time, so the test still skips while `TestResult.wasSuccessful()` reports a false PASS. The audit tool swaps in the original function via `__wrapped__`, which is the safe way.
 
 ### Sanity Tests
 
@@ -241,6 +257,12 @@ See [tests/contract/README.md](../tests/contract/README.md) for specific invaria
 - Check for import failures early
 - Validate deployment readiness
 - No external service dependencies
+- **Guard test reachability:** `tests/sanity/test_discovery.py` fails the
+  sanity suite when a `tests/**/test_*.py` file is not reachable by any
+  runner (unittest discovery skips directories without `__init__.py`
+  silently; the sanity runner only executes what `tests/sanity_check.py`
+  imports). New deliberately-unreachable files must be added to its
+  `UNREACHABLE_ALLOWLIST` with a reason.
 
 **What Makes a Test a "Sanity Test":**
 

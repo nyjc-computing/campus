@@ -239,11 +239,13 @@ try:
     from sanity.test_auth_deployment import TestAuthDeployment
     from sanity.test_api_deployment import TestAPIDeployment
     from sanity.test_wsgi import TestWSGI
+    from sanity.test_discovery import TestTestDiscovery
 
     # Verify classes were imported successfully
     assert TestAuthDeployment is not None, "TestAuthDeployment import failed"
     assert TestAPIDeployment is not None, "TestAPIDeployment import failed"
     assert TestWSGI is not None, "TestWSGI import failed"
+    assert TestTestDiscovery is not None, "TestTestDiscovery import failed"
 
 except ImportError as e:
     # Deployment tests may not be available yet during initial setup
@@ -251,6 +253,7 @@ except ImportError as e:
     TestAuthDeployment = None
     TestAPIDeployment = None
     TestWSGI = None
+    TestTestDiscovery = None
 
 
 if __name__ == '__main__':
