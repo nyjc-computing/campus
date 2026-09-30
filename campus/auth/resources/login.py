@@ -73,7 +73,7 @@ class LoginSessionsResource:
         try:
             login_storage.insert_one(session.to_storage())
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             flask.session[_session_key(PROVIDER)] = session.id
             return session
@@ -104,7 +104,7 @@ class LoginSessionResource:
             # TODO: logging for missing session
             pass
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             # For consistency, only remove client-side session after
             # successful server-side deletion
@@ -154,7 +154,7 @@ class LoginSessionResource:
                 session_id=session_id
             ) from e
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
         session = self.get()
         assert session
         return session
@@ -196,7 +196,7 @@ def _check_existing_id() -> schema.CampusID | None:
         flask.session.pop(session_key, None)
         return None
     except Exception as e:
-        raise api_errors.InternalError.from_exception(e)
+        raise api_errors.InternalError.from_exception(e) from e
     else:
         return client_session_id
 

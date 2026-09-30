@@ -111,7 +111,7 @@ class APIKeysResource:
             raise api_errors.ConflictError(
                 f"Conflict while inserting api_key to db: "
                 f"{api_key.to_resource()}"
-            )
+            ) from None
         else:
             # Audit event logged at routes layer (campus/audit/routes/apikeys.py)
             # Note: No actor tracking - campus.audit is standalone service with no users/clients

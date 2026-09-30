@@ -74,7 +74,7 @@ def _auth_getsecret(name: str) -> str:
         except KeyError:
             raise api_errors.InternalError(
                 f"Vault secret '{name}' not found in label '{deployment}'"
-            )
+            ) from None
 
     # For other deployments, use HTTP client to call auth service
     import campus_python
@@ -84,7 +84,7 @@ def _auth_getsecret(name: str) -> str:
     except KeyError:
         raise api_errors.InternalError(
             f"Vault secret '{name}' not found in label '{deployment}'"
-        )
+        ) from None
 
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:

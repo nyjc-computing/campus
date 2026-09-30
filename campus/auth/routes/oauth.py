@@ -98,7 +98,7 @@ def device_authorize(
     except api_errors.NotFoundError:
         raise token_errors.InvalidClientError(
             "Invalid client_id"
-        )
+        ) from None
 
     # Create device code
     device_code = device_code_resource.create(
@@ -200,7 +200,7 @@ def token(
     except api_errors.NotFoundError:
         raise token_errors.InvalidClientError(
             "Invalid client_id"
-        )
+        ) from None
 
     # Route to appropriate handler based on grant_type
     if grant_type == "urn:ietf:params:oauth:grant-type:device_code":
@@ -230,12 +230,12 @@ def _handle_device_code_grant(
     except api_errors.NotFoundError:
         raise token_errors.InvalidGrantError(
             "Invalid or expired device code"
-        )
+        ) from None
     except api_errors.InvalidRequestError:
         # Device code has expired
         raise token_errors.ExpiredTokenError(
             "The device code has expired"
-        )
+        ) from None
 
     # Check the state of the device code
     if dc.state == "pending":
@@ -284,7 +284,7 @@ def _handle_device_code_grant(
                 token=oauth_token,
             )
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         # Delete the device code as it's now used
         device_code_resource.delete(dc.id)
@@ -965,7 +965,7 @@ def device_authorize_submit(
         raise api_errors.NotFoundError(
             "Invalid user code. Please check and try again.",
             error_code="invalid_code"
-        )
+        ) from None
 
     # Check the state of the device code and provide appropriate error codes
     if dc.state == "expired":
