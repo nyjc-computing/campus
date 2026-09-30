@@ -101,17 +101,12 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
         token_payload = resp.json()
         if "error" in token_payload:
             token_errors.raise_from_json(token_payload)
-        return campus.model.OAuthToken(
-            id=token_payload["access_token"],
-            created_at=request_time,
-            expiry_seconds=token_payload["expires_in"],
-            scopes=token_payload["scope"].split(" "),
-            **(
-                {"refresh_token": token_payload["refresh_token"]}
-                if "refresh_token" in token_payload
-                else {}
-            )
-        )
+        # from_resource accepts RFC 6749 keys (access_token, expires_in,
+        # scope, token_type) and keeps unknown provider fields
+        return campus.model.OAuthToken.from_resource({
+            **token_payload,
+            "created_at": request_time,
+        })
 
     def get_authorization_url(
             self,
@@ -208,8 +203,14 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
             )
         if "error" in token_payload:
             token_errors.raise_from_json(token_payload)
-        auth_token = campus.model.OAuthToken.from_resource(token_payload)
-        return auth_token
+        token = campus.model.OAuthToken.from_resource(token_payload)
+        # RFC 6749 section 6: the refresh response may omit scope and
+        # refresh_token when unchanged; carry the previous values over
+        if "scope" not in token_payload:
+            token.scopes = list(auth_token.scopes)
+        if "refresh_token" not in token_payload:
+            token.refresh_token = auth_token.refresh_token
+        return token
 
     def _refresh_with_auth(
             self,

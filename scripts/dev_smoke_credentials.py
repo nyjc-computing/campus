@@ -126,6 +126,16 @@ def main() -> int:
 
         user_creds = credentials.UserCredentials.from_resource(resource)
         token = user_creds.token
+
+        # #648: the token resource carries the RFC 6749 fields
+        token_resource = resource.get("token", {})
+        check(token_resource.get("token_type") == "Bearer",
+              "token resource token_type is Bearer "
+              f"(got {token_resource.get('token_type')!r})")
+        check(isinstance(token_resource.get("expires_in"), int)
+              and "scope" in token_resource,
+              "token resource carries expires_in and scope (#648)")
+
         check(isinstance(token, credentials.OAuthToken),
               f"from_resource token is OAuthToken (got {type(token).__name__})")
         if isinstance(token, credentials.OAuthToken):
@@ -134,6 +144,10 @@ def main() -> int:
                   f"(got {type(token.expires_at).__name__})")
             check(isinstance(token.is_expired(), bool),
                   "token.is_expired() callable")
+            check(token.token_type == "Bearer"
+                  and isinstance(token.expires_in, int)
+                  and isinstance(token.provider_fields, dict),
+                  "token model exposes token_type/expires_in/provider_fields")
     finally:
         if created and not args.keep:
             resp = session.delete(base, timeout=TIMEOUT)
