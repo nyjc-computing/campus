@@ -1,0 +1,40 @@
+name: Contract Tests
+
+on:
+  push:
+    branches: [main, staging, weekly]
+  pull_request:
+    branches: [main, staging, weekly]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+env:
+  CONTRACT_TEST_TIMEOUT: 60
+
+jobs:
+  contract-tests:
+    name: Contract Tests (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    env:
+      ENV: testing
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite
+        run: poetry install --no-root
+      - name: Run Contract Tests
+        run: poetry run python tests/run_tests.py contract --timeout ${{ env.CONTRACT_TEST_TIMEOUT }}

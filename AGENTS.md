@@ -134,7 +134,7 @@ When fixing bugs or touching endpoints, verify with these (see
 ```bash
 poetry run python tests/run_tests.py unit          # fast signal
 poetry run python tests/run_tests.py integration   # CI gate
-poetry run python tests/run_tests.py contract      # HTTP contracts (local-only, CI does NOT run it)
+poetry run python tests/run_tests.py contract      # HTTP contracts (also a blocking CI gate)
 ```
 
 - **The contract suite should be green** (all remaining failures are skips
