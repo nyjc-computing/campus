@@ -4,6 +4,7 @@ Test token creation utilities for integration tests.
 """
 
 import base64
+from contextlib import suppress
 
 from campus.common import devops, env, schema
 
@@ -44,14 +45,11 @@ def create_test_token(
 
     # Grant vault access to test client (for vault endpoint tests)
     if grant_vault_access and client_id:
-        try:
+        with suppress(Exception):
             auth_resources.client[client_id].access.grant(
                 vault_label="vault",
                 permission=ClientAccess.ALL
             )
-        except Exception:
-            # Client may not have vault access table initialized
-            pass
 
     # Create test user if it doesn't exist
     try:

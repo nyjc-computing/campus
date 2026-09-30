@@ -12,6 +12,7 @@ Issue: #567
 """
 
 import unittest
+from contextlib import suppress
 
 from campus.common.utils import secret
 from tests.fixtures import services
@@ -61,10 +62,8 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
         all_spans = traces_storage.get_matching({}, limit=1000)
         audit_spans = [s for s in all_spans if s.get("path", "").startswith("campus.")]
         for span in audit_spans:
-            try:
+            with suppress(campus.storage.errors.NotFoundError):
                 traces_storage.delete_by_id(span["id"])
-            except campus.storage.errors.NotFoundError:
-                pass
 
     @unittest.skip(
         "API BUG #570: no auth.failed/auth.success audit events are emitted in the contract harness (shared- "

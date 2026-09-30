@@ -10,6 +10,7 @@ Issue: #428
 import statistics
 import time
 import unittest
+from contextlib import suppress
 
 from campus.audit.middleware import tracing
 from campus.audit.resources.traces import TracesResource
@@ -64,10 +65,8 @@ class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCh
         import campus.storage
         from campus.audit.resources.traces import traces_storage
         # Ignore NoChangesAppliedError if table is already empty
-        try:
+        with suppress(campus.storage.errors.NoChangesAppliedError):
             traces_storage.delete_matching({})
-        except campus.storage.errors.NoChangesAppliedError:
-            pass  # Table is already empty, which is fine
 
     def tearDown(self):
         """Clean up after each test.

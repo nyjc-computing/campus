@@ -34,6 +34,7 @@ Legend:
 """
 
 import logging
+from contextlib import suppress
 
 import flask
 import werkzeug
@@ -262,10 +263,8 @@ def token(
 
     # Try to get existing credentials
     credentials = None
-    try:
+    with suppress(api_errors.NotFoundError):
         credentials = user_credentials_resource.get(authsession.client_id)
-    except api_errors.NotFoundError:
-        pass
 
     # Use existing token if available and not expired, otherwise create new
     if (
