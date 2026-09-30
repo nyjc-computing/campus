@@ -10,7 +10,7 @@ This document defines coding standards for the Campus project.
 
 ### Linting (ruff)
 
-The repo is linted with [ruff](https://docs.astral.sh/ruff/); CI runs `ruff check .` on every PR (`.github/workflows/lint.yml`) and it must stay green.
+The repo is linted with [ruff](https://docs.astral.sh/ruff/); CI runs `ruff check .` on every PR (`.github/workflows/ci.yml`) and it must stay green.
 
 ```bash
 poetry run ruff check .    # lint (CI gate) - ruff is a dev dependency

@@ -1,0 +1,219 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging, weekly]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [main, staging, weekly]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+env:
+  ENV: testing
+  UNIT_TEST_TIMEOUT: 60
+  CONTRACT_TEST_TIMEOUT: 60
+  INTEGRATION_TEST_TIMEOUT: 300
+
+# A new push to an open PR supersedes (cancels) its in-flight run.
+# Push runs — weekly is the release/deploy gate — are never cancelled.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Stage 0: style. Cheapest signal (no install needed) and the most common
+  # failure class, so it gates everything else.
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      # Config lives in pyproject.toml [tool.ruff]; the repo must stay green
+      # under `ruff check .`. Ruff is a dev dependency (poetry.lock pins it);
+      # the action pins the same version so CI and `poetry run ruff` agree.
+      - name: Run ruff
+        uses: astral-sh/ruff-action@v3
+        with:
+          version: '0.16.9'
+
+  # Stage 1: structural gates — sanity (imports/config/startup) and pyright,
+  # in parallel. Each suite job shares a venv cache keyed on poetry.lock.
+  sanity-check:
+    name: Sanity Check (${{ matrix.python-version }})
+    needs: ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite
+        run: poetry install --no-root
+      - name: Run Sanity Checks
+        run: poetry run python tests/run_tests.py sanity
+
+  type-check:
+    name: Type Check (${{ matrix.python-version }})
+    needs: ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite
+        run: poetry install --no-root
+      - name: Run Type Checks
+        run: poetry run python tests/run_tests.py type
+
+  # Stage 2: component behavior. Runs only when the structural gates pass.
+  unit-tests:
+    name: Unit Tests (${{ matrix.python-version }})
+    needs: [sanity-check, type-check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite
+        run: poetry install --no-root
+      - name: Run Unit Tests
+        run: poetry run python tests/run_tests.py unit --timeout ${{ env.UNIT_TEST_TIMEOUT }}
+
+  # Stage 3: HTTP contracts. Pointless to exercise routes if components fail.
+  contract-tests:
+    name: Contract Tests (${{ matrix.python-version }})
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite
+        run: poetry install --no-root
+      - name: Run Contract Tests
+        run: poetry run python tests/run_tests.py contract --timeout ${{ env.CONTRACT_TEST_TIMEOUT }}
+
+  # Stage 4: full cross-service stack. Last — assembles every service and is
+  # pointless if contracts already fail. Non-blocking on weekly, as before.
+  integration-tests:
+    name: Integration Tests (${{ matrix.python-version }})
+    needs: contract-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: ${{ github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
+          restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          pip install poetry
+          # Configure Poetry to use system Python (not its own bundled version)
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
+      - name: Install Campus Suite
+        run: poetry install --no-root
+      - name: Run Integration Tests (required for staging/main, optional for weekly)
+        run: poetry run python tests/run_tests.py integration --timeout ${{ env.INTEGRATION_TEST_TIMEOUT }}
