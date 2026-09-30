@@ -269,7 +269,7 @@ mgr.cleanup()
 - **Location:** `tests/contract/`
 - **Dependencies:** Flask test client (not real HTTP)
 - **Speed:** Fast
-- **Runs in CI:** Yes — `.github/workflows/contract-tests.yml` runs the suite on PRs and on pushes to `main`/`staging`/`weekly`, as a blocking gate alongside sanity, type, unit, and integration. Contract failures indicate real endpoint regressions; known-but-unfixed bugs are encoded as skip markers citing their issue (see the policy below).
+- **Runs in CI:** Yes — `.github/workflows/ci.yml` runs the suite on PRs and on pushes to `main`/`staging`/`weekly` (docs-only changes are skipped), as a blocking stage after unit and before integration. Contract failures indicate real endpoint regressions; known-but-unfixed bugs are encoded as skip markers citing their issue (see the policy below).
 - **Examples:**
   - Auth requirements (401 without credentials)
   - Error response formats (409, 400)
@@ -470,13 +470,10 @@ minor version:
 
 | Workflow | Test type | Python versions |
 |----------|-----------|-----------------|
-| `.github/workflows/sanity-check.yml` | Sanity checks | 3.11, 3.12, 3.13 |
-| `.github/workflows/unit-tests.yml` | Unit tests | 3.11, 3.12, 3.13 |
-| `.github/workflows/integration-tests.yml` | Integration tests | 3.11, 3.12, 3.13 |
-| `.github/workflows/type-check.yml` | Pyright type checks | 3.11, 3.12, 3.13 |
+| `.github/workflows/ci.yml` | Ruff, sanity, type, unit, contract, integration — staged so each suite runs only after the previous one passed | 3.11, 3.12, 3.13 |
 
-When changing the supported Python range, update these CI matrices in the same
-PR as `pyproject.toml`. Sanity tests include
+When changing the supported Python range, update the CI matrix in `ci.yml` in
+the same PR as `pyproject.toml`. Sanity tests include
 `test_python_version_matches_requirements`, which verifies that the runtime
 Python version satisfies the package requirement; the matrix ensures that this
 compatibility check is exercised for every supported minor version.
