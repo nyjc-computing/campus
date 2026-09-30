@@ -65,8 +65,8 @@ class LoginSessionsResource:
         session = model.LoginSession(
             id=uid.generate_category_uid(f"{PROVIDER}-login_session"),
             expiry_seconds=login_expiry_seconds,
-            client_id=str(client_id),
-            user_id=str(user_id) if user_id else None,
+            client_id=schema.CampusID(str(client_id)),
+            user_id=schema.UserID(str(user_id)) if user_id else None,
             device_id=device_id,
             agent_string=agent_string,
         )
