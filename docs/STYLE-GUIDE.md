@@ -13,9 +13,10 @@ This document defines coding standards for the Campus project.
 The repo is linted with [ruff](https://docs.astral.sh/ruff/); CI runs `ruff check .` on every PR (`.github/workflows/lint.yml`) and it must stay green.
 
 ```bash
-# Any standalone ruff works; config lives in pyproject.toml [tool.ruff]
-ruff check .              # lint (CI gate)
-ruff check --diff .       # show suggested rewrites for review
+poetry run ruff check .    # lint (CI gate) - ruff is a dev dependency
+ruff check .               # any standalone ruff also works; config lives
+                           # in pyproject.toml [tool.ruff]
+ruff check --diff .        # show suggested rewrites for review
 ```
 
 Rewrites are applied **manually after review**: autofixes are disabled repo-wide (`fixable = []`) because they are only semantics-preserving for common types (ruff's SIM118 fix, for instance, breaks `sqlite3.Row` iteration). Review `--diff` output and apply changes deliberately per site.
