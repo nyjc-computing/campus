@@ -203,9 +203,12 @@ class OAuthToken(Model):
     def from_storage(cls, record: dict) -> "OAuthToken":
         """Create OAuthToken from storage record, properly deserializing DateTime fields.
 
-        Legacy records written before #648 carry no expires_in,
-        token_type, or provider_fields; the missing values are
-        derived from expires_at or defaulted.
+        Storage records carry the RFC 6749 scope string (issue #648
+        end state); the legacy scopes list is still accepted on read
+        for tolerance. Records written before #648 carry no expires_in,
+        token_type, or provider_fields; the missing values are derived
+        from expires_at or defaulted (the migrations/005 backfill
+        removes the need for this, but reads stay tolerant).
 
         Args:
             record: Storage record dictionary
@@ -215,6 +218,8 @@ class OAuthToken(Model):
         """
         # Convert string datetime values to schema.DateTime objects
         processed = record.copy()
+        if "scope" in processed and "scopes" not in processed:
+            processed["scopes"] = str(processed["scope"]).split()
         if "expires_at" in processed and isinstance(processed["expires_at"], str):
             processed["expires_at"] = schema.DateTime(processed["expires_at"])
         if "refresh_token_expires_at" in processed and isinstance(processed["refresh_token_expires_at"], str):
@@ -222,6 +227,17 @@ class OAuthToken(Model):
         if "created_at" in processed and isinstance(processed["created_at"], str):
             processed["created_at"] = schema.DateTime(processed["created_at"])
         return super().from_storage(processed)
+
+    def to_storage(self) -> dict[str, typing.Any]:
+        """Convert the token to a storage record.
+
+        Storage keeps the RFC 6749 scope string per the #648 end state
+        (decision 4); the scopes list is a model-side convenience only.
+        """
+        record = super().to_storage()
+        record.pop("scopes", None)
+        record["scope"] = self.scope
+        return record
 
 
 @dataclass(eq=False, kw_only=True)
