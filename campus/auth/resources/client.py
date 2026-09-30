@@ -368,7 +368,7 @@ class ClientResource:
         new_secret = secret.generate_client_secret()
         secret_hash = secret.hash_client_secret(
             secret=new_secret,
-            key=env.SECRET_KEY
+            key=env.getsecret("SECRET_KEY")
         )
         client_storage.update_by_id(
             self.client_id,
