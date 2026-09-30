@@ -76,6 +76,14 @@ RESTful API resources:
 - Resource handlers and routing
 - Business logic in `.resources` submodule
 
+### `campus.common`
+Shared modules used by every service:
+- `schema`: OpenAPI-aligned types (str/int subclasses such as `DateTime`, `CampusID`, `Email`); start symbol searches here for type definitions
+- `errors`: error taxonomy (API errors, token errors, validation errors) raised by routes
+- `utils`: general helpers (uids, time, secrets)
+- `env`: environment variable access
+- `validation`, `webauth`, `http`, `devops`: request validation, OAuth2 client flows, HTTP plumbing, deployment helpers
+
 ### `campus.model`
 Entity representation (no business logic):
 - Dataclass definitions (User, Circle, Client, Session, Token, etc.)
