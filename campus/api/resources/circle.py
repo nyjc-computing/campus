@@ -17,20 +17,6 @@ circle_storage = campus.storage.get_collection("circles")
 DOMAIN = "nyjc.edu.sg"
 
 
-def _from_record(
-        record: dict[str, typing.Any],
-) -> model.Circle:
-    """Convert a storage record to a Circle model instance."""
-    return model.Circle(
-        id=schema.CampusID(record['id']),
-        created_at=schema.DateTime(record['created_at']),
-        name=record['name'],
-        description=record.get('description', ''),
-        tag=record['tag'],
-        members=record.get('members', {}),
-        sources=record.get('sources', {})
-    )
-
 
 def get_circle_meta() -> dict:
     """Get the circle meta record from the circles collection."""
@@ -96,7 +82,7 @@ class CirclesResource:
                 parents={}
             )
         else:
-            root_circle = _from_record(root_circles[0])
+            root_circle = model.Circle.from_storage(root_circles[0])
 
         if "root" not in meta_record or not meta_record["root"]:
             update_circle_meta(
@@ -152,7 +138,7 @@ class CirclesResource:
             records = circle_storage.get_matching(filters)
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
-        return [_from_record(record) for record in records]
+        return [model.Circle.from_storage(record) for record in records]
 
     def new(self, **fields: typing.Any) -> model.Circle:
         """Create a new circle.
@@ -251,7 +237,7 @@ class CircleResource:
                     "Circle not found",
                     id=self.circle_id
                 )
-            return _from_record(record)
+            return model.Circle.from_storage(record)
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Circle not found",

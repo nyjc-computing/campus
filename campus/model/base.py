@@ -120,21 +120,40 @@ class InternalModel(typing.Protocol):
             cls: type[typing.Self],
             record: dict[str, typing.Any]
     ) -> typing.Self:
-        """Create a model instance from a storage record dictionary."""
+        """Create a model instance from a storage record dictionary.
+
+        Storage records carry plain strings (JSON/BSON); values for
+        fields annotated as str subclasses (schema.DateTime, CampusID,
+        Email, Url, ...) are coerced to the annotated type, mirroring
+        from_resource().
+        """
+        try:
+            hints = typing.get_type_hints(cls)
+        except Exception:
+            # Unresolvable type hints disable coercion below
+            hints = {}
+
         def get_value(f: dataclasses.Field) -> typing.Any:
             """Get value from record, falling back to field default if missing."""
             if f.name in record:
-                return record[f.name]
+                value = record[f.name]
             # Key not in record - use field default if available
-            if f.default is not dataclasses.MISSING:
+            elif f.default is not dataclasses.MISSING:
                 return f.default
-            if f.default_factory is not dataclasses.MISSING:  # type: ignore[attr-defined]
+            elif f.default_factory is not dataclasses.MISSING:  # type: ignore[attr-defined]
                 return f.default_factory()  # type: ignore[attr-defined]
             # No default available - raise KeyError with clear message
-            raise KeyError(
-                f"Required field '{f.name}' not found in storage record "
-                f"for model '{cls.__name__}'"
-            )
+            else:
+                raise KeyError(
+                    f"Required field '{f.name}' not found in storage record "
+                    f"for model '{cls.__name__}'"
+                )
+            field_type = hints.get(f.name)
+            if (isinstance(value, str) and isinstance(field_type, type)
+                    and issubclass(field_type, str)
+                    and not isinstance(value, field_type)):
+                value = field_type(value)
+            return value
 
         return cls(
             **{
