@@ -6,8 +6,6 @@ Client-side session management is handled by first-/third-party apps,
 e.g. through campus-api-python
 """
 
-import typing
-
 import campus.model as model
 import campus.storage
 from campus.common import schema
@@ -102,7 +100,7 @@ class ProviderAuthSessionResource:
         record = session_storage.get_matching({"authorization_code": code})
         if not record:
             raise auth_errors.AccessDeniedError("Invalid authorization code")
-        session = _from_record(record[0])
+        session = model.AuthSession.from_storage(record[0])
         if session.provider != self.provider:
             raise auth_errors.AccessDeniedError("Invalid authorization code")
         return self[session.id].get()
@@ -124,21 +122,21 @@ class ProviderAuthSessionResource:
         logger = logging.getLogger(__name__)
 
         session_id = uid.generate_category_uid(f"{self.provider}_session")
-        session = _from_record({
-            "id": session_id,
-            "expiry_seconds": expiry_seconds,
-            "provider": self.provider,
-            "client_id": schema.CampusID(client_id),
-            "user_id": user_id,
-            "redirect_uri": redirect_uri,
-            "scopes": scopes or [],
-            "authorization_code": (
+        session = model.AuthSession(
+            id=session_id,
+            expiry_seconds=expiry_seconds,
+            provider=self.provider,
+            client_id=schema.CampusID(client_id),
+            user_id=user_id,
+            redirect_uri=redirect_uri,
+            scopes=scopes or [],
+            authorization_code=(
                 authorization_code
                 or secret.generate_authorization_code()
             ),
-            "state": state or session_id,
-            "target": target,
-        })
+            state=state or session_id,
+            target=target,
+        )
         try:
             session_storage.insert_one(session.to_storage())
         except Exception as e:
@@ -197,7 +195,7 @@ class AuthSessionResource:
                 session_id=self.session_id
             )
 
-        result = _from_record(record)
+        result = model.AuthSession.from_storage(record)
         return result
 
     def update(
@@ -232,40 +230,3 @@ class AuthSessionResource:
         return session
 
 
-def _from_record(
-        record: dict[str, typing.Any],
-) -> model.AuthSession:
-    """Convert a storage record (or new() kwargs) to an AuthSession.
-
-    Accepts both the RFC 6749 scope string (storage, per the #648 end
-    state) and the legacy scopes list. When only expiry_seconds is
-    given, it is passed through to the model InitVar, which derives
-    expires_at = created_at + expiry_seconds.
-    """
-    args: dict[str, typing.Any] = {}
-    if "id" in record:
-        args["id"] = schema.CampusID(record["id"])
-    if "created_at" in record and record["created_at"] is not None:
-        args["created_at"] = schema.DateTime(record["created_at"])
-    if "expires_at" in record and record["expires_at"] is not None:
-        args["expires_at"] = schema.DateTime(record["expires_at"])
-    elif "expiry_seconds" in record:
-        args["expiry_seconds"] = record["expiry_seconds"]
-    args["provider"] = record["provider"]
-    args["client_id"] = schema.CampusID(record["client_id"])
-    if "user_id" in record and record["user_id"] is not None:
-        args["user_id"] = schema.UserID(record["user_id"])
-    args["redirect_uri"] = schema.Url(record["redirect_uri"])
-    if "scopes" in record:
-        args["scopes"] = record["scopes"]
-    elif "scope" in record:
-        args["scopes"] = str(record["scope"]).split()
-    if "authorization_code" in record:
-        args["authorization_code"] = record["authorization_code"]
-    if "state" in record:
-        args["state"] = record["state"]
-    if "target" in record and record["target"] is not None:
-        args["target"] = schema.Url(record["target"])
-
-    result = model.AuthSession(**args)
-    return result

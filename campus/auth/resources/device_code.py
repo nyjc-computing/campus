@@ -56,16 +56,16 @@ class DeviceCodeResource:
         device_code_str = secret.generate_device_code()
         user_code = secret.generate_user_code()
 
-        device_code = _from_record({
-            "id": device_code_id,
-            "device_code": device_code_str,
-            "user_code": user_code,
-            "client_id": schema.CampusID(client_id),
-            "scopes": scopes or [],
-            "expiry_seconds": config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS,
-            "interval": config.DEFAULT_DEVICE_CODE_POLL_INTERVAL,
-            "state": "pending",
-        })
+        device_code = model.DeviceCode(
+            id=device_code_id,
+            device_code=device_code_str,
+            user_code=user_code,
+            client_id=schema.CampusID(client_id),
+            scopes=scopes or [],
+            expiry_seconds=config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS,
+            interval=config.DEFAULT_DEVICE_CODE_POLL_INTERVAL,
+            state="pending",
+        )
 
         try:
             device_code_storage.insert_one(device_code.to_storage())
@@ -101,7 +101,7 @@ class DeviceCodeResource:
                 device_code=device_code
             )
 
-        device_code_obj = _from_record(records[0])
+        device_code_obj = model.DeviceCode.from_storage(records[0])
 
         # Check if expired
         if device_code_obj.is_expired():
@@ -142,7 +142,7 @@ class DeviceCodeResource:
                 user_code=user_code
             )
 
-        device_code_obj = _from_record(records[0])
+        device_code_obj = model.DeviceCode.from_storage(records[0])
 
         # Check if expired
         if device_code_obj.is_expired():
@@ -207,7 +207,7 @@ class DeviceCodeResource:
                 "Device code not found",
                 device_code_id=str(device_code_id)
             )
-        return _from_record(record)
+        return model.DeviceCode.from_storage(record)
 
     def delete(
             self,
@@ -249,41 +249,6 @@ class DeviceCodeResource:
         return deletion_count
 
 
-def _from_record(
-        record: dict[str, typing.Any],
-) -> model.DeviceCode:
-    """Convert a storage record (or new() kwargs) to a DeviceCode.
-
-    Accepts both the RFC 6749 scope string (storage, per the #648 end
-    state) and the legacy scopes list. When only expiry_seconds is
-    given, it is passed through to the model InitVar, which derives
-    expires_at = created_at + expiry_seconds.
-    """
-    args: dict[str, typing.Any] = {}
-    if "id" in record:
-        args["id"] = schema.CampusID(record["id"])
-    if "created_at" in record and record["created_at"] is not None:
-        args["created_at"] = schema.DateTime(record["created_at"])
-    if "expires_at" in record and record["expires_at"] is not None:
-        args["expires_at"] = schema.DateTime(record["expires_at"])
-    elif "expiry_seconds" in record:
-        args["expiry_seconds"] = record["expiry_seconds"]
-    args["device_code"] = record["device_code"]
-    args["user_code"] = record["user_code"]
-    args["client_id"] = schema.CampusID(record["client_id"])
-    if "user_id" in record and record["user_id"] is not None:
-        args["user_id"] = schema.UserID(record["user_id"])
-    if "scopes" in record:
-        args["scopes"] = record["scopes"]
-    elif "scope" in record:
-        args["scopes"] = str(record["scope"]).split()
-    if "interval" in record:
-        args["interval"] = record["interval"]
-    if "state" in record:
-        args["state"] = record["state"]
-
-    result = model.DeviceCode(**args)
-    return result
 
 
 # Singleton instance
