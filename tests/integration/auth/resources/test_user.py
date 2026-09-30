@@ -10,6 +10,7 @@ before test mode is configured (see AGENTS.md - Storage Initialization Order).
 """
 
 import unittest
+
 from campus.common import schema
 
 
@@ -25,7 +26,6 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
     def setUpClass(cls):
         """Configure test storage and import resources once before all tests."""
         import campus.storage.testing
-        from campus.common import env
 
         # Configure test mode first
         campus.storage.testing.configure_test_storage()
@@ -136,7 +136,6 @@ class TestUserResource(unittest.TestCase):
     def setUpClass(cls):
         """Configure test storage and import resources once before all tests."""
         import campus.storage.testing
-        from campus.common import env
 
         # Configure test mode first
         campus.storage.testing.configure_test_storage()

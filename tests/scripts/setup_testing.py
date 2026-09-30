@@ -7,17 +7,17 @@ This script sets up a complete testing environment by:
 2. Checking PostgreSQL connectivity
 3. Initializing all fixtures (vault, yapper, storage)
 """
+# Add the project root to Python path so we can import from tests
+import os
 import subprocess
 import sys
 
-# General fixtures
-from tests.fixtures import require, setup
-# Service-specific fixtures
-from tests.fixtures import storage, auth, yapper
 from campus.common import env
 
-# Add the project root to Python path so we can import from tests
-import os
+# General fixtures
+# Service-specific fixtures
+from tests.fixtures import auth, require, setup, storage, yapper
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 

@@ -15,7 +15,6 @@ import sys
 import types
 import unittest
 from threading import Thread
-from unittest.mock import patch
 
 from campus.common import env
 
@@ -32,8 +31,8 @@ class TestEnvModuleInitialization(unittest.TestCase):
     def test_all_imports_point_to_same_module(self):
         """Test that all imports of campus.common.env point to the same module."""
         # Import the module in different ways
-        from campus.common import env as env1
         import campus.common.env as env2
+        from campus.common import env as env1
 
         # All imports should point to the same module object
         self.assertIs(env1, env2)

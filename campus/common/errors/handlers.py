@@ -3,17 +3,17 @@
 Error handler functions for Flask error handling.
 """
 
+import logging
 import sys
 import traceback
-import logging
-import werkzeug.exceptions
+
 import flask
+import werkzeug.exceptions
 
 from campus.common.utils import url
 
-from .base import JsonDict
 from . import api_errors, auth_errors, token_errors
-
+from .base import JsonDict
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,6 @@ adapted for internal service-to-server communication.
 
 from typing import Any, Optional
 
-
 SLASH = "/"
 
 

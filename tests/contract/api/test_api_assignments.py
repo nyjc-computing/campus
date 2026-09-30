@@ -99,7 +99,7 @@ class TestApiAssignmentsContract(unittest.TestCase):
     def test_list_assignments_with_created_by_filter(self):
         """GET /assignments/?created_by={user_id} filters by creator."""
         # Create an assignment
-        assignment_id = self._create_test_assignment()
+        self._create_test_assignment()
 
         # Filter by created_by
         response = self.client.get(

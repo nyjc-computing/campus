@@ -11,7 +11,7 @@ from typing import (
 import flask
 
 import campus.model
-from campus.common.errors import api_errors, ValidationError, FieldError
+from campus.common.errors import FieldError, ValidationError, api_errors
 from campus.common.validation import record
 
 from . import parameter, types

@@ -4,7 +4,7 @@ This module provides utility functions for URL manipulation and validation.
 """
 
 import typing
-from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import flask
 

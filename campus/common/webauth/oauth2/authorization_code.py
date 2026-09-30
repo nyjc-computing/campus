@@ -11,10 +11,10 @@ from typing import Any
 
 import requests
 
+import campus.model
 from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
-import campus.model
 
 from . import base
 
@@ -94,7 +94,7 @@ class OAuth2AuthorizationCodeFlowScheme(base.OAuth2FlowScheme):
                 headers=self.headers,
                 timeout=TIMEOUT
             )
-        except requests.exceptions.Timeout as err:
+        except requests.exceptions.Timeout:
             raise auth_errors.TemporarilyUnavailableError(
                 "Token exchange request timed out"
             ) from None

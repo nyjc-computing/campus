@@ -47,8 +47,38 @@ reportIncompatibleMethodOverride = "none"
 stubPath = ""
 
 [tool.ruff]
-select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']
-ignore = ['W291', 'W292', 'W293']
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# ARG omitted: unused-argument flags Campus's signature-contract pattern
+# (route handlers bound by unpack_request, interface-conform resource
+# methods) repo-wide; revisit if the routing layer changes.
+select = ['E', 'W', 'F', 'I', 'B', 'C4', 'SIM']
+# Policy (2026-09-30): ruff enforces style; humans rewrite code. Autofixes
+# are disabled repo-wide because they are semantics-preserving only for
+# common types - e.g. SIM118 rewrote `for k in sqlite_row.keys():` into
+# direct iteration, which is correct for dict but breaks sqlite3.Row
+# (iterating it yields values, not column names). Use `ruff check --diff`
+# to review suggested rewrites, then apply them deliberately per site.
+fixable = []
+ignore = [
+    'W291', 'W292', 'W293',  # trailing whitespace: formatting, not lint
+    # Ratchet candidates - remove these ignores once existing sites are
+    # fixed (see the ruff-adoption follow-up issue):
+    'B904',   # ~37 raise-without-from sites in error translation paths
+    'SIM105', # ~16 try/except-pass blocks needing contextlib.suppress rewrites
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Legacy one-off scripts predating the campus package (the `apps` module no
+# longer exists); kept for history, not executed.
+"migrations/*" = ['F821']
+# scripts/ bootstraps sys.path before importing campus - intentional.
+"scripts/*" = ['E402']
+# Device-verification route embeds a full HTML/CSS/JS template as a string
+# literal; wrapping template lines churns served HTML for no gain.
+"campus/auth/routes/oauth.py" = ['E501']
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

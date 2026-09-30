@@ -8,11 +8,11 @@ import typing
 
 import bcrypt
 
+import campus.model as model
+import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
-import campus.model as model
-import campus.storage
 
 emailotp_storage = campus.storage.get_table("emailotp")
 

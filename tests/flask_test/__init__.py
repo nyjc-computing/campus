@@ -34,8 +34,8 @@ from .campus_request import (
     register_test_app,
     unpatch_campus_python,
 )
-from .response import FlaskTestResponse
-from .factory import create_test_app
 from .configure import configure_for_testing
+from .factory import create_test_app
 from .json_client import TestJsonClient
+from .response import FlaskTestResponse
 

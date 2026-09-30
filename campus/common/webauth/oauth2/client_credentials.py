@@ -9,9 +9,9 @@ __all__ = ["OAuth2ClientCredentialsFlowScheme"]
 
 import requests
 
+import campus.model
 from campus.common import schema
 from campus.common.errors import token_errors
-import campus.model
 
 from . import base
 

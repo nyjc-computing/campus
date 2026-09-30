@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
-from typing import Any, Self
 
 from campus.common import schema
 from campus.common.utils import uid
 
-from .base import Model
 from . import constraints
+from .base import Model
+
 
 @dataclass(eq=False, kw_only=True)
 class VenueBooking(Model):

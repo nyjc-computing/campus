@@ -35,8 +35,8 @@ from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors as storage_errors
 from campus.storage.query import gt, gte, is_operator, lt, lte, ne
-from ..interface import TableInterface, PK
 
+from ..interface import PK, TableInterface
 
 # Global connection cache and lock for thread-safe SQLite access
 # This ensures all SQLiteTable instances share a single connection per database,
@@ -340,7 +340,9 @@ class SQLiteTable(TableInterface):
             return None
 
         row = {}
-        for key in sqlite_row.keys():
+        # sqlite3.Row is not a dict: iterating the Row yields values, not
+        # column names, so .keys() is required here.
+        for key in sqlite_row.keys():  # noqa: SIM118
             value = sqlite_row[key]
             # Try to parse JSON strings back to objects
             if isinstance(value, str) and value and (value.startswith('{') or value.startswith('[')):
@@ -649,7 +651,7 @@ class SQLiteTable(TableInterface):
         # Close all connections from all instances and clear shared connections
         with _global_lock:
             # Close all shared connections
-            for db_path, conn in _connections.items():
+            for _db_path, conn in _connections.items():
                 try:
                     conn.close()
                 except Exception:

@@ -14,10 +14,9 @@ API Keys Endpoints Reference:
 
 import unittest
 
-from campus.common import schema
-from campus.common.errors import api_errors
-from campus.common.utils import uid, secret
 import campus.storage
+from campus.common import schema
+from campus.common.utils import secret, uid
 from tests.fixtures import services
 
 
@@ -811,13 +810,13 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
 
     def test_create_api_key_expired_key_returns_401(self):
         """POST /audit/v1/apikeys/ with expired API key returns 401."""
-        from campus.common.utils import secret
         import campus.storage
+        from campus.common.utils import secret
 
         # Create an expired API key
         expired_key_value = secret.generate_audit_api_key()
         expired_key_id = uid.generate_category_uid("apikey", length=16)
-        from datetime import datetime, timedelta
+        from datetime import timedelta
         expired_record = {
             "id": expired_key_id,
             "created_at": schema.DateTime.utcnow(),
@@ -845,8 +844,8 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
 
     def test_create_api_key_revoked_key_returns_401(self):
         """POST /audit/v1/apikeys/ with revoked API key returns 401."""
-        from campus.common.utils import secret
         import campus.storage
+        from campus.common.utils import secret
 
         # Create a revoked API key
         revoked_key_value = secret.generate_audit_api_key()

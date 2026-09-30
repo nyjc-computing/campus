@@ -50,7 +50,7 @@ def create_app(mode: str | None = None) -> flask.Flask:
     if '.' not in mode or not mode.startswith('campus.'):
         warnings.warn(
             f"Deployment mode {mode!r} will be deprecated.\n"
-            f"Use {('campus.' + mode)!r} instead.", DeprecationWarning
+            f"Use {('campus.' + mode)!r} instead.", DeprecationWarning, stacklevel=2
         )
         mode = 'campus.' + mode
 

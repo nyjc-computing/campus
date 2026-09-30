@@ -30,11 +30,8 @@ def get_audit_spans(event_type: str | None = None, limit: int = 50) -> list[dict
 
     # Build query for audit events
     # Audit events have path equal to event type (exact match)
-    if event_type:
-        query = {"path": event_type}
-    else:
-        # Get all spans - will filter for audit events in Python
-        query = {}
+    # Empty query gets all spans - filtered for audit events in Python
+    query = {"path": event_type} if event_type else {}
 
     try:
         spans = traces_storage.get_matching(

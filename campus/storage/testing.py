@@ -11,9 +11,8 @@ import os
 import tempfile
 from typing import Type
 
-from campus.storage.tables.interface import TableInterface
 from campus.storage.documents.interface import CollectionInterface
-
+from campus.storage.tables.interface import TableInterface
 
 # Track whether we've registered the cleanup handler
 _cleanup_registered = False
@@ -157,10 +156,7 @@ def configure_test_db():
     # This aligns with production: single DB per deployment
     temp_path = _get_temp_path()
 
-    if temp_path:
-        db_path = os.path.join(temp_path, "campus_test.db")
-    else:
-        db_path = ":memory:"
+    db_path = os.path.join(temp_path, "campus_test.db") if temp_path else ":memory:"
 
     # Store the db_path in environment so SQLiteTable.__init__ can find it
     # Use SQLITE_URI for consistency with POSTGRESDB_URI and MONGODB_URI
@@ -215,8 +211,8 @@ def get_collection_backend() -> Type[CollectionInterface]:
 def reset_test_storage():
     """Reset all test storage. Only works in test mode."""
     if is_test_mode():
-        from campus.storage.tables.backend.sqlite import SQLiteTable
         from campus.storage.documents.backend.memory import MemoryCollection
+        from campus.storage.tables.backend.sqlite import SQLiteTable
 
         SQLiteTable.reset_database()
         MemoryCollection.reset_storage()
@@ -232,8 +228,8 @@ def clear_all_data():
     but preserve the schema defined in setUpClass().
     """
     if is_test_mode():
-        from campus.storage.tables.backend.sqlite import SQLiteTable
         from campus.storage.documents.backend.memory import MemoryCollection
+        from campus.storage.tables.backend.sqlite import SQLiteTable
 
         SQLiteTable.clear_database()
         MemoryCollection.clear_storage()

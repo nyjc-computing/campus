@@ -37,17 +37,11 @@ __all__ = [
 from campus.common import devops
 
 from . import documents, objects, tables
-
 from .documents import CollectionInterface
-from .tables import TableInterface
+from .errors import ConflictError, NoChangesAppliedError, NotFoundError, StorageError
 from .objects import BucketInterface, ObjectMetadata
-from .errors import (
-    StorageError,
-    ConflictError,
-    NotFoundError,
-    NoChangesAppliedError
-)
-from .query import gt, gte, lt, lte, ne, between, is_operator
+from .query import between, gt, gte, is_operator, lt, lte, ne
+from .tables import TableInterface
 
 
 def get_table(name: str) -> TableInterface:

@@ -209,9 +209,16 @@ class TestFixturesImportable(unittest.TestCase):
         - Fixture configuration errors
         """
         try:
-            from tests.fixtures import (
-                api, auth, mongodb, postgres, require, services,
-                setup, storage, yapper
+            from tests.fixtures import (  # noqa: F401 - availability probe
+                api,
+                auth,
+                mongodb,
+                postgres,
+                require,
+                services,
+                setup,
+                storage,
+                yapper,
             )
             self.assertIsNotNone(api, "fixtures.api is None")
             self.assertIsNotNone(auth, "fixtures.auth is None")
@@ -236,10 +243,10 @@ try:
     if str(tests_dir) not in sys.path:
         sys.path.insert(0, str(tests_dir))
 
-    from sanity.test_auth_deployment import TestAuthDeployment
     from sanity.test_api_deployment import TestAPIDeployment
-    from sanity.test_wsgi import TestWSGI
+    from sanity.test_auth_deployment import TestAuthDeployment
     from sanity.test_discovery import TestTestDiscovery
+    from sanity.test_wsgi import TestWSGI
 
     # Verify classes were imported successfully
     assert TestAuthDeployment is not None, "TestAuthDeployment import failed"

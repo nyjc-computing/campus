@@ -141,6 +141,11 @@ poetry run python tests/run_tests.py contract      # HTTP contracts (local-only,
   that cite their issue). A new contract failure is a regression you
   introduced. Every skip marker must cite an issue number; re-verify
   markers with `python scripts/audit_skipped_tests.py`.
+- **Lint must be green**: `ruff check .` (CI gate, config in
+  `pyproject.toml`). See the Linting section of
+  [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md). Caution: ruff's SIM118
+  "in-dict-keys" fix assumes real dicts — `sqlite3.Row` iterates values,
+  not keys, so `.keys()` there is a documented noqa, not a fix.
 - **Before debugging test oddities** (auth failures, 500s that only happen
   in tests, tokens that "should work"), read the gotchas in
   [tests/README.md](tests/README.md) and the "How Cross-Service Test

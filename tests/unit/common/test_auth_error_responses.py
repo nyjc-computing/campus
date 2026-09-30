@@ -10,7 +10,6 @@ from campus.common.errors import FieldError, ValidationError
 from campus.common.errors.auth_errors import (
     AccessDeniedError,
     AuthorizationError,
-    InvalidRequestError as AuthInvalidRequestError,
 )
 from campus.common.errors.base import ErrorConstant
 from campus.common.errors.token_errors import (
@@ -197,14 +196,13 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
     def setUp(self):
         """Set up Flask app for testing error handler."""
         # Lazy import to avoid storage initialization issues
+        import flask
+
+        from campus.common import devops
         from campus.common.errors import init_app
         from campus.common.errors.auth_errors import (
-            AuthorizationError,
             UnauthorizedClientError,
         )
-        from campus.common import devops
-
-        import flask
         self.app = flask.Flask(__name__)
         init_app(self.app)
         self.app.config["TESTING"] = True
@@ -281,8 +279,9 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
             "/some/unknown/path",
             headers={"Accept": "text/html"}
         ):
-            from campus.common.errors.handlers import handle_authorization_error
             from werkzeug.exceptions import BadRequest
+
+            from campus.common.errors.handlers import handle_authorization_error
 
             with self.assertRaises(BadRequest) as context:
                 handle_authorization_error(err)

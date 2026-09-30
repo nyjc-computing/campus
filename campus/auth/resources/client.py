@@ -5,16 +5,15 @@ Client resource for Campus API.
 
 __all__ = []
 
+import logging
 import typing
 
-import logging
-
 import campus.config
+import campus.model as model
+import campus.storage
 from campus.common import env, schema
 from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import secret, uid
-import campus.model as model
-import campus.storage
 
 client_storage = campus.storage.get_table("vault_clients")
 access_storage = campus.storage.get_table("vault_access")

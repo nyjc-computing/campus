@@ -108,12 +108,12 @@ class TestTestDiscovery(unittest.TestCase):
     def test_allowlist_entries_are_still_unreachable(self):
         """Allowlisted files must still be unreachable, else prune the list."""
         stale = []
-        for rel, reason in UNREACHABLE_ALLOWLIST.items():
+        for rel, _reason in UNREACHABLE_ALLOWLIST.items():
             path = TESTS_DIR / rel
             if not path.exists():
                 stale.append(f"{rel}: file no longer exists")
                 continue
-            posix = path.relative_to(TESTS_DIR).as_posix()
+            path.relative_to(TESTS_DIR).as_posix()
             category = _category_of(path.relative_to(TESTS_DIR))
             reachable = (
                 category in DISCOVERY_CATEGORIES

@@ -14,8 +14,8 @@ from dataclasses import dataclass
 
 from campus.common import schema
 
-from . import template
 from ..base import Model
+from . import template
 
 
 @dataclass(eq=False, kw_only=True)

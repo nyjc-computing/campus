@@ -4,8 +4,6 @@ Default implementation for JsonClient and JsonResponse, using `requests`.
 """
 
 import logging
-import os
-
 from typing import Any, Callable, Iterable, Mapping, Optional, Self, TypedDict
 from urllib.parse import urljoin
 
@@ -13,6 +11,7 @@ import requests
 
 from campus.common import env
 from campus.common.utils import secret
+
 from .errors import (
     AuthenticationError,
     NetworkError,
@@ -86,7 +85,7 @@ class DefaultResponse(JsonResponse):
     @property
     def headers(self) -> dict[str, str]:
         # Convert to plain dict[str, str]
-        return {k: v for k, v in self._response.headers.items()}
+        return dict(self._response.headers.items())
 
     @property
     def text(self) -> str:
@@ -126,7 +125,7 @@ class DefaultClient(JsonClient):
         """
         self.base_url = base_url
         assert headers is None or 'Authorization' not in headers, (
-            f"'Authorization' in headers conflicts with provided auth"
+            "'Authorization' in headers conflicts with provided auth"
         )
 
         # Prepare a persistent session and set default headers
@@ -197,7 +196,7 @@ class DefaultClient(JsonClient):
                 try:
                     response_text = response.text[:500]  # Limit to avoid huge logs
                     logger.warning(f"HTTP {method} {url} failed ({response.status_code}): {response_text}")
-                except:
+                except Exception:
                     logger.warning(f"HTTP {method} {url} failed ({response.status_code}): <unable to read response>")
                     
         except requests.RequestException as e:

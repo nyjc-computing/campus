@@ -10,14 +10,14 @@ from typing import Literal
 import flask
 import werkzeug
 
+import campus.config
+import campus.model
 from campus.common import schema, webauth
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
-import campus.config
-import campus.model
 
-from .. import base
 from ... import resources
+from .. import base
 
 PROVIDER = "google"
 SCOPE_SEP = " "
@@ -199,7 +199,7 @@ class GoogleAuthProxy(base.AuthProxy):
         session['user_id'] = str(credentials.user_id)
 
         # Parse target URL and preserve existing query params (like state)
-        from urllib.parse import urlparse, parse_qs
+        from urllib.parse import parse_qs, urlparse
         target_url = authsession.target or flask.request.host_url
         parsed = urlparse(target_url)
         existing_params = parse_qs(parsed.query)

@@ -11,10 +11,10 @@ from typing import Any
 
 import requests
 
+import campus.model
 from campus.common import schema
 from campus.common.errors import auth_errors, token_errors
-from campus.common.utils import url, secret, uid
-import campus.model
+from campus.common.utils import url
 
 from . import base
 
@@ -98,7 +98,7 @@ class OAuth2DeviceAuthorizationFlowScheme(base.OAuth2FlowScheme):
                 headers=self.headers,
                 timeout=TIMEOUT
             )
-        except requests.exceptions.Timeout as err:
+        except requests.exceptions.Timeout:
             raise auth_errors.TemporarilyUnavailableError(
                 "Device code request timed out"
             ) from None
@@ -141,7 +141,7 @@ class OAuth2DeviceAuthorizationFlowScheme(base.OAuth2FlowScheme):
                 headers=self.headers,
                 timeout=TIMEOUT
             )
-        except requests.exceptions.Timeout as err:
+        except requests.exceptions.Timeout:
             raise auth_errors.TemporarilyUnavailableError(
                 "Token request timed out"
             ) from None

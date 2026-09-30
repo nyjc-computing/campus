@@ -5,8 +5,7 @@ Functions for MongoDB database management during testing.
 
 from pymongo import MongoClient
 
-from campus.common import devops
-from campus.common import env
+from campus.common import devops, env
 
 
 def get_mongodb_uri(database_name: str | None = None) -> str:

@@ -2,9 +2,10 @@
 """Test the new storage backends for Flask test client strategy."""
 
 import unittest
-from campus.storage import get_table, get_collection, gt, gte, lt, lte, ne
-from campus.storage import errors as storage_errors
+
 from campus.common import env
+from campus.storage import errors as storage_errors
+from campus.storage import get_collection, get_table, gt, gte, lt, lte, ne
 
 # Configure test storage before importing storage modules
 env.set('STORAGE_MODE', "1")

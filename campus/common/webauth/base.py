@@ -7,7 +7,7 @@ __all__ = [
     "SecurityScheme",
 ]
 
-from typing import Protocol, Type, TypeVar
+from typing import Protocol, TypeVar
 
 S = TypeVar("S", bound="SecurityScheme", covariant=True)
 

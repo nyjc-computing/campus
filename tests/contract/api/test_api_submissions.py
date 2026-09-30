@@ -23,7 +23,7 @@ import unittest
 
 from campus.common import schema
 from tests.fixtures import services
-from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers, get_basic_auth_headers
+from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 
 
 class TestApiSubmissionsContract(unittest.TestCase):
@@ -168,7 +168,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
     def test_list_submissions_by_assignment(self):
         """GET /submissions/by-assignment/{assignment_id} returns submissions for assignment."""
         # Create a test submission
-        submission_id = self._create_test_submission()
+        self._create_test_submission()
 
         response = self.client.get(
             f"/api/v1/submissions/by-assignment/{self.test_assignment_id}",
@@ -184,7 +184,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
     def test_list_submissions_by_student(self):
         """GET /submissions/by-student/{student_id} returns submissions for student."""
         # Create a test submission
-        submission_id = self._create_test_submission()
+        self._create_test_submission()
 
         response = self.client.get(
             f"/api/v1/submissions/by-student/{self.test_student_id}",
@@ -200,7 +200,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
     def test_list_submissions_with_query_params(self):
         """GET /submissions/ with query params filters results."""
         # Create a test submission
-        submission_id = self._create_test_submission()
+        self._create_test_submission()
 
         # Filter by assignment_id
         response = self.client.get(

@@ -3,11 +3,11 @@
 Booking resource for Campus API.
 """
 
+import campus.model as model
+import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model as model
-import campus.storage
 
 venue_booking_table = campus.storage.get_table("venue_bookings")
 venue_table = campus.storage.get_table("venues")

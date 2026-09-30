@@ -6,10 +6,10 @@ OAuth Login Manager for Flask integration.
 from functools import wraps
 from typing import Callable
 
+import campus_python
 import flask
 import werkzeug
 
-import campus_python
 from campus import flask_campus
 from campus.common.utils import url
 

@@ -12,16 +12,15 @@ Test coverage:
 """
 
 import unittest
-from datetime import datetime, timezone
 
+from campus.common import schema
 from campus.model.audit import (
     APIKey,
     TraceSpan,
-    TraceTreeNode,
-    TraceTree,
     TraceSummary,
+    TraceTree,
+    TraceTreeNode,
 )
-from campus.common import schema
 
 
 class TestTraceSpan(unittest.TestCase):
@@ -601,7 +600,6 @@ class TestTraceSummary(unittest.TestCase):
             duration_ms=100.0,
             client_ip="127.0.0.1",
         )
-        spans = [root_span]
 
         summary = TraceSummary(
             trace_id=trace_id,

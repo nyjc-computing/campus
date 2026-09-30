@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Test query operators for storage filtering."""
 
-import unittest
 import dataclasses
+import unittest
 
 
 class TestQueryOperators(unittest.TestCase):
@@ -34,7 +34,7 @@ class TestQueryOperators(unittest.TestCase):
 
     def test_lt_operator(self):
         """lt operator stores value correctly."""
-        from campus.storage.query import lt, is_operator
+        from campus.storage.query import is_operator, lt
 
         op = lt(5000)
         self.assertEqual(op.value, 5000)
@@ -42,7 +42,7 @@ class TestQueryOperators(unittest.TestCase):
 
     def test_lte_operator(self):
         """lte operator stores value correctly."""
-        from campus.storage.query import lte, is_operator
+        from campus.storage.query import is_operator, lte
 
         op = lte(3)
         self.assertEqual(op.value, 3)
@@ -50,7 +50,7 @@ class TestQueryOperators(unittest.TestCase):
 
     def test_ne_operator(self):
         """ne operator stores value correctly."""
-        from campus.storage.query import ne, is_operator
+        from campus.storage.query import is_operator, ne
 
         op = ne("@metadata")
         self.assertEqual(op.value, "@metadata")
@@ -58,7 +58,7 @@ class TestQueryOperators(unittest.TestCase):
 
     def test_is_operator_returns_true_for_operators(self):
         """is_operator returns True for all operator types."""
-        from campus.storage.query import gt, gte, lt, lte, ne, is_operator
+        from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 
         self.assertTrue(is_operator(gt(100)))
         self.assertTrue(is_operator(gte(100)))
@@ -94,8 +94,9 @@ class TestQueryOperators(unittest.TestCase):
 
     def test_operators_with_different_types(self):
         """Operators should work with various value types."""
-        from campus.storage.query import gt, lt, gte, lte, ne, is_operator
         from datetime import datetime
+
+        from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 
         # Integer
         self.assertTrue(is_operator(gt(100)))
@@ -115,7 +116,7 @@ class TestQueryOperators(unittest.TestCase):
 
     def test_operator_type_checking(self):
         """Operator instances are identified by their type."""
-        from campus.storage.query import gt, gte, lt, lte, ne, is_operator, Operator
+        from campus.storage.query import Operator, gt, gte, is_operator, lt, lte, ne
 
         gt_op = gt(100)
         gte_op = gte(100)

@@ -172,9 +172,8 @@ class TestOAuthIntegration(IntegrationTestCase):
         self.assertIn("google", response.location.lower())
 
         # Session should NOT be set
-        with self.app.test_client() as client:
-            with client.session_transaction() as sess:
-                self.assertNotIn('user_id', sess)
+        with self.app.test_client() as client, client.session_transaction() as sess:
+            self.assertNotIn('user_id', sess)
 
     def test_device_code_state_transitions(self):
         """Test device code state transitions: pending -> authorized -> consumed."""
@@ -279,9 +278,10 @@ class TestOAuthIntegration(IntegrationTestCase):
         device code into the database, but that would be testing database
         internals rather than the OAuth flow behavior.
         """
+        from datetime import timedelta
+
         import campus.config
         from campus.common.utils import utc_time
-        from datetime import timedelta
 
         expiry_seconds = campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS
 

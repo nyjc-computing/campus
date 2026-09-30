@@ -98,7 +98,10 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG #502: empty email passes validation and resources.emailotp.request() 500s - emailotp storage table is not initialised in the test harness")
+    @unittest.skip(
+        "API BUG #502: empty email passes validation and resources.emailotp.request() 500s - emailotp storage "
+        "table is not initialised in the test harness"
+    )
     def test_request_otp_empty_email_returns_error(self):
         """POST /emailotp/request with empty email returns error."""
         response = self.client.post(

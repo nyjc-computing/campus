@@ -8,11 +8,6 @@ import flask
 from campus import flask_campus
 from campus.common import schema
 
-from .. import resources
-
-import campus.storage
-import campus.model
-
 bp = flask.Blueprint('bookings', __name__, url_prefix='/bookings')
 
 

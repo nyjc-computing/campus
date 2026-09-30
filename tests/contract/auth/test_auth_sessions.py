@@ -69,7 +69,6 @@ class TestAuthSessionsContract(unittest.TestCase):
 
     def test_sweep_sessions_with_time(self):
         """POST /sessions/sweep with at_time parameter."""
-        from campus.common import schema
 
         response = self.client.post(
             "/auth/v1/sessions/sweep",
@@ -300,7 +299,8 @@ class TestAuthSessionsContract(unittest.TestCase):
     def test_get_session_by_invalid_authorization_code(self):
         """POST /sessions/{provider}/authorization_code with invalid code returns error."""
         response = self.client.post(
-            f"/auth/v1/sessions/{self.test_provider}/authorization_code",  # Note: no trailing slash based on route definition
+            # No trailing slash, per the route definition
+            f"/auth/v1/sessions/{self.test_provider}/authorization_code",
             json={"code": "invalid_auth_code_12345"},
             headers=self.auth_headers
         )

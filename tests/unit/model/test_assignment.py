@@ -2,8 +2,8 @@
 
 import unittest
 
-from campus.model import Assignment, ClassroomLink, Question
 from campus.common import schema
+from campus.model import Assignment, ClassroomLink, Question
 
 
 class TestQuestion(unittest.TestCase):

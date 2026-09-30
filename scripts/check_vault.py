@@ -18,7 +18,7 @@ print("=" * 60)
 
 # Check what's in the google vault
 print("\nQuerying google vault for CLIENT_ID:")
-print(f"  vault_storage.get_matching({{'key': 'CLIENT_ID', 'label': 'google'}})")
+print("  vault_storage.get_matching({'key': 'CLIENT_ID', 'label': 'google'})")
 
 rec = vault_storage.get_matching({"key": "CLIENT_ID", "label": "google"})
 
@@ -54,7 +54,7 @@ else:
 print("\n" + "=" * 60)
 print("All vault labels:")
 all_vaults = vault_storage.get_all()
-labels = set(rec.get("label") for rec in all_vaults if rec.get("label"))
+labels = {rec.get("label") for rec in all_vaults if rec.get("label")}
 for label in sorted(labels):
     count = len([r for r in all_vaults if r.get("label") == label])
     print(f"  - {label}: {count} entries")

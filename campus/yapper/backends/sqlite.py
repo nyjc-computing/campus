@@ -5,11 +5,11 @@ This implementation is for local testing purposes only.
 It is not intended for production use.
 """
 
-from typing import Any, Generator, TypedDict
-from contextlib import contextmanager
 import sqlite3
+from contextlib import contextmanager
+from typing import Any, Generator, TypedDict
 
-from campus.yapper.base import ClientId, Event, EventLabel, EventData, YapperInterface
+from campus.yapper.base import ClientId, Event, EventData, EventLabel, YapperInterface
 
 
 class SQLiteResult(TypedDict):

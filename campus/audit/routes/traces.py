@@ -12,8 +12,8 @@ import flask
 import campus.flask_campus as flask_campus
 from campus.common.errors import api_errors
 
-from ..resources import traces as traces_resource
 from ..helpers import audit_events
+from ..resources import traces as traces_resource
 
 # Create blueprint for trace routes
 bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')

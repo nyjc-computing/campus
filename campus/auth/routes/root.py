@@ -8,7 +8,6 @@ backend services (e.g. campus.api), not by other clients.
 All access must be carefully authenticated and authorized.
 """
 
-import campus_python
 import flask
 
 from campus import flask_campus

@@ -7,12 +7,12 @@ This module manages device codes for CLI and other device authentication.
 
 import typing
 
-from campus.common import schema
-from campus.common.errors import api_errors
-from campus.common.utils import uid, secret
 import campus.config as config
 import campus.model as model
 import campus.storage
+from campus.common import schema
+from campus.common.errors import api_errors
+from campus.common.utils import secret, uid
 
 device_code_storage = campus.storage.get_collection("device_codes")
 
@@ -97,7 +97,7 @@ class DeviceCodeResource:
         if not records:
             logger.warning(f"[DEVICE_CODE] Device code not found: {device_code}")
             raise api_errors.NotFoundError(
-                f"Device code not found or expired",
+                "Device code not found or expired",
                 device_code=device_code
             )
 
@@ -138,7 +138,7 @@ class DeviceCodeResource:
         if not records:
             logger.warning(f"[DEVICE_CODE] User code not found: {user_code}")
             raise api_errors.NotFoundError(
-                f"Invalid user code",
+                "Invalid user code",
                 user_code=user_code
             )
 
@@ -152,7 +152,7 @@ class DeviceCodeResource:
                 {"state": "expired"}
             )
             raise api_errors.NotFoundError(
-                f"This user code has expired",
+                "This user code has expired",
                 user_code=user_code
             )
 

@@ -12,13 +12,12 @@ from urllib.parse import urljoin
 
 import flask
 
-from campus.common.http.interface import JsonDict, JsonResponse
-from campus_python.errors import AuthenticationError
-from campus.model import HttpHeader
 from campus.common import env
+from campus.common.http.interface import JsonDict, JsonResponse
+from campus.model import HttpHeader
 
-from .response import FlaskTestResponse
 from .campus_request import get_test_app
+from .response import FlaskTestResponse
 
 
 class TestJsonClient:
@@ -253,8 +252,5 @@ class TestJsonClient:
     import campus.common.http
 
     if hasattr(campus.common.http, "_original_DefaultClient"):
-        campus.common.http.DefaultClient = getattr(
-            campus.common.http,
-            "_original_DefaultClient"
-        )
+        campus.common.http.DefaultClient = campus.common.http._original_DefaultClient
         delattr(campus.common.http, "_original_DefaultClient")

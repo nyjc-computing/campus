@@ -23,8 +23,8 @@ from campus.common.http.errors import (
     AuthenticationError,
     ConflictError,
     HttpClientError,
-    NotFoundError,
     InvalidRequestError,
+    NotFoundError,
 )
 
 Header = Mapping[str, str]
@@ -100,18 +100,15 @@ class JsonResponse(Protocol):
                     response_data.get('detail') or
                     response_data.get('error_description')
                 )
-                if error_msg:
-                    message = error_msg
-                else:
-                    message = str(response_data)
+                error_msg or str(response_data)
             else:
-                message = str(response_data)
-        except:
+                str(response_data)
+        except Exception:
             # Fall back to response text if JSON parsing fails
             try:
-                message = self.text.strip() or f"HTTP {status}"
-            except:
-                message = f"HTTP {status} (no response body)"
+                self.text.strip() or f"HTTP {status}"
+            except Exception:
+                pass
 
         match status:
             case 400:

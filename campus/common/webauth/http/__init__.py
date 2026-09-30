@@ -14,8 +14,8 @@ __all__ = [
 
 from typing import Literal
 
-from campus.common.errors import api_errors, token_errors
 import campus.model
+from campus.common.errors import api_errors, token_errors
 
 from .. import base
 

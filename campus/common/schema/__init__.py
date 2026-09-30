@@ -24,7 +24,6 @@ from .base import (
     CampusID,
     UserID,
 )
-
 from .openapi import (
     Array,
     Boolean,

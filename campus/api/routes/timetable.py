@@ -220,7 +220,11 @@ def get_timetable_metadata(timetable_id: schema.CampusID):
 
 @bp.patch('/<timetable_id>/metadata')
 @flask_campus.unpack_request
-def set_metadata(timetable_id: schema.CampusID, start_date: schema.DateTime, end_date: schema.DateTime) -> flask_campus.JsonResponse:
+def set_metadata(
+        timetable_id: schema.CampusID,
+        start_date: schema.DateTime,
+        end_date: schema.DateTime,
+) -> flask_campus.JsonResponse:
     """Summary:
         Update metadata for a specific timetable.
 

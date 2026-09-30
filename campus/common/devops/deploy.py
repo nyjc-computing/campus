@@ -9,10 +9,9 @@ from typing import Protocol, runtime_checkable
 import flask
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from campus.common import devops, env, introspect
 import campus.common.errors
+from campus.common import devops, env, introspect
 from campus.common.utils import url
-
 
 # pylint disable=unnecessary-ellipsis
 
@@ -55,7 +54,6 @@ def configure_for_development(app: flask.Flask) -> None:
     - sets host and port from environment variables or defaults
     - configures for Codespaces if detected
     """
-    import os
 
     app.debug = True
     # Configure hostname for various development environments

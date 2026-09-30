@@ -4,6 +4,7 @@ FlaskTestResponse adapter for Campus JsonResponse protocol.
 """
 
 from typing import Any
+
 from werkzeug.test import TestResponse
 
 
@@ -33,7 +34,7 @@ class FlaskTestResponse:
 
         Converts werkzeug Headers to plain dict[str, str].
         """
-        return {k: v for k, v in self._response.headers.items()}
+        return dict(self._response.headers.items())
 
     @property
     def text(self) -> str:

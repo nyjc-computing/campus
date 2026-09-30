@@ -6,7 +6,6 @@ attention to OAuth flow debugging.
 
 import logging
 import sys
-from typing import Any
 
 # Default logging configuration
 DEFAULT_LOG_LEVEL = logging.INFO

@@ -2,8 +2,8 @@
 
 import unittest
 
-from campus.model import Submission, Response, Feedback
 from campus.common import schema
+from campus.model import Feedback, Response, Submission
 
 
 class TestResponse(unittest.TestCase):

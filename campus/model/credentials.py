@@ -11,6 +11,7 @@ from campus.common.utils import secret, utc_time
 from . import constraints
 from .base import Model
 
+
 @dataclass(eq=False, kw_only=True)
 class OAuthToken(Model):
     """Dataclass representation of a token record."""

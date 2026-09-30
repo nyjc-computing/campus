@@ -6,17 +6,17 @@ An oauth proxy carries out OAuth2 authorization flows with third-party
 authentication providers to obtain access tokens for user authentication.
 """
 
-from abc import ABC, abstractmethod
 import contextlib
+from abc import ABC, abstractmethod
 from typing import Iterator, Literal, Self
 
 import flask
 import werkzeug
 
-from campus.common import schema
-from campus.common.errors import auth_errors
 import campus.config
 import campus.model
+from campus.common import schema
+from campus.common.errors import auth_errors
 
 from .. import resources
 

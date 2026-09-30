@@ -18,9 +18,9 @@ from campus.common.errors import api_errors, token_errors
 from campus.common.utils import secret
 
 from .. import get_yapper
-from ..resources import device_code as device_code_resource
 from ..resources import client as client_resource
 from ..resources import credentials as credentials_resource
+from ..resources import device_code as device_code_resource
 
 # Create blueprint for OAuth routes
 bp = flask.Blueprint('oauth', __name__, url_prefix='/oauth')
@@ -359,8 +359,9 @@ def device_verification(user_code: str | None = None):
     GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
     POST /device - Handles form submission for non-JS clients
     """
-    from flask import render_template_string, request, redirect, session
     import html
+
+    from flask import redirect, render_template_string, request, session
 
     # Check if user is authenticated (for both GET and POST)
     # User must be logged in to authorize a device code

@@ -253,9 +253,8 @@ def __getattr__(name: str) -> str:
     Raises:
         AttributeError: If the environment variable is not set.
     """
-    if contains(name):
-        if var := get(name):
-            return var
+    if contains(name) and (var := get(name)):
+        return var
     raise AttributeError(
         f"module '{__name__}' has no attribute '{name}' "
         f"and environment variable '{name}' is not set"

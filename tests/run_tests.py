@@ -210,10 +210,7 @@ def run_type_checks(silent: bool = False) -> int:
     """Run pyright type checks."""
     set_test_environment()
 
-    if venv_pyright := get_venv_executable("pyright"):
-        cmd = [str(venv_pyright), "campus"]
-    else:
-        cmd = ["pyright", "campus"]
+    cmd = [str(venv_pyright), "campus"] if (venv_pyright := get_venv_executable("pyright")) else ["pyright", "campus"]
 
     return run_command(cmd, timeout=None, silent=silent)
 

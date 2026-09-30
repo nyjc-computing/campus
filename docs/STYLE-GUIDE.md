@@ -8,6 +8,20 @@ This document defines coding standards for the Campus project.
 
 ## Python Code Standards
 
+### Linting (ruff)
+
+The repo is linted with [ruff](https://docs.astral.sh/ruff/); CI runs `ruff check .` on every PR (`.github/workflows/lint.yml`) and it must stay green.
+
+```bash
+# Any standalone ruff works; config lives in pyproject.toml [tool.ruff]
+ruff check .              # lint (CI gate)
+ruff check --diff .       # show suggested rewrites for review
+```
+
+Rewrites are applied **manually after review**: autofixes are disabled repo-wide (`fixable = []`) because they are only semantics-preserving for common types (ruff's SIM118 fix, for instance, breaks `sqlite3.Row` iteration). Review `--diff` output and apply changes deliberately per site.
+
+Rules are selected in `[tool.ruff.lint]`; deliberate exceptions live in `per-file-ignores` with a justification comment. A new violation category should be tuned at the config level only if it systematically fights a Campus pattern (as `ARG` did); otherwise fix the code or add a targeted `# noqa: <CODE>` with a reason.
+
 ### Code Conventions
 
 Follow established Python conventions:

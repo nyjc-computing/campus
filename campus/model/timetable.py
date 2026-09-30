@@ -37,11 +37,11 @@ from dataclasses import dataclass, field
 from typing import Any, Self
 
 from campus.common import schema
-from campus.common.errors import ValidationError, FieldError
+from campus.common.errors import FieldError, ValidationError
 from campus.common.utils import uid
 
-from .base import Model
 from . import constraints
+from .base import Model
 
 # NOTE: Assumes reusing the same object is not an issue
 unique_field = field(metadata={

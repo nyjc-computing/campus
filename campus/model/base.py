@@ -4,8 +4,8 @@ Base Model class.
 """
 
 import dataclasses
-from dataclasses import dataclass
 import typing
+from dataclasses import dataclass
 
 from campus.common import schema
 
@@ -61,7 +61,7 @@ class InternalModel(typing.Protocol):
         """
         if not update:
             raise ValueError("No fields provided for update validation")
-        for field_name in update.keys():
+        for field_name in update:
             field = cls.fields().get(field_name)
             if field is None:
                 raise ValueError(

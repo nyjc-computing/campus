@@ -5,7 +5,6 @@ Mocks database calls and external services.
 """
 
 import unittest
-from unittest.mock import patch, Mock
 
 # TODO: Add unit tests for:
 # - campus.yapper.base

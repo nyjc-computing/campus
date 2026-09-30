@@ -5,6 +5,7 @@ Utility functions for comparing complex data types.
 
 from typing import Any
 
+
 def diff_dict(
         dict_A: dict[str, Any],
         dict_B: dict[str, Any]

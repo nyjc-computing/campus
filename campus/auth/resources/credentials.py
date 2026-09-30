@@ -7,12 +7,12 @@ This includes user credentials and tokens.
 Credentials link an issued token to a provider, client, and user.
 """
 
-from campus.common import schema
-from campus.common.errors import api_errors
-from campus.common.utils import secret, uid, utc_time
 import campus.config as config
 import campus.model as model
 import campus.storage
+from campus.common import schema
+from campus.common.errors import api_errors
+from campus.common.utils import secret, uid, utc_time
 
 token_storage = campus.storage.get_collection("tokens")
 cred_storage = campus.storage.get_table("credentials")
