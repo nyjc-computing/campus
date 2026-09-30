@@ -27,6 +27,50 @@ def create_url(
     return urlunparse((protocol, domain, path, '', query_string, ''))
 
 
+def canonical_origin() -> str:
+    """Resolve the canonical public origin for absolute URL generation.
+
+    Precedence:
+        1. PUBLIC_URL environment variable: a full origin
+           (scheme://host[:port]), e.g. "http://localhost:5000".
+        2. https://{HOSTNAME}: legacy fallback for deployments that only
+           set HOSTNAME.
+
+    Returns:
+        The canonical origin, without a trailing slash.
+
+    Raises:
+        ValueError: If PUBLIC_URL is set but is not a bare origin
+                    (missing scheme/netloc, or contains a path, query,
+                    params or fragment component).
+    """
+    from campus.common import env
+    public_url = env.get("PUBLIC_URL")
+    if public_url:
+        parse_result = urlparse(public_url)
+        if not parse_result.scheme or not parse_result.netloc:
+            raise ValueError(
+                "PUBLIC_URL must be a full origin (scheme://host[:port]), "
+                f"got {public_url!r}"
+            )
+        if any((
+                parse_result.path.strip('/'),
+                parse_result.params,
+                parse_result.query,
+                parse_result.fragment,
+        )):
+            raise ValueError(
+                "PUBLIC_URL must not contain a path, query, params or "
+                f"fragment component: {public_url!r}"
+            )
+        return f"{parse_result.scheme}://{parse_result.netloc}"
+    # DEPRECATED (campus#652): the https://{HOSTNAME} fallback assumes
+    # HTTPS and no non-default port, which is wrong for local development
+    # over plain HTTP. Kept for backward compatibility with deployments
+    # that only set HOSTNAME; set PUBLIC_URL instead.
+    return f"https://{env.HOSTNAME}"
+
+
 def full_url_for(
         endpoint: str,
         hostname: str | None = None,
@@ -36,19 +80,22 @@ def full_url_for(
 
     Args:
         endpoint: The endpoint name (Flask view function name).
-        hostname: The hostname to use in the URL.
+        hostname: Optional explicit override. When omitted, the URL is
+                  built from the canonical origin (see `canonical_origin`).
         **kwargs: Additional arguments to build the URL. Passed to
                   `url_for`.
     """
-    # Import env only at runtime to avoid capturing module instead of
-    # EnvironmentProxy
-    from campus.common import env
-    hostname = hostname or env.HOSTNAME
     # Validate that endpoint does not contain scheme or domain
     if urlparse(endpoint).scheme or urlparse(endpoint).netloc:
         raise ValueError("Endpoint should not contain scheme or domain.")
+    if not hostname:
+        parse_result = urlparse(canonical_origin())
+        protocol = parse_result.scheme
+        hostname = parse_result.netloc
+    else:
+        protocol = "https"
     full_url = create_url(
-        protocol="https",
+        protocol=protocol,
         domain=hostname,
         path=flask.url_for(endpoint, **kwargs)
     )

@@ -89,6 +89,29 @@ Once initialized, the following endpoints are automatically available:
 5. Access token is stored and login session is created (30-day expiry)
 6. Redirected to the original destination
 
+### Configuring the OAuth Callback URL
+
+`OAuthLoginManager` builds the `/finalize_login` callback URL from the app's
+canonical public origin, resolved by `campus.common.utils.url.canonical_origin()`:
+
+1. `PUBLIC_URL` env var, if set — a full origin (`scheme://host[:port]`), e.g.
+   `PUBLIC_URL=https://classroom.example.com`
+2. `https://{HOSTNAME}` — legacy fallback for deployments that only set
+   `HOSTNAME` (deprecated; see issue #652)
+
+For local development over plain HTTP, set the origin explicitly:
+
+```dotenv
+PUBLIC_URL=http://localhost:5000
+```
+
+and register `http://localhost:5000/finalize_login` in the Campus client's
+`redirect_uris`. The explicit origin is also what keeps the OAuth `redirect_uri`
+stable — it is never derived from the incoming request (see RFC 6749 §3.1.2.2).
+
+GitHub Codespaces needs no configuration: `configure_for_codespace()` sets
+`PUBLIC_URL` from the forwarded domain automatically.
+
 ## Request/Response Utilities
 
 ### `unpack_request`

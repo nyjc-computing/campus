@@ -28,6 +28,7 @@ CLIENT_SECRET: str  # Campus client secret
 DEPLOY: str  # Campus deployment, (campus.auth, campus.api, campus.audit)
 ENV: str  # deployment environment (development, staging, production)
 HOSTNAME: str  # used for generating redirect_uris
+PUBLIC_URL: str  # canonical public origin (scheme://host[:port]) for absolute URL generation
 PORT: str  # port for running development server
 SECRET_KEY: str  # secret key for signing sessions and tokens
 WORKSPACE_DOMAIN: str  # Google Workspace domain
