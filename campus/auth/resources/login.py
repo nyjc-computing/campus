@@ -3,7 +3,6 @@
 Login session resource for Campus API.
 """
 
-import typing
 
 import flask
 
@@ -63,14 +62,14 @@ class LoginSessionsResource:
         # Delete any existing session
         if (existing_session_id := _check_existing_id()):
             self[existing_session_id].delete()
-        session = _from_record({
-            "id": uid.generate_category_uid(f"{PROVIDER}-login_session"),
-            "expiry_seconds": login_expiry_seconds,
-            "client_id": str(client_id),
-            "user_id": str(user_id) if user_id else None,
-            "device_id": device_id,
-            "agent_string": agent_string,
-        })
+        session = model.LoginSession(
+            id=uid.generate_category_uid(f"{PROVIDER}-login_session"),
+            expiry_seconds=login_expiry_seconds,
+            client_id=schema.CampusID(str(client_id)),
+            user_id=schema.UserID(str(user_id)) if user_id else None,
+            device_id=device_id,
+            agent_string=agent_string,
+        )
         try:
             login_storage.insert_one(session.to_storage())
         except Exception as e:
@@ -125,7 +124,7 @@ class LoginSessionResource:
                 f"Session '{session_id}' not found",
                 session_id=session_id
             )
-        return _from_record(record)
+        return model.LoginSession.from_storage(record)
 
     def update(self, **update) -> model.LoginSession:
         """Update an existing session."""
@@ -161,25 +160,6 @@ class LoginSessionResource:
         return session
 
 
-def _from_record(
-        record: dict[str, typing.Any],
-) -> model.LoginSession:
-    """Convert a storage record to a LoginSession model instance."""
-    args: dict[str, typing.Any] = {}
-    if "id" in record:
-        args["id"] = schema.CampusID(record["id"])
-    if "created_at" in record and record["created_at"] is not None:
-        args["created_at"] = schema.DateTime(record["created_at"])
-    if "expires_at" in record and record["expires_at"] is not None:
-        args["expires_at"] = schema.DateTime(record["expires_at"])
-    if "expiry_seconds" in record and record["expiry_seconds"] is not None:
-        args["expiry_seconds"] = record["expiry_seconds"]
-    args["client_id"] = schema.CampusID(record["client_id"])
-    if "user_id" in record:
-        args["user_id"] = schema.UserID(record["user_id"])
-    args["device_id"] = record.get("device_id")
-    args["agent_string"] = record["agent_string"]
-    return model.LoginSession(**args)
 
 
 def _session_key(provider: str) -> str:

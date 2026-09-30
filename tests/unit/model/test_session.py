@@ -53,3 +53,18 @@ class TestAuthSessionScopeStorage(unittest.TestCase):
         record.pop("scope")
         loaded = session.AuthSession.from_storage(record)
         self.assertEqual(loaded.scopes, ["read", "write"])
+
+    def test_expiry_seconds_initvar_derives_expires_at(self):
+        """expiry_seconds must be honored against created_at, not
+        silently replaced by a config default (regression pin for the
+        removed resource-layer shim; resources now construct directly).
+        """
+        sess = session.AuthSession(
+            created_at=CREATED_AT,
+            expiry_seconds=120,
+            provider="campus",
+            client_id="campus_client_test",
+            redirect_uri="https://app.test/finalize",
+            scopes=["read"],
+        )
+        self.assertEqual(sess.expires_at, schema.DateTime("2026-01-01T00:02:00+00:00"))
