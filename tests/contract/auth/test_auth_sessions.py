@@ -295,9 +295,8 @@ class TestAuthSessionsContract(unittest.TestCase):
         self.assertIn("id", data)
         self.assertEqual(data["id"], session_data["id"])
 
-    @unittest.skip("API BUG #623: returns 400; agreed semantics pending (auth failure vs bad request)")
     def test_get_session_by_invalid_authorization_code(self):
-        """POST /sessions/{provider}/authorization_code with invalid code returns error."""
+        """POST /sessions/{provider}/authorization_code with invalid code returns 400."""
         response = self.client.post(
             # No trailing slash, per the route definition
             f"/auth/v1/sessions/{self.test_provider}/authorization_code",
@@ -305,9 +304,13 @@ class TestAuthSessionsContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        # Invalid auth code should return an error (AccessDeniedError -> 401/403)
-        # or 302 redirect if trailing slash is missing
-        self.assertIn(response.status_code, (302, 401, 403))
+        # A failed code exchange is a bad request, not an auth failure: the
+        # caller is authenticated, the input code is invalid. RFC 6749 5.2
+        # puts access_denied in the 400 token-error response, and the route
+        # raises auth_errors.AccessDeniedError (status_code 400) for it (#623).
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertIn("error", data)
 
 
 if __name__ == '__main__':
