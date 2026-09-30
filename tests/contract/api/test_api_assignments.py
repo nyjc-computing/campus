@@ -129,12 +129,15 @@ class TestApiAssignmentsContract(unittest.TestCase):
         self.assertIn("title", data)
         self.assertEqual(data["title"], "New Assignment")
 
-    @unittest.skip("API BUG #328: POST /assignments/ with questions returns 500")
     def test_create_assignment_with_questions(self):
-        """POST /assignments/ with questions creates assignment with questions."""
+        """POST /assignments/ with questions creates assignment with questions.
+
+        Question payloads follow the Question model's field names
+        (id, prompt, question) — the model shape is canonical (#328).
+        """
         questions = [
-            {"question_id": "q1", "question_text": "What is 2+2?"},
-            {"question_id": "q2", "question_text": "What is 3+3?"},
+            {"id": "q1", "prompt": "", "question": "What is 2+2?"},
+            {"id": "q2", "prompt": "", "question": "What is 3+3?"},
         ]
         response = self.client.post(
             "/api/v1/assignments/",
@@ -149,6 +152,30 @@ class TestApiAssignmentsContract(unittest.TestCase):
         data = response.get_json()
         self.assertIn("questions", data)
         self.assertGreater(len(data["questions"]), 0)
+        self.assertEqual(
+            [q["id"] for q in data["questions"]],
+            ["q1", "q2"]
+        )
+
+    def test_create_assignment_with_malformed_questions_returns_422(self):
+        """POST /assignments/ with malformed questions returns 422 (#328)."""
+        response = self.client.post(
+            "/api/v1/assignments/",
+            json={
+                "title": "Malformed Questions",
+                "questions": [
+                    # Not a Question payload: the model's fields are
+                    # id, prompt and question.
+                    {"question_id": "q1", "question_text": "What is 2+2?"},
+                ],
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
+        self.assertEqual(data["error"]["errors"][0]["field"], "questions[0]")
 
     def test_create_assignment_with_classroom_links(self):
         """POST /assignments/ with classroom_links creates assignment with links."""
