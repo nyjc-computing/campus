@@ -27,6 +27,15 @@ class TestToken(Model):
 
 
 @dataclasses.dataclass(kw_only=True)
+class TestTyped(Model):
+    """Model with str-subclass fields, for testing from_storage coercion."""
+    id: schema.CampusID
+    created_at: schema.DateTime
+    email: schema.Email
+    plain: str = ""
+
+
+@dataclasses.dataclass(kw_only=True)
 class TestCredential(Model):
     """Model with a joined init=False field, mirroring UserCredentials.token."""
     id: str
@@ -44,6 +53,37 @@ class TestCredential(Model):
 
 class TestModelFromStorage(unittest.TestCase):
     """Tests for Model.from_storage() method."""
+
+    def test_from_storage_coerces_str_subclass_fields(self):
+        """Storage strings should be coerced to annotated str subclasses
+        (schema.DateTime, CampusID, Email), mirroring from_resource."""
+        record = {
+            "id": "campus_circle_test",
+            "created_at": "2025-01-01T00:00:00Z",
+            "email": "user@campus.test",
+            "plain": "text",
+        }
+        model = TestTyped.from_storage(record)
+
+        self.assertIsInstance(model.id, schema.CampusID)
+        self.assertIsInstance(model.created_at, schema.DateTime)
+        self.assertIsInstance(model.email, schema.Email)
+        # Plain str fields stay plain
+        self.assertIs(type(model.plain), str)
+        # Coerced values keep their string content
+        self.assertEqual(model.created_at, "2025-01-01T00:00:00Z")
+
+    def test_from_storage_coercion_skips_none(self):
+        """A None value for a str-subclass field must not be coerced
+        (schema.String rejects None); it passes through as before."""
+        record = {
+            "id": "campus_circle_test",
+            "created_at": "2025-01-01T00:00:00Z",
+            "email": "user@campus.test",
+            "plain": None,
+        }
+        model = TestTyped.from_storage(record)
+        self.assertIsNone(model.plain)
 
     def test_from_storage_with_all_fields(self):
         """from_storage should work when all fields are present in record."""

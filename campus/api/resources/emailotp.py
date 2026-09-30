@@ -4,7 +4,6 @@ Email OTP resource for Campus API.
 """
 
 import secrets
-import typing
 
 import bcrypt
 
@@ -40,18 +39,6 @@ def _verify_otp(plain_otp: str, hashed_otp: str) -> bool:
     hashed_bytes = hashed_otp.encode('utf-8')
     return bcrypt.checkpw(plain_bytes, hashed_bytes)
 
-
-def _from_record(
-        record: dict[str, typing.Any],
-) -> model.EmailOTP:
-    """Convert a storage record to an EmailOTP model instance."""
-    return model.EmailOTP(
-        id=schema.CampusID(record['id']),
-        created_at=schema.DateTime(record['created_at']),
-        email=schema.Email(record['email']),
-        otp_hash=record['otp_hash'],
-        expires_at=schema.DateTime(record['expires_at'])
-    )
 
 
 class EmailOTPResource:
