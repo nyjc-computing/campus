@@ -59,25 +59,6 @@ def ensure_public_client_schema() -> None:
     client_storage.init_from_schema(_PUBLIC_CLIENT_SCHEMA_SQL)
 
 
-def _from_record(
-        record: dict[str, typing.Any],
-        permissions: dict[str, int] | None = None
-) -> model.Client:
-    """Convert a storage record to a Client model instance."""
-    return model.Client(
-        id=schema.CampusID(record["id"]),
-        created_at=schema.DateTime(
-            record.get("created_at", schema.DateTime.utcnow())
-        ),
-        name=record["name"],
-        description=record["description"],
-        is_public=record.get("is_public", False),
-        redirect_uris=record.get("redirect_uris", []),
-        permissions=permissions or {},
-        secret_hash=record.get("secret_hash"),
-    )
-
-
 def _get_client_permissions(
         client_id: schema.CampusID | str
 ) -> dict[str, int]:
@@ -343,10 +324,11 @@ class ClientResource:
                 f"Client '{client_id}' not found",
                 client_id=client_id
             )
-        return _from_record(
-            record=record,
-            permissions=_get_client_permissions(client_id)
-        )
+        client = model.Client.from_storage(record)
+        # Permissions live in a separate collection; join after the
+        # storage-shape mapping.
+        client.permissions = _get_client_permissions(client_id)
+        return client
 
     def revoke(self) -> str:
         """Revoke the client by deleting its secret.
