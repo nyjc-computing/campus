@@ -423,6 +423,16 @@ class PostgreSQLTable(TableInterface):
                     f"UPDATE {self.name} SET {set_clause} WHERE {PK} = %s",
                     params
                 )
+            except psycopg2.IntegrityError as e:
+                # Match the insert_one error contract so callers see the
+                # same exception type on unique constraint violations
+                # regardless of backend.
+                conn.rollback()
+                raise errors.ConflictError(
+                    message="Conflict occurred during update",
+                    group_name=self.name,
+                    details={"row_id": row_id, "update": update, "error": str(e)}
+                ) from e
             except psycopg2.Error:
                 raise
             else:

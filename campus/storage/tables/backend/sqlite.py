@@ -631,9 +631,19 @@ class SQLiteTable(TableInterface):
                     f"UPDATE {self.name} SET {set_sql} WHERE id = ?",
                     tuple(values)
                 )
-                conn.commit()
+            except sqlite3.IntegrityError as e:
+                # Match the insert_one error contract so callers see the
+                # same exception type on unique constraint violations
+                # regardless of backend.
+                conn.rollback()
+                raise storage_errors.ConflictError(
+                    message="Conflict occurred during update",
+                    group_name=self.name,
+                    details={"row_id": row_id, "update": update, "error": str(e)}
+                ) from e
             finally:
                 cursor.close()
+            conn.commit()
 
     def update_matching(self, query: dict[str, Any], update: dict[str, Any]):
         """Update rows matching a query."""

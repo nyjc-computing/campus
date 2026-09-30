@@ -380,9 +380,19 @@ class ClientResource:
 
         Args:
             **updates: Fields to update (name, description)
+
+        Raises:
+            api_errors.ConflictError: If renaming the client to a name
+                that already exists (vault_clients.name is UNIQUE).
         """
         model.Client.validate_update(updates)
-        client_storage.update_by_id(self.client_id, updates)
+        try:
+            client_storage.update_by_id(self.client_id, updates)
+        except campus.storage.errors.ConflictError as e:
+            raise api_errors.ConflictError(
+                message=f"Client name '{updates.get('name')}' already exists",
+                name=updates.get("name")
+            ) from e
 
 
 class ClientAccessResource:

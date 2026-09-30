@@ -272,6 +272,33 @@ class TestAuthClientsContract(unittest.TestCase):
         )
         self.assertIn(get_response.status_code, (400, 404, 409, 302))
 
+    def test_update_client_duplicate_name_returns_409(self):
+        """PATCH /clients/{id}/ renaming to an existing name returns 409, not 500.
+
+        Follow-up to #185 (POST fixed via #628), tracked as #643:
+        vault_clients.name is UNIQUE, and the storage-level conflict on
+        rename used to propagate unhandled out of ClientResource.update().
+        """
+        create = self.client.post(
+            "/auth/v1/clients/",
+            json={
+                "name": "rename-target-name",
+                "description": "Client holding the name"
+            },
+            headers=self.auth_headers
+        )
+        self.assertEqual(create.status_code, 200)
+
+        response = self.client.patch(
+            f"/auth/v1/clients/{self.test_client_id}/",
+            json={"name": "rename-target-name"},
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "CONFLICT")
+
     def test_create_client_malformed_json_returns_400(self):
         """POST /clients/ with a malformed JSON body returns 400, not 500.
 
