@@ -28,6 +28,7 @@ import json
 import os
 import sqlite3
 import threading
+from contextlib import suppress
 from typing import Any, Optional
 
 from campus.common import devops
@@ -346,10 +347,8 @@ class SQLiteTable(TableInterface):
             value = sqlite_row[key]
             # Try to parse JSON strings back to objects
             if isinstance(value, str) and value and (value.startswith('{') or value.startswith('[')):
-                try:
+                with suppress(json.JSONDecodeError, ValueError):
                     value = json.loads(value)
-                except (json.JSONDecodeError, ValueError):
-                    pass  # Keep as string if not valid JSON
             row[key] = value
 
         return row
@@ -729,10 +728,8 @@ class SQLiteTable(TableInterface):
         with _global_lock:
             # Close all shared connections
             for _db_path, conn in _connections.items():
-                try:
+                with suppress(Exception):
                     conn.close()
-                except Exception:
-                    pass  # Ignore errors during cleanup
             _connections.clear()
             _connection_locks.clear()
 
@@ -746,10 +743,8 @@ class SQLiteTable(TableInterface):
 
         # Delete temp file if it exists
         if db_path and db_path != ":memory:":
-            try:
+            with suppress(FileNotFoundError):
                 os.unlink(db_path)
-            except FileNotFoundError:
-                pass  # File doesn't exist, no problem
 
         # Clear the instance registry
         cls._instances.clear()

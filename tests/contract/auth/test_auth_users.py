@@ -16,6 +16,7 @@ Users Endpoints Reference:
 """
 
 import unittest
+from contextlib import suppress
 
 from campus.common import env, schema
 from tests.fixtures import services
@@ -46,10 +47,8 @@ class TestAuthUsersContract(unittest.TestCase):
         from campus.auth.resources.user import user_storage
 
         user_id = schema.UserID(email)
-        try:
+        with suppress(Exception):
             user_storage.delete_by_id(user_id)
-        except Exception:
-            pass
 
         # Insert raw dict to avoid DateTime serialization issues
         user_storage.insert_one({

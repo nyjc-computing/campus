@@ -14,6 +14,7 @@ Issue: #541
 """
 
 import unittest
+from contextlib import suppress
 
 import campus.storage
 from campus.common import schema
@@ -55,10 +56,8 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
 
         # Clear apikeys storage between tests for isolation
         apikeys_storage = campus.storage.tables.get_db("apikeys")
-        try:
+        with suppress(campus.storage.errors.NoChangesAppliedError):
             apikeys_storage.delete_matching({})
-        except campus.storage.errors.NoChangesAppliedError:
-            pass  # Table is already empty, which is fine
 
     def tearDown(self):
         """Clean up after each test."""

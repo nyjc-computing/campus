@@ -2,6 +2,7 @@
 """Test the new storage backends for Flask test client strategy."""
 
 import unittest
+from contextlib import suppress
 
 from campus.common import env
 from campus.storage import errors as storage_errors
@@ -40,17 +41,13 @@ class TestSQLiteBackend(unittest.TestCase):
             {"id": "trace4", "created_at": "2023-01-01T13:00:00Z", "duration_ms": 2000, "status_code": 500},
         ]
         for trace in test_traces:
-            try:
+            with suppress(Exception):
                 cls.traces_table.insert_one(trace)
-            except Exception:
-                pass  # Ignore if already exists
 
     def tearDown(self):
         """Clean up after each test."""
-        try:
+        with suppress(storage_errors.NotFoundError):
             self.users_table.delete_by_id("test123")
-        except storage_errors.NotFoundError:
-            pass
 
     def test_get_by_id_raises_not_found_error(self):
         """get_by_id() must raise NotFoundError when ID doesn't exist."""
@@ -444,17 +441,13 @@ class TestMemoryBackend(unittest.TestCase):
             {"id": "metric4", "created_at": "2023-01-01T13:00:00Z", "value": 2000, "score": 500},
         ]
         for metric in test_metrics:
-            try:
+            with suppress(Exception):
                 cls.metrics_collection.insert_one(metric)
-            except Exception:
-                pass  # Ignore if already exists
 
     def tearDown(self):
         """Clean up after each test."""
-        try:
+        with suppress(storage_errors.NotFoundError):
             self.posts_collection.delete_by_id("post123")
-        except storage_errors.NotFoundError:
-            pass
 
     def test_get_by_id_returns_none_for_not_found(self):
         """Collection get_by_id() returns None when ID doesn't exist.
@@ -616,10 +609,8 @@ class TestInsertMany(unittest.TestCase):
 
     def tearDown(self):
         for row_id in ("bulk-1", "bulk-2", "bulk-3"):
-            try:
+            with suppress(storage_errors.NotFoundError):
                 self.users_table.delete_by_id(row_id)
-            except storage_errors.NotFoundError:
-                pass
         for row_id in ("mem-1", "mem-2"):
             self.mem_collection.delete_by_id(row_id)
 

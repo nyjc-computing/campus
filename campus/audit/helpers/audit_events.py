@@ -7,6 +7,7 @@ traces table with easy enabling/disabling per route.
 import functools
 import time
 import typing
+from contextlib import suppress
 
 import flask
 
@@ -191,11 +192,8 @@ def emit_audit_event(
     # Lazy-import resources to enable test monkey-patching
     from campus.audit.resources import traces as traces_resource
     # Ingest the audit event
-    try:
+    with suppress(Exception):
         traces_resource.ingest([audit_span])
-    except Exception:
-        # Fail silently - don't break operations if audit logging fails
-        pass
 
 
 def audit_event(

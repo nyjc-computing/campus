@@ -16,6 +16,7 @@ __all__ = [
 ]
 
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import Any, Iterable, Protocol, Self, runtime_checkable
 
 from campus.common.http.errors import (
@@ -105,10 +106,8 @@ class JsonResponse(Protocol):
                 str(response_data)
         except Exception:
             # Fall back to response text if JSON parsing fails
-            try:
+            with suppress(Exception):
                 self.text.strip() or f"HTTP {status}"
-            except Exception:
-                pass
 
         match status:
             case 400:

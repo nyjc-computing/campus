@@ -22,6 +22,7 @@ Issue: #428
 import re
 import time
 import unittest
+from contextlib import suppress
 from unittest.mock import patch
 
 from campus.common import env
@@ -109,10 +110,8 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
         from campus.audit.resources.traces import traces_storage
         # Use delete_matching with empty query to delete all spans
         # Ignore NoChangesAppliedError if table is already empty
-        try:
+        with suppress(campus.storage.errors.NoChangesAppliedError):
             traces_storage.delete_matching({})
-        except campus.storage.errors.NoChangesAppliedError:
-            pass  # Table is already empty, which is fine
 
     def tearDown(self):
         """Clean up after each test."""
@@ -335,10 +334,8 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         from campus.audit.resources.traces import traces_storage
         # Use delete_matching with empty query to delete all spans
         # Ignore NoChangesAppliedError if table is already empty
-        try:
+        with suppress(campus.storage.errors.NoChangesAppliedError):
             traces_storage.delete_matching({})
-        except campus.storage.errors.NoChangesAppliedError:
-            pass  # Table is already empty, which is fine
 
     def tearDown(self):
         """Clean up after each test."""
