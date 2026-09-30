@@ -75,14 +75,45 @@ class InternalModel(typing.Protocol):
             cls: type[typing.Self],
             resource: dict[str, typing.Any]
     ) -> typing.Self:
-        """Create a model instance from a resource dictionary."""
-        return cls(
-            **{
-                field.name: resource[field.name]
-                for field in cls.fields().values()
-                if field.metadata.get("resource", True)
-            }
-        )
+        """Create a model instance from a resource dictionary.
+
+        Fields declared init=False are assigned after construction,
+        since they cannot be passed to __init__(). Values for
+        Model-typed fields are deserialized recursively, and plain
+        strings are coerced to annotated str subclasses
+        (e.g. schema.DateTime).
+        """
+        try:
+            hints = typing.get_type_hints(cls)
+        except Exception:
+            # Unresolvable type hints disable coercion below
+            hints = {}
+
+        init_kwargs: dict[str, typing.Any] = {}
+        post_init_fields: dict[str, typing.Any] = {}
+        for field in cls.fields().values():
+            if not field.metadata.get("resource", True):
+                continue
+            if field.name not in resource:
+                continue
+            value = resource[field.name]
+            field_type = hints.get(field.name)
+            if (isinstance(value, dict) and isinstance(field_type, type)
+                    and issubclass(field_type, Model)):
+                value = field_type.from_resource(value)
+            elif (isinstance(value, str) and isinstance(field_type, type)
+                    and issubclass(field_type, str)
+                    and not isinstance(value, field_type)):
+                value = field_type(value)
+            if field.init:
+                init_kwargs[field.name] = value
+            else:
+                post_init_fields[field.name] = value
+
+        instance = cls(**init_kwargs)
+        for field_name, value in post_init_fields.items():
+            setattr(instance, field_name, value)
+        return instance
 
     @classmethod
     def from_storage(
