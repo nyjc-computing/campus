@@ -190,6 +190,34 @@ class TestAuthClientsContract(unittest.TestCase):
         self.assertIsInstance(data["secret"], str)
         self.assertTrue(len(data["secret"]) > 0)
 
+    def test_revoke_client_secret_without_body(self):
+        """POST /clients/{id}/revoke without a JSON body rotates the secret.
+
+        Regression test for #634: campus_python/campus-cli send POST with
+        no body and no Content-Type. Before #613's payload fix, the
+        malformed-payload error carried the raw bytes body in its details
+        and crashed JSON serialization, so the revoke returned 500 after
+        already rotating the stored secret hash.
+        """
+        create_response = self.client.post(
+            "/auth/v1/clients/",
+            json={"name": "client-to-revoke-no-body", "description": "For bodyless revoke test"},
+            headers=self.auth_headers
+        )
+        client_id = create_response.get_json()["id"]
+
+        # No json kwarg: no body, no Content-Type header
+        response = self.client.post(
+            f"/auth/v1/clients/{client_id}/revoke",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("secret", data)
+        self.assertIsInstance(data["secret"], str)
+        self.assertTrue(len(data["secret"]) > 0)
+
     def test_delete_client(self):
         """DELETE /clients/{id}/ removes the client."""
         # First create a client to delete
