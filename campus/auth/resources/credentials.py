@@ -169,7 +169,7 @@ class UserCredentialsResource:
             *,
             client_id: str,
             scopes: list[str],
-            expiry_seconds: int = (
+            expires_in: int = (
                 config.DEFAULT_TOKEN_EXPIRY_DAYS
                 * utc_time.DAY_SECONDS
             ),
@@ -181,7 +181,7 @@ class UserCredentialsResource:
         token_id = secret.generate_access_token()
         token = model.OAuthToken(
             id=token_id,
-            expiry_seconds=expiry_seconds,
+            expires_in=expires_in,
             scopes=scopes,
         )
         token_storage.insert_one(token.to_storage())

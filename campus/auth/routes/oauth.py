@@ -266,13 +266,13 @@ def _handle_device_code_grant(
 
         # Calculate expiry
         created_at = schema.DateTime.utcnow()
-        expiry_seconds = campus.config.DEFAULT_TOKEN_EXPIRY_DAYS * 24 * 60 * 60
+        expires_in = campus.config.DEFAULT_TOKEN_EXPIRY_DAYS * 24 * 60 * 60
 
         # Create OAuthToken model
         oauth_token = campus.model.OAuthToken(
             id=access_token,
             created_at=created_at,
-            expiry_seconds=expiry_seconds,
+            expires_in=expires_in,
             refresh_token=refresh_tok,
             scopes=dc.scopes,
         )

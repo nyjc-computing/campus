@@ -278,7 +278,7 @@ def token(
         token = user_credentials_resource.new(
             client_id=authsession.client_id,
             scopes=authsession.scopes,
-            expiry_seconds=(
+            expires_in=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
                 * utc_time.DAY_SECONDS
             ),

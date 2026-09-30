@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from campus.common import schema  # noqa: E402
 from campus.model import credentials  # noqa: E402
 
-TIMEOUT = 10
+TIMEOUT = 30  # generous: the first request after a fresh deploy waits out the cold DB pool (~25s observed)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -111,7 +111,7 @@ def main() -> int:
     try:
         resp = session.post(
             base,
-            json={"scopes": ["read"], "expiry_seconds": args.expiry_seconds},
+            json={"scopes": ["read"], "expires_in": args.expiry_seconds},
             timeout=TIMEOUT,
         )
         check(resp.status_code == 201, f"POST credentials -> {resp.status_code}")
