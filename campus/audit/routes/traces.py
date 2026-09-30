@@ -80,7 +80,7 @@ def ingest_spans(
             for span_dict in spans
         ]
     except (KeyError, TypeError, ValueError) as e:
-        raise api_errors.InvalidRequestError(f"Invalid span data: {e}")
+        raise api_errors.InvalidRequestError(f"Invalid span data: {e}") from e
 
     result = traces_resource.ingest(span_models)
     return result, 201

@@ -163,7 +163,7 @@ class RailwayBucket(BucketInterface):
             client.put_object(**put_args)
 
         except Exception as e:
-            raise self._map_boto_error(e, key, "Upload")
+            raise self._map_boto_error(e, key, "Upload") from e
 
     def get(self, key: str) -> bytes:
         """Download data from Railway bucket."""
@@ -178,7 +178,7 @@ class RailwayBucket(BucketInterface):
             return response["Body"].read()
 
         except Exception as e:
-            raise self._map_boto_error(e, key, "Download")
+            raise self._map_boto_error(e, key, "Download") from e
 
     def delete(self, key: str) -> None:
         """Delete an object from Railway bucket."""
@@ -192,7 +192,7 @@ class RailwayBucket(BucketInterface):
             )
 
         except Exception as e:
-            raise self._map_boto_error(e, key, "Delete")
+            raise self._map_boto_error(e, key, "Delete") from e
 
     def exists(self, key: str) -> bool:
         """Check if an object exists in Railway bucket."""
@@ -210,7 +210,7 @@ class RailwayBucket(BucketInterface):
             error_code = getattr(e, "response", {}).get("Error", {}).get("Code", "")
             if error_code in ("NoSuchKey", "404"):
                 return False
-            raise self._map_boto_error(e, key, "Exists check")
+            raise self._map_boto_error(e, key, "Exists check") from e
 
     def list(self, prefix: str = "", limit: int | None = None) -> list[str]:
         """List object keys with a given prefix."""
@@ -280,7 +280,7 @@ class RailwayBucket(BucketInterface):
             return url
 
         except Exception as e:
-            raise self._map_boto_error(e, key, "URL generation")
+            raise self._map_boto_error(e, key, "URL generation") from e
 
     def get_metadata(self, key: str) -> ObjectMetadata:
         """Get object metadata from Railway bucket."""
@@ -313,7 +313,7 @@ class RailwayBucket(BucketInterface):
             )
 
         except Exception as e:
-            raise self._map_boto_error(e, key, "Metadata retrieval")
+            raise self._map_boto_error(e, key, "Metadata retrieval") from e
 
     def copy(self, source_key: str, dest_key: str) -> None:
         """Copy an object within the Railway bucket."""
@@ -329,4 +329,4 @@ class RailwayBucket(BucketInterface):
             )
 
         except Exception as e:
-            raise self._map_boto_error(e, source_key, "Copy")
+            raise self._map_boto_error(e, source_key, "Copy") from e

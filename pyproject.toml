@@ -64,9 +64,6 @@ select = ['E', 'W', 'F', 'I', 'B', 'C4', 'SIM']
 fixable = []
 ignore = [
     'W291', 'W292', 'W293',  # trailing whitespace: formatting, not lint
-    # Ratchet candidates - remove these ignores once existing sites are
-    # fixed (see the ruff-adoption follow-up issue):
-    'B904',   # ~37 raise-without-from sites in error translation paths
 ]
 
 [tool.ruff.lint.per-file-ignores]

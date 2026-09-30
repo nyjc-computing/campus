@@ -141,7 +141,7 @@ class ProviderAuthSessionResource:
             session_storage.insert_one(session.to_storage())
         except Exception as e:
             logger.error(f"[SESSION] Failed to insert session: {e}")
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return session
 
@@ -166,7 +166,7 @@ class AuthSessionResource:
             # TODO: logging for missing session
             pass
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def finalize(self) -> schema.Url | None:
         """Finalize an auth session and return the redirect URI.

@@ -139,7 +139,7 @@ class TracesResource:
                 limit=limit * 10,  # Get more spans to find unique traces
             )
         except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         return _build_trace_summaries(spans)[:limit]
 
@@ -196,7 +196,7 @@ class TracesResource:
                 limit=limit * 10,
             )
         except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         return _build_trace_summaries(spans)[:limit]
 
@@ -236,7 +236,7 @@ class TraceResource:
         try:
             spans = traces_storage.get_matching({"trace_id": self.trace_id})
         except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         return _build_trace_tree(spans)
 
@@ -280,7 +280,7 @@ class TraceSpansResource:
         try:
             records = traces_storage.get_matching({"trace_id": self._parent.trace_id})
         except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         return [model.TraceSpan.from_storage(record) for record in records]
 
@@ -307,7 +307,7 @@ class SpanResource:
         except campus.storage.errors.NotFoundError:
             return None
         except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
         # Verify it belongs to this trace
         if record.get("trace_id") != self._parent._parent.trace_id:
