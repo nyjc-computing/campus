@@ -3,6 +3,7 @@
 import dataclasses
 import unittest
 
+from campus.model import credentials
 from campus.model.base import Model
 from campus.common import schema
 
@@ -16,6 +17,29 @@ class TestModel(Model):
     optional_with_default: str = "default_value"
     list_field: list[str] = dataclasses.field(default_factory=list)
     dict_field: dict[str, str] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass(kw_only=True)
+class TestToken(Model):
+    """Nested model with a DateTime field, for testing from_resource."""
+    id: str
+    expires_at: schema.DateTime = None  # type: ignore[assignment]
+
+
+@dataclasses.dataclass(kw_only=True)
+class TestCredential(Model):
+    """Model with a joined init=False field, mirroring UserCredentials.token."""
+    id: str
+    provider: str
+    token_id: str = dataclasses.field(  # type: ignore[assignment]
+        default=None,
+        metadata={"storage": True, "resource": False},
+    )
+    token: TestToken = dataclasses.field(  # type: ignore[assignment]
+        default=None,
+        init=False,
+        metadata={"storage": False, "resource": True},
+    )
 
 
 class TestModelFromStorage(unittest.TestCase):
@@ -180,6 +204,110 @@ class TestModelToResource(unittest.TestCase):
         self.assertEqual(loaded.id, original.id)
         self.assertEqual(loaded.required_field, original.required_field)
         self.assertEqual(loaded.optional_field, original.optional_field)
+
+
+class TestModelFromResource(unittest.TestCase):
+    """Tests for Model.from_resource() method."""
+
+    def test_from_resource_sets_init_false_field(self):
+        """from_resource should assign init=False fields after construction.
+
+        Regression test for issue #633: this used to raise TypeError
+        ('unexpected keyword argument') for init=False fields.
+        """
+        resource = {
+            "id": "cred1",
+            "provider": "campus",
+            "token": {
+                "id": "tok1",
+                "expires_at": "2026-10-06T00:00:00+00:00",
+            },
+        }
+        credential = TestCredential.from_resource(resource)
+
+        self.assertIsInstance(credential.token, TestToken)
+        self.assertEqual(credential.token.id, "tok1")
+
+    def test_from_resource_init_false_field_absent(self):
+        """from_resource should leave init=False fields at default when absent."""
+        resource = {"id": "cred1", "provider": "campus"}
+        credential = TestCredential.from_resource(resource)
+
+        self.assertIsNone(credential.token)
+
+    def test_from_resource_ignores_non_resource_fields(self):
+        """from_resource should skip fields with resource=False metadata."""
+        resource = {"id": "cred1", "provider": "campus", "token_id": "tok1"}
+        credential = TestCredential.from_resource(resource)
+
+        self.assertIsNone(credential.token_id)
+
+    def test_from_resource_deserializes_nested_models(self):
+        """Nested Model-typed dicts should deserialize recursively,
+        including str-to-DateTime coercion of nested fields."""
+        resource = {
+            "id": "cred1",
+            "provider": "campus",
+            "token": {
+                "id": "tok1",
+                "expires_at": "2026-10-06T00:00:00+00:00",
+            },
+        }
+        credential = TestCredential.from_resource(resource)
+
+        token = credential.token
+        self.assertIsInstance(token, TestToken)
+        self.assertIsInstance(token.expires_at, schema.DateTime)
+        self.assertEqual(token.expires_at, "2026-10-06T00:00:00+00:00")
+
+    def test_from_resource_coerces_str_subclass_fields(self):
+        """Plain strings for annotated str subclasses should be coerced.
+
+        Resource payloads arrive as JSON, so schema.DateTime fields come
+        as plain strings.
+        """
+        resource = {"id": "tok1", "expires_at": "2026-10-06T00:00:00+00:00"}
+        token = TestToken.from_resource(resource)
+
+        self.assertIsInstance(token.expires_at, schema.DateTime)
+
+    def test_to_resource_roundtrip_with_init_false_field(self):
+        """Model with an init=False field should roundtrip through resources."""
+        credential = TestCredential(id="cred1", provider="campus")
+        credential.token = TestToken(
+            id="tok1",
+            expires_at=schema.DateTime("2026-10-06T00:00:00+00:00"),
+        )
+
+        loaded = TestCredential.from_resource(credential.to_resource())
+
+        self.assertIsInstance(loaded.token, TestToken)
+        self.assertEqual(loaded.token.id, "tok1")
+        self.assertIsInstance(loaded.token.expires_at, schema.DateTime)
+
+    def test_usercredentials_from_resource_with_joined_token(self):
+        """UserCredentials.from_resource should accept a joined token resource.
+
+        Regression test for issue #633: this used to raise TypeError, and
+        token fields arrived as dict/str instead of OAuthToken/DateTime.
+        """
+        resource = {
+            "id": "cred1",
+            "provider": "campus",
+            "client_id": "guest",
+            "user_id": "user@campus.edu",
+            "token": {
+                "id": "tok1",
+                "expires_at": "2026-10-06T00:00:00+00:00",
+                "scopes": ["read"],
+            },
+        }
+        user_creds = credentials.UserCredentials.from_resource(resource)
+
+        self.assertIsInstance(user_creds.token, credentials.OAuthToken)
+        self.assertIsInstance(user_creds.token.expires_at, schema.DateTime)
+        # is_expired() requires expires_at to be schema.DateTime
+        self.assertIsInstance(user_creds.token.is_expired(), bool)
 
 
 class TestModelRoundtrip(unittest.TestCase):
