@@ -18,23 +18,6 @@ timetable_entry_storage = campus.storage.get_collection("timetable_entries")
 timetable_collection = campus.storage.get_collection("timetables")
 
 
-def _from_record(record: dict) -> model.TimetableMetadata:
-    """Convert a storage record into a TimetableMetadata model.
-
-    Args:
-        record (dict): Raw timetable metadata record from storage.
-
-    Returns:
-        model.TimetableMetadata: Parsed timetable metadata object.
-    """
-    try:
-        return model.TimetableMetadata.from_storage(record)
-    except KeyError as e:
-        raise api_errors.InternalError(
-            e.args[0],
-            record=record
-        ) from e
-
 def _get_lessongroup_labels(
         timetable_id: schema.CampusID
 ) -> dict[schema.CampusID, schema.String]:
@@ -114,7 +97,16 @@ class TimetablesResource:
             records = timetable_collection.get_matching(filters)
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
-        return [_from_record(record) for record in records]
+        timetables: list[model.TimetableMetadata] = []
+        for record in records:
+            try:
+                timetables.append(model.TimetableMetadata.from_storage(record))
+            except KeyError as e:
+                raise api_errors.InternalError(
+                    e.args[0],
+                    record=record
+                ) from e
+        return timetables
     
     def new(
             self,
@@ -435,7 +427,13 @@ class TimetableMetadataResource:
                     "Timetable not found",
                     id=self.timetable_id
                 )
-            return _from_record(record)
+            try:
+                return model.TimetableMetadata.from_storage(record)
+            except KeyError as e:
+                raise api_errors.InternalError(
+                    e.args[0],
+                    record=record
+                ) from e
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Timetable not found",
