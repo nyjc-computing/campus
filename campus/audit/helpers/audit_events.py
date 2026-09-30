@@ -128,7 +128,7 @@ def emit_from_flask(
         event_metadata = {**data, "event_type": event_type}
         emit_audit_event(
             data=event_metadata,
-            api_key_id=api_key_id or flask.g.api_key_id,
+            api_key_id=api_key_id or getattr(flask.g, "api_key_id", None),
             parent_span_id=flask.g.get('span_id'),
             started_at=started_at,
             duration_ms=duration_ms,
@@ -278,7 +278,9 @@ def audit_event(
                     response,
                     event_type=event_type,
                     data=event_data,
-                    api_key_id=flask.g.api_key_id,
+                    # Public routes (e.g. GET /health) run without the
+                    # API-key middleware, so the attribute may be absent (#621).
+                    api_key_id=getattr(flask.g, "api_key_id", None),
                     started_at=started_at,
                     duration_ms=duration_ms,
                 )
