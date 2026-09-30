@@ -160,26 +160,30 @@ class MongoDBCollection(CollectionInterface):
         - lte(value) → {"field": {"$lte": value}}
         - ne(value) → {"field": {"$ne": value}}
         - exact match → {"field": value}
+
+        The Campus PK `id` is mapped to Mongo's `_id`, matching how
+        records are stored (MongoRecord.to_mongo).
         """
         mongo_query = {}
         for key, value in query.items():
+            query_key = MONGO_PK if key == PK else key
             if is_operator(value):
                 if isinstance(value, gt):
-                    mongo_query[key] = {"$gt": value.value}
+                    mongo_query[query_key] = {"$gt": value.value}
                 elif isinstance(value, gte):
-                    mongo_query[key] = {"$gte": value.value}
+                    mongo_query[query_key] = {"$gte": value.value}
                 elif isinstance(value, lt):
-                    mongo_query[key] = {"$lt": value.value}
+                    mongo_query[query_key] = {"$lt": value.value}
                 elif isinstance(value, lte):
-                    mongo_query[key] = {"$lte": value.value}
+                    mongo_query[query_key] = {"$lte": value.value}
                 elif isinstance(value, ne):
-                    mongo_query[key] = {"$ne": value.value}
+                    mongo_query[query_key] = {"$ne": value.value}
                 else:
                     # Unknown operator, fall back to exact match
-                    mongo_query[key] = value.value
+                    mongo_query[query_key] = value.value
             else:
                 # Exact match
-                mongo_query[key] = value
+                mongo_query[query_key] = value
         return mongo_query
 
     def get_by_id(self, doc_id: str) -> JsonObject | None:
@@ -208,9 +212,6 @@ class MongoDBCollection(CollectionInterface):
         Supports exact matches, comparison operators (gt, gte, lt, lte),
         sorting, and pagination.
         """
-        if "id" in query:
-            # TODO: warn about using "id"
-            pass
         try:
             mongo_query = self._build_mongo_query(query)
             cursor = self.collection.find(mongo_query)
