@@ -269,7 +269,7 @@ mgr.cleanup()
 - **Location:** `tests/contract/`
 - **Dependencies:** Flask test client (not real HTTP)
 - **Speed:** Fast
-- **Runs in CI:** No — the contract suite currently runs **locally only**. CI gates are sanity, type, unit, and integration. When validating a change locally, compare contract failure counts/test IDs against the current `weekly` baseline rather than expecting green; contract failures today indicate real endpoint bugs tracked in issues.
+- **Runs in CI:** Yes — `.github/workflows/contract-tests.yml` runs the suite on PRs and on pushes to `main`/`staging`/`weekly`, as a blocking gate alongside sanity, type, unit, and integration. Contract failures indicate real endpoint regressions; known-but-unfixed bugs are encoded as skip markers citing their issue (see the policy below).
 - **Examples:**
   - Auth requirements (401 without credentials)
   - Error response formats (409, 400)

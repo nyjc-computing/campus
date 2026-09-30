@@ -33,11 +33,12 @@ poetry run python tests/run_tests.py all
 | type | Yes | pyright |
 | unit | Yes | `unittest discover tests/unit` |
 | integration | Yes | `unittest discover tests/integration` |
-| contract | **No — local only** | Compare against the current `weekly` baseline; failures = real bugs |
+| contract | Yes | `tests/run_tests.py contract` (`.github/workflows/contract-tests.yml`); failures = real bugs |
 | performance | No (manual) | `tests/run_tests.py performance` |
 
-CI never runs the contract suite, so a green PR check does **not** mean the
-HTTP contracts pass — run it locally before merging endpoint changes.
+CI runs the contract suite on PRs and on pushes to `main`/`staging`/`weekly`,
+so a green PR check covers the HTTP contracts. Running it locally before
+merging endpoint changes is still good practice for fast feedback.
 
 ### Test-File Reachability
 
