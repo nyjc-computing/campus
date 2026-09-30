@@ -23,7 +23,8 @@ class LoginSession(Model):
     expiry_seconds: InitVar[int | None] = None
     expires_at: schema.DateTime = None  # type: ignore
     client_id: schema.CampusID
-    user_id: schema.UserID
+    # None until the login is attributed to a user
+    user_id: schema.UserID | None = None
     device_id: str | None = None
     # TODO: add ip_address
     # TODO: add last_login?
