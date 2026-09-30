@@ -67,17 +67,14 @@ class TestOAuthTokenConstruction(unittest.TestCase):
         )
         self.assertEqual(token.expires_in, 3600)
 
-    def test_expiry_seconds_initvar_still_accepted(self):
-        """The legacy expiry_seconds InitVar should behave like expires_in
-        and raise a DeprecationWarning.
-        """
-        with self.assertWarns(DeprecationWarning):
-            token = credentials.OAuthToken(
+    def test_expiry_seconds_is_removed(self):
+        """The legacy expiry_seconds alias was removed post-deprecation
+        (#648 item 2); constructing with it must fail loudly."""
+        with self.assertRaises(TypeError):
+            credentials.OAuthToken(
                 created_at=CREATED_AT,
                 expiry_seconds=3600,
             )
-        self.assertEqual(token.expires_in, 3600)
-        self.assertEqual(token.expires_at, EXPIRES_AT)
 
     def test_missing_expiry_raises_value_error(self):
         """Construction without any expiry information should fail."""
@@ -208,17 +205,17 @@ class TestOAuthTokenFromResource(unittest.TestCase):
         token = credentials.OAuthToken.from_resource(payload)
         self.assertEqual(token.id, "campus_tok")
 
-    def test_legacy_expiry_seconds_key(self):
-        """The legacy expiry_seconds key should map to expires_in and
-        raise a DeprecationWarning.
-        """
+    def test_expiry_seconds_key_is_no_longer_special(self):
+        """The legacy expiry_seconds payload key is no longer mapped;
+        per the unknown-key policy it lands in provider_fields."""
         payload = {
             "id": "tok_1",
             "expiry_seconds": 600,
+            "expires_in": 600,
         }
-        with self.assertWarns(DeprecationWarning):
-            token = credentials.OAuthToken.from_resource(payload)
+        token = credentials.OAuthToken.from_resource(payload)
         self.assertEqual(token.expires_in, 600)
+        self.assertEqual(token.provider_fields.get("expiry_seconds"), 600)
 
     def test_string_expires_in_is_coerced(self):
         """A string expires_in (lenient provider) should coerce to int."""
