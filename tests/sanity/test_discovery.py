@@ -31,10 +31,6 @@ IMPORT_CATEGORIES = {"sanity"}
 # and (where applicable) the issue that will remove the entry. Delete the
 # entry when it becomes stale - the guard enforces this.
 UNREACHABLE_ALLOWLIST = {
-    "integration/api/test_assignments.py": (
-        "pending #328: fails on the questions-path endpoint bug; activate "
-        "discovery (add tests/integration/api/__init__.py) when fixed"
-    ),
     "api/test_error_responses.py": (
         "tests/api is not a run_tests.py category, so this file never runs; "
         "give it a home (e.g. fold into tests/unit/common) or delete it"

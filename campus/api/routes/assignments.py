@@ -13,7 +13,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import resources
+from .. import payloads, resources
 
 bp = flask.Blueprint('assignments', __name__, url_prefix='/assignments')
 
@@ -146,14 +146,14 @@ def update_assignment(
         updates["description"] = description
     if questions is not None:
         # Convert dict questions to Question models
-        updates["questions"] = [
-            campus.model.Question(**q) for q in questions
-        ]
+        updates["questions"] = payloads.models_from_payloads(
+            campus.model.Question, questions, "questions"
+        )
     if classroom_links is not None:
         # Convert dict links to ClassroomLink models
-        updates["classroom_links"] = [
-            campus.model.ClassroomLink(**link) for link in classroom_links
-        ]
+        updates["classroom_links"] = payloads.models_from_payloads(
+            campus.model.ClassroomLink, classroom_links, "classroom_links"
+        )
 
     if not updates:
         raise api_errors.InvalidRequestError("Empty request body")
