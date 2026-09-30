@@ -1,0 +1,156 @@
+"""Unit tests for campus.common.utils.url canonical origin resolution.
+
+`canonical_origin` (and thus `full_url_for`) must prefer an explicit
+PUBLIC_URL env var — the only way to express plain-HTTP local
+development origins — while keeping the legacy `https://{HOSTNAME}`
+fallback for deployments that only set HOSTNAME (#649, #652).
+"""
+
+import os
+import unittest
+
+import flask
+
+from campus.common.utils import url
+
+
+def _env(**overrides: str | None) -> dict[str, str | None]:
+    """Snapshot the env vars these tests mutate."""
+    return {name: os.environ.get(name) for name in overrides}
+
+
+def _restore_env(saved: dict[str, str | None]) -> None:
+    for name, value in saved.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+
+
+class _AppContextTestCase(unittest.TestCase):
+    """Base providing a Flask app with a `finalize_login` endpoint and
+    env save/restore around each test."""
+
+    def setUp(self):
+        self.saved = _env(PUBLIC_URL=None, HOSTNAME=None)
+        self.app = flask.Flask(__name__)
+        self.app.config["SERVER_NAME"] = "in-process.test"
+
+        @self.app.get("/finalize_login")
+        def finalize_login():
+            return ""
+
+    def tearDown(self):
+        _restore_env(self.saved)
+
+
+class TestCanonicalOrigin(_AppContextTestCase):
+    """canonical_origin precedence: PUBLIC_URL > https://{HOSTNAME}."""
+
+    def test_public_url_http_localhost_with_port(self):
+        os.environ["PUBLIC_URL"] = "http://localhost:5000"
+        with self.app.app_context():
+            self.assertEqual(url.canonical_origin(), "http://localhost:5000")
+
+    def test_public_url_https_domain(self):
+        os.environ["PUBLIC_URL"] = "https://classroom.example.com"
+        with self.app.app_context():
+            self.assertEqual(
+                url.canonical_origin(), "https://classroom.example.com"
+            )
+
+    def test_public_url_trailing_slash_is_normalized(self):
+        os.environ["PUBLIC_URL"] = "http://localhost:5000/"
+        with self.app.app_context():
+            self.assertEqual(url.canonical_origin(), "http://localhost:5000")
+
+    def test_hostname_fallback_assumes_https(self):
+        os.environ["HOSTNAME"] = "classroom.example.com"
+        with self.app.app_context():
+            self.assertEqual(
+                url.canonical_origin(), "https://classroom.example.com"
+            )
+
+    def test_hostname_fallback_preserves_port(self):
+        os.environ["HOSTNAME"] = "localhost:5000"
+        with self.app.app_context():
+            self.assertEqual(
+                url.canonical_origin(), "https://localhost:5000"
+            )
+
+    def test_public_url_missing_scheme_rejected(self):
+        os.environ["PUBLIC_URL"] = "localhost:5000"
+        with self.assertRaises(ValueError):
+            url.canonical_origin()
+
+    def test_public_url_with_path_rejected(self):
+        os.environ["PUBLIC_URL"] = "https://classroom.example.com/app"
+        with self.assertRaises(ValueError):
+            url.canonical_origin()
+
+    def test_public_url_with_query_rejected(self):
+        os.environ["PUBLIC_URL"] = "https://classroom.example.com?next=/"
+        with self.assertRaises(ValueError):
+            url.canonical_origin()
+
+
+class TestFullUrlFor(_AppContextTestCase):
+    """full_url_for builds absolute URLs from the canonical origin."""
+
+    def test_public_url_drives_callback_url(self):
+        os.environ["PUBLIC_URL"] = "http://localhost:5000"
+        with self.app.test_request_context("/login"):
+            self.assertEqual(
+                url.full_url_for("finalize_login"),
+                "http://localhost:5000/finalize_login",
+            )
+
+    def test_hostname_fallback_drives_callback_url(self):
+        os.environ["HOSTNAME"] = "classroom.example.com"
+        with self.app.test_request_context("/login"):
+            self.assertEqual(
+                url.full_url_for("finalize_login"),
+                "https://classroom.example.com/finalize_login",
+            )
+
+    def test_explicit_hostname_overrides_public_url(self):
+        os.environ["PUBLIC_URL"] = "http://localhost:5000"
+        with self.app.test_request_context("/login"):
+            self.assertEqual(
+                url.full_url_for("finalize_login", hostname="override.test"),
+                "https://override.test/finalize_login",
+            )
+
+    def test_endpoint_with_scheme_rejected(self):
+        with self.app.test_request_context("/login"), \
+                self.assertRaises(ValueError):
+            url.full_url_for("https://evil.test/finalize_login")
+
+
+class TestConfigureForCodespace(unittest.TestCase):
+    """configure_for_codespace derives PUBLIC_URL from the forwarded
+    domain (Codespaces is always HTTPS), preserving the #396 fix."""
+
+    def setUp(self):
+        self.saved = _env(
+            PUBLIC_URL=None,
+            HOSTNAME=None,
+            PORT=None,
+            CODESPACE_NAME=None,
+            GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN=None,
+        )
+
+    def tearDown(self):
+        _restore_env(self.saved)
+
+    def test_public_url_set_from_codespace_domain(self):
+        from campus.common.devops import deploy
+
+        os.environ["CODESPACE_NAME"] = "fuzzy-waddle-giggle"
+        os.environ["GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"] = "app.github.dev"
+        app = flask.Flask(__name__)
+        deploy.configure_for_codespace(app)
+        self.assertEqual(os.environ["HOSTNAME"],
+                         "fuzzy-waddle-giggle-5000.app.github.dev")
+        self.assertEqual(os.environ["PUBLIC_URL"],
+                         "https://fuzzy-waddle-giggle-5000.app.github.dev")
