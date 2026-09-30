@@ -362,7 +362,6 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    @unittest.skip("API BUG #622: API returns the root span unwrapped; test expects a root_span envelope key")
     def test_get_trace_returns_tree_structure(self):
         """GET /audit/v1/traces/<id> returns nested tree structure."""
         # Ingest a trace with multiple spans
