@@ -12,6 +12,8 @@ from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
 
+from .. import payloads
+
 submission_storage = campus.storage.get_collection("submissions")
 
 
@@ -78,14 +80,16 @@ class SubmissionsResource:
             assignment_id=schema.CampusID(fields["assignment_id"]),
             student_id=schema.UserID(fields["student_id"]),
             course_id=fields["course_id"],
-            responses=[
-                model.Response(**r)
-                for r in fields.get("responses", [])
-            ],
-            feedback=[
-                model.Feedback(**f)
-                for f in fields.get("feedback", [])
-            ],
+            responses=payloads.models_from_payloads(
+                model.Response,
+                fields.get("responses", []),
+                "responses",
+            ),
+            feedback=payloads.models_from_payloads(
+                model.Feedback,
+                fields.get("feedback", []),
+                "feedback",
+            ),
             submitted_at=schema.DateTime(fields["submitted_at"]) if fields.get(
                 "submitted_at") else None,
             updated_at=schema.DateTime.utcnow()

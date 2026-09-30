@@ -12,6 +12,8 @@ from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
 
+from .. import payloads
+
 assignment_storage = campus.storage.get_collection("assignments")
 
 
@@ -76,16 +78,18 @@ class AssignmentsResource:
             created_at=schema.DateTime.utcnow(),
             title=fields["title"],
             description=fields.get("description", ""),
-            questions=[
-                model.Question(**q)
-                for q in fields.get("questions", [])
-            ],
+            questions=payloads.models_from_payloads(
+                model.Question,
+                fields.get("questions", []),
+                "questions",
+            ),
             created_by=schema.UserID(fields["created_by"]),
             updated_at=schema.DateTime.utcnow(),
-            classroom_links=[
-                model.ClassroomLink(**link)
-                for link in fields.get("classroom_links", [])
-            ]
+            classroom_links=payloads.models_from_payloads(
+                model.ClassroomLink,
+                fields.get("classroom_links", []),
+                "classroom_links",
+            )
         )
 
         try:

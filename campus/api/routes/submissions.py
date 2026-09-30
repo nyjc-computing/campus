@@ -13,7 +13,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import resources
+from .. import payloads, resources
 
 bp = flask.Blueprint('submissions', __name__, url_prefix='/submissions')
 
@@ -180,14 +180,14 @@ def update_submission(
     updates = {}
     if responses is not None:
         # Convert dict responses to Response models
-        updates["responses"] = [
-            campus.model.Response(**r) for r in responses
-        ]
+        updates["responses"] = payloads.models_from_payloads(
+            campus.model.Response, responses, "responses"
+        )
     if feedback is not None:
         # Convert dict feedback to Feedback models
-        updates["feedback"] = [
-            campus.model.Feedback(**f) for f in feedback
-        ]
+        updates["feedback"] = payloads.models_from_payloads(
+            campus.model.Feedback, feedback, "feedback"
+        )
     if submitted_at is not None:
         updates["submitted_at"] = schema.DateTime(submitted_at)
 
