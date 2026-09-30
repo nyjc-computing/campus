@@ -17,38 +17,6 @@ from .. import payloads
 assignment_storage = campus.storage.get_collection("assignments")
 
 
-def _from_record(record: dict) -> model.Assignment:
-    """Convert a storage record to an Assignment model instance."""
-    questions = [
-        model.Question(
-            id=q["id"],
-            prompt=q["prompt"],
-            question=q["question"]
-        )
-        for q in record.get("questions", [])
-    ]
-
-    classroom_links = [
-        model.ClassroomLink(
-            course_id=link["course_id"],
-            coursework_id=link["coursework_id"],
-            attachment_id=link.get("attachment_id"),
-            linked_at=schema.DateTime(link["linked_at"])
-        )
-        for link in record.get("classroom_links", [])
-    ]
-
-    return model.Assignment(
-        id=schema.CampusID(record['id']),
-        created_at=schema.DateTime(record['created_at']),
-        title=record['title'],
-        description=record.get('description', ''),
-        questions=questions,
-        created_by=schema.UserID(record['created_by']),
-        updated_at=schema.DateTime(record['updated_at']),
-        classroom_links=classroom_links
-    )
-
 
 class AssignmentsResource:
     """Represents the assignments resource in Campus API Schema."""
@@ -67,7 +35,7 @@ class AssignmentsResource:
             records = assignment_storage.get_matching(filters)
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
-        return [_from_record(record) for record in records]
+        return [model.Assignment.from_storage(record) for record in records]
 
     def new(self, **fields: typing.Any) -> model.Assignment:
         """Create a new assignment."""
@@ -115,7 +83,7 @@ class AssignmentResource:
                     "Assignment not found",
                     id=self.assignment_id
                 )
-            return _from_record(record)
+            return model.Assignment.from_storage(record)
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Assignment not found",

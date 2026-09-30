@@ -17,39 +17,6 @@ from .. import payloads
 submission_storage = campus.storage.get_collection("submissions")
 
 
-def _from_record(record: dict) -> model.Submission:
-    """Convert a storage record to a Submission model instance."""
-    responses = [
-        model.Response(
-            question_id=r["question_id"],
-            response_text=r["response_text"]
-        )
-        for r in record.get("responses", [])
-    ]
-
-    feedback = [
-        model.Feedback(
-            question_id=f["question_id"],
-            feedback_text=f["feedback_text"],
-            teacher_id=schema.UserID(f["teacher_id"]),
-            created_at=schema.DateTime(f["created_at"])
-        )
-        for f in record.get("feedback", [])
-    ]
-
-    return model.Submission(
-        id=schema.CampusID(record['id']),
-        created_at=schema.DateTime(record['created_at']),
-        assignment_id=schema.CampusID(record['assignment_id']),
-        student_id=schema.UserID(record['student_id']),
-        course_id=record['course_id'],
-        responses=responses,
-        feedback=feedback,
-        submitted_at=schema.DateTime(record['submitted_at']) if record.get(
-            'submitted_at') else None,
-        updated_at=schema.DateTime(record['updated_at'])
-    )
-
 
 class SubmissionsResource:
     """Represents the submissions resource in Campus API Schema."""
@@ -68,7 +35,7 @@ class SubmissionsResource:
             records = submission_storage.get_matching(filters)
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
-        return [_from_record(record) for record in records]
+        return [model.Submission.from_storage(record) for record in records]
 
     def new(self, **fields: typing.Any) -> model.Submission:
         """Create a new submission."""
@@ -118,7 +85,7 @@ class SubmissionResource:
                     "Submission not found",
                     id=self.submission_id
                 )
-            return _from_record(record)
+            return model.Submission.from_storage(record)
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Submission not found",

@@ -139,6 +139,16 @@ class Assignment(Model):
         }
         return cls(**kwargs)
 
+    @classmethod
+    def from_storage(cls, record: dict) -> "Assignment":
+        """Create an Assignment from a storage record.
+
+        Storage records share the resource shape (nested questions and
+        classroom_links as dicts), so deserialization delegates to
+        from_resource().
+        """
+        return cls.from_resource(record)
+
     def to_resource(self) -> dict:
         """Convert the Assignment to an API resource response.
 
@@ -287,6 +297,16 @@ class Submission(Model):
             "updated_at": resource["updated_at"],
         }
         return cls(**kwargs)
+
+    @classmethod
+    def from_storage(cls, record: dict) -> "Submission":
+        """Create a Submission from a storage record.
+
+        Storage records share the resource shape (nested responses and
+        feedback as dicts), so deserialization delegates to
+        from_resource().
+        """
+        return cls.from_resource(record)
 
     def to_resource(self) -> dict:
         """Convert the Submission to an API resource response.

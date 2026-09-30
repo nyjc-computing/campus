@@ -35,17 +35,6 @@ def _from_record(record: dict) -> model.TimetableMetadata:
             record=record
         ) from e
 
-def _entry_from_record(record: dict) -> model.TimetableEntry:
-    """Convert a storage record into a TimetableEntry model.
-
-    Args:
-        record (dict): Raw timetable entry record from storage.
-
-    Returns:
-        model.TimetableEntry: Parsed timetable entry object.
-    """
-    return model.TimetableEntry.from_storage(record)
-
 def _get_lessongroup_labels(
         timetable_id: schema.CampusID
 ) -> dict[schema.CampusID, schema.String]:
@@ -329,7 +318,7 @@ class TimetableResource:
 
         entries = []
         for entry_record in entry_records:
-            entry = _entry_from_record(entry_record)
+            entry = model.TimetableEntry.from_storage(entry_record)
             entry.label = lessongroup_labels.get(entry.lessongroup_id)
             entries.append(entry)
 
@@ -421,7 +410,7 @@ class TimetableEntriesResource:
 
         entries = []
         for record in records:
-            entry = _entry_from_record(record)
+            entry = model.TimetableEntry.from_storage(record)
             entry.label = lessongroup_labels.get(entry.lessongroup_id)
             entries.append(entry)
         return entries
