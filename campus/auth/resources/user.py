@@ -13,21 +13,6 @@ from campus.common.errors import api_errors
 user_storage = campus.storage.get_table("users")
 
 
-def _from_record(
-        record: dict[str, typing.Any],
-) -> model.User:
-    """Convert a storage record to a User model instance."""
-    return model.User(
-        id=schema.UserID(record['id']),
-        created_at=schema.DateTime(record['created_at']),
-        email=record['email'],
-        name=record['name'],
-        activated_at=(schema.DateTime(record['activated_at'])
-                      if record['activated_at'] is not None
-                      else None)
-    )
-
-
 class UsersResource:
     """Represents the users resource in Campus API Schema."""
 
@@ -54,7 +39,7 @@ class UsersResource:
             List of User instances
         """
         records = user_storage.get_matching({})
-        return [_from_record(record) for record in records]
+        return [model.User.from_storage(record) for record in records]
 
     def new(
             self,
@@ -80,7 +65,7 @@ class UsersResource:
             "created_at": schema.DateTime.utcnow(),
             "activated_at": activated_at,
         }
-        user = _from_record(record)
+        user = model.User.from_storage(record)
         user_storage.insert_one(user.to_storage())
         return user
 
@@ -158,7 +143,7 @@ class UserResource:
                 f"User '{self.user_id}' not found",
                 user_id=self.user_id
             )
-        return _from_record(record=record)
+        return model.User.from_storage(record=record)
 
     def update(self, **updates: typing.Any) -> None:
         """Update a Campus user's information.
