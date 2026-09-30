@@ -155,22 +155,22 @@ class TestAuthCredentialsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_create_credentials_deprecated_expiry_seconds_warns(self):
-        """POST with the deprecated expiry_seconds key still works but
-        raises a DeprecationWarning server-side (#648)."""
-        new_user_id = schema.UserID("dep.user@campus.test")
+    def test_create_credentials_expiry_seconds_returns_422(self):
+        """POST with the removed expiry_seconds key returns 422 (#648
+        item 2: the deprecation window closed; only expires_in is
+        accepted)."""
+        response = self.client.post(
+            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            json={
+                "scopes": ["read"],
+                "expiry_seconds": 3600
+            },
+            headers=self.bearer_auth_headers
+        )
 
-        with self.assertWarns(DeprecationWarning):
-            response = self.client.post(
-                f"/auth/v1/credentials/campus/{new_user_id}",
-                json={
-                    "scopes": ["read"],
-                    "expiry_seconds": 3600
-                },
-                headers=self.bearer_auth_headers
-            )
-
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
 
     def test_create_credentials_missing_expiry_returns_422(self):
         """POST without expires_in/expiry_seconds returns 422."""
