@@ -13,9 +13,9 @@ __all__ = []
 
 import typing
 
-from campus.common.errors import api_errors
 import campus.model as model
 import campus.storage
+from campus.common.errors import api_errors
 
 traces_storage = campus.storage.tables.get_db("spans")
 

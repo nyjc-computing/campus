@@ -3,9 +3,7 @@
 API error handling for Campus.
 """
 
-from .base import JsonDict
-from . import api_errors, auth_errors, token_errors, validation
-from .validation import ValidationError, FieldError
+from . import api_errors, auth_errors, handlers, token_errors, validation
 from .api_errors import (
     ConflictError,
     ForbiddenError,
@@ -14,7 +12,8 @@ from .api_errors import (
     NotFoundError,
     UnauthorizedError,
 )
-from . import handlers
+from .base import JsonDict
+from .validation import FieldError, ValidationError
 
 __all__ = [
     "init_app",

@@ -27,18 +27,18 @@ __all__ = [
     "get_client",
 ]
 
-from .interface import JsonClient, JsonResponse
-from .default import DefaultResponse, DefaultClient
+from .default import DefaultClient, DefaultResponse
 from .errors import (
-    HttpClientError,
-    AuthenticationError,
     AccessDeniedError,
+    AuthenticationError,
     ConflictError,
-    NotFoundError,
+    HttpClientError,
     InvalidRequestError,
-    NetworkError,
     MalformedResponseError,
+    NetworkError,
+    NotFoundError,
 )
+from .interface import JsonClient, JsonResponse
 
 # Cache instantiated clients to reuse sessions
 __client_cache: dict[tuple, JsonClient] = {}

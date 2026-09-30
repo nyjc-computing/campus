@@ -42,6 +42,4 @@ def is_optional(field: dataclasses.Field) -> bool:
     args = typing.get_args(field_type)
     if type(None) not in args:
         return False
-    if not has_default(field):
-        return False
-    return True
+    return has_default(field)

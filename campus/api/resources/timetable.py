@@ -5,10 +5,10 @@ Timetable resource for Campus API.
 
 import typing
 
-from campus.common import schema
-from campus.common.errors import api_errors
 import campus.model as model
 import campus.storage
+from campus.common import schema
+from campus.common.errors import api_errors
 from campus.storage.documents.interface import PK
 
 timetable_lessongroup_collection = campus.storage.get_collection("timetable_lessongroup")

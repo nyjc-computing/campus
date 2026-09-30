@@ -68,9 +68,9 @@ class TestClientRevoke(unittest.TestCase):
         variable absent, revoke() must still rotate and return the new
         secret, and store a hash computed with the fallback key.
         """
+        from campus.auth.resources.client import client_storage
         from campus.common import env
         from campus.common.utils import secret as secret_utils
-        from campus.auth.resources.client import client_storage
 
         client_id = self._create_confidential_client()
         fallback_key = "integration-test-secret-key"

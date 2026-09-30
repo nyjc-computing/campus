@@ -152,7 +152,7 @@ def update_assignment(
     if classroom_links is not None:
         # Convert dict links to ClassroomLink models
         updates["classroom_links"] = [
-            campus.model.ClassroomLink(**l) for l in classroom_links
+            campus.model.ClassroomLink(**link) for link in classroom_links
         ]
 
     if not updates:
@@ -213,7 +213,7 @@ def add_classroom_link(
     assignment.classroom_links.append(new_link)
 
     # Convert to dict for storage
-    links_dict = [asdict(l) for l in assignment.classroom_links]
+    links_dict = [asdict(link) for link in assignment.classroom_links]
     resources.assignment[schema.CampusID(assignment_id)].update(
         classroom_links=links_dict
     )

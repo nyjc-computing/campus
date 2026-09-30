@@ -15,10 +15,9 @@ Audit Endpoints Reference:
 
 import unittest
 
-from campus.common import schema
-from campus.common.utils import uid, secret
-from campus.model import TraceSpan
 import campus.storage
+from campus.common import schema
+from campus.model import TraceSpan
 from tests.fixtures import services
 
 apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -42,7 +41,10 @@ class TestAuditHealthContract(unittest.TestCase):
         assert self.app
         self.client = self.app.test_client()
 
-    @unittest.skip("API BUG #621: GET /audit/v1/health errors with AttributeError: api_key_id (audit_event decorator assumes an authenticated context)")
+    @unittest.skip(
+        "API BUG #621: GET /audit/v1/health errors with AttributeError: api_key_id (audit_event decorator "
+        "assumes an authenticated context)"
+    )
     def test_health_check_no_auth_required(self):
         """GET /audit/v1/health returns 200 without authentication."""
         response = self.client.get("/audit/v1/health")
@@ -51,7 +53,10 @@ class TestAuditHealthContract(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["status"], "ok")
 
-    @unittest.skip("API BUG #621: GET /audit/v1/health errors with AttributeError: api_key_id (audit_event decorator assumes an authenticated context)")
+    @unittest.skip(
+        "API BUG #621: GET /audit/v1/health errors with AttributeError: api_key_id (audit_event decorator "
+        "assumes an authenticated context)"
+    )
     def test_health_check_returns_json(self):
         """GET /audit/v1/health returns JSON response."""
         response = self.client.get("/audit/v1/health")

@@ -8,8 +8,9 @@ users.
 Authentication is handled in a global routes.before_request hook.
 """
 
-import flask
 from typing import Any
+
+import flask
 
 from campus import flask_campus
 from campus.common import schema

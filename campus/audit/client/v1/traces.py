@@ -10,10 +10,11 @@ URL path mapping:
     /audit/v1/traces/search         → Search traces
 """
 
-from typing import Optional, Any
+from typing import Any, Optional
 
 from campus.common.http.interface import JsonClient, JsonResponse
-from ..interface import ResourceCollection, Resource, ResourceRoot, SLASH
+
+from ..interface import SLASH, Resource, ResourceCollection, ResourceRoot
 
 
 class Traces(ResourceCollection):

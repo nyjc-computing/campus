@@ -7,7 +7,7 @@ import unittest
 
 import flask
 
-from tests.flask_test import TestCampusRequest, FlaskTestResponse, register_test_app
+from tests.flask_test import FlaskTestResponse, TestCampusRequest, register_test_app
 
 
 class TestFlaskTestResponse(unittest.TestCase):

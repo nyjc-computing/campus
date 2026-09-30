@@ -9,14 +9,13 @@ Issue: #428
 
 import statistics
 import time
-import typing
 import unittest
 
-from campus.common import env
-from campus.audit.resources.traces import TracesResource
 from campus.audit.middleware import tracing
+from campus.audit.resources.traces import TracesResource
+from campus.common import env
 from tests.fixtures.tokens import get_basic_auth_headers
-from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
+from tests.integration.base import DependencyCheckedTestCase, IsolatedIntegrationTestCase
 
 
 class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
@@ -147,7 +146,7 @@ class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCh
         p99_time = statistics.quantiles(times_with_middleware, n=100)[98]  # 99th percentile
 
         # Print results for visibility
-        print(f"\n=== Tracing Middleware Performance Benchmark ===")
+        print("\n=== Tracing Middleware Performance Benchmark ===")
         print(f"Requests: {NUM_REQUESTS}")
         print(f"Mean:   {mean_time:.3f} ms")
         print(f"Median: {median_time:.3f} ms")
@@ -208,7 +207,7 @@ class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCh
         max_time = max(response_times)
         std_dev = statistics.stdev(response_times) if len(response_times) > 1 else 0
 
-        print(f"\n=== Async Ingestion Performance Test ===")
+        print("\n=== Async Ingestion Performance Test ===")
         print(f"Requests: {NUM_REQUESTS}")
         print(f"Total time: {total_time:.3f} ms")
         print(f"Mean per request: {mean_time:.3f} ms")
@@ -264,7 +263,7 @@ class TestTracingMiddlewarePerformance(IsolatedIntegrationTestCase, DependencyCh
         manual_mean = statistics.mean(manual_times)
         diff = abs(auto_mean - manual_mean)
 
-        print(f"\n=== Trace ID Generation Overhead ===")
+        print("\n=== Trace ID Generation Overhead ===")
         print(f"Auto-generated mean: {auto_mean:.3f} ms")
         print(f"Pre-generated mean:  {manual_mean:.3f} ms")
         print(f"Difference:          {diff:.3f} ms")

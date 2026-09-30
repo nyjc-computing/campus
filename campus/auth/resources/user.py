@@ -4,10 +4,11 @@ Implements Campus API for user access.
 """
 
 import typing
-from campus.common import schema
-from campus.common.errors import api_errors
+
 import campus.model as model
 import campus.storage
+from campus.common import schema
+from campus.common.errors import api_errors
 
 user_storage = campus.storage.get_table("users")
 

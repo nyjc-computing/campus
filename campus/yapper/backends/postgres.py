@@ -10,7 +10,7 @@ from typing import Generator, TypedDict
 import psycopg2
 import psycopg2.extras
 
-from campus.yapper.base import ClientId, Event, EventLabel, EventData, YapperInterface
+from campus.yapper.base import ClientId, Event, EventData, EventLabel, YapperInterface
 
 
 class PostgreSQLResult(TypedDict):

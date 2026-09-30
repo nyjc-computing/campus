@@ -4,10 +4,10 @@ Utility functions for generating and hashing secrets.
 """
 
 import base64
+import binascii
 import hashlib
 import hmac
 import secrets
-import binascii
 
 import bcrypt
 

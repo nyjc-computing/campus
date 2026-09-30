@@ -1,9 +1,9 @@
-import unittest
-import sys
 import os
+import sys
+import unittest
 
-from tests.fixtures import services
 from campus.common import env
+from tests.fixtures import services
 
 
 class TestWSGI(unittest.TestCase):
@@ -46,7 +46,6 @@ class TestWSGI(unittest.TestCase):
             env.set('DEPLOY', deploy_mode)
 
             # Import wsgi after service setup to avoid connection issues
-            import wsgi
             from wsgi import app
             self.assertIsNotNone(app, "App should not be None")
 

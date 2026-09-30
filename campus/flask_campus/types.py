@@ -14,7 +14,6 @@ from typing import (
 
 from werkzeug import Response as FlaskResponse
 
-
 R = TypeVar("R", covariant=True)
 
 # Only expecting strings or dicts

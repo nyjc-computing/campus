@@ -8,16 +8,17 @@ Audit service for tracing and monitoring Campus services.
 __all__ = ["init_app"]
 
 import logging
-logger = logging.getLogger(__name__)
 
 import flask
 
 from campus.common import webauth
-from campus.common.errors import auth_errors, api_errors
+from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import secret
 
 from . import resources
 from .helpers import audit_events
+
+logger = logging.getLogger(__name__)
 
 
 def _authenticate_audit_api_key() -> None:
@@ -32,9 +33,11 @@ def _authenticate_audit_api_key() -> None:
         UnauthorizedError: if API key is invalid or missing
 
     """
-    from .helpers.audit_events import _extract_request_context, emit_audit_event, FlaskResponseContext
-    from campus.common import schema
     import time
+
+    from campus.common import schema
+
+    from .helpers.audit_events import FlaskResponseContext, _extract_request_context, emit_audit_event
 
     request_context = _extract_request_context(flask.request)
     started_at = schema.DateTime.utcnow()
@@ -81,7 +84,7 @@ def _authenticate_audit_api_key() -> None:
             response_context=make_response_context(401),
         )
         raise api_errors.UnauthorizedError(
-            f"Invalid API key format. Expected: audit_v1_<22-char-base64url>"
+            "Invalid API key format. Expected: audit_v1_<22-char-base64url>"
         )
 
     # Verify against database
@@ -114,8 +117,9 @@ def _authenticate_audit_api_key() -> None:
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
-    from . import routes, web
     from campus.common.errors import handlers
+
+    from . import routes, web
 
     # Organise audit routes under audit blueprint
     bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')

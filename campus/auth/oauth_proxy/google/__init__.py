@@ -41,10 +41,9 @@ import werkzeug
 
 from campus import flask_campus
 from campus.common import schema
-from campus.common.errors import auth_errors
 
 from . import proxy
-from .proxy import get_proxy
+from .proxy import get_proxy as get_proxy  # noqa: F401 (re-export)
 
 logger = logging.getLogger(__name__)
 

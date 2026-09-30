@@ -10,9 +10,8 @@ import flask
 import campus.model
 from campus import flask_campus
 from campus.common import schema
-from campus.common.errors import api_errors, FieldError, ValidationError
+from campus.common.errors import FieldError, ValidationError
 
-from .. import get_yapper
 from ..resources import credentials as creds_resource
 
 # Create blueprint for session management routes

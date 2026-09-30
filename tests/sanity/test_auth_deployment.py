@@ -12,6 +12,7 @@ Test Principles:
 """
 
 import unittest
+
 import flask
 
 from tests.fixtures import services
@@ -150,7 +151,7 @@ class TestAuthDeployment(unittest.TestCase):
         """
         try:
             # Import provider module to verify it can be loaded
-            from campus.auth import provider
+            from campus.auth import provider  # noqa: F401 - availability probe
             # Note: provider.py doesn't export a 'bp' attribute like oauth_proxy modules.
             # It uses app.add_url_rule() directly in init_app() instead of registering
             # a blueprint. We only verify successful import here.

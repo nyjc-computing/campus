@@ -11,7 +11,6 @@ from campus import flask_campus
 from campus.common import schema, webauth
 from campus.common.errors import api_errors, auth_errors
 
-
 # Type stubs
 
 # An authenticator returns a dict containing a client model and optionally a user model if authentication is successful.

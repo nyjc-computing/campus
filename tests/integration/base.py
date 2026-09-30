@@ -11,7 +11,6 @@ from typing import Any, ClassVar, NoReturn
 
 from tests.fixtures import services
 
-
 # Module-level storage for dependency check results
 # This ensures persistence across test method calls
 _dependency_check_results: dict[type, tuple[bool, str]] = {}

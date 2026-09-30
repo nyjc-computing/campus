@@ -6,18 +6,19 @@ Complete integration testing with DNS verification and service orchestration.
 Uses threading approach to start services without blocking.
 """
 
-import sys
-import time
-import threading
 import signal
-import requests
+import sys
+import threading
+import time
 from pathlib import Path
 
+import requests
+
+import tests.fixtures.api as api_fixtures
+import tests.fixtures.auth as auth_fixtures
+import tests.fixtures.setup as setup
 import tests.fixtures.storage as storage_fixtures
 import tests.fixtures.yapper as yapper_fixtures
-import tests.fixtures.auth as auth_fixtures
-import tests.fixtures.api as api_fixtures
-import tests.fixtures.setup as setup
 from campus.common import env
 
 # Add project root to path

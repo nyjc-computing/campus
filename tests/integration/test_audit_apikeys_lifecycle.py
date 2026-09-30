@@ -14,13 +14,10 @@ Issue: #541
 """
 
 import unittest
-from typing import ClassVar
 
+import campus.storage
 from campus.common import schema
 from campus.common.utils import secret, uid
-import campus.storage
-
-from tests.fixtures import services
 from tests.integration.base import IsolatedIntegrationTestCase
 
 
@@ -154,7 +151,10 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         self.created_key_id = data["id"]
         self.created_key_value = data["api_key"]
 
-    @unittest.skip("https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or independence")
+    @unittest.skip(
+        "https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or "
+        "independence"
+    )
     def test_02_created_key_stored_with_hash_not_plaintext(self):
         """Test that created key is stored with hash, not plaintext value.
 
@@ -180,7 +180,10 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         self.assertNotIn("api_key", record)
 
     # Lifecycle Step 2: Use API Key for Authentication
-    @unittest.skip("https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or independence")
+    @unittest.skip(
+        "https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or "
+        "independence"
+    )
     def test_03_created_key_can_authenticate_requests(self):
         """Test that created API key can authenticate requests.
 
@@ -215,7 +218,10 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         self.assertIsNotNone(updated_record.get("last_used"))
         self.assertNotEqual(updated_record.get("last_used"), initial_last_used)
 
-    @unittest.skip("https://github.com/nyjc-computing/campus/issues/570 - Authentication bypass: /health endpoint might not require auth")
+    @unittest.skip(
+        "https://github.com/nyjc-computing/campus/issues/570 - Authentication bypass: /health endpoint might "
+        "not require auth"
+    )
     def test_04_wrong_key_value_fails_authentication(self):
         """Test that wrong API key value fails authentication.
 
@@ -236,7 +242,10 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         self.assertIn("error", data)
 
     # Lifecycle Step 3: Update API Key
-    @unittest.skip("https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or independence")
+    @unittest.skip(
+        "https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or "
+        "independence"
+    )
     def test_05_update_api_key_modifies_stored_values(self):
         """Test that API key can be updated with new values.
 
@@ -280,7 +289,10 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         self.assertEqual(record["rate_limit"], 200)
 
     # Lifecycle Step 4: Revoke API Key
-    @unittest.skip("https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or independence")
+    @unittest.skip(
+        "https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or "
+        "independence"
+    )
     def test_06_revoke_api_key_marks_as_revoked(self):
         """Test that API key revocation works correctly.
 
@@ -315,13 +327,15 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         # Should also succeed (idempotent)
         self.assertIn(response2.status_code, [204, 404])
 
-    @unittest.skip("https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or independence")
+    @unittest.skip(
+        "https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or "
+        "independence"
+    )
     def test_07_revoked_key_cannot_authenticate(self):
         """Test that revoked API key cannot authenticate new requests.
 
         This verifies security: revoked keys are immediately invalid.
         """
-        api_key_id = self.created_key_id
         api_key_value = self.created_key_value
 
         # Try to use revoked key
@@ -336,7 +350,10 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         data = response.get_json()
         self.assertIn("error", data)
 
-    @unittest.skip("https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or independence")
+    @unittest.skip(
+        "https://github.com/nyjc-computing/campus/issues/570 - State management: tests need shared setup or "
+        "independence"
+    )
     def test_08_revoked_key_still_exists_in_storage(self):
         """Test that revoked keys are kept in storage for audit trail.
 

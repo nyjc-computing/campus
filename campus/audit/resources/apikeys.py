@@ -11,11 +11,11 @@ __all__ = []
 
 from typing import Any
 
+import campus.model as model
+import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import secret
-import campus.model as model
-import campus.storage
 from campus.storage import errors as storage_errors
 
 apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -107,7 +107,7 @@ class APIKeysResource:
         api_key = model.APIKey(**record)
         try:
             apikeys_storage.insert_one(api_key.to_storage())
-        except storage_errors.ConflictError as e:
+        except storage_errors.ConflictError:
             raise api_errors.ConflictError(
                 f"Conflict while inserting api_key to db: "
                 f"{api_key.to_resource()}"

@@ -3,10 +3,10 @@
 Implements Campus API for vault access.
 """
 
-from campus.common import schema
-from campus.common.utils import uid
 import campus.model as model
 import campus.storage
+from campus.common import schema
+from campus.common.utils import uid
 
 vault_storage = campus.storage.get_table("vault")
 

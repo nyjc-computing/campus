@@ -3,9 +3,9 @@
 import dataclasses
 import unittest
 
+from campus.common import schema
 from campus.model import credentials
 from campus.model.base import Model
-from campus.common import schema
 
 
 @dataclasses.dataclass(kw_only=True)

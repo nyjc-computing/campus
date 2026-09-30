@@ -128,7 +128,8 @@ class TestEnsurePublicClient(unittest.TestCase):
         created = self._get_seed()()
 
         self.assertFalse(created)
-        with self.assertRaises(Exception):
+        # Deliberately broad: any failure to fetch a missing client counts
+        with self.assertRaises(Exception):  # noqa: B017
             client_storage.get_by_id(campus.config.PUBLIC_OAUTH_CLIENT_ID)
 
     def test_schema_alignment_is_noop_in_testing(self):

@@ -3,14 +3,14 @@
 Client model definitions for Campus.
 """
 
-from typing import ClassVar
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 from campus.common import schema
 from campus.common.utils import uid
 
-from .base import Model
 from . import constraints
+from .base import Model
 
 
 @dataclass(eq=False, kw_only=True)

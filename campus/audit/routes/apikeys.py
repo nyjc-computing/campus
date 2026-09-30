@@ -58,13 +58,16 @@ def new(
     return record, 201
 
 
+DEFAULT_LIST_LIMIT = schema.Integer(50)
+
+
 @bp.get("/")
 @flask_campus.unpack_request
 def list_keys(
         *,
         owner_id: schema.UserID | None = None,
         active_only: bool = True,
-        limit: schema.Integer = schema.Integer(50),
+        limit: schema.Integer = DEFAULT_LIST_LIMIT,
 ) -> flask_campus.JsonResponse:
     """List API keys with optional filtering.
 

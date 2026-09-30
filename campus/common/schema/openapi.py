@@ -39,14 +39,14 @@ class Boolean(int, metaclass=BooleanMeta):
         return "true" if self else "false"
 
     def __bool__(self) -> bool:
-        return True if self else False
+        return bool(self)
 
     def __eq__(self, other: object) -> bool:
         match other:
             case Boolean():
-                return True if bool(self) == bool(other) else False
+                return bool(self) == bool(other)
             case bool():
-                return True if bool(self) == other else False
+                return bool(self) == other
         raise (
             TypeError(f"__eq__ not implemented for {type(other)}")
         ) from None

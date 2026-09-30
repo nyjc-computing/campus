@@ -16,6 +16,7 @@ __all__ = ("AuditClient",)
 
 from campus.common import env
 from campus.common.http.interface import JsonClient
+
 from .v1 import AuditRoot
 
 
@@ -66,7 +67,7 @@ def _get_base_url() -> str:
         case "production":
             return "https://audit.campus.nyjc.app"
         case _:
-            raise ValueError(f"Invalid ENV value for audit client")
+            raise ValueError("Invalid ENV value for audit client")
 
 
 class AuditClient:

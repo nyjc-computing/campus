@@ -10,7 +10,6 @@ import werkzeug
 
 from campus import flask_campus
 from campus.common import schema
-from campus.common.errors import auth_errors
 
 from . import proxy
 

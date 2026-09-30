@@ -6,11 +6,11 @@ Submission resource for Campus API.
 import typing
 from dataclasses import asdict
 
+import campus.model as model
+import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model as model
-import campus.storage
 
 submission_storage = campus.storage.get_collection("submissions")
 

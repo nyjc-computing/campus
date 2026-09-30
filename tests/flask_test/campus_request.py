@@ -17,11 +17,11 @@ from typing import Any, Self
 from urllib.parse import urljoin
 
 import flask
-import campus.model
 from campus_python.json_client.interface import JsonClient
 
-from .response import FlaskTestResponse
+import campus.model
 
+from .response import FlaskTestResponse
 
 # Global registry for test apps
 # Maps base_url to dict of path_prefix -> Flask app
@@ -384,8 +384,8 @@ def patch_campus_python() -> None:
     Call this in test setup before any campus_python.Campus instances
     are created.
     """
-    import campus_python.json_client
     import campus_python
+    import campus_python.json_client
 
     # Store original for cleanup
     if not hasattr(campus_python.json_client, "_original_CampusRequest"):
@@ -407,8 +407,8 @@ def unpatch_campus_python() -> None:
 
     Call this in test teardown to clean up the monkey-patch.
     """
-    import campus_python.json_client
     import campus_python
+    import campus_python.json_client
 
     if hasattr(campus_python.json_client, "_original_CampusRequest"):
         campus_python.json_client.CampusRequest = (
@@ -417,9 +417,7 @@ def unpatch_campus_python() -> None:
         delattr(campus_python.json_client, "_original_CampusRequest")
     if hasattr(campus_python, "_original_CampusRequest"):
         if campus_python._original_CampusRequest is not None:  # type: ignore[reportAttributeAccessIssue]
-            campus_python.CampusRequest = getattr(
-                campus_python, "_original_CampusRequest"
-            )
+            campus_python.CampusRequest = campus_python._original_CampusRequest
         else:
             delattr(campus_python, "CampusRequest")
         delattr(campus_python, "_original_CampusRequest")

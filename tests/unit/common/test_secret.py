@@ -13,6 +13,7 @@ Test Principles:
 """
 
 import unittest
+
 from campus.common.utils import secret
 
 
@@ -292,9 +293,8 @@ class TestHTTPBasicAuth(unittest.TestCase):
         ]
 
         for invalid in invalid_inputs:
-            with self.subTest(invalid=invalid):
-                with self.assertRaises((ValueError, Exception)):
-                    secret.decode_http_basic_auth(invalid)
+            with self.subTest(invalid=invalid), self.assertRaises((ValueError, Exception)):
+                secret.decode_http_basic_auth(invalid)
 
     def test_decode_valid_base64_without_colon(self):
         """Test decode with valid base64 but missing colon separator."""

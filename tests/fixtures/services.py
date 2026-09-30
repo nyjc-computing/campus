@@ -5,13 +5,13 @@ Service manager for initializing and coordinating Campus service instances.
 Orchestrates setup and lifecycle of services for integration testing.
 """
 
-from contextlib import contextmanager
 from typing import Optional
 
 from flask import Flask
 
-from . import setup, auth, api, storage, yapper
 from campus.common import devops, env
+
+from . import api, auth, setup, storage, yapper
 
 # Lazy import of audit (imports campus_python which needs vault setup)
 # pylint: disable=import-outside-toplevel

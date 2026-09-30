@@ -7,6 +7,7 @@ import uuid
 
 from campus.common import schema
 
+
 def generate_uid(length: int = 16) -> str:
     """Generate a unique identifier of specified length (default: 16 bytes).
 

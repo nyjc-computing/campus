@@ -5,12 +5,12 @@ These tests verify that invalid field metadata is caught during schema
 generation, preventing silent errors from typos or incorrect types.
 """
 
-import unittest
 import dataclasses
+import unittest
 from dataclasses import dataclass
 
-from campus.model.base import InternalModel, Model
 from campus.model import constraints
+from campus.model.base import InternalModel, Model
 
 
 @dataclass
@@ -74,8 +74,7 @@ class TestFieldMetadataValidation(unittest.TestCase):
     def test_valid_field_metadata(self):
         """Test that valid field metadata passes validation."""
         # Lazy import as per AGENTS.md guidelines
-        from campus.storage.tables.backend import postgres
-        from campus.storage.tables.backend import sqlite
+        from campus.storage.tables.backend import postgres, sqlite
 
         # Valid: storage=True (default)
         field = TestModelWithStorage.fields()["name"]

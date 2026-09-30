@@ -11,7 +11,6 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from campus.model import InternalModel, Model
-from campus.storage import errors as storage_errors
 
 # This constant should match the one in campus.common.schema
 PK = "id"

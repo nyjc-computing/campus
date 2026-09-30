@@ -141,7 +141,6 @@ class TestAuthCredentialsContract(unittest.TestCase):
 
     def test_update_credentials(self):
         """PATCH /credentials/{provider}/{user_id} updates credentials."""
-        import campus.model
 
         response = self.client.patch(
             f"/auth/v1/credentials/campus/{self.test_user_id}",

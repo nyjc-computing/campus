@@ -12,6 +12,7 @@ Test Principles:
 """
 
 import unittest
+
 import flask
 
 from campus.common.devops.deploy import create_app

@@ -12,14 +12,13 @@ For schema details, see:
 https://github.com/nyjc-computing/campus-classroom/blob/main/docs/schema-proposal.md
 """
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 
 from campus.common import schema
 from campus.common.utils import uid
 
 from .base import Model
-
 
 # ============================================================================
 # Assignment Models
@@ -119,12 +118,12 @@ class Assignment(Model):
         ]
         classroom_links = [
             ClassroomLink(
-                course_id=l["course_id"],
-                coursework_id=l["coursework_id"],
-                attachment_id=l.get("attachment_id"),
-                **({"linked_at": schema.DateTime(l["linked_at"])} if "linked_at" in l else {})
-            ) if isinstance(l, dict) else l
-            for l in resource.get("classroom_links", [])
+                course_id=link["course_id"],
+                coursework_id=link["coursework_id"],
+                attachment_id=link.get("attachment_id"),
+                **({"linked_at": schema.DateTime(link["linked_at"])} if "linked_at" in link else {})
+            ) if isinstance(link, dict) else link
+            for link in resource.get("classroom_links", [])
         ]
 
         # Build kwargs for Assignment constructor
@@ -154,7 +153,7 @@ class Assignment(Model):
             "questions": [asdict(q) for q in self.questions],
             "created_by": self.created_by,
             "updated_at": self.updated_at,
-            "classroom_links": [asdict(l) for l in self.classroom_links],
+            "classroom_links": [asdict(link) for link in self.classroom_links],
         }
 
     def to_storage(self) -> dict:
@@ -167,7 +166,7 @@ class Assignment(Model):
         data = super().to_storage()
         # Convert nested dataclasses to dicts for storage
         data['questions'] = [asdict(q) for q in self.questions]
-        data['classroom_links'] = [asdict(l) for l in self.classroom_links]
+        data['classroom_links'] = [asdict(link) for link in self.classroom_links]
         return data
 
     def get_question_tree(self) -> dict:

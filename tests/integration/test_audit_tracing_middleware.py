@@ -19,16 +19,14 @@ File: tests/integration/test_audit_tracing_middleware.py
 Issue: #428
 """
 
-import concurrent.futures
 import re
 import time
-import typing
 import unittest
 from unittest.mock import patch
 
 from campus.common import env
 from tests.fixtures.tokens import get_basic_auth_headers, get_bearer_auth_headers
-from tests.integration.base import IsolatedIntegrationTestCase, DependencyCheckedTestCase
+from tests.integration.base import DependencyCheckedTestCase, IsolatedIntegrationTestCase
 
 
 class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
@@ -229,7 +227,6 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         - skipped=1 (silent skip, easy to miss)
         """
         import campus.storage
-        import concurrent.futures
 
         # First, ensure the spans table exists
         try:

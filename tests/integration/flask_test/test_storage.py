@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Test Flask test client strategy with storage backends"""
 
-from tests.flask_test import TestCampusRequest, register_test_app, create_test_app
 import campus.auth
+from tests.flask_test import TestCampusRequest, create_test_app, register_test_app
 
 
 def test_auth_with_storage():

@@ -162,7 +162,8 @@ def validate_keys(
 
     Args:
         record (dict): The record to validate.
-        valid_keys (Collection[str] | Mapping[str, type]): A collection of valid keys or a mapping of valid keys to types.
+        valid_keys (Collection[str] | Mapping[str, type]): A collection of valid
+            keys or a mapping of valid keys to types.
             If a mapping is provided, the types are checked against the record values.
         ignore_extra (bool): If True, keys not in valid_keys are ignored.
         required (bool): If True, all keys in valid_keys are required.

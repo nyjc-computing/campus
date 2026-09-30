@@ -31,9 +31,8 @@ collection.delete_by_id("123")
 import uuid
 from typing import Any, Dict, List
 
-from campus.common import devops
 from campus.model import Model
-from campus.storage.documents.interface import CollectionInterface, PK
+from campus.storage.documents.interface import PK, CollectionInterface
 from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 
 
@@ -137,7 +136,7 @@ class MemoryCollection(CollectionInterface):
                     if not (doc_value <= value.value):
                         return False
                 elif isinstance(value, ne):
-                    if not (doc_value != value.value):
+                    if doc_value == value.value:
                         return False
                 else:
                     # Unknown operator, fall back to exact match

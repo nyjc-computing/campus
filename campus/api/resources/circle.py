@@ -5,11 +5,11 @@ Circle resource for Campus API.
 
 import typing
 
+import campus.model as model
+import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model as model
-import campus.storage
 
 circle_storage = campus.storage.get_collection("circles")
 
@@ -41,7 +41,7 @@ def get_circle_meta() -> dict:
 
     if not circle_metas:
         raise api_errors.NotFoundError(
-            f"Circle meta record not found in collection circles",
+            "Circle meta record not found in collection circles",
             id=DOMAIN
         )
 

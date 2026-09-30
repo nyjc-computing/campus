@@ -13,10 +13,10 @@ __all__ = [
 ]
 
 from . import (
+    assignments,
     bookings,
     circles,
     emailotp,
-    assignments,
     submissions,
     timetable,
 )

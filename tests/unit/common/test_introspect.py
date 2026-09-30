@@ -1,7 +1,7 @@
 """Test cases for campus.common.introspect module."""
 
-import unittest
 import sys
+import unittest
 from types import ModuleType
 
 from campus.common.introspect import get_caller_module

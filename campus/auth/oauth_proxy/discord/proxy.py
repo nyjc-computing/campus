@@ -10,12 +10,12 @@ from typing import Literal
 import flask
 import werkzeug
 
+import campus.config
 from campus.common import schema, webauth
 from campus.common.errors import auth_errors
-import campus.config
 
-from .. import base
 from ... import resources
+from .. import base
 
 PROVIDER = "discord"
 SCOPE_SEP = " "

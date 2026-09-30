@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 
-
 DNS_MAPPINGS = [
     "# Campus Testing DNS Mappings",
     "127.0.0.1    apps.campus.testing",

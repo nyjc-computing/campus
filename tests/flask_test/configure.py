@@ -5,8 +5,7 @@ Configuration utilities for Flask apps in testing environments.
 
 import flask
 
-from campus.common import devops
-from campus.common import env
+from campus.common import devops, env
 
 
 def configure_for_testing(app: flask.Flask) -> None:

@@ -281,16 +281,15 @@ class PostgreSQLTable(TableInterface):
 
     def get_by_id(self, row_id: str) -> dict[str, Any]:
         """Retrieve a row by its ID."""
-        with self._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                cursor.execute(
-                    f"SELECT * FROM {self.name} WHERE {PK} = %s",
-                    (row_id,)
-                )
-                row = cursor.fetchone()
-                if not row:
-                    raise errors.NotFoundError(row_id, self.name)
-                return dict(row)
+        with self._get_connection() as conn, conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(
+                f"SELECT * FROM {self.name} WHERE {PK} = %s",
+                (row_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                raise errors.NotFoundError(row_id, self.name)
+            return dict(row)
 
     def get_matching(
         self,
@@ -306,52 +305,50 @@ class PostgreSQLTable(TableInterface):
         Supports exact matches, comparison operators (gt, gte, lt, lte),
         sorting, and pagination.
         """
-        with self._get_connection() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cursor:
-                where_clause, params = self._build_where_clause(query)
-                sql = f"SELECT * FROM {self.name} {where_clause}"
+        with self._get_connection() as conn, conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            where_clause, params = self._build_where_clause(query)
+            sql = f"SELECT * FROM {self.name} {where_clause}"
 
-                # Add ORDER BY clause if specified
-                if order_by is not None:
-                    direction = "ASC" if ascending else "DESC"
-                    sql += f' ORDER BY "{order_by}" {direction}'
+            # Add ORDER BY clause if specified
+            if order_by is not None:
+                direction = "ASC" if ascending else "DESC"
+                sql += f' ORDER BY "{order_by}" {direction}'
 
-                # Add LIMIT clause if specified
-                if limit is not None:
-                    sql += f" LIMIT {limit}"
+            # Add LIMIT clause if specified
+            if limit is not None:
+                sql += f" LIMIT {limit}"
 
-                # Add OFFSET clause if specified
-                if offset > 0:
-                    sql += f" OFFSET {offset}"
+            # Add OFFSET clause if specified
+            if offset > 0:
+                sql += f" OFFSET {offset}"
 
-                cursor.execute(sql, params)
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
 
     def insert_one(self, row: dict) -> None:
         """Insert a row into the specified table."""
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                column_names, placeholders, values = self._build_columns_and_values(
-                    row)
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            column_names, placeholders, values = self._build_columns_and_values(
+                row)
 
-                try:
-                    cursor.execute(
-                        f"INSERT INTO {self.name} ({column_names}) VALUES ({placeholders})",
-                        values
-                    )
-                except psycopg2.IntegrityError as e:
-                    conn.rollback()
-                    raise errors.ConflictError(
-                        message="Conflict occurred during insert",
-                        group_name=self.name,
-                        details={"row": row, "error": str(e)}
-                    ) from e
-                except psycopg2.Error as e:
-                    conn.rollback()
-                    raise
-                else:
-                    conn.commit()
+            try:
+                cursor.execute(
+                    f"INSERT INTO {self.name} ({column_names}) VALUES ({placeholders})",
+                    values
+                )
+            except psycopg2.IntegrityError as e:
+                conn.rollback()
+                raise errors.ConflictError(
+                    message="Conflict occurred during insert",
+                    group_name=self.name,
+                    details={"row": row, "error": str(e)}
+                ) from e
+            except psycopg2.Error:
+                conn.rollback()
+                raise
+            else:
+                conn.commit()
 
     def update_by_id(self, row_id: str, update: dict) -> None:
         """Update a row in the specified table.
@@ -363,82 +360,78 @@ class PostgreSQLTable(TableInterface):
         if not update:
             return
 
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                set_clause, params = self._build_set_clause(update)
-                params.append(row_id)
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            set_clause, params = self._build_set_clause(update)
+            params.append(row_id)
 
-                try:
-                    cursor.execute(
-                        f"UPDATE {self.name} SET {set_clause} WHERE {PK} = %s",
-                        params
+            try:
+                cursor.execute(
+                    f"UPDATE {self.name} SET {set_clause} WHERE {PK} = %s",
+                    params
+                )
+            except psycopg2.Error:
+                raise
+            else:
+                if cursor.rowcount == 0:
+                    raise errors.NotFoundError(
+                        row_id, self.name
                     )
-                except psycopg2.Error as e:
-                    raise
-                else:
-                    if cursor.rowcount == 0:
-                        raise errors.NotFoundError(
-                            row_id, self.name
-                        )
-                    conn.commit()
+                conn.commit()
 
     def update_matching(self, query: dict, update: dict) -> None:
         """Update rows matching a query in the specified table."""
         if not update:
             return
 
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                set_clause, set_params = self._build_set_clause(update)
-                where_clause, where_params = self._build_where_clause(query)
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            set_clause, set_params = self._build_set_clause(update)
+            where_clause, where_params = self._build_where_clause(query)
 
-                params = set_params + where_params
-                sql = f"UPDATE {self.name} SET {set_clause} {where_clause}"
+            params = set_params + where_params
+            sql = f"UPDATE {self.name} SET {set_clause} {where_clause}"
 
-                try:
-                    cursor.execute(sql, params)
-                except psycopg2.Error as e:
-                    raise
-                else:
-                    if cursor.rowcount == 0:
-                        raise errors.NoChangesAppliedError(
-                            "update", query, self.name)
-                    conn.commit()
+            try:
+                cursor.execute(sql, params)
+            except psycopg2.Error:
+                raise
+            else:
+                if cursor.rowcount == 0:
+                    raise errors.NoChangesAppliedError(
+                        "update", query, self.name)
+                conn.commit()
 
     def delete_by_id(self, row_id: str) -> None:
         """Delete a row from the specified table."""
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                try:
-                    cursor.execute(
-                        f"DELETE FROM {self.name} WHERE {PK} = %s",
-                        (row_id,)
-                    )
-                except psycopg2.Error as e:
-                    raise
-                else:
-                    if cursor.rowcount == 0:
-                        raise errors.NotFoundError(row_id, self.name)
-                    conn.commit()
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            try:
+                cursor.execute(
+                    f"DELETE FROM {self.name} WHERE {PK} = %s",
+                    (row_id,)
+                )
+            except psycopg2.Error:
+                raise
+            else:
+                if cursor.rowcount == 0:
+                    raise errors.NotFoundError(row_id, self.name)
+                conn.commit()
 
     def delete_matching(self, query: dict) -> None:
         """Delete rows matching a query in the specified table."""
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                where_clause, params = self._build_where_clause(query)
-                try:
-                    cursor.execute(
-                        f"DELETE FROM {self.name} {where_clause}",
-                        params
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            where_clause, params = self._build_where_clause(query)
+            try:
+                cursor.execute(
+                    f"DELETE FROM {self.name} {where_clause}",
+                    params
+                )
+            except psycopg2.Error:
+                raise
+            else:
+                if cursor.rowcount == 0:
+                    raise errors.NoChangesAppliedError(
+                        "delete", query, self.name
                     )
-                except psycopg2.Error as e:
-                    raise
-                else:
-                    if cursor.rowcount == 0:
-                        raise errors.NoChangesAppliedError(
-                            "delete", query, self.name
-                        )
-                    conn.commit()
+                conn.commit()
     
     @devops.block_env(devops.PRODUCTION)
     def init_from_model(
@@ -449,10 +442,9 @@ class PostgreSQLTable(TableInterface):
         """Initialize the table from a Campus model definition."""
         create_table_sql = _model_to_sql_schema(name, model)
         # Ensure connection is properly closed after operation
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(create_table_sql)
-                conn.commit()
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(create_table_sql)
+            conn.commit()
 
     @devops.block_env(devops.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:
@@ -465,10 +457,9 @@ class PostgreSQLTable(TableInterface):
             schema: SQL CREATE TABLE statement defining the table structure.
         """
         # Ensure connection is properly closed after operation
-        with self._get_connection() as conn:
-            with conn.cursor() as cursor:
-                cursor.execute(schema)
-                conn.commit()
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            cursor.execute(schema)
+            conn.commit()
 
 
 @devops.block_env(devops.PRODUCTION)

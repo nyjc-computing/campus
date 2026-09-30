@@ -30,11 +30,11 @@ if 'POSTGRESDB_URI' not in os.environ:
     print("WARNING: POSTGRESDB_URI not set in environment")
     print("Proceeding - the storage backend will fail if unconfigured")
 
+import campus.config
 from campus.auth.resources.client import (
     ensure_public_client,
     ensure_public_client_schema,
 )
-import campus.config
 
 print("=" * 80)
 print("SEEDING PUBLIC OAUTH CLIENT")

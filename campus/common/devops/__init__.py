@@ -5,9 +5,9 @@ This module contains the DevOps-related functionality for the Campus project.
 
 __all__ = ["deploy"]
 
+import logging
 import os
 from functools import wraps
-import logging
 from typing import Literal
 from warnings import warn
 

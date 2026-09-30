@@ -8,7 +8,6 @@ using the common.devops environment enums for consistency.
 
 from campus.common import devops
 
-
 Url = str
 
 BASE_URLS = {

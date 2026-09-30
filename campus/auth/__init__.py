@@ -12,9 +12,9 @@ integrations.
 __all__ = ["init_app", "get_yapper"]
 
 import logging
+from typing import TYPE_CHECKING
 
 import flask
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from campus.yapper.base import YapperInterface
@@ -101,8 +101,9 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
 
     This ensures proper error handling and deployment configuration.
     """
-    from . import oauth_proxy, provider, routes
     from campus.common import env
+
+    from . import oauth_proxy, provider, routes
 
     # Register deployment-specific getsecret function
     env.register_getsecret(_auth_getsecret)

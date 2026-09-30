@@ -10,10 +10,9 @@ import typing
 
 import flask
 
-from campus.common import env
-from campus.common import schema
-from campus.common.utils import uid
 import campus.model as model
+from campus.common import env, schema
+from campus.common.utils import uid
 
 # Standardize JsonObject representation in campus.audit
 JsonObject = dict[str, typing.Any]

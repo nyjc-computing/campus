@@ -2,8 +2,8 @@
 
 import unittest
 
-from campus.common.errors import ValidationError
 from campus.common import schema
+from campus.common.errors import ValidationError
 from campus.model import Timetable, TimetableMetadata
 
 

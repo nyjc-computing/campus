@@ -6,8 +6,8 @@ These models represent trace spans and computed views/aggregations
 for the audit service, including trace trees and summaries.
 """
 
-from dataclasses import dataclass, field
 import typing
+from dataclasses import dataclass, field
 
 from campus.common import schema
 from campus.common.utils import uid
@@ -132,7 +132,8 @@ class TraceSpan(InternalModel):
         metadata={"resource": False}  # Hide from API, use as PK only
     )
     trace_id: str = field(default_factory=uid.generate_trace_id)  # 32-char hex
-    span_id: str = field(default_factory=uid.generate_span_id)  # 16-char hex (OpenTelemetry identifier, used in resources)
+    # 16-char hex (OpenTelemetry identifier, used in resources)
+    span_id: str = field(default_factory=uid.generate_span_id)
     parent_span_id: str | None = None
 
     # Request data
@@ -313,10 +314,7 @@ class TraceTree(InternalModel):
                 span_map[parent_id]["children"].append(span_map[span_id])
 
         # Build tree nodes
-        if root_dict:
-            root = cls._build_node(root_dict, 0, 0.0)
-        else:
-            root = None
+        root = cls._build_node(root_dict, 0, 0.0) if root_dict else None
 
         return cls(root=root)
 

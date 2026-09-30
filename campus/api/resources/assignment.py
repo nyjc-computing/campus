@@ -6,11 +6,11 @@ Assignment resource for Campus API.
 import typing
 from dataclasses import asdict
 
+import campus.model as model
+import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import uid
-import campus.model as model
-import campus.storage
 
 assignment_storage = campus.storage.get_collection("assignments")
 
@@ -28,12 +28,12 @@ def _from_record(record: dict) -> model.Assignment:
 
     classroom_links = [
         model.ClassroomLink(
-            course_id=l["course_id"],
-            coursework_id=l["coursework_id"],
-            attachment_id=l.get("attachment_id"),
-            linked_at=schema.DateTime(l["linked_at"])
+            course_id=link["course_id"],
+            coursework_id=link["coursework_id"],
+            attachment_id=link.get("attachment_id"),
+            linked_at=schema.DateTime(link["linked_at"])
         )
-        for l in record.get("classroom_links", [])
+        for link in record.get("classroom_links", [])
     ]
 
     return model.Assignment(
@@ -83,8 +83,8 @@ class AssignmentsResource:
             created_by=schema.UserID(fields["created_by"]),
             updated_at=schema.DateTime.utcnow(),
             classroom_links=[
-                model.ClassroomLink(**l)
-                for l in fields.get("classroom_links", [])
+                model.ClassroomLink(**link)
+                for link in fields.get("classroom_links", [])
             ]
         )
 
@@ -130,8 +130,8 @@ class AssignmentResource:
             ]
         if "classroom_links" in updates:
             updates["classroom_links"] = [
-                asdict(l) if isinstance(l, model.ClassroomLink) else l
-                for l in updates["classroom_links"]
+                asdict(link) if isinstance(link, model.ClassroomLink) else link
+                for link in updates["classroom_links"]
             ]
 
         try:

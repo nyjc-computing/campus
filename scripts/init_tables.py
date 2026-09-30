@@ -20,12 +20,12 @@ print("=" * 80)
 print("INITIALIZING DATABASE TABLES")
 print("=" * 80)
 
-from campus.auth.resources.vault import VaultsResource
 from campus.auth.resources.client import ClientsResource
-from campus.auth.resources.user import UsersResource
-from campus.auth.resources.session import AuthSessionsResource
 from campus.auth.resources.credentials import CredentialsResource
 from campus.auth.resources.login import LoginSessionsResource
+from campus.auth.resources.session import AuthSessionsResource
+from campus.auth.resources.user import UsersResource
+from campus.auth.resources.vault import VaultsResource
 
 print("\nInitializing vault table...")
 VaultsResource.init_storage()

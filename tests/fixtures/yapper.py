@@ -49,8 +49,8 @@ def init():
     elif campus.storage.testing.is_test_mode():
         # Use a temp file for the database
         # Note: :memory: doesn't work because each connection creates a new empty DB
-        import tempfile
         import os
+        import tempfile
         fd, db_path = tempfile.mkstemp(suffix='.sqlite', prefix='yapperdb_')
         os.close(fd)
         db_uri = db_path
