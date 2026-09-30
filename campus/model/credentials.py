@@ -4,8 +4,7 @@ Credential model definitions for Campus.
 """
 
 import typing
-import warnings
-from dataclasses import InitVar, dataclass, field
+from dataclasses import dataclass, field
 
 from campus.common import schema
 from campus.common.utils import secret, utc_time
@@ -16,14 +15,6 @@ from .base import Model
 # Token types are case-insensitive per RFC 6749 section 7.1; the
 # canonical campus spelling is the RFC 6750 "Bearer" designation.
 _BEARER_TOKEN_TYPE = "Bearer"
-
-_EXPIRY_SECONDS_DEPRECATION = (
-    "expiry_seconds is deprecated and will be removed; "
-    "use expires_in instead (campus#648)"
-)
-# Public alias for callers that raise the same deprecation warning at
-# their own boundary (e.g. the POST /credentials route).
-EXPIRY_SECONDS_DEPRECATION = _EXPIRY_SECONDS_DEPRECATION
 
 
 def _as_datetime(value: schema.DateTime | str) -> schema.DateTime:
@@ -49,8 +40,8 @@ class OAuthToken(Model):
       (RFC 6749 section 4.2.2); expires_at is derived as
       created_at + expires_in and is the temporal authority.
     - scope (space-delimited string) and scopes (list) are views of
-      the same granted scopes; storage keeps the scopes list until
-      the #648 deprecation window closes.
+      the same granted scopes; storage keeps the scope string (#648
+      end state).
     - token_type defaults to "Bearer" and is case-normalised on
       input; only Bearer tokens are treated as usable.
     - provider_fields reserves a home for unknown keys accepted from
@@ -67,9 +58,6 @@ class OAuthToken(Model):
     # expires_at is derived from expires_in in __post_init__ if not provided
     expires_at: schema.DateTime = None  # type: ignore
     expires_in: int | None = None
-    # Legacy alias for expires_in, accepted during the #648
-    # deprecation window and removed once consumers have migrated
-    expiry_seconds: InitVar[int] = None  # type: ignore
     token_type: str = _BEARER_TOKEN_TYPE
     refresh_token: str | None = None
     refresh_token_expires_at: schema.DateTime | None = None
@@ -82,15 +70,10 @@ class OAuthToken(Model):
         }
     )
 
-    def __post_init__(self, expiry_seconds: int | None = None):
+    def __post_init__(self):
         """Resolve expiry fields and normalise token_type and scopes."""
-        if expiry_seconds is not None:
-            warnings.warn(_EXPIRY_SECONDS_DEPRECATION, DeprecationWarning,
-                          stacklevel=2)
         if isinstance(self.scopes, str):
             self.scopes = self.scopes.split()
-        if self.expires_in is None and expiry_seconds is not None:
-            self.expires_in = int(expiry_seconds)
         if self.expires_at is None:
             if self.expires_in is None:
                 raise ValueError(
@@ -155,17 +138,12 @@ class OAuthToken(Model):
         """Create an OAuthToken from a resource dict.
 
         Accepts RFC 6749 standard keys alongside campus keys:
-        access_token maps to id, scope to scopes, and legacy
-        expiry_seconds to the stored expires_in. Unknown keys are
+        access_token maps to id and scope to scopes. Unknown keys are
         preserved in provider_fields for internal use (issue #648).
         """
         processed = dict(resource)
         if "access_token" in processed:
             processed.setdefault("id", processed.pop("access_token"))
-        if "expiry_seconds" in processed:
-            warnings.warn(_EXPIRY_SECONDS_DEPRECATION, DeprecationWarning,
-                          stacklevel=2)
-            processed.setdefault("expires_in", processed.pop("expiry_seconds"))
         if "scope" in processed:
             processed.setdefault("scopes", processed.pop("scope"))
         expires_in = processed.get("expires_in")

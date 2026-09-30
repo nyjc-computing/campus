@@ -5,15 +5,12 @@ Flask routes for credentials management.
 Authentication is handled in a global routes.before_request hook.
 """
 
-import warnings
-
 import flask
 
 import campus.model
 from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError
-from campus.model.credentials import EXPIRY_SECONDS_DEPRECATION
 
 from ..resources import credentials as creds_resource
 
@@ -138,8 +135,7 @@ def new_credentials(
         provider: str,
         user_id: schema.UserID,
         scopes: list[str],
-        expires_in: int | None = None,
-        expiry_seconds: int | None = None,
+        expires_in: int,
 ) -> flask_campus.JsonResponse:
     """Issue new credentials for a specific provider and user ID.
 
@@ -147,27 +143,12 @@ def new_credentials(
     Body: {
         "client_id": "client_id",
         "scopes": [...],
-        "expires_in": 3600  (or deprecated expiry_seconds)
+        "expires_in": 3600
     }
     Returns: {
         "credentials": { ... }
     }
     """
-    if expiry_seconds is not None:
-        warnings.warn(EXPIRY_SECONDS_DEPRECATION, DeprecationWarning,
-                      stacklevel=2)
-        if expires_in is None:
-            expires_in = expiry_seconds
-    if expires_in is None:
-        raise ValidationError(
-            "expires_in (or deprecated expiry_seconds) is required",
-            errors=[FieldError(
-                field="expires_in",
-                code="MISSING_FIELD",
-                message="exactly one of expires_in or expiry_seconds "
-                        "must be provided"
-            )]
-        )
     client_id = flask.g.current_client.id
     credentials = creds_resource[provider][user_id].new(
         client_id=client_id,
