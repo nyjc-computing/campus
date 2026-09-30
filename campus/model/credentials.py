@@ -4,6 +4,7 @@ Credential model definitions for Campus.
 """
 
 import typing
+import warnings
 from dataclasses import InitVar, dataclass, field
 
 from campus.common import schema
@@ -15,6 +16,14 @@ from .base import Model
 # Token types are case-insensitive per RFC 6749 section 7.1; the
 # canonical campus spelling is the RFC 6750 "Bearer" designation.
 _BEARER_TOKEN_TYPE = "Bearer"
+
+_EXPIRY_SECONDS_DEPRECATION = (
+    "expiry_seconds is deprecated and will be removed; "
+    "use expires_in instead (campus#648)"
+)
+# Public alias for callers that raise the same deprecation warning at
+# their own boundary (e.g. the POST /credentials route).
+EXPIRY_SECONDS_DEPRECATION = _EXPIRY_SECONDS_DEPRECATION
 
 
 def _as_datetime(value: schema.DateTime | str) -> schema.DateTime:
@@ -75,6 +84,9 @@ class OAuthToken(Model):
 
     def __post_init__(self, expiry_seconds: int | None = None):
         """Resolve expiry fields and normalise token_type and scopes."""
+        if expiry_seconds is not None:
+            warnings.warn(_EXPIRY_SECONDS_DEPRECATION, DeprecationWarning,
+                          stacklevel=2)
         if isinstance(self.scopes, str):
             self.scopes = self.scopes.split()
         if self.expires_in is None and expiry_seconds is not None:
@@ -151,6 +163,8 @@ class OAuthToken(Model):
         if "access_token" in processed:
             processed.setdefault("id", processed.pop("access_token"))
         if "expiry_seconds" in processed:
+            warnings.warn(_EXPIRY_SECONDS_DEPRECATION, DeprecationWarning,
+                          stacklevel=2)
             processed.setdefault("expires_in", processed.pop("expiry_seconds"))
         if "scope" in processed:
             processed.setdefault("scopes", processed.pop("scope"))
@@ -175,10 +189,13 @@ class OAuthToken(Model):
     def to_resource(self) -> dict[str, typing.Any]:
         """Convert the token to a resource dict.
 
-        Emits both scope (RFC 6749 string) and scopes (list) during
-        the #648 deprecation window; provider_fields is not emitted.
+        Emits the RFC 6749 scope string only (the scopes list alias was
+        dropped from resources when the #648 deprecation window closed
+        on the emission side); the scopes field remains on the model
+        and from_resource still accepts both keys.
         """
         resource = super().to_resource()
+        resource.pop("scopes", None)
         resource["scope"] = self.scope
         return resource
 

@@ -11,7 +11,7 @@ from campus.common import devops, env, schema
 def create_test_token(
     user_id: schema.UserID,
     scopes: list[str] | None = None,
-    expiry_seconds: int = 3600,
+    expires_in: int = 3600,
     grant_vault_access: bool = True
 ) -> str:
     """Create a test bearer token for integration tests.
@@ -22,7 +22,7 @@ def create_test_token(
     Args:
         user_id: The user ID to create the token for
         scopes: OAuth scopes to grant (defaults to full access)
-        expiry_seconds: Token lifetime in seconds
+        expires_in: Token lifetime in seconds
         grant_vault_access: Whether to grant vault access to the client
 
     Returns:
@@ -69,7 +69,7 @@ def create_test_token(
     token = auth_resources.credentials["campus"][user_id].new(
         client_id=client_id,
         scopes=scopes or ["read", "write"],
-        expiry_seconds=expiry_seconds
+        expires_in=expires_in
     )
 
     return token.id

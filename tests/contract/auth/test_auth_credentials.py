@@ -109,16 +109,16 @@ class TestAuthCredentialsContract(unittest.TestCase):
             f"/auth/v1/credentials/campus/{new_user_id}",
             json={
                 "scopes": ["read", "write"],
-                "expiry_seconds": 3600
+                "expires_in": 3600
             },
             headers=self.bearer_auth_headers
         )
 
         self.assertEqual(response.status_code, 201)
         data = response.get_json()
-        # Credentials resource is returned directly (unwrapped)
+        # POST returns the token resource directly
         self.assertIn("id", data)
-        self.assertIn("scopes", data)
+        self.assertIn("scope", data)
 
     def test_create_credentials_missing_fields_returns_422(self):
         """POST /credentials/{provider}/{user_id} without required fields returns 422.
@@ -129,7 +129,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         """
         response = self.client.post(
             f"/auth/v1/credentials/campus/{self.test_user_id}",
-            json={},  # Missing scopes and expiry_seconds
+            json={},  # Missing scopes and expires_in
             headers=self.bearer_auth_headers
         )
 
@@ -147,13 +147,42 @@ class TestAuthCredentialsContract(unittest.TestCase):
                 "token": {
                     "id": self.bearer_token,
                     "scopes": ["read", "write", "admin"],
-                    "expiry_seconds": 7200
+                    "expires_in": 7200
                 }
             },
             headers=self.bearer_auth_headers
         )
 
         self.assertEqual(response.status_code, 200)
+
+    def test_create_credentials_deprecated_expiry_seconds_warns(self):
+        """POST with the deprecated expiry_seconds key still works but
+        raises a DeprecationWarning server-side (#648)."""
+        new_user_id = schema.UserID("dep.user@campus.test")
+
+        with self.assertWarns(DeprecationWarning):
+            response = self.client.post(
+                f"/auth/v1/credentials/campus/{new_user_id}",
+                json={
+                    "scopes": ["read"],
+                    "expiry_seconds": 3600
+                },
+                headers=self.bearer_auth_headers
+            )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_create_credentials_missing_expiry_returns_422(self):
+        """POST without expires_in/expiry_seconds returns 422."""
+        response = self.client.post(
+            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            json={"scopes": ["read"]},
+            headers=self.bearer_auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
 
     def test_update_credentials_accepts_resource_emission(self):
         """PATCH accepts a token resource as emitted by OAuthToken.to_resource().

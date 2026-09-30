@@ -68,11 +68,14 @@ class TestOAuthTokenConstruction(unittest.TestCase):
         self.assertEqual(token.expires_in, 3600)
 
     def test_expiry_seconds_initvar_still_accepted(self):
-        """The legacy expiry_seconds InitVar should behave like expires_in."""
-        token = credentials.OAuthToken(
-            created_at=CREATED_AT,
-            expiry_seconds=3600,
-        )
+        """The legacy expiry_seconds InitVar should behave like expires_in
+        and raise a DeprecationWarning.
+        """
+        with self.assertWarns(DeprecationWarning):
+            token = credentials.OAuthToken(
+                created_at=CREATED_AT,
+                expiry_seconds=3600,
+            )
         self.assertEqual(token.expires_in, 3600)
         self.assertEqual(token.expires_at, EXPIRES_AT)
 
@@ -206,12 +209,15 @@ class TestOAuthTokenFromResource(unittest.TestCase):
         self.assertEqual(token.id, "campus_tok")
 
     def test_legacy_expiry_seconds_key(self):
-        """The legacy expiry_seconds key should map to expires_in."""
+        """The legacy expiry_seconds key should map to expires_in and
+        raise a DeprecationWarning.
+        """
         payload = {
             "id": "tok_1",
             "expiry_seconds": 600,
         }
-        token = credentials.OAuthToken.from_resource(payload)
+        with self.assertWarns(DeprecationWarning):
+            token = credentials.OAuthToken.from_resource(payload)
         self.assertEqual(token.expires_in, 600)
 
     def test_string_expires_in_is_coerced(self):
@@ -226,7 +232,7 @@ class TestOAuthTokenFromResource(unittest.TestCase):
 
     def test_to_resource_from_resource_roundtrip(self):
         """A token resource should roundtrip through from_resource,
-        including the dual-emitted scope key and provider fields.
+        with the RFC 6749 scope string as the only scope emission.
         """
         token = credentials.OAuthToken(
             id="tok_123",
@@ -237,9 +243,11 @@ class TestOAuthTokenFromResource(unittest.TestCase):
             provider_fields={"id_token": "jwt_blob"},
         )
         resource = token.to_resource()
-        # Dual emission during the #648 compat window
-        self.assertIn("scopes", resource)
+        # scope-only emission: the scopes list alias was dropped from
+        # resources (#648 deprecation, emission side)
         self.assertIn("scope", resource)
+        self.assertEqual(resource["scope"], "read write")
+        self.assertNotIn("scopes", resource)
         self.assertNotIn("provider_fields", resource)
 
         loaded = credentials.OAuthToken.from_resource(resource)
@@ -361,7 +369,7 @@ class TestUserCredentialsWithToken(unittest.TestCase):
 
         self.assertIsInstance(token_resource, dict)
         self.assertEqual(token_resource["scope"], "read write")
-        self.assertEqual(token_resource["scopes"], ["read", "write"])
+        self.assertNotIn("scopes", token_resource)
         self.assertNotIn("provider_fields", token_resource)
 
         loaded = credentials.UserCredentials.from_resource(resource)
