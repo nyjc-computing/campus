@@ -156,6 +156,33 @@ class MemoryCollection(CollectionInterface):
         doc_id = doc[PK]
         collection[doc_id] = doc.copy()
 
+    def insert_many(
+            self,
+            rows: List[Dict[str, Any]],
+            *,
+            max_retries: int = 1
+    ) -> dict[int, Exception]:
+        """Insert multiple documents in one pass (#576).
+
+        Memory insertion cannot fail under normal operation, so the
+        happy path skips the per-row error handling. If anything does
+        raise, fall back to the row-by-row implementation from
+        CollectionInterface.insert_many to preserve the interface
+        contract of a per-row error map (row index -> exception).
+        """
+        if not isinstance(max_retries, int) or max_retries < 0:
+            raise ValueError("max_retries must be a zero or positive integer")
+        if rows:
+            try:
+                collection = self._get_collection()
+                for row in rows:
+                    doc = self._ensure_id(row)
+                    collection[doc[PK]] = doc.copy()
+                return {}
+            except Exception:
+                return super().insert_many(rows, max_retries=max_retries)
+        return super().insert_many(rows, max_retries=max_retries)
+
     def update_by_id(self, doc_id: str, update: Dict[str, Any]):
         """Update a document by its ID.
 

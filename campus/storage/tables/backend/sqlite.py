@@ -521,6 +521,73 @@ class SQLiteTable(TableInterface):
                 cursor.close()
             conn.commit()
 
+    def insert_many(
+            self,
+            rows: list[dict[str, Any]],
+            *,
+            max_retries: int = 1
+    ) -> dict[int, Exception]:
+        """Insert multiple rows into the table in a single transaction.
+
+        Optimized override of TableInterface.insert_many (#576): all rows
+        are written with one executemany call and committed together.
+
+        If the bulk insert fails, the transaction is rolled back and the
+        row-by-row implementation runs instead, preserving the interface
+        contract of a per-row error map (row index -> exception).
+        """
+        if not isinstance(max_retries, int) or max_retries < 0:
+            raise ValueError("max_retries must be a zero or positive integer")
+        if not rows:
+            return {}
+        try:
+            self._insert_many_bulk(rows)
+            return {}
+        except Exception:
+            return super().insert_many(rows, max_retries=max_retries)
+
+    def _insert_many_bulk(self, rows: list[dict[str, Any]]) -> None:
+        """Insert all rows with one executemany inside a single transaction.
+
+        Raises on the first failure after rolling back, leaving the
+        table unchanged.
+        """
+        conn = self.get_connection()
+        columns = self._get_table_columns()
+        if not columns:
+            raise RuntimeError(
+                f"Table '{self.name}' does not exist. "
+                "Call init_from_model() or init_from_schema() first."
+            )
+
+        placeholders = ", ".join(["?" for _ in columns])
+        columns_sql = ", ".join([f'"{col}"' for col in columns])
+        rows_to_insert = []
+        for row in rows:
+            values = []
+            for col in columns:
+                value = row.get(col)
+                # Convert complex types to JSON strings for storage
+                if value is not None and not isinstance(value, (str, int, float, bool)):
+                    value = json.dumps(value)
+                values.append(value)
+            rows_to_insert.append(tuple(values))
+
+        # Serialize against other statements on the shared connection
+        with _connection_locks[self.db_path]:
+            cursor = conn.cursor()
+            try:
+                cursor.executemany(
+                    f"INSERT INTO {self.name} ({columns_sql}) VALUES ({placeholders})",
+                    rows_to_insert
+                )
+            except sqlite3.Error:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+            conn.commit()
+
     def update_by_id(self, row_id: str, update: dict[str, Any]):
         """Update a row by its ID using actual table columns."""
         # Hold the lock across the whole read-modify-write so the operation

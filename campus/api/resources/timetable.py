@@ -195,17 +195,23 @@ class TimetablesResource:
         try:
             # TODO: Atomic transactions across multiple storage objects
             timetable_collection.insert_one(timetable_meta.to_storage())
-            for entry in entries:
-                timetable_entry_storage.insert_one(
-                    entry.to_storage()
-                )
-            for lessongroup in groups:
-                timetable_lessongroup_collection.insert_one(
-                    lessongroup.to_storage()
-                )
-            for member in members:
-                timetable_lessongroupmembers_table.insert_one(
-                    member.to_storage()
+            # Bulk inserts (#576): a full timetable has too many entries,
+            # groups and members for per-row inserts, which time out on
+            # the development deployment.
+            error_details: dict[str, str] = {}
+            for name, storage, records in (
+                ("entries", timetable_entry_storage, entries),
+                ("lessongroups", timetable_lessongroup_collection, groups),
+                ("members", timetable_lessongroupmembers_table, members),
+            ):
+                for i, e in storage.insert_many(
+                    [record.to_storage() for record in records]
+                ).items():
+                    error_details[f"{name}[{i}]"] = str(e)
+            if error_details:
+                raise campus.storage.errors.StorageError(
+                    "Some timetable records failed to insert",
+                    details=error_details
                 )
         except campus.storage.errors.StorageError as e:
             # TODO: transaction rollback

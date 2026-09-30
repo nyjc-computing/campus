@@ -30,7 +30,7 @@ from typing import Any
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.database import Database
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import BulkWriteError, DuplicateKeyError
 
 from campus.common import devops, env
 from campus.model.base import Model
@@ -252,6 +252,42 @@ class MongoDBCollection(CollectionInterface):
                     details={"row": record, "error": str(e)}
                 ) from None
             raise
+
+    def insert_many(
+            self,
+            docs: list[JsonObject],
+            *,
+            max_retries: int = 1
+    ) -> dict[int, Exception]:
+        """Insert multiple documents in a single bulk operation (#576).
+
+        Falls back to the row-by-row implementation from
+        CollectionInterface.insert_many when any write fails, preserving
+        the interface contract of a per-row error map
+        (row index -> exception).
+        """
+        if not isinstance(max_retries, int) or max_retries < 0:
+            raise ValueError("max_retries must be a zero or positive integer")
+        if not docs:
+            return {}
+        try:
+            self.collection.insert_many(
+                [MongoRecord.from_record(doc).to_mongo() for doc in docs],
+                ordered=True
+            )
+            return {}
+        except BulkWriteError as e:
+            # ordered=True: documents before the first write error were
+            # inserted and stay; process only the remainder per-row.
+            write_errors = e.details.get("writeErrors") or [{}]
+            first_error_index = write_errors[0].get("index", 0)
+            remaining = super().insert_many(
+                docs[first_error_index:],
+                max_retries=max_retries
+            )
+            return {first_error_index + i: exc for i, exc in remaining.items()}
+        except Exception:
+            return super().insert_many(docs, max_retries=max_retries)
 
     def update_by_id(self, doc_id: str, update: JsonObject) -> None:
         """Update a document in the collection.

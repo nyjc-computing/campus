@@ -596,6 +596,82 @@ class TestMemoryBackend(unittest.TestCase):
         self.assertEqual(results[1]["value"], 1500)
 
 
+class TestInsertMany(unittest.TestCase):
+    """Test insert_many() overrides on the sqlite and memory backends (#576).
+
+    The optimized overrides must preserve the TableInterface/
+    CollectionInterface contract: rows are inserted, and any failures
+    come back as a per-row error map (row index -> exception) instead
+    of losing the successful inserts.
+    """
+
+    def setUp(self):
+        from campus.model import User
+
+        self.users_table = get_table("test_users")
+        # Idempotent (CREATE TABLE IF NOT EXISTS); keeps this class
+        # independent of the other classes in this module
+        self.users_table.init_from_model("test_users", User)
+        self.mem_collection = get_collection("test_insert_many_mem")
+
+    def tearDown(self):
+        for row_id in ("bulk-1", "bulk-2", "bulk-3"):
+            try:
+                self.users_table.delete_by_id(row_id)
+            except storage_errors.NotFoundError:
+                pass
+        for row_id in ("mem-1", "mem-2"):
+            self.mem_collection.delete_by_id(row_id)
+
+    def _user_row(self, row_id: str) -> dict:
+        return {
+            "id": row_id,
+            "created_at": "2023-01-01T00:00:00Z",
+            "name": f"User {row_id}",
+            "email": f"{row_id}@example.com"
+        }
+
+    def test_sqlite_insert_many_happy_path(self):
+        """All rows are inserted and retrievable."""
+        rows = [self._user_row(f"bulk-{i}") for i in (1, 2, 3)]
+        errors = self.users_table.insert_many(rows)
+        self.assertEqual(errors, {})
+        for row in rows:
+            retrieved = self.users_table.get_by_id(row["id"])
+            self.assertEqual(retrieved["name"], row["name"])
+
+    def test_sqlite_insert_many_conflict_returns_error_map(self):
+        """A duplicate id yields a per-row error, not a lost batch."""
+        rows = [self._user_row("bulk-1"), self._user_row("bulk-2")]
+        rows.append(self._user_row("bulk-1"))  # duplicate id at index 2
+
+        errors = self.users_table.insert_many(rows)
+
+        self.assertEqual(set(errors), {2})
+        self.assertIsInstance(errors[2], storage_errors.ConflictError)
+        # The non-conflicting rows were still inserted
+        self.assertIsNotNone(self.users_table.get_by_id("bulk-2"))
+
+    def test_memory_insert_many_happy_path(self):
+        """All documents are inserted and retrievable."""
+        docs = [{"id": "mem-1", "name": "A"}, {"id": "mem-2", "name": "B"}]
+        errors = self.mem_collection.insert_many(docs)
+        self.assertEqual(errors, {})
+        self.assertEqual(self.mem_collection.get_by_id("mem-2")["name"], "B")
+
+    def test_insert_many_empty_rows_returns_no_errors(self):
+        """insert_many([]) returns an empty error map on both backends."""
+        self.assertEqual(self.users_table.insert_many([]), {})
+        self.assertEqual(self.mem_collection.insert_many([]), {})
+
+    def test_insert_many_rejects_negative_max_retries(self):
+        """A negative max_retries is rejected on both backends."""
+        with self.assertRaises(ValueError):
+            self.users_table.insert_many([], max_retries=-1)
+        with self.assertRaises(ValueError):
+            self.mem_collection.insert_many([], max_retries=-1)
+
+
 if __name__ == "__main__":
     unittest.main()
 

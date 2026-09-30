@@ -28,7 +28,7 @@ import dataclasses
 from typing import Any
 
 import psycopg2
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_values
 
 from campus.common import devops, env
 from campus.common.utils import datacls
@@ -344,6 +344,60 @@ class PostgreSQLTable(TableInterface):
                     group_name=self.name,
                     details={"row": row, "error": str(e)}
                 ) from e
+            except psycopg2.Error:
+                conn.rollback()
+                raise
+            else:
+                conn.commit()
+
+    def insert_many(
+            self,
+            rows: list[dict],
+            *,
+            max_retries: int = 1
+    ) -> dict[int, Exception]:
+        """Insert multiple rows into the specified table.
+
+        Optimized override of TableInterface.insert_many (#576): rows
+        with a uniform column set are written in one execute_values
+        batch and committed together.
+
+        If the bulk insert fails, the transaction is rolled back and the
+        row-by-row implementation runs instead, preserving the interface
+        contract of a per-row error map (row index -> exception). Rows
+        with mixed column sets skip the bulk path for the same reason.
+        """
+        if not isinstance(max_retries, int) or max_retries < 0:
+            raise ValueError("max_retries must be a zero or positive integer")
+        uniform_columns = (
+            rows
+            and all(sorted(row) == sorted(rows[0]) for row in rows[1:])
+        )
+        if uniform_columns:
+            try:
+                self._insert_many_bulk(rows)
+                return {}
+            except Exception:
+                pass  # fall back to per-row insertion for the error map
+        return super().insert_many(rows, max_retries=max_retries)
+
+    def _insert_many_bulk(self, rows: list[dict]) -> None:
+        """Insert all rows in a single execute_values batch.
+
+        Raises on the first failure after rolling back, leaving the
+        table unchanged.
+        """
+        columns = list(rows[0])
+        column_names = ", ".join(columns)
+        values = [tuple(row[col] for col in columns) for row in rows]
+
+        with self._get_connection() as conn, conn.cursor() as cursor:
+            try:
+                execute_values(
+                    cursor,
+                    f"INSERT INTO {self.name} ({column_names}) VALUES %s",
+                    values
+                )
             except psycopg2.Error:
                 conn.rollback()
                 raise
