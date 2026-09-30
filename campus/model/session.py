@@ -50,3 +50,38 @@ class AuthSession(Model):
             self.expires_at.to_datetime(),
             at_time=at_time.to_datetime()
         )
+
+    @property
+    def scope(self) -> str:
+        """RFC 6749 space-delimited scope string view of scopes."""
+        return " ".join(self.scopes)
+
+    @scope.setter
+    def scope(self, value: str | list[str]) -> None:
+        """Set the granted scopes from a scope string or list."""
+        if isinstance(value, str):
+            self.scopes = value.split()
+        else:
+            self.scopes = list(value)
+
+    def to_storage(self) -> dict:
+        """Convert to a storage record.
+
+        Storage keeps the RFC 6749 scope string per the #648 end state
+        (decision 4); the scopes list is a model-side convenience only.
+        """
+        record = super().to_storage()
+        record.pop("scopes", None)
+        record["scope"] = self.scope
+        return record
+
+    @classmethod
+    def from_storage(cls, record: dict) -> "AuthSession":
+        """Create an AuthSession from a storage record.
+
+        The legacy scopes list is still accepted on read for tolerance.
+        """
+        processed = record.copy()
+        if "scope" in processed and "scopes" not in processed:
+            processed["scopes"] = str(processed["scope"]).split()
+        return super().from_storage(processed)

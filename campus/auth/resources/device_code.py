@@ -252,7 +252,13 @@ class DeviceCodeResource:
 def _from_record(
         record: dict[str, typing.Any],
 ) -> model.DeviceCode:
-    """Convert a storage record to a DeviceCode model instance."""
+    """Convert a storage record (or new() kwargs) to a DeviceCode.
+
+    Accepts both the RFC 6749 scope string (storage, per the #648 end
+    state) and the legacy scopes list. When only expiry_seconds is
+    given, it is passed through to the model InitVar, which derives
+    expires_at = created_at + expiry_seconds.
+    """
     args: dict[str, typing.Any] = {}
     if "id" in record:
         args["id"] = schema.CampusID(record["id"])
@@ -260,10 +266,8 @@ def _from_record(
         args["created_at"] = schema.DateTime(record["created_at"])
     if "expires_at" in record and record["expires_at"] is not None:
         args["expires_at"] = schema.DateTime(record["expires_at"])
-    elif "expiry_seconds" in record and "expires_at" not in record:
-        args["expires_at"] = schema.DateTime.utcafter(
-            seconds=config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS
-        )
+    elif "expiry_seconds" in record:
+        args["expiry_seconds"] = record["expiry_seconds"]
     args["device_code"] = record["device_code"]
     args["user_code"] = record["user_code"]
     args["client_id"] = schema.CampusID(record["client_id"])
@@ -271,6 +275,8 @@ def _from_record(
         args["user_id"] = schema.UserID(record["user_id"])
     if "scopes" in record:
         args["scopes"] = record["scopes"]
+    elif "scope" in record:
+        args["scopes"] = str(record["scope"]).split()
     if "interval" in record:
         args["interval"] = record["interval"]
     if "state" in record:

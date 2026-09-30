@@ -267,7 +267,11 @@ class TestOAuthTokenStorage(unittest.TestCase):
     """Tests for to_storage()/from_storage() with new and legacy records."""
 
     def test_to_storage_from_storage_roundtrip(self):
-        """All fields, including the #648 additions, should roundtrip."""
+        """All fields, including the #648 additions, should roundtrip.
+
+        Storage keeps the RFC 6749 scope string (#648 decision 4 end
+        state); the scopes list is model-side only.
+        """
         token = credentials.OAuthToken(
             id="tok_123",
             created_at=CREATED_AT,
@@ -280,6 +284,8 @@ class TestOAuthTokenStorage(unittest.TestCase):
         self.assertEqual(record["token_type"], "Bearer")
         self.assertEqual(record["expires_in"], 3600)
         self.assertEqual(record["provider_fields"], {"id_token": "jwt_blob"})
+        self.assertEqual(record["scope"], "read")
+        self.assertNotIn("scopes", record)
 
         loaded = credentials.OAuthToken.from_storage(record)
         self.assertEqual(loaded.id, token.id)
@@ -289,8 +295,19 @@ class TestOAuthTokenStorage(unittest.TestCase):
         self.assertEqual(loaded.scopes, token.scopes)
         self.assertEqual(loaded.provider_fields, token.provider_fields)
 
-    def test_from_storage_legacy_record(self):
-        """Records written before #648 should derive the new fields."""
+    def test_from_storage_scope_string_record(self):
+        """Storage records carrying the scope string should load."""
+        record = {
+            "id": "tok_123",
+            "created_at": "2026-01-01T00:00:00+00:00",
+            "expires_at": "2026-01-01T01:00:00+00:00",
+            "scope": "read write",
+        }
+        token = credentials.OAuthToken.from_storage(record)
+        self.assertEqual(token.scopes, ["read", "write"])
+
+    def test_from_storage_legacy_scopes_list_tolerated(self):
+        """Records written before the storage flip (scopes list) still load."""
         legacy_record = {
             "id": "tok_123",
             "created_at": "2026-01-01T00:00:00+00:00",

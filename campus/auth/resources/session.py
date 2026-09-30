@@ -8,7 +8,6 @@ e.g. through campus-api-python
 
 import typing
 
-import campus.config as config
 import campus.model as model
 import campus.storage
 from campus.common import schema
@@ -236,7 +235,13 @@ class AuthSessionResource:
 def _from_record(
         record: dict[str, typing.Any],
 ) -> model.AuthSession:
-    """Convert a storage record to an AuthSession model instance."""
+    """Convert a storage record (or new() kwargs) to an AuthSession.
+
+    Accepts both the RFC 6749 scope string (storage, per the #648 end
+    state) and the legacy scopes list. When only expiry_seconds is
+    given, it is passed through to the model InitVar, which derives
+    expires_at = created_at + expiry_seconds.
+    """
     args: dict[str, typing.Any] = {}
     if "id" in record:
         args["id"] = schema.CampusID(record["id"])
@@ -244,10 +249,8 @@ def _from_record(
         args["created_at"] = schema.DateTime(record["created_at"])
     if "expires_at" in record and record["expires_at"] is not None:
         args["expires_at"] = schema.DateTime(record["expires_at"])
-    elif "expiry_seconds" in record and "expires_at" not in record:
-        args["expires_at"] = schema.DateTime.utcafter(
-            minutes=config.DEFAULT_OAUTH_EXPIRY_MINUTES
-        )
+    elif "expiry_seconds" in record:
+        args["expiry_seconds"] = record["expiry_seconds"]
     args["provider"] = record["provider"]
     args["client_id"] = schema.CampusID(record["client_id"])
     if "user_id" in record and record["user_id"] is not None:
@@ -255,6 +258,8 @@ def _from_record(
     args["redirect_uri"] = schema.Url(record["redirect_uri"])
     if "scopes" in record:
         args["scopes"] = record["scopes"]
+    elif "scope" in record:
+        args["scopes"] = str(record["scope"]).split()
     if "authorization_code" in record:
         args["authorization_code"] = record["authorization_code"]
     if "state" in record:
