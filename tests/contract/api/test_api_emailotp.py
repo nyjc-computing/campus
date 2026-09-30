@@ -112,16 +112,6 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    @unittest.skip("Skipped: Email sender error handling - verify error response format")
-    def test_request_otp_email_sender_error(self):
-        """POST /emailotp/request with email sender error returns 500.
-
-        NOTE: This test requires mocking the email sender to return an error.
-        Verify that the response contains proper error_code.
-        """
-        # This would require mocking create_email_sender to return an error
-        pass
-
     # Verify OTP Tests
 
     def test_verify_otp_requires_auth(self):
