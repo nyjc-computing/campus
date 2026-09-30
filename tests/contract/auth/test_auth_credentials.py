@@ -77,7 +77,6 @@ class TestAuthCredentialsContract(unittest.TestCase):
         self.assertIn("id", data)
         self.assertIn("provider", data)
 
-    @unittest.skip("API BUG #624: GET /credentials/{provider}/{user_id} returns 422 for an existing user")
     def test_get_credentials_by_user_id(self):
         """GET /credentials/{provider}/{user_id} returns user credentials."""
         response = self.client.get(
@@ -92,7 +91,6 @@ class TestAuthCredentialsContract(unittest.TestCase):
         self.assertIn("provider", data)
         self.assertIn("user_id", data)
 
-    @unittest.skip("API BUG #624: GET /credentials/{provider}/{user_id} returns 422 instead of 404")
     def test_get_credentials_missing_user_returns_404(self):
         """GET /credentials/{provider}/nonexistent returns 404."""
         response = self.client.get(
