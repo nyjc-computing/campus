@@ -132,13 +132,15 @@ def get_trace(trace_id: str) -> flask_campus.JsonResponse:
         - text/plain: Waterfall with offset timing
 
     Returns:
-        JSON: Trace tree with nested children
+        JSON: {"trace_id": ..., "root_span": <trace tree with nested children>}
         Text: Waterfall visualization showing timing hierarchy
     """
     tree = traces_resource[trace_id].get_tree()
     if tree is None:
         raise api_errors.NotFoundError(f"Trace {trace_id} not found")
-    return tree.to_resource(), 200
+    # Envelope the root span so the response is self-describing and can
+    # carry trace-level metadata alongside the tree later (#622).
+    return {"trace_id": trace_id, "root_span": tree.to_resource()}, 200
 
 
 @bp.get("/<trace_id>/spans")
