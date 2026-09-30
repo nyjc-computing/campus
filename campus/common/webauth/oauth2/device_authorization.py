@@ -151,17 +151,12 @@ class OAuth2DeviceAuthorizationFlowScheme(base.OAuth2FlowScheme):
         if "error" in payload:
             token_errors.raise_from_json(payload)
 
-        return campus.model.OAuthToken(
-            id=payload["access_token"],
-            created_at=request_time,
-            expiry_seconds=payload["expires_in"],
-            scopes=payload.get("scope", "").split(" ") if "scope" in payload else [],
-            **(
-                {"refresh_token": payload["refresh_token"]}
-                if "refresh_token" in payload
-                else {}
-            )
-        )
+        # from_resource accepts RFC 6749 keys (access_token, expires_in,
+        # scope, token_type) and keeps unknown provider fields
+        return campus.model.OAuthToken.from_resource({
+            **payload,
+            "created_at": request_time,
+        })
 
     def get_verification_uri(self, user_code: str | None = None) -> schema.Url:
         """Get the verification URI for the user to visit.
