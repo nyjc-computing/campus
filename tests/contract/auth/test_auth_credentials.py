@@ -13,6 +13,7 @@ Credentials Endpoints Reference:
 
 import unittest
 
+import campus.model
 from campus.common import env, schema
 from tests.fixtures import services
 from tests.fixtures.tokens import create_test_token, get_basic_auth_headers, get_bearer_auth_headers
@@ -147,6 +148,49 @@ class TestAuthCredentialsContract(unittest.TestCase):
                     "id": self.bearer_token,
                     "scopes": ["read", "write", "admin"],
                     "expiry_seconds": 7200
+                }
+            },
+            headers=self.bearer_auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_update_credentials_accepts_resource_emission(self):
+        """PATCH accepts a token resource as emitted by OAuthToken.to_resource().
+
+        Regression test for #655: since #650 the token resource carries
+        the RFC 6749 `scope` string alongside `scopes`; validating the
+        PATCH body with OAuthToken(**token) rejected the model's own
+        output with 422 VALIDATION_FAILED.
+        """
+        token = campus.model.OAuthToken(
+            id=self.bearer_token,
+            expires_in=7200,
+            scopes=["read", "write", "admin"],
+        )
+
+        response = self.client.patch(
+            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            json={"token": token.to_resource()},
+            headers=self.bearer_auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_update_credentials_scope_only_token(self):
+        """PATCH accepts a token carrying only the RFC 6749 `scope` string.
+
+        When the #648 deprecation window closes, token resources will
+        emit `scope` without the `scopes` alias; the validation path
+        must already accept that shape (#655).
+        """
+        response = self.client.patch(
+            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            json={
+                "token": {
+                    "id": self.bearer_token,
+                    "scope": "read write",
+                    "expires_in": 7200,
                 }
             },
             headers=self.bearer_auth_headers

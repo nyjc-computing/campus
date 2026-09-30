@@ -107,8 +107,12 @@ def update_credentials(
     client_id = flask.g.current_client.id
     try:
         # The body arrives as a plain dict; the resource layer expects
-        # an OAuthToken model.
-        oauth_token = campus.model.OAuthToken(**token)
+        # an OAuthToken model. Validate via from_resource, not
+        # OAuthToken(**token): token resources carry the RFC 6749
+        # `scope` string (a property, not a constructor field) during
+        # the #648 deprecation window, and unknown provider keys are
+        # bagged into provider_fields (#650) rather than rejected.
+        oauth_token = campus.model.OAuthToken.from_resource(token)
     except (TypeError, ValueError) as e:
         raise ValidationError(
             "token must be a valid token object",
