@@ -238,3 +238,17 @@ class UserCredentials(Model):
         """Set token_id from token.id after initialization."""
         if self.token is not None:
             self.token_id = schema.CampusID(self.token.id)
+
+    def to_resource(self) -> dict[str, typing.Any]:
+        """Convert the credentials to a resource dict.
+
+        The joined token is serialized by OAuthToken.to_resource()
+        rather than left as a dataclass for the JSON layer's default
+        asdict() handling: asdict() skips the token's scope property
+        and would leak provider_fields into the response (issue
+        #648 decision 4/5; gap found during #650 dev verification).
+        """
+        resource = super().to_resource()
+        if self.token is not None:
+            resource["token"] = self.token.to_resource()
+        return resource

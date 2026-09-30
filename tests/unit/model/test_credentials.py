@@ -336,6 +336,38 @@ class TestUserCredentialsWithToken(unittest.TestCase):
         self.assertEqual(token.scopes, ["read", "write"])
         self.assertIsInstance(token.is_expired(), bool)
 
+    def test_to_resource_nests_token_resource_shape(self):
+        """UserCredentials.to_resource should serialize the joined token
+        via OAuthToken.to_resource: scope emitted, provider_fields not
+        leaked (follow-up to #650: JSON-layer asdict() handling bypassed
+        the token's to_resource and dropped scope / leaked extras).
+        """
+        user_creds = credentials.UserCredentials(
+            id="cred1",
+            provider="campus",
+            client_id="guest",
+            user_id="user@campus.edu",
+        )
+        user_creds.token = credentials.OAuthToken(
+            id="at_123",
+            created_at=CREATED_AT,
+            expires_at=EXPIRES_AT,
+            scopes=["read", "write"],
+            provider_fields={"id_token": "jwt_blob"},
+        )
+
+        resource = user_creds.to_resource()
+        token_resource = resource["token"]
+
+        self.assertIsInstance(token_resource, dict)
+        self.assertEqual(token_resource["scope"], "read write")
+        self.assertEqual(token_resource["scopes"], ["read", "write"])
+        self.assertNotIn("provider_fields", token_resource)
+
+        loaded = credentials.UserCredentials.from_resource(resource)
+        self.assertEqual(loaded.token.id, "at_123")
+        self.assertEqual(loaded.token.scopes, ["read", "write"])
+
 
 if __name__ == '__main__':
     unittest.main()
