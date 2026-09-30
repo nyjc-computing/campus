@@ -71,7 +71,7 @@ class DeviceCodeResource:
             device_code_storage.insert_one(device_code.to_storage())
         except Exception as e:
             logger.error(f"[DEVICE_CODE] Failed to insert device code: {e}")
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
         else:
             return device_code
 
@@ -224,7 +224,7 @@ class DeviceCodeResource:
         except campus.storage.errors.NotFoundError:
             pass
         except Exception as e:
-            raise api_errors.InternalError.from_exception(e)
+            raise api_errors.InternalError.from_exception(e) from e
 
     def sweep(
             self,

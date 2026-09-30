@@ -67,7 +67,7 @@ def _authenticate_audit_api_key() -> None:
             request_context=request_context,
             response_context=make_response_context(401),
         )
-        raise api_errors.UnauthorizedError("Missing API key")
+        raise api_errors.UnauthorizedError("Missing API key") from None
 
     # Extract API key from Bearer token
     api_key = httpauth.token

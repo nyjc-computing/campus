@@ -59,7 +59,7 @@ def create_app(mode: str | None = None) -> flask.Flask:
     except ModuleNotFoundError as e:
         raise RuntimeError(
             f"Unable to create app for deployment mode '{mode}': {e}"
-        )
+        ) from e
     if not isinstance(module, devops.deploy.AppModule):
         raise TypeError(
             f"Module '{mode}' does not fulfill the AppModule protocol."

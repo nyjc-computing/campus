@@ -142,7 +142,7 @@ class UserResource:
             raise api_errors.NotFoundError(
                 f"User '{self.user_id}' not found",
                 user_id=self.user_id
-            )
+            ) from None
         return model.User.from_storage(record=record)
 
     def update(self, **updates: typing.Any) -> None:

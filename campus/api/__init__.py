@@ -56,7 +56,7 @@ def _api_getsecret(name: str) -> str:
     except KeyError:
         raise api_errors.InternalError(
             f"Vault secret '{name}' not found in label '{deployment}'"
-        )
+        ) from None
 
 
 # Any 4xx from campus.auth's /root/authenticate endpoint means the

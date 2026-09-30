@@ -323,7 +323,7 @@ class ClientResource:
             raise auth_errors.InvalidRequestError(
                 f"Client '{client_id}' not found",
                 client_id=client_id
-            )
+            ) from None
         client = model.Client.from_storage(record)
         # Permissions live in a separate collection; join after the
         # storage-shape mapping.

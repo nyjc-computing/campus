@@ -128,7 +128,7 @@ class EmailOTPResource:
             try:
                 otp_records = emailotp_storage.get_matching({"email": email})
             except campus.storage.errors.NotFoundError:
-                raise api_errors.ConflictError("OTP not found")
+                raise api_errors.ConflictError("OTP not found") from None
 
             # Get the most recent OTP record
             if not otp_records:
@@ -166,7 +166,7 @@ class EmailOTPResource:
             try:
                 otp_records = emailotp_storage.get_matching({"email": email})
             except campus.storage.errors.NotFoundError:
-                raise api_errors.ConflictError("OTP not found")
+                raise api_errors.ConflictError("OTP not found") from None
 
             # Delete all OTP records for this email
             for record in otp_records:
