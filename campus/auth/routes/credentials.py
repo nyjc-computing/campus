@@ -72,7 +72,7 @@ def delete_by_user(
 def get_by_user(
         provider: str,
         user_id: schema.UserID,
-        client_id: schema.CampusID | None,
+        client_id: schema.CampusID | None = None,
 ) -> flask_campus.JsonResponse:
     """Get credentials for a specific provider and user ID.
 
