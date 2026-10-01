@@ -87,6 +87,42 @@ class ProviderCredentialsResource:
             )
         return model.UserCredentials.from_storage(records[0])
 
+    def get_by_refresh_token(
+            self,
+            refresh_token: str
+    ) -> model.UserCredentials:
+        """Get credentials by refresh token value.
+
+        Resolves the token record by its refresh_token field, then the
+        credential record linked to that token via token_id.
+
+        Args:
+            refresh_token: The refresh token string
+
+        Returns:
+            UserCredentials instance with token loaded
+        """
+        token_records = token_storage.get_matching(
+            {"refresh_token": refresh_token}
+        )
+        if not token_records:
+            raise api_errors.NotFoundError(
+                "Credentials for this refresh token not found."
+            )
+        token_record = token_records[0]
+        records = cred_storage.get_matching({
+            "provider": self.provider,
+            "token_id": token_record["id"],
+        })
+        if not records:
+            raise api_errors.NotFoundError(
+                f"Credentials for provider {self.provider} and token "
+                f"{token_record['id']} not found."
+            )
+        credentials = model.UserCredentials.from_storage(records[0])
+        credentials.token = model.OAuthToken.from_storage(token_record)
+        return credentials
+
     def list_all(
             self,
             user_id: str | None = None
@@ -245,6 +281,10 @@ class UserCredentialsResource:
                 credentials.id,
                 {"token_id": token.id}
             )
+            # The superseded token record must not linger: its refresh
+            # token would stay resolvable, making a rotated refresh
+            # token replayable (#678)
+            token_storage.delete_by_id(cred_record['token_id'])
         else:  # token_id unchanged, just load existing credentials
             credentials = model.UserCredentials.from_storage(
                 records[0]

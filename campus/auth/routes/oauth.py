@@ -1,6 +1,7 @@
 """campus.auth.routes.oauth
 
-Flask routes for OAuth 2.0 Device Authorization Flow (RFC 8628).
+Flask routes for OAuth 2.0 Device Authorization Flow (RFC 8628) and
+token grants (RFC 6749: device_code, refresh_token).
 
 These routes handle device authorization for CLI and other device applications.
 
@@ -328,17 +329,80 @@ def _handle_refresh_token_grant(
         client_id: schema.CampusID,
         refresh_token: str | None,
 ) -> flask_campus.JsonResponse:
-    """Handle the refresh_token grant type."""
+    """Handle the refresh_token grant type (RFC 6749 section 6).
+
+    Resolves the credential by refresh token value, verifies it belongs
+    to the requesting client, and issues a rotated token pair with the
+    originally granted scopes. The credential update deletes the old
+    token record, so the presented refresh token (and its access token)
+    are single-use.
+    """
     if not refresh_token:
         raise token_errors.InvalidRequestError(
             "refresh_token is required for refresh_token grant type"
         )
 
-    # Find credentials by refresh token
-    # This requires additional implementation
-    raise token_errors.UnsupportedGrantTypeError(
-        "refresh_token grant not yet implemented"
+    try:
+        credentials = credentials_resource["campus"].get_by_refresh_token(
+            refresh_token
+        )
+    except api_errors.NotFoundError:
+        raise token_errors.InvalidGrantError(
+            "Invalid or expired refresh token"
+        ) from None
+
+    # The refresh token must belong to the client presenting it
+    if credentials.client_id != str(client_id):
+        raise token_errors.InvalidGrantError(
+            "Invalid or expired refresh token"
+        )
+
+    token = credentials.token
+    assert token is not None  # get_by_refresh_token always loads it
+
+    # Refresh tokens carry their own lifetime when set; the access
+    # token's expiry does not limit the refresh grant
+    now = schema.DateTime.utcnow().to_timestamp()
+    if (token.refresh_token_expires_at is not None
+            and token.refresh_token_expires_at.to_timestamp() < now):
+        raise token_errors.InvalidGrantError(
+            "Invalid or expired refresh token"
+        )
+
+    # Issue a rotated token pair: new access token and new refresh token
+    access_token = secret.generate_access_token()
+    new_refresh_token = secret.generate_access_code()
+    created_at = schema.DateTime.utcnow()
+    expires_in = campus.config.DEFAULT_TOKEN_EXPIRY_DAYS * 24 * 60 * 60
+    oauth_token = campus.model.OAuthToken(
+        id=access_token,
+        created_at=created_at,
+        expires_in=expires_in,
+        refresh_token=new_refresh_token,
+        scopes=token.scopes,
     )
+
+    try:
+        credentials_resource["campus"][credentials.user_id].update(
+            client_id=str(client_id),
+            token=oauth_token,
+        )
+    except Exception as e:
+        raise api_errors.InternalError.from_exception(e) from e
+
+    get_yapper().emit('campus.oauth.token', {
+        "grant_type": "refresh_token",
+        "client_id": str(client_id),
+        "user_id": str(credentials.user_id),
+    })
+
+    return {
+        "access_token": access_token,
+        "token_type": "Bearer",
+        "expires_in": expires_in,
+        "refresh_token": new_refresh_token,
+        "scope": " ".join(token.scopes),
+    }, 200
 
 
 @bp.get("/device")

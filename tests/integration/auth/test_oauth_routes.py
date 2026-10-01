@@ -417,5 +417,164 @@ class TestOAuthIntegration(IntegrationTestCase):
             self.assertEqual(data["user"]["id"], "test@example.com")
 
 
+    def _complete_device_flow(self) -> dict:
+        """Run a full device flow as the test user and return the token response."""
+        create_response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            data={"client_id": "guest"},
+            content_type="application/x-www-form-urlencoded"
+        )
+        create_data = create_response.get_json()
+
+        with self.app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess['user_id'] = 'test@example.com'
+
+            authorize_response = client.post(
+                "/auth/v1/oauth/device/authorize",
+                json={"user_code": create_data["user_code"],
+                      "user_id": "test@example.com"}
+            )
+            self.assertEqual(authorize_response.status_code, 200)
+
+        token_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "device_code": create_data["device_code"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(token_response.status_code, 200)
+        return token_response.get_json()
+
+    def test_refresh_token_grant_returns_rotated_pair(self):
+        """Test that the refresh_token grant issues a rotated token pair."""
+        original = self._complete_device_flow()
+        self.assertIn("refresh_token", original)
+
+        refresh_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": original["refresh_token"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(refresh_response.status_code, 200)
+        refreshed = refresh_response.get_json()
+
+        # Standard token response fields
+        self.assertIn("access_token", refreshed)
+        self.assertIn("refresh_token", refreshed)
+        self.assertIn("token_type", refreshed)
+        self.assertIn("expires_in", refreshed)
+        self.assertIn("scope", refreshed)
+        self.assertEqual(refreshed["token_type"], "Bearer")
+
+        # Rotation: both values must differ from the originals
+        self.assertNotEqual(refreshed["access_token"], original["access_token"])
+        self.assertNotEqual(refreshed["refresh_token"], original["refresh_token"])
+
+        # Scopes are preserved from the original grant
+        self.assertEqual(refreshed["scope"], original["scope"])
+
+    def test_refresh_token_replay_rejected_after_rotation(self):
+        """Test that a rotated-out refresh token cannot be replayed.
+
+        The credential update deletes the superseded token record, so
+        the old refresh token must no longer resolve (#678).
+        """
+        original = self._complete_device_flow()
+
+        first_refresh = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": original["refresh_token"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(first_refresh.status_code, 200)
+
+        # Replay the original refresh token -> rejected
+        replay_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": original["refresh_token"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(replay_response.status_code, 400)
+        error_obj = replay_response.get_json().get("error", {})
+        oauth_error = error_obj.get("details", {}).get("oauth_error", "")
+        self.assertEqual(oauth_error, "invalid_grant")
+
+    def test_refresh_token_wrong_client_rejected(self):
+        """Test that a refresh token presented by a different client is rejected."""
+        original = self._complete_device_flow()
+
+        # Register a second public client to present the foreign token
+        from campus.auth.resources import client as client_resource
+        other = client_resource.new(
+            id="otherclient",
+            name="Other Refresh Client",
+            description="Client that must not accept foreign refresh tokens",
+            is_public=True,
+            redirect_uris=["urn:ietf:wg:oauth:2.0:oob"],
+        )
+        self.assertEqual(other.id, "otherclient")
+
+        refresh_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": original["refresh_token"],
+                "client_id": "otherclient",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(refresh_response.status_code, 400)
+        error_obj = refresh_response.get_json().get("error", {})
+        oauth_error = error_obj.get("details", {}).get("oauth_error", "")
+        self.assertEqual(oauth_error, "invalid_grant")
+
+    def test_refresh_token_invalid_rejected(self):
+        """Test that an unknown refresh token is rejected with invalid_grant."""
+        refresh_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": "not-a-real-refresh-token",
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(refresh_response.status_code, 400)
+        error_obj = refresh_response.get_json().get("error", {})
+        oauth_error = error_obj.get("details", {}).get("oauth_error", "")
+        self.assertEqual(oauth_error, "invalid_grant")
+
+    def test_refresh_token_missing_rejected(self):
+        """Test that a refresh_token grant without the token value is invalid_request."""
+        refresh_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(refresh_response.status_code, 400)
+        error_obj = refresh_response.get_json().get("error", {})
+        oauth_error = error_obj.get("details", {}).get("oauth_error", "")
+        self.assertEqual(oauth_error, "invalid_request")
+
+
 if __name__ == '__main__':
     unittest.main()
