@@ -172,6 +172,74 @@ class TestAuthOAuthTokenContract(unittest.TestCase):
             error["details"]["oauth_error"], "unsupported_grant_type"
         )
 
+    def _revoke_request(self, body: dict):
+        """POST the revocation endpoint with form encoding (RFC 7009)."""
+        return self.client.post(
+            "/auth/v1/oauth/revoke",
+            data=body,
+            content_type="application/x-www-form-urlencoded"
+        )
+
+    def test_revoke_returns_empty_200_on_success(self):
+        """RFC 7009: successful revocation returns 200 with an empty body."""
+        original = self._complete_device_flow()
+
+        response = self._revoke_request({
+            "token": original["access_token"],
+            "token_type_hint": "access_token",
+            "client_id": "guest",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {})
+
+        # The revoked token no longer grants a refresh
+        refresh = self._token_request({
+            "grant_type": "refresh_token",
+            "refresh_token": original["refresh_token"],
+            "client_id": "guest",
+        })
+        self.assertEqual(refresh.status_code, 400)
+        error = refresh.get_json()["error"]
+        self.assertEqual(error["details"]["oauth_error"], "invalid_grant")
+
+    def test_revoke_unknown_token_returns_200(self):
+        """RFC 7009 section 2.2: the endpoint returns 200 for unknown,
+        expired, or already-revoked tokens — it does not confirm token
+        validity to untrusted callers."""
+        response = self._revoke_request({
+            "token": "not-a-real-token",
+            "client_id": "guest",
+        })
+        self.assertEqual(response.status_code, 200)
+
+    def test_revoke_is_idempotent(self):
+        """RFC 7009 section 2.2: revoking an already-revoked token
+        returns 200, not an error."""
+        original = self._complete_device_flow()
+
+        first = self._revoke_request({
+            "token": original["access_token"],
+            "client_id": "guest",
+        })
+        self.assertEqual(first.status_code, 200)
+
+        second = self._revoke_request({
+            "token": original["access_token"],
+            "client_id": "guest",
+        })
+        self.assertEqual(second.status_code, 200)
+
+    def test_revoke_missing_token_returns_invalid_request(self):
+        """RFC 7009 section 2.1: a missing token parameter is
+        invalid_request."""
+        response = self._revoke_request({
+            "client_id": "guest",
+        })
+        self.assertEqual(response.status_code, 400)
+        error = response.get_json()["error"]
+        self.assertEqual(error["details"]["oauth_error"], "invalid_request")
+
 
 if __name__ == '__main__':
     unittest.main()
