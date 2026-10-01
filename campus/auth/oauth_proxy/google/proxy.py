@@ -25,8 +25,7 @@ SCOPE_SEP = " "
 
 def _get_redirect_uri() -> schema.Url:
     """Get redirect URI with runtime env access."""
-    from campus.common import env
-    return schema.Url(f"https://{env.HOSTNAME}/auth/v1/{PROVIDER}/callback")
+    return schema.Url(url.canonical_origin() + f"/auth/v1/{PROVIDER}/callback")
 
 
 def get_proxy() -> "GoogleAuthProxy":
@@ -200,7 +199,7 @@ class GoogleAuthProxy(base.AuthProxy):
 
         # Parse target URL and preserve existing query params (like state)
         from urllib.parse import parse_qs, urlparse
-        target_url = authsession.target or flask.request.host_url
+        target_url = authsession.target or url.canonical_origin()
         parsed = urlparse(target_url)
         existing_params = parse_qs(parsed.query)
 

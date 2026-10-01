@@ -16,6 +16,7 @@ __all__ = ("AuditClient",)
 
 from campus.common import env
 from campus.common.http.interface import JsonClient
+from campus.common.utils import url
 
 from .v1 import AuditRoot
 
@@ -49,19 +50,19 @@ def _get_base_url() -> str:
 
     Returns the appropriate URL based on ENV setting:
     - development: Railway development URL
-    - testing: localhost/current hostname
+    - testing: canonical origin (PUBLIC_URL, falling back to HOSTNAME)
     - staging: production staging URL
     - production: production URL
     """
-    # If running in the audit deployment itself, use relative URL
+    # If running in the audit deployment itself, use canonical origin
     if env.get("DEPLOY") == "campus.audit":
-        return f"https://{env.get('HOSTNAME', 'localhost')}"
+        return url.canonical_origin()
 
     match env.get("ENV", env.get("CAMPUS_ENV", "development")):
         case "development":
             return "https://campusaudit-development.up.railway.app"
         case "testing":
-            return f"https://{env.get('HOSTNAME', 'localhost')}"
+            return url.canonical_origin()
         case "staging":
             return "https://audit.campus.nyjc.dev"
         case "production":
