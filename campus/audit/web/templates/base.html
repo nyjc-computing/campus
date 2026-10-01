@@ -20,6 +20,15 @@
                     <li><span class="nav-disabled" title="Coming soon">Metrics</span></li>
                 </ul>
             </nav>
+            <div class="header-auth">
+                {% set oauth = session.get('audit_oauth') %}
+                {% if oauth and oauth.get('user_id') %}
+                    <span class="auth-user" title="{{ oauth.get('user_id') }}">{{ oauth.get('user_id') }}</span>
+                    <a class="auth-logout" href="/audit/logout">Logout</a>
+                {% else %}
+                    <a class="auth-login" href="/audit/login">Login</a>
+                {% endif %}
+            </div>
         </div>
     </header>
 
