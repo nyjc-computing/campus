@@ -87,6 +87,9 @@ For detailed file locations and architecture, see:
 - [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md) - Import patterns, docstrings, commit messages
 - [docs/development-guidelines.md](docs/development-guidelines.md) - Architecture patterns, common pitfalls
 
+### Auth
+- [docs/auth-login-flow.md](docs/auth-login-flow.md) - End-to-end browser login flow: session init, Google federated login, code exchange (read before touching campus.auth or adding a login client)
+
 ### Getting Started
 - [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) - Installation and setup
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) - Branching strategy and workflow
