@@ -55,6 +55,43 @@ class TestAuditWebUI(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(token, response.data)
 
+    def test_traces_js_targets_ui_data_endpoint(self):
+        """traces.js must fetch the UI data endpoint, not the auth'd API.
+
+        The browser cannot call /audit/v1/traces (API-key auth), so the
+        list page must target /audit/api/traces.
+        """
+        response = self.client.get("/audit/static/js/traces.js")
+        self.assertIn(b"/audit/api/traces", response.data)
+        self.assertNotIn(b"/audit/v1/traces", response.data)
+
+
+class TestAuditUIDataEndpoint(unittest.TestCase):
+    """Verify the UI data endpoint serves trace data in the API's shape."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Lazy import: campus.audit pulls in storage modules at import time.
+        # See AGENTS.md - Storage Initialization Order.
+        from campus.audit.resources.traces import TracesResource
+        from campus.audit.web import data
+
+        TracesResource.init_storage()
+
+        app = flask.Flask(__name__)
+        app.config["TESTING"] = True
+        app.register_blueprint(data.create_blueprint())
+        cls.client = app.test_client()
+
+    def test_list_traces_returns_api_shape(self):
+        """GET /audit/api/traces returns the {traces, cursor} shape."""
+        response = self.client.get("/audit/api/traces?limit=5&status=")
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertIsInstance(body["traces"], list)
+        self.assertLessEqual(len(body["traces"]), 5)
+        self.assertEqual(body["cursor"], {"next": None, "has_more": False})
+
 
 if __name__ == "__main__":
     unittest.main()
