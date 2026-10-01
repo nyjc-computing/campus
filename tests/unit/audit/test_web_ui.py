@@ -77,6 +77,23 @@ class TestAuditWebUI(unittest.TestCase):
         self.assertIn(b"/audit/api/traces", response.data)
         self.assertNotIn(b"/audit/v1/traces", response.data)
 
+    def test_traces_js_formats_ids_and_timestamps(self):
+        """The list renders commit-hash trace IDs and local datetimes.
+
+        docs/web-ui-requirements.md §3.3/§7.1/§7.4: trace IDs truncate to
+        first 8 chars + ellipsis in tables (full ID in the hover tooltip),
+        timestamps render as local YYYY-MM-DD HH:MM:SS.
+        """
+        main_js = self.client.get("/audit/static/js/main.js").data
+        traces_js = self.client.get("/audit/static/js/traces.js").data
+        # Shared helpers exist
+        self.assertIn(b"function formatTraceId", main_js)
+        self.assertIn(b"function formatTimestamp", main_js)
+        # The list page uses them, keeping full values in tooltips
+        self.assertIn(b"formatTraceId(summary.trace_id)", traces_js)
+        self.assertIn(b"formatTimestamp(summary.started_at)", traces_js)
+        self.assertIn(b'title="${escapeHtml(summary.trace_id)}"', traces_js)
+
     def test_trace_js_targets_ui_data_endpoint(self):
         """trace.js must fetch the UI data endpoints, not the auth'd API."""
         response = self.client.get("/audit/static/js/trace.js")
