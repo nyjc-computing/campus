@@ -30,6 +30,7 @@ _CLIENT_SCHEMA_SQL = """
 ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "is_public" BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "redirect_uris" TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "allowed_scopes" TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "upstream_scopes" TEXT NOT NULL DEFAULT '{}';
 """
 
 
@@ -37,9 +38,10 @@ def ensure_public_client_schema() -> None:
     """Align the vault_clients table schema with the current client model.
 
     Adds the is_public and redirect_uris columns if the table predates
-    PR #604, and allowed_scopes if it predates the scope-allowlist
-    work (#705). CREATE TABLE IF NOT EXISTS (init_storage) never alters
-    an existing table, so databases initialized before those changes
+    PR #604, allowed_scopes if it predates the scope-allowlist work
+    (#705), and upstream_scopes if it predates the upstream-scope work.
+    CREATE TABLE IF NOT EXISTS (init_storage) never alters an
+    existing table, so databases initialized before those changes
     lack the columns: reads tolerate their absence, but inserting a
     client fails with UndefinedColumn (observed on the development
     deployment, #605).
@@ -49,7 +51,7 @@ def ensure_public_client_schema() -> None:
     No-op in test mode (test databases are created fresh from the
     model, and SQLite does not support ADD COLUMN IF NOT EXISTS) and
     in production (schema changes go through migrations; apply
-    migrations/004 and migrations/006).
+    migrations/004, migrations/006 and migrations/007).
     """
     from campus.common import devops
     from campus.storage.testing import is_test_mode

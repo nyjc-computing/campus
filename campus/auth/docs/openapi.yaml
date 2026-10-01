@@ -141,6 +141,17 @@ components:
           description: >
             Fail-closed scope allowlist: the only scopes this client may
             be granted on Campus tokens (docs/auth-token-invariants.md A1).
+        upstream_scopes:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: >
+            Per-provider allowlist of upstream (third-party) scopes the
+            client may be granted through the OAuth proxies; an absent
+            provider entry allows only that proxy's base scopes
+            (docs/auth-token-invariants.md B3).
 
     LoginSession:
       type: object
@@ -530,6 +541,13 @@ paths:
                   items:
                     type: string
                   description: Scope allowlist requested at registration.
+                upstream_scopes:
+                  type: object
+                  additionalProperties:
+                    type: array
+                    items:
+                      type: string
+                  description: Upstream provider scope allowlist requested at registration.
       responses:
         '201':
           description: Client registered successfully

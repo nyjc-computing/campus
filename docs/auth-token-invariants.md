@@ -137,11 +137,11 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | A5 | P1 | **enforced** | `provider.token` issues via `credentials.update()` (deletes superseded record, #678); `test_token_issuance.py::test_superseded_token_stops_authenticating` |
 | A6 | P1 | **enforced** | `routes/sessions.py::_validated_campus_scopes` + `provider.authorize` scope-param check; `test_scope_algebra.py::test_authorize_scope_*` |
 | A7 | P1 | **enforced** | `routes/oauth.py::device_authorize` + device grant re-check; `test_scope_algebra.py::test_device_authorize_respects_allowlist` |
-| B1 | P2 | preserved | `credentials.new()` assertion |
-| B2 | P2 | planned | proxy code paths + doc audit |
-| B3 | P2 | planned | google proxy `scopes` param + allowlist |
-| B4 | P2 | preserved | `WORKSPACE_DOMAIN` checks |
-| B5 | P2 | preserved | credentials resource keying |
+| B1 | P2 | **preserved** | `credentials.new()` provider assertion (unchanged) |
+| B2 | P2 | **enforced (path audit)** | no proxy code path returns/logs refresh tokens; release-path rule hardened in P3 (C2) |
+| B3 | P2 | **enforced** | `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check lands with P3 (C3) |
+| B4 | P2 | **preserved** | `WORKSPACE_DOMAIN` checks in `google/proxy.py::handle_auth_callback`, `provider.verify_login` |
+| B5 | P2 | **preserved** | credentials resource keying `(provider, user, client)` |
 | C1 | P3 | planned | bridge endpoint guards |
 | C2 | P3 | planned | bridge response shape |
 | C3 | P3 | planned | bridge scope check |

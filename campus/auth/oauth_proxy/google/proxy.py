@@ -16,7 +16,7 @@ from campus.common import schema, webauth
 from campus.common.errors import auth_errors, token_errors
 from campus.common.utils import url
 
-from ... import resources
+from ... import resources, scopes
 from .. import base
 
 PROVIDER = "google"
@@ -95,15 +95,27 @@ class GoogleAuthProxy(base.AuthProxy):
             hd: str | None = None,  # hosted domain
             login_hint: schema.Email | None = None,  # email hint
             prompt: _PROMPT_OPTIONS = None,
+            extra_scopes: list[str] | None = None,
     ) -> werkzeug.Response:
-        """Redirect to Google OAuth2 authorization endpoint."""
+        """Redirect to Google OAuth2 authorization endpoint.
+
+        extra_scopes are merged on top of the proxy's base scopes
+        (email, profile). Because include_granted_scopes=true is always
+        sent, Google returns the cumulative scope set on re-consent, so
+        the stored credential grows to the union — Campus's hosted
+        incremental authorization for upstream providers (invariant B3,
+        docs/auth-token-invariants.md). Callers cap extra_scopes
+        upstream: provider.authorize validates against the requesting
+        campus client's upstream_scopes allowlist.
+        """
+        merged_scopes = scopes.union(self._oauth2.scopes, extra_scopes or [])
         authsession = self.init_authsession(
             expiry_seconds=campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60,
             redirect_uri=_get_redirect_uri(),
-            scopes=self._oauth2.scopes,
+            scopes=merged_scopes,
             target=target
         )
-        
+
         # Build params dict
         params = {
             "access_type": "offline",
@@ -118,6 +130,9 @@ class GoogleAuthProxy(base.AuthProxy):
 
         authorization_url = self._oauth2.get_authorization_url(
             state=authsession.id,
+            # get_authorization_url defaults to the scheme's fixed base
+            # scopes; the merged set (base + extras) overrides it
+            scope=" ".join(merged_scopes),
             **params
         )
         return flask.redirect(authorization_url)
@@ -149,11 +164,22 @@ class GoogleAuthProxy(base.AuthProxy):
             client_id=self._CLIENT_ID,  # type: ignore[arg-type]
             client_secret=self._CLIENT_SECRET,
         )
-        # Verify requested scopes were granted
-        scopes = scope.split(SCOPE_SEP)
-        if missing_scopes := token.validate_scope(scopes):
+        # Verify requested scopes were granted. Google echoes the
+        # cumulative scope set (include_granted_scopes=true); the
+        # authsession's scopes are what this flow asked Google for, so
+        # they must all be present in the grant (invariant B3).
+        granted_scopes = scope.split(SCOPE_SEP)
+        if missing_scopes := token.validate_scope(granted_scopes):
             raise auth_errors.InvalidScopeError(
                 f"Missing required scopes: {', '.join(missing_scopes)}"
+            )
+        if missing_requested := (
+            set(authsession.scopes) - set(granted_scopes)
+        ):
+            raise auth_errors.InvalidScopeError(
+                f"Google grant missing requested scopes: "
+                f"{', '.join(sorted(missing_requested))}",
+                requested_scopes=authsession.scopes,
             )
         # Fill in user info from userinfo endpoint
         userinfo = self._oauth2.get_user_info(token.access_token)

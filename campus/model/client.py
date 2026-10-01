@@ -52,6 +52,14 @@ class Client(Model):
         default_factory=list,
         metadata={"mutable": True}
     )
+    # Upstream (third-party provider) scopes the client may be granted
+    # through Campus's OAuth proxies, keyed by provider name. Fail-closed:
+    # an absent provider entry means the client may only receive that
+    # proxy's base scopes (docs/auth-token-invariants.md B3).
+    upstream_scopes: dict[str, list[str]] = field(
+        default_factory=dict,
+        metadata={"mutable": True}
+    )
     # permissions are stored in a separate table
     permissions: dict[str, int] = field(
         default_factory=dict,
