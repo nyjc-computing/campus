@@ -8,7 +8,8 @@ dynamically for test isolation.
 """
 
 __all__ = [
+    "data",
     "ui",
 ]
 
-from . import ui
+from . import data, ui

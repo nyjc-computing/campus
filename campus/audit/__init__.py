@@ -152,6 +152,11 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     ui_blueprint = web.ui.create_blueprint()
     app.register_blueprint(ui_blueprint)
 
+    # Register UI data endpoints (in-process data for the UI's JavaScript;
+    # must be gated by browser OAuth per web-ui-requirements.md §5)
+    data_blueprint = web.data.create_blueprint()
+    app.register_blueprint(data_blueprint)
+
     if isinstance(app, flask.Flask):
         # Register error handlers for proper error responses
         handlers.init_app(app)

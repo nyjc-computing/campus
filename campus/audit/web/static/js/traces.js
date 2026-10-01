@@ -7,7 +7,9 @@
     const tableBody = document.getElementById('trace-table-body');
     const statusRegion = document.getElementById('list-status');
 
-    const SEARCH_URL = '/audit/traces/search';
+    // UI data endpoint (served in-process). The versioned API requires an
+    // API key the browser cannot hold, so it must not be called from here.
+    const SEARCH_URL = '/audit/api/traces';
 
     function readFilters() {
         const params = new URLSearchParams();
