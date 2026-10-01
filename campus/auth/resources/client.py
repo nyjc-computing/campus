@@ -31,6 +31,7 @@ ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "is_public" BOOLEAN NOT NUL
 ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "redirect_uris" TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "allowed_scopes" TEXT NOT NULL DEFAULT '[]';
 ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "upstream_scopes" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "vault_clients" ADD COLUMN IF NOT EXISTS "token_bridge" BOOLEAN NOT NULL DEFAULT FALSE;
 """
 
 
@@ -39,7 +40,8 @@ def ensure_public_client_schema() -> None:
 
     Adds the is_public and redirect_uris columns if the table predates
     PR #604, allowed_scopes if it predates the scope-allowlist work
-    (#705), and upstream_scopes if it predates the upstream-scope work.
+    (#705), upstream_scopes if it predates the upstream-scope work,
+    and token_bridge if it predates the token-bridge work.
     CREATE TABLE IF NOT EXISTS (init_storage) never alters an
     existing table, so databases initialized before those changes
     lack the columns: reads tolerate their absence, but inserting a
@@ -51,7 +53,7 @@ def ensure_public_client_schema() -> None:
     No-op in test mode (test databases are created fresh from the
     model, and SQLite does not support ADD COLUMN IF NOT EXISTS) and
     in production (schema changes go through migrations; apply
-    migrations/004, migrations/006 and migrations/007).
+    migrations/004, 006, 007 and 008).
     """
     from campus.common import devops
     from campus.storage.testing import is_test_mode

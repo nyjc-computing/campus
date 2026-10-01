@@ -60,6 +60,14 @@ class Client(Model):
         default_factory=dict,
         metadata={"mutable": True}
     )
+    # Token bridge access (invariant C1): only confidential clients
+    # flagged for bridge access may exchange a campus bearer token for
+    # the user's upstream access tokens via /auth/v1/broker. Public
+    # clients are never eligible. Fail-closed default.
+    token_bridge: bool = field(
+        default=False,
+        metadata={"mutable": True}
+    )
     # permissions are stored in a separate table
     permissions: dict[str, int] = field(
         default_factory=dict,
