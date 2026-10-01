@@ -123,6 +123,81 @@ class ProviderCredentialsResource:
         credentials.token = model.OAuthToken.from_storage(token_record)
         return credentials
 
+    def revoke(
+            self,
+            *,
+            token: str,
+            client_id: str,
+            token_type_hint: str | None = None,
+    ) -> bool:
+        """Revoke a token and its linked credential records (RFC 7009).
+
+        Lookup follows the token_type_hint ("access_token" or
+        "refresh_token"), falling back to the other token type when
+        the hinted lookup misses (RFC 7009 section 2.1). Revoking
+        either value kills the whole pair: both live on one token
+        record, and bearer authentication resolves the credential by
+        token id, so deleting the credential record invalidates the
+        access token immediately.
+
+        The client_id must match the credential record's client; a
+        mismatch revokes nothing — one client must not be able to
+        revoke another client's tokens.
+
+        Args:
+            token: The access token or refresh token value
+            client_id: The client requesting the revocation
+            token_type_hint: Optional RFC 7009 token type hint
+
+        Returns:
+            True if a credential record was revoked, False if no
+            matching record exists (callers return 200 either way per
+            RFC 7009 section 2.2).
+        """
+        lookups = (self._find_token_id_by_access,
+                   self._find_token_id_by_refresh)
+        if token_type_hint == "refresh_token":
+            lookups = tuple(reversed(lookups))
+        for lookup in lookups:
+            token_id = lookup(token)
+            if token_id is not None:
+                return self._revoke_token_record(token_id, client_id)
+        return False
+
+    def _find_token_id_by_access(self, token: str) -> str | None:
+        """Resolve an access token value to its token record id.
+
+        An access token is stored as the token record's id.
+        """
+        if token_storage.get_by_id(token):
+            return token
+        return None
+
+    def _find_token_id_by_refresh(self, token: str) -> str | None:
+        """Resolve a refresh token value to its token record id."""
+        records = token_storage.get_matching({"refresh_token": token})
+        if records:
+            return records[0]["id"]
+        return None
+
+    def _revoke_token_record(self, token_id: str, client_id: str) -> bool:
+        """Delete the credential and token records for a token id.
+
+        Only credential records belonging to client_id are deleted;
+        if none match, nothing is revoked.
+        """
+        records = cred_storage.get_matching({
+            "provider": self.provider,
+            "token_id": token_id,
+        })
+        matching = [r for r in records if r["client_id"] == client_id]
+        if not matching:
+            return False
+        for record in matching:
+            cred_storage.delete_by_id(record["id"])
+        token_storage.delete_by_id(token_id)
+        return True
+
     def list_all(
             self,
             user_id: str | None = None

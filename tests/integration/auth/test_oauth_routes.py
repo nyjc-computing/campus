@@ -575,6 +575,185 @@ class TestOAuthIntegration(IntegrationTestCase):
         oauth_error = error_obj.get("details", {}).get("oauth_error", "")
         self.assertEqual(oauth_error, "invalid_request")
 
+    def _bearer_credentials_status(self, user_id: str, token: str) -> int:
+        """Probe a bearer-authenticated endpoint with the given access token."""
+        response = self.app.test_client().get(
+            f"/auth/v1/credentials/campus/{user_id}",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        return response.status_code
+
+    def test_revoke_access_token_invalidates_bearer_auth(self):
+        """Test that revoking an access token invalidates bearer auth (#677).
+
+        Bearer authentication resolves the credential record by token
+        id, so revocation deletes the credential record; the token then
+        authenticates like one that never existed (404, not 200).
+        """
+        tokens = self._complete_device_flow()
+        user_id = "test@example.com"
+
+        self.assertEqual(
+            self._bearer_credentials_status(user_id, tokens["access_token"]),
+            200
+        )
+
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "token": tokens["access_token"],
+                "token_type_hint": "access_token",
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 200)
+
+        self.assertEqual(
+            self._bearer_credentials_status(user_id, tokens["access_token"]),
+            404
+        )
+
+    def test_revoke_refresh_token_also_invalidates_access_token(self):
+        """Test RFC 7009 section 2.1: revoking a refresh token also
+        invalidates the associated access token (one token record)."""
+        tokens = self._complete_device_flow()
+        user_id = "test@example.com"
+
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "token": tokens["refresh_token"],
+                "token_type_hint": "refresh_token",
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 200)
+
+        # The refresh token no longer grants tokens
+        refresh_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": tokens["refresh_token"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(refresh_response.status_code, 400)
+
+        # The associated access token is dead too
+        self.assertEqual(
+            self._bearer_credentials_status(user_id, tokens["access_token"]),
+            404
+        )
+
+    def test_revoke_without_hint_kills_pair(self):
+        """Test that revoking with no token_type_hint kills the pair."""
+        tokens = self._complete_device_flow()
+        user_id = "test@example.com"
+
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "token": tokens["access_token"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 200)
+
+        self.assertEqual(
+            self._bearer_credentials_status(user_id, tokens["access_token"]),
+            404
+        )
+        refresh_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": tokens["refresh_token"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(refresh_response.status_code, 400)
+
+    def test_revoke_wrong_client_does_not_revoke(self):
+        """Test that a client cannot revoke another client's token.
+
+        The response is still 200 (RFC 7009 section 2.2 — no validity
+        disclosure) but the token must keep working.
+        """
+        tokens = self._complete_device_flow()
+        user_id = "test@example.com"
+
+        from campus.auth.resources import client as client_resource
+        client_resource.new(
+            id="otherrevokeclient",
+            name="Other Revoke Client",
+            description="Client that must not revoke foreign tokens",
+            is_public=True,
+            redirect_uris=["urn:ietf:wg:oauth:2.0:oob"],
+        )
+
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "token": tokens["access_token"],
+                "client_id": "otherrevokeclient",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 200)
+
+        # The token was NOT revoked
+        self.assertEqual(
+            self._bearer_credentials_status(user_id, tokens["access_token"]),
+            200
+        )
+
+    def test_revoke_unknown_token_returns_200(self):
+        """Test RFC 7009 section 2.2: unknown tokens still return 200."""
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "token": "not-a-real-token",
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 200)
+
+    def test_revoke_idempotent_returns_200(self):
+        """Test RFC 7009 section 2.2: revoking twice returns 200 both times."""
+        tokens = self._complete_device_flow()
+
+        for _ in range(2):
+            revoke_response = self.client.post(
+                "/auth/v1/oauth/revoke",
+                data={
+                    "token": tokens["access_token"],
+                    "client_id": "guest",
+                },
+                content_type="application/x-www-form-urlencoded"
+            )
+            self.assertEqual(revoke_response.status_code, 200)
+
+    def test_revoke_missing_token_returns_400_invalid_request(self):
+        """Test RFC 7009 section 2.1: a missing token is invalid_request."""
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 400)
+        error_obj = revoke_response.get_json().get("error", {})
+        oauth_error = error_obj.get("details", {}).get("oauth_error", "")
+        self.assertEqual(oauth_error, "invalid_request")
+
 
 if __name__ == '__main__':
     unittest.main()

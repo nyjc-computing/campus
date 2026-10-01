@@ -1,7 +1,8 @@
 """campus.auth.routes.oauth
 
 Flask routes for OAuth 2.0 Device Authorization Flow (RFC 8628) and
-token grants (RFC 6749: device_code, refresh_token).
+token grants (RFC 6749: device_code, refresh_token) plus token
+revocation (RFC 7009).
 
 These routes handle device authorization for CLI and other device applications.
 
@@ -403,6 +404,60 @@ def _handle_refresh_token_grant(
         "refresh_token": new_refresh_token,
         "scope": " ".join(token.scopes),
     }, 200
+
+
+@bp.post("/revoke")
+@unpack_oauth_request
+def revoke(
+        token: str | None = None,
+        client_id: schema.CampusID = None,  # pyright: ignore[reportArgumentType]
+        token_type_hint: str | None = None,
+) -> flask_campus.JsonResponse:
+    """Revoke an access or refresh token (RFC 7009).
+
+    POST /oauth/revoke
+    Body: {
+        "token": "...",
+        "token_type_hint": "access_token" | "refresh_token"  (optional)
+        "client_id": "campus-cli"
+    }
+    Returns: {} with 200
+
+    Per RFC 7009 section 2.2, the response is 200 regardless of
+    whether the token was found, already revoked, or belongs to
+    another client — the endpoint does not confirm token validity to
+    untrusted callers. A missing token is rejected with 400
+    invalid_request (section 2.1).
+
+    client_id carries a None default purely to keep it out of the
+    required-parameters 422 path: a request without it fails client
+    validation below with 400 invalid_client, which is also what the
+    token endpoint does for an unknown client_id.
+    """
+    if not token:
+        raise token_errors.InvalidRequestError(
+            "token is required for revocation"
+        )
+
+    # Validate the client, like the token endpoint
+    try:
+        client_resource[client_id].get()
+    except api_errors.NotFoundError:
+        raise token_errors.InvalidClientError(
+            "Invalid client_id"
+        ) from None
+
+    credentials_resource["campus"].revoke(
+        token=token,
+        client_id=str(client_id),
+        token_type_hint=token_type_hint,
+    )
+
+    get_yapper().emit('campus.oauth.revoke', {
+        "client_id": str(client_id),
+    })
+
+    return {}, 200
 
 
 @bp.get("/device")
@@ -1101,6 +1156,7 @@ def create_blueprint() -> flask.Blueprint:
     # Manually register routes (mimicking the decorator behavior)
     new_bp.add_url_rule("/device_authorize", "device_authorize", device_authorize, methods=["POST"])
     new_bp.add_url_rule("/token", "token", token, methods=["POST"])
+    new_bp.add_url_rule("/revoke", "revoke", revoke, methods=["POST"])
     new_bp.add_url_rule("/device", "device_verification", device_verification, methods=["GET", "POST"])
     new_bp.add_url_rule("/device/<user_code>", "device_verification_prefilled", device_verification, methods=["GET", "POST"])
     new_bp.add_url_rule("/device/authorize", "device_authorize_submit", device_authorize_submit, methods=["POST"])
