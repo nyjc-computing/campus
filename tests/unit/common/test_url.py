@@ -1,9 +1,9 @@
 """Unit tests for campus.common.utils.url canonical origin resolution.
 
-`canonical_origin` (and thus `full_url_for`) must prefer an explicit
+`canonical_origin` (and thus `full_url_for`) requires an explicit
 PUBLIC_URL env var — the only way to express plain-HTTP local
-development origins — while keeping the legacy `https://{HOSTNAME}`
-fallback for deployments that only set HOSTNAME (#649, #652).
+development origins (#649). The legacy `https://{HOSTNAME}` fallback
+was removed (#652): deployments that only set HOSTNAME must migrate.
 """
 
 import os
@@ -45,7 +45,7 @@ class _AppContextTestCase(unittest.TestCase):
 
 
 class TestCanonicalOrigin(_AppContextTestCase):
-    """canonical_origin precedence: PUBLIC_URL > https://{HOSTNAME}."""
+    """canonical_origin requires PUBLIC_URL."""
 
     def test_public_url_http_localhost_with_port(self):
         os.environ["PUBLIC_URL"] = "http://localhost:5000"
@@ -64,19 +64,15 @@ class TestCanonicalOrigin(_AppContextTestCase):
         with self.app.app_context():
             self.assertEqual(url.canonical_origin(), "http://localhost:5000")
 
-    def test_hostname_fallback_assumes_https(self):
-        os.environ["HOSTNAME"] = "classroom.example.com"
-        with self.app.app_context():
-            self.assertEqual(
-                url.canonical_origin(), "https://classroom.example.com"
-            )
+    def test_missing_public_url_raises(self):
+        with self.app.app_context(), self.assertRaises(OSError):
+            url.canonical_origin()
 
-    def test_hostname_fallback_preserves_port(self):
-        os.environ["HOSTNAME"] = "localhost:5000"
-        with self.app.app_context():
-            self.assertEqual(
-                url.canonical_origin(), "https://localhost:5000"
-            )
+    def test_hostname_alone_no_longer_suffices(self):
+        # The https://{HOSTNAME} fallback was removed (campus#652)
+        os.environ["HOSTNAME"] = "classroom.example.com"
+        with self.app.app_context(), self.assertRaises(OSError):
+            url.canonical_origin()
 
     def test_public_url_missing_scheme_rejected(self):
         os.environ["PUBLIC_URL"] = "localhost:5000"
@@ -95,7 +91,7 @@ class TestCanonicalOrigin(_AppContextTestCase):
 
 
 class TestFullUrlFor(_AppContextTestCase):
-    """full_url_for builds absolute URLs from the canonical origin."""
+    """full_url_for builds absolute URLs from PUBLIC_URL."""
 
     def test_public_url_drives_callback_url(self):
         os.environ["PUBLIC_URL"] = "http://localhost:5000"
@@ -105,13 +101,10 @@ class TestFullUrlFor(_AppContextTestCase):
                 "http://localhost:5000/finalize_login",
             )
 
-    def test_hostname_fallback_drives_callback_url(self):
-        os.environ["HOSTNAME"] = "classroom.example.com"
-        with self.app.test_request_context("/login"):
-            self.assertEqual(
-                url.full_url_for("finalize_login"),
-                "https://classroom.example.com/finalize_login",
-            )
+    def test_missing_public_url_raises(self):
+        with self.app.test_request_context("/login"), \
+                self.assertRaises(OSError):
+            url.full_url_for("finalize_login")
 
     def test_explicit_hostname_overrides_public_url(self):
         os.environ["PUBLIC_URL"] = "http://localhost:5000"

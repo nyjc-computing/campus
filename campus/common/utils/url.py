@@ -30,45 +30,44 @@ def create_url(
 def canonical_origin() -> str:
     """Resolve the canonical public origin for absolute URL generation.
 
-    Precedence:
-        1. PUBLIC_URL environment variable: a full origin
-           (scheme://host[:port]), e.g. "http://localhost:5000".
-        2. https://{HOSTNAME}: legacy fallback for deployments that only
-           set HOSTNAME.
+    The PUBLIC_URL environment variable (a full origin scheme://host[:port],
+    e.g. "http://localhost:5000") is required.
 
     Returns:
         The canonical origin, without a trailing slash.
 
     Raises:
+        OSError: If PUBLIC_URL is not set.
         ValueError: If PUBLIC_URL is set but is not a bare origin
                     (missing scheme/netloc, or contains a path, query,
                     params or fragment component).
     """
     from campus.common import env
     public_url = env.get("PUBLIC_URL")
-    if public_url:
-        parse_result = urlparse(public_url)
-        if not parse_result.scheme or not parse_result.netloc:
-            raise ValueError(
-                "PUBLIC_URL must be a full origin (scheme://host[:port]), "
-                f"got {public_url!r}"
-            )
-        if any((
-                parse_result.path.strip('/'),
-                parse_result.params,
-                parse_result.query,
-                parse_result.fragment,
-        )):
-            raise ValueError(
-                "PUBLIC_URL must not contain a path, query, params or "
-                f"fragment component: {public_url!r}"
-            )
-        return f"{parse_result.scheme}://{parse_result.netloc}"
-    # DEPRECATED (campus#652): the https://{HOSTNAME} fallback assumes
-    # HTTPS and no non-default port, which is wrong for local development
-    # over plain HTTP. Kept for backward compatibility with deployments
-    # that only set HOSTNAME; set PUBLIC_URL instead.
-    return f"https://{env.HOSTNAME}"
+    if not public_url:
+        raise OSError(
+            "PUBLIC_URL must be set to a full public origin "
+            "(scheme://host[:port], e.g. https://your-domain.tld) for "
+            "absolute URL generation. The legacy https://{HOSTNAME} "
+            "fallback was removed (campus#652)."
+        )
+    parse_result = urlparse(public_url)
+    if not parse_result.scheme or not parse_result.netloc:
+        raise ValueError(
+            "PUBLIC_URL must be a full origin (scheme://host[:port]), "
+            f"got {public_url!r}"
+        )
+    if any((
+            parse_result.path.strip('/'),
+            parse_result.params,
+            parse_result.query,
+            parse_result.fragment,
+    )):
+        raise ValueError(
+            "PUBLIC_URL must not contain a path, query, params or "
+            f"fragment component: {public_url!r}"
+        )
+    return f"{parse_result.scheme}://{parse_result.netloc}"
 
 
 def full_url_for(

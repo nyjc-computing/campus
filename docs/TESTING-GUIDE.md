@@ -220,7 +220,8 @@ reverse), this is the machinery involved:
 - **URL routing:** each Flask app is registered with
   `flask_test.register_test_app("https://campus.test", app,
   path_prefix="/auth" | "/api" | "/audit")`. campus_python builds its
-  base URL from the `HOSTNAME` env var, which the fixture sets to
+  base URL from the `HOSTNAME` env var, and campus URL generation uses
+  `PUBLIC_URL` (required since #652) — the fixture sets both to
   `campus.test`; the path prefix selects the app.
 - **Outgoing auth headers:** `TestCampusRequest` attaches credentials in
   this precedence: `ACCESS_TOKEN` (Bearer) first, then
