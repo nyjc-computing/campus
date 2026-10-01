@@ -355,6 +355,7 @@ CLIs and other input-constrained clients use RFC 8628 instead
 | GET | `/auth/v1/google/callback` | public (browser) | Google redirect target; sets login cookie |
 | GET | `/auth/v1/verify_login` | campus login cookie | bind user + code, 302 to client |
 | POST | `/auth/v1/token` | client secret (body) | exchange `authorization_code` |
+| POST | `/auth/v1/broker/:provider/` | user (Bearer, bridge-flagged confidential client) | release the user's upstream access token ([token-broker.md](token-broker.md)) |
 | GET/PATCH/DELETE | `/auth/v1/sessions/campus/:id/` | client (Basic/Bearer) | inspect / update / finalize session |
 | POST | `/auth/v1/sessions/:provider/authorization_code` | client (Basic/Bearer) | look up a session by code |
 | POST | `/auth/v1/sessions/sweep` | client (Basic/Bearer) | delete expired sessions |

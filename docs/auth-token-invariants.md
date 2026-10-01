@@ -137,18 +137,18 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | A5 | P1 | **enforced** | `provider.token` issues via `credentials.update()` (deletes superseded record, #678); `test_token_issuance.py::test_superseded_token_stops_authenticating` |
 | A6 | P1 | **enforced** | `routes/sessions.py::_validated_campus_scopes` + `provider.authorize` scope-param check; `test_scope_algebra.py::test_authorize_scope_*` |
 | A7 | P1 | **enforced** | `routes/oauth.py::device_authorize` + device grant re-check; `test_scope_algebra.py::test_device_authorize_respects_allowlist` |
-| B1 | P2 | **preserved** | `credentials.new()` provider assertion (unchanged) |
-| B2 | P2 | **enforced (path audit)** | no proxy code path returns/logs refresh tokens; release-path rule hardened in P3 (C2) |
-| B3 | P2 | **enforced** | `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check lands with P3 (C3) |
+| B1 | P2/P3 | **enforced** | `credentials.new()` provider assertion + credentials API refuses non-campus providers (`routes/credentials.py::_reject_non_campus_provider`); `test_token_broker.py::test_credentials_api_refuses_third_party_provider` |
+| B2 | P2/P3 | **enforced** | credentials API lockdown closes the token-embedding read path; broker responses are built explicitly without refresh tokens; no proxy path returns/logs refresh tokens |
+| B3 | P2 | **enforced** | `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check in C3 |
 | B4 | P2 | **preserved** | `WORKSPACE_DOMAIN` checks in `google/proxy.py::handle_auth_callback`, `provider.verify_login` |
-| B5 | P2 | **preserved** | credentials resource keying `(provider, user, client)` |
-| C1 | P3 | planned | bridge endpoint guards |
-| C2 | P3 | planned | bridge response shape |
-| C3 | P3 | planned | bridge scope check |
-| C4 | P3 | planned | bridge audit emissions |
-| C5 | P3 | planned | docs + contract tests |
-| D1 | P3 | documented | this doc; classroom switchover contract |
-| D2 | P3 | documented | this doc |
+| B5 | P2/P3 | **enforced** | credentials resource keying `(provider, user, client)`; broker releases keyed to the bearer token's own user |
+| C1 | P3 | **enforced** | `routes/broker.py::_authorize_bridge_call` (bearer user + confidential + token_bridge flag, fail-closed); `test_token_broker.py` unflagged/public/basic/missing-credential cases |
+| C2 | P3 | **enforced** | broker response built explicitly (access token, expiry, scope only); `test_token_broker.py::test_release_returns_minimal_upstream_token` |
+| C3 | P3 | **enforced** | `validate_upstream_for_client` (C3a) + stored-grant coverage check (C3b) with machine-readable `missing_scopes`; `test_token_broker.py::test_min_scopes_*` |
+| C4 | P3 | **enforced** | `campus.broker.release` / `campus.broker.deny` emissions on every path; payloads carry scopes, never token values |
+| C5 | P3 | **documented** | campus-token revocation vs upstream-link revocation separated in docs/token-broker.md; revoking the campus token kills bridge access via bearer lookup (see A5 supersession test) |
+| D1 | P3 | **documented** | docs/token-broker.md (classroom switchover contract); enforced by review + audit deterrence |
+| D2 | P3 | **documented** | docs/token-broker.md |
 
 Additional P1 note: the authorization-code exchange now also binds the
 code to the issuing client (RFC 6749 §4.1.3; was previously unchecked)

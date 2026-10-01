@@ -160,6 +160,13 @@ components:
             client may be granted through the OAuth proxies; an absent
             provider entry allows only that proxy's base scopes
             (docs/auth-token-invariants.md B3).
+        token_bridge:
+          type: boolean
+          description: >
+            Token bridge access (docs/auth-token-invariants.md C1):
+            confidential clients flagged here may release the user's
+            upstream access tokens via POST /auth/v1/broker/{provider}.
+            Public clients are never eligible.
 
     LoginSession:
       type: object

@@ -29,7 +29,8 @@ def new(
         is_public: bool = False,
         redirect_uris: list[str] | None = None,
         allowed_scopes: list[str] | None = None,
-        upstream_scopes: dict[str, list[str]] | None = None
+        upstream_scopes: dict[str, list[str]] | None = None,
+        token_bridge: bool = False
 ) -> flask_campus.JsonResponse:
     """Create a new vault client.
 
@@ -40,7 +41,8 @@ def new(
         "is_public": false,  # Optional: true for CLI/mobile apps
         "redirect_uris": [],  # Optional: OAuth redirect URIs
         "allowed_scopes": [],  # Optional: scope allowlist (fail-closed)
-        "upstream_scopes": {}  # Optional: per-provider upstream allowlist
+        "upstream_scopes": {},  # Optional: per-provider upstream allowlist
+        "token_bridge": false  # Optional: upstream token release access
     }
 
     Returns: {
@@ -51,6 +53,7 @@ def new(
         "redirect_uris": [],
         "allowed_scopes": [],
         "upstream_scopes": {},
+        "token_bridge": false,
         "created_at": "2025-07-20T10:30:00Z"
     }
 
@@ -63,15 +66,22 @@ def new(
     can be granted no scopes. upstream_scopes caps the third-party
     provider scopes a client may be granted through the OAuth proxies
     (invariant B3); an absent provider entry allows only that proxy's
-    base scopes.
+    base scopes. token_bridge grants access to the upstream token
+    release endpoint (invariant C1): confidential clients only, never
+    public ones.
     """
+    if is_public and token_bridge:
+        raise api_errors.InvalidRequestError(
+            "Public clients cannot be granted token bridge access",
+        )
     client = client_resource.new(
         name=name,
         description=description,
         is_public=is_public,
         redirect_uris=redirect_uris or [],
         allowed_scopes=scopes.parse(allowed_scopes),
-        upstream_scopes=scopes.parse_upstream(upstream_scopes)
+        upstream_scopes=scopes.parse_upstream(upstream_scopes),
+        token_bridge=token_bridge
     )
     get_yapper().emit('campus.clients.create', {"client_id": client.id})
     return client.to_resource(), 200
@@ -158,7 +168,8 @@ def update_client(
         description: str | None = None,
         redirect_uris: list[str] | None = None,
         allowed_scopes: list[str] | None = None,
-        upstream_scopes: dict[str, list[str]] | None = None
+        upstream_scopes: dict[str, list[str]] | None = None,
+        token_bridge: bool | None = None
 ) -> flask_campus.JsonResponse:
     """Update a client's details.
 
@@ -199,6 +210,14 @@ def update_client(
         updates["allowed_scopes"] = scopes.parse(allowed_scopes)
     if upstream_scopes is not None:
         updates["upstream_scopes"] = scopes.parse_upstream(upstream_scopes)
+    if token_bridge is not None:
+        existing = client_resource[client_id].get()
+        if token_bridge and existing.is_public:
+            raise api_errors.InvalidRequestError(
+                "Public clients cannot be granted token bridge access",
+                client_id=client_id
+            )
+        updates["token_bridge"] = token_bridge
     if not updates:
         raise api_errors.InvalidRequestError(
             "No updates provided",
