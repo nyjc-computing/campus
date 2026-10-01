@@ -33,4 +33,13 @@ def create_blueprint() -> flask.Blueprint:
         """
         return flask.render_template('base.html')
 
+    @bp.route('/traces')
+    def traces() -> str:
+        """Render the trace list page.
+
+        Lists recent traces with filters (path, status, time range);
+        rows link to trace detail pages.
+        """
+        return flask.render_template('traces.html')
+
     return bp

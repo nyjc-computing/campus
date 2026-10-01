@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Traces - Audit{% endblock %}
+
+{% block content %}
+<h2 class="page-title">Traces</h2>
+<p class="page-subtitle">Recent request traces across Campus services, newest first.</p>
+
+<form id="trace-filters" class="filter-form" autocomplete="off">
+    <div class="filter-field">
+        <label for="filter-path">Path</label>
+        <input type="text" id="filter-path" name="path" placeholder="/api/v1/...">
+    </div>
+    <div class="filter-field">
+        <label for="filter-status">Status</label>
+        <input type="number" id="filter-status" name="status" min="100" max="599" placeholder="e.g. 404">
+    </div>
+    <div class="filter-field">
+        <label for="filter-since">Since</label>
+        <input type="datetime-local" id="filter-since" name="since">
+    </div>
+    <div class="filter-field">
+        <label for="filter-until">Until</label>
+        <input type="datetime-local" id="filter-until" name="until">
+    </div>
+    <div class="filter-field">
+        <label for="filter-limit">Limit</label>
+        <select id="filter-limit" name="limit">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+        </select>
+    </div>
+    <div class="filter-actions">
+        <button type="submit">Apply filters</button>
+        <button type="reset">Clear</button>
+    </div>
+</form>
+
+<div id="list-status" class="list-status" aria-live="polite"></div>
+
+<div class="table-wrapper">
+    <table class="trace-table">
+        <thead>
+            <tr>
+                <th>Trace ID</th>
+                <th>Started</th>
+                <th>Method</th>
+                <th>Path</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Spans</th>
+                <th>Client</th>
+                <th>User</th>
+            </tr>
+        </thead>
+        <tbody id="trace-table-body">
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/audit/static/js/traces.js"></script>
+{% endblock %}
