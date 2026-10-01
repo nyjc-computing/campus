@@ -93,6 +93,9 @@ class ServiceManager:
         # When DEPLOY="campus.auth", it uses base_url = f"https://{env.HOSTNAME}"
         # We use a fake hostname that we'll map to Flask test apps
         env.set('HOSTNAME', "campus.test")
+        # PUBLIC_URL is required for campus URL generation (campus#652):
+        # url.canonical_origin() raises without it
+        env.set('PUBLIC_URL', "https://campus.test")
 
         # Enable audit tracing middleware in tests (default: enabled)
         # This can be disabled per-test by setting env.set('AUDIT_TRACING_ENABLED', '0')
@@ -213,7 +216,7 @@ class ServiceManager:
         initialization in proper dependency order: auth → storage → yapper → api.
 
         Phase Details:
-        - Configures test environment variables (ENV, STORAGE_MODE, HOSTNAME)
+        - Configures test environment variables (ENV, STORAGE_MODE, HOSTNAME, PUBLIC_URL)
         - Patches campus_python for test routing
         - Initializes services in dependency order
         - Creates Flask apps for auth, api, and audit

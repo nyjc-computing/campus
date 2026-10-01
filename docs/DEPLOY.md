@@ -3,6 +3,23 @@
 One codebase, one `main.py`, multiple deployment modes. 
 Clients use the `campus_python` library to communicate with deployments via HTTP API.
 
+## ⚠️ Required: `PUBLIC_URL` (breaking change, campus#652)
+
+Every deployment **must** set `PUBLIC_URL` to its full public origin
+(`scheme://host[:port]`, no trailing path), e.g.:
+
+```bash
+export PUBLIC_URL=https://campusauth-development.up.railway.app   # Railway
+export PUBLIC_URL=http://localhost:5000                           # local dev
+```
+
+All absolute URL generation (OAuth redirect URIs, device-flow
+verification URIs, login callbacks) is built from it. The legacy
+`https://{HOSTNAME}` fallback was **removed**: deployments that only set
+`HOSTNAME` will raise `OSError` when generating URLs. On Railway, set
+`PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}`. In Codespaces the
+variable is derived automatically.
+
 ## 🔐 Deploy Auth Service
 
 ```bash
@@ -11,6 +28,7 @@ poetry install
 
 # Configure deployment mode
 export DEPLOY=campus.auth
+export PUBLIC_URL=https://your-auth-domain.tld
 python main.py
 ```
 
@@ -27,6 +45,7 @@ poetry install
 
 # Configure deployment mode  
 export DEPLOY=campus.api
+export PUBLIC_URL=https://your-api-domain.tld
 python main.py
 ```
 
@@ -53,8 +72,9 @@ See the [campus-api-python repository](https://github.com/nyjc-computing/campus-
 ## 🎯 Platform Instructions
 
 ### Railway
-Set environment variable in Railway dashboard:
+Set environment variables in Railway dashboard:
 - `DEPLOY=campus.auth` or `DEPLOY=campus.api`
+- `PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}`
 - Start command: `gunicorn --bind "0.0.0.0:$PORT" --timeout 120 wsgi:app`
 
 **Note:** The `--timeout 120` flag sets a 2-minute timeout (vs default 30s) to handle OAuth flows and external API calls.
@@ -70,10 +90,12 @@ Then click Run button (or `python main.py`)
 ```bash
 # Auth service
 export DEPLOY=campus.auth
+export PUBLIC_URL=http://localhost:5000
 python main.py
 
 # API service  
 export DEPLOY=campus.api
+export PUBLIC_URL=http://localhost:5000
 python main.py
 ```
 
