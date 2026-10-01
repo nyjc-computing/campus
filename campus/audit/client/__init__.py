@@ -26,7 +26,13 @@ def _create_http_client(base_url: str) -> JsonClient:
 
     Priority:
     1. AuditClient.json_client_class (if set)
-    2. DefaultClient (fallback)
+    2. DefaultClient with explicit AUDIT_API_KEY (Bearer auth) if set
+    3. DefaultClient (ambient environment credentials)
+
+    The AUDIT_API_KEY path passes the key explicitly to DefaultClient's
+    auth parameter so the Authorization header is scoped to this client
+    only; ambient credentials (ACCESS_TOKEN, CLIENT_ID/CLIENT_SECRET)
+    shared by other DefaultClient consumers are never picked up (#699).
 
     Args:
         base_url: The base URL for the client
@@ -40,8 +46,13 @@ def _create_http_client(base_url: str) -> JsonClient:
     if client_class is not None:
         return client_class(base_url=base_url)
 
-    # Priority 2: Default client
+    # Priority 2: Default client with explicit audit API key
     from campus.common.http import DefaultClient
+    api_key = env.get("AUDIT_API_KEY")
+    if api_key:
+        return DefaultClient(base_url=base_url, auth=api_key)  # type: ignore[return-value]
+
+    # Priority 3: Default client with ambient environment credentials
     return DefaultClient(base_url=base_url)  # type: ignore[return-value]
 
 
@@ -78,7 +89,10 @@ class AuditClient:
     service-to-server communication (e.g., campus.auth → campus.audit).
 
     The client uses campus.common.http.DefaultClient which handles:
+    - Bearer auth via the AUDIT_API_KEY environment variable (preferred;
+      the audit service only accepts `audit_v1_` API keys) (#699)
     - Basic auth via CLIENT_ID/CLIENT_SECRET environment variables
+      (legacy fallback; rejected by the audit service front door)
     - Persistent connections via requests.Session
     - Automatic error handling and logging
 

@@ -42,6 +42,7 @@ SQLITE_URI: str
 CAMPUS_OAUTH_REDIRECT_URI: str  # redirect_uri for integration providers
 
 # Audit tracing middleware
+AUDIT_API_KEY: str  # campus.audit API key (audit_v1_...) for span ingestion
 AUDIT_EVENTS_ENABLED: bool  # Trace campus.audit internal API calls
 AUDIT_TRACING_ENABLED: bool  # Enable audit tracing middleware ("1" or "0")
 
