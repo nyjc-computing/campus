@@ -9,6 +9,13 @@ RFC 6749 §3.1.2.2 and §4.1.2.1 (#651, implemented fail-closed per #681):
 - The authorization session's redirect_uri must match the request's
   (the code is delivered to the session's redirect_uri).
 - Rejections return 400 without redirecting to the supplied URI.
+
+These tests are the executable specification of the authorization-code
+flow's entry point. The endpoint-level schemas live in
+campus/auth/docs/openapi.yaml (/auth/v1/authorize,
+/auth/v1/sessions/{provider}/, /auth/v1/token) and the narrative flow
+in docs/auth-login-flow.md — keep all three in sync when changing the
+flow.
 """
 
 import unittest

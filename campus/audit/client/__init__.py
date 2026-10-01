@@ -59,27 +59,18 @@ def _create_http_client(base_url: str) -> JsonClient:
 def _get_base_url() -> str:
     """Get the audit service base URL from environment.
 
-    Returns the appropriate URL based on ENV setting:
-    - development: Railway development URL
-    - testing: canonical origin (PUBLIC_URL, falling back to HOSTNAME)
-    - staging: production staging URL
-    - production: production URL
+    Delegates to campus.config.get_base_url("campus.audit"), with one
+    special case: when running inside the audit deployment itself,
+    trace ingestion targets the canonical origin rather than the
+    environment's public URL.
     """
     # If running in the audit deployment itself, use canonical origin
     if env.get("DEPLOY") == "campus.audit":
         return url.canonical_origin()
 
-    match env.get("ENV", env.get("CAMPUS_ENV", "development")):
-        case "development":
-            return "https://campusaudit-development.up.railway.app"
-        case "testing":
-            return url.canonical_origin()
-        case "staging":
-            return "https://audit.campus.nyjc.dev"
-        case "production":
-            return "https://audit.campus.nyjc.app"
-        case _:
-            raise ValueError("Invalid ENV value for audit client")
+    import campus.config
+
+    return campus.config.get_base_url("campus.audit")
 
 
 class AuditClient:

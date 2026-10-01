@@ -219,20 +219,44 @@ Show full request/response data for a single span when clicked.
 
 ## 5. Authentication
 
+> **Implemented (2026-10, #696).** This section describes the shipped
+> design, which differs from the original draft: the token is held in a
+> server-side signed cookie session (never in localStorage), and the
+> browser never sees or sends a Bearer token — data endpoints are
+> served by the audit service itself under `/audit/api/*` and authorized
+> by the session cookie. Reference implementation:
+> `campus/audit/web/auth.py`. The login chain it drives is documented
+> in [auth-login-flow.md](../../../docs/auth-login-flow.md).
+
 ### 5.1 Authentication Method
 
-**Browser OAuth Flow:**
-- User clicks "Login" or accesses `/audit/`
-- Redirect to Campus Auth `/oauth/authorize`
-- User approves access
-- Redirect back to `/audit/` with authorization code
-- Exchange code for access token
-- Store token in localStorage (or secure httpOnly cookie)
-- Include token in `Authorization: Bearer <token>` header for API requests
+**Browser OAuth flow via Campus Auth (authorization-code grant):**
+
+1. Unauthenticated access to any `/audit/*` page redirects to
+   `/audit/login`.
+2. `/audit/login` creates a Campus auth session server-to-server
+   (`POST /auth/v1/sessions/campus/`) and redirects the browser to
+   Campus Auth `GET /auth/v1/authorize` with the session id as the
+   OAuth `state`.
+3. Campus Auth authenticates the user (Google Workspace) and redirects
+   back to `GET /audit/callback?code=...&state=...`.
+4. `/audit/callback` validates `state` (CSRF), exchanges the code at
+   `POST /auth/v1/token` (confidential client: `client_id` +
+   `client_secret`, server-to-server), and stores the token and user
+   identity in the signed Flask cookie session. The token is never
+   exposed to browser JS.
+5. Subsequent requests are authorized by the session cookie.
+6. `/audit/logout` revokes the token (RFC 7009, best-effort) and
+   clears the session.
+
+The gate **fails closed**: if `AUDIT_OAUTH_CLIENT_ID` /
+`AUDIT_OAUTH_CLIENT_SECRET` are not configured, UI pages return 503
+and `/audit/api/*` returns 401 — the UI is never silently open.
 
 **Protected Routes:**
 - All `/audit/*` routes require authentication
-- Exception: `/audit/v1/health` (public API endpoint)
+- Exceptions: `/audit/v1/health` (public API endpoint);
+  `/audit/v1/*` keeps its API-key authentication (unchanged)
 
 ### 5.2 Authorization
 
@@ -245,28 +269,33 @@ Show full request/response data for a single span when clicked.
 
 ## 6. API Integration
 
+> **Implemented (2026-10, #429/#696).** The browser fetches from the
+> audit service's own session-authenticated data endpoints
+> (`/audit/api/*`), not the API-key-authed versioned API — the browser
+> holds no API key and no Bearer token (see §5).
+
 ### 6.1 Endpoints Used
 
 | Endpoint | Purpose | Response |
 |----------|---------|----------|
-| `GET /audit/v1/traces` | List traces with filters | `{"traces": [...], "cursor": {...}}` |
-| `GET /audit/v1/traces/<trace_id>` | Get trace tree | Trace object with nested spans |
-| `GET /audit/v1/traces/<trace_id>/spans/<span_id>` | Get span details | Full span with headers/bodies |
-| `GET /audit/v1/traces/search` | Search with filters | `{"traces": [...], "cursor": {...}}` |
+| `GET /audit/api/traces` | List traces with filters (session cookie) | `{"traces": [...], "cursor": {...}}` |
+| `GET /audit/api/traces/<trace_id>` | Get trace tree (session cookie) | Trace object with nested spans |
+| `GET /audit/api/traces/<trace_id>/spans/<span_id>` | Get span details (session cookie) | Full span with headers/bodies |
+
+The versioned API (`GET /audit/v1/traces` etc.) remains available to
+server-side callers with an audit API key and is not used by the
+browser.
 
 ### 6.2 Request Headers
 
-All authenticated requests include:
-```
-Authorization: Bearer <access_token>
-Accept: application/json
-```
+Data requests carry the login session cookie automatically
+(same-origin `fetch`); no `Authorization` header is involved.
 
 ### 6.3 Error Handling
 
 | Status | Action |
 |--------|--------|
-| 401 Unauthorized | Redirect to login |
+| 401 Unauthorized | Redirect to login (the gate does this server-side before pages render) |
 | 403 Forbidden | Show "Access denied" message |
 | 404 Not Found | Show "Trace not found" error |
 | 429 Too Many Requests | Show rate limit message with Retry-After |
@@ -357,11 +386,15 @@ Accept: application/json
 
 From issue #429:
 
-- [ ] Trace list loads and displays recent traces
-- [ ] Filters work (path, status, time range, client_id, user_id)
-- [ ] Trace detail shows waterfall correctly
-- [ ] Clicking span shows full headers/bodies
-- [ ] Tracebacks display formatted when present
-- [ ] Manual browser testing passes
-- [ ] OAuth login flow works
-- [ ] UI is responsive on mobile devices
+- [x] Trace list loads and displays recent traces
+- [x] Filters work (path, status, time range, client_id, user_id)
+      — path/status/time-range filters are wired; client_id/user_id
+      display in the table but are not yet filterable (data endpoint
+      passes only path/status/since/until; resource layer already
+      supports them)
+- [x] Trace detail shows waterfall correctly
+- [x] Clicking span shows full headers/bodies
+- [x] Tracebacks display formatted when present
+- [x] Manual browser testing passes
+- [x] OAuth login flow works (#696, verified on dev 2026-10)
+- [x] UI is responsive on mobile devices

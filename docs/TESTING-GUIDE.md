@@ -263,6 +263,45 @@ print(r.status_code, r.get_json())
 mgr.cleanup()
 ```
 
+### Testing Service Code That Makes Its Own HTTP Calls (`json_client_class`)
+
+The transport patch above covers calls routed through `campus_python`.
+Service code that builds its own HTTP client on `campus.common.http`
+(`DefaultClient`) does **not** go through that patch — instead, such
+clients expose a `json_client_class` **class attribute** that tests set
+to a test double. Established instances:
+
+- `campus.audit.client.AuditClient.json_client_class` — the tracing
+  middleware's span ingestion; the harness sets it to
+  `flask_test.TestJsonClient` (see `tests/fixtures/services.py`), which
+  routes to the registered audit app and loads credentials dynamically.
+- `campus.audit.web.auth.AuthClient.json_client_class` — the audit web
+  UI OAuth gate's auth-service calls; unit tests
+  (`tests/unit/audit/test_web_auth.py`) install a small in-memory fake
+  and reset the attribute in teardown (`json_client_class = None`).
+
+Follow this pattern for new cross-service clients:
+
+```python
+class MyClient:
+    json_client_class: type[JsonClient] | None = None
+
+    def __init__(self, base_url: str | None = None):
+        self.base_url = base_url or _get_base_url()
+        client_class = type(self).json_client_class
+        if client_class is not None:
+            self._client = client_class(base_url=self.base_url)
+        else:
+            self._client = DefaultClient(base_url=self.base_url, ...)
+```
+
+Always reset the class attribute after the test class — service
+manager cleanup only resets `AuditClient`'s, and a leaked double will
+silently intercept the next test module's requests. Base URLs for new
+clients should come from `campus.config.get_base_url("<service>")`
+(resolve to `PUBLIC_URL` under `ENV=testing`), not hardcoded per-env
+dispatch.
+
 ### Contract Tests
 
 **Purpose:** Verify HTTP interface contracts.

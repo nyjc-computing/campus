@@ -4,6 +4,9 @@ Configuration for Campus base URLs and service mappings.
 
 This module provides environment-aware configuration for service base URLs
 using the common.devops environment enums for consistency.
+
+Base URLs are bare service origins (no API path suffix); clients append
+the service's own route prefix (e.g. /auth/v1, /audit/v1) themselves.
 """
 
 from campus.common import devops
@@ -12,36 +15,58 @@ Url = str
 
 BASE_URLS = {
     "campus.auth": {
-        devops.PRODUCTION: "https://auth.campus.nyjc.app/api/v1/",
-        devops.STAGING: "https://auth.campus.nyjc.dev/api/v1/",
-        devops.TESTING: "http://auth.campus.testing:8080/api/v1/",
-        devops.DEVELOPMENT: "https://campusauth-development.up.railway.app/api/v1/",
+        devops.PRODUCTION: "https://auth.campus.nyjc.app",
+        devops.STAGING: "https://auth.campus.nyjc.dev",
+        devops.DEVELOPMENT: "https://campusauth-development.up.railway.app",
     },
     "campus.api": {
-        devops.PRODUCTION: "https://api.campus.nyjc.app/api/v1/",
-        devops.STAGING: "https://api.campus.nyjc.dev/api/v1/",
-        devops.TESTING: "http://api.campus.testing:8081/api/v1/",
-        devops.DEVELOPMENT: "https://campusapi-development.up.railway.app/api/v1/",
-    }
+        devops.PRODUCTION: "https://api.campus.nyjc.app",
+        devops.STAGING: "https://api.campus.nyjc.dev",
+        devops.DEVELOPMENT: "https://campusapi-development.up.railway.app",
+    },
+    "campus.audit": {
+        devops.PRODUCTION: "https://audit.campus.nyjc.app",
+        devops.STAGING: "https://audit.campus.nyjc.dev",
+        devops.DEVELOPMENT: "https://campusaudit-development.up.railway.app",
+    },
 }
 
 
 def get_base_url(app_name: str) -> Url:
     """Get the base URL for a service based on environment.
 
+    ENV is read at call time so processes that set it after import
+    (e.g. the test harness) resolve correctly. In the testing
+    environment every service resolves to the canonical origin
+    (PUBLIC_URL) — the test harness routes /auth, /api and /audit path
+    prefixes to the respective in-process Flask apps.
+
     Args:
-        app_name: Service name (e.g., "campus.auth", "campus.api")
+        app_name: Service name (e.g., "campus.auth", "campus.api",
+            "campus.audit")
 
     Returns:
-        str: Base URL for the service deployment
+        str: Base URL (bare origin) for the service deployment
+
+    Raises:
+        ValueError: If no base URL is registered for the service or
+            environment
     """
     if app_name not in BASE_URLS:
         raise ValueError(f"No base URL registered for service: {app_name}")
-    app_envs = BASE_URLS[app_name]
-    if devops.ENV not in app_envs:
+    # Lazy import: url pulls in flask; keep campus.config importable
+    # without a web framework.
+    from campus.common import env
+    from campus.common.utils import url
+
+    app_env = env.get("ENV", devops.DEVELOPMENT)
+    if app_env == devops.TESTING:
+        return url.canonical_origin()
+    url_by_env = BASE_URLS[app_name]
+    if app_env not in url_by_env:
         raise ValueError(
-            f"No base URL registered for service: {app_name} in environment: {devops.ENV}")
-    return app_envs[devops.ENV]
+            f"No base URL registered for service: {app_name} in environment: {app_env}")
+    return url_by_env[app_env]
 
 
 DEFAULT_LOGIN_EXPIRY_DAYS = 30
