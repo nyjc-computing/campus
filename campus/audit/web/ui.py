@@ -9,6 +9,7 @@ a web interface for exploring and viewing audit traces.
 __all__ = ["create_blueprint"]
 
 import flask
+import werkzeug
 
 
 def create_blueprint() -> flask.Blueprint:
@@ -35,7 +36,7 @@ def create_blueprint() -> flask.Blueprint:
         return flask.render_template('traces.html')
 
     @bp.route('/traces')
-    def traces() -> flask.Response:
+    def traces() -> werkzeug.Response:
         """Redirect the former list URL to /audit/."""
         return flask.redirect(flask.url_for('audit_ui.index'))
 
