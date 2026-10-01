@@ -73,18 +73,9 @@ _SCOPES: list[str] = []
 
 def _get_base_url() -> str:
     """Get the campus.auth service origin for the current environment."""
-    from campus.common import devops
+    import campus.config
 
-    match env.get("ENV", devops.DEVELOPMENT):
-        case devops.TESTING:
-            # Test harness routes /auth to the auth app via PUBLIC_URL
-            return url.canonical_origin()
-        case devops.STAGING:
-            return "https://auth.campus.nyjc.dev"
-        case devops.PRODUCTION:
-            return "https://auth.campus.nyjc.app"
-        case _:
-            return "https://campusauth-development.up.railway.app"
+    return campus.config.get_base_url("campus.auth")
 
 
 def _client_credentials() -> tuple[str, str]:
