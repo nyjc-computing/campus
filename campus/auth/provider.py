@@ -125,6 +125,11 @@ def authorize(
         401 Invalid client_id/user_id: None
         - Returned when the client_id or user_id in the session does not
           match the request.
+        400 Invalid request: None
+        - Returned (without redirecting) when the client has no
+          registered redirect_uris, when the request's redirect_uri does
+          not exactly match a registered URI (RFC 6749 §3.1.2.2), or
+          when the session's redirect_uri does not match the request.
         302 Found: Redirect
         - Redirects to the specified redirect URI with the
           authorization code, as well as state if provided.
@@ -136,7 +141,23 @@ def authorize(
         )
 
     # Check if client exists
-    resources.client[client_id].get()
+    client = resources.client[client_id].get()
+
+    # RFC 6749 §3.1.2.2: validate the request's redirect_uri against the
+    # client's registered redirect_uris. §4.1.2.1 requires rejecting the
+    # request without redirecting on mismatch, and this server fails
+    # closed on clients with no registered redirect_uris at all.
+    registered_uris = client.redirect_uris or []
+    if not registered_uris:
+        raise auth_errors.InvalidRequestError(
+            f"Client '{client_id}' has no registered redirect_uris; "
+            "authorization requests are rejected"
+        )
+    if redirect_uri not in registered_uris:
+        raise auth_errors.InvalidRequestError(
+            f"redirect_uri '{redirect_uri}' is not registered for "
+            f"client '{client_id}'"
+        )
 
     # ASSUME: app has already created a session via auth.sessions,
     # e.g. using campus_python
@@ -156,6 +177,13 @@ def authorize(
     if client_id != app_session.client_id:
         raise auth_errors.UnauthorizedClientError(
             f"Client mismatch: {client_id}"
+        )
+
+    # The authorization code is delivered to the session's redirect_uri,
+    # so it must be the same registered URI that the request presented.
+    if app_session.redirect_uri != redirect_uri:
+        raise auth_errors.InvalidRequestError(
+            "Session redirect_uri does not match the authorization request"
         )
 
     # Scope verification not yet handled here.
