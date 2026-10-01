@@ -102,9 +102,13 @@ token). Body: `client_id`, `redirect_uri` (must be registered on the
 client), optional `scopes`, optional `target` (final destination after
 login), optional `user_id`.
 
-The service creates an `AuthSession` record
-(`campus/auth/resources/session.py`): a generated session `id`, a
-pre-generated `authorization_code`, `state` (defaults to the session
+Requested `scopes` are validated **fail-closed** against the client's
+registered `allowed_scopes` allowlist: a scope the client is not
+registered for rejects the request with 400 `invalid_scope`, and a
+client with an empty allowlist cannot request any scope (see
+*Scope algebra* below). The service then creates an `AuthSession`
+record (`campus/auth/resources/session.py`): a generated session `id`,
+a pre-generated `authorization_code`, `state` (defaults to the session
 id), and the `redirect_uri`/`target` pair. Default lifetime is 10
 minutes (`DEFAULT_OAUTH_EXPIRY_MINUTES`). Response body is the session
 resource, including `id` and `authorization_code`.
@@ -124,11 +128,14 @@ backend issues the 302; the browser never calls the sessions API.
   rejected outright, and a mismatch is rejected with 400 *without*
   redirecting (RFC 6749 §3.1.2.2/§4.1.2.1, issues #651/#685);
 - the session exists (`state` is the session id) and its `client_id`
-  and `redirect_uri` match the request.
+  and `redirect_uri` match the request;
+- if the request carries a `scope` parameter, it must be within the
+  session's scopes — exceeding it is rejected with 400 `invalid_scope`
+  (the session API is the validated boundary).
 
-Scope consent is not implemented yet: whatever scopes the session
-carries are granted. On success the browser is redirected to
-`/auth/v1/google/authorize` with `target` pointing at
+Scope **consent** (a user-facing screen) is not implemented yet: the
+validated session scopes are granted. On success the browser is
+redirected to `/auth/v1/google/authorize` with `target` pointing at
 `/auth/v1/verify_login?state=<session id>`.
 
 ### 3. Google leg (OAuth proxy)
@@ -179,13 +186,19 @@ browser) calls:
 this grant. The endpoint:
 
 - matches `code` and `redirect_uri` against the session;
-- authenticates the client (`client_id` + `client_secret`);
+- authenticates the client (`client_id` + `client_secret`), and
+  requires that this is the same client the code was issued to
+  (RFC 6749 §4.1.3 — otherwise 400 `unauthorized_client`);
 - marks the code used by overwriting it with the sentinel
   `INVALIDATED` — codes are single-use (replay fails the equality
   check);
-- reuses the user's existing unexpired Campus credential token, or
-  mints a new `OAuthToken` (7-day access token + refresh token,
-  `DEFAULT_TOKEN_EXPIRY_DAYS`).
+- **scope algebra**: reuses the user's existing unexpired token for
+  this client only if it already covers every requested scope;
+  otherwise mints a new token carrying the *union* of the existing
+  grant and the requested scopes, and deletes the superseded token
+  record (single-use rotation). This is what makes incremental scope
+  authorization work: re-run the login with a wider scope request and
+  the new token accumulates the old scopes (see *Scope algebra*).
 
 Response: the token resource — note the field names:
 
@@ -235,15 +248,47 @@ stateDiagram-v2
 
 - Session TTL (10 min) is enforced by the **sweep** job
   (`POST /auth/v1/sessions/sweep`), not on every read.
-- The access token lives 7 days. The refresh token rotates on every
-  refresh: `POST /auth/v1/oauth/token` with
-  `grant_type=refresh_token` issues a new pair and deletes the old
-  record, so refresh tokens are single-use (#678).
+- The access token lives 7 days and is minted together with a refresh
+  token (authorization-code exchange and device flow alike). The
+  refresh token rotates on every refresh: `POST /auth/v1/oauth/token`
+  with `grant_type=refresh_token` issues a new pair and deletes the
+  old record, so refresh tokens are single-use (#678). Refreshing
+  never changes the granted scopes.
 - `POST /auth/v1/oauth/revoke` implements RFC 7009 and returns 200
   regardless of token state (#677).
 - Known gaps: revoked tokens currently surface as 404 on bearer
   routes (RFC 6750 wants 401); refresh tokens have no independent
   lifetime cap. Both are tracked as follow-ups.
+
+## Scope algebra
+
+Campus implements Google-style **incremental scope authorization**
+(#705). The rules, enforced fail-closed
+(`docs/auth-token-invariants.md`, contract-tested in
+`tests/contract/auth/test_scope_algebra.py` and
+`test_token_issuance.py`):
+
+1. **Allowlist first.** Every client registration carries
+   `allowed_scopes` — the only scopes the client can ever be granted.
+   An empty allowlist grants nothing. Scope requests beyond it fail
+   with 400 `invalid_scope` at session creation, at `/authorize`, and
+   at device authorization (`DEFAULT_CLI_SCOPES` for the seeded
+   `guest` CLI client).
+2. **Grant accumulation.** The credential row for `(campus, user,
+   client)` is the grant record. Exchanging a code for a wider scope
+   request mints a token with the *union* of the existing grant and
+   the request; an existing token is reused only when it already
+   covers the request.
+3. **No silent widening.** Scope only grows through a fresh
+   authorization-code login. The refresh grant reissues exactly the
+   granted scopes, and a narrower re-login reuses the covering token
+   rather than shrinking the grant. Shrinking happens only via
+   `POST /auth/v1/oauth/revoke` or admin action.
+
+For app developers: to add scopes your app did not ask for at first
+login, create a new session with the full scope set you now want and
+send the user through `/authorize` again — the issued token carries
+old ∪ new.
 
 ## Device flow (CLIs) — how it differs
 
@@ -260,7 +305,9 @@ CLIs and other input-constrained clients use RFC 8628 instead
 4. The CLI polls `POST /auth/v1/oauth/token` with
    `grant_type=urn:ietf:params:oauth:grant-type:device_code` until it
    gets tokens (10 min code TTL, 5 s poll interval). Device-code
-   scopes are fixed to `read write`.
+   scopes are fixed to `read write` and validated against the
+   client's `allowed_scopes` allowlist at request time and again at
+   issuance.
 
 ## Endpoint reference
 

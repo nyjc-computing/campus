@@ -40,12 +40,13 @@ import flask
 import werkzeug
 
 import campus.config
+import campus.model as model
 from campus import flask_campus
 from campus.common import env, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import secret, url, utc_time
 
-from . import resources
+from . import resources, scopes
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +118,9 @@ def authorize(
             it as session ID
 
     Responses:
-        501 Not Implemented: None
-        - Returned when missing scopes as this is not implemented yet.
+        400 invalid_scope: None
+        - Returned when the request's scope parameter exceeds the
+          scopes granted in the referenced auth session.
         404 Session not found: None
         - Returned when the user session is not found and user needs to
           log in.
@@ -186,11 +188,19 @@ def authorize(
             "Session redirect_uri does not match the authorization request"
         )
 
-    # Scope verification not yet handled here.
-    # TODO: Create consent screen for user scope consent
-    # The issued token will contain only the scopes allowed for the
-    # client and consented by user.
-    # The client app should handle insufficient scope errors.
+    # The authorization request's scope parameter (RFC 6749 section 3.3)
+    # must not exceed the scopes the session was created with: the
+    # session API is the validated boundary (invariant A6,
+    # docs/auth-token-invariants.md).
+    if scope is not None:
+        requested_scopes = scopes.parse(scope)
+        if not scopes.covers(app_session.scopes, requested_scopes):
+            raise auth_errors.InvalidScopeError(
+                "Requested scope exceeds the scopes granted in the "
+                "auth session",
+                requested_scopes=requested_scopes,
+                session_scopes=app_session.scopes,
+            )
 
     # Build verify_login callback URL with Campus session state
     verify_callback_url = url.full_url_for(
@@ -251,8 +261,19 @@ def token(
           the authorization request.
         400 Invalid grant_type: None
         - Returned when grant_type is not "authorization_code"
+        401 unauthorized_client: None
+        - Returned when the presenting client is not the client the
+          authorization code was issued to (RFC 6749 section 4.1.3).
         401 Not authenticated: None
         - Returned when the session ID is not in the Flask session
+
+    Scope handling:
+        The exchanged token covers every scope of the auth session. If
+        the user already holds an unexpired grant for this client that
+        covers the requested scopes, that token is reused; otherwise a
+        new token is issued with the union of the existing grant and
+        the requested scopes (incremental scope authorization,
+        docs/auth-token-invariants.md A2-A4).
     """
     # HACK: ensure client_id is CampusID type
     # TODO: improve unpack_into() to support openapi schemas
@@ -273,6 +294,13 @@ def token(
     # Raises auth errors if auth fails
     resources.client.raise_for_authentication(client_id, client_secret)
 
+    # RFC 6749 section 4.1.3: the client presenting the authorization
+    # code must be the client the code was issued to
+    if client_id != authsession.client_id:
+        raise auth_errors.UnauthorizedClientError(
+            f"Client mismatch: {client_id}"
+        )
+
     # Invalidate authorization code to prevent reuse (single-use guarantee)
     # Session remains alive for finalization to retrieve target URL
     resources.session[PROVIDER][authsession.id].update(
@@ -286,27 +314,45 @@ def token(
     user_credentials_resource = (
         campus_cred_resource[authsession.user_id]
     )
+    requested_scopes = authsession.scopes
 
-    # Try to get existing credentials
+    # Reuse an existing unexpired token only if it already covers every
+    # scope of this authorization (invariant A3: never return a narrower
+    # token for a wider request). Otherwise issue a token carrying the
+    # union of the existing grant and the requested scopes — Campus's
+    # incremental scope authorization (invariant A4). update() re-points
+    # the credential at the new token and deletes the superseded record,
+    # so a replaced token cannot be replayed (invariant A5).
     credentials = None
     with suppress(api_errors.NotFoundError):
         credentials = user_credentials_resource.get(authsession.client_id)
 
-    # Use existing token if available and not expired, otherwise create new
+    existing_token = credentials.token if credentials else None
     if (
-        credentials is not None
-        and credentials.token is not None
-        and not credentials.token.is_expired()
+        existing_token is not None
+        and not existing_token.is_expired()
+        and scopes.covers(existing_token.scopes, requested_scopes)
     ):
-        token = credentials.token
+        token = existing_token
     else:
-        token = user_credentials_resource.new(
-            client_id=authsession.client_id,
-            scopes=authsession.scopes,
+        token = model.OAuthToken(
+            id=secret.generate_access_token(),
             expires_in=(
                 campus.config.DEFAULT_TOKEN_EXPIRY_DAYS
                 * utc_time.DAY_SECONDS
             ),
+            # Minted alongside the access token so confidential clients
+            # can refresh without a full re-login; the refresh grant
+            # reissues the same scopes (invariant A2).
+            refresh_token=secret.generate_access_code(),
+            scopes=scopes.union(
+                existing_token.scopes if existing_token else [],
+                requested_scopes,
+            ),
+        )
+        user_credentials_resource.update(
+            client_id=authsession.client_id,
+            token=token,
         )
     # The token resource carries no user identity; echo the authorized
     # user from the session so confidential clients (e.g. the audit web

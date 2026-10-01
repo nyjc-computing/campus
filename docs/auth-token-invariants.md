@@ -130,13 +130,13 @@ Re-checked at the end of every phase; updated in the phase's PR.
 
 | ID | Phase | Status | Where enforced / tested |
 |----|-------|--------|--------------------------|
-| A1 | P1 | planned | client model + session/device validation |
-| A2 | P1 | planned | refresh grant (`routes/oauth.py`) |
-| A3 | P1 | planned | `provider.token` issuance path |
-| A4 | P1 | planned | `provider.token` issuance path |
-| A5 | P1 | preserved | `credentials.update()` (existing #678) |
-| A6 | P1 | planned | `POST /sessions/{provider}/`, `/authorize` |
-| A7 | P1 | planned | `device_authorize` / device grant |
+| A1 | P1 | **enforced** | `campus/auth/scopes.py::validate_for_client`; `POST /clients/`, `PATCH /clients/{id}/`; `tests/contract/auth/test_scope_algebra.py` |
+| A2 | P1 | **enforced** | refresh grant reissues granted scopes (`routes/oauth.py::_handle_refresh_token_grant`); reuse path in `provider.token` never shrinks a grant; `test_token_issuance.py::test_narrower_reauth_reuses_covering_token` |
+| A3 | P1 | **enforced** | `provider.token` coverage check; `test_token_issuance.py::test_exchange_issues_session_scopes`, `::test_wider_reauth_unions_scopes` |
+| A4 | P1 | **enforced** | `provider.token` union issuance; `test_token_issuance.py::test_wider_reauth_unions_scopes` |
+| A5 | P1 | **enforced** | `provider.token` issues via `credentials.update()` (deletes superseded record, #678); `test_token_issuance.py::test_superseded_token_stops_authenticating` |
+| A6 | P1 | **enforced** | `routes/sessions.py::_validated_campus_scopes` + `provider.authorize` scope-param check; `test_scope_algebra.py::test_authorize_scope_*` |
+| A7 | P1 | **enforced** | `routes/oauth.py::device_authorize` + device grant re-check; `test_scope_algebra.py::test_device_authorize_respects_allowlist` |
 | B1 | P2 | preserved | `credentials.new()` assertion |
 | B2 | P2 | planned | proxy code paths + doc audit |
 | B3 | P2 | planned | google proxy `scopes` param + allowlist |
@@ -149,6 +149,11 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | C5 | P3 | planned | docs + contract tests |
 | D1 | P3 | documented | this doc; classroom switchover contract |
 | D2 | P3 | documented | this doc |
+
+Additional P1 note: the authorization-code exchange now also binds the
+code to the issuing client (RFC 6749 §4.1.3; was previously unchecked)
+and mints a refresh token for confidential clients, matching the
+documented response contract in `docs/auth-login-flow.md`.
 
 ## Verification protocol
 
