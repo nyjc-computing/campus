@@ -69,6 +69,10 @@ Authentication and OAuth services:
 - Token generation and validation
 - Business logic in `.resources` submodule
 
+The end-to-end browser login flow (session init, Google federated
+login, code exchange) is documented in
+[auth-login-flow.md](auth-login-flow.md).
+
 ### `campus.api`
 RESTful API resources:
 - Circle (group) management

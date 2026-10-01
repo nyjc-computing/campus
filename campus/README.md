@@ -156,6 +156,10 @@ See [DEPLOY.md](../DEPLOY.md).
 
 ## Authentication
 
+See [docs/auth-login-flow.md](../docs/auth-login-flow.md) for the
+end-to-end browser login flow (session init, Google federated login,
+authorization code exchange).
+
 ```python
 import campus_python
 
