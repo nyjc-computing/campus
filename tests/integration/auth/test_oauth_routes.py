@@ -61,6 +61,17 @@ class TestOAuthIntegration(IntegrationTestCase):
         # Verify user_code format (XXXX-XXXX)
         self.assertRegex(response_data["user_code"], r"^[A-Z0-9]{4}-[A-Z0-9]{4}$")
 
+        # Verification URIs must be built from the canonical origin
+        # (PUBLIC_URL, falling back to HOSTNAME), not the request host (#652)
+        self.assertEqual(
+            response_data["verification_uri"],
+            "https://campus.test/auth/v1/oauth/device"
+        )
+        self.assertEqual(
+            response_data["verification_uri_complete"],
+            f"https://campus.test/auth/v1/oauth/device?user_code={response_data['user_code']}"
+        )
+
     def test_oauth_device_authorize_with_form_data(self):
         """Test device authorization endpoint with form-encoded request.
 
@@ -98,6 +109,17 @@ class TestOAuthIntegration(IntegrationTestCase):
 
         # Verify user_code format (XXXX-XXXX)
         self.assertRegex(response_data["user_code"], r"^[A-Z0-9]{4}-[A-Z0-9]{4}$")
+
+        # Verification URIs must be built from the canonical origin
+        # (PUBLIC_URL, falling back to HOSTNAME), not the request host (#652)
+        self.assertEqual(
+            response_data["verification_uri"],
+            "https://campus.test/auth/v1/oauth/device"
+        )
+        self.assertEqual(
+            response_data["verification_uri_complete"],
+            f"https://campus.test/auth/v1/oauth/device?user_code={response_data['user_code']}"
+        )
 
     def test_oauth_token_pending_with_form_data(self):
         """Test token endpoint with pending device code (form data).

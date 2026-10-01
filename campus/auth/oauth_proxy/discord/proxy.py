@@ -13,6 +13,7 @@ import werkzeug
 import campus.config
 from campus.common import schema, webauth
 from campus.common.errors import auth_errors
+from campus.common.utils import url
 
 from ... import resources
 from .. import base
@@ -23,8 +24,7 @@ SCOPE_SEP = " "
 
 def _get_redirect_uri() -> schema.Url:
     """Get redirect URI with runtime env access."""
-    from campus.common import env
-    return schema.Url(env.HOSTNAME + f"/auth/{PROVIDER}/callback")
+    return schema.Url(url.canonical_origin() + f"/auth/{PROVIDER}/callback")
 
 
 def get_proxy() -> "DiscordAuthPoxy":
@@ -134,4 +134,4 @@ class DiscordAuthPoxy(base.AuthProxy):
             token=token,
         )
         self.finalize_authsession(authsession)
-        return flask.redirect(authsession.target or flask.request.host_url)
+        return flask.redirect(authsession.target or url.canonical_origin())
