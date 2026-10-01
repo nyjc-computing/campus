@@ -9,6 +9,7 @@ a web interface for exploring and viewing audit traces.
 __all__ = ["create_blueprint"]
 
 import flask
+import werkzeug
 
 
 def create_blueprint() -> flask.Blueprint:
@@ -27,19 +28,25 @@ def create_blueprint() -> flask.Blueprint:
 
     @bp.route('/')
     def index() -> str:
-        """Render the base template.
-
-        This is the main entry point for the Audit Web UI.
-        """
-        return flask.render_template('base.html')
-
-    @bp.route('/traces')
-    def traces() -> str:
         """Render the trace list page.
 
-        Lists recent traces with filters (path, status, time range);
-        rows link to trace detail pages.
+        The list is the main entry point for the Audit Web UI
+        (docs/web-ui-requirements.md §2: list at /audit/).
         """
         return flask.render_template('traces.html')
+
+    @bp.route('/traces')
+    def traces() -> werkzeug.Response:
+        """Redirect the former list URL to /audit/."""
+        return flask.redirect(flask.url_for('audit_ui.index'))
+
+    @bp.route('/traces/<trace_id>')
+    def trace(trace_id: str) -> str:
+        """Render the trace detail page.
+
+        Shows trace metadata, a span waterfall, and a span details
+        drawer; data is loaded client-side from the UI data endpoints.
+        """
+        return flask.render_template('trace.html', trace_id=trace_id)
 
     return bp

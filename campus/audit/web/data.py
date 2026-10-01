@@ -60,4 +60,24 @@ def create_blueprint() -> flask.Blueprint:
             "cursor": {"next": None, "has_more": False}
         }, 200
 
+    @bp.route('/traces/<trace_id>')
+    def get_trace(trace_id: str) -> flask_campus.JsonResponse:
+        """Get a single trace tree for the UI detail page.
+
+        Mirrors the versioned API's response shape:
+        {"trace_id": ..., "root_span": <tree with nested children>}.
+        """
+        tree = traces_resource[trace_id].get_tree()
+        if tree is None or tree.root is None:
+            return {"error": f"Trace {trace_id} not found"}, 404
+        return {"trace_id": trace_id, "root_span": tree.to_resource()}, 200
+
+    @bp.route('/traces/<trace_id>/spans/<span_id>')
+    def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
+        """Get a single span (with headers/bodies) for the UI drawer."""
+        span = traces_resource[trace_id]["spans"][span_id].get()
+        if span is None:
+            return {"error": f"Span {span_id} not found in trace {trace_id}"}, 404
+        return span.to_resource(), 200
+
     return bp
