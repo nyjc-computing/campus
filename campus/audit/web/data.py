@@ -4,9 +4,8 @@ Data endpoints for the Audit Web UI.
 
 The browser cannot call the authenticated /audit/v1 API directly (it has
 no API key), so these routes serve the same data in-process from the
-resources layer. They are intentionally unauthenticated for now; the
-browser OAuth flow in docs/web-ui-requirements.md §5 must gate them
-before production use (see issue #429).
+resources layer. They are gated by the browser OAuth session
+(campus.audit.web.auth, issue #696); unauthenticated callers get 401.
 """
 
 __all__ = ["create_blueprint"]

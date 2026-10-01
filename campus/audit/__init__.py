@@ -172,14 +172,23 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     app.register_blueprint(bp)
 
-    # Register web UI blueprint (no authentication required for browsing)
+    # Register web UI blueprint, gated by the browser OAuth flow
+    # (docs/web-ui-requirements.md §5; issue #696): unauthenticated
+    # page requests redirect to /audit/login.
     ui_blueprint = web.ui.create_blueprint()
+    ui_blueprint.before_request(web.auth.require_login_page)
     app.register_blueprint(ui_blueprint)
 
-    # Register UI data endpoints (in-process data for the UI's JavaScript;
-    # must be gated by browser OAuth per web-ui-requirements.md §5)
+    # Register UI data endpoints (in-process data for the UI's
+    # JavaScript), gated by the same login session; fetch() callers get
+    # a 401 JSON response instead of a redirect.
     data_blueprint = web.data.create_blueprint()
+    data_blueprint.before_request(web.auth.require_login_api)
     app.register_blueprint(data_blueprint)
+
+    # Register the OAuth gate routes (login/callback/logout) last: they
+    # must stay reachable without a session.
+    app.register_blueprint(web.auth.create_blueprint())
 
     if isinstance(app, flask.Flask):
         # Register error handlers for proper error responses

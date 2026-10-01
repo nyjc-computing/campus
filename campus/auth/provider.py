@@ -308,7 +308,12 @@ def token(
                 * utc_time.DAY_SECONDS
             ),
         )
-    return token.to_resource(), 200
+    # The token resource carries no user identity; echo the authorized
+    # user from the session so confidential clients (e.g. the audit web
+    # UI gate, #696) can display login state without a second lookup.
+    resource = token.to_resource()
+    resource["user_id"] = str(authsession.user_id)
+    return resource, 200
 
 
 # Proxy endpoint for login verification
