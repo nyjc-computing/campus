@@ -28,7 +28,8 @@ def new(
         description: str,
         is_public: bool = False,
         redirect_uris: list[str] | None = None,
-        allowed_scopes: list[str] | None = None
+        allowed_scopes: list[str] | None = None,
+        upstream_scopes: dict[str, list[str]] | None = None
 ) -> flask_campus.JsonResponse:
     """Create a new vault client.
 
@@ -38,7 +39,8 @@ def new(
         "description": "Client description",
         "is_public": false,  # Optional: true for CLI/mobile apps
         "redirect_uris": [],  # Optional: OAuth redirect URIs
-        "allowed_scopes": []  # Optional: scope allowlist (fail-closed)
+        "allowed_scopes": [],  # Optional: scope allowlist (fail-closed)
+        "upstream_scopes": {}  # Optional: per-provider upstream allowlist
     }
 
     Returns: {
@@ -48,6 +50,7 @@ def new(
         "is_public": false,
         "redirect_uris": [],
         "allowed_scopes": [],
+        "upstream_scopes": {},
         "created_at": "2025-07-20T10:30:00Z"
     }
 
@@ -57,14 +60,18 @@ def new(
 
     allowed_scopes is the fail-closed scope allowlist
     (docs/auth-token-invariants.md A1): a client with an empty allowlist
-    can be granted no scopes.
+    can be granted no scopes. upstream_scopes caps the third-party
+    provider scopes a client may be granted through the OAuth proxies
+    (invariant B3); an absent provider entry allows only that proxy's
+    base scopes.
     """
     client = client_resource.new(
         name=name,
         description=description,
         is_public=is_public,
         redirect_uris=redirect_uris or [],
-        allowed_scopes=scopes.parse(allowed_scopes)
+        allowed_scopes=scopes.parse(allowed_scopes),
+        upstream_scopes=scopes.parse_upstream(upstream_scopes)
     )
     get_yapper().emit('campus.clients.create', {"client_id": client.id})
     return client.to_resource(), 200
@@ -150,7 +157,8 @@ def update_client(
         name: str | None = None,
         description: str | None = None,
         redirect_uris: list[str] | None = None,
-        allowed_scopes: list[str] | None = None
+        allowed_scopes: list[str] | None = None,
+        upstream_scopes: dict[str, list[str]] | None = None
 ) -> flask_campus.JsonResponse:
     """Update a client's details.
 
@@ -159,7 +167,8 @@ def update_client(
         "name": "New Client Name",
         "description": "New description",
         "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"],  # Optional
-        "allowed_scopes": ["read", "write"]  # Optional
+        "allowed_scopes": ["read", "write"],  # Optional
+        "upstream_scopes": {"google": [...]}  # Optional
     }
     Returns: {
         "id": "client_abc123",
@@ -168,13 +177,16 @@ def update_client(
         "is_public": false,
         "redirect_uris": [],
         "allowed_scopes": [],
+        "upstream_scopes": {},
         "created_at": "2025-07-20T10:30:00Z"
     }
 
     Note: is_public cannot be changed after client creation.
     allowed_scopes is the fail-closed scope allowlist
     (docs/auth-token-invariants.md A1): sessions and device codes may
-    only request scopes it contains.
+    only request scopes it contains. upstream_scopes caps the
+    third-party provider scopes the client may be granted through the
+    OAuth proxies (invariant B3).
     """
     updates = {}
     if name is not None:
@@ -185,6 +197,8 @@ def update_client(
         updates["redirect_uris"] = redirect_uris
     if allowed_scopes is not None:
         updates["allowed_scopes"] = scopes.parse(allowed_scopes)
+    if upstream_scopes is not None:
+        updates["upstream_scopes"] = scopes.parse_upstream(upstream_scopes)
     if not updates:
         raise api_errors.InvalidRequestError(
             "No updates provided",

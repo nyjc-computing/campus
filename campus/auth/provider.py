@@ -83,6 +83,7 @@ def authorize(
         redirect_uri: str,
         state: str,
         scope: str | None = None,
+        upstream_scope: str | None = None,
         *,
         hd: str | None = None,  # hosted domain (for Google)
 ) -> werkzeug.Response:
@@ -110,7 +111,13 @@ def authorize(
         - redirect_uri: str (required)
             URI to redirect the user to after authentication
         - scope: str (optional)
-            Space-separated list of scopes requested by the client.
+            Space-separated list of Campus scopes requested by the
+            client; must be within the session's scopes.
+        - upstream_scope: str (optional)
+            Space-separated upstream (Google) scopes requested on
+            behalf of the client, e.g. Classroom API scopes. Validated
+            against the client's registered upstream_scopes allowlist
+            (fail-closed); excess requests are rejected.
         - state: str
             Opaque value used by the client to maintain state between
             request and callback.
@@ -202,6 +209,17 @@ def authorize(
                 session_scopes=app_session.scopes,
             )
 
+    # Upstream (third-party provider) scopes requested on behalf of
+    # this client are capped by the client's upstream_scopes allowlist
+    # (invariant B3, docs/auth-token-invariants.md). The login leg is
+    # Google; requests are merged with the proxy's base scopes at the
+    # google authorize endpoint and re-checked at broker release time.
+    upstream_requested = scopes.validate_upstream_for_client(
+        client.upstream_scopes,
+        "google",
+        upstream_scope,
+    )
+
     # Build verify_login callback URL with Campus session state
     verify_callback_url = url.full_url_for(
         'auth.verify_login_and_redirect',
@@ -212,6 +230,8 @@ def authorize(
     params = {"target": verify_callback_url}
     if hd:
         params["hd"] = hd
+    if upstream_requested:
+        params["scope"] = " ".join(upstream_requested)
     oauth_authorize_url = url.full_url_for(
         'auth.google.authorize',
         **params
