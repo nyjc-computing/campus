@@ -12,7 +12,7 @@ from typing import Literal
 from warnings import warn
 
 # Namespace exports
-from campus.common import env
+from campus.common import env as env  # noqa: F401 (re-export)
 
 from . import deploy
 
@@ -77,6 +77,10 @@ def confirm_action_in_env(*envs, prompt: str = "Proceed? (y/N): "):
 def load_dotenv() -> bool:
     """Load environment variables from a .env file if it exists.
 
+    Values are written to os.environ so they are visible to env.get(),
+    env.contains(), env.require() and attribute access alike.
+    Existing environment variables are not overridden.
+
     Returns True if .env file was found and loaded, False otherwise.
     """
     dotenv_path = os.path.join(os.getcwd(), ".env")
@@ -90,7 +94,7 @@ def load_dotenv() -> bool:
                     key, value = line.split("=", 1)
                     key = key.strip()
                     value = value.strip(" \"\'")
-                    setattr(env, key, value)
+                    os.environ.setdefault(key, value)
         return True
     return False
 
