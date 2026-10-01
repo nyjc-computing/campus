@@ -165,9 +165,8 @@ def authorize(
     # The client app should handle insufficient scope errors.
 
     # Build verify_login callback URL with Campus session state
-    verify_callback_url = flask.url_for(
+    verify_callback_url = url.full_url_for(
         'auth.verify_login_and_redirect',
-        _external=True,
         state=state  # Preserve Campus session ID through Google OAuth flow
     )
 
@@ -175,9 +174,8 @@ def authorize(
     params = {"target": verify_callback_url}
     if hd:
         params["hd"] = hd
-    oauth_authorize_url = flask.url_for(
+    oauth_authorize_url = url.full_url_for(
         'auth.google.authorize',
-        _external=True,
         **params
     )
     return flask.redirect(oauth_authorize_url)
@@ -389,7 +387,7 @@ def verify_login_and_redirect(
     # Redirect to app callback (redirect_uri, not final target)
     assert authsession.state and authsession.authorization_code
     full_redirect_url = url.add_query(
-        authsession.redirect_uri or flask.request.host_url,
+        authsession.redirect_uri or url.canonical_origin(),
         # TODO: user consent screen for scope grant
         # For now, grant all scopes
         code=authsession.authorization_code,
