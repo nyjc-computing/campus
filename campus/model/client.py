@@ -39,8 +39,16 @@ class Client(Model):
         default=False,
         metadata={"mutable": False}
     )
-    # OAuth redirect URIs for public clients (e.g., "urn:ietf:wg:oauth:2.0:oob")
+    # OAuth redirect URIs for public clients (e.g. "urn:ietf:wg:oauth:2.0:oob")
     redirect_uris: list[str] = field(
+        default_factory=list,
+        metadata={"mutable": True}
+    )
+    # Scopes this client may be granted on Campus tokens. Fail-closed:
+    # an empty allowlist grants nothing, so scope-bearing sessions and
+    # device codes are rejected until the client's registered scopes
+    # are set (docs/auth-token-invariants.md A1).
+    allowed_scopes: list[str] = field(
         default_factory=list,
         metadata={"mutable": True}
     )

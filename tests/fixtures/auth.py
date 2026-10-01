@@ -61,6 +61,9 @@ def init():
     # Create a test client for authentication in tests
     # Check if client already exists to make this function idempotent
     client_name = "test-client"
+    # Scopes the test client may be granted (invariant A1 allowlist);
+    # covers every scope the contract and integration suites request.
+    test_scopes = ["read", "write"]
     existing = client_storage.get_matching({"name": client_name})
     if existing:
         # Client already exists, reuse it
@@ -68,10 +71,15 @@ def init():
         client_resource = auth_resources.client[client_id]
         # Generate a new secret for this test run
         secret = client_resource.revoke()
+        # Keep the scope allowlist current even on the reuse path
+        client_resource.update(allowed_scopes=test_scopes)
     else:
         # Create new client
         client_obj = auth_resources.client.new(
-            name=client_name, description="Campus test client")
+            name=client_name,
+            description="Campus test client",
+            allowed_scopes=test_scopes,
+        )
         # Generate a client secret (ClientResource.revoke() generates a new secret)
         client_id = client_obj.id
         client_resource = auth_resources.client[client_id]

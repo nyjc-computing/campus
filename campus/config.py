@@ -81,4 +81,9 @@ DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 # ensure_public_client) so it cannot be missing after a database reset.
 PUBLIC_OAUTH_CLIENT_ID = "guest"
 
+# Scopes requested by CLI/device apps (RFC 8628). The seeded public
+# client's allowlist is exactly this set, and device_authorize defaults
+# to it when the caller does not name scopes.
+DEFAULT_CLI_SCOPES = ["read", "write"]
+
 SUPPORTED_OAUTH2_GRANT_TYPES = ("code", "device_code")
