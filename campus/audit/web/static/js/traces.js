@@ -30,8 +30,8 @@
         const user = root.user_id || '—';
         return `
             <tr>
-                <td class="wrap"><a href="${detailHref}">${escapeHtml(summary.trace_id)}</a></td>
-                <td>${escapeHtml(summary.started_at || '—')}</td>
+                <td class="wrap" title="${escapeHtml(summary.trace_id)}"><a href="${detailHref}">${escapeHtml(formatTraceId(summary.trace_id))}</a></td>
+                <td title="${escapeHtml(summary.started_at || '')}">${escapeHtml(formatTimestamp(summary.started_at))}</td>
                 <td>${escapeHtml(root.method || '—')}</td>
                 <td class="wrap">${escapeHtml(root.path || '—')}</td>
                 <td>${renderStatusBadge(root.status_code)}</td>

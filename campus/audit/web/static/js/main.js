@@ -50,6 +50,37 @@ function formatDuration(durationMs) {
 }
 
 /**
+ * Format a trace ID commit-hash style for tables: first 8 chars + ellipsis
+ * (docs/web-ui-requirements.md §3.3/§7.4). Keep the full ID in the row's
+ * title attribute; detail pages show it in full.
+ */
+function formatTraceId(traceId) {
+    if (traceId === null || traceId === undefined || traceId === '') {
+        return '—';
+    }
+    const text = String(traceId);
+    return text.length <= 8 ? text : `${text.slice(0, 8)}…`;
+}
+
+/**
+ * Parse an ISO 8601 timestamp and format it in the browser's local
+ * timezone as YYYY-MM-DD HH:MM:SS (docs/web-ui-requirements.md §7.1).
+ * Values that fail to parse are shown as-is rather than "Invalid Date".
+ */
+function formatTimestamp(value) {
+    if (value === null || value === undefined || value === '') {
+        return '—';
+    }
+    const date = new Date(value);
+    if (isNaN(date.getTime())) {
+        return String(value);
+    }
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+        `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+/**
  * Fetch JSON from the audit API and return the parsed body.
  * Throws an Error with a readable message on non-2xx responses.
  */
