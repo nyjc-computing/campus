@@ -16,10 +16,22 @@ The repo is linted with [ruff](https://docs.astral.sh/ruff/); CI runs `ruff chec
 poetry run ruff check .    # lint (CI gate) - ruff is a dev dependency
 ruff check .               # any standalone ruff also works; config lives
                            # in pyproject.toml [tool.ruff]
-ruff check --diff .        # show suggested rewrites for review
 ```
 
-Rewrites are applied **manually after review**: autofixes are disabled repo-wide (`fixable = []`) because they are only semantics-preserving for common types (ruff's SIM118 fix, for instance, breaks `sqlite3.Row` iteration). Review `--diff` output and apply changes deliberately per site.
+Rewrites are applied **manually after review**: autofixes are disabled repo-wide (`fixable = []`) because they are only semantics-preserving for common types (ruff's SIM118 fix, for instance, breaks `sqlite3.Row` iteration). Apply changes deliberately per site.
+
+**Seeing what ruff would change:** plain `ruff check --diff` prints
+*nothing* under `fixable = []`. To preview a suggested rewrite, re-enable
+fixability for one invocation:
+
+```bash
+ruff check --select I --fixable I --diff path/to/file.py
+```
+
+**Import sorting (I001) gotcha:** isort wants exactly **one blank line**
+between the import block and module-level constants — two blank lines
+trigger I001 there (two are still correct before `class`/`def`). When
+I001 fires and the ordering looks right, suspect the blank lines first.
 
 Rules are selected in `[tool.ruff.lint]`; deliberate exceptions live in `per-file-ignores` with a justification comment. A new violation category should be tuned at the config level only if it systematically fights a Campus pattern (as `ARG` did); otherwise fix the code or add a targeted `# noqa: <CODE>` with a reason.
 
