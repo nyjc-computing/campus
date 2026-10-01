@@ -69,6 +69,23 @@ def _authenticate_audit_api_key() -> None:
         )
         raise api_errors.UnauthorizedError("Missing API key") from None
 
+    # The audit API only accepts Bearer auth with audit API keys;
+    # reject other schemes (e.g. Basic) with a clear 401 rather than
+    # the scheme-mismatch error from .token (#699)
+    if httpauth.scheme != "bearer":
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Unsupported authentication scheme"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
+        )
+        raise api_errors.UnauthorizedError(
+            "Bearer authentication with an audit API key is required"
+        )
+
     # Extract API key from Bearer token
     api_key = httpauth.token
 

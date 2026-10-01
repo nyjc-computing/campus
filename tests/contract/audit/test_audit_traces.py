@@ -13,6 +13,7 @@ Audit Endpoints Reference:
 - GET    /audit/v1/health                     - Health check (NO auth required)
 """
 
+import base64
 import unittest
 
 import campus.storage
@@ -129,6 +130,22 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         response = self.client.post(
             "/audit/v1/traces/",
             json={"spans": [self._make_test_span()]}
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_ingest_rejects_basic_auth_scheme(self):
+        """Basic auth is rejected with 401; audit API is Bearer-only (#699).
+
+        Producers authenticate with an audit_v1_ API key via Bearer auth;
+        OAuth client credentials (Basic) are not a valid scheme here and
+        must fail with a clear Unauthorized, not a scheme-mismatch 400.
+        """
+        credentials = base64.b64encode(b"uid-client-x:secret").decode()
+        response = self.client.post(
+            "/audit/v1/traces/",
+            json={"spans": [self._make_test_span()]},
+            headers={"Authorization": f"Basic {credentials}"},
         )
 
         self.assertEqual(response.status_code, 401)

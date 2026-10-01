@@ -143,9 +143,9 @@ _ingestion_executor: concurrent.futures.ThreadPoolExecutor | None = None
 # Client singleton (lazy initialized)
 _audit_client: AuditClient | None = None
 # Track credentials used to create the client, for detecting when they change
-# Includes (client_id, client_secret, access_token) to detect when audit
-# API key changes
-_client_credentials: tuple[str, str, str | None] | None = None
+# Includes (client_id, client_secret, access_token, api_key) to detect when
+# any credential source changes
+_client_credentials: tuple[str | None, str | None, str | None, str | None] | None = None
 
 
 def _get_audit_client() -> AuditClient:
@@ -154,11 +154,18 @@ def _get_audit_client() -> AuditClient:
     The client is recreated if credentials have changed since last creation,
     ensuring each test class gets a client with its own credentials.
 
+    Credentials are resolved in priority order:
+    1. AUDIT_API_KEY: explicit audit API key, sent as Bearer auth (#699)
+    2. CLIENT_ID/CLIENT_SECRET: legacy Basic auth (rejected by the audit
+       service front door, but kept for test harnesses that inject a
+       custom json_client_class reading those variables)
+
     Returns:
         AuditClient instance for sending spans to audit service.
 
     Raises:
-        ValueError: If CLIENT_ID or CLIENT_SECRET are not set in environment.
+        ValueError: If neither AUDIT_API_KEY nor CLIENT_ID/CLIENT_SECRET
+            are set in environment.
     """
     global _audit_client, _client_credentials
 
@@ -166,19 +173,21 @@ def _get_audit_client() -> AuditClient:
     from campus.common import env
 
     # Check if credentials are available (they may be deleted during test cleanup)
+    api_key = env.get("AUDIT_API_KEY")
     client_id = env.get("CLIENT_ID")
     client_secret = env.get("CLIENT_SECRET")
 
-    if not client_id or not client_secret:
+    if not api_key and not (client_id and client_secret):
         raise ValueError(
-            "CLIENT_ID and CLIENT_SECRET must be set in environment "
-            "to create audit client"
+            "AUDIT_API_KEY (or CLIENT_ID and CLIENT_SECRET) must be set "
+            "in environment to create audit client"
         )
 
-    # Include ACCESS_TOKEN in credential tracking so the client is recreated
-    # when clear_test_data() deletes and recreates the audit API key
+    # Track all credential sources so the client is recreated when any of
+    # them change, e.g. when clear_test_data() deletes and recreates the
+    # audit API key
     access_token = env.get("ACCESS_TOKEN")
-    current_credentials = (client_id, client_secret, access_token)
+    current_credentials = (client_id, client_secret, access_token, api_key)
 
     # Recreate client if credentials have changed or client doesn't exist
     if _audit_client is None or _client_credentials != current_credentials:
