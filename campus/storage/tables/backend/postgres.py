@@ -25,6 +25,8 @@ table.delete_by_id("123")
 """
 
 import dataclasses
+import json
+from contextlib import suppress
 from typing import Any
 
 import psycopg2
@@ -183,6 +185,19 @@ def _get_db_uri() -> str:
     return db_uri
 
 
+def _encode_value(value: Any) -> Any:
+    """Encode non-scalar values as JSON for storage in a TEXT column.
+
+    Mirrors the sqlite backend's encoding (#673): psycopg2 adapts Python
+    lists and dicts as Postgres array/row literals, which would otherwise
+    land verbatim in TEXT columns (e.g. redirect_uris stored as
+    '{http://...}' instead of a JSON array).
+    """
+    if value is not None and not isinstance(value, (str, int, float, bool)):
+        return json.dumps(value)
+    return value
+
+
 class PostgreSQLTable(TableInterface):
     """PostgreSQL backend for the Tables storage interface.
 
@@ -263,7 +278,7 @@ class PostgreSQLTable(TableInterface):
         columns = list(row.keys())
         placeholders = ", ".join(["%s"] * len(columns))
         column_names = ", ".join(columns)
-        values = list(row.values())
+        values = [_encode_value(value) for value in row.values()]
 
         return column_names, placeholders, values
 
@@ -275,9 +290,26 @@ class PostgreSQLTable(TableInterface):
 
         for key, value in update.items():
             set_parts.append(f"{key} = %s")
-            params.append(value)
+            params.append(_encode_value(value))
 
         return ", ".join(set_parts), params
+
+    @staticmethod
+    def _deserialize_row(row: dict) -> dict:
+        """Decode JSON-encoded values in a row read from storage.
+
+        Inverse of _encode_value (#673), mirroring the sqlite backend's
+        _deserialize_row: JSON strings starting with '{' or '[' are parsed
+        back to lists/dicts; strings that fail to parse are returned
+        unchanged.
+        """
+        decoded = {}
+        for key, value in row.items():
+            if isinstance(value, str) and value and (value.startswith('{') or value.startswith('[')):
+                with suppress(json.JSONDecodeError, ValueError):
+                    value = json.loads(value)
+            decoded[key] = value
+        return decoded
 
     def get_by_id(self, row_id: str) -> dict[str, Any]:
         """Retrieve a row by its ID."""
@@ -289,7 +321,7 @@ class PostgreSQLTable(TableInterface):
             row = cursor.fetchone()
             if not row:
                 raise errors.NotFoundError(row_id, self.name)
-            return dict(row)
+            return self._deserialize_row(dict(row))
 
     def get_matching(
         self,
@@ -324,7 +356,7 @@ class PostgreSQLTable(TableInterface):
 
             cursor.execute(sql, params)
             rows = cursor.fetchall()
-            return [dict(row) for row in rows]
+            return [self._deserialize_row(dict(row)) for row in rows]
 
     def insert_one(self, row: dict) -> None:
         """Insert a row into the specified table."""
@@ -389,7 +421,10 @@ class PostgreSQLTable(TableInterface):
         """
         columns = list(rows[0])
         column_names = ", ".join(columns)
-        values = [tuple(row[col] for col in columns) for row in rows]
+        values = [
+            tuple(_encode_value(row[col]) for col in columns)
+            for row in rows
+        ]
 
         with self._get_connection() as conn, conn.cursor() as cursor:
             try:
