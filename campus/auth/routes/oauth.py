@@ -17,7 +17,7 @@ import campus.model
 from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors, token_errors
-from campus.common.utils import secret
+from campus.common.utils import secret, url
 
 from .. import get_yapper
 from ..resources import client as client_resource
@@ -108,16 +108,13 @@ def device_authorize(
         scopes=DEFAULT_CLI_SCOPES,
     )
 
-    # Build verification URIs
-    # Use the request to determine the base URL
+    # Build verification URIs from the canonical public origin
     # Note: endpoint needs 'auth.' prefix since oauth blueprint is registered under auth blueprint
-    verification_uri = flask.url_for(
+    verification_uri = url.full_url_for(
         "auth.oauth.device_verification",
-        _external=True
     )
-    verification_uri_complete = flask.url_for(
+    verification_uri_complete = url.full_url_for(
         "auth.oauth.device_verification",
-        _external=True,
         user_code=device_code.user_code
     )
 
@@ -488,12 +485,11 @@ def device_verification(user_code: str | None = None):
     if not user_id:
         # User not logged in - redirect to Google OAuth login
         # After login, they'll return to this page to authorize the device
-        login_callback = flask.url_for('auth.oauth.device_verification', _external=True)
+        login_callback = url.full_url_for('auth.oauth.device_verification')
         if user_code:
             login_callback += f"/{user_code}"
-        oauth_authorize_url = flask.url_for(
+        oauth_authorize_url = url.full_url_for(
             'auth.google.authorize',
-            _external=True,
             target=login_callback
         )
         return flask.redirect(oauth_authorize_url)
@@ -501,7 +497,10 @@ def device_verification(user_code: str | None = None):
     # Handle POST for non-JS fallback
     if request.method == "POST":
         user_code_form = request.form.get('user_code', '').strip().upper()
-        redirect_url = request.form.get('redirect_url', flask.url_for('auth.oauth.device_verification', _external=True))
+        redirect_url = request.form.get(
+            'redirect_url',
+            url.full_url_for('auth.oauth.device_verification')
+        )
 
         # Validate user code format
         if not user_code_form or len(user_code_form) != 9 or user_code_form[4] != '-':

@@ -125,6 +125,11 @@ def authorize(
         401 Invalid client_id/user_id: None
         - Returned when the client_id or user_id in the session does not
           match the request.
+        400 Invalid request: None
+        - Returned (without redirecting) when the client has no
+          registered redirect_uris, when the request's redirect_uri does
+          not exactly match a registered URI (RFC 6749 §3.1.2.2), or
+          when the session's redirect_uri does not match the request.
         302 Found: Redirect
         - Redirects to the specified redirect URI with the
           authorization code, as well as state if provided.
@@ -136,7 +141,23 @@ def authorize(
         )
 
     # Check if client exists
-    resources.client[client_id].get()
+    client = resources.client[client_id].get()
+
+    # RFC 6749 §3.1.2.2: validate the request's redirect_uri against the
+    # client's registered redirect_uris. §4.1.2.1 requires rejecting the
+    # request without redirecting on mismatch, and this server fails
+    # closed on clients with no registered redirect_uris at all.
+    registered_uris = client.redirect_uris or []
+    if not registered_uris:
+        raise auth_errors.InvalidRequestError(
+            f"Client '{client_id}' has no registered redirect_uris; "
+            "authorization requests are rejected"
+        )
+    if redirect_uri not in registered_uris:
+        raise auth_errors.InvalidRequestError(
+            f"redirect_uri '{redirect_uri}' is not registered for "
+            f"client '{client_id}'"
+        )
 
     # ASSUME: app has already created a session via auth.sessions,
     # e.g. using campus_python
@@ -158,6 +179,13 @@ def authorize(
             f"Client mismatch: {client_id}"
         )
 
+    # The authorization code is delivered to the session's redirect_uri,
+    # so it must be the same registered URI that the request presented.
+    if app_session.redirect_uri != redirect_uri:
+        raise auth_errors.InvalidRequestError(
+            "Session redirect_uri does not match the authorization request"
+        )
+
     # Scope verification not yet handled here.
     # TODO: Create consent screen for user scope consent
     # The issued token will contain only the scopes allowed for the
@@ -165,9 +193,8 @@ def authorize(
     # The client app should handle insufficient scope errors.
 
     # Build verify_login callback URL with Campus session state
-    verify_callback_url = flask.url_for(
+    verify_callback_url = url.full_url_for(
         'auth.verify_login_and_redirect',
-        _external=True,
         state=state  # Preserve Campus session ID through Google OAuth flow
     )
 
@@ -175,9 +202,8 @@ def authorize(
     params = {"target": verify_callback_url}
     if hd:
         params["hd"] = hd
-    oauth_authorize_url = flask.url_for(
+    oauth_authorize_url = url.full_url_for(
         'auth.google.authorize',
-        _external=True,
         **params
     )
     return flask.redirect(oauth_authorize_url)
@@ -389,7 +415,7 @@ def verify_login_and_redirect(
     # Redirect to app callback (redirect_uri, not final target)
     assert authsession.state and authsession.authorization_code
     full_redirect_url = url.add_query(
-        authsession.redirect_uri or flask.request.host_url,
+        authsession.redirect_uri or url.canonical_origin(),
         # TODO: user consent screen for scope grant
         # For now, grant all scopes
         code=authsession.authorization_code,
