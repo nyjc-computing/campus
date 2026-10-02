@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Log in - Campus Audit{% endblock %}
+
+{% block content %}
+<section class="login-card">
+    <h2 class="page-title">Log in to Campus Audit</h2>
+    <p class="page-subtitle">
+        The Audit Web UI requires a Campus account. Authentication is
+        handled by Campus Auth through Google Workspace sign-in.
+    </p>
+    <a class="btn btn-primary btn-wide" href="/audit/login/start">Log in with your Campus account</a>
+    <p class="login-note">
+        You will be redirected to the Campus login page and returned to
+        the Audit Web UI afterwards.
+    </p>
+</section>
+{% endblock %}

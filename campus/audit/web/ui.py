@@ -4,12 +4,21 @@ UI routes for the Audit Web UI - serves HTML templates for browsing traces.
 
 This module contains web UI routes for the audit service, providing
 a web interface for exploring and viewing audit traces.
+
+Page map (docs/web-ui-requirements.md §2):
+
+- GET /audit/ - landing page (public: no login required)
+- GET /audit/traces - trace list (login required)
+- GET /audit/traces/<trace_id> - trace detail (login required)
+
+The trace list moved from /audit/ to /audit/traces when the landing
+page was added; the login gate (campus.audit.web.auth) exempts the
+landing page and this blueprint's static assets.
 """
 
 __all__ = ["create_blueprint"]
 
 import flask
-import werkzeug
 
 
 def create_blueprint() -> flask.Blueprint:
@@ -28,17 +37,22 @@ def create_blueprint() -> flask.Blueprint:
 
     @bp.route('/')
     def index() -> str:
-        """Render the trace list page.
+        """Render the landing page.
 
-        The list is the main entry point for the Audit Web UI
-        (docs/web-ui-requirements.md §2: list at /audit/).
+        The landing page is the public entry point for the Audit Web UI:
+        it introduces the service and links to the gated trace list and
+        the login flow. No trace data is shown here.
         """
-        return flask.render_template('traces.html')
+        return flask.render_template('index.html')
 
     @bp.route('/traces')
-    def traces() -> werkzeug.Response:
-        """Redirect the former list URL to /audit/."""
-        return flask.redirect(flask.url_for('audit_ui.index'))
+    def traces() -> str:
+        """Render the trace list page (login required via the auth gate).
+
+        Shows the filter bar and trace table; data is loaded client-side
+        from the UI data endpoints.
+        """
+        return flask.render_template('traces.html')
 
     @bp.route('/traces/<trace_id>')
     def trace(trace_id: str) -> str:

@@ -50,19 +50,6 @@ function formatDuration(durationMs) {
 }
 
 /**
- * Format a trace ID commit-hash style for tables: first 8 chars + ellipsis
- * (docs/web-ui-requirements.md §3.3/§7.4). Keep the full ID in the row's
- * title attribute; detail pages show it in full.
- */
-function formatTraceId(traceId) {
-    if (traceId === null || traceId === undefined || traceId === '') {
-        return '—';
-    }
-    const text = String(traceId);
-    return text.length <= 8 ? text : `${text.slice(0, 8)}…`;
-}
-
-/**
  * Parse an ISO 8601 timestamp and format it in the browser's local
  * timezone as YYYY-MM-DD HH:MM:SS (docs/web-ui-requirements.md §7.1).
  * Values that fail to parse are shown as-is rather than "Invalid Date".

@@ -231,13 +231,13 @@ button[type="reset"] {
 .trace-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.92rem;
+    font-size: 0.82rem;
 }
 
 .trace-table th,
 .trace-table td {
     text-align: left;
-    padding: 0.55rem 0.75rem;
+    padding: 0.3rem 0.6rem;
     border-bottom: 1px solid var(--audit-border);
     white-space: nowrap;
 }
@@ -247,9 +247,16 @@ button[type="reset"] {
     word-break: break-all;
 }
 
+/* Trace IDs render in full on one line; the wrapper scrolls
+   horizontally instead. Higher specificity than the small-screen
+   white-space override at the bottom of this file. */
+.trace-table td.trace-id {
+    white-space: nowrap;
+}
+
 .trace-table thead th {
     background: #eef1f5;
-    font-size: 0.78rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--audit-muted);
@@ -274,9 +281,9 @@ button[type="reset"] {
     display: inline-block;
     min-width: 2.6em;
     text-align: center;
-    padding: 0.1rem 0.45rem;
+    padding: 0.05rem 0.4rem;
     border-radius: 999px;
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     font-weight: 600;
     color: #fff;
 }
@@ -614,6 +621,144 @@ body.drawer-open {
     color: var(--status-client-error);
     font-size: 0.8rem;
     margin: 0.25rem 0;
+}
+
+/* Buttons (landing/login CTAs) */
+.btn {
+    display: inline-block;
+    font: inherit;
+    padding: 0.45rem 1rem;
+    border-radius: 4px;
+    border: 1px solid var(--audit-border);
+    background: var(--audit-surface);
+    color: var(--audit-text);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.btn:hover {
+    border-color: var(--audit-accent);
+    color: var(--audit-accent);
+}
+
+.btn-primary {
+    background: var(--audit-accent);
+    border-color: var(--audit-accent);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: var(--audit-accent-dark);
+    border-color: var(--audit-accent-dark);
+    color: #fff;
+}
+
+.btn-wide {
+    min-width: 16rem;
+}
+
+/* Flash messages (e.g. post-logout confirmation) */
+.flash-messages {
+    margin: 0 0 1rem;
+}
+
+.flash-message {
+    margin: 0 0 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--audit-border);
+    border-left: 3px solid var(--audit-accent);
+    border-radius: 4px;
+    background: var(--audit-surface);
+    font-size: 0.9rem;
+}
+
+/* Landing page */
+.hero {
+    padding: 2.5rem 0 1.5rem;
+}
+
+.hero .page-title {
+    font-size: 1.6rem;
+    margin-bottom: 0.5rem;
+}
+
+.hero .page-subtitle {
+    max-width: 40rem;
+    margin-bottom: 1.25rem;
+}
+
+.landing-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.landing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.landing-card {
+    display: block;
+    background: var(--audit-surface);
+    border: 1px solid var(--audit-border);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+a.landing-card:hover {
+    border-color: var(--audit-accent);
+}
+
+.landing-card h3 {
+    margin: 0 0 0.35rem;
+    font-size: 1rem;
+}
+
+.landing-card p {
+    margin: 0 0 0.75rem;
+    color: var(--audit-muted);
+    font-size: 0.9rem;
+}
+
+.landing-card-cta {
+    color: var(--audit-accent);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.landing-card-disabled {
+    opacity: 0.65;
+}
+
+.landing-card-disabled .landing-card-cta {
+    color: var(--audit-muted);
+    font-weight: 400;
+}
+
+/* Login page */
+.login-card {
+    max-width: 30rem;
+    margin: 3rem auto 0;
+    background: var(--audit-surface);
+    border: 1px solid var(--audit-border);
+    border-radius: 6px;
+    padding: 1.5rem 1.5rem 1.75rem;
+    text-align: center;
+}
+
+.login-card .page-subtitle {
+    margin-bottom: 1.25rem;
+}
+
+.login-note {
+    color: var(--audit-muted);
+    font-size: 0.85rem;
+    margin: 0.75rem 0 0;
 }
 
 /* Footer */

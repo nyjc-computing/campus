@@ -2,21 +2,26 @@
 
 Browser OAuth gate for the Audit Web UI (docs/web-ui-requirements.md §5).
 
-All /audit/* UI pages and /audit/api/* data endpoints require a logged-in
-user; /audit/v1/* keeps its API-key authentication and is unaffected.
+The gated surface: all UI pages under /audit (except the public landing
+page and this blueprint's static assets) and the /audit/api/* data
+endpoints require a logged-in user; /audit/v1/* keeps its API-key
+authentication and is unaffected.
 
 The gate drives Campus Auth's authorization-code flow (RFC 6749 §4.1,
 campus.auth.provider) server-side:
 
-1. GET /audit/login creates a campus auth session (server-to-server) and
-   redirects the browser to the auth service's /auth/v1/authorize.
+1. GET /audit/login renders a login page; its button links to
+   GET /audit/login/start, which creates a campus auth session
+   (server-to-server) and redirects the browser to the auth service's
+   /auth/v1/authorize.
 2. Campus Auth authenticates the user (Google Workspace), then redirects
    to GET /audit/callback with a single-use authorization code.
 3. GET /audit/callback exchanges the code at /auth/v1/token (confidential
    client) and stores the token and user identity in the signed Flask
-   cookie session. The token is never exposed to browser JS.
-4. GET /audit/logout revokes the token (best-effort) and clears the
-   session.
+   cookie session, then sends the browser to the trace list. The token
+   is never exposed to browser JS.
+4. GET /audit/logout revokes the token (best-effort), clears the
+   session, and redirects to the landing page.
 
 Configuration (fail-closed: the UI is unusable without it):
 
@@ -59,6 +64,11 @@ logger = logging.getLogger(__name__)
 # Signed-cookie session keys
 SESSION_KEY = "audit_oauth"
 LOGIN_STATE_KEY = "audit_login_state"
+
+# UI endpoints reachable without a login: the landing page and the UI
+# blueprint's static assets (the landing and login pages need their CSS
+# and JS). Everything else under /audit requires a login session.
+PUBLIC_UI_ENDPOINTS = frozenset({"audit_ui.index", "audit_ui.static"})
 
 # Campus Auth endpoints (paths are appended to the auth service origin)
 _AUTHORIZE_PATH = "/auth/v1/authorize"
@@ -230,8 +240,11 @@ def is_authenticated() -> bool:
 def require_login_page() -> werkzeug.Response | None:
     """Before-request gate for UI page routes: redirect to login.
 
-    Returns None to allow the request when authenticated.
+    Returns None to allow the request when authenticated, or when the
+    request targets a public endpoint (landing page, static assets).
     """
+    if flask.request.endpoint in PUBLIC_UI_ENDPOINTS:
+        return None
     if is_authenticated():
         return None
     try:
@@ -277,7 +290,20 @@ def create_blueprint() -> flask.Blueprint:
     )
 
     @bp.route('/login')
-    def login() -> werkzeug.Response:
+    def login() -> werkzeug.Response | str:
+        """Render the login page.
+
+        Authenticated visitors are sent straight to the trace list;
+        everyone else sees a page with a button that starts the OAuth
+        flow at /audit/login/start (a proper login page rather than an
+        immediate redirect to the auth service).
+        """
+        if is_authenticated():
+            return flask.redirect(flask.url_for("audit_ui.traces"))
+        return flask.render_template('login.html')
+
+    @bp.route('/login/start')
+    def login_start() -> werkzeug.Response:
         """Start the browser OAuth flow.
 
         Creates a campus auth session (its id serves as the OAuth state)
@@ -356,11 +382,13 @@ def create_blueprint() -> flask.Blueprint:
             "scope": token.get("scope") or "",
             "user_id": token.get("user_id") or "unknown",
         }
-        return flask.redirect(flask.url_for("audit_ui.index"))
+        return flask.redirect(flask.url_for("audit_ui.traces"))
 
     @bp.route('/logout')
-    def logout() -> flask.Response:
-        """Revoke the access token (best-effort) and clear the session."""
+    def logout() -> werkzeug.Response:
+        """Revoke the access token (best-effort), clear the session,
+        and return the visitor to the landing page.
+        """
         session_data = flask.session.pop(SESSION_KEY, None)
         flask.session.pop(LOGIN_STATE_KEY, None)
         if isinstance(session_data, dict) and session_data.get("access_token"):
@@ -370,12 +398,7 @@ def create_blueprint() -> flask.Blueprint:
                 logger.warning("Logout could not build auth client: %s", e)
             else:
                 auth.revoke_token(session_data["access_token"])
-        return flask.Response(
-            '<h1>Logged out</h1>'
-            '<p>You have been signed out of the Audit Web UI.</p>'
-            '<p><a href="/audit/login">Log in again</a></p>',
-            status=200,
-            mimetype="text/html",
-        )
+        flask.flash("You have been signed out of the Audit Web UI.")
+        return flask.redirect(flask.url_for("audit_ui.index"))
 
     return bp
