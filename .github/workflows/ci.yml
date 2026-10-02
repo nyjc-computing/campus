@@ -1,5 +1,11 @@
 name: CI
 
+# Deliberately NO paths-ignore on these triggers: the `weekly` ruleset
+# requires the Sanity/Unit matrix checks to be *reported* on every PR,
+# and a workflow skipped by paths-ignore never runs — the required
+# checks sit on "Expected — waiting for status to be reported" forever,
+# which made docs-only PRs unmergeable (#706). Docs-only change sets are
+# no-opped by the `changes` job plus per-step gating below instead.
 on:
   push:
     branches: [main, staging, weekly]
@@ -93,6 +99,12 @@ jobs:
     needs: [changes, ruff]
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    # The matrix EXPANDS into the check-run names the `weekly` ruleset
+    # requires verbatim ("Sanity Check (3.11)", "Unit Tests (3.11)", ...).
+    # Renaming a job or editing python-version strands the ruleset: the
+    # required names stop being reported and every PR blocks. Note 3.13
+    # runs but is not ruleset-required. Update the ruleset in the same
+    # PR as any rename or matrix change.
     strategy:
       fail-fast: false
       matrix:
