@@ -13,6 +13,7 @@ __all__ = ["create_blueprint"]
 import flask
 
 import campus.flask_campus as flask_campus
+from campus.common.errors import api_errors
 
 from ..resources import traces as traces_resource
 
@@ -38,25 +39,37 @@ def create_blueprint() -> flask.Blueprint:
             status: filter by HTTP status code
             since: ISO 8601 timestamp
             until: ISO 8601 timestamp
-            limit: max results (default 50)
+            limit: page size, clamped to [1, MAX_PAGE_SIZE] (default
+                DEFAULT_PAGE_SIZE)
+            cursor: opaque token from a previous page's cursor.next
 
         Returns:
             JSON: {"traces": [...], "cursor": {"next": ..., "has_more": ...}}
         """
-        limit = flask.request.args.get("limit", "50")
         status = flask.request.args.get("status")
-        limit_int = int(limit) if isinstance(limit, str) else limit
-        status_int = int(status) if status else None
-        summaries = traces_resource.search(
+        status_int: int | None
+        if status is None or status == "":
+            status_int = None
+        else:
+            try:
+                status_int = int(status)
+            except (TypeError, ValueError) as e:
+                raise api_errors.InvalidRequestError(
+                    f"status must be an integer, got {status!r}"
+                ) from e
+        page = traces_resource.search(
             path=flask.request.args.get("path") or None,
             status=status_int,
             since=flask.request.args.get("since") or None,
             until=flask.request.args.get("until") or None,
-            limit=limit_int,
+            limit=traces_resource.parse_page_size(
+                flask.request.args.get("limit")
+            ),
+            cursor=flask.request.args.get("cursor"),
         )
         return {
-            "traces": [s.to_resource() for s in summaries],
-            "cursor": {"next": None, "has_more": False}
+            "traces": [s.to_resource() for s in page.summaries],
+            "cursor": {"next": page.next_cursor, "has_more": page.has_more},
         }, 200
 
     @bp.route('/traces/<trace_id>')

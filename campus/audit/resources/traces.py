@@ -11,6 +11,8 @@ URL path mapping:
 
 __all__ = []
 
+import base64
+import json
 import typing
 
 import campus.model as model
@@ -18,6 +20,16 @@ import campus.storage
 from campus.common.errors import api_errors
 
 traces_storage = campus.storage.tables.get_db("spans")
+
+# Page size bounds for trace list/search pagination (issue #698).
+# Plain constants for now until a config management strategy is decided;
+# requested page sizes are clamped into [1, MAX_PAGE_SIZE].
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 1000
+
+# Traces are grouped from span rows, so the span fetch window gets
+# headroom of 10x the requested trace count (approximate heuristic).
+_SPAN_FETCH_MULTIPLIER = 10
 
 
 def _build_trace_tree(spans: list[dict]) -> model.TraceTree | None:
@@ -61,8 +73,132 @@ def _build_trace_summaries(spans: list[dict]) -> list[model.TraceSummary]:
     ]
 
 
+class TracePage(typing.NamedTuple):
+    """One page of trace summaries plus cursor pagination metadata.
+
+    Attributes:
+        summaries: Trace summaries, newest first
+        next_cursor: Opaque token for the next page, or None if exhausted
+        has_more: True if at least one more trace exists after this page
+    """
+
+    summaries: list[model.TraceSummary]
+    next_cursor: str | None
+    has_more: bool
+
+
+def _encode_cursor(started_at: str, trace_id: str) -> str:
+    """Encode a trace key (started_at, trace_id) as an opaque cursor token."""
+    payload = json.dumps({"started_at": started_at, "trace_id": trace_id})
+    return base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+
+
+def _decode_cursor(cursor: str) -> tuple[str, str]:
+    """Decode an opaque cursor token into a trace key.
+
+    Args:
+        cursor: Cursor token from a previous page response
+
+    Returns:
+        (started_at, trace_id) of the last trace on that page
+
+    Raises:
+        api_errors.InvalidRequestError: If the token is malformed
+    """
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(cursor.encode("ascii")))
+        return payload["started_at"], payload["trace_id"]
+    except (ValueError, TypeError, KeyError) as e:
+        # binascii.Error and json.JSONDecodeError are both ValueError
+        raise api_errors.InvalidRequestError("Invalid cursor token") from e
+
+
+def _query_trace_page(
+        query: dict,
+        *,
+        limit: int,
+        cursor: str | None,
+) -> TracePage:
+    """Fetch one keyset-paginated page of trace summaries, newest first.
+
+    Traces are grouped from spans and ordered by (started_at, trace_id)
+    descending; the cursor encodes the last trace key of the previous
+    page. Spans at or before the cursor timestamp are fetched, then
+    traces at or after the cursor key are dropped (the query language is
+    AND-only, so the tie-break on trace_id happens here).
+
+    Pagination is trace-approximate: the span fetch window is capped at
+    limit * _SPAN_FETCH_MULTIPLIER spans, so a trace whose spans straddle
+    the window edge may be summarized from partial data.
+
+    Args:
+        query: Storage query dict (filters shared by list and search)
+        limit: Page size (clamped by parse_page_size)
+        cursor: Opaque token from a previous page, or None for page 1
+
+    Returns:
+        TracePage with up to limit summaries and next-page metadata
+    """
+    effective_query = dict(query)
+    if cursor is not None:
+        cursor_started_at, cursor_trace_id = _decode_cursor(cursor)
+        effective_query["started_at"] = campus.storage.lte(cursor_started_at)
+
+    try:
+        spans = traces_storage.get_matching(
+            effective_query,
+            order_by="started_at",
+            ascending=False,
+            limit=limit * _SPAN_FETCH_MULTIPLIER,
+        )
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+
+    summaries = _build_trace_summaries(spans)
+    summaries.sort(key=lambda s: (s.started_at, s.trace_id), reverse=True)
+    if cursor is not None:
+        # Strictly after the cursor in (started_at, trace_id) walk order
+        cursor_key = (cursor_started_at, cursor_trace_id)
+        summaries = [
+            s for s in summaries if (s.started_at, s.trace_id) < cursor_key
+        ]
+
+    has_more = len(summaries) > limit
+    page = summaries[:limit]
+    next_cursor = (
+        _encode_cursor(page[-1].started_at, page[-1].trace_id)
+        if has_more
+        else None
+    )
+    return TracePage(summaries=page, next_cursor=next_cursor, has_more=has_more)
+
+
 class TracesResource:
     """Represents the traces resource in Campus audit API."""
+
+    @staticmethod
+    def parse_page_size(value: str | int | None) -> int:
+        """Parse and clamp a page size request parameter.
+
+        Args:
+            value: Raw limit value (query params arrive as str)
+
+        Returns:
+            Page size clamped into [1, MAX_PAGE_SIZE]; DEFAULT_PAGE_SIZE
+            if the value is None or empty
+
+        Raises:
+            api_errors.InvalidRequestError: If the value is not an integer
+        """
+        if value is None or value == "":
+            return DEFAULT_PAGE_SIZE
+        try:
+            limit = int(value)
+        except (TypeError, ValueError) as e:
+            raise api_errors.InvalidRequestError(
+                f"limit must be an integer, got {value!r}"
+            ) from e
+        return max(1, min(limit, MAX_PAGE_SIZE))
 
     @staticmethod
     def init_storage() -> None:
@@ -110,17 +246,19 @@ class TracesResource:
         self,
         since: str | None = None,
         until: str | None = None,
-        limit: int = 50,
-    ) -> list[model.TraceSummary]:
+        limit: int = DEFAULT_PAGE_SIZE,
+        cursor: str | None = None,
+    ) -> TracePage:
         """List traces newest first with optional time range filter.
 
         Args:
             since: ISO 8601 timestamp (optional)
             until: ISO 8601 timestamp (optional)
-            limit: Maximum number of traces to return
+            limit: Page size (should be clamped via parse_page_size)
+            cursor: Opaque token from a previous page (optional)
 
         Returns:
-            List of TraceSummary model instances
+            TracePage of TraceSummary model instances
         """
         query = {}
         if since and until:
@@ -131,17 +269,7 @@ class TracesResource:
         elif until:
             query["started_at"] = campus.storage.lte(until)
 
-        try:
-            spans = traces_storage.get_matching(
-                query,
-                order_by="started_at",
-                ascending=False,
-                limit=limit * 10,  # Get more spans to find unique traces
-            )
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-
-        return _build_trace_summaries(spans)[:limit]
+        return _query_trace_page(query, limit=limit, cursor=cursor)
 
     def search(
         self,
@@ -152,8 +280,9 @@ class TracesResource:
         user_id: str | None = None,
         since: str | None = None,
         until: str | None = None,
-        limit: int = 50,
-    ) -> typing.List[model.TraceSummary]:
+        limit: int = DEFAULT_PAGE_SIZE,
+        cursor: str | None = None,
+    ) -> TracePage:
         """Search traces by multiple filter criteria.
 
         Args:
@@ -164,10 +293,11 @@ class TracesResource:
             user_id: Filter by user
             since: ISO 8601 timestamp (optional)
             until: ISO 8601 timestamp (optional)
-            limit: Maximum number of traces to return
+            limit: Page size (should be clamped via parse_page_size)
+            cursor: Opaque token from a previous page (optional)
 
         Returns:
-            List of TraceSummary model instances
+            TracePage of TraceSummary model instances
         """
         query = {}
         if path:
@@ -188,17 +318,7 @@ class TracesResource:
         elif until:
             query["started_at"] = campus.storage.lte(until)
 
-        try:
-            spans = traces_storage.get_matching(
-                query,
-                order_by="started_at",
-                ascending=False,
-                limit=limit * 10,
-            )
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-
-        return _build_trace_summaries(spans)[:limit]
+        return _query_trace_page(query, limit=limit, cursor=cursor)
 
 
 class TraceResource:
