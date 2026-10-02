@@ -6,6 +6,8 @@ docs/web-ui-requirements.md §5 (issue #696):
 - The landing page and static assets are public; every other UI page
   redirects unauthenticated requests to /audit/login.
 - Unauthenticated data endpoint requests get 401 JSON.
+- Authenticated users not on the AUDIT_ADMINS allowlist get a 403 page
+  (403 JSON on /audit/api/*); an unset/empty allowlist denies everyone.
 - The gate fails closed (503/401) when the OAuth client is unconfigured
   (the landing page stays reachable).
 - GET /audit/login renders the login page (authenticated visitors are
@@ -38,6 +40,7 @@ CLIENT_SECRET = "auditweb-secret"
 SESSION_ID = "campus_session_123"
 ACCESS_TOKEN = "tok_abc123"
 USER_ID = "teacher@nyjc.edu.sg"
+ADMIN_ID = "ng_jun_siang@nyjc.edu.sg"
 
 
 class FakeResponse:
@@ -122,11 +125,13 @@ class TestAuditWebAuthGate(unittest.TestCase):
     def setUp(self):
         FakeAuthClient.calls = []
         # canonical_origin() requires PUBLIC_URL; the gate credentials
-        # must be present for non-fail-closed paths.
+        # must be present for non-fail-closed paths. USER_ID is on the
+        # admin allowlist so the authenticated tests below see 200s.
         env_patch = mock.patch.dict(os.environ, {
             "PUBLIC_URL": PUBLIC_URL,
             "AUDIT_OAUTH_CLIENT_ID": CLIENT_ID,
             "AUDIT_OAUTH_CLIENT_SECRET": CLIENT_SECRET,
+            "AUDIT_ADMINS": USER_ID,
         })
         env_patch.start()
         self.addCleanup(env_patch.stop)
@@ -179,6 +184,54 @@ class TestAuditWebAuthGate(unittest.TestCase):
         response = self.client.get("/audit/api/traces")
         self.assertEqual(response.status_code, 401)
         self.assertIn("error", response.get_json())
+
+    def test_non_admin_page_gets_403(self):
+        """An authenticated user not on AUDIT_ADMINS gets the 403 page."""
+        self._log_in()
+
+        with mock.patch.dict(os.environ, {"AUDIT_ADMINS": ADMIN_ID}):
+            response = self.client.get("/audit/traces")
+            self.assertEqual(response.status_code, 403)
+            self.assertIn(b"Access denied", response.data)
+            self.assertIn(USER_ID.encode(), response.data)
+            self.assertIn(b"AUDIT_ADMINS", response.data)
+            # The landing page stays reachable; the login page shows the
+            # forbidden page to the signed-in non-admin (no login loop)
+            self.assertEqual(self.client.get("/audit/").status_code, 200)
+            self.assertEqual(
+                self.client.get("/audit/login").status_code, 403
+            )
+
+    def test_non_admin_api_gets_403_json(self):
+        """A logged-in non-admin gets 403 JSON on data endpoints."""
+        self._log_in()
+
+        with mock.patch.dict(os.environ, {"AUDIT_ADMINS": ADMIN_ID}):
+            response = self.client.get("/audit/api/traces")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("error", response.get_json())
+
+    def test_admin_gate_fails_closed_when_unset(self):
+        """An empty AUDIT_ADMINS denies even authenticated users."""
+        self._log_in()
+
+        with mock.patch.dict(os.environ, {"AUDIT_ADMINS": ""}):
+            response = self.client.get("/audit/traces")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_list_is_case_insensitive_and_tolerates_spaces(self):
+        """Allowlist entries are trimmed and compared case-insensitively."""
+        self._log_in()
+
+        with mock.patch.dict(
+                os.environ,
+                {"AUDIT_ADMINS": f"  {USER_ID.upper()} , {ADMIN_ID} "},
+        ):
+            response = self.client.get("/audit/traces")
+
+        self.assertEqual(response.status_code, 200)
 
     def test_unconfigured_gate_returns_503_on_pages(self):
         """Without OAuth client config, gated pages fail closed with 503."""
@@ -398,6 +451,33 @@ class TestAuditWebAuthGate(unittest.TestCase):
         self.assertTrue(
             response.headers["Location"].endswith("/audit/login")
         )
+
+
+class TestAdminAllowlistParsing(unittest.TestCase):
+    """Verify AUDIT_ADMINS parsing (comma-separated emails,
+    case-insensitive, whitespace-tolerant, fail-closed when unset)."""
+
+    def test_entries_are_trimmed_lowercased_and_empties_ignored(self):
+        from campus.audit.web import auth
+
+        with mock.patch.dict(
+                os.environ,
+                {"AUDIT_ADMINS": " A@Example.com ,b@nyjc.edu.sg,, "},
+        ):
+            self.assertEqual(
+                auth._admin_emails(),
+                frozenset({"a@example.com", "b@nyjc.edu.sg"}),
+            )
+
+    def test_unset_or_empty_variable_allows_no_one(self):
+        from campus.audit.web import auth
+
+        env_without_admins = {k: v for k, v in os.environ.items()
+                              if k != "AUDIT_ADMINS"}
+        with mock.patch.dict(os.environ, env_without_admins, clear=True):
+            self.assertEqual(auth._admin_emails(), frozenset())
+        with mock.patch.dict(os.environ, {"AUDIT_ADMINS": "  "}):
+            self.assertEqual(auth._admin_emails(), frozenset())
 
 
 if __name__ == "__main__":

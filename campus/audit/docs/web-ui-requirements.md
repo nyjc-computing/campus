@@ -1,7 +1,7 @@
 # Audit Web UI Requirements
 
-**Document Version:** 1.1
-**Date:** 2026-04-16 (updated 2026-10-02: landing page, login page, dense table)
+**Document Version:** 1.2
+**Date:** 2026-04-16 (updated 2026-10-02: landing page, login page, dense table; admin allowlist gate)
 **Parent Issue:** #429
 **Related:** [campus-trace-api-prd-v3.md](./campus-trace-api-prd-v3.md)
 
@@ -263,17 +263,27 @@ The gate **fails closed**: if `AUDIT_OAUTH_CLIENT_ID` /
 503 and `/audit/api/*` returns 401 — the UI is never silently open.
 
 **Protected Routes:**
-- All `/audit/*` UI pages require authentication
+- All `/audit/*` UI pages require authentication AND admin allowlist
+  membership (§5.2)
 - Exceptions: the landing page `/audit/`, the UI's static assets
   (needed by the public pages), and `/audit/v1/health`;
   `/audit/v1/*` keeps its API-key authentication (unchanged)
 
 ### 5.2 Authorization
 
+> **Implemented (2026-10, temporary stopgap).** Access is limited to
+> accounts on the `AUDIT_ADMINS` allowlist: a comma-separated list of
+> campus.auth user ids (emails), compared case-insensitively, with
+> whitespace around entries ignored. Unset or empty means **no one**
+> has access (fail-closed). Authenticated non-admins get a 403 page
+> (403 JSON on `/audit/api/*`); the allowlist is read per-request, so
+> changes take effect on the next request. Keep the list small
+> (≤ 5 accounts) — a proper admin/role gate is planned to replace
+> this mechanism.
+
 **Access Control:**
-- Only authenticated users can view traces
+- Only authenticated users on the `AUDIT_ADMINS` allowlist can view traces
 - Users can only view traces from clients they have access to (enforced by API)
-- Admin users can view all traces (future enhancement)
 
 ---
 

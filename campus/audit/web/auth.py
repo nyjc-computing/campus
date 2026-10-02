@@ -4,8 +4,19 @@ Browser OAuth gate for the Audit Web UI (docs/web-ui-requirements.md §5).
 
 The gated surface: all UI pages under /audit (except the public landing
 page and this blueprint's static assets) and the /audit/api/* data
-endpoints require a logged-in user; /audit/v1/* keeps its API-key
-authentication and is unaffected.
+endpoints require a logged-in user who is on the admin allowlist;
+/audit/v1/* keeps its API-key authentication and is unaffected.
+
+Admin allowlist (temporary stopgap until a proper admin/role gate):
+
+- AUDIT_ADMINS: comma-separated campus.auth user ids (emails), compared
+  case-insensitively; whitespace around entries is ignored. Intended
+  for a handful of accounts (<= 5).
+- An unset or empty variable means no one has access (fail-closed,
+  mirroring the OAuth credential handling below).
+- Authenticated users not on the list get a 403 page (403 JSON on
+  /audit/api/*). The landing page, login page, and static assets stay
+  reachable without admin rights.
 
 The gate drives Campus Auth's authorization-code flow (RFC 6749 §4.1,
 campus.auth.provider) server-side:
@@ -42,6 +53,7 @@ auth-service requests through a test double, mirroring AuditClient.
 __all__ = [
     "AuthClient",
     "create_blueprint",
+    "is_admin",
     "is_authenticated",
     "require_login_api",
     "require_login_page",
@@ -237,16 +249,56 @@ def is_authenticated() -> bool:
     return bool(time.time() < expires_at)
 
 
+def _session_user_id() -> str | None:
+    """Return the logged-in user's campus.auth user id, if any."""
+    session_data = flask.session.get(SESSION_KEY)
+    if not isinstance(session_data, dict):
+        return None
+    user_id = session_data.get("user_id")
+    if not isinstance(user_id, str) or not user_id:
+        return None
+    return user_id
+
+
+def _admin_emails() -> frozenset[str]:
+    """Parse the AUDIT_ADMINS allowlist.
+
+    The variable holds comma-separated campus.auth user ids (emails).
+    Entries are trimmed and compared case-insensitively; empty entries
+    are ignored. An unset or empty variable allows no one (fail-closed).
+    """
+    raw = env.get("AUDIT_ADMINS") or ""
+    return frozenset(
+        entry.strip().lower() for entry in raw.split(",") if entry.strip()
+    )
+
+
+def is_admin() -> bool:
+    """Check whether the logged-in user is on the AUDIT_ADMINS
+    allowlist.
+
+    Read per-request so allowlist changes take effect without touching
+    the login session.
+    """
+    user_id = _session_user_id()
+    return user_id is not None and user_id.strip().lower() in _admin_emails()
+
+
 def require_login_page() -> werkzeug.Response | None:
     """Before-request gate for UI page routes: redirect to login.
 
-    Returns None to allow the request when authenticated, or when the
-    request targets a public endpoint (landing page, static assets).
+    Returns None to allow the request when the user is authenticated
+    AND on the admin allowlist, or when the request targets a public
+    endpoint (landing page, static assets). Authenticated non-admins
+    get a 403 page rather than a login redirect (re-authenticating
+    cannot help; the page tells them how to get access).
     """
     if flask.request.endpoint in PUBLIC_UI_ENDPOINTS:
         return None
     if is_authenticated():
-        return None
+        if is_admin():
+            return None
+        return _forbidden_page()
     try:
         _client_credentials()
     except OSError as e:
@@ -260,11 +312,34 @@ def require_login_page() -> werkzeug.Response | None:
 
 def require_login_api() -> flask_campus.JsonResponse | werkzeug.Response | None:
     """Before-request gate for UI data endpoints: 401 JSON when not
-    logged in (browsers redirect pages; fetch() callers get 401).
+    logged in (browsers redirect pages; fetch() callers get 401), and
+    403 JSON for logged-in non-admins.
     """
     if is_authenticated():
-        return None
+        if is_admin():
+            return None
+        user_id = _session_user_id() or "unknown"
+        logger.warning(
+            "Audit UI data access denied for non-admin user %s", user_id
+        )
+        return {
+            "error": (
+                "Admin access required: this account is not on the "
+                "audit admin allowlist."
+            )
+        }, 403
     return {"error": "Authentication required. Visit /audit/login."}, 401
+
+
+def _forbidden_page() -> flask.Response:
+    """Render the 403 page for authenticated non-admin visitors."""
+    user_id = _session_user_id() or "unknown"
+    logger.warning("Audit UI access denied for non-admin user %s", user_id)
+    return flask.Response(
+        flask.render_template("forbidden.html", user_id=user_id),
+        status=403,
+        mimetype="text/html",
+    )
 
 
 def _error_page(message: str, status: int) -> flask.Response:
@@ -293,13 +368,16 @@ def create_blueprint() -> flask.Blueprint:
     def login() -> werkzeug.Response | str:
         """Render the login page.
 
-        Authenticated visitors are sent straight to the trace list;
-        everyone else sees a page with a button that starts the OAuth
-        flow at /audit/login/start (a proper login page rather than an
-        immediate redirect to the auth service).
+        Authenticated admins are sent straight to the trace list;
+        authenticated non-admins get the forbidden page (re-logging in
+        cannot help); everyone else sees a page with a button that
+        starts the OAuth flow at /audit/login/start (a proper login
+        page rather than an immediate redirect to the auth service).
         """
         if is_authenticated():
-            return flask.redirect(flask.url_for("audit_ui.traces"))
+            if is_admin():
+                return flask.redirect(flask.url_for("audit_ui.traces"))
+            return _forbidden_page()
         return flask.render_template('login.html')
 
     @bp.route('/login/start')

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Access denied - Campus Audit{% endblock %}
+
+{% block content %}
+<section class="login-card">
+    <h2 class="page-title">Access denied</h2>
+    <p class="page-subtitle">
+        You are signed in as <span class="mono">{{ user_id }}</span>,
+        but this account is not on the Audit Web UI admin allowlist.
+    </p>
+    <p class="page-subtitle">
+        Ask an administrator to add your account to the
+        <span class="mono">AUDIT_ADMINS</span> list, then sign in again.
+    </p>
+    <a class="btn" href="/audit/logout">Sign out / switch account</a>
+</section>
+{% endblock %}
