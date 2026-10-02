@@ -14,7 +14,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import get_yapper
+from .. import get_yapper, scopes
 from ..resources import client as client_resource
 
 # Create blueprint for client management routes
@@ -27,7 +27,8 @@ def new(
         name: str,
         description: str,
         is_public: bool = False,
-        redirect_uris: list[str] | None = None
+        redirect_uris: list[str] | None = None,
+        allowed_scopes: list[str] | None = None
 ) -> flask_campus.JsonResponse:
     """Create a new vault client.
 
@@ -36,7 +37,8 @@ def new(
         "name": "Client Name",
         "description": "Client description",
         "is_public": false,  # Optional: true for CLI/mobile apps
-        "redirect_uris": []  # Optional: OAuth redirect URIs
+        "redirect_uris": [],  # Optional: OAuth redirect URIs
+        "allowed_scopes": []  # Optional: scope allowlist (fail-closed)
     }
 
     Returns: {
@@ -45,18 +47,24 @@ def new(
         "description": "Client description",
         "is_public": false,
         "redirect_uris": [],
+        "allowed_scopes": [],
         "created_at": "2025-07-20T10:30:00Z"
     }
 
     Public clients (is_public=true) don't have a client_secret and are used
     for CLI, mobile apps, and native applications that cannot securely store
     credentials per RFC 6749 Section 2.1.
+
+    allowed_scopes is the fail-closed scope allowlist
+    (docs/auth-token-invariants.md A1): a client with an empty allowlist
+    can be granted no scopes.
     """
     client = client_resource.new(
         name=name,
         description=description,
         is_public=is_public,
-        redirect_uris=redirect_uris or []
+        redirect_uris=redirect_uris or [],
+        allowed_scopes=scopes.parse(allowed_scopes)
     )
     get_yapper().emit('campus.clients.create', {"client_id": client.id})
     return client.to_resource(), 200
@@ -141,7 +149,8 @@ def update_client(
         client_id: schema.CampusID,
         name: str | None = None,
         description: str | None = None,
-        redirect_uris: list[str] | None = None
+        redirect_uris: list[str] | None = None,
+        allowed_scopes: list[str] | None = None
 ) -> flask_campus.JsonResponse:
     """Update a client's details.
 
@@ -149,7 +158,8 @@ def update_client(
     Body: {
         "name": "New Client Name",
         "description": "New description",
-        "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"]  # Optional
+        "redirect_uris": ["urn:ietf:wg:oauth:2.0:oob"],  # Optional
+        "allowed_scopes": ["read", "write"]  # Optional
     }
     Returns: {
         "id": "client_abc123",
@@ -157,10 +167,14 @@ def update_client(
         "description": "New description",
         "is_public": false,
         "redirect_uris": [],
+        "allowed_scopes": [],
         "created_at": "2025-07-20T10:30:00Z"
     }
 
     Note: is_public cannot be changed after client creation.
+    allowed_scopes is the fail-closed scope allowlist
+    (docs/auth-token-invariants.md A1): sessions and device codes may
+    only request scopes it contains.
     """
     updates = {}
     if name is not None:
@@ -169,6 +183,8 @@ def update_client(
         updates["description"] = description
     if redirect_uris is not None:
         updates["redirect_uris"] = redirect_uris
+    if allowed_scopes is not None:
+        updates["allowed_scopes"] = scopes.parse(allowed_scopes)
     if not updates:
         raise api_errors.InvalidRequestError(
             "No updates provided",

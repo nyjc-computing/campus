@@ -142,6 +142,13 @@ components:
           type: array
           items:
             type: string
+        allowed_scopes:
+          type: array
+          items:
+            type: string
+          description: >
+            Fail-closed scope allowlist: the only scopes this client may
+            be granted on Campus tokens (docs/auth-token-invariants.md A1).
 
     LoginSession:
       type: object
@@ -994,6 +1001,11 @@ paths:
                   type: array
                   items:
                     type: string
+                allowed_scopes:
+                  type: array
+                  items:
+                    type: string
+                  description: Scope allowlist requested at registration.
       responses:
         '201':
           description: Client registered successfully

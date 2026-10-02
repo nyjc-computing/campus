@@ -13,11 +13,37 @@ import campus.config
 from campus import flask_campus
 from campus.common import schema
 
-from .. import get_yapper
+from .. import get_yapper, scopes
+from ..resources import client as client_resource
 from ..resources import session as session_resource
 
 # Create blueprint for session management routes
 bp = flask.Blueprint('sessions', __name__, url_prefix='/sessions')
+
+
+def _validated_campus_scopes(
+        client_id: schema.CampusID,
+        scopes_value: list[str] | None,
+) -> list[str]:
+    """Validate requested scopes against the client's allowlist.
+
+    Applies to Campus-provider sessions only: proxy-provider sessions
+    carry the upstream provider's scope strings, which are validated
+    by the proxy flows instead. Fail-closed per invariant A1/A6
+    (docs/auth-token-invariants.md): the authenticated session-creation
+    boundary is where an allowlisted client's scope request is first
+    enforced.
+
+    Raises:
+        api_errors.NotFoundError: If the client does not exist.
+        auth_errors.InvalidScopeError: If any scope is outside the
+            client's allowed_scopes.
+    """
+    client = client_resource[client_id].get()
+    return scopes.validate_for_client(
+        client.allowed_scopes,
+        scopes_value,
+    )
 
 
 @bp.post("/sweep")
@@ -78,6 +104,10 @@ def new_provider_session(
 ) -> flask_campus.JsonResponse:
     """Create a new session for a specific authentication provider.
 
+    For provider="campus", requested scopes are validated fail-closed
+    against the client's allowed_scopes allowlist (invariant A1/A6,
+    docs/auth-token-invariants.md).
+
     POST /sessions/{provider}/
     Body: {
         "expiry_seconds": 3600,
@@ -94,12 +124,17 @@ def new_provider_session(
     }
     """
     expiry_seconds = campus.config.DEFAULT_OAUTH_EXPIRY_MINUTES * 60
+    validated_scopes = (
+        _validated_campus_scopes(client_id, scopes)
+        if provider == "campus"
+        else scopes or []
+    )
     authsession = session_resource[provider].new(
         expiry_seconds=expiry_seconds,
         client_id=client_id,
         user_id=user_id,
         redirect_uri=redirect_uri,
-        scopes=scopes,
+        scopes=validated_scopes,
         authorization_code=authorization_code,
         state=state,
         target=target
