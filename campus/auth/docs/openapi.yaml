@@ -1136,6 +1136,71 @@ paths:
         '400':
           description: OAuth error from Google (HTML error page)
 
+  /auth/v1/google/{integration}/authorize:
+    get:
+      tags: [OAuth Proxies]
+      summary: Start an integration's connect consent flow
+      operationId: googleIntegrationAuthorize
+      description: |
+        Browser endpoint: 302 to Google under the integration's own
+        OAuth client (#733). Requires the browser to already hold a
+        campus session (401 otherwise) — connect binds the credential
+        to the session user, never an anonymous browser. `target` must
+        be an HTTPS origin in the integration's vault
+        `CONNECT_TARGETS`. Consent is forced (`prompt=consent`) so the
+        stored credential always carries a refresh token, and the
+        asked scopes are exactly the integration's vault `SCOPES` cap.
+      parameters:
+        - $ref: '#/components/parameters/Integration'
+        - name: target
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Where to land the browser after the flow.
+      responses:
+        '302':
+          description: Redirect to Google
+        '400':
+          description: Target is not an HTTPS origin in CONNECT_TARGETS
+        '401':
+          description: No campus session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Unknown slug, unconfigured client, or connect disabled
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/google/{integration}/callback:
+    get:
+      tags: [OAuth Proxies]
+      summary: Google redirect target for a connect flow
+      operationId: googleIntegrationCallback
+      description: |
+        Browser endpoint (called by Google). Verifies the grant,
+        enforces the workspace domain, binds the consenting Google
+        identity to the campus session user (403 on mismatch — nothing
+        is stored), stores the credential under the integration's
+        namespaced provider (e.g. `google.classroom`), emits
+        `campus.integrations.connect` and 302s to the flow's `target`
+        with its query params preserved. Unlike the identity callback
+        it never sets the campus login cookie.
+      parameters:
+        - $ref: '#/components/parameters/Integration'
+      responses:
+        '302':
+          description: Redirect to the flow target
+        '400':
+          description: OAuth error from Google (HTML error page)
+        '403':
+          description: Consenting identity does not match the campus session user
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/v1/github/authorize:
     get:
       tags: [OAuth Proxies]
@@ -1373,6 +1438,66 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/v1/broker/{provider}/{integration}/:
+    post:
+      tags: [Token Bridge]
+      summary: Release the user's stored integration access token
+      operationId: releaseIntegrationToken
+      description: |
+        Per-integration variant of the token bridge (#733): releases
+        the user's credential for the integration's namespaced provider
+        (e.g. `google.classroom`) via the integration's own OAuth
+        client, refreshing silently server-side. Same C1 guards as the
+        identity route. Amended C3a rule: the client's
+        `upstream_scopes` must carry a NON-EMPTY entry for the
+        namespaced provider even when `min_scopes` is omitted (absent
+        key ⇒ 400 — an integration token inherently carries
+        integration scopes). `min_scopes` are additionally capped by
+        the integration's vault `SCOPES` set (400). Unknown slug,
+        base-provider mismatch, or unconfigured integration ⇒ 404; no
+        stored credential ⇒ 404 with a hint pointing at the connect
+        flow; grant misses `min_scopes` ⇒ 403 with `missing_scopes`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/Integration'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                min_scopes:
+                  type: array
+                  items:
+                    type: string
+                  example:
+                    - https://www.googleapis.com/auth/classroom.rosters
+      responses:
+        '200':
+          description: Upstream access token (`provider` is the namespaced string)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerRelease'
+        '400':
+          description: Absent allowlist entry, min_scopes beyond allowlist, or beyond the vault SCOPES cap
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '403':
+          description: Not eligible (C1) or grant does not cover min_scopes (C3b)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Unknown integration, unconfigured client, or no stored credential
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/v1/vaults/{label}/:
     get:
       tags: [Vaults]
@@ -1571,6 +1696,14 @@ components:
       schema:
         type: string
         enum: [campus, google, github, discord]
+    Integration:
+      name: integration
+      in: path
+      required: true
+      schema:
+        type: string
+        description: Integration slug from the in-code registry (#733)
+        enum: [classroom, calendar]
     VaultLabel:
       name: label
       in: path
