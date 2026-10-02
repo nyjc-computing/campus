@@ -13,6 +13,7 @@ import flask
 from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
+from campus.common.errors.base import ErrorConstant
 
 from .. import get_yapper
 from ..resources import (
@@ -58,9 +59,10 @@ def authenticate(
     elif client_id and client_secret:
         result = authenticate_credentials(client_id, client_secret)
     else:
-        result = {
-            "error": "Missing authentication credentials."
-        }, 400
+        raise api_errors.InvalidRequestError(
+            "Missing authentication credentials.",
+            error_code=ErrorConstant.AUTH_INVALID_REQUEST,
+        )
     get_yapper().emit('campus.root.authenticate')
     return result
 
@@ -70,17 +72,14 @@ def authenticate_credentials(
         client_secret: str
 ) -> flask_campus.JsonResponse:
     """Authenticate using client credentials."""
-    if client_resource.is_valid_credentials(client_id, client_secret):
-        resp_json = {
-            "client": client_resource[client_id].get().to_resource(),
-        }
-        status_code = 200
-    else:
-        resp_json = {
-            "error": "Invalid client credentials."
-        }
-        status_code = 401
-    return resp_json, status_code
+    if not client_resource.is_valid_credentials(client_id, client_secret):
+        raise api_errors.UnauthorizedError(
+            "Invalid client credentials.",
+            error_code=ErrorConstant.AUTH_INVALID_CLIENT,
+        )
+    return {
+        "client": client_resource[client_id].get().to_resource(),
+    }, 200
 
 
 def authenticate_token(token: str) -> flask_campus.JsonResponse:
@@ -88,17 +87,14 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
     try:
         user_creds = creds_resource["campus"].get(token)
     except api_errors.NotFoundError as err:
-        resp_json = {
-            "error": str(err)
-        }
-        status_code = 401
-    else:
-        resp_json = {
-            "client": client_resource[user_creds.client_id].get().to_resource(),  # type: ignore[index]
-            "user": user_resource[user_creds.user_id].get().to_resource(),
-        }
-        status_code = 200
-    return resp_json, status_code
+        raise api_errors.UnauthorizedError(
+            str(err),
+            error_code=ErrorConstant.AUTH_TOKEN_INVALID,
+        ) from None
+    return {
+        "client": client_resource[user_creds.client_id].get().to_resource(),  # type: ignore[index]
+        "user": user_resource[user_creds.user_id].get().to_resource(),
+    }, 200
 
 
 def create_blueprint() -> flask.Blueprint:
