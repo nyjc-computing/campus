@@ -53,6 +53,35 @@ class TestApiAuthMiddleware(IsolatedIntegrationTestCase):
         data = response.get_json()
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
+    def test_malformed_authorization_returns_401(self):
+        """Malformed Authorization values return 401, not 500 (#725).
+
+        "Bearer" without a token is the observed payload: curl trims a
+        trailing space, so "Authorization: Bearer " arrives scheme-only.
+        """
+        for value in ("Bearer", "Digest abc"):
+            response = self.apps_client.get(
+                "/api/v1/circles/",
+                headers={"Authorization": value},
+            )
+
+            self.assertEqual(response.status_code, 401, value)
+            data = response.get_json()
+            self.assertEqual(data["error"]["code"], "UNAUTHORIZED", value)
+
+    def test_basic_without_separator_returns_401(self):
+        """Basic credentials decoding without a separator return 401 (#725)."""
+        credentials = base64.b64encode(b"no-separator").decode()
+
+        response = self.apps_client.get(
+            "/api/v1/circles/",
+            headers={"Authorization": f"Basic {credentials}"},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
+
     def test_root_authenticate_needs_no_prior_credentials(self):
         """POST /root/ works with only the credentials in the body.
 

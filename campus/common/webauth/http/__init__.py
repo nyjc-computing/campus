@@ -62,11 +62,24 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             raise api_errors.UnauthorizedError(
                 "Missing Authorization header."
             )
-        match header.authorization.scheme:
-            case "basic":
-                return cls(provider, scheme="basic", header=header)
-            case "bearer":
-                return cls(provider, scheme="bearer", header=header)
+        try:
+            match header.authorization.scheme:
+                case "basic":
+                    # Parse the credentials here so malformed values
+                    # (bad base64, missing separator) reject as 401 at
+                    # the boundary instead of escaping as ValueError
+                    # from later extraction (#725).
+                    header.authorization.credentials()
+                    return cls(provider, scheme="basic", header=header)
+                case "bearer":
+                    return cls(provider, scheme="bearer", header=header)
+        except ValueError as err:
+            # Malformed Authorization values (unknown scheme prefix,
+            # undecodable Basic credentials) are authentication
+            # failures, not server errors.
+            raise api_errors.UnauthorizedError(
+                f"Malformed Authorization header: {err}"
+            ) from None
         raise token_errors.InvalidClientError(
             f"Unsupported HTTP scheme: {header.authorization.scheme}"
         )
