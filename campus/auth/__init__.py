@@ -128,11 +128,39 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     if isinstance(app, flask.Flask):
         app.url_map.strict_slashes = True
 
+    # Ensure the auth storage tables exist before seeding/first use.
+    # Same self-heal policy as _seed_public_client below: idempotent,
+    # non-production only, and loud-but-non-fatal on failure.
+    _init_auth_tables()
+
     # Ensure the public OAuth client ('guest') exists so device-flow
     # login works out of the box. Runs on every startup (idempotent) so
     # a database reset self-heals on the next deploy instead of silently
     # breaking the device flow with client-facing 400s (#605).
     _seed_public_client()
+
+
+def _init_auth_tables() -> None:
+    """Initialize the credentials storage tables, logging loudly on failure.
+
+    CREATE TABLE IF NOT EXISTS per table (idempotent), so a fresh or
+    reset deployment self-heals on the next deploy. In production,
+    schema management is handled by migrations/scripts (see migration
+    009 for app_credentials), so initialization is skipped there.
+    """
+    from campus.common import devops
+
+    try:
+        if devops.ENV != devops.PRODUCTION:
+            from .resources.credentials import CredentialsResource
+            CredentialsResource.init_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize auth storage tables: credential "
+            "issuance (all OAuth token grants) will fail until the "
+            "tables exist. Recover by running migrations/ against the "
+            "database (see migrations/009_create_app_credentials.py)."
+        )
 
 
 def _seed_public_client() -> None:
