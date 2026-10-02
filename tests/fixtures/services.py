@@ -89,10 +89,12 @@ class ServiceManager:
         setup.set_postgres_env_vars()
         setup.set_mongodb_env_vars()
 
-        # Set HOSTNAME for test mode - campus_python uses this to build base_url
-        # When DEPLOY="campus.auth", it uses base_url = f"https://{env.HOSTNAME}"
-        # We use a fake hostname that we'll map to Flask test apps
-        env.set('HOSTNAME', "campus.test")
+        # Set explicit service base URLs for campus_python (post campus-api-python#53):
+        # full Campus() clients resolve base URLs from these vars, routing
+        # requests into the Flask test apps registered under https://campus.test.
+        # Without them, clients fall back to the development Railway defaults.
+        env.set('CAMPUS_AUTH_URL', "https://campus.test")
+        env.set('CAMPUS_API_URL', "https://campus.test")
         # PUBLIC_URL is required for campus URL generation (campus#652):
         # url.canonical_origin() raises without it
         env.set('PUBLIC_URL', "https://campus.test")
@@ -148,7 +150,7 @@ class ServiceManager:
         flask_test.configure_for_testing(self.auth_app)
 
         # Register auth app with its base URL and path prefix for test routing
-        # campus_python will use base_url = f"https://{env.HOSTNAME}" = "https://campus.test"
+        # campus_python resolves base_url from CAMPUS_AUTH_URL = "https://campus.test"
         # Auth routes are at /auth/v1/*
         flask_test.register_test_app("https://campus.test", self.auth_app, path_prefix="/auth")
 
@@ -216,7 +218,7 @@ class ServiceManager:
         initialization in proper dependency order: auth → storage → yapper → api.
 
         Phase Details:
-        - Configures test environment variables (ENV, STORAGE_MODE, HOSTNAME, PUBLIC_URL)
+        - Configures test environment variables (ENV, STORAGE_MODE, CAMPUS_AUTH_URL/CAMPUS_API_URL, PUBLIC_URL)
         - Patches campus_python for test routing
         - Initializes services in dependency order
         - Creates Flask apps for auth, api, and audit
