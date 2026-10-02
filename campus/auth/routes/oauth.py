@@ -19,7 +19,7 @@ from campus.common import schema
 from campus.common.errors import api_errors, token_errors
 from campus.common.utils import secret, url
 
-from .. import get_yapper
+from .. import get_yapper, scopes
 from ..resources import client as client_resource
 from ..resources import credentials as credentials_resource
 from ..resources import device_code as device_code_resource
@@ -27,8 +27,8 @@ from ..resources import device_code as device_code_resource
 # Create blueprint for OAuth routes
 bp = flask.Blueprint('oauth', __name__, url_prefix='/oauth')
 
-# Default scopes for CLI clients
-DEFAULT_CLI_SCOPES = ["read", "write"]
+# Default scopes for CLI clients (the seeded public client's allowlist)
+DEFAULT_CLI_SCOPES = campus.config.DEFAULT_CLI_SCOPES
 
 
 def _get_oauth_payload() -> dict:
@@ -101,6 +101,11 @@ def device_authorize(
         raise token_errors.InvalidClientError(
             "Invalid client_id"
         ) from None
+
+    # Fail-closed scope allowlist (invariant A7,
+    # docs/auth-token-invariants.md): a device code may only carry
+    # scopes within the client's registered allowlist.
+    scopes.validate_for_client(client.allowed_scopes, DEFAULT_CLI_SCOPES)
 
     # Create device code
     device_code = device_code_resource.create(
@@ -258,6 +263,12 @@ def _handle_device_code_grant(
             raise api_errors.InternalError(
                 "Device code is authorized but has no user_id"
             )
+
+        # Re-validate the device code's scopes against the client's
+        # current allowlist: it may have narrowed since the device was
+        # authorized (invariant A7, docs/auth-token-invariants.md).
+        client = client_resource[client_id].get()
+        scopes.validate_for_client(client.allowed_scopes, dc.scopes)
 
         # Create OAuth token
         access_token = secret.generate_access_token()

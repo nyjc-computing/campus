@@ -70,6 +70,7 @@ class TestSQLiteConcurrentAccess(unittest.TestCase):
                 "description": f"row {i}",
                 "is_public": False,
                 "redirect_uris": [],
+                "allowed_scopes": [],
             })
 
     def _run_concurrently(self, worker) -> list[Exception]:
@@ -136,6 +137,7 @@ class TestSQLiteConcurrentAccess(unittest.TestCase):
                     "description": "concurrent insert",
                     "is_public": False,
                     "redirect_uris": [],
+                    "allowed_scopes": [],
                 })
                 self.table.delete_by_id(row_id)
 
