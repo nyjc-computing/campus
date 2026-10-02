@@ -11,6 +11,7 @@ dynamically. This allows creating fresh blueprints for test isolation.
 """
 
 __all__ = [
+    "broker",
     "clients",
     "credentials",
     "logins",
@@ -28,10 +29,11 @@ from campus.common import schema
 
 from .. import resources
 from ..middleware import Authenticator
-from . import clients, credentials, logins, oauth, root, sessions, users, vaults
+from . import broker, clients, credentials, logins, oauth, root, sessions, users, vaults
 
 # Route modules that require authentication
 _AUTHENTICATED_ROUTE_MODULES = [
+    broker,
     clients,
     credentials,
     logins,
@@ -54,7 +56,11 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
     """Authenticate using HTTP Bearer Authentication."""
     credentials = resources.credentials["campus"].get(token_id=token)
     return {
-        "client": resources.client[schema.CampusID(credentials.client_id)].get()
+        "client": resources.client[schema.CampusID(credentials.client_id)].get(),
+        # Bearer authentication carries the user context (the token's
+        # owner); basic (client-credentials) auth has none. The token
+        # bridge uses this to bind releases to the authenticated user.
+        "user": {"id": str(credentials.user_id)},
     }
 
 # campus.auth authenticates directly from campus.auth.resources to avoid

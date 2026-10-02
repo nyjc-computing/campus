@@ -42,6 +42,7 @@ import werkzeug
 from campus import flask_campus
 from campus.common import schema
 
+from ... import scopes as campus_scopes
 from . import proxy
 from .proxy import get_proxy as get_proxy  # noqa: F401 (re-export)
 
@@ -69,14 +70,26 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             hd: str | None = "nyjc.edu.sg",
             login_hint: schema.Email | None = None,
             prompt: PROMPT_OPTION | None = None,
+            scope: str | None = None,
     ) -> werkzeug.Response:
         """Prepares the Google OAuth authorization URL and redirects to it.
+
+        scope (space-delimited) requests upstream Google scopes beyond
+        the proxy's base set (email, profile), merged via
+        include_granted_scopes=true so re-consent accumulates
+        (invariant B3, docs/auth-token-invariants.md). The app path
+        reaches this endpoint through provider.authorize, which caps
+        the requested scopes against the campus client's
+        upstream_scopes allowlist before forwarding them here; what the
+        broker may later release is re-checked against the same
+        allowlist.
         """
         return flask.g.proxy.redirect_for_authorization(
             target,
             hd=hd,
             login_hint=login_hint,
-            prompt=prompt
+            prompt=prompt,
+            extra_scopes=campus_scopes.parse(scope),
         )
 
     @bp.get('/callback')

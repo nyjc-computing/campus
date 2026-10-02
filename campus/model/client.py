@@ -52,6 +52,22 @@ class Client(Model):
         default_factory=list,
         metadata={"mutable": True}
     )
+    # Upstream (third-party provider) scopes the client may be granted
+    # through Campus's OAuth proxies, keyed by provider name. Fail-closed:
+    # an absent provider entry means the client may only receive that
+    # proxy's base scopes (docs/auth-token-invariants.md B3).
+    upstream_scopes: dict[str, list[str]] = field(
+        default_factory=dict,
+        metadata={"mutable": True}
+    )
+    # Token bridge access (invariant C1): only confidential clients
+    # flagged for bridge access may exchange a campus bearer token for
+    # the user's upstream access tokens via /auth/v1/broker. Public
+    # clients are never eligible. Fail-closed default.
+    token_bridge: bool = field(
+        default=False,
+        metadata={"mutable": True}
+    )
     # permissions are stored in a separate table
     permissions: dict[str, int] = field(
         default_factory=dict,

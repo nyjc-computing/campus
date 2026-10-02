@@ -10,12 +10,31 @@ import flask
 import campus.model
 from campus import flask_campus
 from campus.common import schema
-from campus.common.errors import FieldError, ValidationError
+from campus.common.errors import FieldError, ValidationError, api_errors
 
 from ..resources import credentials as creds_resource
 
 # Create blueprint for session management routes
 bp = flask.Blueprint('credentials', __name__, url_prefix='/credentials')
+
+
+def _reject_non_campus_provider(provider: str) -> None:
+    """Refuse the credentials API for third-party providers.
+
+    Campus is the sole custodian of upstream credentials (invariant B1,
+    docs/auth-token-invariants.md): the credential records for
+    providers like google/github/discord hold those users' upstream
+    access AND refresh tokens, which must never leave Campus over this
+    API. Upstream access tokens are released only through the token
+    bridge (/auth/v1/broker), which enforces the client flag and scope
+    ceiling (invariants C1-C3).
+    """
+    if provider != "campus":
+        raise api_errors.ForbiddenError(
+            f"Provider {provider!r} credentials are not exposed via the "
+            "credentials API; upstream tokens are released only via "
+            "/auth/v1/broker (docs/auth-token-invariants.md B1/C1)"
+        )
 
 
 @bp.get("/<provider>/")
@@ -36,6 +55,7 @@ def get_by_token(
         "credentials": { ... }
     }
     """
+    _reject_non_campus_provider(provider)
     if token_id:
         credentials = creds_resource[provider].get(token_id)
         return credentials.to_resource(), 200
@@ -63,6 +83,7 @@ def delete_by_user(
     }
     """
     client_id = flask.g.current_client.id
+    _reject_non_campus_provider(provider)
     creds_resource[provider][user_id].delete(client_id)
     return {}, 200
 
@@ -82,6 +103,7 @@ def get_by_user(
     }
     Returns: { ... }
     """
+    _reject_non_campus_provider(provider)
     client_id = client_id or flask.g.current_client.id
     assert client_id  # Authorization already done by this point
     credentials = creds_resource[provider][user_id].get(client_id)
@@ -104,6 +126,7 @@ def update_credentials(
     }
     Returns: {}
     """
+    _reject_non_campus_provider(provider)
     client_id = flask.g.current_client.id
     try:
         # The body arrives as a plain dict; the resource layer expects
@@ -149,6 +172,7 @@ def new_credentials(
         "credentials": { ... }
     }
     """
+    _reject_non_campus_provider(provider)
     client_id = flask.g.current_client.id
     credentials = creds_resource[provider][user_id].new(
         client_id=client_id,

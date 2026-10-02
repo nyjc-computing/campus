@@ -2,25 +2,42 @@ openapi: 3.0.3
 info:
   title: Campus Auth API
   description: |
-    Campus OAuth 2.0 Authorization Server and Authentication API.
+    Campus OAuth 2.0 authorization server and authentication API.
 
-    All routes are served under the `/auth/v1` prefix; paths in this
-    document are written with that prefix included.
+    The API has two provider families with deliberately different
+    mechanics (docs/auth-token-invariants.md):
 
-    For the narrative end-to-end browser login flow (session creation,
-    Google Workspace leg, code exchange) see
-    [docs/auth-login-flow.md](../../../../docs/auth-login-flow.md) —
-    this file documents the same endpoints at schema level.
+    - `campus` (first-party): Campus's own OAuth 2.0 authorization
+      server — authorization-code, device-code (RFC 8628) and refresh
+      grants issuing Campus bearer tokens.
+    - `google`, `github`, `discord` (third-party): OAuth proxies that
+      carry out browser login/consent with the upstream provider and
+      keep custody of the upstream credentials. Upstream access tokens
+      are released to apps only through the token bridge
+      (docs/token-broker.md); refresh tokens never leave Campus.
 
-    ## Error Responses
+    ## Trails
 
-    All error responses follow the Campus error envelope format while maintaining
-    OAuth 2.0 compliance (RFC 6749).
+    - docs/auth-login-flow.md — the browser login chain
+    - docs/token-broker.md — the token bridge contract
+    - docs/auth-token-invariants.md — security invariants
+    - campus/auth/docs/auth-error-spec.md — error codes
 
-    OAuth-specific details are included in the `details.oauth_error` field.
+    ## Error responses
 
-    Reference: [auth-error-spec.md](./auth-error-spec.md)
-  version: 0.1.0
+    Errors use the Campus error envelope (see `ErrorEnvelope`), with
+    `AUTH_*` error codes; RFC 6749 protocol errors surface in
+    `error.details` with the OAuth error string. Malformed request
+    bodies return the validation-error shape (`ValidationError`).
+    There are no endpoint-specific exceptions (#714 normalized the
+    last flat-shape holdouts on `/root/` and the vault lookup).
+
+    ## Trailing slashes
+
+    Paths are listed exactly as routed (Flask): a path shown with a
+    trailing slash must be requested with it — the no-slash variant
+    answers with a 308 redirect.
+  version: 0.2.0
   contact:
     name: NYJC Computing
     email: nyjc.computing@nyjc.edu.sg
@@ -33,8 +50,1862 @@ servers:
   - url: https://campusauth-development.up.railway.app
     description: Development
 
+security:
+  - BasicAuth: []
+  - BearerAuth: []
+
+tags:
+  - name: Users
+  - name: Login Sessions
+  - name: Clients
+  - name: Client Vault Access
+  - name: Auth Sessions
+  - name: OAuth Provider
+    description: Campus as OAuth 2.0 authorization server (RFC 6749) and device flow (RFC 8628)
+  - name: OAuth Proxies
+    description: Browser login/consent with third-party identity providers
+  - name: Credentials
+  - name: Token Bridge
+  - name: Vaults
+  - name: Root
+
+paths:
+  /auth/v1/users/:
+    get:
+      tags: [Users]
+      summary: List all users
+      operationId: listUsers
+      responses:
+        '200':
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users]
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Users]
+      summary: Create a user
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+      responses:
+        '201':
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/users/{user_id}/:
+    get:
+      tags: [Users]
+      summary: Get a user
+      operationId: getUser
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Users]
+      summary: Update a user (not implemented)
+      operationId: updateUser
+      description: Returns 501; user updates are not implemented yet.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '501':
+          description: Not implemented
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      operationId: deleteUser
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Deleted (empty object)
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/users/{user_id}/activate:
+    post:
+      tags: [Users]
+      summary: Activate a user
+      operationId: activateUser
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Activated user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/logins/:
+    post:
+      tags: [Login Sessions]
+      summary: Create a login session
+      operationId: createLoginSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, user_id, agent_string]
+              properties:
+                client_id:
+                  type: string
+                  example: uid-client-72bbe11c
+                user_id:
+                  type: string
+                  format: email
+                device_id:
+                  type: string
+                  nullable: true
+                agent_string:
+                  type: string
+      responses:
+        '200':
+          description: Login session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSession'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/logins/{session_id}/:
+    get:
+      tags: [Login Sessions]
+      summary: Get a login session
+      operationId: getLoginSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Login session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSession'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Login Sessions]
+      summary: Extend a login session
+      operationId: updateLoginSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expiry_seconds]
+              properties:
+                expiry_seconds:
+                  type: integer
+      responses:
+        '200':
+          description: Updated login session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSession'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Login Sessions]
+      summary: Delete a login session
+      operationId: deleteLoginSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Deleted (empty object)
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/clients/:
+    get:
+      tags: [Clients]
+      summary: List all clients
+      operationId: listClients
+      responses:
+        '200':
+          description: Clients
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [clients]
+                properties:
+                  clients:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Client'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Clients]
+      summary: Register a client
+      operationId: createClient
+      description: |
+        The response never contains a secret; the first secret is
+        obtained (and later rotated) via `POST /clients/{client_id}/revoke`.
+        Scope fields are fail-closed (docs/auth-token-invariants.md A1/B3/C1).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientRegistration'
+      responses:
+        '200':
+          description: Created client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '409':
+          description: Client name already exists
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/clients/{client_id}/:
+    get:
+      tags: [Clients]
+      summary: Get a client
+      operationId: getClient
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: Client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Clients]
+      summary: Update a client
+      operationId: updateClient
+      description: '`is_public` cannot be changed after creation. Public clients cannot be granted `token_bridge`.'
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                redirect_uris:
+                  type: array
+                  items:
+                    type: string
+                allowed_scopes:
+                  type: array
+                  items:
+                    type: string
+                upstream_scopes:
+                  $ref: '#/components/schemas/UpstreamScopeMap'
+                token_bridge:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '409':
+          description: Client name already exists
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Clients]
+      summary: Delete a client
+      operationId: deleteClient
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: Deleted (empty object)
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/clients/{client_id}/revoke:
+    post:
+      tags: [Clients]
+      summary: Rotate the client secret
+      operationId: revokeClientSecret
+      description: Generates a new secret (returned once, in plaintext) and invalidates the old one. Public clients have no secret and are rejected.
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: New client secret
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [secret]
+                properties:
+                  secret:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/clients/{client_id}/access/:
+    get:
+      tags: [Client Vault Access]
+      summary: List a client's vault access
+      operationId: getClientAccess
+      description: With `vault`, returns that label's access bitflag; without, the full label-to-access map.
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - name: vault
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Vault access
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [vault, access]
+                    properties:
+                      vault:
+                        type: string
+                      access:
+                        $ref: '#/components/schemas/AccessBitflag'
+                  - type: object
+                    required: [access]
+                    properties:
+                      access:
+                        type: object
+                        additionalProperties:
+                          $ref: '#/components/schemas/AccessBitflag'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Client Vault Access]
+      summary: Replace a client's access for a vault
+      operationId: updateClientAccess
+      description: Replaces (not merges) the client's permission bitflag for the label.
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessGrant'
+      responses:
+        '200':
+          description: Updated vault access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGrantResult'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/clients/{client_id}/access/check:
+    get:
+      tags: [Client Vault Access]
+      summary: Check a client's vault access
+      operationId: checkClientAccess
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+        - name: vault
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: permission
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/AccessBitflag'
+      responses:
+        '200':
+          description: Access verdict
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [client_id, has_access]
+                properties:
+                  client_id:
+                    type: string
+                  has_access:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/clients/{client_id}/access/grant:
+    post:
+      tags: [Client Vault Access]
+      summary: Grant a client access to a vault
+      operationId: grantClientAccess
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessGrant'
+      responses:
+        '200':
+          description: Updated vault access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGrantResult'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/clients/{client_id}/access/revoke:
+    post:
+      tags: [Client Vault Access]
+      summary: Revoke a client's vault access
+      operationId: revokeClientAccess
+      description: Revokes only the permission bits in the request.
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessGrant'
+      responses:
+        '200':
+          description: Updated vault access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessGrantResult'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/sessions/{provider}/:
+    post:
+      tags: [Auth Sessions]
+      summary: Create an auth session
+      operationId: createAuthSession
+      description: |
+        Server-to-server: the app backend creates the session, then
+        sends the browser to `GET /authorize` with `state` = the
+        session id. For `provider=campus`, requested scopes are
+        validated fail-closed against the client's `allowed_scopes`
+        (invariant A1/A6); proxy providers carry the upstream
+        provider's scope strings instead.
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id, redirect_uri]
+              properties:
+                client_id:
+                  type: string
+                  example: uid-client-72bbe11c
+                redirect_uri:
+                  type: string
+                  format: uri
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                user_id:
+                  type: string
+                  format: email
+                  nullable: true
+                authorization_code:
+                  type: string
+                  nullable: true
+                state:
+                  type: string
+                  nullable: true
+                target:
+                  type: string
+                  format: uri
+                  nullable: true
+      responses:
+        '200':
+          description: Auth session (includes the pre-generated authorization code)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/sessions/{provider}/authorization_code:
+    post:
+      tags: [Auth Sessions]
+      summary: Look up a session by authorization code
+      operationId: getSessionByAuthorizationCode
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Auth session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/sessions/{provider}/{session_id}/:
+    get:
+      tags: [Auth Sessions]
+      summary: Get an auth session
+      operationId: getAuthSession
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Auth session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Auth Sessions]
+      summary: Update an auth session
+      operationId: updateAuthSession
+      description: Only `user_id` and `authorization_code` can be updated (this is how the login flow binds them).
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                  format: email
+                  nullable: true
+                authorization_code:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Updated (empty object)
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Auth Sessions]
+      summary: Finalize an auth session
+      operationId: finalizeAuthSession
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Finalized; returns the session's landing target
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [target]
+                properties:
+                  target:
+                    type: string
+                    format: uri
+                    nullable: true
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/sessions/sweep:
+    post:
+      tags: [Auth Sessions]
+      summary: Sweep expired sessions
+      operationId: sweepSessions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                at_time:
+                  type: string
+                  format: date-time
+                  nullable: true
+      responses:
+        '200':
+          description: Sweep result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [swept_count]
+                properties:
+                  swept_count:
+                    type: integer
+
+  /auth/v1/authorize:
+    get:
+      tags: [OAuth Provider]
+      summary: Authorization endpoint (RFC 6749 section 4.1.1)
+      operationId: authorize
+      description: |
+        Browser endpoint. Validates the request (fail-closed
+        redirect_uri matching, RFC 6749 section 3.1.2.2), then
+        redirects to the Google leg for authentication. `scope` must
+        be within the session's scopes; `upstream_scope` must be within
+        the client's `upstream_scopes["google"]` allowlist — violations
+        are rejected with 400 `invalid_scope` without redirecting.
+        On success: 302 to `/auth/v1/google/authorize?...`.
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code, device_code]
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Must exactly match a registered redirect_uri.
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The auth session id.
+        - name: scope
+          in: query
+          schema:
+            type: string
+          description: Space-delimited Campus scopes; must be within the session's scopes.
+        - name: upstream_scope
+          in: query
+          schema:
+            type: string
+          description: Space-delimited Google scopes requested on behalf of the client (e.g. Classroom API scopes).
+        - name: hd
+          in: query
+          schema:
+            type: string
+          description: Hosted domain passed through to Google.
+      responses:
+        '302':
+          description: Redirect to the Google leg
+        '400':
+          description: Invalid request (no redirect is issued)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /auth/v1/token:
+    post:
+      tags: [OAuth Provider]
+      summary: Exchange an authorization code for a Campus token
+      operationId: exchangeAuthorizationCode
+      description: |
+        Token endpoint for the authorization-code grant (the only grant
+        handled here). Accepts JSON or form-encoded bodies. The code
+        binds to the issuing client (RFC 6749 section 4.1.3); the
+        issued token covers the session's scopes — an existing covering
+        grant is reused, otherwise a new token carries the union of
+        grant and request (incremental scope authorization, invariant
+        A3/A4).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationCodeGrant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AuthorizationCodeGrant'
+      responses:
+        '200':
+          description: Campus token resource (note the campus field names)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampusTokenResource'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/verify_login:
+    get:
+      tags: [OAuth Provider]
+      summary: Post-login callback (browser)
+      operationId: verifyLogin
+      description: |
+        Internal step of the login chain: called as the Google leg's
+        target after a successful login. Requires the campus login
+        cookie; provisions the user record, binds the authorization
+        code to the session, and 302s the browser to the session's
+        `redirect_uri` with `code`, `state` and `scope`.
+      parameters:
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: The auth session id.
+      responses:
+        '302':
+          description: Redirect to the client's redirect_uri
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/oauth/device_authorize:
+    post:
+      tags: [OAuth Provider]
+      summary: Start a device authorization (RFC 8628 section 3.1)
+      operationId: deviceAuthorize
+      description: |
+        Public. The client's `allowed_scopes` must cover the default
+        CLI scopes (`read write`) or the request fails with
+        `invalid_scope` (invariant A7). Accepts JSON or form-encoded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_id]
+              properties:
+                client_id:
+                  type: string
+                  example: guest
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [client_id]
+              properties:
+                client_id:
+                  type: string
+      responses:
+        '200':
+          description: Device authorization response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceAuthorizationResponse'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/oauth/token:
+    post:
+      tags: [OAuth Provider]
+      summary: Token endpoint for device-code and refresh grants
+      operationId: oauthToken
+      description: |
+        RFC 6749/8628 token endpoint. The `authorization_code` grant is
+        NOT handled here — use `POST /auth/v1/token`. The refresh grant
+        reissues exactly the granted scopes (never widens, invariant
+        A2) and rotates the token pair; the presented refresh token is
+        single-use. Accepts JSON or form-encoded bodies. Device-code
+        polling returns 400 with `authorization_pending`/`slow_down`
+        until the user approves.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/DeviceCodeGrant'
+                - $ref: '#/components/schemas/RefreshTokenGrant'
+          application/x-www-form-urlencoded:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/DeviceCodeGrant'
+                - $ref: '#/components/schemas/RefreshTokenGrant'
+      responses:
+        '200':
+          description: RFC 6749 token response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuth2TokenResponse'
+        '400':
+          description: '`authorization_pending`/`slow_down` (device polling) or a token error'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/oauth/revoke:
+    post:
+      tags: [OAuth Provider]
+      summary: Revoke a token (RFC 7009)
+      operationId: revokeToken
+      description: Returns 200 regardless of token state (RFC 7009 section 2.2); revoking either token of a pair kills both. Accepts JSON or form-encoded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, client_id]
+              properties:
+                token:
+                  type: string
+                client_id:
+                  type: string
+                token_type_hint:
+                  type: string
+                  enum: [access_token, refresh_token]
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [token, client_id]
+              properties:
+                token:
+                  type: string
+                client_id:
+                  type: string
+                token_type_hint:
+                  type: string
+                  enum: [access_token, refresh_token]
+      responses:
+        '200':
+          description: Revoked or unknown token (empty object)
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/oauth/device:
+    get:
+      tags: [OAuth Provider]
+      summary: Device-code verification page
+      operationId: deviceVerificationPage
+      description: |
+        Browser page (HTML). `GET /device/{user_code}` pre-fills the
+        code; the page redirects through the Google leg if the user has
+        no campus login cookie. `POST` is the no-JS form fallback;
+        `status=success|error` query params drive the fallback states.
+      parameters:
+        - name: user_code
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [success, error]
+        - name: error_code
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML page
+    post:
+      tags: [OAuth Provider]
+      summary: Device-code verification form submission (no-JS fallback)
+      operationId: deviceVerificationSubmit
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                user_code:
+                  type: string
+      responses:
+        '200':
+          description: HTML page
+
+  /auth/v1/oauth/device/{user_code}:
+    get:
+      tags: [OAuth Provider]
+      summary: Device-code verification page with pre-filled code
+      operationId: deviceVerificationPagePrefilled
+      parameters:
+        - name: user_code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML page
+    post:
+      tags: [OAuth Provider]
+      summary: Device-code verification form submission (pre-filled)
+      operationId: deviceVerificationSubmitPrefilled
+      parameters:
+        - name: user_code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML page
+
+  /auth/v1/oauth/device/authorize:
+    post:
+      tags: [OAuth Provider]
+      summary: Approve a device code
+      operationId: approveDeviceCode
+      description: |
+        Called by the verification page; binds the user to the pending
+        device code. Error responses carry an `invalid_code`,
+        `expired`, `already_used` or `denied` code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_code, user_id]
+              properties:
+                user_code:
+                  type: string
+                user_id:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Device authorized
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/oauth/users/me:
+    get:
+      tags: [OAuth Provider]
+      summary: Current logged-in user (browser session)
+      operationId: oauthUsersMe
+      description: Returns the user from the campus login cookie (set by the Google leg); used by the device verification page. 401 if not logged in.
+      responses:
+        '200':
+          description: Logged-in user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user:
+                    type: object
+                    required: [id]
+                    properties:
+                      id:
+                        type: string
+                        format: email
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/google/authorize:
+    get:
+      tags: [OAuth Proxies]
+      summary: Start the Google login/consent flow
+      operationId: googleAuthorize
+      description: |
+        Browser endpoint: 302 to Google. `scope` (space-delimited)
+        requests upstream Google scopes beyond the base `email profile`
+        set; they are merged with `include_granted_scopes=true` so
+        re-consent accumulates (invariant B3). The app path reaches
+        this endpoint through `/authorize`, which caps `scope` against
+        the client's `upstream_scopes` allowlist first.
+      parameters:
+        - name: target
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Where to land the browser after the flow.
+        - name: hd
+          in: query
+          schema:
+            type: string
+            default: nyjc.edu.sg
+        - name: login_hint
+          in: query
+          schema:
+            type: string
+            format: email
+        - name: prompt
+          in: query
+          schema:
+            type: string
+            enum: [consent, login, none, select_account]
+        - name: scope
+          in: query
+          schema:
+            type: string
+          description: Space-delimited Google scope URLs.
+      responses:
+        '302':
+          description: Redirect to Google
+
+  /auth/v1/google/callback:
+    get:
+      tags: [OAuth Proxies]
+      summary: Google redirect target
+      operationId: googleCallback
+      description: Browser endpoint (called by Google). Verifies the grant, enforces the workspace domain, stores the user's Google credential (access and refresh tokens, server-side only), sets the campus login cookie and 302s to the flow's `target`.
+      responses:
+        '302':
+          description: Redirect to the flow target
+        '400':
+          description: OAuth error from Google (HTML error page)
+
+  /auth/v1/github/authorize:
+    get:
+      tags: [OAuth Proxies]
+      summary: Start the GitHub login flow
+      operationId: githubAuthorize
+      parameters:
+        - name: target
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: prompt
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to GitHub
+
+  /auth/v1/github/callback:
+    get:
+      tags: [OAuth Proxies]
+      summary: GitHub redirect target
+      operationId: githubCallback
+      responses:
+        '302':
+          description: Redirect to the flow target
+        '400':
+          description: OAuth error from GitHub (HTML error page)
+
+  /auth/v1/discord/authorize:
+    get:
+      tags: [OAuth Proxies]
+      summary: Start the Discord login flow
+      operationId: discordAuthorize
+      parameters:
+        - name: target
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+        - name: prompt
+          in: query
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to Discord
+
+  /auth/v1/discord/callback:
+    get:
+      tags: [OAuth Proxies]
+      summary: Discord redirect target
+      operationId: discordCallback
+      responses:
+        '302':
+          description: Redirect to the flow target
+        '400':
+          description: OAuth error from Discord (HTML error page)
+
+  /auth/v1/credentials/{provider}/:
+    get:
+      tags: [Credentials]
+      summary: Get campus credentials by token, or list for a provider
+      operationId: getCredentials
+      description: |
+        Campus-provider credentials only — third-party providers are
+        refused with 403 (invariant B1: upstream tokens are custodied
+        by Campus and released only via the token bridge).
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - name: token_id
+          in: query
+          schema:
+            type: string
+          description: When set, return the single credential holding this token.
+      responses:
+        '200':
+          description: A single credential, or a list
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/UserCredentials'
+                  - type: object
+                    required: [credentials]
+                    properties:
+                      credentials:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/UserCredentials'
+        '403':
+          description: Non-campus provider
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/credentials/{provider}/{user_id}:
+    get:
+      tags: [Credentials]
+      summary: Get a user's campus credentials for the calling client
+      operationId: getUserCredentials
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User credentials (joined token included)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserCredentials'
+        '403':
+          description: Non-campus provider
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Credentials]
+      summary: Issue campus credentials for a user
+      operationId: issueCredentials
+      description: Issues a new campus token bound to the calling client (provider must be `campus`).
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scopes, expires_in]
+              properties:
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                expires_in:
+                  type: integer
+      responses:
+        '201':
+          description: Created credentials (token resource)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CampusTokenResource'
+        '403':
+          description: Non-campus provider
+        default:
+          $ref: '#/components/responses/Error'
+    patch:
+      tags: [Credentials]
+      summary: Replace a user's campus token
+      operationId: updateCredentials
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: object
+                  description: Token resource; `access_token`/`scope` RFC aliases accepted on input.
+      responses:
+        '200':
+          description: Updated (empty object)
+        '403':
+          description: Non-campus provider
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Credentials]
+      summary: Delete a user's credentials for the calling client
+      operationId: deleteUserCredentials
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Deleted (empty object)
+        '403':
+          description: Non-campus provider
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/broker/{provider}/:
+    post:
+      tags: [Token Bridge]
+      summary: Release the user's upstream access token
+      operationId: releaseUpstreamToken
+      description: |
+        The only sanctioned path to upstream (e.g. Google) access
+        tokens — docs/token-broker.md. Requires a campus Bearer token
+        for the user, presented by a confidential client flagged
+        `token_bridge` (invariant C1; anything else is 403). The
+        response carries the access token, its expiry and its scope —
+        never a refresh token (C2). `min_scopes` must be within the
+        client's `upstream_scopes[provider]` allowlist (400) and
+        covered by the user's stored grant (403 with `missing_scopes`
+        and a re-consent hint, C3).
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                min_scopes:
+                  type: array
+                  items:
+                    type: string
+                  example:
+                    - https://www.googleapis.com/auth/classroom.rosters
+      responses:
+        '200':
+          description: Upstream access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrokerRelease'
+        '403':
+          description: Not eligible (C1) or grant does not cover min_scopes (C3)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/vaults/{label}/:
+    get:
+      tags: [Vaults]
+      summary: List a vault's keys
+      operationId: listVaultKeys
+      parameters:
+        - $ref: '#/components/parameters/VaultLabel'
+      responses:
+        '200':
+          description: Keys
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: string
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/vaults/{label}/{key}:
+    get:
+      tags: [Vaults]
+      summary: Get a vault value
+      operationId: getVaultValue
+      parameters:
+        - $ref: '#/components/parameters/VaultLabel'
+        - $ref: '#/components/parameters/VaultKey'
+      responses:
+        '200':
+          description: Value
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key]
+                properties:
+                  key:
+                    type: string
+        '404':
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: Key not found
+                  request_id: req_bb922g
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Vaults]
+      summary: Set a vault value
+      operationId: setVaultValue
+      parameters:
+        - $ref: '#/components/parameters/VaultLabel'
+        - $ref: '#/components/parameters/VaultKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Stored value
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key]
+                properties:
+                  key:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      tags: [Vaults]
+      summary: Delete a vault key
+      operationId: deleteVaultKey
+      parameters:
+        - $ref: '#/components/parameters/VaultLabel'
+        - $ref: '#/components/parameters/VaultKey'
+      responses:
+        '200':
+          description: Deleted (empty object)
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/root/:
+    post:
+      tags: [Root]
+      summary: Authenticate a client or token (service-to-service)
+      operationId: rootAuthenticate
+      description: |
+        Used by Campus backend services to validate credentials they
+        were given. Send either `{token}` or
+        `{client_id, client_secret}`. Errors use the standard envelope
+        (400 `AUTH_INVALID_REQUEST` for missing credentials, 401
+        `AUTH_INVALID_CLIENT` for invalid ones). The `user` key is
+        present only for token auth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [client]
+                properties:
+                  client:
+                    $ref: '#/components/schemas/Client'
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Missing authentication credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  code: AUTH_INVALID_REQUEST
+                  message: Missing authentication credentials.
+                  request_id: req_ff926k
+        '401':
+          description: Invalid credentials (unknown client or token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  code: AUTH_INVALID_CLIENT
+                  message: Invalid client credentials.
+                  request_id: req_42a91c
+
 components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Client credentials — `client_id:client_secret`.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Campus access token (RFC 6750); resolved by looking up the campus credential whose token id matches.
+
+  parameters:
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: email
+    ClientId:
+      name: client_id
+      in: path
+      required: true
+      schema:
+        type: string
+        example: uid-client-72bbe11c
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      schema:
+        type: string
+    Provider:
+      name: provider
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [campus, google, github, discord]
+    VaultLabel:
+      name: label
+      in: path
+      required: true
+      schema:
+        type: string
+    VaultKey:
+      name: key
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    Error:
+      description: Campus error envelope (see `ErrorEnvelope`); malformed bodies use the `ValidationError` shape (422).
+
   schemas:
+    User:
+      type: object
+      required: [id, email, name, created_at]
+      properties:
+        id:
+          type: string
+          format: email
+          description: The user id is the workspace email.
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        activated_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    LoginSession:
+      type: object
+      required: [id, client_id, agent_string, created_at, expires_at]
+      properties:
+        id:
+          type: string
+        client_id:
+          type: string
+        user_id:
+          type: string
+          format: email
+          nullable: true
+        device_id:
+          type: string
+          nullable: true
+        agent_string:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    AccessBitflag:
+      type: integer
+      minimum: 1
+      maximum: 15
+      description: READ=1, CREATE=2, UPDATE=4, DELETE=8; combine with bitwise OR.
+
+    AccessGrant:
+      type: object
+      required: [vault, permission]
+      properties:
+        vault:
+          type: string
+        permission:
+          $ref: '#/components/schemas/AccessBitflag'
+
+    AccessGrantResult:
+      type: object
+      required: [vault, permission]
+      properties:
+        vault:
+          type: string
+        permission:
+          $ref: '#/components/schemas/AccessBitflag'
+
+    UpstreamScopeMap:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          type: string
+      description: |
+        Per-provider allowlist of upstream scopes the client may be
+        granted through the OAuth proxies, keyed by provider name.
+        Fail-closed: an absent provider entry allows only that proxy's
+        base scopes (docs/auth-token-invariants.md B3).
+      example:
+        google:
+          - https://www.googleapis.com/auth/classroom.rosters
+
+    ClientRegistration:
+      type: object
+      required: [name, description]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        is_public:
+          type: boolean
+          default: false
+          description: Public clients (CLI/mobile) have no secret.
+        redirect_uris:
+          type: array
+          items:
+            type: string
+        allowed_scopes:
+          type: array
+          items:
+            type: string
+          description: Fail-closed campus scope allowlist; empty grants nothing (invariant A1).
+        upstream_scopes:
+          $ref: '#/components/schemas/UpstreamScopeMap'
+        token_bridge:
+          type: boolean
+          default: false
+          description: Token bridge access (invariant C1); confidential clients only, never public ones.
+
+    Client:
+      allOf:
+        - $ref: '#/components/schemas/ClientRegistration'
+        - type: object
+          required: [id, name, description, is_public, redirect_uris, allowed_scopes, upstream_scopes, token_bridge, created_at]
+          properties:
+            id:
+              type: string
+              example: uid-client-72bbe11c
+            is_public:
+              type: boolean
+            created_at:
+              type: string
+              format: date-time
+      description: The secret hash is never exposed; secrets are returned only by the revoke operation.
+
+    AuthSession:
+      type: object
+      required: [id, provider, client_id, redirect_uri, scopes, created_at, expires_at]
+      properties:
+        id:
+          type: string
+          description: Used as the `state` parameter on /authorize.
+        provider:
+          type: string
+          example: campus
+        client_id:
+          type: string
+        user_id:
+          type: string
+          format: email
+          nullable: true
+        redirect_uri:
+          type: string
+          format: uri
+        scopes:
+          type: array
+          items:
+            type: string
+        authorization_code:
+          type: string
+          nullable: true
+          description: Single-use; overwritten with a sentinel once exchanged.
+        state:
+          type: string
+          nullable: true
+        target:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    CampusTokenResource:
+      type: object
+      required: [id, token_type, expires_at, expires_in, scope]
+      properties:
+        id:
+          type: string
+          description: The access token string (campus field name — NOT `access_token`).
+        token_type:
+          type: string
+          enum: [Bearer]
+        refresh_token:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+        expires_in:
+          type: integer
+        scope:
+          type: string
+          description: RFC 6749 space-delimited granted scopes.
+      description: |
+        `POST /auth/v1/token` additionally echoes `user_id` from the
+        session. On input, `OAuthToken.from_resource` accepts the RFC
+        names (`access_token`, `scope`); route boundaries must validate
+        through `from_resource`, never `OAuthToken(**dict)`.
+
+    OAuth2TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, scope]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+        refresh_token:
+          type: string
+        scope:
+          type: string
+      description: Response shape of `POST /auth/v1/oauth/token` (RFC 6749 names), distinct from the campus token resource above.
+
+    AuthorizationCodeGrant:
+      type: object
+      required: [grant_type, code, redirect_uri, client_id, client_secret]
+      properties:
+        grant_type:
+          type: string
+          enum: [authorization_code]
+        code:
+          type: string
+        redirect_uri:
+          type: string
+          format: uri
+        client_id:
+          type: string
+        client_secret:
+          type: string
+
+    DeviceCodeGrant:
+      type: object
+      required: [grant_type, client_id, device_code]
+      properties:
+        grant_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:grant-type:device_code']
+        client_id:
+          type: string
+        device_code:
+          type: string
+
+    RefreshTokenGrant:
+      type: object
+      required: [grant_type, client_id, refresh_token]
+      properties:
+        grant_type:
+          type: string
+          enum: [refresh_token]
+        client_id:
+          type: string
+        refresh_token:
+          type: string
+
+    DeviceAuthorizationResponse:
+      type: object
+      required: [device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval]
+      properties:
+        device_code:
+          type: string
+        user_code:
+          type: string
+          example: ABCD-1234
+        verification_uri:
+          type: string
+          format: uri
+        verification_uri_complete:
+          type: string
+          format: uri
+        expires_in:
+          type: integer
+        interval:
+          type: integer
+
+    UserCredentials:
+      type: object
+      required: [id, provider, client_id, user_id]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+          enum: [campus, google, github, discord]
+        client_id:
+          type: string
+          description: The client the credential is bound to (for upstream providers, Campus's own upstream client id).
+        user_id:
+          type: string
+          format: email
+        token:
+          $ref: '#/components/schemas/CampusTokenResource'
+      description: |
+        The joined `token` embeds the FULL token including the refresh
+        token for campus credentials. Third-party providers are refused
+        by the credentials API (invariant B1) — their rows hold upstream
+        refresh tokens that must never leave Campus.
+
+    BrokerRelease:
+      type: object
+      required: [provider, user_id, access_token, token_type, expires_in, scope]
+      properties:
+        provider:
+          type: string
+        user_id:
+          type: string
+          format: email
+        access_token:
+          type: string
+          description: The upstream provider's access token.
+        token_type:
+          type: string
+        expires_in:
+          type: integer
+        scope:
+          type: string
+      description: Minimal by invariant C2 — no refresh token, no provider fields.
+
     ErrorEnvelope:
       type: object
       required: [error]
@@ -48,31 +1919,26 @@ components:
       properties:
         code:
           type: string
-          description: Campus error code (AUTH_* prefix)
+          description: Campus error code (AUTH_* prefix for auth/OAuth errors)
           example: AUTH_INVALID_CLIENT
         message:
           type: string
-          description: Human-readable error message
         request_id:
           type: string
           nullable: true
-          description: Request correlation ID for tracing
         details:
           type: object
-          description: Additional error details including OAuth protocol fields
+          description: Additional details, including OAuth protocol fields
           properties:
             oauth_error:
               type: string
-              description: RFC 6749 OAuth error string
               example: invalid_client
             oauth_error_description:
               type: string
-              description: OAuth error description
             required_scopes:
               type: array
               items:
                 type: string
-              description: Required scopes for insufficient_scope errors
 
     ValidationError:
       type: object
@@ -102,1270 +1968,3 @@ components:
                     type: string
                   message:
                     type: string
-
-    User:
-      type: object
-      required: [id, email, name, created_at, updated_at]
-      properties:
-        id:
-          type: string
-          example: usr_123abc
-        email:
-          type: string
-          format: email
-          example: user@example.com
-        name:
-          type: string
-          example: John Doe
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-
-    Client:
-      type: object
-      required: [id, client_id, client_secret]
-      properties:
-        id:
-          type: string
-        client_id:
-          type: string
-        client_secret:
-          type: string
-        redirect_uris:
-          type: array
-          items:
-            type: string
-        scopes:
-          type: array
-          items:
-            type: string
-        allowed_scopes:
-          type: array
-          items:
-            type: string
-          description: >
-            Fail-closed scope allowlist: the only scopes this client may
-            be granted on Campus tokens (docs/auth-token-invariants.md A1).
-
-    LoginSession:
-      type: object
-      required: [id, user_id, created_at, expires_at]
-      properties:
-        id:
-          type: string
-        user_id:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        expires_at:
-          type: string
-          format: date-time
-
-    AuthSession:
-      type: object
-      description: |
-        A Campus authorization session (RFC 6749 authorization-code
-        pending state). Created by the client backend via
-        POST /auth/v1/sessions/campus/; the `id` doubles as the OAuth
-        `state` for /auth/v1/authorize. See docs/auth-login-flow.md.
-      required: [id, provider, client_id, redirect_uri]
-      properties:
-        id:
-          type: string
-          description: Session id; used as the OAuth state parameter
-          example: campus_session_d2fc0db51093418f
-        created_at:
-          type: string
-          format: date-time
-        expires_at:
-          type: string
-          format: date-time
-          description: Session TTL is 10 minutes by default
-        provider:
-          type: string
-          description: Session provider namespace (campus for the login flow)
-          enum: [campus, google, github, discord]
-        client_id:
-          type: string
-          example: uid-client-cfaf0e29
-        user_id:
-          type: string
-          nullable: true
-          description: Bound by verify_login after Google authentication
-        redirect_uri:
-          type: string
-          description: Exact registered URI the authorization code is delivered to
-        scopes:
-          type: array
-          items:
-            type: string
-        authorization_code:
-          type: string
-          nullable: true
-          description: Pre-generated code; overwritten with INVALIDATED once used
-        state:
-          type: string
-          nullable: true
-          description: Defaults to the session id
-        target:
-          type: string
-          nullable: true
-          description: Final post-login destination returned by session finalize
-
-    TokenResponse:
-      type: object
-      description: |
-        Campus OAuth token issued by POST /auth/v1/token
-        (authorization_code grant). Field names deviate from RFC 6749:
-        the access token string is carried in `id` and granted scopes
-        are the space-delimited `scope` string (#648/#650).
-      required: [id, expires_at, expires_in, token_type, scope]
-      properties:
-        id:
-          type: string
-          description: Access token string (RFC name access_token on input only)
-        created_at:
-          type: string
-          format: date-time
-        expires_at:
-          type: string
-          format: date-time
-        expires_in:
-          type: integer
-          description: Access token lifetime in seconds (default 7 days)
-        token_type:
-          type: string
-          enum: [Bearer]
-        refresh_token:
-          type: string
-          nullable: true
-          description: Rotated on every refresh grant; single-use (#678)
-        refresh_token_expires_at:
-          type: string
-          format: date-time
-          nullable: true
-        scope:
-          type: string
-          description: Space-delimited granted scopes
-        user_id:
-          type: string
-          description: |
-            Authorized user echoed from the auth session so confidential
-            clients can display login state without a second lookup (#696)
-
-    Credentials:
-      type: object
-      required: [token, client_id, user_id, scopes, expiry]
-      properties:
-        token:
-          type: string
-        client_id:
-          type: string
-        user_id:
-          type: string
-        scopes:
-          type: array
-          items:
-            type: string
-        expiry:
-          type: string
-          format: date-time
-
-    VaultKey:
-      type: string
-      description: A key in a vault (encrypted value)
-
-  responses:
-    InvalidRequest:
-      description: Invalid request, rejected without redirecting (400)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: AUTH_INVALID_REQUEST
-              message: redirect_uri is not registered for this client
-              request_id: req_ff926k
-              details:
-                oauth_error: invalid_request
-
-    InvalidClient:
-      description: Client authentication failed (401)
-      headers:
-        WWW-Authenticate:
-          description: Bearer authentication scheme with error details
-          schema:
-            type: string
-            example: 'Bearer error="invalid_client", error_description="Client authentication failed"'
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: AUTH_INVALID_CLIENT
-              message: Client authentication failed
-              request_id: req_42a91c
-              details:
-                oauth_error: invalid_client
-
-    InvalidGrant:
-      description: Invalid or expired authorization grant (400)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: AUTH_INVALID_GRANT
-              message: Invalid credentials
-              request_id: req_d81b0f
-              details:
-                oauth_error: invalid_grant
-
-    UnauthorizedClient:
-      description: Client not authorized for this grant type (403)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: AUTH_UNAUTHORIZED_CLIENT
-              message: Client not authorized
-              request_id: req_aa921f
-              details:
-                oauth_error: unauthorized_client
-
-    InsufficientScope:
-      description: Token lacks required scope (403)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: AUTH_INSUFFICIENT_SCOPE
-              message: Insufficient permissions
-              request_id: req_bb922g
-              details:
-                oauth_error: insufficient_scope
-                required_scopes: [campus.read]
-
-    ValidationError:
-      description: Request validation failed (422)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ValidationError'
-          example:
-            error:
-              code: VALIDATION_FAILED
-              message: One or more fields are invalid
-              request_id: req_cc923h
-              errors:
-                - field: username
-                  code: MISSING
-                  message: Username is required
-                - field: password
-                  code: MISSING
-                  message: Password is required
-
-    NotFound:
-      description: Resource not found (404)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: NOT_FOUND
-              message: Resource not found
-              request_id: req_dd924i
-
-    Conflict:
-      description: Resource conflict (409)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ErrorEnvelope'
-          example:
-            error:
-              code: CONFLICT
-              message: Resource already exists
-              request_id: req_ee925j
-
-  parameters:
-    Provider:
-      name: provider
-      in: path
-      required: true
-      schema:
-        type: string
-      description: Session provider namespace (campus for the login flow)
-    SessionId:
-      name: session_id
-      in: path
-      required: true
-      schema:
-        type: string
-      description: Authorization session id
-
-paths:
-  /auth/v1/users/:
-    get:
-      summary: List all users
-      description: Get all Campus users
-      tags:
-        - Users
-      responses:
-        '200':
-          description: List of users
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  users:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/User'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-        '403':
-          $ref: '#/components/responses/UnauthorizedClient'
-
-    post:
-      summary: Create a new user
-      description: Create a new Campus user
-      tags:
-        - Users
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email, name]
-              properties:
-                email:
-                  type: string
-                  format: email
-                name:
-                  type: string
-      responses:
-        '201':
-          description: User created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /auth/v1/users/{user_id}/:
-    get:
-      summary: Get user details
-      description: Get details of a specific user
-      tags:
-        - Users
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: User ID
-      responses:
-        '200':
-          description: User details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-    patch:
-      summary: Update a user
-      description: Update user details (not yet implemented)
-      tags:
-        - Users
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '501':
-          description: Not implemented
-
-    delete:
-      summary: Delete a user
-      description: Delete a user
-      tags:
-        - Users
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: User deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /auth/v1/users/{user_id}/activate:
-    post:
-      summary: Activate a user
-      description: Activate a user account
-      tags:
-        - Users
-      parameters:
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: User activated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /auth/v1/logins/:
-    post:
-      summary: Create login session
-      description: Create a new login session with email/password
-      tags:
-        - Authentication
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email, password]
-              properties:
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  format: password
-      responses:
-        '200':
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LoginSession'
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /auth/v1/sessions/{provider}/:
-    post:
-      summary: Create an authorization session
-      description: |
-        Create a Campus authorization session (step 1 of the
-        authorization-code flow). Authenticated with the client's own
-        credentials (HTTP Basic, or a Bearer Campus token). The session
-        `id` in the response is used as the OAuth `state` for
-        /auth/v1/authorize. Requires a trailing slash.
-      tags:
-        - OAuth
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-            enum: [campus, google, github, discord]
-          description: Session provider namespace; use campus for the login flow
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [client_id, redirect_uri]
-              properties:
-                client_id:
-                  type: string
-                  description: The OAuth client requesting authorization
-                redirect_uri:
-                  type: string
-                  format: uri
-                  description: Must be registered on the client (fail-closed, #685)
-                scopes:
-                  type: array
-                  items:
-                    type: string
-                user_id:
-                  type: string
-                  nullable: true
-                target:
-                  type: string
-                  format: uri
-                  nullable: true
-                  description: Final post-login destination (returned by finalize)
-                state:
-                  type: string
-                  nullable: true
-                  description: Defaults to the session id
-      responses:
-        '200':
-          description: Session created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthSession'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /auth/v1/sessions/{provider}/authorization_code:
-    post:
-      summary: Look up a session by authorization code
-      description: |
-        Resolve an authorization code to its session. Requires a
-        trailing-slash-free path as written.
-      tags:
-        - OAuth
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [code]
-              properties:
-                code:
-                  type: string
-      responses:
-        '200':
-          description: Session for the given code
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthSession'
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-
-  /auth/v1/sessions/{provider}/{session_id}/:
-    get:
-      summary: Get an authorization session
-      tags:
-        - OAuth
-      parameters:
-        - $ref: '#/components/parameters/Provider'
-        - $ref: '#/components/parameters/SessionId'
-      responses:
-        '200':
-          description: The session resource
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthSession'
-        '404':
-          $ref: '#/components/responses/NotFound'
-    patch:
-      summary: Update an authorization session
-      description: |
-        Only `user_id` and `authorization_code` can be updated; both are
-        normally set by verify_login after Google authentication.
-      tags:
-        - OAuth
-      parameters:
-        - $ref: '#/components/parameters/Provider'
-        - $ref: '#/components/parameters/SessionId'
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                user_id:
-                  type: string
-                authorization_code:
-                  type: string
-      responses:
-        '200':
-          description: Update applied
-        '404':
-          $ref: '#/components/responses/NotFound'
-    delete:
-      summary: Finalize (delete) an authorization session
-      description: |
-        Deletes the session and returns the `target` URL the client
-        should land the browser on (step 6 of the login flow).
-      tags:
-        - OAuth
-      parameters:
-        - $ref: '#/components/parameters/Provider'
-        - $ref: '#/components/parameters/SessionId'
-      responses:
-        '200':
-          description: Session finalized
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  target:
-                    type: string
-                    nullable: true
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /auth/v1/authorize:
-    get:
-      summary: Authorization endpoint (RFC 6749 §4.1.1)
-      description: |
-        Browser-facing authorization endpoint (campus/auth/provider.py).
-        Validates the request, then redirects the browser through the
-        Google Workspace login leg; verify_login eventually delivers the
-        authorization code to the session's redirect_uri. The `state`
-        parameter must be a campus session id created via
-        POST /auth/v1/sessions/campus/.
-
-        redirect_uri is validated fail-closed (exact match against the
-        client's registered redirect_uris; clients with no registered
-        URIs are rejected). Rejections return 400 without redirecting
-        (RFC 6749 §4.1.2.1, #651/#685).
-      tags:
-        - OAuth
-      parameters:
-        - name: response_type
-          in: query
-          required: true
-          schema:
-            type: string
-            enum: [code]
-        - name: client_id
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: redirect_uri
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uri
-        - name: state
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Campus auth session id (from POST /auth/v1/sessions/campus/)
-        - name: scope
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Not yet enforced; the session's scopes are granted
-        - name: hd
-          in: query
-          required: false
-          schema:
-            type: string
-          description: Hosted domain hint passed through to Google
-      responses:
-        '302':
-          description: Redirect to the Google login leg (google/authorize)
-          headers:
-            Location:
-              schema:
-                type: string
-                format: uri
-        '400':
-          $ref: '#/components/responses/InvalidRequest'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-
-  /auth/v1/verify_login:
-    get:
-      summary: Post-login callback that issues the authorization code
-      description: |
-        Internal browser-flow leg (target of the Google redirect).
-        Requires the campus login cookie set by google/callback.
-        Provisions the user record, binds user_id and a fresh
-        authorization code onto the session identified by `state`, and
-        redirects the browser to the session's redirect_uri with
-        code, state and scope query parameters.
-      tags:
-        - OAuth
-      parameters:
-        - name: state
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Campus auth session id
-      responses:
-        '302':
-          description: Redirect to the client redirect_uri with the code
-          headers:
-            Location:
-              schema:
-                type: string
-                format: uri
-        '400':
-          $ref: '#/components/responses/InvalidRequest'
-        '401':
-          description: No campus login cookie / no valid Google credential
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-
-  /auth/v1/token:
-    post:
-      summary: Token endpoint — authorization_code grant
-      description: |
-        Exchanges an authorization code for a Campus token
-        (campus/auth/provider.py). Confidential clients must present
-        their client_secret; the code is single-use (overwritten with
-        INVALIDATED on first use). Accepts JSON or
-        application/x-www-form-urlencoded.
-
-        Do not confuse with /auth/v1/oauth/token (device_code and
-        refresh_token grants).
-      tags:
-        - OAuth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [grant_type, code, redirect_uri, client_id, client_secret]
-              properties:
-                grant_type:
-                  type: string
-                  enum: [authorization_code]
-                code:
-                  type: string
-                redirect_uri:
-                  type: string
-                  format: uri
-                  description: Must match the authorization request
-                client_id:
-                  type: string
-                client_secret:
-                  type: string
-      responses:
-        '200':
-          description: Token issued (or existing unexpired token reused)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenResponse'
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-
-  /auth/v1/oauth/token:
-    post:
-      summary: Token endpoint — device_code and refresh_token grants
-      description: |
-        Handles RFC 8628 device_code and RFC 6749 refresh_token grants
-        for public/confidential clients (campus/auth/routes/oauth.py).
-        The authorization_code grant is deliberately NOT handled here.
-      tags:
-        - OAuth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [grant_type, client_id]
-              properties:
-                grant_type:
-                  type: string
-                  enum: [urn:ietf:params:oauth:grant-type:device_code, refresh_token]
-                client_id:
-                  type: string
-                device_code:
-                  type: string
-                  description: Required for the device_code grant
-                refresh_token:
-                  type: string
-                  description: Required for the refresh_token grant
-      responses:
-        '200':
-          description: Token issued; refresh grants rotate the pair (single-use)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TokenResponse'
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-        '403':
-          $ref: '#/components/responses/UnauthorizedClient'
-
-  /auth/v1/oauth/revoke:
-    post:
-      summary: Revoke an access or refresh token (RFC 7009)
-      description: |
-        Returns 200 regardless of whether the token was found, was
-        already revoked, or belongs to another client (#677).
-      tags:
-        - OAuth
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [token, client_id]
-              properties:
-                token:
-                  type: string
-                client_id:
-                  type: string
-                token_type_hint:
-                  type: string
-                  enum: [access_token, refresh_token]
-      responses:
-        '200':
-          description: Revocation processed (or token unknown)
-        '400':
-          $ref: '#/components/responses/InvalidRequest'
-
-  /auth/v1/clients/:
-    post:
-      summary: Register OAuth client
-      description: Register a new OAuth client application
-      tags:
-        - Clients
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [client_name, redirect_uris]
-              properties:
-                client_name:
-                  type: string
-                redirect_uris:
-                  type: array
-                  items:
-                    type: string
-                    format: uri
-                grant_types:
-                  type: array
-                  items:
-                    type: string
-                allowed_scopes:
-                  type: array
-                  items:
-                    type: string
-                  description: Scope allowlist requested at registration.
-      responses:
-        '201':
-          description: Client registered successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Client'
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '409':
-          description: Client already exists
-        '422':
-          $ref: '#/components/responses/ValidationError'
-
-  /auth/v1/credentials/{provider}/:
-    get:
-      summary: Get credentials
-      description: |
-        Get credentials for a specific token, or list all credentials
-        for a provider.
-      tags:
-        - Credentials
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: token_id
-          in: query
-          schema:
-            type: string
-          description: Specific token ID (optional)
-          required: false
-      responses:
-        '200':
-          description: Credentials retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  credential:
-                    type: object
-                    description: Single credential if token_id is specified
-                  credentials:
-                    type: array
-                    items:
-                      type: object
-                    description: List of all credentials if token_id is not specified
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-
-  /auth/v1/credentials/{provider}/{user_id}:
-    get:
-      summary: Get user credentials
-      description: Get credentials for a specific provider and user ID
-      tags:
-        - Credentials
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Credentials retrieved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Credentials'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    post:
-      summary: Issue new credentials
-      description: Issue new credentials for a specific provider and user ID
-      tags:
-        - Credentials
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                scopes:
-                  type: array
-                  items:
-                    type: string
-                expiry_seconds:
-                  type: integer
-      responses:
-        '201':
-          description: Credentials issued
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Credentials'
-        '400':
-          $ref: '#/components/responses/InvalidGrant'
-        '401':
-          $ref: '#/components/responses/InvalidClient'
-
-    patch:
-      summary: Update credentials
-      description: Update credentials for a specific provider and user ID
-      tags:
-        - Credentials
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                token:
-                  type: object
-      responses:
-        '200':
-          description: Credentials updated
-          content:
-            application/json:
-              schema:
-                type: object
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    delete:
-      summary: Delete credentials
-      description: Delete credentials for a specific provider and user ID
-      tags:
-        - Credentials
-      parameters:
-        - name: provider
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: user_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Credentials deleted
-          content:
-            application/json:
-              schema:
-                type: object
-
-  /auth/v1/vaults/{label}/:
-    get:
-      summary: List vault keys
-      description: Get the keys for a specific vault
-      tags:
-        - Vaults
-      parameters:
-        - name: label
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Vault keys retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  keys:
-                    type: array
-                    items:
-                      type: string
-
-  /auth/v1/vaults/{label}/{key}:
-    get:
-      summary: Get vault value
-      description: Get a specific key from a vault
-      tags:
-        - Vaults
-      parameters:
-        - name: label
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: key
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Vault value retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  key:
-                    type: string
-        '404':
-          description: Key not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-              example:
-                error:
-                  code: NOT_FOUND
-                  message: Key not found
-                  request_id: req_bb922g
-
-    post:
-      summary: Set vault value
-      description: Set a specific key in a vault
-      tags:
-        - Vaults
-      parameters:
-        - name: label
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: key
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [value]
-              properties:
-                value:
-                  type: string
-      responses:
-        '200':
-          description: Value set successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  key:
-                    type: string
-
-    delete:
-      summary: Delete vault key
-      description: Delete a key from a vault
-      tags:
-        - Vaults
-      parameters:
-        - name: label
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: key
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Key deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-
-  /auth/v1/root/:
-    post:
-      summary: Authenticate service
-      description: |
-        Authenticate a service client using token or client credentials.
-        **WARNING: For internal backend use only.**
-      tags:
-        - Internal
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                token:
-                  type: string
-                  description: OAuth token for authentication
-                client_id:
-                  type: string
-                  description: Client ID for client credential auth
-                client_secret:
-                  type: string
-                  description: Client secret for client credential auth
-      responses:
-        '200':
-          description: Authentication successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  client:
-                    type: object
-                  user:
-                    type: object
-        '400':
-          description: Missing credentials
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-              example:
-                error:
-                  code: AUTH_INVALID_REQUEST
-                  message: Missing authentication credentials.
-                  request_id: req_ff926k
-        '401':
-          description: Invalid credentials (unknown client or token)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-              example:
-                error:
-                  code: AUTH_INVALID_CLIENT
-                  message: Invalid client credentials.
-                  request_id: req_42a91c

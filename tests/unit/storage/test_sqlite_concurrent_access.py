@@ -71,6 +71,8 @@ class TestSQLiteConcurrentAccess(unittest.TestCase):
                 "is_public": False,
                 "redirect_uris": [],
                 "allowed_scopes": [],
+                "upstream_scopes": {},
+                "token_bridge": False,
             })
 
     def _run_concurrently(self, worker) -> list[Exception]:
@@ -138,6 +140,8 @@ class TestSQLiteConcurrentAccess(unittest.TestCase):
                     "is_public": False,
                     "redirect_uris": [],
                     "allowed_scopes": [],
+                    "upstream_scopes": {},
+                    "token_bridge": False,
                 })
                 self.table.delete_by_id(row_id)
 

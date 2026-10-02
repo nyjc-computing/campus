@@ -131,18 +131,32 @@ backend issues the 302; the browser never calls the sessions API.
   and `redirect_uri` match the request;
 - if the request carries a `scope` parameter, it must be within the
   session's scopes — exceeding it is rejected with 400 `invalid_scope`
-  (the session API is the validated boundary).
+  (the session API is the validated boundary);
+- if the request carries an `upstream_scope` parameter (space-delimited
+  Google scopes, e.g. Classroom API scopes), each must be in the
+  client's registered `upstream_scopes["google"]` allowlist —
+  fail-closed, 400 `invalid_scope` otherwise. Allowed scopes are
+  forwarded to the Google leg (see *Scope algebra → Upstream scopes*).
 
 Scope **consent** (a user-facing screen) is not implemented yet: the
 validated session scopes are granted. On success the browser is
 redirected to `/auth/v1/google/authorize` with `target` pointing at
-`/auth/v1/verify_login?state=<session id>`.
+`/auth/v1/verify_login?state=<session id>` (plus `scope` when upstream
+scopes were requested).
 
 ### 3. Google leg (OAuth proxy)
 
 `GET /auth/v1/google/authorize` (`campus/auth/oauth_proxy/google/`)
 builds the Google authorization URL (default `hd=nyjc.edu.sg`) and
-redirects the browser to Google. The proxy keeps its *own* auth
+redirects the browser to Google. Its `scope` parameter names upstream
+Google scopes beyond the proxy's base `email profile`; requested
+scopes are merged with the base set and sent with
+`include_granted_scopes=true`, so Google's consent screen shows the
+new scopes and the grant **accumulates** — on re-consent Google
+returns the cumulative scope set, and the stored Google credential
+grows to the union (Campus's hosted incremental authorization; what
+an app may request is capped by its `upstream_scopes` allowlist).
+The proxy keeps its *own* auth
 session (separate from the Campus session in step 1) and stores its id
 in the Flask session cookie as CSRF `state`.
 
@@ -290,6 +304,28 @@ login, create a new session with the full scope set you now want and
 send the user through `/authorize` again — the issued token carries
 old ∪ new.
 
+### Upstream (Google) scopes
+
+Campus's Google credential for a user is what downstream apps draw on
+(phase P3's token bridge), and it grows the same incremental way.
+App path:
+
+1. Register `upstream_scopes: {"google": [<Google scope URLs>]}` on
+   your client (admin-reviewed; fail-closed — no entry means base
+   `email profile` only).
+2. Send the user through `/authorize` with
+   `upstream_scope=<space-delimited Google scope URLs>`. Campus
+   validates against your allowlist, adds them to the Google consent
+   (`include_granted_scopes=true`), and stores the resulting
+   cumulative Google credential for the user.
+3. Re-run with more scopes whenever needed; Google's incremental
+   consent means already-granted scopes are not re-prompted.
+
+Direct requests to `/auth/v1/google/authorize?scope=...` (outside the
+app path) are possible for account linking, but they cannot widen what
+an *app* can access: the token bridge (phase P3) re-checks the same
+`upstream_scopes` allowlist at release time.
+
 ## Device flow (CLIs) — how it differs
 
 CLIs and other input-constrained clients use RFC 8628 instead
@@ -319,6 +355,7 @@ CLIs and other input-constrained clients use RFC 8628 instead
 | GET | `/auth/v1/google/callback` | public (browser) | Google redirect target; sets login cookie |
 | GET | `/auth/v1/verify_login` | campus login cookie | bind user + code, 302 to client |
 | POST | `/auth/v1/token` | client secret (body) | exchange `authorization_code` |
+| POST | `/auth/v1/broker/:provider/` | user (Bearer, bridge-flagged confidential client) | release the user's upstream access token ([token-broker.md](token-broker.md)) |
 | GET/PATCH/DELETE | `/auth/v1/sessions/campus/:id/` | client (Basic/Bearer) | inspect / update / finalize session |
 | POST | `/auth/v1/sessions/:provider/authorization_code` | client (Basic/Bearer) | look up a session by code |
 | POST | `/auth/v1/sessions/sweep` | client (Basic/Bearer) | delete expired sessions |
