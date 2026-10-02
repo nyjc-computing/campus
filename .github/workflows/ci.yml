@@ -1,17 +1,17 @@
 name: CI
 
+# Deliberately NO paths-ignore on these triggers: the `weekly` ruleset
+# requires the Sanity/Unit matrix checks to be *reported* on every PR,
+# and a workflow skipped by paths-ignore never runs — the required
+# checks sit on "Expected — waiting for status to be reported" forever,
+# which made docs-only PRs unmergeable (#706). Docs-only change sets are
+# no-opped by the `changes` job plus per-step gating below instead.
 on:
   push:
     branches: [main, staging, weekly]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
   pull_request:
     branches: [main, staging, weekly]
     types: [opened, synchronize, reopened, ready_for_review]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
 
 env:
   ENV: testing
@@ -26,15 +26,60 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Stage -1: change detection. The workflow must ALWAYS run — the
+  # `weekly` ruleset requires the Sanity/Unit matrix checks to be
+  # *reported* on every PR, and a workflow skipped via `paths-ignore`
+  # reports nothing, leaving the required checks stuck on "Expected —
+  # waiting for status to be reported" forever (observed on docs-only
+  # PR #706).
+  #
+  # The output is `code` — "did ANY changed file fall outside
+  # docs/markdown?" — because paths-filter matches with OR semantics:
+  # a `docs_only` filter that lists doc patterns is true whenever a PR
+  # touches at least one doc, which misclassified every code PR that
+  # also edits docs (all of the #705 stack). Docs-only change sets are
+  # handled by STEP-level gating below rather than job-level `if:`
+  # skipping: a skipped matrix job reports a single check run with the
+  # literal un-expanded name
+  # (`Sanity Check (${{ matrix.python-version }})`), which can never
+  # match the ruleset's per-leg required names. Jobs that run and
+  # no-op report their real expanded names as green.
+  changes:
+    name: Detect docs-only changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Classify change set
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!*.md'
+              - '!docs/**'
+
   # Stage 0: style. Cheapest signal (no install needed) and the most common
   # failure class, so it gates everything else.
   ruff:
     name: Ruff
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
+      - name: Docs-only fast exit
+        run: |
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then
+            echo "Docs-only change set: skipping ruff (no-op run to report checks)."
+          fi
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-python@v7
         with:
           python-version: '3.13'
@@ -42,6 +87,7 @@ jobs:
       # under `ruff check .`. Ruff is a dev dependency (poetry.lock pins it);
       # the action pins the same version so CI and `poetry run ruff` agree.
       - name: Run ruff
+        if: needs.changes.outputs.code == 'true'
         uses: astral-sh/ruff-action@v3
         with:
           version: '0.16.9'
@@ -50,26 +96,41 @@ jobs:
   # in parallel. Each suite job shares a venv cache keyed on poetry.lock.
   sanity-check:
     name: Sanity Check (${{ matrix.python-version }})
-    needs: ruff
+    needs: [changes, ruff]
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    # The matrix EXPANDS into the check-run names the `weekly` ruleset
+    # requires verbatim ("Sanity Check (3.11)", "Unit Tests (3.11)", ...).
+    # Renaming a job or editing python-version strands the ruleset: the
+    # required names stop being reported and every PR blocks. Note 3.13
+    # runs but is not ruleset-required. Update the ruleset in the same
+    # PR as any rename or matrix change.
     strategy:
       fail-fast: false
       matrix:
         python-version: ['3.11', '3.12', '3.13']
     steps:
+      - name: Docs-only fast exit
+        run: |
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then
+            echo "Docs-only change set: skipping sanity suite (no-op run to report checks)."
+          fi
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache virtualenv
+        if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
+        if: needs.changes.outputs.code == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install poetry
@@ -77,13 +138,15 @@ jobs:
           poetry config virtualenvs.create true
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite
+        if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
       - name: Run Sanity Checks
+        if: needs.changes.outputs.code == 'true'
         run: poetry run python tests/run_tests.py sanity
 
   type-check:
     name: Type Check (${{ matrix.python-version }})
-    needs: ruff
+    needs: [changes, ruff]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     strategy:
@@ -91,18 +154,27 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12', '3.13']
     steps:
+      - name: Docs-only fast exit
+        run: |
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then
+            echo "Docs-only change set: skipping type suite (no-op run to report checks)."
+          fi
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache virtualenv
+        if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
+        if: needs.changes.outputs.code == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install poetry
@@ -110,14 +182,16 @@ jobs:
           poetry config virtualenvs.create true
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite
+        if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
       - name: Run Type Checks
+        if: needs.changes.outputs.code == 'true'
         run: poetry run python tests/run_tests.py type
 
   # Stage 2: component behavior. Runs only when the structural gates pass.
   unit-tests:
     name: Unit Tests (${{ matrix.python-version }})
-    needs: [sanity-check, type-check]
+    needs: [changes, sanity-check, type-check]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     strategy:
@@ -125,18 +199,27 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12', '3.13']
     steps:
+      - name: Docs-only fast exit
+        run: |
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then
+            echo "Docs-only change set: skipping unit suite (no-op run to report checks)."
+          fi
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache virtualenv
+        if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
+        if: needs.changes.outputs.code == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install poetry
@@ -144,14 +227,16 @@ jobs:
           poetry config virtualenvs.create true
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite
+        if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
       - name: Run Unit Tests
+        if: needs.changes.outputs.code == 'true'
         run: poetry run python tests/run_tests.py unit --timeout ${{ env.UNIT_TEST_TIMEOUT }}
 
   # Stage 3: HTTP contracts. Pointless to exercise routes if components fail.
   contract-tests:
     name: Contract Tests (${{ matrix.python-version }})
-    needs: unit-tests
+    needs: [changes, unit-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     strategy:
@@ -159,18 +244,27 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12', '3.13']
     steps:
+      - name: Docs-only fast exit
+        run: |
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then
+            echo "Docs-only change set: skipping contract suite (no-op run to report checks)."
+          fi
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache virtualenv
+        if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
+        if: needs.changes.outputs.code == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install poetry
@@ -178,15 +272,17 @@ jobs:
           poetry config virtualenvs.create true
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite
+        if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
       - name: Run Contract Tests
+        if: needs.changes.outputs.code == 'true'
         run: poetry run python tests/run_tests.py contract --timeout ${{ env.CONTRACT_TEST_TIMEOUT }}
 
   # Stage 4: full cross-service stack. Last — assembles every service and is
   # pointless if contracts already fail. Non-blocking on weekly, as before.
   integration-tests:
     name: Integration Tests (${{ matrix.python-version }})
-    needs: contract-tests
+    needs: [changes, contract-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 8
     continue-on-error: ${{ github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
@@ -195,18 +291,27 @@ jobs:
       matrix:
         python-version: ['3.11', '3.12', '3.13']
     steps:
+      - name: Docs-only fast exit
+        run: |
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then
+            echo "Docs-only change set: skipping integration suite (no-op run to report checks)."
+          fi
       - uses: actions/checkout@v7
+        if: needs.changes.outputs.code == 'true'
       - name: Set up Python
+        if: needs.changes.outputs.code == 'true'
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Cache virtualenv
+        if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
+        if: needs.changes.outputs.code == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install poetry
@@ -214,6 +319,8 @@ jobs:
           poetry config virtualenvs.create true
           poetry config virtualenvs.in-project true
       - name: Install Campus Suite
+        if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
       - name: Run Integration Tests (required for staging/main, optional for weekly)
+        if: needs.changes.outputs.code == 'true'
         run: poetry run python tests/run_tests.py integration --timeout ${{ env.INTEGRATION_TEST_TIMEOUT }}
