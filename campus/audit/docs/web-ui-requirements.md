@@ -1,7 +1,7 @@
 # Audit Web UI Requirements
 
-**Document Version:** 1.0
-**Date:** 2026-04-16
+**Document Version:** 1.1
+**Date:** 2026-04-16 (updated 2026-10-02: landing page, login page, dense table)
 **Parent Issue:** #429
 **Related:** [campus-trace-api-prd-v3.md](./campus-trace-api-prd-v3.md)
 
@@ -28,11 +28,18 @@ The Audit Web UI is a browser-based dashboard for exploring API traces captured 
 
 ### 2.1 Page Structure
 
-| Page | Path | Purpose |
-|------|------|---------|
-| Trace List | `/audit/` | Browse and filter traces |
-| Trace Detail | `/audit/traces/<trace_id>` | View waterfall and span details |
-| (Future) Metrics | `/audit/metrics` | Performance dashboards |
+| Page | Path | Purpose | Access |
+|------|------|---------|--------|
+| Landing | `/audit/` | Service intro; links to the trace list and login | Public |
+| Trace List | `/audit/traces` | Browse and filter traces | Login required |
+| Trace Detail | `/audit/traces/<trace_id>` | View waterfall and span details | Login required |
+| Login | `/audit/login` | Sign-in page (button starts the OAuth flow) | Public |
+| (Future) Metrics | `/audit/metrics` | Performance dashboards | Login required |
+
+> **Changed (2026-10):** the trace list moved from `/audit/` to
+> `/audit/traces` when the public landing page was added; `/audit/login`
+> became a real page (its button starts the flow at
+> `/audit/login/start`), and logout redirects back to the landing page.
 
 ### 2.2 Navigation
 
@@ -75,7 +82,7 @@ Browse recent traces with filtering capabilities. Primary entry point for invest
 
 | Column | Description | Formatting |
 |--------|-------------|------------|
-| Trace ID | Clickable link to detail page | Monospace, truncated to first 8 chars + "..." |
+| Trace ID | Clickable link to detail page | Monospace, full ID on one line (no wrap; table scrolls horizontally) |
 | Status | HTTP status code | Color-coded badge (green/yellow/orange/red) |
 | Duration | Total trace duration | In milliseconds (e.g., "142.5ms") |
 | Method | HTTP method | Badge (GET, POST, etc.) |
@@ -232,9 +239,11 @@ Show full request/response data for a single span when clicked.
 
 **Browser OAuth flow via Campus Auth (authorization-code grant):**
 
-1. Unauthenticated access to any `/audit/*` page redirects to
-   `/audit/login`.
-2. `/audit/login` creates a Campus auth session server-to-server
+1. Unauthenticated access to any gated `/audit/*` page redirects to
+   `/audit/login`, which renders a login page. Its button starts the
+   flow at `/audit/login/start` (the landing page at `/audit/` and the
+   UI's static assets are public and skip the gate).
+2. `/audit/login/start` creates a Campus auth session server-to-server
    (`POST /auth/v1/sessions/campus/`) and redirects the browser to
    Campus Auth `GET /auth/v1/authorize` with the session id as the
    OAuth `state`.
@@ -244,18 +253,19 @@ Show full request/response data for a single span when clicked.
    `POST /auth/v1/token` (confidential client: `client_id` +
    `client_secret`, server-to-server), and stores the token and user
    identity in the signed Flask cookie session. The token is never
-   exposed to browser JS.
+   exposed to browser JS; the browser is then sent to the trace list.
 5. Subsequent requests are authorized by the session cookie.
-6. `/audit/logout` revokes the token (RFC 7009, best-effort) and
-   clears the session.
+6. `/audit/logout` revokes the token (RFC 7009, best-effort), clears
+   the session, and redirects to the landing page.
 
 The gate **fails closed**: if `AUDIT_OAUTH_CLIENT_ID` /
-`AUDIT_OAUTH_CLIENT_SECRET` are not configured, UI pages return 503
-and `/audit/api/*` returns 401 — the UI is never silently open.
+`AUDIT_OAUTH_CLIENT_SECRET` are not configured, gated UI pages return
+503 and `/audit/api/*` returns 401 — the UI is never silently open.
 
 **Protected Routes:**
-- All `/audit/*` routes require authentication
-- Exceptions: `/audit/v1/health` (public API endpoint);
+- All `/audit/*` UI pages require authentication
+- Exceptions: the landing page `/audit/`, the UI's static assets
+  (needed by the public pages), and `/audit/v1/health`;
   `/audit/v1/*` keeps its API-key authentication (unchanged)
 
 ### 5.2 Authorization
@@ -334,7 +344,9 @@ Data requests carry the login session cookie automatically
 
 - **Trace ID:** 32 hex chars
 - **Span ID:** 16 hex chars
-- **Display:** Truncate to first 8 chars in tables, full in detail pages
+- **Display:** Full trace ID in list tables, on one line without
+  wrapping (dense table, horizontal scroll); full on detail pages.
+  (Until 2026-10 the list truncated to the first 8 chars.)
 - **Font:** Monospace
 
 ---

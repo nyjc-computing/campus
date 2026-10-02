@@ -27,19 +27,22 @@ class TestAuditWebUI(unittest.TestCase):
         app.register_blueprint(ui.create_blueprint())
         cls.client = app.test_client()
 
-    def test_index_serves_trace_list(self):
-        """/audit/ is the trace list page (docs/web-ui-requirements.md §2)."""
+    def test_index_serves_landing_page(self):
+        """/audit/ is the public landing page (docs/web-ui-requirements.md §2)."""
         response = self.client.get("/audit/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Browse traces", response.data)
+        self.assertIn(b"/audit/traces", response.data)
+        # The landing page carries no trace list scaffolding
+        self.assertNotIn(b"trace-filters", response.data)
+
+    def test_traces_serves_trace_list(self):
+        """/audit/traces is the trace list page (docs/web-ui-requirements.md §2)."""
+        response = self.client.get("/audit/traces")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"trace-filters", response.data)
         self.assertIn(b"trace-table-body", response.data)
         self.assertIn(b"traces.js", response.data)
-
-    def test_former_list_url_redirects_to_index(self):
-        """/audit/traces redirects to /audit/ so old links keep working."""
-        response = self.client.get("/audit/traces")
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.headers["Location"].endswith("/audit/"))
 
     def test_trace_detail_page_renders_scaffold(self):
         """/audit/traces/<trace_id> renders the waterfall/drawer scaffold."""
@@ -78,21 +81,25 @@ class TestAuditWebUI(unittest.TestCase):
         self.assertNotIn(b"/audit/v1/traces", response.data)
 
     def test_traces_js_formats_ids_and_timestamps(self):
-        """The list renders commit-hash trace IDs and local datetimes.
+        """The list renders the full trace ID on one line and local datetimes.
 
-        docs/web-ui-requirements.md §3.3/§7.1/§7.4: trace IDs truncate to
-        first 8 chars + ellipsis in tables (full ID in the hover tooltip),
-        timestamps render as local YYYY-MM-DD HH:MM:SS.
+        docs/web-ui-requirements.md §3.3/§7.1/§7.4: trace IDs render in
+        full, unwrapped (td.trace-id keeps them on one line), timestamps
+        render as local YYYY-MM-DD HH:MM:SS.
         """
         main_js = self.client.get("/audit/static/js/main.js").data
         traces_js = self.client.get("/audit/static/js/traces.js").data
-        # Shared helpers exist
-        self.assertIn(b"function formatTraceId", main_js)
+        css = self.client.get("/audit/static/css/main.css").data
+        # Shared timestamp helper exists and is used
         self.assertIn(b"function formatTimestamp", main_js)
-        # The list page uses them, keeping full values in tooltips
-        self.assertIn(b"formatTraceId(summary.trace_id)", traces_js)
         self.assertIn(b"formatTimestamp(summary.started_at)", traces_js)
-        self.assertIn(b'title="${escapeHtml(summary.trace_id)}"', traces_js)
+        # The trace ID cell renders the full id with the no-wrap class;
+        # the truncation helper is gone (dead code).
+        self.assertIn(b'<td class="trace-id">', traces_js)
+        self.assertNotIn(b"formatTraceId", main_js)
+        self.assertIn(b".trace-table td.trace-id", css)
+        # Detail links keep pointing at the detail route
+        self.assertIn(b"/audit/traces/${encodeURIComponent(summary.trace_id)}", traces_js)
 
     def test_trace_js_targets_ui_data_endpoint(self):
         """trace.js must fetch the UI data endpoints, not the auth'd API."""

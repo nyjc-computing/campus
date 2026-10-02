@@ -3,14 +3,19 @@
 These tests verify the browser OAuth gate required by
 docs/web-ui-requirements.md §5 (issue #696):
 
-- Unauthenticated page requests redirect to /audit/login.
+- The landing page and static assets are public; every other UI page
+  redirects unauthenticated requests to /audit/login.
 - Unauthenticated data endpoint requests get 401 JSON.
-- The gate fails closed (503/401) when the OAuth client is unconfigured.
-- The login route creates a campus auth session and redirects to the
-  auth service's authorize endpoint.
+- The gate fails closed (503/401) when the OAuth client is unconfigured
+  (the landing page stays reachable).
+- GET /audit/login renders the login page (authenticated visitors are
+  redirected to the trace list); GET /audit/login/start creates a
+  campus auth session and redirects to the auth service's authorize
+  endpoint.
 - The callback validates state, exchanges the code, and establishes the
   session; authenticated pages render and show login state.
-- Logout revokes the token and clears the session.
+- Logout revokes the token, clears the session, and redirects to the
+  landing page.
 
 The gate's auth-service transport is replaced with an in-memory fake via
 AuthClient.json_client_class (mirrors AuditClient's test injection).
@@ -144,9 +149,18 @@ class TestAuditWebAuthGate(unittest.TestCase):
                 "user_id": USER_ID,
             }
 
-    def test_unauthenticated_page_redirects_to_login(self):
-        """/audit/ redirects unauthenticated browsers to /audit/login."""
+    def test_landing_page_is_public(self):
+        """The landing page and static assets render without a login."""
         response = self.client.get("/audit/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Browse traces", response.data)
+        static_css = self.client.get("/audit/static/css/main.css")
+        self.assertEqual(static_css.status_code, 200)
+
+    def test_unauthenticated_trace_list_redirects_to_login(self):
+        """The trace list redirects unauthenticated browsers to the
+        login page."""
+        response = self.client.get("/audit/traces")
         self.assertEqual(response.status_code, 302)
         self.assertTrue(
             response.headers["Location"].endswith("/audit/login")
@@ -167,7 +181,20 @@ class TestAuditWebAuthGate(unittest.TestCase):
         self.assertIn("error", response.get_json())
 
     def test_unconfigured_gate_returns_503_on_pages(self):
-        """Without OAuth client config, pages fail closed with 503."""
+        """Without OAuth client config, gated pages fail closed with 503."""
+        with mock.patch.dict(
+                os.environ,
+                {
+                    "AUDIT_OAUTH_CLIENT_ID": "",
+                    "AUDIT_OAUTH_CLIENT_SECRET": "",
+                },
+        ):
+            response = self.client.get("/audit/traces")
+        self.assertEqual(response.status_code, 503)
+        self.assertIn(b"AUDIT_OAUTH_CLIENT_ID", response.data)
+
+    def test_unconfigured_gate_keeps_landing_public(self):
+        """Without OAuth client config, the landing page still renders."""
         with mock.patch.dict(
                 os.environ,
                 {
@@ -176,8 +203,7 @@ class TestAuditWebAuthGate(unittest.TestCase):
                 },
         ):
             response = self.client.get("/audit/")
-        self.assertEqual(response.status_code, 503)
-        self.assertIn(b"AUDIT_OAUTH_CLIENT_ID", response.data)
+        self.assertEqual(response.status_code, 200)
 
     def test_unconfigured_gate_returns_401_on_api(self):
         """Without OAuth client config, data endpoints still 401."""
@@ -191,13 +217,33 @@ class TestAuditWebAuthGate(unittest.TestCase):
             response = self.client.get("/audit/api/traces")
         self.assertEqual(response.status_code, 401)
 
-    def test_login_creates_session_and_redirects_to_authorize(self):
-        """GET /audit/login creates a campus session and redirects to
-        the auth service authorize endpoint with the session id as state.
+    def test_login_page_renders_for_unauthenticated(self):
+        """GET /audit/login renders the login page with a start link."""
+        response = self.client.get("/audit/login")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Log in to Campus Audit", response.data)
+        self.assertIn(b'href="/audit/login/start"', response.data)
+        # No auth flow was started by rendering the page
+        self.assertEqual(FakeAuthClient.calls, [])
+
+    def test_login_page_redirects_authenticated_to_traces(self):
+        """An authenticated visitor at /audit/login goes to the list."""
+        self._log_in()
+
+        response = self.client.get("/audit/login")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/audit/traces"))
+
+    def test_login_start_creates_session_and_redirects_to_authorize(self):
+        """GET /audit/login/start creates a campus session and redirects
+        to the auth service authorize endpoint with the session id as
+        state.
         """
         from urllib.parse import parse_qs, urlparse
 
-        response = self.client.get("/audit/login")
+        response = self.client.get("/audit/login/start")
 
         self.assertEqual(response.status_code, 302)
         location = response.headers["Location"]
@@ -233,7 +279,7 @@ class TestAuditWebAuthGate(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.headers["Location"].endswith("/audit/"))
+        self.assertTrue(response.headers["Location"].endswith("/audit/traces"))
         # The code was exchanged confidentially (client_secret present)
         token_posts = [
             (path, body) for path, body in FakeAuthClient.calls
@@ -254,7 +300,7 @@ class TestAuditWebAuthGate(unittest.TestCase):
         logout control (spec §2)."""
         self._log_in()
 
-        response = self.client.get("/audit/")
+        response = self.client.get("/audit/traces")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(USER_ID.encode(), response.data)
@@ -309,13 +355,15 @@ class TestAuditWebAuthGate(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn(b"access_denied", response.data)
 
-    def test_logout_clears_session_and_revokes_token(self):
-        """Logout revokes the token and re-gates the pages."""
+    def test_logout_clears_session_revokes_token_and_redirects(self):
+        """Logout revokes the token, redirects to the landing page, and
+        re-gates the protected pages."""
         self._log_in()
 
         response = self.client.get("/audit/logout")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/audit/"))
         revoke_posts = [
             (path, body) for path, body in FakeAuthClient.calls
             if path == "/auth/v1/oauth/revoke"
@@ -324,8 +372,12 @@ class TestAuditWebAuthGate(unittest.TestCase):
         self.assertEqual(revoke_posts[0][1]["token"], ACCESS_TOKEN)
         with self.client.session_transaction() as sess:
             self.assertNotIn("audit_oauth", sess)
-        # Protected routes are inaccessible again
-        response = self.client.get("/audit/")
+        # The landing page shows the signed-out confirmation...
+        landing = self.client.get("/audit/", follow_redirects=True)
+        self.assertEqual(landing.status_code, 200)
+        self.assertIn(b"signed out", landing.data)
+        # ...and protected routes are inaccessible again
+        response = self.client.get("/audit/traces")
         self.assertEqual(response.status_code, 302)
         self.assertTrue(
             response.headers["Location"].endswith("/audit/login")
@@ -341,7 +393,7 @@ class TestAuditWebAuthGate(unittest.TestCase):
                 "user_id": USER_ID,
             }
 
-        response = self.client.get("/audit/")
+        response = self.client.get("/audit/traces")
         self.assertEqual(response.status_code, 302)
         self.assertTrue(
             response.headers["Location"].endswith("/audit/login")

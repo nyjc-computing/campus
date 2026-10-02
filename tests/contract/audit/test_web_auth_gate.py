@@ -3,10 +3,11 @@
 These tests verify the browser OAuth gate contract required by
 docs/web-ui-requirements.md §5 (issue #696):
 
-- Unauthenticated requests to UI pages redirect to /audit/login.
+- The landing page (/audit/) is public; other UI pages redirect
+  unauthenticated requests to /audit/login.
 - Unauthenticated requests to /audit/api/* data endpoints get 401 JSON.
-- /audit/v1/health stays publicly reachable (the only public /audit/*
-  exception per spec §5.1).
+- /audit/v1/health stays publicly reachable (public /audit/* exceptions
+  per spec §5.1: the landing page and the health endpoint).
 - /audit/v1/* API-key authentication is unchanged (still 401 without a
   Bearer audit API key).
 
@@ -53,9 +54,16 @@ class TestAuditWebGateContract(unittest.TestCase):
         assert self.app
         self.client = self.app.test_client()
 
-    def test_unauthenticated_index_redirects_to_login(self):
-        """GET /audit/ redirects unauthenticated browsers to login."""
+    def test_landing_page_is_public(self):
+        """GET /audit/ renders the landing page without authentication."""
         response = self.client.get("/audit/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Browse traces", response.data)
+
+    def test_unauthenticated_trace_list_redirects_to_login(self):
+        """GET /audit/traces redirects unauthenticated browsers to login."""
+        response = self.client.get("/audit/traces")
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(
