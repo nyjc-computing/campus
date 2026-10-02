@@ -6,6 +6,8 @@ docs/web-ui-requirements.md §5 (issue #696):
 - The landing page (/audit/) is public; other UI pages redirect
   unauthenticated requests to /audit/login.
 - Unauthenticated requests to /audit/api/* data endpoints get 401 JSON.
+- An authenticated session for a user not on AUDIT_ADMINS gets 403
+  (page and JSON).
 - /audit/v1/health stays publicly reachable (public /audit/* exceptions
   per spec §5.1: the landing page and the health endpoint).
 - /audit/v1/* API-key authentication is unchanged (still 401 without a
@@ -15,10 +17,11 @@ The login redirect must not require the auth service: the gate only
 checks that the OAuth client is configured before redirecting.
 
 File: tests/contract/audit/test_web_auth_gate.py
-Issue: #696
+Issue: #696, #720
 """
 
 import os
+import time
 import unittest
 from unittest import mock
 
@@ -76,6 +79,32 @@ class TestAuditWebGateContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertIn("error", response.get_json())
+
+    def test_non_admin_session_gets_403(self):
+        """An authenticated session for a non-allowlisted user gets 403.
+
+        The admin allowlist (AUDIT_ADMINS) gates pages and data
+        endpoints for logged-in users; the landing page stays public.
+        """
+        with mock.patch.dict(
+                os.environ,
+                {"AUDIT_ADMINS": "admin@nyjc.edu.sg"},
+        ):
+            with self.client.session_transaction() as sess:
+                sess["audit_oauth"] = {
+                    "access_token": "contract-token",
+                    "expires_at": time.time() + 3600,
+                    "scope": "",
+                    "user_id": "teacher@nyjc.edu.sg",
+                }
+            page = self.client.get("/audit/traces")
+            api = self.client.get("/audit/api/traces")
+            landing = self.client.get("/audit/")
+
+        self.assertEqual(page.status_code, 403)
+        self.assertEqual(api.status_code, 403)
+        self.assertIn("error", api.get_json())
+        self.assertEqual(landing.status_code, 200)
 
     def test_health_remains_public(self):
         """GET /audit/v1/health is reachable without authentication."""
