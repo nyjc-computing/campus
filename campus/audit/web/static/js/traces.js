@@ -1,4 +1,4 @@
-/* Campus Audit Web UI - trace list page (issue #429) */
+/* Campus Audit Web UI - trace list page (issues #429, #698) */
 
 (function () {
     'use strict';
@@ -6,10 +6,18 @@
     const form = document.getElementById('trace-filters');
     const tableBody = document.getElementById('trace-table-body');
     const statusRegion = document.getElementById('list-status');
+    const loadMoreBtn = document.getElementById('load-more');
 
     // UI data endpoint (served in-process). The versioned API requires an
     // API key the browser cannot hold, so it must not be called from here.
     const SEARCH_URL = '/audit/api/traces';
+
+    // Cursor pagination state: token of the last loaded page. Reset on
+    // any fresh (filter-driven) load.
+    const state = {
+        cursor: null,
+        hasMore: false,
+    };
 
     function readFilters() {
         const params = new URLSearchParams();
@@ -48,29 +56,51 @@
             : '';
     }
 
-    async function loadTraces() {
-        tableBody.innerHTML = '';
-        setStatus('Loading traces…', false);
+    function updateLoadMore() {
+        loadMoreBtn.hidden = !state.hasMore;
+        loadMoreBtn.disabled = false;
+        loadMoreBtn.textContent = 'Load more';
+    }
+
+    async function loadNextPage() {
         try {
             const params = readFilters();
+            if (state.cursor) {
+                params.set('cursor', state.cursor);
+            }
             const data = await fetchJson(`${SEARCH_URL}?${params.toString()}`);
             const traces = data.traces || [];
-            if (traces.length === 0) {
+            tableBody.insertAdjacentHTML('beforeend', traces.map(renderRow).join(''));
+            state.cursor = (data.cursor && data.cursor.next) || null;
+            state.hasMore = Boolean(data.cursor && data.cursor.has_more && state.cursor);
+            const total = tableBody.rows.length;
+            if (total === 0) {
                 setStatus('No traces match the current filters.', false);
-                return;
+            } else {
+                setStatus(`Showing ${total} trace${total === 1 ? '' : 's'}.`, false);
             }
-            tableBody.innerHTML = traces.map(renderRow).join('');
-            let summary = `Showing ${traces.length} trace${traces.length === 1 ? '' : 's'}.`;
-            if (data.cursor && data.cursor.has_more) {
-                // The API does not return a usable cursor yet (always null);
-                // surface it honestly instead of pretending we can paginate.
-                summary += ' More results exist but pagination is not yet available.';
-            }
-            setStatus(summary, false);
         } catch (err) {
+            state.cursor = null;
+            state.hasMore = false;
             setStatus(`Failed to load traces: ${err.message}`, true);
         }
+        updateLoadMore();
     }
+
+    function loadTraces() {
+        tableBody.innerHTML = '';
+        state.cursor = null;
+        state.hasMore = false;
+        loadMoreBtn.hidden = true;
+        setStatus('Loading traces…', false);
+        loadNextPage();
+    }
+
+    loadMoreBtn.addEventListener('click', () => {
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.textContent = 'Loading…';
+        loadNextPage();
+    });
 
     form.addEventListener('submit', (event) => {
         event.preventDefault();

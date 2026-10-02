@@ -15,6 +15,7 @@ Audit Endpoints Reference:
 
 import base64
 import unittest
+from urllib.parse import urlencode
 
 import campus.storage
 from campus.common import schema
@@ -828,3 +829,244 @@ class TestAuditTracesSearchContract(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertLessEqual(len(data["traces"]), 2)
+
+
+class TestAuditTracesCursorPaginationContract(unittest.TestCase):
+    """HTTP contract tests for cursor pagination (issue #698).
+
+    Invariants: stable (started_at, trace_id) descending order across
+    pages, no duplicates across pages, has_more/next termination, and
+    400 responses for malformed cursor/limit input.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.initialize()
+        cls.app = cls.manager.audit_app
+
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        # Clear test data - no manual resource initialization needed
+        self.manager.clear_test_data()
+        assert self.app
+        self.client = self.app.test_client()
+
+        # Disable request tracing for this class: the middleware ingests a
+        # span for every test HTTP request (asynchronously), which would
+        # pollute exact-content assertions over the spans table.
+        from campus.common import env
+        env.set('AUDIT_TRACING_ENABLED', '0')
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="admin",
+        )
+
+        # Use the audit API key for authentication
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
+
+        # Clear traces that were emitted during API key creation
+        traces_storage = campus.storage.tables.get_db("spans")
+        traces_storage.delete_matching({})
+
+    def tearDown(self):
+        # Restore fixture defaults for other test classes
+        from campus.common import env
+        env.set('AUDIT_TRACING_ENABLED', '1')
+
+    def _ingest_traces(self, count: int, started_at: str) -> list[str]:
+        """Ingest `count` single-span traces sharing a started_at value.
+
+        Trace IDs sort as trace00... < trace01... < ... so the keyset
+        walk order is deterministic in tests.
+        """
+        from campus.audit.resources.traces import TracesResource
+        traces_resource = TracesResource()
+        spans = [
+            TraceSpan(
+                trace_id=f"trace{i:02d}" + "a" * 26,
+                span_id=f"span{i:02d}" + "b" * 10,
+                method="GET",
+                path="/api/test",
+                status_code=200,
+                started_at=schema.DateTime(started_at),
+                duration_ms=100.0,
+                client_ip="127.0.0.1",
+            )
+            for i in range(count)
+        ]
+        traces_resource.ingest(spans)
+        return [s.trace_id for s in spans]
+
+    def _walk_pages(self, endpoint: str, page_size: int) -> list[dict]:
+        """Follow cursor.next from `endpoint` until has_more is False.
+
+        Disables audit event emission while walking: each authenticated
+        request would otherwise ingest new spans and shift the dataset
+        mid-walk. Returns the raw page responses in walk order.
+        """
+        from campus.common import env
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        try:
+            pages: list[dict] = []
+            cursor = None
+            while True:
+                params = {"limit": str(page_size)}
+                if cursor:
+                    params["cursor"] = cursor
+                response = self.client.get(
+                    f"{endpoint}?{urlencode(params)}",
+                    headers=self.auth_headers,
+                )
+                self.assertEqual(response.status_code, 200)
+                data = response.get_json()
+                # Every page respects the requested page size
+                self.assertLessEqual(len(data["traces"]), page_size)
+                pages.append(data)
+                cursor = data["cursor"]["next"]
+                if not data["cursor"]["has_more"]:
+                    self.assertIsNone(cursor)
+                    break
+                # Guard against an infinite walk if the contract regresses
+                self.assertLess(len(pages), 100)
+                self.assertIsNotNone(cursor)
+            return pages
+        finally:
+            env.set('AUDIT_EVENTS_ENABLED', '1')
+
+    def _assert_cursor_walk_invariants(
+            self,
+            pages: list[dict],
+            expected: set[str],
+    ) -> None:
+        """Assert cursor invariants over a full page walk.
+
+        Stray traces (e.g. async-ingested spans from earlier requests)
+        may appear, so page contents are not asserted exactly. Instead:
+        - every page except the last has has_more + next; the last
+          terminates with has_more=False, next=None
+        - no trace_id appears twice across the whole walk (no dupes)
+        - every seeded trace appears exactly once
+        - the concatenated order is strictly descending by
+          (started_at, trace_id), across page boundaries
+        """
+        self.assertGreater(len(pages), 0)
+        for page in pages[:-1]:
+            self.assertTrue(page["cursor"]["has_more"])
+            self.assertIsNotNone(page["cursor"]["next"])
+        self.assertFalse(pages[-1]["cursor"]["has_more"])
+        self.assertIsNone(pages[-1]["cursor"]["next"])
+
+        seen = [t["trace_id"] for p in pages for t in p["traces"]]
+        self.assertEqual(len(seen), len(set(seen)), f"duplicate traces: {seen}")
+        for trace_id in expected:
+            self.assertEqual(seen.count(trace_id), 1, f"{trace_id} not exactly once")
+
+        keys = [
+            (t["started_at"], t["trace_id"])
+            for p in pages for t in p["traces"]
+        ]
+        self.assertEqual(keys, sorted(keys, reverse=True), "order not descending")
+
+    def test_search_pages_cover_all_traces_without_duplicates(self):
+        """Walking /search cursor pages yields every trace exactly once."""
+        expected = set(self._ingest_traces(5, "2023-01-01T10:00:00Z"))
+
+        pages = self._walk_pages("/audit/v1/traces/search", page_size=2)
+
+        self._assert_cursor_walk_invariants(pages, expected)
+
+    def test_list_pages_cover_all_traces_without_duplicates(self):
+        """Walking /traces cursor pages yields every trace exactly once."""
+        expected = set(self._ingest_traces(5, "2023-01-01T10:00:00Z"))
+
+        pages = self._walk_pages("/audit/v1/traces/", page_size=2)
+
+        self._assert_cursor_walk_invariants(pages, expected)
+
+    def test_same_started_at_traces_do_not_duplicate_across_pages(self):
+        """Traces sharing a started_at are tie-broken by trace_id.
+
+        The storage query can only filter started_at (lte); traces at or
+        after the cursor key at the same timestamp must be dropped
+        in the resource layer, or ties would repeat on every page.
+        """
+        expected = set(self._ingest_traces(5, "2023-06-01T08:30:00Z"))
+
+        pages = self._walk_pages("/audit/v1/traces/search", page_size=2)
+
+        self._assert_cursor_walk_invariants(pages, expected)
+
+    def test_invalid_cursor_returns_400(self):
+        """A malformed cursor token is a 400, not a 500."""
+        from campus.common import env
+        self._ingest_traces(1, "2023-01-01T10:00:00Z")
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        try:
+            for cursor in ("garbage", base64.urlsafe_b64encode(b"nojson").decode()):
+                with self.subTest(cursor=cursor):
+                    response = self.client.get(
+                        f"/audit/v1/traces/?{urlencode({'cursor': cursor})}",
+                        headers=self.auth_headers,
+                    )
+                    self.assertEqual(response.status_code, 400)
+        finally:
+            env.set('AUDIT_EVENTS_ENABLED', '1')
+
+    def test_non_integer_limit_returns_400(self):
+        """A non-integer limit is a 400, not a 500."""
+        from campus.common import env
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        try:
+            for endpoint in ("/audit/v1/traces/", "/audit/v1/traces/search"):
+                with self.subTest(endpoint=endpoint):
+                    response = self.client.get(
+                        f"{endpoint}?{urlencode({'limit': 'abc'})}",
+                        headers=self.auth_headers,
+                    )
+                    self.assertEqual(response.status_code, 400)
+        finally:
+            env.set('AUDIT_EVENTS_ENABLED', '1')
+
+    def test_out_of_range_limits_are_clamped(self):
+        """Out-of-range limits clamp to [1, 1000] instead of erroring."""
+        from campus.audit.resources.traces import MAX_PAGE_SIZE
+        expected = set(self._ingest_traces(3, "2023-01-01T10:00:00Z"))
+
+        from campus.common import env
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        try:
+            for limit in ("999999", "0", "-5"):
+                with self.subTest(limit=limit):
+                    response = self.client.get(
+                        "/audit/v1/traces/?"
+                        + urlencode({"limit": limit}),
+                        headers=self.auth_headers,
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    traces = response.get_json()["traces"]
+                    self.assertGreaterEqual(
+                        len(traces), 1, f"limit={limit} returned no traces"
+                    )
+                    seen = {t["trace_id"] for t in traces}
+                    self.assertLessEqual(len(traces), MAX_PAGE_SIZE)
+                    if limit == "999999":
+                        # Clamped to MAX_PAGE_SIZE: nothing may be cut
+                        self.assertTrue(
+                            expected.issubset(seen),
+                            f"oversized limit cut traces: {expected - seen}",
+                        )
+        finally:
+            env.set('AUDIT_EVENTS_ENABLED', '1')
+

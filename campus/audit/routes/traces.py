@@ -93,14 +93,17 @@ def list_traces(
         *,
         since: str | None = None,
         until: str | None = None,
-        limit: str | int = 50,
+        limit: str | int | None = None,
+        cursor: str | None = None,
 ) -> flask_campus.JsonResponse:
     """List recent traces, newest first.
 
     Query params:
         since: ISO 8601 timestamp (optional)
         until: ISO 8601 timestamp (optional)
-        limit: int, default 50
+        limit: page size, clamped to [1, MAX_PAGE_SIZE] (default
+            DEFAULT_PAGE_SIZE)
+        cursor: opaque token from a previous page's cursor.next
 
     Supports content negotiation via Accept header:
         - application/json: Structured JSON with cursor pagination
@@ -110,12 +113,15 @@ def list_traces(
         JSON: {"traces": [...], "cursor": {"next": "...", "has_more": true}}
         Text: Compact trace list with pagination hint
     """
-    # Convert limit to int if it's a string from query parameters
-    limit_int = int(limit) if isinstance(limit, str) else limit
-    summaries = traces_resource.list(since=since, until=until, limit=limit_int)
+    page = traces_resource.list(
+        since=since,
+        until=until,
+        limit=traces_resource.parse_page_size(limit),
+        cursor=cursor,
+    )
     return {
-        "traces": [s.to_resource() for s in summaries],
-        "cursor": {"next": None, "has_more": False}
+        "traces": [s.to_resource() for s in page.summaries],
+        "cursor": {"next": page.next_cursor, "has_more": page.has_more},
     }, 200
 
 
@@ -192,7 +198,8 @@ def search_traces(
         user_id: str | None = None,
         since: str | None = None,
         until: str | None = None,
-        limit: str | int = 50,
+        limit: str | int | None = None,
+        cursor: str | None = None,
 ) -> flask_campus.JsonResponse:
     """Filter and search traces.
 
@@ -204,18 +211,27 @@ def search_traces(
         user_id: Filter by user
         since: ISO 8601 timestamp (optional)
         until: ISO 8601 timestamp (optional)
-        limit: int, default 50
+        limit: page size, clamped to [1, MAX_PAGE_SIZE] (default
+            DEFAULT_PAGE_SIZE)
+        cursor: opaque token from a previous page's cursor.next
 
     Supports content negotiation via Accept header.
 
     Returns:
-        Filtered trace list matching criteria
+        Filtered trace list matching criteria with cursor pagination
     """
-    # Convert parameters to int if they're strings from query parameters
-    limit_int = int(limit) if isinstance(limit, str) else limit
-    status_int = int(status) if isinstance(status, str) else status
+    status_int: int | None
+    if status is None or status == "":
+        status_int = None
+    else:
+        try:
+            status_int = int(status)  # type: ignore[arg-type]
+        except (TypeError, ValueError) as e:
+            raise api_errors.InvalidRequestError(
+                f"status must be an integer, got {status!r}"
+            ) from e
 
-    summaries = traces_resource.search(
+    page = traces_resource.search(
         path=path,
         status=status_int,
         api_key_id=api_key_id,
@@ -223,11 +239,12 @@ def search_traces(
         user_id=user_id,
         since=since,
         until=until,
-        limit=limit_int,
+        limit=traces_resource.parse_page_size(limit),
+        cursor=cursor,
     )
     return {
-        "traces": [s.to_resource() for s in summaries],
-        "cursor": {"next": None, "has_more": False}
+        "traces": [s.to_resource() for s in page.summaries],
+        "cursor": {"next": page.next_cursor, "has_more": page.has_more},
     }, 200
 
 
