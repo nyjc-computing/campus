@@ -122,6 +122,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          # Wheel cache (~/.cache/pip) for the pipx Poetry install — warm
+          # runs skip the network fetch (#718). cache-dependency-path is
+          # explicit: the repo has no requirements.txt to autodetect.
+          cache: pip
+          cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
@@ -131,12 +136,7 @@ jobs:
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
         if: needs.changes.outputs.code == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          # Configure Poetry to use system Python (not its own bundled version)
-          poetry config virtualenvs.create true
-          poetry config virtualenvs.in-project true
+        uses: ./.github/actions/setup-poetry
       - name: Install Campus Suite
         if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
@@ -166,6 +166,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          # Wheel cache (~/.cache/pip) for the pipx Poetry install — warm
+          # runs skip the network fetch (#718). cache-dependency-path is
+          # explicit: the repo has no requirements.txt to autodetect.
+          cache: pip
+          cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
@@ -175,12 +180,7 @@ jobs:
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
         if: needs.changes.outputs.code == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          # Configure Poetry to use system Python (not its own bundled version)
-          poetry config virtualenvs.create true
-          poetry config virtualenvs.in-project true
+        uses: ./.github/actions/setup-poetry
       - name: Install Campus Suite
         if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
@@ -211,6 +211,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          # Wheel cache (~/.cache/pip) for the pipx Poetry install — warm
+          # runs skip the network fetch (#718). cache-dependency-path is
+          # explicit: the repo has no requirements.txt to autodetect.
+          cache: pip
+          cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
@@ -220,12 +225,7 @@ jobs:
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
         if: needs.changes.outputs.code == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          # Configure Poetry to use system Python (not its own bundled version)
-          poetry config virtualenvs.create true
-          poetry config virtualenvs.in-project true
+        uses: ./.github/actions/setup-poetry
       - name: Install Campus Suite
         if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
@@ -256,6 +256,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          # Wheel cache (~/.cache/pip) for the pipx Poetry install — warm
+          # runs skip the network fetch (#718). cache-dependency-path is
+          # explicit: the repo has no requirements.txt to autodetect.
+          cache: pip
+          cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
@@ -265,12 +270,7 @@ jobs:
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
         if: needs.changes.outputs.code == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          # Configure Poetry to use system Python (not its own bundled version)
-          poetry config virtualenvs.create true
-          poetry config virtualenvs.in-project true
+        uses: ./.github/actions/setup-poetry
       - name: Install Campus Suite
         if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
@@ -303,6 +303,11 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+          # Wheel cache (~/.cache/pip) for the pipx Poetry install — warm
+          # runs skip the network fetch (#718). cache-dependency-path is
+          # explicit: the repo has no requirements.txt to autodetect.
+          cache: pip
+          cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
         uses: actions/cache@v4
@@ -312,12 +317,7 @@ jobs:
           restore-keys: venv-${{ runner.os }}-py${{ matrix.python-version }}-
       - name: Install Poetry
         if: needs.changes.outputs.code == 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install poetry
-          # Configure Poetry to use system Python (not its own bundled version)
-          poetry config virtualenvs.create true
-          poetry config virtualenvs.in-project true
+        uses: ./.github/actions/setup-poetry
       - name: Install Campus Suite
         if: needs.changes.outputs.code == 'true'
         run: poetry install --no-root
