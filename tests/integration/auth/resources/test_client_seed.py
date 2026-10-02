@@ -114,7 +114,9 @@ class TestEnsurePublicClient(unittest.TestCase):
 
         The seed insert conflicts on the UNIQUE name constraint; the
         guest row stays absent and the caller gets False rather than an
-        exception, with remediation logged.
+        exception, with remediation logged. The ERROR line is asserted
+        here so this designed scenario stops reading as ambient failure
+        noise in CI logs (#717).
         """
         import campus.config
         from campus.auth.resources.client import client_storage
@@ -125,9 +127,17 @@ class TestEnsurePublicClient(unittest.TestCase):
             description="Unrelated client that took the name",
         )
 
-        created = self._get_seed()()
+        with self.assertLogs(
+            "campus.auth.resources.client", level="ERROR"
+        ) as captured:
+            created = self._get_seed()()
 
         self.assertFalse(created)
+        self.assertIn(
+            "Cannot seed public OAuth client",
+            "".join(captured.output)
+        )
+        self.assertIn("Public CLI Client", "".join(captured.output))
         # Deliberately broad: any failure to fetch a missing client counts
         with self.assertRaises(Exception):  # noqa: B017
             client_storage.get_by_id(campus.config.PUBLIC_OAUTH_CLIENT_ID)
