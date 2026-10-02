@@ -1,8 +1,8 @@
 """campus.auth.routes.oauth
 
 Flask routes for OAuth 2.0 Device Authorization Flow (RFC 8628) and
-token grants (RFC 6749: device_code, refresh_token) plus token
-revocation (RFC 7009).
+token grants (RFC 6749: device_code, refresh_token, client_credentials)
+plus token revocation (RFC 7009).
 
 These routes handle device authorization for CLI and other device applications.
 
@@ -20,6 +20,7 @@ from campus.common.errors import api_errors, token_errors
 from campus.common.utils import secret, url
 
 from .. import get_yapper, scopes
+from ..resources import app_credentials
 from ..resources import client as client_resource
 from ..resources import credentials as credentials_resource
 from ..resources import device_code as device_code_resource
@@ -155,10 +156,12 @@ def device_authorize(
 def token(
         grant_type: str,
         client_id: schema.CampusID,
+        client_secret: str | None = None,
         device_code: str | None = None,
         code: str | None = None,
         redirect_uri: str | None = None,
         refresh_token: str | None = None,
+        scope: str | None = None,
 ) -> flask_campus.JsonResponse:
     """Exchange an authorization grant for an access token.
 
@@ -166,6 +169,7 @@ def token(
     - urn:ietf:params:oauth:grant-type:device_code (RFC 8628)
     - authorization_code (RFC 6749)
     - refresh_token (RFC 6749)
+    - client_credentials (RFC 6749 section 4.4)
 
     POST /oauth/token
     Body (device code): {
@@ -184,11 +188,16 @@ def token(
         "client_id": "campus-cli",
         "refresh_token": "..."
     }
+    Body (client credentials): {
+        "grant_type": "client_credentials",
+        "client_id": "uid-client-...",
+        "client_secret": "..."
+    }
     Returns: {
         "access_token": "...",
         "token_type": "Bearer",
         "expires_in": 3600,
-        "refresh_token": "...",
+        "refresh_token": "...",  (never present for client_credentials)
         "scope": "read write"
     }
     """
@@ -213,10 +222,70 @@ def token(
         return _handle_authorization_code_grant(client_id, code, redirect_uri)
     elif grant_type == "refresh_token":
         return _handle_refresh_token_grant(client_id, refresh_token)
+    elif grant_type == "client_credentials":
+        return _handle_client_credentials_grant(client, client_secret, scope)
     else:
         raise token_errors.UnsupportedGrantTypeError(
             f"Unsupported grant_type: {grant_type}"
         )
+
+
+def _handle_client_credentials_grant(
+        client: campus.model.Client,
+        client_secret: str | None,
+        scope: str | None,
+) -> flask_campus.JsonResponse:
+    """Handle the client_credentials grant type (RFC 6749 section 4.4).
+
+    Authenticates a confidential client by secret and issues (or
+    reuses, see AppCredentialsResource.issue) an app-scoped token that
+    resolves to the client with no user identity. Scopes follow the
+    fail-closed allowlist (invariant A1): a scope parameter must be
+    within the client's registered allowed_scopes, and an absent scope
+    parameter defaults to the full allowlist. No refresh token is
+    issued (RFC 6749 section 4.4.3); expiry is handled by re-running
+    the grant.
+    """
+    # RFC 6749 section 4.4.2: the client credentials grant requires
+    # client authentication, which public clients cannot perform
+    if client.is_public:
+        raise token_errors.InvalidClientError(
+            "Public clients cannot use the client_credentials grant type"
+        )
+    if not client_secret:
+        raise token_errors.InvalidRequestError(
+            "client_secret is required for client_credentials grant type"
+        )
+    if not client_resource.is_valid_credentials(client.id, client_secret):
+        raise token_errors.InvalidClientError(
+            "Invalid client credentials"
+        )
+
+    granted = (
+        list(client.allowed_scopes) if scope is None
+        else scopes.validate_for_client(client.allowed_scopes, scope)
+    )
+
+    token = app_credentials.issue(str(client.id), granted)
+
+    get_yapper().emit('campus.oauth.token', {
+        "grant_type": "client_credentials",
+        "client_id": str(client.id),
+    })
+
+    # expires_in reports the token's remaining lifetime, which is the
+    # full grant lifetime on a fresh issue but shorter on reuse
+    remaining = int(
+        (token.expires_at.to_datetime()
+         - schema.DateTime.utcnow().to_datetime()).total_seconds()
+    )
+
+    return {
+        "access_token": token.id,
+        "token_type": "Bearer",
+        "expires_in": remaining,
+        "scope": token.scope,
+    }, 200
 
 
 def _handle_device_code_grant(

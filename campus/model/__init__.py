@@ -16,6 +16,7 @@ kept out of models.
 
 __all__ = [
     "APIKey",
+    "AppCredentials",
     "Assignment",
     "AuthSession",
     "Circle",
@@ -63,7 +64,7 @@ from .classroom import (
     Submission,
 )
 from .client import Client, ClientAccess
-from .credentials import OAuthToken, UserCredentials
+from .credentials import AppCredentials, OAuthToken, UserCredentials
 from .device_code import DeviceCode
 from .emailotp import EmailOTP
 from .http.header import HttpHeader, HttpHeaderWithAuth
