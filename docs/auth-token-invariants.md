@@ -25,10 +25,18 @@ families is **not** a goal.
 
 | Provider | Family | Role |
 |----------|--------|------|
-| `campus` | first-party | Campus's own OAuth 2.0 authorization server: authorization-code, device-code (RFC 8628), and refresh grants issuing Campus bearer tokens |
+| `campus` | first-party | Campus's own OAuth 2.0 authorization server: authorization-code, client_credentials (RFC 6749 §4.4; confidential clients only, no user identity, no refresh token), device-code (RFC 8628), and refresh grants issuing Campus bearer tokens |
 | `google` | third-party | OAuth proxy: browser login/consent with Google, custody of upstream credentials |
 | `github` | third-party | OAuth proxy (same shape as google) |
 | `discord` | third-party | OAuth proxy (same shape as google) |
+
+Note on client_credentials: the grant is userless by design — the
+client itself is the resource owner, so the resulting bearer resolves
+(via `/root/authenticate`) to the client with no user. Its scopes
+follow A1 (validated against the client's registered allowlist; an
+absent `scope` parameter defaults to the full allowlist), and its
+single live token per client follows A5 supersession semantics when
+replaced (`AppCredentialsResource.issue`).
 
 ## Invariants
 

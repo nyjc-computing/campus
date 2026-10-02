@@ -263,3 +263,54 @@ class UserCredentials(Model):
         if self.token is not None:
             resource["token"] = self.token.to_resource()
         return resource
+
+
+@dataclass(eq=False, kw_only=True)
+class AppCredentials(Model):
+    """Client-scoped credentials for the client_credentials grant
+    (RFC 6749 section 4.4).
+
+    The confidential client itself is the resource owner, so unlike
+    UserCredentials these link a client to its single live app token
+    with no user involved: bearer authentication resolves the token to
+    the client alone. App tokens never carry a refresh token (RFC 6749
+    section 4.4.3).
+    """
+    __constraints__ = constraints.Unique("client_id")
+    id: schema.CampusID
+    # created_at inherited from Model
+    client_id: str
+    # storage will hold token_id
+    # caller expected to set token manually after initialization
+    token_id: str = field(  # type: ignore
+        default=None,
+        metadata={
+            "storage": True,
+            "resource": False,
+            "constraints": [constraints.UNIQUE]
+        }
+    )
+    token: OAuthToken = field(  # type: ignore
+        default=None,
+        init=False,
+        metadata={
+            "storage": False,
+            "resource": True,
+        }
+    )
+
+    def __post_init__(self):
+        """Set token_id from token.id after initialization."""
+        if self.token is not None:
+            self.token_id = schema.CampusID(self.token.id)
+
+    def to_resource(self) -> dict[str, typing.Any]:
+        """Convert the credentials to a resource dict.
+
+        The joined token is serialized by OAuthToken.to_resource() for
+        the same reasons as UserCredentials (issue #648).
+        """
+        resource = super().to_resource()
+        if self.token is not None:
+            resource["token"] = self.token.to_resource()
+        return resource

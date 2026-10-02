@@ -16,6 +16,7 @@ from campus.common.utils import secret, uid, utc_time
 
 token_storage = campus.storage.get_collection("tokens")
 cred_storage = campus.storage.get_table("credentials")
+app_cred_storage = campus.storage.get_table("app_credentials")
 
 
 class CredentialsResource:
@@ -29,6 +30,9 @@ class CredentialsResource:
         )
         cred_storage.init_from_model(
             "credentials", model.UserCredentials
+        )
+        app_cred_storage.init_from_model(
+            "app_credentials", model.AppCredentials
         )
 
     def __getitem__(
@@ -183,8 +187,10 @@ class ProviderCredentialsResource:
     def _revoke_token_record(self, token_id: str, client_id: str) -> bool:
         """Delete the credential and token records for a token id.
 
-        Only credential records belonging to client_id are deleted;
-        if none match, nothing is revoked.
+        Covers both credential families: user credentials (this
+        provider's rows) and app credentials from the
+        client_credentials grant. Only records belonging to client_id
+        are deleted; if none match, nothing is revoked.
         """
         records = cred_storage.get_matching({
             "provider": self.provider,
@@ -192,7 +198,7 @@ class ProviderCredentialsResource:
         })
         matching = [r for r in records if r["client_id"] == client_id]
         if not matching:
-            return False
+            return app_credentials.revoke_token(token_id, client_id)
         for record in matching:
             cred_storage.delete_by_id(record["id"])
         token_storage.delete_by_id(token_id)
@@ -372,3 +378,118 @@ class UserCredentialsResource:
         else:
             token_storage.insert_one(token.to_storage())
         return credentials
+
+
+class AppCredentialsResource:
+    """Represents the app (client-scoped) credentials resource.
+
+    Holds the single live token issued per confidential client via the
+    client_credentials grant (RFC 6749 section 4.4). The client is the
+    resource owner — there is no user — so bearer authentication
+    resolves these credentials to a client only.
+    """
+
+    def get(self, token_id: str) -> model.AppCredentials:
+        """Get app credentials by token ID.
+
+        Args:
+            token_id: The token identifier (the access token value)
+
+        Returns:
+            AppCredentials instance with token loaded
+
+        Raises:
+            api_errors.NotFoundError: If no app credential links this
+                token to a client
+        """
+        records = app_cred_storage.get_matching({"token_id": token_id})
+        if not records:
+            raise api_errors.NotFoundError(
+                f"App credentials for token {token_id} not found."
+            )
+        credentials = model.AppCredentials.from_storage(records[0])
+        token_record = token_storage.get_by_id(token_id)
+        if token_record:
+            credentials.token = model.OAuthToken.from_storage(token_record)
+        return credentials
+
+    def issue(self, client_id: str, scopes: list[str]) -> model.OAuthToken:
+        """Issue (or reuse) the client's live app token.
+
+        Reuse semantics: when the client already holds an unexpired
+        token carrying exactly the requested scopes, it is returned
+        as-is. Downstream clients (campus-python's with_app_session)
+        fetch a token per call, so without reuse every call would mint
+        and retain a new token record. Any mismatch — no live token,
+        expiry, or a different scope set — supersedes: a fresh token is
+        issued and the replaced token record deleted (invariant A5,
+        docs/auth-token-invariants.md).
+
+        App tokens never carry a refresh token (RFC 6749 section 4.4.3);
+        expiry is handled by re-running the grant.
+
+        Args:
+            client_id: The confidential client identifier
+            scopes: The validated scope list (already checked against
+                the client's allowlist by the caller, invariant A1)
+
+        Returns:
+            OAuthToken instance for the client's live app session
+        """
+        records = app_cred_storage.get_matching({"client_id": client_id})
+        old_token_record = None
+        if records:
+            old = model.AppCredentials.from_storage(records[0])
+            if old.token_id:
+                old_token_record = token_storage.get_by_id(old.token_id)
+            if old_token_record is not None:
+                existing = model.OAuthToken.from_storage(old_token_record)
+                if not existing.is_expired() and set(existing.scopes) == set(scopes):
+                    return existing
+
+        token = model.OAuthToken(
+            id=secret.generate_access_token(),
+            expires_in=config.DEFAULT_TOKEN_EXPIRY_DAYS * utc_time.DAY_SECONDS,
+            scopes=scopes,
+        )
+        token_storage.insert_one(token.to_storage())
+        if records:
+            app_cred_storage.update_by_id(
+                records[0]["id"],
+                {"token_id": token.id}
+            )
+            # Supersession is deletion (invariant A5): the replaced
+            # token record must not linger as a resolvable bearer.
+            if old_token_record is not None:
+                token_storage.delete_by_id(old_token_record["id"])
+        else:
+            credential = model.AppCredentials(
+                id=uid.generate_category_uid("app_credentials"),
+                client_id=client_id,
+                token_id=token.id,
+            )
+            app_cred_storage.insert_one(credential.to_storage())
+        return token
+
+    def revoke_token(self, token_id: str, client_id: str) -> bool:
+        """Delete the app credential and token records for a token id.
+
+        The client_id must match the credential record's client; a
+        mismatch revokes nothing, mirroring the user-credential
+        revocation rules (RFC 7009 section 2.2).
+
+        Returns:
+            True if an app credential record was revoked, False if no
+            matching record exists
+        """
+        records = app_cred_storage.get_matching({"token_id": token_id})
+        matching = [r for r in records if r["client_id"] == client_id]
+        if not matching:
+            return False
+        for record in matching:
+            app_cred_storage.delete_by_id(record["id"])
+        token_storage.delete_by_id(token_id)
+        return True
+
+
+app_credentials = AppCredentialsResource()

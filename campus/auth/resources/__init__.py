@@ -8,6 +8,7 @@ External clients should access resources via API.
 """
 
 __all__ = [
+    "app_credentials",
     "client",
     "credentials",
     "device_code",
@@ -18,7 +19,7 @@ __all__ = [
 ]
 
 from .client import ClientsResource
-from .credentials import CredentialsResource
+from .credentials import CredentialsResource, app_credentials
 from .device_code import DeviceCodeResource
 from .login import LoginSessionsResource
 from .session import AuthSessionsResource

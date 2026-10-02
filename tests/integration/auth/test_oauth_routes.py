@@ -755,5 +755,237 @@ class TestOAuthIntegration(IntegrationTestCase):
         self.assertEqual(oauth_error, "invalid_request")
 
 
+class TestClientCredentialsGrant(IntegrationTestCase):
+    """Integration tests for the client_credentials grant (RFC 6749 4.4).
+
+    campus#334 / campus-classroom#24: a confidential client exchanges
+    its registered secret for an app-scoped token that authenticates
+    the client with no user, enabling service-to-service Campus API
+    reads (campus-python's with_app_session()).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up local services once for the entire test class."""
+        super().setUpClass()
+
+        # The token endpoint lives on the auth app
+        import flask
+        auth_app = cls.service_manager.auth_app
+        if not isinstance(auth_app, flask.Flask):
+            raise RuntimeError("Expected Flask app from service manager")
+
+        cls.app = auth_app
+
+    def _grant(self, **overrides):
+        """POST a client_credentials token request (form-encoded).
+
+        Defaults to the fixture's confidential test client (allowed
+        scopes: read, write). A None override value removes the field,
+        for missing-parameter cases.
+        """
+        from campus.common import env
+        body = {
+            "grant_type": "client_credentials",
+            "client_id": env.get("CLIENT_ID"),
+            "client_secret": env.get("CLIENT_SECRET"),
+        }
+        for key, value in overrides.items():
+            if value is None:
+                body.pop(key, None)
+            else:
+                body[key] = value
+        return self.client.post(
+            "/auth/v1/oauth/token",
+            data=body,
+            content_type="application/x-www-form-urlencoded"
+        )
+
+    def _grant_token(self, **overrides) -> str:
+        """Run a successful grant and return the access token."""
+        response = self._grant(**overrides)
+        assert response.status_code == 200, response.get_json()
+        return response.get_json()["access_token"]
+
+    @staticmethod
+    def _oauth_error(response) -> str:
+        """Extract the RFC 6749 error code from an error envelope."""
+        error_obj = response.get_json().get("error", {})
+        return error_obj.get("details", {}).get("oauth_error", "")
+
+    def test_grant_returns_app_token_without_refresh_token(self):
+        """Test the happy path: standard token response, no refresh token."""
+        response = self._grant()
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["token_type"], "Bearer")
+        self.assertIn("access_token", data)
+        # Fixture test-client allowlist is ["read", "write"]; an absent
+        # scope parameter defaults to the full allowlist
+        self.assertEqual(set(data["scope"].split()), {"read", "write"})
+        # RFC 6749 section 4.4.3: no refresh token on this grant
+        self.assertNotIn("refresh_token", data)
+
+    def test_grant_accepts_json_body(self):
+        """Test that the grant works with a JSON body (campus-python
+        posts JSON to this endpoint)."""
+        from campus.common import env
+        response = self.client.post(
+            "/auth/v1/oauth/token",
+            json={
+                "grant_type": "client_credentials",
+                "client_id": env.get("CLIENT_ID"),
+                "client_secret": env.get("CLIENT_SECRET"),
+            }
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access_token", response.get_json())
+
+    def test_grant_reports_remaining_lifetime(self):
+        """Test that expires_in is bounded by the configured token
+        lifetime (full lifetime on a fresh issue)."""
+        import campus.config
+        response = self._grant()
+        data = response.get_json()
+        max_lifetime = (
+            campus.config.DEFAULT_TOKEN_EXPIRY_DAYS * 24 * 60 * 60
+        )
+        self.assertGreater(data["expires_in"], 0)
+        self.assertLessEqual(data["expires_in"], max_lifetime)
+
+    def test_grant_reuses_live_token(self):
+        """Test that repeated grants with the same scopes reuse the
+        client's live token instead of accumulating token records."""
+        first = self._grant().get_json()
+        second = self._grant().get_json()
+        self.assertEqual(first["access_token"], second["access_token"])
+
+    def test_grant_with_scope_param_narrows_and_supersedes(self):
+        """Test the scope parameter narrows the grant, and a different
+        scope set supersedes the live token (invariant A5: the replaced
+        token record is deleted, a fresh one issued)."""
+        narrowed = self._grant(scope="read")
+        self.assertEqual(narrowed.status_code, 200)
+        self.assertEqual(narrowed.get_json()["scope"], "read")
+
+        full = self._grant()
+        self.assertEqual(full.status_code, 200)
+        self.assertNotEqual(
+            narrowed.get_json()["access_token"],
+            full.get_json()["access_token"]
+        )
+
+    def test_grant_scope_outside_allowlist_rejected(self):
+        """Test invariant A1 (fail-closed allowlist): a scope outside
+        the client's registered allowlist rejects the whole request."""
+        response = self._grant(scope="read admin")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self._oauth_error(response), "invalid_scope")
+
+    def test_grant_invalid_secret_rejected(self):
+        """Test that a wrong client secret is rejected with
+        invalid_client (RFC 6749 section 5.2)."""
+        response = self._grant(client_secret="wrong-secret")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self._oauth_error(response), "invalid_client")
+
+    def test_grant_missing_secret_rejected(self):
+        """Test that omitting client_secret is invalid_request."""
+        response = self._grant(client_secret=None)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self._oauth_error(response), "invalid_request")
+
+    def test_grant_public_client_rejected(self):
+        """Test that public clients cannot use the grant (RFC 6749
+        section 4.4.2 requires client authentication)."""
+        response = self._grant(client_id="guest")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(self._oauth_error(response), "invalid_client")
+
+    def test_app_token_bearer_resolves_to_client_without_user(self):
+        """Test that /root/authenticate resolves an app token to the
+        client with no user (campus.api treats this as an app session)."""
+        from campus.common import env
+        token = self._grant_token()
+
+        response = self.client.post(
+            "/auth/v1/root/",
+            json={"token": token}
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["client"]["id"], env.get("CLIENT_ID"))
+        self.assertNotIn("user", data)
+
+    def test_app_token_authenticates_against_campus_api(self):
+        """Test end-to-end: an app token passes campus.api bearer
+        authentication (service-to-service read, campus-classroom#24)."""
+        apps_client = self.service_manager.apps_app.test_client()
+        token = self._grant_token()
+
+        response = apps_client.get(
+            "/api/v1/circles/",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_revoke_app_token_invalidates_bearer(self):
+        """Test RFC 7009 revocation of an app token: the bearer dies
+        and the next grant mints a fresh token."""
+        from campus.common import env
+        token = self._grant_token()
+
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "token": token,
+                "client_id": env.get("CLIENT_ID"),
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 200)
+
+        # The token no longer authenticates
+        auth_response = self.client.post(
+            "/auth/v1/root/",
+            json={"token": token}
+        )
+        self.assertEqual(auth_response.status_code, 401)
+
+        # A fresh grant issues a new token
+        self.assertNotEqual(self._grant_token(), token)
+
+    def test_revoke_app_token_wrong_client_does_not_revoke(self):
+        """Test that one client cannot revoke another client's app
+        token (RFC 7009 section 2.2 — response is 200, token stays
+        valid)."""
+        from campus.auth.resources import client as client_resource
+        client_resource.new(
+            id="otherappclient",
+            name="Other App Client",
+            description="Client that must not revoke foreign app tokens",
+            is_public=True,
+            redirect_uris=["urn:ietf:wg:oauth:2.0:oob"],
+        )
+        token = self._grant_token()
+
+        revoke_response = self.client.post(
+            "/auth/v1/oauth/revoke",
+            data={
+                "token": token,
+                "client_id": "otherappclient",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(revoke_response.status_code, 200)
+
+        # The app token was NOT revoked
+        auth_response = self.client.post(
+            "/auth/v1/root/",
+            json={"token": token}
+        )
+        self.assertEqual(auth_response.status_code, 200)
+
+
 if __name__ == '__main__':
     unittest.main()
