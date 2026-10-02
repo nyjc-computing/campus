@@ -12,6 +12,8 @@ access token, its expiry, and its scope, nothing else.
 Invariants: docs/auth-token-invariants.md B1-B5, C1-C5.
 """
 
+import logging
+
 import flask
 
 from campus import flask_campus
@@ -23,8 +25,21 @@ from .. import scopes as campus_scopes
 from ..resources import credentials as creds_resource
 from ..resources import vault as vault_resource
 
+logger = logging.getLogger(__name__)
+
 # Create blueprint for token bridge routes
 bp = flask.Blueprint('broker', __name__, url_prefix='/broker')
+
+# Google identity scopes: the base set a plain campus login grants
+# (email, profile, in both OAuth short and URL forms). min_scopes
+# beyond these on the identity broker route are integration asks that
+# belong on the per-integration broker routes (#733 Phase 1).
+_GOOGLE_IDENTITY_SCOPES = {
+    "email",
+    "profile",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+}
 
 # Providers with an OAuth proxy, mapped to their proxy module.
 # Imported lazily in _get_proxy: proxy modules import auth resources.
@@ -126,6 +141,25 @@ def release_upstream_token(
     """
     client_id, user_id = _authorize_bridge_call()
     requested_scopes = campus_scopes.parse(min_scopes)
+
+    # Deprecation telemetry (pre-implementation for #733): non-identity
+    # min_scopes on the identity route are integration asks that should
+    # move to the per-integration broker routes once they exist. These
+    # events are the who-still-uses-old-paths inventory that gates that
+    # retirement; denied calls are additionally counted by campus.broker.deny.
+    if provider == "google" and not set(requested_scopes) <= _GOOGLE_IDENTITY_SCOPES:
+        logger.warning(
+            "Deprecated non-identity min_scopes on /broker/google/ (client %s): %s",
+            client_id,
+            requested_scopes,
+        )
+        get_yapper().emit('campus.auth.deprecated_call', {
+            "endpoint": "broker.google",
+            "client_id": client_id,
+            "user_id": str(user_id),
+            "param": "min_scopes",
+            "requested_scopes": requested_scopes,
+        })
 
     # C3a: the caller may only ask for scopes its registration allows
     try:

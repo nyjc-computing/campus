@@ -142,6 +142,50 @@ class TestUpstreamScopesContract(unittest.TestCase):
         self.assertIn("/auth/v1/google/authorize", location)
         self.assertIn("classroom.rosters", location)
 
+    def test_authorize_with_upstream_scope_warns_deprecated(self):
+        """Deprecated-call telemetry (#733): upstream_scope at /authorize
+        is logged + audited as a deprecated call but still succeeds."""
+        client_id = self._create_client({"google": [CLASSROOM_ROSTERS]})
+        session_id = self._create_session(client_id)
+
+        with self.assertLogs(
+                "campus.auth.provider", level="WARNING"
+        ) as captured:
+            response = self.client.get(
+                "/auth/v1/authorize",
+                query_string={
+                    "client_id": client_id,
+                    "response_type": "code",
+                    "redirect_uri": REGISTERED_URI,
+                    "state": session_id,
+                    "upstream_scope": CLASSROOM_ROSTERS,
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            any("Deprecated upstream_scope" in message for message in captured.output)
+        )
+
+    def test_authorize_without_upstream_scope_does_not_warn(self):
+        """Deprecated-call telemetry (#733): a plain authorize request
+        does not trigger the deprecation warning."""
+        client_id = self._create_client()
+        session_id = self._create_session(client_id)
+
+        with self.assertNoLogs("campus.auth.provider", level="WARNING"):
+            response = self.client.get(
+                "/auth/v1/authorize",
+                query_string={
+                    "client_id": client_id,
+                    "response_type": "code",
+                    "redirect_uri": REGISTERED_URI,
+                    "state": session_id,
+                },
+            )
+
+        self.assertEqual(response.status_code, 302)
+
     def test_authorize_rejects_unallowed_upstream_scope(self):
         """B3: upstream scopes beyond the allowlist fail fail-closed."""
         client_id = self._create_client({"google": []})

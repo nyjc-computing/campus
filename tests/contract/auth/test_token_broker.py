@@ -141,6 +141,35 @@ class TestTokenBrokerContract(unittest.TestCase):
         self.assertNotIn("refresh_token", data)
         self.assertNotIn("provider_fields", data)
 
+    def test_non_identity_min_scopes_warn_deprecated(self):
+        """Deprecated-call telemetry (#733): non-identity min_scopes on
+        the identity broker route warn but do not block the release."""
+        with self.assertLogs(
+                "campus.auth.routes.broker", level="WARNING"
+        ) as captured:
+            response = self.client.post(
+                "/auth/v1/broker/google/",
+                json={"min_scopes": [GOOGLE_SCOPE]},
+                headers=self.bearer_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            any("Deprecated" in message for message in captured.output)
+        )
+
+    def test_identity_release_does_not_warn_deprecated(self):
+        """Deprecated-call telemetry (#733): an identity-shaped release
+        (min_scopes omitted) does not trigger the deprecation warning."""
+        with self.assertNoLogs("campus.auth.routes.broker", level="WARNING"):
+            response = self.client.post(
+                "/auth/v1/broker/google/",
+                json={},
+                headers=self.bearer_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+
     def test_unflagged_client_denied(self):
         """C1: a confidential client without the bridge flag is denied."""
         other_id = self._bridge_client_with_token(
