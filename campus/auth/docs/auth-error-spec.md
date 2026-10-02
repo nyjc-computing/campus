@@ -31,6 +31,12 @@ In particular:
 * Error codes are stable, machine-readable, and documented
 * Internal details are never exposed to clients
 
+This applies to **every** `/auth/v1` endpoint, including internal routes:
+`POST /root/` (service credential validation) and vault key reads
+(`GET /vaults/{label}/{key}`) MUST return the standard envelope
+(`AUTH_INVALID_REQUEST`, `AUTH_INVALID_CLIENT`, `AUTH_TOKEN_INVALID`,
+`NOT_FOUND` as appropriate) — no endpoint-specific flat error shapes (#714).
+
 ---
 
 ## 3. OAuth Error Signaling Model

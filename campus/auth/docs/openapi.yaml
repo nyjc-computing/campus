@@ -1228,6 +1228,15 @@ paths:
                     type: string
         '404':
           description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  code: NOT_FOUND
+                  message: Key not found
+                  request_id: req_bb922g
 
     post:
       summary: Set vault value
@@ -1331,10 +1340,20 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  code: AUTH_INVALID_REQUEST
+                  message: Missing authentication credentials.
+                  request_id: req_ff926k
         '401':
-          description: Invalid credentials
+          description: Invalid credentials (unknown client or token)
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ErrorEnvelope'
+              example:
+                error:
+                  code: AUTH_INVALID_CLIENT
+                  message: Invalid client credentials.
+                  request_id: req_42a91c

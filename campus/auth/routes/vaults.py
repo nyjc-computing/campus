@@ -11,6 +11,7 @@ Authentication is handled in a global routes.before_request hook.
 import flask
 
 from campus import flask_campus
+from campus.common.errors import api_errors
 
 from .. import get_yapper
 from ..resources import vault as vault_resource
@@ -63,7 +64,7 @@ def get(label: str, key: str) -> flask_campus.JsonResponse:
     try:
         value = vault_resource[label][key]
     except KeyError:
-        return {"error": "Key not found"}, 404
+        raise api_errors.NotFoundError("Key not found") from None
     return {"key": value}, 200
 
 

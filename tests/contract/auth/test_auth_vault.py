@@ -49,9 +49,10 @@ class TestAuthVaultContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 404)
         data = response.get_json()
-        # Vault endpoint returns simple error dict for 404
         self.assertIn("error", data)
-        self.assertEqual(data["error"], "Key not found")
+        self.assertEqual(data["error"]["code"], "NOT_FOUND")
+        self.assertIn("message", data["error"])
+        self.assertIn("request_id", data["error"])
 
     def test_get_set_secret_round_trip(self):
         """SET then GET secret returns the value."""
