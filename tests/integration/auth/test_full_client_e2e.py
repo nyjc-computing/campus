@@ -6,12 +6,9 @@ don't cover: base URL resolution → client_credentials grant →
 bearer-authenticated read (campus#736, campus#731).
 """
 
-import unittest
-
 import campus_python
 
 from campus.common import env
-
 from tests.integration.base import IntegrationTestCase
 
 

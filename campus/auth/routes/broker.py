@@ -20,7 +20,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors, auth_errors
 
-from .. import get_yapper
+from .. import get_yapper, integrations
 from .. import scopes as campus_scopes
 from ..resources import credentials as creds_resource
 from ..resources import vault as vault_resource
@@ -60,6 +60,19 @@ def _get_proxy(provider: str):
     import importlib
     module = importlib.import_module(_PROXY_MODULES[provider])
     return module.get_proxy()
+
+
+def _get_integration_proxy(integration: integrations.Integration):
+    """Return the OAuth proxy for an integration's base provider."""
+    if integration.base_provider not in _PROXY_MODULES:
+        raise api_errors.NotFoundError(
+            f"Unknown upstream provider {integration.base_provider!r}",
+            provider=integration.base_provider,
+            integration=integration.slug,
+        )
+    import importlib
+    module = importlib.import_module(_PROXY_MODULES[integration.base_provider])
+    return module.get_proxy(integration)
 
 
 def _authorize_bridge_call() -> tuple[str, schema.UserID]:
@@ -265,6 +278,192 @@ def release_upstream_token(
     }, 200
 
 
+@bp.post("/<provider>/<integration>/")
+@flask_campus.unpack_request
+def release_integration_token(
+        provider: str,
+        integration: str,
+        min_scopes: list[str] | None = None,
+) -> flask_campus.JsonResponse:
+    """Release the user's upstream access token for an integration.
+
+    POST /broker/{provider}/{integration}
+    e.g. POST /broker/google/classroom/
+    Auth: campus Bearer token (the user), issued to a confidential
+    client flagged for bridge access (same guards as the identity
+    route, invariant C1).
+    Body: {"min_scopes": ["..."]}  (optional)
+    Returns: same shape as the identity route, with the namespaced
+    provider string (e.g. "google.classroom"); no refresh token, ever
+    (invariant B2).
+
+    Integration-specific rules (#733, design §2.4-§2.5):
+    - The caller's upstream_scopes must carry a NON-EMPTY entry for the
+      namespaced provider even when min_scopes is omitted: an
+      integration token inherently carries integration scopes, so an
+      absent entry means no access at all (fail-closed).
+    - min_scopes are additionally capped by the integration's vault
+      SCOPES set; asking beyond it is a configuration error.
+    - A missing user credential is a 404 whose hint points at the
+      connect flow, not at the deprecated upstream_scope login path.
+    """
+    client_id, user_id = _authorize_bridge_call()
+    campus_integration = integrations.get(integration)
+    if campus_integration.base_provider != provider:
+        raise api_errors.NotFoundError(
+            f"Unknown upstream provider {provider!r} for integration "
+            f"{integration!r}",
+            provider=provider,
+            integration=integration,
+        )
+    provider_str = campus_integration.provider
+    requested_scopes = campus_scopes.parse(min_scopes)
+
+    # Fails closed (404) when the integration's vault label has no
+    # upstream OAuth client.
+    integration_proxy = _get_integration_proxy(campus_integration)
+    config = integrations.get_config(campus_integration)
+
+    # Amended C3a rule for integrations (#733): a namespaced provider
+    # has no "base scopes" to fall back on, so an absent or empty
+    # allowlist entry denies even a min_scopes-less release.
+    allowed = flask.g.current_client.upstream_scopes.get(provider_str, [])
+    if not allowed:
+        _deny(
+            client_id, user_id, provider_str,
+            integration=campus_integration.slug,
+            reason="client has no upstream_scopes entry for this integration",
+            requested_scopes=requested_scopes,
+        )
+        raise auth_errors.InvalidScopeError(
+            f"Client is not allowed to request {provider_str} scopes; "
+            "add a non-empty upstream_scopes entry for the integration",
+            provider=provider_str,
+        )
+
+    # C3a: the caller may only ask for scopes its registration allows
+    try:
+        campus_scopes.validate_upstream_for_client(
+            flask.g.current_client.upstream_scopes,
+            provider_str,
+            requested_scopes,
+        )
+    except auth_errors.InvalidScopeError:
+        _deny(
+            client_id, user_id, provider_str,
+            integration=campus_integration.slug,
+            reason="min_scopes exceed the client's upstream_scopes allowlist",
+            requested_scopes=requested_scopes,
+        )
+        raise
+
+    # The vault SCOPES set is the integration's hard cap, independent
+    # of any client allowlist (design §2.5): a scope beyond it can never
+    # be granted by this Google client, so asking for it is a
+    # configuration bug, not a re-consent situation.
+    beyond_cap = [
+        scope for scope in requested_scopes
+        if scope not in set(integration_proxy.scopes)
+    ]
+    if beyond_cap:
+        _deny(
+            client_id, user_id, provider_str,
+            integration=campus_integration.slug,
+            reason="min_scopes exceed the integration's vault SCOPES cap",
+            requested_scopes=requested_scopes,
+        )
+        raise auth_errors.InvalidScopeError(
+            f"Requested scopes exceed the {provider_str} integration's "
+            f"configured scope cap: {', '.join(beyond_cap)}",
+            provider=provider_str,
+            disallowed_scopes=beyond_cap,
+        )
+
+    try:
+        credentials = creds_resource[provider_str][user_id].get(
+            config.client_id
+        )
+    except api_errors.NotFoundError:
+        _deny(
+            client_id, user_id, provider_str,
+            integration=campus_integration.slug,
+            reason="no upstream credential for user",
+        )
+        raise api_errors.NotFoundError(
+            f"No {provider_str} credential for user {user_id}; complete "
+            f"the {campus_integration.title} connect flow first (via "
+            "the app's integrations page)"
+        ) from None
+    token = credentials.token
+    if token is None:
+        _deny(
+            client_id, user_id, provider_str,
+            integration=campus_integration.slug,
+            reason="upstream credential has no token",
+        )
+        raise api_errors.NotFoundError(
+            f"No {provider_str} token for user {user_id}"
+        )
+
+    # Silent refresh: Campus refreshes from its stored refresh token so
+    # callers only ever see a live access token (invariant B2: the
+    # refresh token itself never leaves)
+    if token.is_expired():
+        token = integration_proxy._oauth2.refresh_token(
+            token,
+            client_id=integration_proxy._CLIENT_ID,
+            client_secret=integration_proxy._CLIENT_SECRET,
+        )
+        creds_resource[provider_str][user_id].update(
+            client_id=config.client_id,
+            token=token,
+        )
+
+    # C3b: the stored grant must cover the requested minimum
+    missing_scopes = sorted(
+        set(requested_scopes) - set(token.scopes)
+    )
+    if missing_scopes:
+        _deny(
+            client_id, user_id, provider_str,
+            integration=campus_integration.slug,
+            reason="upstream grant does not cover min_scopes",
+            missing_scopes=missing_scopes,
+        )
+        raise api_errors.ForbiddenError(
+            f"The user's {provider_str} grant does not cover the "
+            "requested scopes; re-consent via the integration connect "
+            f"flow (/auth/v1/{provider}/{campus_integration.slug}/authorize)",
+            missing_scopes=missing_scopes,
+            provider=provider_str,
+        )
+
+    get_yapper().emit('campus.broker.release', {
+        "client_id": client_id,
+        "user_id": str(user_id),
+        "provider": provider_str,
+        "integration": campus_integration.slug,
+        "requested_scopes": requested_scopes,
+        "scope_count": len(token.scopes),
+    })
+
+    # C2: minimal exposure — build the response explicitly; the token
+    # resource's refresh_token and provider_fields are never emitted
+    expires_in = max(
+        0,
+        int(token.expires_at.to_timestamp()
+            - schema.DateTime.utcnow().to_timestamp()),
+    )
+    return {
+        "provider": provider_str,
+        "user_id": str(user_id),
+        "access_token": token.id,
+        "token_type": token.token_type,
+        "expires_in": expires_in,
+        "scope": token.scope,
+    }, 200
+
+
 def create_blueprint() -> flask.Blueprint:
     """Create a fresh blueprint with routes for test isolation.
 
@@ -276,6 +475,11 @@ def create_blueprint() -> flask.Blueprint:
     # Manually register routes (mimicking the decorator behavior)
     new_bp.add_url_rule(
         "/<provider>/", "release_upstream_token", release_upstream_token,
+        methods=["POST"]
+    )
+    new_bp.add_url_rule(
+        "/<provider>/<integration>/", "release_integration_token",
+        release_integration_token,
         methods=["POST"]
     )
 
