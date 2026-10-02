@@ -43,9 +43,12 @@ class HttpAuthProperty(str):
         if scheme.lower() != "basic":
             raise ValueError("Only Basic authentication can be decoded")
         decoded = b64decode(key).decode("utf-8")
-        assert sep in decoded, (
-            f"Credentials must contain '{sep}' separator, got: {decoded}"
-        )
+        # ValueError (not assert): asserts vanish under python -O, and
+        # the message must never echo the decoded credentials.
+        if sep not in decoded:
+            raise ValueError(
+                f"Credentials must contain '{sep}' separator"
+            )
         # cast for type-checking
         creds = cast(
             tuple[str, str],
