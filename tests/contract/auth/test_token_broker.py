@@ -185,6 +185,21 @@ class TestTokenBrokerContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_unknown_bearer_token_returns_401(self):
+        """C1: an unresolvable bearer token is 401 invalid_token
+        (RFC 6750 §3.1), not 404 (#729)."""
+        response = self.client.post(
+            "/auth/v1/broker/google/",
+            json={},
+            headers=self._bearer("campus-garbage-token"),
+        )
+
+        self.assertEqual(response.status_code, 401)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "AUTH_TOKEN_INVALID")
+        self.assertIn("message", data["error"])
+        self.assertIn("request_id", data["error"])
+
     def test_min_scopes_beyond_grant_denied_with_missing_list(self):
         """C3: a grant that does not cover min_scopes is denied.
 

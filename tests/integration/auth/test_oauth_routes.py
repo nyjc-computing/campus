@@ -588,7 +588,8 @@ class TestOAuthIntegration(IntegrationTestCase):
 
         Bearer authentication resolves the credential record by token
         id, so revocation deletes the credential record; the token then
-        authenticates like one that never existed (404, not 200).
+        authenticates like one that never existed (401, not 200) —
+        RFC 6750 §3.1 invalid_token semantics (#729).
         """
         tokens = self._complete_device_flow()
         user_id = "test@example.com"
@@ -611,7 +612,7 @@ class TestOAuthIntegration(IntegrationTestCase):
 
         self.assertEqual(
             self._bearer_credentials_status(user_id, tokens["access_token"]),
-            404
+            401
         )
 
     def test_revoke_refresh_token_also_invalidates_access_token(self):
@@ -646,7 +647,7 @@ class TestOAuthIntegration(IntegrationTestCase):
         # The associated access token is dead too
         self.assertEqual(
             self._bearer_credentials_status(user_id, tokens["access_token"]),
-            404
+            401
         )
 
     def test_revoke_without_hint_kills_pair(self):
@@ -666,7 +667,7 @@ class TestOAuthIntegration(IntegrationTestCase):
 
         self.assertEqual(
             self._bearer_credentials_status(user_id, tokens["access_token"]),
-            404
+            401
         )
         refresh_response = self.client.post(
             "/auth/v1/oauth/token",
