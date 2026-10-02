@@ -140,9 +140,10 @@ def _query_trace_page(
         TracePage with up to limit summaries and next-page metadata
     """
     effective_query = dict(query)
-    if cursor is not None:
-        cursor_started_at, cursor_trace_id = _decode_cursor(cursor)
-        effective_query["started_at"] = campus.storage.lte(cursor_started_at)
+    # (started_at, trace_id) of the last trace on the previous page
+    cursor_key = _decode_cursor(cursor) if cursor is not None else None
+    if cursor_key is not None:
+        effective_query["started_at"] = campus.storage.lte(cursor_key[0])
 
     try:
         spans = traces_storage.get_matching(
@@ -156,9 +157,8 @@ def _query_trace_page(
 
     summaries = _build_trace_summaries(spans)
     summaries.sort(key=lambda s: (s.started_at, s.trace_id), reverse=True)
-    if cursor is not None:
+    if cursor_key is not None:
         # Strictly after the cursor in (started_at, trace_id) walk order
-        cursor_key = (cursor_started_at, cursor_trace_id)
         summaries = [
             s for s in summaries if (s.started_at, s.trace_id) < cursor_key
         ]
