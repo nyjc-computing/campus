@@ -263,12 +263,14 @@ class TestAuthCredentialsContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-        # Verify they're gone
+        # Verify they're gone: the deleted credential no longer
+        # authenticates, so the request is rejected as 401 invalid_token
+        # (RFC 6750 §3.1, #729) rather than a resource 404.
         get_response = self.client.get(
             f"/auth/v1/credentials/campus/{temp_user_id}",
             headers=temp_headers
         )
-        self.assertEqual(get_response.status_code, 404)
+        self.assertEqual(get_response.status_code, 401)
 
 
 if __name__ == '__main__':

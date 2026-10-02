@@ -140,9 +140,8 @@ class TestTokenIssuanceContract(unittest.TestCase):
             headers=self._bearer_headers(first_token),
         )
         # The superseded credential no longer resolves, so the request
-        # is rejected. It surfaces as 404 rather than RFC 6750's 401 —
-        # a known deviation tracked as a follow-up to #678.
-        self.assertEqual(stale.status_code, 404)
+        # is rejected as 401 invalid_token (RFC 6750 §3.1, #729).
+        self.assertEqual(stale.status_code, 401)
 
     def test_narrower_reauth_reuses_covering_token(self):
         """A3: a covering existing grant is reused, not re-issued."""

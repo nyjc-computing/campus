@@ -26,6 +26,8 @@ from typing import Any
 import flask
 
 from campus.common import schema
+from campus.common.errors import api_errors
+from campus.common.errors.base import ErrorConstant
 
 from .. import resources
 from ..middleware import Authenticator
@@ -54,9 +56,19 @@ def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
 
 def bearer_authenticate(token: str) -> dict[str, Any]:
     """Authenticate using HTTP Bearer Authentication."""
-    credentials = resources.credentials["campus"].get(token_id=token)
+    try:
+        credentials = resources.credentials["campus"].get(token_id=token)
+        client = resources.client[schema.CampusID(credentials.client_id)].get()
+    except api_errors.NotFoundError as err:
+        # Unknown and revoked tokens alike are authentication failures:
+        # RFC 6750 §3.1 expects 401 invalid_token, not 404 (#729). 404
+        # stays reserved for unknown routes and resources.
+        raise api_errors.UnauthorizedError(
+            str(err),
+            error_code=ErrorConstant.AUTH_TOKEN_INVALID,
+        ) from None
     return {
-        "client": resources.client[schema.CampusID(credentials.client_id)].get(),
+        "client": client,
         # Bearer authentication carries the user context (the token's
         # owner); basic (client-credentials) auth has none. The token
         # bridge uses this to bind releases to the authenticated user.
