@@ -83,7 +83,10 @@ bridge flag — by design.
 - **Identity route** — `min_scopes` must be within the client's
   registered `upstream_scopes[provider]` allowlist → otherwise `400`
   `AUTH_INVALID_SCOPE` (invariant C3a). Non-identity asks on this
-  route are deprecated (warned + audited) and slated for refusal.
+  route are **refused outright** (#733 Phase 2 retirement: the
+  deprecation warnings flipped to hard errors once telemetry showed no
+  remaining callers) — integration asks belong on the integration
+  route.
 - **Integration route** — the client's `upstream_scopes` must carry a
   **non-empty entry for the namespaced provider** (e.g.
   `"google.classroom": [...]`), **even when `min_scopes` is omitted**:

@@ -12,8 +12,6 @@ access token, its expiry, and its scope, nothing else.
 Invariants: docs/auth-token-invariants.md B1-B5, C1-C5.
 """
 
-import logging
-
 import flask
 
 from campus import flask_campus
@@ -24,8 +22,6 @@ from .. import get_yapper, integrations
 from .. import scopes as campus_scopes
 from ..resources import credentials as creds_resource
 from ..resources import vault as vault_resource
-
-logger = logging.getLogger(__name__)
 
 # Create blueprint for token bridge routes
 bp = flask.Blueprint('broker', __name__, url_prefix='/broker')
@@ -188,24 +184,29 @@ def release_upstream_token(
             integration=namespaced.slug,
         )
 
-    # Deprecation telemetry (pre-implementation for #733): non-identity
-    # min_scopes on the identity route are integration asks that should
-    # move to the per-integration broker routes once they exist. These
-    # events are the who-still-uses-old-paths inventory that gates that
-    # retirement; denied calls are additionally counted by campus.broker.deny.
+    # Retired (#733 Phase 2): non-identity min_scopes on the identity
+    # route are refused outright now that no callers remain (telemetry:
+    # the pre-implementation deprecated_call events + the consumer
+    # sweep). Integration asks belong on the per-integration broker
+    # routes, where the amended C3a rule applies.
     if provider == "google" and not set(requested_scopes) <= _GOOGLE_IDENTITY_SCOPES:
-        logger.warning(
-            "Deprecated non-identity min_scopes on /broker/google/ (client %s): %s",
-            client_id,
-            requested_scopes,
+        missing_identity = sorted(
+            set(requested_scopes) - _GOOGLE_IDENTITY_SCOPES
         )
-        get_yapper().emit('campus.auth.deprecated_call', {
-            "endpoint": "broker.google",
-            "client_id": client_id,
-            "user_id": str(user_id),
-            "param": "min_scopes",
-            "requested_scopes": requested_scopes,
-        })
+        _deny(
+            client_id, user_id, provider,
+            reason="non-identity min_scopes on the identity route are "
+                   "refused; release integration tokens via "
+                   "/auth/v1/broker/<provider>/<integration>/",
+            requested_scopes=requested_scopes,
+        )
+        raise auth_errors.InvalidScopeError(
+            "Non-identity min_scopes are not accepted on the identity "
+            "broker route; release integration tokens via the "
+            "per-integration route "
+            "(/auth/v1/broker/google/<integration>/)",
+            disallowed_scopes=missing_identity,
+        )
 
     # C3a: the caller may only ask for scopes its registration allows
     try:
@@ -280,8 +281,9 @@ def release_upstream_token(
         )
         raise api_errors.ForbiddenError(
             f"The user's {provider} grant does not cover the requested "
-            "scopes; re-consent via /auth/v1/authorize with "
-            "upstream_scope set to the missing scopes",
+            "scopes; re-authenticate via the normal login flow "
+            "(/auth/v1/authorize) to grow the stored identity grant "
+            "(upstream_scope is retired and no longer accepted)",
             missing_scopes=missing_scopes,
             provider=provider,
         )

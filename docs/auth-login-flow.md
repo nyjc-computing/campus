@@ -132,16 +132,12 @@ backend issues the 302; the browser never calls the sessions API.
 - if the request carries a `scope` parameter, it must be within the
   session's scopes — exceeding it is rejected with 400 `invalid_scope`
   (the session API is the validated boundary);
-- if the request carries an `upstream_scope` parameter (space-delimited
-  Google scopes), each must be in the client's registered
-  `upstream_scopes["google"]` allowlist — fail-closed, 400
-  `invalid_scope` otherwise. **Deprecated (#733):** client allowlists
-  are identity-only, so any integration ask (e.g. Classroom scopes)
-  fails closed; the parameter is warned on and audited
-  (`campus.auth.deprecated_call`) ahead of removal, and is reserved
-  for hypothetical identity-client growth. Integrations connect via
-  the per-integration connect flow instead (see *Integration connect
-  flows*).
+- if the request carries an `upstream_scope` parameter, it is
+  **rejected outright** with 400 `invalid_scope` — **retired (#733
+  Phase 2)**: login never carries upstream scopes. Integrations
+  connect via the per-integration connect flow instead (see
+  *Integration connect flows*); the parameter itself is removed after
+  this rejection has been live for its deprecation window.
 
 Scope **consent** (a user-facing screen) is not implemented yet: the
 validated session scopes are granted. On success the browser is
