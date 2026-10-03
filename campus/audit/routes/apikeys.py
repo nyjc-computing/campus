@@ -11,13 +11,72 @@ import flask
 
 import campus.flask_campus as flask_campus
 from campus.common import schema
-from campus.common.errors import api_errors
+from campus.common.errors import FieldError, ValidationError, api_errors
 
 from .. import resources
 from ..helpers import audit_events
 
 # Create blueprint for API key routes
 bp = flask.Blueprint('apikeys', __name__, url_prefix='/apikeys')
+
+
+def _validate_non_empty_str(
+        field_errors: list[FieldError],
+        field: str,
+        value: object,
+) -> None:
+    """Record a field error if value is not a non-empty string."""
+    if not isinstance(value, str) or not value.strip():
+        field_errors.append(FieldError(
+            field=field,
+            code="EMPTY" if value == "" else "INVALID_TYPE",
+            message=f"{field} must be a non-empty string"
+        ))
+
+
+def _validate_scopes_field(
+        field_errors: list[FieldError],
+        scopes: object,
+) -> None:
+    """Record a field error unless scopes is a non-empty list of
+    non-empty strings."""
+    if not isinstance(scopes, list):
+        field_errors.append(FieldError(
+            field="scopes",
+            code="INVALID_TYPE",
+            message="scopes must be a list of scope strings"
+        ))
+        return
+    if not scopes:
+        field_errors.append(FieldError(
+            field="scopes",
+            code="EMPTY",
+            message="scopes must contain at least one scope"
+        ))
+        return
+    for scope in scopes:
+        if not isinstance(scope, str) or not scope.strip():
+            field_errors.append(FieldError(
+                field="scopes",
+                code="INVALID_TYPE",
+                message="scopes must be a list of non-empty strings"
+            ))
+            return
+
+
+def _validate_rate_limit_field(
+        field_errors: list[FieldError],
+        rate_limit: object,
+) -> None:
+    """Record a field error unless rate_limit is an integer or None."""
+    if rate_limit is None:
+        return
+    if isinstance(rate_limit, bool) or not isinstance(rate_limit, int):
+        field_errors.append(FieldError(
+            field="rate_limit",
+            code="INVALID_TYPE",
+            message="rate_limit must be an integer or null"
+        ))
 
 
 @bp.post("/")
@@ -44,8 +103,18 @@ def new(
 
     Returns:
         201 Created with the API key (only shown once) and key details
-        400 Bad Request on invalid input
+        422 Unprocessable Entity on invalid input
     """
+    field_errors: list[FieldError] = []
+    _validate_non_empty_str(field_errors, "name", name)
+    _validate_non_empty_str(field_errors, "owner_id", owner_id)
+    _validate_scopes_field(field_errors, scopes)
+    _validate_rate_limit_field(field_errors, rate_limit)
+    if field_errors:
+        raise ValidationError(
+            message="One or more fields are invalid",
+            errors=field_errors
+        )
     api_key, apikey_value = resources.apikeys.new(
         name=name,
         owner_id=owner_id,
@@ -116,7 +185,7 @@ def get(
 def update(
         api_key_id: schema.CampusID,
         *,
-        name: schema.CampusID | None = None,
+        name: schema.String | None = None,
         scopes: list[schema.String] | None = None,
         rate_limit: schema.Integer | None = None,
 ) -> flask_campus.JsonResponse:
@@ -138,7 +207,21 @@ def update(
     Returns:
         200 OK with updated API key details
         404 Not Found if API key doesn't exist
+        422 Unprocessable Entity on invalid input
     """
+    field_errors: list[FieldError] = []
+    if name is not None:
+        _validate_non_empty_str(field_errors, "name", name)
+    if scopes is not None:
+        _validate_scopes_field(field_errors, scopes)
+    if rate_limit is not None:
+        _validate_rate_limit_field(field_errors, rate_limit)
+    if field_errors:
+        raise ValidationError(
+            message="One or more fields are invalid",
+            errors=field_errors
+        )
+
     updates = {}
     if name is not None:
         updates["name"] = name
