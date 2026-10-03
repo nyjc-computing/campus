@@ -58,10 +58,15 @@ self-healing for an existing environment.
   from the highest existing number. Never reuse a number, even if a
   migration was reverted before release.
 - **Immutability**: never edit a migration that has been applied to any
-  environment. Fix-forward with a new migration instead.
+  environment. Fix-forward with a new migration instead. Since phase 3
+  (#746) this is enforced: `apply` refuses to run when an applied
+  revision's file hash no longer matches the ledger (`--allow-hash-mismatch`
+  proceeds with a warning for conscious recovery).
 - **Docstring**: every migration opens with a docstring stating the
   revision ID, creation date, the rationale (linking the relevant issue),
-  and run instructions (including how to scope it to the right service).
+  and run instructions (including how to scope it to the right service);
+  rewrite migrations also state their backup usage there (`--backup
+  PATH`, and which collections the backup covers).
 - **Structure**: module-level `upgrade()` and `downgrade()`. Both are
   required, even for one-way data rewrites where `downgrade()` can only
   drop or no-op — say so in its docstring.
@@ -77,6 +82,49 @@ self-healing for an existing environment.
   argparse entry point that **dry-runs by default** and writes only with
   `--apply` (see `005_backfill_scope_string.py` for the pattern). DDL
   migrations do not need this.
+- **Rewrites back up first**: a Mongo rewrite dumps the documents it is
+  about to touch before its first write — accept `--backup PATH` and,
+  when given, hand the affected documents (per collection) to
+  `migrations/_backup.py`'s `write_backup()` before writing; `--backup`
+  without `--apply` is a valid backup-only run. `downgrade()` cannot
+  restore overwritten values; the backup is the restore path (see
+  [Backups and restore](#backups-and-restore)).
+
+## Backups and restore
+
+Mongo rewrites (005-style data migrations) are the one migration family
+whose `downgrade()` cannot undo: overwritten values are gone. Since
+phase 3 (#746) the protocol is backup-before-rewrite: the migration's
+`--backup PATH` dumps every affected document to a local JSON envelope
+BEFORE the first write, via the helpers in `migrations/_backup.py`:
+
+```python
+from migrations._backup import write_backup
+
+# in upgrade(), after collecting the affected documents, before writing:
+write_backup(args.backup, REVISION, __file__,
+             {"tokens": token_docs, "auth_sessions": session_docs})
+```
+
+The envelope (`campus-migration-backup/1`) records the producing
+migration, a UTC timestamp, the operator and the documents keyed by
+collection. Restore from the same context a migration runs in (storage
+secrets resolve):
+
+```bash
+python migrations/_backup.py show backup.json            # summarize
+python migrations/_backup.py restore backup.json --dry-run
+python migrations/_backup.py restore backup.json         # write back
+python migrations/_backup.py restore backup.json --collection tokens
+```
+
+Restore fidelity follows `update_by_id`: every backed-up field is set,
+fields whose backed-up value is `None` are unset, and fields the
+rewrite added after the backup are left in place — they carry no old
+value to restore. A rewrite's `downgrade()` docstring names those
+(005's `scope` unset-sentinel is the pattern); the restore stops where
+that guidance ends. The restore validates the whole file (every
+document carries an `id`) before writing anything.
 
 ## Applying migrations
 
@@ -142,12 +190,21 @@ python migrations/runner.py stamp all          # record every migration as appli
 python migrations/runner.py stamp 001 --as historical   # record as never applicable here
 python migrations/runner.py apply              # run pending migrations in revision order
 python migrations/runner.py apply --up-to 008  # run pending migrations up to 008
+python migrations/runner.py apply --allow-hash-mismatch  # run despite an edited applied file (warn)
 ```
 
 Each row records the revision, filename, `status`, the stamp/run time
-and operator (`applied_at`, `applied_by`), and for failures the error
-text; the `duration_ms` and `file_hash` columns are reserved for
-phase-3 execution auditing (#27). Statuses:
+and operator (`applied_at`, `applied_by`), the error text for
+failures, and — since phase 3 (#746, 2026-10-03) — the wall-clock
+`duration_ms` of an actual run (NULL for stamped rows, which run
+nothing) and `file_hash`: the sha256 of the migration file at write
+time. `apply` runs a hash guard before anything else: an
+already-applied revision whose file hash no longer matches the ledger
+(the file was edited after it was applied) refuses the run;
+`--allow-hash-mismatch` proceeds with a warning for conscious
+recovery. Rows stamped before phase 3 (the dev baseline below) carry a
+NULL `file_hash` and are not guarded; a fresh environment's first
+apply anchors hashes from day one. Statuses:
 
 - `applied` — `upgrade()` ran to completion (or the row was stamped for
   a baseline bootstrap)
@@ -201,10 +258,16 @@ does **not** meet; they are the remaining scope of issue #27:
   enforces revision ordering, reports/records pending state, wraps each
   migration with success/failure ledger rows, and stops on failure;
   `--up-to` bounds deliberate partial runs.
-- **Rollback tooling** — `downgrade()` exists in every file but has never
-  been exercised as part of a process, and data rewrites (005-style)
-  cannot restore overwritten values.
-- **Execution audit** — who ran what, when, with what outcome is recorded
-  nowhere; git history records intent, not events.
+- **Rollback tooling** — `downgrade()` exists in every file but has
+  never been exercised as part of a process. The data-restore half is
+  CLOSED by phase 3 (#746, 2026-10-03): rewrite migrations back up
+  affected documents before writing
+  ([Backups and restore](#backups-and-restore)). What remains —
+  exercising `downgrade()` as a process and the rollback-by-composition
+  decision — is phase 5 (#748).
+- **Execution audit** — CLOSED by phase 3 (#746, 2026-10-03): every
+  ledger row records the operator, the duration and the file hash;
+  the hash guard makes the immutability rule enforceable rather than
+  aspirational.
 - **Deploy integration / pre-flight checks** — no automation gates a
   deploy on migration state.

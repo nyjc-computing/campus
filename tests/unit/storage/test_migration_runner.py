@@ -1,9 +1,9 @@
-"""Test the migration runner (#27 phases 1+2, #744 #745).
+"""Test the migration runner (#27 phases 1-3, #744 #745 #746).
 
 Covers the pure logic (file discovery, revision resolution, ledger
-diffing, apply targeting), the stamp/ensure DB paths via a fake
-connection, and the apply loop with real (temp-dir) migration files —
-no live database.
+diffing, apply targeting, hash-guard scanning), the stamp/ensure DB
+paths via a fake connection, and the apply loop with real (temp-dir)
+migration files — no live database.
 
 Note: this file lives under storage/ rather than a migrations/ test
 package because a tests/unit/migrations package would shadow the
@@ -85,9 +85,9 @@ def _make_files(*specs):
     return [MigrationFile(revision=rev, filename=name) for rev, name in specs]
 
 
-def _row(revision, filename, status="applied"):
-    """Ledger fetch row (revision, filename, status, applied_at)."""
-    return (revision, filename, status, datetime(2026, 10, 3))
+def _row(revision, filename, status="applied", file_hash=None):
+    """Ledger fetch row (revision, filename, status, applied_at, file_hash)."""
+    return (revision, filename, status, datetime(2026, 10, 3), file_hash)
 
 
 class TestDiscoverMigrationFiles(unittest.TestCase):
@@ -278,11 +278,18 @@ class TestStamp(unittest.TestCase):
     FILE = _make_files(("005", "005_backfill_scope_string.py"))[0]
 
     def setUp(self):
-        # _upsert_row reads applied_by from getpass; freeze it
+        # _upsert_row reads applied_by from getpass; freeze it. MIGRATIONS_DIR
+        # points at an empty temp dir so file-hash reads stay hermetic.
         self.user_patcher = patch(
             "migrations.runner._get_user", return_value="operator")
         self.user_patcher.start()
         self.addCleanup(self.user_patcher.stop)
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.dir_patcher = patch(
+            "migrations.runner.MIGRATIONS_DIR", Path(self.tmpdir.name))
+        self.dir_patcher.start()
+        self.addCleanup(self.dir_patcher.stop)
 
     def _inserts(self, conn):
         return [(sql, params) for sql, params in conn.cursor_obj.executed
@@ -301,8 +308,14 @@ class TestStamp(unittest.TestCase):
         self.assertIsNotNone(params[3].tzinfo)
         self.assertEqual(params[4], "operator")
         self.assertIsNone(params[5])
+        # stamp runs nothing: no duration; the file is absent from the
+        # temp MIGRATIONS_DIR, so no hash either
+        self.assertIsNone(params[6])
+        self.assertIsNone(params[7])
         (sql, _), = self._inserts(conn)
         self.assertIn("ON CONFLICT (revision) DO UPDATE", sql)
+        for column in ("duration_ms", "file_hash"):
+            self.assertIn(f"{column} = EXCLUDED.{column}", sql)
 
     def test_upserts_failure_row_with_error(self):
         from migrations.runner import _upsert_row
@@ -311,6 +324,19 @@ class TestStamp(unittest.TestCase):
         (_, params), = self._inserts(conn)
         self.assertEqual(params[2], "failed")
         self.assertEqual(params[5], "RuntimeError: boom")
+
+    def test_upsert_row_records_file_hash_when_file_exists(self):
+        from migrations.runner import _file_hash, _upsert_row
+        (Path(self.tmpdir.name) / self.FILE.filename).write_text(
+            "upgrade(): pass", encoding="utf-8")
+        conn = FakeConn()
+        _upsert_row(conn, self.FILE, "applied", duration_ms=42)
+        (_, params), = self._inserts(conn)
+        self.assertEqual(params[6], 42)
+        self.assertEqual(
+            params[7],
+            _file_hash(Path(self.tmpdir.name) / self.FILE.filename))
+        self.assertEqual(len(params[7]), 64)
 
     def test_skips_already_recorded_same_status(self):
         from migrations.runner import stamp
@@ -421,6 +447,28 @@ class TestLoadAndRunUpgrade(unittest.TestCase):
             self._run("003", "003_noupgrade.py")
 
 
+class TestFileHash(unittest.TestCase):
+    """The file_hash anchor: sha256 of file bytes, tolerant of absence."""
+
+    def test_hexdigest_of_contents(self):
+        import hashlib
+
+        from migrations.runner import _file_hash
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        path = Path(tmpdir.name) / "001_a.py"
+        # write_bytes: no platform newline translation — the hash is of
+        # the exact bytes on disk
+        path.write_bytes(b"upgrade(): pass\n")
+        self.assertEqual(
+            _file_hash(path),
+            hashlib.sha256(b"upgrade(): pass\n").hexdigest())
+
+    def test_missing_file_returns_none(self):
+        from migrations.runner import _file_hash
+        self.assertIsNone(_file_hash(Path("definitely/not/here.py")))
+
+
 class TestFetchLedgerRows(unittest.TestCase):
     """Reading the ledger, tolerating a missing table."""
 
@@ -428,13 +476,15 @@ class TestFetchLedgerRows(unittest.TestCase):
         from migrations.runner import _fetch_ledger_rows
         rows = [
             _row("003", "003_add_api_traces_table.py"),
-            _row("005", "005_backfill_scope_string.py"),
+            _row("005", "005_backfill_scope_string.py", file_hash="ab" * 32),
         ]
         conn = FakeConn(FakeCursor(fetchall_rows=rows))
         ledger = _fetch_ledger_rows(conn)
         self.assertEqual(sorted(ledger), ["003", "005"])
         self.assertEqual(ledger["005"]["filename"], "005_backfill_scope_string.py")
         self.assertEqual(ledger["005"]["status"], "applied")
+        self.assertEqual(ledger["005"]["file_hash"], "ab" * 32)
+        self.assertIsNone(ledger["003"]["file_hash"])
 
     def test_missing_table_returns_empty(self):
         from migrations.runner import _fetch_ledger_rows
@@ -573,12 +623,8 @@ class TestMain(unittest.TestCase):
         self.assertIn("error: Unknown migration '999'", stderr)
 
 
-class TestApply(unittest.TestCase):
-    """apply: ordering, pending detection, failure path, --up-to bound.
-
-    Uses real migration files in a temp dir (loaded via importlib by the
-    runner) and a fake DB connection.
-    """
+class TestApplyHarnessMixin:
+    """Shared harness: real temp-dir migration files, fake connection."""
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -614,6 +660,18 @@ class TestApply(unittest.TestCase):
                 contextlib.redirect_stderr(stderr):
             exit_code = main(["apply", *argv])
         return exit_code, stdout.getvalue(), stderr.getvalue(), conn, cursor
+
+    def _inserts(self, cursor):
+        return [(sql, params) for sql, params in cursor.executed
+                if "INSERT INTO" in sql]
+
+
+class TestApply(TestApplyHarnessMixin, unittest.TestCase):
+    """apply: ordering, pending detection, failure path, --up-to bound.
+
+    Uses real migration files in a temp dir (loaded via importlib by the
+    runner) and a fake DB connection.
+    """
 
     def test_runs_pending_in_revision_order(self):
         self._write_migration("001_a.py", "():\n    pass\n")
@@ -729,6 +787,153 @@ class TestApply(unittest.TestCase):
                    if "INSERT INTO" in sql]
         self.assertEqual(inserts[0][1][2], "failed")
         self.assertIn("import-time boom", inserts[0][1][5])
+
+
+class TestApplyAuditColumns(TestApplyHarnessMixin, unittest.TestCase):
+    """Every apply outcome records duration_ms and file_hash (#746)."""
+
+    def test_success_row_records_duration_and_hash(self):
+        from migrations.runner import _file_hash
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, _, _, cursor = self._run_apply([], files)
+        self.assertEqual(exit_code, 0)
+        (_, params), = self._inserts(cursor)
+        self.assertIsInstance(params[6], int)
+        self.assertGreaterEqual(params[6], 0)
+        self.assertEqual(params[7], _file_hash(self.dir / "001_a.py"))
+        self.assertRegex(stdout, r"applied 001 \(\d+ ms\)")
+
+    def test_failure_row_records_duration_and_hash(self):
+        from migrations.runner import _file_hash
+        self._write_migration(
+            "001_bad.py", "():\n    raise RuntimeError('boom')\n")
+        files = self._files(("001", "001_bad.py"))
+        exit_code, _, _, _, cursor = self._run_apply([], files)
+        self.assertEqual(exit_code, 1)
+        (_, params), = self._inserts(cursor)
+        self.assertEqual(params[2], "failed")
+        self.assertIsInstance(params[6], int)
+        self.assertGreaterEqual(params[6], 0)
+        self.assertEqual(params[7], _file_hash(self.dir / "001_bad.py"))
+
+
+class TestHashGuard(TestApplyHarnessMixin, unittest.TestCase):
+    """apply refuses to run when an applied file's hash changed (#746)."""
+
+    STORED = "0" * 64  # any stored hash that cannot match a real file
+
+    def _applied_row(self, filename, file_hash=STORED):
+        return _row("001", filename, file_hash=file_hash)
+
+    def test_scanner_flags_only_edited_applied_files(self):
+        from migrations.runner import _file_hash, hash_mismatches
+        self._write_migration("001_a.py", "():\n    pass\n")
+        self._write_migration("002_b.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        good = _file_hash(self.dir / "001_a.py")
+
+        def ledger_row(status, file_hash):
+            return {
+                "revision": "002", "filename": "002_b.py",
+                "status": status, "applied_at": datetime(2026, 10, 3),
+                "file_hash": file_hash,
+            }
+
+        # hash_mismatches reads MIGRATIONS_DIR at call time; point it at
+        # the temp dir for these direct (non-CLI) calls
+        with patch("migrations.runner.MIGRATIONS_DIR", self.dir):
+            # a matching hash is clean; pending files are not scanned
+            self.assertEqual(
+                hash_mismatches(files, {"001": {
+                    "revision": "001", "filename": "001_a.py",
+                    "status": "applied", "applied_at": datetime(2026, 10, 3),
+                    "file_hash": good,
+                }}),
+                [])
+            rows = {"002": ledger_row("applied", self.STORED)}
+            mismatches = hash_mismatches(files, rows)
+            self.assertEqual(
+                [(f.revision, s, c) for f, s, c in mismatches],
+                [("002", self.STORED,
+                  _file_hash(self.dir / "002_b.py"))])
+            # rows without a stored hash (pre-phase-3 stamps) not guarded
+            rows["002"]["file_hash"] = None
+            self.assertEqual(hash_mismatches(files, rows), [])
+            # non-applied statuses are not guarded
+            rows["002"]["file_hash"] = self.STORED
+            rows["002"]["status"] = "failed"
+            self.assertEqual(hash_mismatches(files, rows), [])
+            # a file that vanished is left to status's missing-file report
+            rows["002"]["status"] = "applied"
+            (self.dir / "002_b.py").unlink()
+            self.assertEqual(hash_mismatches(files, rows), [])
+
+    def test_matching_hash_applies_normally(self):
+        from migrations.runner import _file_hash
+        self._write_migration("001_a.py", "():\n    pass\n")
+        self._write_migration("002_b.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        rows = [self._applied_row(
+            "001_a.py", file_hash=_file_hash(self.dir / "001_a.py"))]
+        exit_code, stdout, stderr, _, _ = self._run_apply([], files, rows)
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("hash guard", stderr)
+        self.assertIn("applying 002", stdout)
+
+    def test_edited_applied_file_refuses_apply(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        self._write_migration("002_b.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        rows = [self._applied_row("001_a.py")]
+        exit_code, stdout, stderr, _, cursor = self._run_apply([], files, rows)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("hash guard: 001", stderr)
+        self.assertIn("refusing to apply", stderr)
+        self.assertIn("--allow-hash-mismatch", stderr)
+        self.assertNotIn("applying", stdout)
+        self.assertEqual(self._inserts(cursor), [])
+
+    def test_allow_hash_mismatch_warns_and_applies(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        self._write_migration("002_b.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        rows = [self._applied_row("001_a.py")]
+        exit_code, stdout, stderr, _, _ = self._run_apply(
+            ["--allow-hash-mismatch"], files, rows)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("hash guard: 001", stderr)
+        self.assertIn("WARNING", stderr)
+        self.assertIn("applying 002", stdout)
+
+    def test_null_hash_rows_not_guarded(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        self._write_migration("002_b.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        rows = [self._applied_row("001_a.py", file_hash=None)]
+        exit_code, stdout, stderr, _, _ = self._run_apply([], files, rows)
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("hash guard", stderr)
+        self.assertIn("applying 002", stdout)
+
+    def test_failed_row_with_changed_hash_is_still_retried(self):
+        from migrations.runner import FAILED
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        rows = [_row("001", "001_a.py", status=FAILED, file_hash=self.STORED)]
+        exit_code, stdout, stderr, _, _ = self._run_apply([], files, rows)
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("hash guard", stderr)
+        self.assertIn("applying 001", stdout)
+
+    def test_guard_fires_even_when_up_to_date(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        rows = [self._applied_row("001_a.py")]
+        exit_code, stdout, stderr, _, _ = self._run_apply([], files, rows)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("refusing to apply", stderr)
+        self.assertNotIn("up to date", stdout)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,8 @@ POSTGRESDB_URI resolves, e.g. `railway ssh` into campus.auth):
     python migrations/runner.py stamp 001 --as historical   # record as never-applicable
     python migrations/runner.py apply              # run pending migrations in order
     python migrations/runner.py apply --up-to 008  # run pending migrations up to 008
+    python migrations/runner.py apply --allow-hash-mismatch
+        # run anyway after the hash guard flagged an edited, applied file
 
 Ledger statuses:
 
@@ -45,6 +47,18 @@ Baseline bootstrap for dev (per the doc ledger, 2026-10-03): 003–009
 stamped applied; 001–002 stamped `--as historical` (their tables are
 absent from both dev Postgres databases).
 
+Execution audit (#27 phase 3, #746): every run records who ran it, how
+long it took and a sha256 of the migration file — `applied_by`,
+`duration_ms` (NULL for stamped rows, which run nothing) and
+`file_hash`. `apply` runs a hash guard first: an already-applied
+revision whose file hash no longer matches the ledger means the file
+was edited after it was applied, and the run is refused;
+`--allow-hash-mismatch` proceeds with a warning for conscious
+recovery. Rows stamped before phase 3 (e.g. the dev baseline) carry a
+NULL file_hash and are not guarded. Mongo rewrite migrations take a
+document backup before writing — see migrations/_backup.py and the
+protocol doc's backup conventions.
+
 The `_migrations` DDL deliberately does not go through
 PostgreSQLTable.init_from_schema: that entry point is production-blocked,
 and standing up production is exactly when this runner is needed. The
@@ -52,6 +66,7 @@ ledger table is runner bookkeeping, not user schema.
 """
 
 import argparse
+import hashlib
 import re
 import sys
 from dataclasses import dataclass
@@ -196,6 +211,14 @@ def _get_user() -> str | None:
         return None
 
 
+def _file_hash(path: Path) -> str | None:
+    """sha256 hexdigest of a migration file; None if it cannot be read."""
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
 def _connect():
     """Open a connection to the auth Postgres.
 
@@ -213,7 +236,8 @@ def _fetch_ledger_rows(conn) -> dict[str, dict]:
     with conn.cursor() as cursor:
         try:
             cursor.execute(
-                f'SELECT revision, filename, status, applied_at FROM "{LEDGER_TABLE}"'
+                f'SELECT revision, filename, status, applied_at, file_hash '
+                f'FROM "{LEDGER_TABLE}"'
             )
         except psycopg2.Error as e:
             if getattr(e, "pgcode", None) == UNDEFINED_TABLE_SQLSTATE:
@@ -227,6 +251,7 @@ def _fetch_ledger_rows(conn) -> dict[str, dict]:
                 "filename": row[1],
                 "status": row[2],
                 "applied_at": row[3],
+                "file_hash": row[4],
             }
             for row in rows
         }
@@ -239,27 +264,36 @@ def ensure(conn) -> None:
     conn.commit()
 
 
-def _upsert_row(conn, file: MigrationFile, status: str, error: str | None = None) -> None:
+def _upsert_row(conn, file: MigrationFile, status: str,
+                error: str | None = None,
+                duration_ms: int | None = None) -> None:
     """Write one ledger row, replacing any existing row for the revision.
 
     The upsert is what makes a post-failure retry converge: the success
     write clears the error column and the failed status of the attempt
-    it supersedes.
+    it supersedes. Every write records the operator (applied_by) and
+    the file's sha256 at write time (#746 execution audit); duration_ms
+    is the wall time of an actual run — NULL for stamped rows.
     """
     applied_by = _get_user()
+    file_hash = _file_hash(MIGRATIONS_DIR / file.filename)
     with conn.cursor() as cursor:
         cursor.execute(
             f'INSERT INTO "{LEDGER_TABLE}" '
-            f'(revision, filename, status, applied_at, applied_by, error) '
-            f"VALUES (%s, %s, %s, %s, %s, %s) "
+            f'(revision, filename, status, applied_at, applied_by, error, '
+            f"duration_ms, file_hash) "
+            f"VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
             f"ON CONFLICT (revision) DO UPDATE SET "
             f"filename = EXCLUDED.filename, "
             f"status = EXCLUDED.status, "
             f"applied_at = EXCLUDED.applied_at, "
             f"applied_by = EXCLUDED.applied_by, "
-            f"error = EXCLUDED.error",
+            f"error = EXCLUDED.error, "
+            f"duration_ms = EXCLUDED.duration_ms, "
+            f"file_hash = EXCLUDED.file_hash",
             (file.revision, file.filename, status,
-             datetime.now(timezone.utc), applied_by, error),
+             datetime.now(timezone.utc), applied_by, error,
+             duration_ms, file_hash),
         )
     conn.commit()
 
@@ -340,6 +374,32 @@ def pending_for_apply(
     return targets
 
 
+def hash_mismatches(
+    files: list[MigrationFile],
+    ledger_rows: dict[str, dict],
+) -> list[tuple[MigrationFile, str, str]]:
+    """Applied files whose current sha256 differs from the ledger row.
+
+    The hash guard's scan (#746): a mismatch means a migration file was
+    edited after it was applied — the protocol's immutability rule,
+    enforced. Rows without a stored hash (stamped before phase 3) and
+    revisions whose file is gone are not guarded. Returns (file,
+    stored_hash, current_hash) tuples.
+    """
+    mismatches = []
+    for file in files:
+        row = ledger_rows.get(file.revision)
+        if not row or row.get("status") != APPLIED:
+            continue
+        stored = row.get("file_hash")
+        if not stored:
+            continue
+        current = _file_hash(MIGRATIONS_DIR / file.filename)
+        if current is not None and current != stored:
+            mismatches.append((file, stored, current))
+    return mismatches
+
+
 def cmd_ensure(args, conn) -> int:
     ensure(conn)
     print(f"ledger table {LEDGER_TABLE!r} ready")
@@ -387,6 +447,30 @@ def cmd_apply(args, conn) -> int:
     files = discover_migration_files()
     ensure(conn)
     rows = _fetch_ledger_rows(conn)
+
+    mismatches = hash_mismatches(files, rows)
+    if mismatches:
+        for file, stored, current in mismatches:
+            print(
+                f"hash guard: {file.revision} ({file.filename}) changed "
+                f"since it was applied — ledger {stored[:12]}…, file "
+                f"{current[:12]}…",
+                file=sys.stderr,
+            )
+        if not args.allow_hash_mismatch:
+            print(
+                "error: refusing to apply — a migration file was edited "
+                "after it was applied (fix forward with a new migration, "
+                "or pass --allow-hash-mismatch to proceed anyway)",
+                file=sys.stderr,
+            )
+            return 1
+        print(
+            f"WARNING: continuing despite {len(mismatches)} edited "
+            f"migration file(s) (--allow-hash-mismatch)",
+            file=sys.stderr,
+        )
+
     up_to = resolve_revision(args.up_to, files) if args.up_to else None
     targets = pending_for_apply(files, rows, up_to)
     if not targets:
@@ -402,7 +486,9 @@ def cmd_apply(args, conn) -> int:
             run_upgrade(module, file)
         except Exception as e:
             error = f"{type(e).__name__}: {e}"
-            _upsert_row(conn, file, FAILED, error=error)
+            duration_ms = round((time.perf_counter() - started) * 1000)
+            _upsert_row(conn, file, FAILED, error=error,
+                        duration_ms=duration_ms)
             print(
                 f"FAILED {file.revision}: {error}\n"
                 f"recorded failure and stopped — "
@@ -412,8 +498,9 @@ def cmd_apply(args, conn) -> int:
             )
             return 1
         else:
-            _upsert_row(conn, file, APPLIED)
-            print(f"applied {file.revision} ({time.perf_counter() - started:.2f}s)",
+            duration_ms = round((time.perf_counter() - started) * 1000)
+            _upsert_row(conn, file, APPLIED, duration_ms=duration_ms)
+            print(f"applied {file.revision} ({duration_ms} ms)",
                   flush=True)
     print(f"applied {len(targets)} migration(s)")
     return 0
@@ -456,6 +543,13 @@ def main(argv: list[str] | None = None) -> int:
         dest="up_to",
         metavar="REV",
         help="apply only revisions at or below this one (e.g. 008)",
+    )
+    apply_parser.add_argument(
+        "--allow-hash-mismatch",
+        dest="allow_hash_mismatch",
+        action="store_true",
+        help="apply even when an applied migration file's hash no longer "
+             "matches the ledger (edited file); warn instead of refusing",
     )
     subparsers.add_parser(
         "status",
