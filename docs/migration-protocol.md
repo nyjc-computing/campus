@@ -8,7 +8,8 @@ applied to each environment, and how applied state is tracked.
 > It supersedes the earlier design in PR #382 (a `campus-admin` package with
 > its own database, state table, runner and CLI), which was closed unimplemented.
 > The gaps that design intended to close are listed under
-> [Known gaps](#known-gaps) and remain tracked by issue #27.
+> [Known gaps](#known-gaps); issue #27 closed all of them in five phases
+> (completed 2026-10-03).
 
 ## Overview
 
@@ -125,6 +126,32 @@ value to restore. A rewrite's `downgrade()` docstring names those
 (005's `scope` unset-sentinel is the pattern); the restore stops where
 that guidance ends. The restore validates the whole file (every
 document carries an `id`) before writing anything.
+
+## Rollback
+
+There is no rollback command, by decision (#27 phase 5, #748,
+2026-10-03): rollback is **by composition** — the pieces already built
+cover what a rollback tool would do, without a half-executed
+`downgrade()` being the worst outcome of a bad day:
+
+- **DDL rollback**: run the migration's `downgrade()` manually, from the
+  same context as `apply` (storage secrets resolve). Every migration
+  carries one, but none has been exercised as part of a process to
+  date — acceptable for additive DDL (`CREATE TABLE IF NOT EXISTS`,
+  guarded `ALTER`s), which is the only DDL shipped so far.
+- **Data restore**: rewrite migrations back up affected documents
+  before writing; `migrations/_backup.py restore` is the restore path
+  (see [Backups and restore](#backups-and-restore)). `downgrade()` on a
+  data rewrite cannot undo overwrites — the backup, not `downgrade()`,
+  is the restore path.
+- **Failure forensics**: the `_migrations` ledger records who ran what,
+  when, how long it took, the file hash and the error text (see
+  [Applied-migrations ledger](#applied-migrations-ledger)).
+
+A `runner.py rollback REV` subcommand — restricted to additive-DDL
+migrations, refusing data rewrites — stays shelved until a production
+database with real data exists; until then the manual `downgrade()` run
+is the same operation with fewer moving parts to trust.
 
 ## Applying migrations
 
@@ -255,7 +282,8 @@ Note: production currently has no `campus.auth` service (survey
 ## Known gaps
 
 These were the goals of the superseded #382 design that current practice
-does **not** meet; they are the remaining scope of issue #27:
+did not meet. Issue #27 closed all five in phases, completed
+2026-10-03:
 
 - **Applied-state tracking in the database** — CLOSED by phase 1
   (#744, 2026-10-03): the `_migrations` table and the
@@ -265,13 +293,12 @@ does **not** meet; they are the remaining scope of issue #27:
   enforces revision ordering, reports/records pending state, wraps each
   migration with success/failure ledger rows, and stops on failure;
   `--up-to` bounds deliberate partial runs.
-- **Rollback tooling** — `downgrade()` exists in every file but has
-  never been exercised as part of a process. The data-restore half is
-  CLOSED by phase 3 (#746, 2026-10-03): rewrite migrations back up
-  affected documents before writing
-  ([Backups and restore](#backups-and-restore)). What remains —
-  exercising `downgrade()` as a process and the rollback-by-composition
-  decision — is phase 5 (#748).
+- **Rollback tooling** — CLOSED by phase 5 (#748, 2026-10-03): rollback
+  is by composition, not a rollback command — manual `downgrade()` for
+  DDL, phase-3 backups for data, the ledger for forensics
+  ([Rollback](#rollback)). The data-restore half landed in phase 3
+  (#746, 2026-10-03): rewrite migrations back up affected documents
+  before writing ([Backups and restore](#backups-and-restore)).
 - **Execution audit** — CLOSED by phase 3 (#746, 2026-10-03): every
   ledger row records the operator, the duration and the file hash;
   the hash guard makes the immutability rule enforceable rather than
