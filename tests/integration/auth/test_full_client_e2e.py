@@ -30,9 +30,7 @@ class TestFullClientEndToEnd(IntegrationTestCase):
 
         The bearer read targets the api app: its middleware authenticates
         the app-scoped token via auth's /root/authenticate, which falls
-        through to app credentials. (The auth service's own routes cannot
-        serve this token yet — its bearer_authenticate only resolves user
-        credentials; see follow-up issue.)
+        through to app credentials.
         """
         self.assertTrue(env.CLIENT_ID, "fixture must set CLIENT_ID")
 
@@ -41,3 +39,17 @@ class TestFullClientEndToEnd(IntegrationTestCase):
             # against the local auth app; the list call is the bearer read.
             assignments = client.api.assignments.list()
             self.assertIsInstance(assignments, list)
+
+    def test_app_session_bearer_read_on_auth_route(self):
+        """An app-scoped token authenticates against the auth service itself.
+
+        bearer_authenticate falls through from user credentials to app
+        credentials (#739), so GET /auth/v1/clients/<id>/ serves the
+        token minted by the client_credentials grant. Before the
+        fallthrough, the same read failed with 401 invalid_token.
+        """
+        self.assertTrue(env.CLIENT_ID, "fixture must set CLIENT_ID")
+
+        with campus_python.Campus(timeout=10).with_app_session() as client:
+            client_record = client.auth.clients[env.CLIENT_ID].get()
+            self.assertEqual(str(client_record.id), env.CLIENT_ID)

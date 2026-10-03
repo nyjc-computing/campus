@@ -58,9 +58,18 @@ def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
     }
 
 def bearer_authenticate(token: str) -> dict[str, Any]:
-    """Authenticate using HTTP Bearer Authentication."""
+    """Authenticate using HTTP Bearer Authentication.
+
+    User tokens are resolved first; a miss falls through to app
+    credentials (client_credentials grant), which resolve to the
+    client with no user (#739). This mirrors authenticate_token in
+    routes/root.py.
+    """
     try:
         credentials = resources.credentials["campus"].get(token_id=token)
+    except api_errors.NotFoundError:
+        return _authenticate_app_bearer(token)
+    try:
         client = resources.client[schema.CampusID(credentials.client_id)].get()
     except api_errors.NotFoundError as err:
         # Unknown and revoked tokens alike are authentication failures:
@@ -76,6 +85,28 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
         # owner); basic (client-credentials) auth has none. The token
         # bridge uses this to bind releases to the authenticated user.
         "user": {"id": str(credentials.user_id)},
+    }
+
+
+def _authenticate_app_bearer(token: str) -> dict[str, Any]:
+    """Authenticate an app-scoped (client_credentials) bearer token.
+
+    App tokens carry no user identity: the confidential client is the
+    resource owner (RFC 6749 §4.4), so the result is the client only.
+    """
+    try:
+        app_credentials = resources.app_credentials.get(token_id=token)
+        client = resources.client[schema.CampusID(app_credentials.client_id)].get()
+    except api_errors.NotFoundError as err:
+        # Unknown and revoked tokens of either kind are authentication
+        # failures: RFC 6750 §3.1 expects 401 invalid_token, not 404
+        # (#729). 404 stays reserved for unknown routes and resources.
+        raise api_errors.UnauthorizedError(
+            str(err),
+            error_code=ErrorConstant.AUTH_TOKEN_INVALID,
+        ) from None
+    return {
+        "client": client,
     }
 
 # campus.auth authenticates directly from campus.auth.resources to avoid
