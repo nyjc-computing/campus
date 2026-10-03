@@ -4,7 +4,31 @@ Essential reminders for working on the Campus codebase. This guide applies to bo
 
 ## Critical Reminders (Read First!)
 
-### 1. Python Environment Setup
+### 1. One Stream per Worktree (Concurrent Sessions)
+
+Multiple agent sessions and humans work in this clone concurrently. **Never
+create branches or `git checkout` in the main checkout** — switching a
+shared checkout's branch under another active stream makes its next commit
+land on the wrong branch.
+
+- The **main checkout stays on `weekly`** and only ever takes `git pull`.
+- **Every task runs in its own worktree** — one worktree = one branch = one PR:
+
+```bash
+python scripts/worktree.py new feat/your-feature        # code work: worktree + venv
+python scripts/worktree.py new docs/your-doc --no-venv  # docs-only: no venv
+python scripts/worktree.py remove feat/your-feature     # after merge (single-use)
+python scripts/worktree.py list                         # who is working where
+```
+
+- Worktrees are **single-use**: remove the worktree (and its venv) once the
+  task's PRs are merged; build a fresh one for the next task.
+- Never `git checkout` inside another stream's worktree.
+
+Details and the manual recipe: [CONTRIBUTING.md](docs/CONTRIBUTING.md),
+section "Concurrent work streams (worktrees)".
+
+### 2. Python Environment Setup
 
 Campus uses pyenv for Python version management and pipx for Poetry installation.
 
@@ -28,7 +52,7 @@ pyenv local 3.13.0
 pipx install poetry
 ```
 
-### 2. Running Python Commands
+### 3. Running Python Commands
 
 Use `poetry run` for all Python commands - this works consistently across all environments (local, CI, Codespaces).
 
@@ -43,7 +67,7 @@ poetry run python main.py
 
 **Note:** The test runner (`tests/run_tests.py`) automatically detects and uses `.venv/bin/python` when available, but using `poetry run` ensures consistency across all environments.
 
-### 3. Use `run_tests.py` for Testing
+### 4. Use `run_tests.py` for Testing
 
 The only supported test entrypoint is `tests/run_tests.py`. It handles environment setup, cleanup, and isolation. Running tests directly may produce false positives.
 
@@ -56,11 +80,11 @@ poetry run python tests/run_tests.py unit
 poetry run python tests/run_tests.py integration
 ```
 
-### 3. Campus Uses `unittest`, Not pytest
+### 5. Campus Uses `unittest`, Not pytest
 
 Test files use the standard library `unittest.TestCase` framework. No pytest dependencies are installed.
 
-### 4. Read These Files Before Starting Work
+### 6. Read These Files Before Starting Work
 
 | File | Purpose |
 |------|---------|
@@ -159,6 +183,7 @@ poetry run python tests/run_tests.py contract      # HTTP contracts (also a bloc
 
 ## Before You Start
 
+- [ ] Are you working in a per-task worktree, not the shared checkout?
 - [ ] Have you read the relevant documentation?
 - [ ] Are you using `poetry run python` for all commands?
 - [ ] Will you use `run_tests.py` for testing?
