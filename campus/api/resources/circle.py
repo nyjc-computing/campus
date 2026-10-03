@@ -138,6 +138,9 @@ class CirclesResource:
             records = circle_storage.get_matching(filters)
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+        # @meta bookkeeping records share this collection but lack circle
+        # fields (name/tag), so they cannot be hydrated as Circle models.
+        records = [record for record in records if not record.get("@meta")]
         return [model.Circle.from_storage(record) for record in records]
 
     def new(self, **fields: typing.Any) -> model.Circle:
