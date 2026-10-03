@@ -82,8 +82,22 @@ def _create_bp(
         Returns:
             Redirect to the destination stored in login_next session variable
         """
-        # Complete the OAuth flow (creates login session)
-        campus.auth.finalize(state=state, code=code, scope=scope)
+        # Complete the OAuth flow (creates login session). A rejected
+        # code (replayed single-use code, expired code) is routine in a
+        # browser flow — send the user back to sign-in instead of an
+        # unhandled 500 (#690).
+        try:
+            campus.auth.finalize(state=state, code=code, scope=scope)
+        except campus_python.errors.BadRequestError as err:
+            flask.current_app.logger.warning(
+                "finalize_login rejected: %s", err
+            )
+            flask.flash(
+                "Your sign-in session expired or was already used."
+                " Please sign in again.",
+                "warning"
+            )
+            return flask.redirect(flask.url_for('auth.login'))
         campus.auth.push_context()
 
         # Redirect to the original destination
