@@ -88,7 +88,7 @@ class TestAuditTracesIngestContract(unittest.TestCase):
         _, api_key_value = APIKeysResource().new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
 
         # Use the audit API key for authentication
@@ -232,7 +232,7 @@ class TestAuditTracesListContract(unittest.TestCase):
         _, api_key_value = APIKeysResource().new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
 
         # Use the audit API key for authentication
@@ -344,7 +344,7 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
         _, api_key_value = APIKeysResource().new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
 
         # Use the audit API key for authentication
@@ -448,7 +448,7 @@ class TestAuditSpansListContract(unittest.TestCase):
         _, api_key_value = APIKeysResource().new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
 
         # Use the audit API key for authentication
@@ -537,7 +537,7 @@ class TestAuditSpanGetContract(unittest.TestCase):
         _, api_key_value = APIKeysResource().new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
 
         # Use the audit API key for authentication
@@ -653,7 +653,7 @@ class TestAuditTracesSearchContract(unittest.TestCase):
         _, api_key_value = APIKeysResource().new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
 
         # Use the audit API key for authentication
@@ -870,7 +870,7 @@ class TestAuditTracesCursorPaginationContract(unittest.TestCase):
         _, api_key_value = APIKeysResource().new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
 
         # Use the audit API key for authentication
@@ -1070,3 +1070,127 @@ class TestAuditTracesCursorPaginationContract(unittest.TestCase):
         finally:
             env.set('AUDIT_EVENTS_ENABLED', '1')
 
+
+
+class TestAuditTracesScopeEnforcement(unittest.TestCase):
+    """Scope enforcement on trace endpoints (#575).
+
+    API keys authenticate with scopes; trace endpoints require
+    traces:read for queries and traces:write for ingestion. Wildcard
+    key scopes (traces:*, *) satisfy both.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.initialize()
+        cls.app = cls.manager.audit_app
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+        assert self.app
+        self.client = self.app.test_client()
+
+    def _make_span(self):
+        """Minimal valid span payload for ingestion."""
+        return {
+            "trace_id": "a" * 32,
+            "span_id": "b" * 16,
+            "parent_span_id": None,
+            "method": "GET",
+            "path": "/api/test",
+            "status_code": 200,
+            "started_at": "2023-01-01T10:00:00Z",
+            "duration_ms": 100.0,
+            "query_params": {},
+            "request_headers": {},
+            "request_body": None,
+            "response_headers": {},
+            "response_body": None,
+            "api_key_id": None,
+            "client_id": None,
+            "user_id": None,
+            "client_ip": "127.0.0.1",
+            "user_agent": "test-agent",
+            "error_message": None,
+            "tags": {},
+        }
+
+    def _make_key(self, scopes: str) -> dict:
+        """Create an audit API key with the given scopes; return headers."""
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name=f"Scope Test Key ({scopes})",
+            owner_id="test-user",
+            scopes=scopes,
+        )
+        return {"Authorization": f"Bearer {api_key_value}"}
+
+    def test_read_only_key_can_list_but_not_ingest(self):
+        """A traces:read key gets 200 on GET and 403 on POST."""
+        headers = self._make_key("traces:read")
+
+        response = self.client.get(
+            "/audit/v1/traces/",
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            "/audit/v1/traces/",
+            json={"spans": [self._make_span()]},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_write_only_key_can_ingest_but_not_list(self):
+        """A traces:write key gets 201 on POST and 403 on GET."""
+        headers = self._make_key("traces:write")
+
+        response = self.client.post(
+            "/audit/v1/traces/",
+            json={"spans": [self._make_span()]},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
+        response = self.client.get(
+            "/audit/v1/traces/",
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_unscoped_key_is_denied(self):
+        """A key with an unrelated scope is denied on trace endpoints."""
+        headers = self._make_key("metrics:read")
+
+        response = self.client.get(
+            "/audit/v1/traces/",
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_wildcard_scope_gets_full_access(self):
+        """A "*" key scope satisfies both read and write requirements."""
+        headers = self._make_key("*")
+
+        response = self.client.post(
+            "/audit/v1/traces/",
+            json={"spans": [self._make_span()]},
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
+        response = self.client.get(
+            "/audit/v1/traces/",
+            headers=headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+
+if __name__ == "__main__":
+    unittest.main()

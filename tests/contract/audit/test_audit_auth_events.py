@@ -49,7 +49,7 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
         api_key_model, api_key_value = apikey_resource.new(
             name="Test Auth Key",
             owner_id="test-user",
-            scopes="admin",
+            scopes="traces:*",
         )
         self.api_key_id = api_key_model.id
         self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}

@@ -117,8 +117,8 @@ class APIKeysResource:
             # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return api_key, apikey_value
 
-    def verify(self, api_key: str) -> schema.CampusID | None:
-        """Verify if the provided API key is valid and return its ID.
+    def verify(self, api_key: str) -> model.APIKey | None:
+        """Verify if the provided API key is valid and return its record.
 
         This method scans all API keys to find a matching hash, since
         requests contain the API key value, not the ID.
@@ -127,8 +127,9 @@ class APIKeysResource:
             api_key: The plaintext API key to verify
 
         Returns:
-            The ID of the API key if valid and active (not expired or
-            revoked), None otherwise
+            The API key model if valid and active (not expired or
+            revoked), None otherwise. The model carries the key's
+            scopes for the authorization layer (#575).
         """
         api_key_hash = secret.hash_api_key(api_key)
 
@@ -150,7 +151,7 @@ class APIKeysResource:
                     key_record.id,
                     {"last_used": schema.DateTime.utcnow()}
                 )
-                return key_record.id
+                return key_record
         except (storage_errors.NotFoundError, IndexError):
             pass
 
