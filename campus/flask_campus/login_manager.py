@@ -130,10 +130,10 @@ class OAuthLoginManager:
     def login_required(self, view: Callable) -> Callable:
         """Decorator to protect routes that require authentication."""
         @wraps(view)
-        def wrapped_view(**kwargs):
+        def wrapped_view(*args, **kwargs):
             if not hasattr(flask.g, "user") or flask.g.user is None:
                 return flask.redirect(
                     flask.url_for('auth.login', next=flask.request.path)
                 )
-            return view(**kwargs)
+            return view(*args, **kwargs)
         return wrapped_view
