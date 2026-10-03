@@ -143,7 +143,14 @@ runbook below.
 ### Staging / production-style environments (manual runbook)
 
 These environments block `init_from_model`, so every migration is a
-manual, per-service run:
+manual, per-service run. Since phase 4 (#747, 2026-10-03) the app
+surfaces skipped runs itself: `main.create_app` logs one WARNING at
+startup naming every revision the ledger does not record as applied or
+historical (pending, failed, or a ledger row whose file is gone). The
+check is fail-open — an unreachable ledger never blocks boot, and
+non-production boots are unchanged (dev self-heals schema via
+`init_from_model`) — and it never runs anything: migrations stay
+manual, per this runbook:
 
 1. `railway ssh -s campus.auth` (add `-e <environment>` as needed).
    Service SSH must be enabled in the Railway dashboard.
@@ -269,5 +276,10 @@ does **not** meet; they are the remaining scope of issue #27:
   ledger row records the operator, the duration and the file hash;
   the hash guard makes the immutability rule enforceable rather than
   aspirational.
-- **Deploy integration / pre-flight checks** — no automation gates a
-  deploy on migration state.
+- **Deploy integration / pre-flight checks** — CLOSED by phase 4
+  (#747, 2026-10-03): production-style boots log a WARNING when the
+  ledger shows outstanding migrations (fail-open; apps never auto-run
+  migrations), so a deploy that skipped this runbook is visible in the
+  deployment logs. A *blocking* deploy gate remains out of scope by the
+  standing decision that Campus apps never touch migration state beyond
+  reading the ledger.

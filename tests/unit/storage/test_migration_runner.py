@@ -936,5 +936,108 @@ class TestHashGuard(TestApplyHarnessMixin, unittest.TestCase):
         self.assertNotIn("up to date", stdout)
 
 
+class TestWarnIfPending(unittest.TestCase):
+    """Startup pending-warning (#747): production-gated, fires when the
+    ledger shows outstanding revisions, silent when clean or when the
+    ledger is unreachable (fail-open). Stubbed ledger throughout — no
+    live database."""
+
+    LOGGER = "migrations.runner"
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.dir = Path(self.tmpdir.name)
+        for name in ("001_a.py", "002_b.py", "003_c.py"):
+            (self.dir / name).write_text("", encoding="utf-8")
+
+    @staticmethod
+    def _ledger_row(revision, filename, status):
+        """Ledger row as _fetch_ledger_rows returns it."""
+        return {
+            "revision": revision,
+            "filename": filename,
+            "status": status,
+            "applied_at": datetime(2026, 10, 3),
+            "file_hash": None,
+        }
+
+    def _warn(self, rows, env="production", connect=None):
+        """Run warn_if_pending against a stubbed ledger."""
+        from migrations import runner
+        with patch("migrations.runner._connect",
+                   connect or (lambda: FakeConn())), \
+                patch("migrations.runner._fetch_ledger_rows",
+                      lambda conn: rows):
+            return runner.warn_if_pending(
+                env_name=env, migrations_dir=self.dir
+            )
+
+    def test_warns_and_returns_pending_revisions(self):
+        rows = {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+            "002": self._ledger_row("002", "002_b.py", "applied"),
+        }
+        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+            outstanding = self._warn(rows)
+        self.assertEqual(outstanding, ["003"])
+        self.assertIn("003_c.py [pending]", captured.output[-1])
+        self.assertIn("migrations/runner.py", captured.output[-1])
+
+    def test_silent_when_ledger_clean(self):
+        rows = {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+            "002": self._ledger_row("002", "002_b.py", "historical"),
+            "003": self._ledger_row("003", "003_c.py", "applied"),
+        }
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._warn(rows)
+        self.assertEqual(outstanding, [])
+
+    def test_failed_and_missing_file_are_outstanding(self):
+        rows = {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+            "002": self._ledger_row("002", "002_b.py", "failed"),
+            "003": self._ledger_row("003", "003_c.py", "applied"),
+            "099": self._ledger_row("099", "099_gone.py", "applied"),
+        }
+        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+            outstanding = self._warn(rows)
+        self.assertEqual(outstanding, ["002", "099"])
+        self.assertIn("002_b.py [failed]", captured.output[-1])
+        self.assertIn("099_gone.py [missing-file]", captured.output[-1])
+
+    def test_no_db_touch_outside_production(self):
+        def connect():
+            raise AssertionError("must not connect outside production")
+
+        # Empty ledger = all-pending; the env gate must return first.
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._warn({}, env="development", connect=connect)
+        self.assertEqual(outstanding, [])
+
+    def test_fail_open_when_ledger_unreachable(self):
+        def connect():
+            raise OSError("POSTGRESDB_URI unresolvable")
+
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._warn({}, connect=connect)
+        self.assertEqual(outstanding, [])
+
+    def test_default_env_reads_devops(self):
+        rows = {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+            "002": self._ledger_row("002", "002_b.py", "applied"),
+        }
+        with patch("campus.common.devops.ENV", "production"), \
+                self.assertLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._warn(rows, env=None)
+        self.assertEqual(outstanding, ["003"])
+        with patch("campus.common.devops.ENV", "development"), \
+                self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._warn(rows, env=None)
+        self.assertEqual(outstanding, [])
+
+
 if __name__ == "__main__":
     unittest.main()
