@@ -155,6 +155,39 @@ def release_upstream_token(
     client_id, user_id = _authorize_bridge_call()
     requested_scopes = campus_scopes.parse(min_scopes)
 
+    # Namespaced providers have no identity release (#733): the amended
+    # C3a rule (a non-empty upstream_scopes entry required) applies on
+    # every broker surface. A dotted provider that resolves to a
+    # registry integration is answered with integration semantics — an
+    # absent entry denies outright; with an entry, the caller is
+    # pointed at the canonical integration route — never the generic
+    # unknown-provider 404.
+    try:
+        namespaced = integrations.resolve(provider)
+    except api_errors.NotFoundError:
+        pass
+    else:
+        allowed = flask.g.current_client.upstream_scopes.get(provider, [])
+        if not allowed:
+            _deny(
+                client_id, user_id, provider,
+                integration=namespaced.slug,
+                reason="client has no upstream_scopes entry for this integration",
+                requested_scopes=requested_scopes,
+            )
+            raise auth_errors.InvalidScopeError(
+                f"Client is not allowed to request {provider} scopes; "
+                "add a non-empty upstream_scopes entry for the integration",
+                provider=provider,
+            )
+        raise api_errors.NotFoundError(
+            f"Release {provider} tokens via the integration route "
+            f"(/auth/v1/broker/{namespaced.base_provider}/"
+            f"{namespaced.slug}/)",
+            provider=provider,
+            integration=namespaced.slug,
+        )
+
     # Deprecation telemetry (pre-implementation for #733): non-identity
     # min_scopes on the identity route are integration asks that should
     # move to the per-integration broker routes once they exist. These

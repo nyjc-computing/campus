@@ -22,6 +22,65 @@ app_cred_storage = campus.storage.get_table("app_credentials")
 class CredentialsResource:
     """Represents the credentials resource in Campus API Schema."""
 
+    def list_connections(
+            self,
+            user_id: schema.UserID | str,
+    ) -> list[model.UserCredentials]:
+        """List a user's upstream connections (design §2.7, #733).
+
+        Every non-campus credential row for the user, with the linked
+        token loaded where one exists. Campus login tokens are not
+        connections (invariant C5): they are revoked via /oauth/revoke,
+        not listed or disconnected here.
+        """
+        records = cred_storage.get_matching({"user_id": str(user_id)})
+        connections: list[model.UserCredentials] = []
+        for record in records:
+            if record["provider"] == "campus":
+                continue
+            connections.append(
+                self._with_token(model.UserCredentials.from_storage(record))
+            )
+        return connections
+
+    def disconnect(
+            self,
+            provider: str,
+            user_id: schema.UserID | str,
+    ) -> list[model.UserCredentials]:
+        """Delete all of a user's credential rows for a provider, plus
+        the token records they point at (design §2.7: the same
+        primitive as UserCredentialsResource.delete + token cleanup).
+
+        Returns the deleted rows with tokens loaded, so callers can
+        audit what was removed and answer 404 when nothing was.
+        """
+        records = cred_storage.get_matching({
+            "provider": provider,
+            "user_id": str(user_id),
+        })
+        deleted: list[model.UserCredentials] = []
+        for record in records:
+            credentials = self._with_token(
+                model.UserCredentials.from_storage(record)
+            )
+            cred_storage.delete_by_id(record["id"])
+            if record.get("token_id"):
+                token_storage.delete_by_id(record["token_id"])
+            deleted.append(credentials)
+        return deleted
+
+    @staticmethod
+    def _with_token(credentials: model.UserCredentials) -> model.UserCredentials:
+        """Load the linked token record into a credential, if any."""
+        if credentials.token_id:
+            token_record = token_storage.get_by_id(credentials.token_id)
+            if token_record:
+                credentials.token = model.OAuthToken.from_storage(
+                    token_record
+                )
+        return credentials
+
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for credentials resource."""

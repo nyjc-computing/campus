@@ -1498,6 +1498,113 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/v1/connections/:
+    get:
+      tags: [Connections]
+      summary: List the user's upstream connections
+      operationId: listConnections
+      description: |
+        Metadata-only inventory of the upstream credentials Campus
+        custodies for a user (#733 design §2.7) — the sanctioned
+        status surface for integrations pages. Campus bearer token:
+        self only. Basic auth: delegated access, requires `user_id`.
+        Campus login tokens are not connections (C5) and are not
+        listed; no token value is ever returned (C2).
+      security:
+        - BearerAuth: []
+        - BasicAuth: []
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          description: Target user for delegated (basic auth) access; ignored under bearer auth.
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: The user's upstream connections across providers and integrations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionsList'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/connections/{provider}/:
+    delete:
+      tags: [Connections]
+      summary: Disconnect the user's credentials for a base provider
+      operationId: disconnectProvider
+      description: |
+        Deletes every stored credential row for (provider, user)
+        together with its token records, and emits
+        `campus.integrations.disconnect` (no token values). Bearer
+        auth acts for its own user; basic auth requires `user_id`.
+        The next login or connect re-establishes the grant; 404 means
+        there was nothing to disconnect. `campus` is refused (403 —
+        campus tokens are revoked via /oauth/revoke, C5), and
+        namespaced providers (e.g. `google.classroom` in the provider
+        segment) are refused with a pointer to the integration route.
+      security:
+        - BearerAuth: []
+        - BasicAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - name: user_id
+          in: query
+          required: false
+          description: Target user for delegated (basic auth) access; ignored under bearer auth.
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: Disconnected
+        '403':
+          description: Provider is `campus` (C5)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No stored connection for the user (or namespaced provider on the identity grammar)
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/connections/{provider}/{integration}/:
+    delete:
+      tags: [Connections]
+      summary: Disconnect the user's credentials for an integration
+      operationId: disconnectIntegration
+      description: |
+        Per-integration variant of the disconnect route (#733): deletes
+        the user's stored credential rows for the namespaced provider
+        (e.g. `google.classroom`) together with their token records,
+        and emits `campus.integrations.disconnect` (no token values).
+        Unknown slug or base-provider mismatch ⇒ 404; no stored
+        connection ⇒ 404.
+      security:
+        - BearerAuth: []
+        - BasicAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Provider'
+        - $ref: '#/components/parameters/Integration'
+        - name: user_id
+          in: query
+          required: false
+          description: Target user for delegated (basic auth) access; ignored under bearer auth.
+          schema:
+            type: string
+            format: email
+      responses:
+        '200':
+          description: Disconnected
+        '404':
+          description: Unknown integration, base-provider mismatch, or no stored connection
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/v1/vaults/{label}/:
     get:
       tags: [Vaults]
@@ -2038,6 +2145,44 @@ components:
         scope:
           type: string
       description: Minimal by invariant C2 — no refresh token, no provider fields.
+
+    ConnectionEntry:
+      type: object
+      required: [provider, integration, scopes, connected_at, expires_at]
+      properties:
+        provider:
+          type: string
+          description: The provider string the credential is keyed under (namespaced for integrations).
+          example: google.classroom
+        integration:
+          type: string
+          nullable: true
+          description: Integration slug for namespaced providers; null for identity providers.
+          example: classroom
+        scopes:
+          type: array
+          items:
+            type: string
+          description: The stored grant's scopes; empty when the token record is missing.
+        connected_at:
+          type: string
+          format: date-time
+          description: When the credential row was created (the connect time).
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Access-token expiry; null when no token record exists.
+      description: Metadata only — never carries token values (C2).
+
+    ConnectionsList:
+      type: object
+      required: [connections]
+      properties:
+        connections:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConnectionEntry'
 
     ErrorEnvelope:
       type: object
