@@ -132,18 +132,16 @@ backend issues the 302; the browser never calls the sessions API.
 - if the request carries a `scope` parameter, it must be within the
   session's scopes — exceeding it is rejected with 400 `invalid_scope`
   (the session API is the validated boundary);
-- if the request carries an `upstream_scope` parameter, it is
-  **rejected outright** with 400 `invalid_scope` — **retired (#733
-  Phase 2)**: login never carries upstream scopes. Integrations
-  connect via the per-integration connect flow instead (see
-  *Integration connect flows*); the parameter itself is removed after
-  this rejection has been live for its deprecation window.
+- the login-time `upstream_scope` parameter has been **removed**
+  (**#733 Phase 2 retirement**): login never carries upstream scopes,
+  and requests carrying the parameter fail validation with 422
+  (unrecognized field). Integrations connect via the per-integration
+  connect flow instead (see *Integration connect flows*).
 
 Scope **consent** (a user-facing screen) is not implemented yet: the
 validated session scopes are granted. On success the browser is
 redirected to `/auth/v1/google/authorize` with `target` pointing at
-`/auth/v1/verify_login?state=<session id>` (plus `scope` when upstream
-scopes were requested).
+`/auth/v1/verify_login?state=<session id>`.
 
 ### 3. Google leg (OAuth proxy)
 
@@ -342,7 +340,7 @@ expires_at}`; bearer = self, basic + `user_id` = delegated), and
 explicitly (audit: `campus.integrations.disconnect`).
 
 The legacy login-time growth path (`upstream_scope` at `/authorize`)
-is deprecated — see the `/authorize` section above.
+has been removed — see the `/authorize` section above.
 
 ## Device flow (CLIs) — how it differs
 

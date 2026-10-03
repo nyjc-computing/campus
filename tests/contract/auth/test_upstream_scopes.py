@@ -6,10 +6,10 @@ These tests verify Campus's upstream scope mechanics
 - The Google authorize endpoint merges requested upstream scopes with
   the proxy's base scopes (email, profile) and forwards them to
   Google with include_granted_scopes=true.
-- The campus /authorize endpoint REJECTS the login-time
-  upstream_scope parameter outright (#733 Phase 2 retirement: login
-  never carries upstream scopes; integrations connect via the
-  per-integration connect flow).
+- The login-time upstream_scope parameter is REMOVED from the campus
+  /authorize endpoint (#733 Phase 2 retirement: login never carries
+  upstream scopes; integrations connect via the per-integration
+  connect flow) — requests carrying it fail validation with 422.
 - Client registration round-trips the upstream_scopes allowlist.
 """
 
@@ -121,91 +121,47 @@ class TestUpstreamScopesContract(unittest.TestCase):
             ["email", CLASSROOM_ROSTERS, "profile"],
         )
 
-    def test_authorize_rejects_upstream_scope_despite_allowlist(self):
-        """#733 Phase 2: upstream_scope at /authorize is retired and
-        refused outright — even for a client whose allowlist would
-        have permitted the scopes."""
+    def test_authorize_rejects_removed_upstream_scope_parameter(self):
+        """#733 Phase 2: the upstream_scope parameter is removed from
+        /authorize — requests carrying it fail validation with 422
+        (unrecognized field), regardless of any allowlist entry."""
         client_id = self._create_client({"google": [CLASSROOM_ROSTERS]})
         session_id = self._create_session(client_id)
 
-        with self.assertNoLogs("campus.auth.provider", level="WARNING"):
-            response = self.client.get(
-                "/auth/v1/authorize",
-                query_string={
-                    "client_id": client_id,
-                    "response_type": "code",
-                    "redirect_uri": REGISTERED_URI,
-                    "state": session_id,
-                    "upstream_scope": CLASSROOM_ROSTERS,
-                },
-            )
+        response = self.client.get(
+            "/auth/v1/authorize",
+            query_string={
+                "client_id": client_id,
+                "response_type": "code",
+                "redirect_uri": REGISTERED_URI,
+                "state": session_id,
+                "upstream_scope": CLASSROOM_ROSTERS,
+            },
+        )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
         data = response.get_json()
-        self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
-        self.assertIn("retired", data["error"]["message"])
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
+        fields = {e["field"] for e in data["error"]["errors"]}
+        self.assertIn("upstream_scope", fields)
 
-    def test_authorize_without_upstream_scope_does_not_warn(self):
-        """Deprecated-call telemetry (#733): a plain authorize request
-        does not trigger the deprecation warning."""
+    def test_authorize_without_upstream_scope_redirects(self):
+        """#733 Phase 2: a plain authorize request (no upstream_scope)
+        proceeds normally to the Google-leg redirect."""
         client_id = self._create_client()
         session_id = self._create_session(client_id)
 
-        with self.assertNoLogs("campus.auth.provider", level="WARNING"):
-            response = self.client.get(
-                "/auth/v1/authorize",
-                query_string={
-                    "client_id": client_id,
-                    "response_type": "code",
-                    "redirect_uri": REGISTERED_URI,
-                    "state": session_id,
-                },
-            )
+        response = self.client.get(
+            "/auth/v1/authorize",
+            query_string={
+                "client_id": client_id,
+                "response_type": "code",
+                "redirect_uri": REGISTERED_URI,
+                "state": session_id,
+            },
+        )
 
         self.assertEqual(response.status_code, 302)
-
-    def test_authorize_rejects_unallowed_upstream_scope(self):
-        """#733 Phase 2: upstream_scope is refused with
-        AUTH_INVALID_SCOPE (the allowlist gate that preceded the
-        outright rejection)."""
-        client_id = self._create_client({"google": []})
-        session_id = self._create_session(client_id)
-
-        response = self.client.get(
-            "/auth/v1/authorize",
-            query_string={
-                "client_id": client_id,
-                "response_type": "code",
-                "redirect_uri": REGISTERED_URI,
-                "state": session_id,
-                "upstream_scope": CLASSROOM_ROSTERS,
-            },
-        )
-
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
-
-    def test_client_without_upstream_entry_rejects_any_upstream_scope(self):
-        """#733 Phase 2: upstream_scope is refused outright, allowlist
-        entry or not."""
-        client_id = self._create_client()
-        session_id = self._create_session(client_id)
-
-        response = self.client.get(
-            "/auth/v1/authorize",
-            query_string={
-                "client_id": client_id,
-                "response_type": "code",
-                "redirect_uri": REGISTERED_URI,
-                "state": session_id,
-                "upstream_scope": CLASSROOM_ROSTERS,
-            },
-        )
-
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
 
     def test_client_upstream_scopes_roundtrip(self):
         """B3: registration and PATCH round-trip the upstream allowlist."""
