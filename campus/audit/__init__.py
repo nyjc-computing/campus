@@ -105,8 +105,8 @@ def _authenticate_audit_api_key() -> None:
         )
 
     # Verify against database
-    api_key_id = resources.apikeys.verify(api_key)
-    if not api_key_id:
+    api_key_record = resources.apikeys.verify(api_key)
+    if not api_key_record:
         emit_audit_event(
             data={"event_type": "audit.apikeys.auth.failed", "reason": "Invalid API key"},
             api_key_id=None,
@@ -120,8 +120,11 @@ def _authenticate_audit_api_key() -> None:
 
     # Success - emit audit event
     emit_audit_event(
-        data={"event_type": "audit.apikeys.auth.success", "api_key_id": api_key_id},
-        api_key_id=api_key_id,
+        data={
+            "event_type": "audit.apikeys.auth.success",
+            "api_key_id": api_key_record.id,
+        },
+        api_key_id=api_key_record.id,
         parent_span_id=None,
         started_at=started_at,
         duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
@@ -129,7 +132,9 @@ def _authenticate_audit_api_key() -> None:
         response_context=make_response_context(200),
     )
 
-    flask.g.api_key_id = api_key_id
+    flask.g.api_key_id = api_key_record.id
+    # Scopes for the authorization layer (@require_scopes, #575)
+    flask.g.api_key_scopes = list(api_key_record.scopes)
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
