@@ -291,9 +291,8 @@ class TestApiCirclesContract(unittest.TestCase):
 
     # Update Circle Tests
 
-    @unittest.skip("API BUG #501: PATCH with name only returns 422 - route requires both name and description")
     def test_update_circle_name(self):
-        """PATCH /circles/{circle_id}/ updates name."""
+        """PATCH /circles/{circle_id}/ updates name (description optional)."""
         circle_id = self._create_test_circle(name="Original Name")
 
         response = self.client.patch(
@@ -314,9 +313,11 @@ class TestApiCirclesContract(unittest.TestCase):
         circle_data = get_response.get_json()
         self.assertEqual(circle_data["name"], "Updated Name")
 
-    @unittest.skip("API BUG #501: PATCH with description only returns 422 - route requires both name and description")
-    def test_update_circle_description(self):
-        """PATCH /circles/{circle_id}/ updates description."""
+    def test_update_circle_description_only_returns_error(self):
+        """PATCH /circles/{circle_id}/ with description only returns 422 (#501).
+
+        The decided contract requires name; description alone is invalid.
+        """
         circle_id = self._create_test_circle(description="Original Description")
 
         response = self.client.patch(
@@ -325,7 +326,10 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
 
     def test_update_circle_both_fields(self):
         """PATCH /circles/{circle_id}/ updates both name and description."""
@@ -369,7 +373,6 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    @unittest.skip("API BUG #501: PATCH on missing circle returns 422 instead of 409")
     def test_update_missing_circle_returns_error(self):
         """PATCH /circles/{circle_id}/ for non-existent circle returns 409."""
         response = self.client.patch(
@@ -379,6 +382,63 @@ class TestApiCirclesContract(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "CONFLICT")
+
+    def test_create_circle_duplicate_name_returns_409(self):
+        """POST /circles/ with an existing name returns 409 (#761)."""
+        self._create_test_circle(name="Duplicate Name", tag="first")
+
+        response = self.client.post(
+            "/api/v1/circles/",
+            json={
+                "name": "Duplicate Name",
+                "description": "Collides on name only",
+                "tag": "second",
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "CONFLICT")
+
+    def test_update_circle_duplicate_name_returns_409(self):
+        """PATCH /circles/{circle_id}/ to another circle's name returns 409 (#761)."""
+        first_id = self._create_test_circle(name="First Circle")
+        second_id = self._create_test_circle(name="Second Circle")
+
+        response = self.client.patch(
+            f"/api/v1/circles/{second_id}/",
+            json={"name": "First Circle"},
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "CONFLICT")
+
+        # The failed rename must not have touched either circle
+        first_response = self.client.get(
+            f"/api/v1/circles/{first_id}/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(first_response.get_json()["name"], "First Circle")
+
+    def test_update_circle_same_name_is_noop(self):
+        """PATCH /circles/{circle_id}/ with its own name returns 200 (#761)."""
+        circle_id = self._create_test_circle(name="Stable Name")
+
+        response = self.client.patch(
+            f"/api/v1/circles/{circle_id}/",
+            json={"name": "Stable Name"},
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
 
     # Delete Circle Tests
 
