@@ -202,6 +202,17 @@ Alternatives when SSH is unavailable: `railway run -s campus.auth` locally
 (needs the DB reachable), or a temporary `ENV` flip + redeploy (mutates
 running-service config twice — last resort).
 
+> **DB reachability.** The DB hosts sit on Railway's restricted internal
+> network and are not directly reachable from dev machines — including
+> via `railway ssh` when off-network or when service SSH is not enabled
+> for the target service (it is enabled per service in the Railway
+> dashboard). When a local tool needs a direct DB connection, open a
+> temporary public TCP proxy on the DB service with the Railway CLI
+> (`railway tcp-proxy create -s <db-service> -p <port>`), connect through
+> the proxy address it prints, and **delete the proxy afterwards**
+> (`railway tcp-proxy delete`); a public proxy on a database is a
+> stopgap, not a fixture.
+
 ## Applied-migrations ledger
 
 As of 2026-10-03 (#27 phase 1), applied state is tracked in the
