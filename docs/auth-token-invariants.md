@@ -19,9 +19,11 @@ every phase PR.
 
 ## Provider taxonomy
 
-Campus currently has four token providers, in two mechanically different
-families. Invariants are tagged accordingly; full parity between the
-families is **not** a goal.
+Campus has four base token providers, in two mechanically different
+families, plus **namespaced integration providers** (#733) that extend
+a third-party base with per-integration upstream OAuth clients.
+Invariants are tagged accordingly; full parity between the families is
+**not** a goal.
 
 | Provider | Family | Role |
 |----------|--------|------|
@@ -29,6 +31,12 @@ families is **not** a goal.
 | `google` | third-party | OAuth proxy: browser login/consent with Google, custody of upstream credentials |
 | `github` | third-party | OAuth proxy (same shape as google) |
 | `discord` | third-party | OAuth proxy (same shape as google) |
+| `google.<integration>` (e.g. `google.classroom`) | third-party, namespaced | a first-party integration backed by its **own** upstream OAuth client: separate consent (connect flow), separate credential rows, separate blast radius — login/identity paths are untouched |
+
+Integration providers are declared in the in-code registry
+(`campus/auth/integrations.py`, published read-only at
+`GET /integrations/v1/`, #688); their upstream client credentials and
+scope caps live in vault labels mirroring the provider string.
 
 Note on client_credentials: the grant is userless by design — the
 client itself is the resource owner, so the resulting bearer resolves
@@ -78,17 +86,25 @@ replaced (`AppCredentialsResource.issue`).
   live only in Campus storage, keyed `(provider, user, client=Campus's
   own upstream client id)`. No Campus API writes third-party-provider
   tokens supplied by apps (the `provider == "campus"` assertion on token
-  issuance stands).
+  issuance stands). Campus is likewise the **sole custodian of the
+  per-integration upstream clients** (#733): each integration's OAuth
+  client id/secret/scope cap live in its vault label, never in
+  downstream apps.
 - **B2 — Refresh tokens never leave.** No HTTP response, log line, audit
   event, or error payload ever contains an upstream refresh token (or
   any upstream token value beyond the access token explicitly released
   by the bridge, per C2).
 - **B3 — Upstream scope growth is browser-only.** Extra upstream scopes
-  (e.g. Google Classroom) are requested by redirecting the user through
-  the provider's consent screen — Google incremental authorization
-  (`include_granted_scopes=true`) unions the granted scopes into the
-  stored credential. Requestable upstream scopes are capped by a
-  per-client upstream allowlist, vetted at client registration.
+  are requested by redirecting the user through a consent screen.
+  Identity scopes grow through the login flow's Google incremental
+  authorization (`include_granted_scopes=true`), capped by the
+  per-client upstream allowlist vetted at registration. **Integration
+  scopes grow only through the integration's connect flow** (#733:
+  campus session required, target allowlisted against the
+  integration's `CONNECT_TARGETS`, `prompt=consent` forced, ask capped
+  at the integration's registered scope set) — never at login: client
+  allowlists are identity-only, and the login-time `upstream_scope`
+  parameter is deprecated (warned + audited) with removal pending.
 - **B4 — Workspace restriction.** Upstream logins remain bound to the
   configured workspace domain (existing `WORKSPACE_DOMAIN` check).
 - **B5 — User-scoped reads.** Upstream credentials are readable only per
@@ -109,15 +125,28 @@ replaced (`AppCredentialsResource.issue`).
   caller declares, and is capped at (scopes granted by the user on the
   upstream link) ∩ (the client's registered upstream allowlist). A
   release that would exceed either is denied with a machine-readable
-  error that points the app at the re-consent URL.
+  error. **C3a is keyed by the (possibly namespaced) provider string**,
+  and for integration providers a **non-empty allowlist entry is
+  required even when no `min_scopes` are declared** — an absent key
+  denies outright, fail-closed (an integration token inherently carries
+  integration scopes, so there are no "base scopes" to fall back on).
+  Integration releases are additionally capped by the integration's
+  vault scope set. Denials on integration routes point at the connect
+  flow for re-consent, never at the deprecated login-time
+  `upstream_scope` path.
 - **C4 — Audited.** Every bridge release *and* denial emits an audit
-  event recording (client, user, provider, requested/granted scopes).
-  Token values are never included in audit payloads.
+  event recording (client, user, provider, requested/granted scopes;
+  integration releases add the integration slug). Connect and
+  disconnect flows emit `campus.integrations.*` events. Token values
+  are never included in audit payloads.
 - **C5 — Explicit revocation semantics.** Revoking a Campus token
   revokes that app's access, including bridge access, but not the
   user's upstream link itself. Destroying the upstream link is a
-  separate, explicit action. Both are documented and tested; neither is
-  implied by the other.
+  separate, explicit action — the connections API
+  (`DELETE /auth/v1/connections/...`, #733), which deletes the stored
+  credential and token records and audits
+  `campus.integrations.disconnect`. Both are documented and tested;
+  neither is implied by the other.
 
 ### D — Downstream client contract `[client]` (phase P3)
 
@@ -145,16 +174,16 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | A5 | P1 | **enforced** | `provider.token` issues via `credentials.update()` (deletes superseded record, #678); `test_token_issuance.py::test_superseded_token_stops_authenticating` |
 | A6 | P1 | **enforced** | `routes/sessions.py::_validated_campus_scopes` + `provider.authorize` scope-param check; `test_scope_algebra.py::test_authorize_scope_*` |
 | A7 | P1 | **enforced** | `routes/oauth.py::device_authorize` + device grant re-check; `test_scope_algebra.py::test_device_authorize_respects_allowlist` |
-| B1 | P2/P3 | **enforced** | `credentials.new()` provider assertion + credentials API refuses non-campus providers (`routes/credentials.py::_reject_non_campus_provider`); `test_token_broker.py::test_credentials_api_refuses_third_party_provider` |
+| B1 | P2/P3 | **enforced** | `credentials.new()` provider assertion + credentials API refuses non-campus providers (`routes/credentials.py::_reject_non_campus_provider`); `test_token_broker.py::test_credentials_api_refuses_third_party_provider`. Integration clients custody: vault labels + in-code registry (`campus/auth/integrations.py`, #733) |
 | B2 | P2/P3 | **enforced** | credentials API lockdown closes the token-embedding read path; broker responses are built explicitly without refresh tokens; no proxy path returns/logs refresh tokens |
-| B3 | P2 | **enforced** | `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check in C3 |
+| B3 | P2 | **enforced** | identity growth: `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check in C3. Integration growth: connect flow guards (`routes/oauth_proxy/google` authorize + `oauth_proxy/google/proxy.py::_validate_connect_binding`, `prompt=consent` forced); `tests/contract/auth/test_integrations.py` |
 | B4 | P2 | **preserved** | `WORKSPACE_DOMAIN` checks in `google/proxy.py::handle_auth_callback`, `provider.verify_login` |
 | B5 | P2/P3 | **enforced** | credentials resource keying `(provider, user, client)`; broker releases keyed to the bearer token's own user |
 | C1 | P3 | **enforced** | `routes/broker.py::_authorize_bridge_call` (bearer user + confidential + token_bridge flag, fail-closed); `test_token_broker.py` unflagged/public/basic/missing-credential cases |
 | C2 | P3 | **enforced** | broker response built explicitly (access token, expiry, scope only); `test_token_broker.py::test_release_returns_minimal_upstream_token` |
-| C3 | P3 | **enforced** | `validate_upstream_for_client` (C3a) + stored-grant coverage check (C3b) with machine-readable `missing_scopes`; `test_token_broker.py::test_min_scopes_*` |
-| C4 | P3 | **enforced** | `campus.broker.release` / `campus.broker.deny` emissions on every path; payloads carry scopes, never token values |
-| C5 | P3 | **documented** | campus-token revocation vs upstream-link revocation separated in docs/token-broker.md; revoking the campus token kills bridge access via bearer lookup (see A5 supersession test) |
+| C3 | P3 | **enforced** | `validate_upstream_for_client` (C3a, keyed by the provider string) + integration absent-key-deny (`routes/broker.py`, both routes) + stored-grant coverage check (C3b) with machine-readable `missing_scopes`; `test_token_broker.py::test_min_scopes_*`, `test_integrations.py` broker cases, `test_connections.py::TestBrokerNamespacedGuardContract` |
+| C4 | P3 | **enforced** | `campus.broker.release` / `campus.broker.deny` emissions on every path; `campus.integrations.connect/connect_fail/disconnect` on the connect/disconnect flows; payloads carry scopes, never token values |
+| C5 | P3 | **enforced** | campus-token revocation (`/oauth/revoke`) vs upstream-link disconnect (`/auth/v1/connections/`, `routes/connections.py` refuses `provider=campus` with 403) separated and tested; `test_connections.py` |
 | D1 | P3 | **documented** | docs/token-broker.md (classroom switchover contract); enforced by review + audit deterrence |
 | D2 | P3 | **documented** | docs/token-broker.md |
 

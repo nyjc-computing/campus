@@ -220,7 +220,11 @@ class OAuthToken(Model):
 
 @dataclass(eq=False, kw_only=True)
 class UserCredentials(Model):
-    __constraints__ = constraints.Unique("provider", "user_id")
+    # Declares the app-enforced keying (provider, user, upstream client)
+    # — a user holds one credential per integration/identity client, and
+    # Postgres enforces neither this nor any other unique declaration
+    # here (#730 design §2.2; was stale at ("provider", "user_id")).
+    __constraints__ = constraints.Unique("provider", "user_id", "client_id")
     id: schema.CampusID
     # created_at inherited from Model
     provider: str

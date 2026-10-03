@@ -52,6 +52,7 @@ class Integration:
     base_provider: str  # "google" — the identity/login provider
     vault_label: str    # "google.classroom" — mirrors the provider string
     title: str          # display name for connect UX
+    description: str = ""  # one-line public description for consumer UX
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,10 @@ REGISTRY: dict[str, Integration] = {
         base_provider="google",
         vault_label="google.classroom",
         title="Google Classroom",
+        description=(
+            "Connect Google Classroom to your Campus account so "
+            "Campus apps can read your courses and coursework."
+        ),
     ),
     # Stub: inert until a vault label with a real client is seeded.
     "calendar": Integration(
@@ -78,6 +83,10 @@ REGISTRY: dict[str, Integration] = {
         base_provider="google",
         vault_label="google.calendar",
         title="Google Calendar",
+        description=(
+            "Connect Google Calendar to your Campus account "
+            "(coming soon)."
+        ),
     ),
 }
 
