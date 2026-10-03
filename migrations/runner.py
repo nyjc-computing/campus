@@ -1,17 +1,16 @@
-"""Migration ledger runner: manage the applied-migrations state table.
+"""Migration runner: applied-migrations ledger + migration execution.
 
 Revision ID: n/a (the runner is not itself a migration)
 Create Date: 2026-10-03
 
-Phase 1 of the storage migration protocol (#27, #744): the `_migrations`
-table in the auth Postgres (campus.auth-postgres) is the authoritative
-record of which migrations have been applied to an environment. The doc
-ledger in docs/migration-protocol.md is a human-readable mirror.
-
-The table is created here, NOT by a migration file, to avoid the
-chicken-and-egg of a migration that records migrations. It records both
-storage families (Postgres DDL and Mongo backfills): every migration
-runs in the campus.auth context where both secrets resolve.
+The `_migrations` table in the auth Postgres (campus.auth-postgres) is
+the authoritative record of which migrations have been applied to an
+environment (#27 phase 1, #744). The doc ledger in
+docs/migration-protocol.md is a human-readable mirror. The table is
+created here, NOT by a migration file, to avoid the chicken-and-egg of
+a migration that records migrations. It records both storage families
+(Postgres DDL and Mongo backfills): every migration runs in the
+campus.auth context where both secrets resolve.
 
 Commands (run like today's migration scripts, from a context where
 POSTGRESDB_URI resolves, e.g. `railway ssh` into campus.auth):
@@ -20,17 +19,31 @@ POSTGRESDB_URI resolves, e.g. `railway ssh` into campus.auth):
     python migrations/runner.py status             # applied/pending per migration file
     python migrations/runner.py stamp 005          # record one migration as applied
     python migrations/runner.py stamp all          # record every migration as applied
+    python migrations/runner.py stamp 001 --as historical   # record as never-applicable
+    python migrations/runner.py apply              # run pending migrations in order
+    python migrations/runner.py apply --up-to 008  # run pending migrations up to 008
 
-`stamp` records a migration as applied WITHOUT running it — the baseline
-bootstrap for environments that predate the ledger. Only `ensure` and
-`stamp` write; `status` is read-only and treats a missing table as
-"nothing applied".
+Ledger statuses:
 
-Baseline bootstrap for dev (per the doc ledger, 2026-10-03):
+- `applied` — upgrade() ran (or the row was stamped for a baseline)
+- `failed` — upgrade() raised; the error text is recorded; the next
+  `apply` retries it (stop-on-failure blocks everything after it)
+- `historical` — recorded as never applicable to this environment
+  (e.g. a migration that predates the current topology whose tables do
+  not exist here); `apply` never runs it
 
-    python migrations/runner.py ensure
-    python migrations/runner.py stamp all
-    python migrations/runner.py status             # verify: all applied
+`apply` runs one migration at a time in numeric revision order. Each
+migration manages its own transactionality (per the protocol doc every
+migration must be idempotent); the runner guarantees the ledger reflects
+exactly what completed — the row is written only after upgrade()
+returns, and a failure row is written before the runner stops.
+Migrations guarded by `@block_env(PRODUCTION)` follow the documented
+per-process override for deliberate production runs:
+`ENV=development python migrations/runner.py apply`.
+
+Baseline bootstrap for dev (per the doc ledger, 2026-10-03): 003–009
+stamped applied; 001–002 stamped `--as historical` (their tables are
+absent from both dev Postgres databases).
 
 The `_migrations` DDL deliberately does not go through
 PostgreSQLTable.init_from_schema: that entry point is production-blocked,
@@ -72,11 +85,18 @@ MIGRATION_FILE_RE = re.compile(r"^(\d{3})_[a-z0-9_]+\.py$")
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent
 
-# status states: file with/without a ledger row, and ledger rows whose
-# file is gone (never reuse a number; a missing file is drift to report).
+# Ledger statuses. APPLIED/FAILED/HISTORICAL are stored values; PENDING
+# and MISSING_FILE are computed states for the status diff (a file with
+# no ledger row is pending; a ledger row with no file is drift).
 APPLIED = "applied"
+FAILED = "failed"
+HISTORICAL = "historical"
 PENDING = "pending"
 MISSING_FILE = "missing-file"
+
+# apply() runs a file only when its ledger status is absent, failed
+# (retry) or pending; applied and historical files are skipped.
+APPLY_RUNNABLE = (APPLIED, FAILED, HISTORICAL)
 
 
 @dataclass(frozen=True)
@@ -111,7 +131,7 @@ def discover_migration_files(migrations_dir: Path = MIGRATIONS_DIR) -> list[Migr
 
 
 def resolve_revision(arg: str, files: list[MigrationFile]) -> MigrationFile:
-    """Resolve a stamp argument to a discovered migration file.
+    """Resolve a stamp/apply argument to a discovered migration file.
 
     Accepts the bare revision ("005", "5"), the filename
     ("005_backfill_scope_string.py") or its stem. Raises ValueError for
@@ -136,14 +156,16 @@ def compute_status(
 ) -> list[tuple[MigrationFile, str]]:
     """Diff discovered files against ledger rows.
 
-    Returns (file, state) pairs sorted by revision where state is
-    APPLIED (file has a ledger row), PENDING (file has no row) or
-    MISSING_FILE (ledger row with no file — reported after files, with
-    the recorded filename).
+    Returns (file, state) pairs sorted by revision. A file's state is
+    its ledger status (APPLIED, FAILED, HISTORICAL) or PENDING when no
+    row exists. Ledger rows whose file is gone are reported after files
+    with state MISSING_FILE (never reuse a number; a missing file is
+    drift to report).
     """
     status: list[tuple[MigrationFile, str]] = []
     for file in files:
-        state = APPLIED if file.revision in ledger_rows else PENDING
+        row = ledger_rows.get(file.revision)
+        state = row["status"] if row else PENDING
         status.append((file, state))
     for revision, row in sorted(ledger_rows.items()):
         if revision not in {f.revision for f in files}:
@@ -152,6 +174,17 @@ def compute_status(
                  MISSING_FILE)
             )
     return status
+
+
+def _format_summary(status: list[tuple[MigrationFile, str]]) -> str:
+    """One-line counts in fixed order, omitting zero states."""
+    order = (APPLIED, PENDING, FAILED, HISTORICAL, MISSING_FILE)
+    counts = dict.fromkeys(order, 0)
+    for _, state in status:
+        counts[state] = counts.get(state, 0) + 1
+    parts = [f"{counts[state]} {state}" for state in order if counts[state]]
+    total = sum(1 for _, state in status if state != MISSING_FILE)
+    return f"{', '.join(parts)} of {total} migration file(s)"
 
 
 def _get_user() -> str | None:
@@ -206,29 +239,105 @@ def ensure(conn) -> None:
     conn.commit()
 
 
-def stamp(conn, file: MigrationFile) -> bool:
-    """Record one migration as applied without running it.
+def _upsert_row(conn, file: MigrationFile, status: str, error: str | None = None) -> None:
+    """Write one ledger row, replacing any existing row for the revision.
 
-    Returns True if a row was written, False if the revision was
-    already recorded (stamping is idempotent).
+    The upsert is what makes a post-failure retry converge: the success
+    write clears the error column and the failed status of the attempt
+    it supersedes.
     """
     applied_by = _get_user()
     with conn.cursor() as cursor:
         cursor.execute(
-            f'SELECT 1 FROM "{LEDGER_TABLE}" WHERE revision = %s',
-            (file.revision,),
-        )
-        if cursor.fetchone():
-            return False
-        cursor.execute(
             f'INSERT INTO "{LEDGER_TABLE}" '
-            f'(revision, filename, status, applied_at, applied_by) '
-            f"VALUES (%s, %s, %s, %s, %s)",
-            (file.revision, file.filename, APPLIED,
-             datetime.now(timezone.utc), applied_by),
+            f'(revision, filename, status, applied_at, applied_by, error) '
+            f"VALUES (%s, %s, %s, %s, %s, %s) "
+            f"ON CONFLICT (revision) DO UPDATE SET "
+            f"filename = EXCLUDED.filename, "
+            f"status = EXCLUDED.status, "
+            f"applied_at = EXCLUDED.applied_at, "
+            f"applied_by = EXCLUDED.applied_by, "
+            f"error = EXCLUDED.error",
+            (file.revision, file.filename, status,
+             datetime.now(timezone.utc), applied_by, error),
         )
     conn.commit()
+
+
+def stamp(conn, file: MigrationFile, status: str = APPLIED) -> bool:
+    """Record a migration as applied without running it.
+
+    Returns True if a row was written, False if the revision was
+    already recorded with the same status (stamping is idempotent). A
+    revision recorded with a DIFFERENT status is updated — stamp is the
+    operator's tool for correcting the ledger (e.g. marking a stamped
+    revision historical, or overriding a failure after manual repair).
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f'SELECT status FROM "{LEDGER_TABLE}" WHERE revision = %s',
+            (file.revision,),
+        )
+        row = cursor.fetchone()
+        if row and row[0] == status:
+            return False
+    _upsert_row(conn, file, status)
     return True
+
+
+def load_migration(file: MigrationFile, migrations_dir: Path | None = None):
+    """Load a migration module from its file.
+
+    Importing the module runs its top-level code (campus.storage
+    imports etc.), which is why the runner must be invoked from a
+    context where the storage secrets resolve — same as running the
+    migration script directly.
+    """
+    import importlib.util
+    path = (migrations_dir or MIGRATIONS_DIR) / file.filename
+    spec = importlib.util.spec_from_file_location(
+        f"campus_migration_{file.revision}", path
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_upgrade(module, file: MigrationFile) -> None:
+    """Call the migration's upgrade().
+
+    Data migrations following the dry-run-by-default convention take an
+    `apply` flag (005_backfill_scope_string is the pattern); the runner
+    always executes in apply mode.
+    """
+    import inspect
+    upgrade = getattr(module, "upgrade", None)
+    if not callable(upgrade):
+        raise ValueError(f"{file.filename} has no upgrade()")
+    if "apply" in inspect.signature(upgrade).parameters:
+        upgrade(apply=True)
+    else:
+        upgrade()
+
+
+def pending_for_apply(
+    files: list[MigrationFile],
+    ledger_rows: dict[str, dict],
+    up_to: MigrationFile | None = None,
+) -> list[MigrationFile]:
+    """Files apply() should run: not recorded as applied or historical.
+
+    Failed revisions are included (the next apply retries them).
+    Result is in revision order; with up_to set, only revisions at or
+    below the bound (zero-padded, so lexicographic order is numeric).
+    """
+    targets = [
+        f for f in files
+        if ledger_rows.get(f.revision, {}).get("status") not in (APPLIED, HISTORICAL)
+    ]
+    if up_to is not None:
+        targets = [f for f in targets if f.revision <= up_to.revision]
+    return targets
 
 
 def cmd_ensure(args, conn) -> int:
@@ -240,22 +349,27 @@ def cmd_ensure(args, conn) -> int:
 def cmd_stamp(args, conn) -> int:
     files = discover_migration_files()
     ensure(conn)
+    status = args.as_status
     if args.revision == "all":
-        pending = [f for f in files if f.revision not in _fetch_ledger_rows(conn)]
+        rows = _fetch_ledger_rows(conn)
+        pending = [
+            f for f in files
+            if rows.get(f.revision, {}).get("status") != status
+        ]
         if not pending:
-            print("nothing to stamp: all migrations already recorded")
+            print(f"nothing to stamp: all migrations already recorded as {status}")
             return 0
         for file in pending:
-            stamp(conn, file)
-            print(f"stamped {file.revision} ({file.filename})")
-        print(f"stamped {len(pending)} migration(s)")
+            stamp(conn, file, status)
+            print(f"stamped {file.revision} as {status} ({file.filename})")
+        print(f"stamped {len(pending)} migration(s) as {status}")
         return 0
 
     file = resolve_revision(args.revision, files)
-    if stamp(conn, file):
-        print(f"stamped {file.revision} ({file.filename})")
+    if stamp(conn, file, status):
+        print(f"stamped {file.revision} as {status} ({file.filename})")
     else:
-        print(f"{file.revision} already recorded; nothing to do")
+        print(f"{file.revision} already recorded as {status}; nothing to do")
     return 0
 
 
@@ -265,16 +379,50 @@ def cmd_status(args, conn) -> int:
     status = compute_status(files, rows)
     for file, state in status:
         print(f"{file.revision}  {file.filename:<48} {state}")
-    applied = sum(1 for _, state in status if state == APPLIED)
-    pending = sum(1 for _, state in status if state == PENDING)
-    print(f"{applied} applied, {pending} pending of {len(files)} migration file(s)")
+    print(_format_summary(status))
+    return 0
+
+
+def cmd_apply(args, conn) -> int:
+    files = discover_migration_files()
+    ensure(conn)
+    rows = _fetch_ledger_rows(conn)
+    up_to = resolve_revision(args.up_to, files) if args.up_to else None
+    targets = pending_for_apply(files, rows, up_to)
+    if not targets:
+        print("up to date: nothing to apply")
+        return 0
+
+    import time
+    for index, file in enumerate(targets):
+        print(f"applying {file.revision} ({file.filename})...", flush=True)
+        started = time.perf_counter()
+        try:
+            module = load_migration(file)
+            run_upgrade(module, file)
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+            _upsert_row(conn, file, FAILED, error=error)
+            print(
+                f"FAILED {file.revision}: {error}\n"
+                f"recorded failure and stopped — "
+                f"{len(targets) - index - 1} later migration(s) not run",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+        else:
+            _upsert_row(conn, file, APPLIED)
+            print(f"applied {file.revision} ({time.perf_counter() - started:.2f}s)",
+                  flush=True)
+    print(f"applied {len(targets)} migration(s)")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="migrations/runner.py",
-        description="Manage the applied-migrations ledger (#27 phase 1).",
+        description="Applied-migrations ledger and migration runner (#27).",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -291,6 +439,24 @@ def main(argv: list[str] | None = None) -> int:
         metavar="rev|all",
         help="migration revision (e.g. 005), filename, or 'all'",
     )
+    stamp_parser.add_argument(
+        "--as",
+        dest="as_status",
+        choices=(APPLIED, HISTORICAL),
+        default=APPLIED,
+        help="status to record (default: applied; historical = "
+             "never applicable to this environment, apply skips it)",
+    )
+    apply_parser = subparsers.add_parser(
+        "apply",
+        help="run pending migrations in revision order",
+    )
+    apply_parser.add_argument(
+        "--up-to",
+        dest="up_to",
+        metavar="REV",
+        help="apply only revisions at or below this one (e.g. 008)",
+    )
     subparsers.add_parser(
         "status",
         help="diff migrations/ files against the ledger",
@@ -301,12 +467,17 @@ def main(argv: list[str] | None = None) -> int:
         "ensure": cmd_ensure,
         "stamp": cmd_stamp,
         "status": cmd_status,
+        "apply": cmd_apply,
     }
     conn = _connect()
     try:
         return handlers[args.command](args, conn)
     except ValueError as e:
         # Usage errors: unknown revision, malformed migrations/ directory
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        # POSTGRESDB_URI unresolvable in this context
         print(f"error: {e}", file=sys.stderr)
         return 1
     finally:
