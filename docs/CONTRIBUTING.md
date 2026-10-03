@@ -71,6 +71,40 @@ normal post-merge cleanup. `remove` refuses to discard uncommitted
 changes (pass `--force-dirty` to override; untracked venv artifacts are
 always ignored).
 
+> **Always use the script, not bare `git worktree add`.** A manual
+> worktree skips the `safe.directory` registration (exFAT reports
+> "dubious ownership"), has no venv — and `tests/run_tests.py` then
+> refuses to run rather than silently falling back to an arbitrary
+> system Python — and leaves a stub branch named after the directory
+> behind when removed.
+
+### Stacked PRs
+
+When a series of PRs belongs together, chain them: branch each PR off
+the branch of the PR below it, and set each PR's base to the branch of
+the PR below (the bottom PR targets `weekly` as usual). GitHub's
+stack-merge then merges the chain bottom-up, surfacing each link to
+`weekly` in turn. Conventions that keep this painless:
+
+- **Each branch must contain the branch below it.** A stack where the
+  links merely share a common ancestor is not mergeable as a stack.
+  Rebase bottom-up: the bottom branch onto `origin/weekly`, then each
+  branch onto the one below it. Push with
+  `git push --force-with-lease=<branch>:<expected-sha>`.
+- **CI runs per link** — the workflow has no base-branch filter on
+  `pull_request`, so every stacked PR gets its own run, and a PR run
+  builds head ⊕ base (exactly the content that reaches `weekly` when
+  that link merges). Validate the chain tip locally too (type +
+  contract at minimum) before force-pushing a rewritten chain; the
+  scripted worktree's venv is what makes those runs trustworthy.
+- **After a lower PR merges**, GitHub retargets the next one to
+  `weekly`; if you rebase instead of using stack-merge, retarget bases
+  by hand (`gh pr edit <n> --base ...`).
+- **Expect tip rewrites.** GitHub's stack merge may author new merge
+  commits rather than using your branch heads verbatim — before
+  force-deleting a "not fully merged" local branch, diff it against
+  what actually landed to confirm the content is identical.
+
 ## Workflow
 
 ### 1. Create a Worktree and Branch
