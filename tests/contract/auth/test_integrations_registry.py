@@ -68,7 +68,7 @@ class TestIntegrationsRegistryContract(unittest.TestCase):
         response = self._get_registry()
 
         self.assertEqual(response.status_code, 200)
-        entries = response.get_json()
+        entries = response.get_json()["integrations"]
         by_provider = {entry["provider"]: entry for entry in entries}
         self.assertEqual(
             sorted(by_provider),
@@ -90,7 +90,7 @@ class TestIntegrationsRegistryContract(unittest.TestCase):
         response = self._get_registry()
 
         classroom = next(
-            entry for entry in response.get_json()
+            entry for entry in response.get_json()["integrations"]
             if entry["provider"] == "google.classroom"
         )
         self.assertEqual(classroom["slug"], "classroom")
@@ -115,7 +115,7 @@ class TestIntegrationsRegistryContract(unittest.TestCase):
         response = self._get_registry()
 
         calendar = next(
-            entry for entry in response.get_json()
+            entry for entry in response.get_json()["integrations"]
             if entry["provider"] == "google.calendar"
         )
         self.assertFalse(calendar["connectable"])
@@ -129,7 +129,7 @@ class TestIntegrationsRegistryContract(unittest.TestCase):
         response = self._get_registry()
 
         classroom = next(
-            entry for entry in response.get_json()
+            entry for entry in response.get_json()["integrations"]
             if entry["provider"] == "google.classroom"
         )
         self.assertFalse(classroom["connectable"])

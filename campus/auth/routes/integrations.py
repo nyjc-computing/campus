@@ -39,18 +39,20 @@ def list_integrations() -> flask_campus.JsonResponse:
 
     GET /integrations/v1/
     Auth: public.
-    Returns: [
-        {
-            "provider": "google.classroom",
-            "slug": "classroom",
-            "base_provider": "google",
-            "title": "Google Classroom",
-            "description": "...",
-            "scopes": ["..."],          (the integration's scope cap)
-            "connectable": true,        (configured AND connect open)
-            "authorize_path": "/auth/v1/google/classroom/authorize"
-        }
-    ]
+    Returns: {
+        "integrations": [
+            {
+                "provider": "google.classroom",
+                "slug": "classroom",
+                "base_provider": "google",
+                "title": "Google Classroom",
+                "description": "...",
+                "scopes": ["..."],      (the integration's scope cap)
+                "connectable": true,    (configured AND connect open)
+                "authorize_path": "/auth/v1/google/classroom/authorize"
+            }
+        ]
+    }
 
     `connectable` is computed from the vault label at call time:
     false for an unconfigured registry stub (no upstream OAuth
@@ -80,7 +82,7 @@ def list_integrations() -> flask_campus.JsonResponse:
                 f"{integration.slug}/authorize"
             ),
         })
-    return entries, 200
+    return {"integrations": entries}, 200
 
 
 def create_blueprint() -> flask.Blueprint:
