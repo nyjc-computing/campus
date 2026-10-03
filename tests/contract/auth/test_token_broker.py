@@ -141,26 +141,25 @@ class TestTokenBrokerContract(unittest.TestCase):
         self.assertNotIn("refresh_token", data)
         self.assertNotIn("provider_fields", data)
 
-    def test_non_identity_min_scopes_warn_deprecated(self):
-        """Deprecated-call telemetry (#733): non-identity min_scopes on
-        the identity broker route warn but do not block the release."""
-        with self.assertLogs(
-                "campus.auth.routes.broker", level="WARNING"
-        ) as captured:
-            response = self.client.post(
-                "/auth/v1/broker/google/",
-                json={"min_scopes": [GOOGLE_SCOPE]},
-                headers=self.bearer_headers,
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(
-            any("Deprecated" in message for message in captured.output)
+    def test_non_identity_min_scopes_refused(self):
+        """#733 Phase 2: non-identity min_scopes on the identity broker
+        route are refused outright (the deprecation warning flipped to
+        a hard error); integration asks belong on the per-integration
+        routes."""
+        response = self.client.post(
+            "/auth/v1/broker/google/",
+            json={"min_scopes": [GOOGLE_SCOPE]},
+            headers=self.bearer_headers,
         )
 
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
+        self.assertIn("per-integration", data["error"]["message"])
+
     def test_identity_release_does_not_warn_deprecated(self):
-        """Deprecated-call telemetry (#733): an identity-shaped release
-        (min_scopes omitted) does not trigger the deprecation warning."""
+        """An identity-shaped release (min_scopes omitted) proceeds
+        without warnings (the #733 deprecation telemetry is retired)."""
         with self.assertNoLogs("campus.auth.routes.broker", level="WARNING"):
             response = self.client.post(
                 "/auth/v1/broker/google/",
@@ -232,22 +231,41 @@ class TestTokenBrokerContract(unittest.TestCase):
     def test_min_scopes_beyond_grant_denied_with_missing_list(self):
         """C3: a grant that does not cover min_scopes is denied.
 
-        GOOGLE_UNGRANTED_SCOPE is allowlisted for the client but absent
-        from the user's stored Google grant, so the denial comes from
-        the grant check (C3b), not the allowlist check (C3a).
+        The identity route now refuses non-identity min_scopes outright
+        (#733 Phase 2), so the C3b shape is exercised with an
+        identity-allowlisted scope (long-form userinfo.email) that the
+        stored grant (short-form email/profile + classroom.rosters)
+        does not literally carry. The denial comes from the grant
+        check (C3b), not the allowlist check (C3a).
         """
+        other_id = self._bridge_client_with_token(
+            "broker-c3b-client",
+            "campus-c3b-bearer",
+            token_bridge=True,
+            upstream_scopes={
+                "google": ["https://www.googleapis.com/auth/userinfo.email"],
+            },
+        )
+        self.assertIsNotNone(other_id)
+
         response = self.client.post(
             "/auth/v1/broker/google/",
-            json={"min_scopes": [GOOGLE_UNGRANTED_SCOPE]},
-            headers=self.bearer_headers,
+            json={"min_scopes": [
+                "https://www.googleapis.com/auth/userinfo.email",
+            ]},
+            headers=self._bearer("campus-c3b-bearer"),
         )
 
         self.assertEqual(response.status_code, 403)
         data = response.get_json()
-        self.assertIn("classroom.announcements", str(data))
+        self.assertIn("missing_scopes", str(data))
 
     def test_min_scopes_beyond_allowlist_rejected(self):
-        """C3: min_scopes outside the client's allowlist fail at once."""
+        """C3: min_scopes outside the client's allowlist fail at once.
+
+        Post-retirement (#733 Phase 2) non-identity asks are refused by
+        the identity-route guard before C3a even runs; the observable
+        contract (400 AUTH_INVALID_SCOPE) is unchanged."""
         response = self.client.post(
             "/auth/v1/broker/google/",
             json={"min_scopes": [

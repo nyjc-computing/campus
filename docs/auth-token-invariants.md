@@ -102,9 +102,10 @@ replaced (`AppCredentialsResource.issue`).
   scopes grow only through the integration's connect flow** (#733:
   campus session required, target allowlisted against the
   integration's `CONNECT_TARGETS`, `prompt=consent` forced, ask capped
-  at the integration's registered scope set) — never at login: client
-  allowlists are identity-only, and the login-time `upstream_scope`
-  parameter is deprecated (warned + audited) with removal pending.
+  at the integration's registered scope set) — never at login: the
+  login-time `upstream_scope` parameter is **refused outright**
+  (#733 Phase 2 retirement) and is removed after its deprecation
+  window closes.
 - **B4 — Workspace restriction.** Upstream logins remain bound to the
   configured workspace domain (existing `WORKSPACE_DOMAIN` check).
 - **B5 — User-scoped reads.** Upstream credentials are readable only per
