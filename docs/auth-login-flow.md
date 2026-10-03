@@ -133,10 +133,15 @@ backend issues the 302; the browser never calls the sessions API.
   session's scopes — exceeding it is rejected with 400 `invalid_scope`
   (the session API is the validated boundary);
 - if the request carries an `upstream_scope` parameter (space-delimited
-  Google scopes, e.g. Classroom API scopes), each must be in the
-  client's registered `upstream_scopes["google"]` allowlist —
-  fail-closed, 400 `invalid_scope` otherwise. Allowed scopes are
-  forwarded to the Google leg (see *Scope algebra → Upstream scopes*).
+  Google scopes), each must be in the client's registered
+  `upstream_scopes["google"]` allowlist — fail-closed, 400
+  `invalid_scope` otherwise. **Deprecated (#733):** client allowlists
+  are identity-only, so any integration ask (e.g. Classroom scopes)
+  fails closed; the parameter is warned on and audited
+  (`campus.auth.deprecated_call`) ahead of removal, and is reserved
+  for hypothetical identity-client growth. Integrations connect via
+  the per-integration connect flow instead (see *Integration connect
+  flows*).
 
 Scope **consent** (a user-facing screen) is not implemented yet: the
 validated session scopes are granted. On success the browser is
@@ -304,27 +309,44 @@ login, create a new session with the full scope set you now want and
 send the user through `/authorize` again — the issued token carries
 old ∪ new.
 
-### Upstream (Google) scopes
+### Integration connect flows (#733)
 
-Campus's Google credential for a user is what downstream apps draw on
-(phase P3's token bridge), and it grows the same incremental way.
+Login never carries integration scopes. A first-party integration
+(`google.classroom`, later `google.calendar`) is a **separate upstream
+OAuth client** with its own vault-held configuration and its own
+consent flow, so a grant for one integration can never widen another.
+Its credential is stored under the namespaced provider string
+(`google.classroom`) and released only through the per-integration
+broker route ([token-broker.md](token-broker.md)).
+
 App path:
 
-1. Register `upstream_scopes: {"google": [<Google scope URLs>]}` on
-   your client (admin-reviewed; fail-closed — no entry means base
-   `email profile` only).
-2. Send the user through `/authorize` with
-   `upstream_scope=<space-delimited Google scope URLs>`. Campus
-   validates against your allowlist, adds them to the Google consent
-   (`include_granted_scopes=true`), and stores the resulting
-   cumulative Google credential for the user.
-3. Re-run with more scopes whenever needed; Google's incremental
-   consent means already-granted scopes are not re-prompted.
+1. Discover integrations (and whether their connect flow is open) via
+   the public catalog `GET /integrations/v1/` (#688) — no hardcoded
+   provider lists.
+2. **Connect** — send the signed-in user to
+   `GET /auth/v1/google/<integration>/authorize?target=<callback URL>`
+   (the `authorize_path` from the catalog). Campus requires a live
+   campus session (the user logs in via the identity flow first), the
+   `target` origin must be registered in the integration's vault
+   `CONNECT_TARGETS`, and `prompt=consent` is forced so the stored
+   credential always carries a refresh token. The ask is exactly the
+   integration's registered scope cap — no per-app allowlist applies
+   here; per-app policy is enforced at the broker.
+3. On callback, campus binds the credential to the signed-in user
+   (a consenting Google identity that differs from the session user
+   is a 403 and stores nothing) and redirects to `target` preserving
+   its query params, then emits `campus.integrations.connect`.
 
-Direct requests to `/auth/v1/google/authorize?scope=...` (outside the
-app path) are possible for account linking, but they cannot widen what
-an *app* can access: the token bridge (phase P3) re-checks the same
-`upstream_scopes` allowlist at release time.
+Status and teardown are metadata-only, never through the credentials
+API (invariant B1): `GET /auth/v1/connections/` lists a user's
+connections (`{provider, integration, scopes, connected_at,
+expires_at}`; bearer = self, basic + `user_id` = delegated), and
+`DELETE /auth/v1/connections/google/<integration>/` disconnects
+explicitly (audit: `campus.integrations.disconnect`).
+
+The legacy login-time growth path (`upstream_scope` at `/authorize`)
+is deprecated — see the `/authorize` section above.
 
 ## Device flow (CLIs) — how it differs
 
@@ -355,7 +377,12 @@ CLIs and other input-constrained clients use RFC 8628 instead
 | GET | `/auth/v1/google/callback` | public (browser) | Google redirect target; sets login cookie |
 | GET | `/auth/v1/verify_login` | campus login cookie | bind user + code, 302 to client |
 | POST | `/auth/v1/token` | client secret (body) | exchange `authorization_code` |
-| POST | `/auth/v1/broker/:provider/` | user (Bearer, bridge-flagged confidential client) | release the user's upstream access token ([token-broker.md](token-broker.md)) |
+| GET | `/auth/v1/google/:integration/authorize` | campus login cookie | integration connect flow: 302 to Google, consent forced (#733) |
+| GET | `/auth/v1/google/:integration/callback` | public (browser) | connect callback: stores credential under the namespaced provider |
+| GET | `/integrations/v1/` | public | read-only integrations catalog (#688) |
+| GET | `/auth/v1/connections/` | user (Bearer) or client (Basic) + `user_id` | user's upstream connections — metadata only (#733) |
+| DELETE | `/auth/v1/connections/:provider[/:integration]/` | user (Bearer) or client (Basic) + `user_id` | disconnect an upstream connection (#733) |
+| POST | `/auth/v1/broker/:provider[/:integration]/` | user (Bearer, bridge-flagged confidential client) | release the user's upstream access token ([token-broker.md](token-broker.md)) |
 | GET/PATCH/DELETE | `/auth/v1/sessions/campus/:id/` | client (Basic/Bearer) | inspect / update / finalize session |
 | POST | `/auth/v1/sessions/:provider/authorization_code` | client (Basic/Bearer) | look up a session by code |
 | POST | `/auth/v1/sessions/sweep` | client (Basic/Bearer) | delete expired sessions |

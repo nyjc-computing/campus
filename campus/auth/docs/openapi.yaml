@@ -760,7 +760,17 @@ paths:
           in: query
           schema:
             type: string
-          description: Space-delimited Google scopes requested on behalf of the client (e.g. Classroom API scopes).
+          deprecated: true
+          description: >
+            Deprecated (#733): integration scopes (e.g. Classroom) are
+            no longer obtainable at login — client allowlists are
+            identity-only and any integration ask fails closed with 400
+            `invalid_scope`. Calls are warned on and audited
+            (`campus.auth.deprecated_call`) ahead of parameter removal;
+            integrations connect via
+            `/auth/v1/google/{integration}/authorize` instead. The
+            parameter is reserved for hypothetical identity-client
+            growth only.
         - name: hd
           in: query
           schema:
