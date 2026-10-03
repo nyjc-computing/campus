@@ -48,6 +48,27 @@ def update_circle_meta(update: dict) -> None:
         raise api_errors.InternalError.from_exception(e) from e
 
 
+def ensure_name_available(
+        name: str,
+        exclude_id: schema.CampusID | None = None
+) -> None:
+    """Raise ConflictError if a circle already uses the given name.
+
+    Best-effort uniqueness: a pre-write exact-match lookup (case-sensitive),
+    not a storage invariant — concurrent writes may still race.
+    """
+    try:
+        matches = circle_storage.get_matching({"name": name})
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+    for record in matches:
+        if record.get(schema.CAMPUS_KEY) != exclude_id:
+            raise api_errors.ConflictError(
+                f"Circle name already exists: {name}",
+                id=name
+            )
+
+
 class CirclesResource:
     """Represents the circles resource in Campus API Schema."""
 
@@ -153,7 +174,8 @@ class CirclesResource:
             Circle instance
 
         Raises:
-            ConflictError: For validation errors or storage conflicts
+            ConflictError: If the name is already used by another circle
+                (best-effort check), or a root circle is given parents
         """
         parents = fields.pop("parents", {})
         if fields["tag"] == "root" and len(parents) > 0:
@@ -161,6 +183,7 @@ class CirclesResource:
                 "Root circle cannot have parents",
                 id=fields["tag"]
             )
+        ensure_name_available(fields["name"])
 
         circle_id = schema.CampusID(
             uid.generate_category_uid("circle", length=8)
@@ -256,9 +279,12 @@ class CircleResource:
             **updates: Fields to update (name, description)
 
         Raises:
-            ConflictError: If circle not found
+            ConflictError: If circle not found or the new name is
+                already used by another circle
             InternalError: For storage errors
         """
+        if "name" in updates:
+            ensure_name_available(updates["name"], exclude_id=self.circle_id)
         try:
             circle_storage.update_by_id(self.circle_id, updates)
         except campus.storage.errors.NoChangesAppliedError:
