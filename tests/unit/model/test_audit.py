@@ -8,7 +8,9 @@ Test coverage:
 - TraceTreeNode: tree structure, to_resource(), depth/offset metrics
 - TraceTree: from_spans() tree building algorithm, _build_node() recursion
 - TraceSummary: from_spans() summary computation, root span logic
-- APIKey: serialization, field filtering (key_hash excluded)
+- APIKey: serialization, field filtering (key_hash excluded),
+  lifecycle helpers (is_active/is_expired/is_revoked), has_scope(),
+  validate_update()
 """
 
 import unittest
@@ -748,8 +750,44 @@ class TestAPIKey(unittest.TestCase):
         self.assertEqual(storage["name"], "Test Key")
         self.assertEqual(storage["owner_id"], "user456")
 
-    def test_apikey_is_active_not_implemented(self):
-        """is_active() raises NotImplementedError."""
+    def test_apikey_is_active_returns_true_for_active_key(self):
+        """is_active() returns True when key is neither expired nor revoked."""
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            expires_at=schema.DateTime.utcafter(days=1),
+        )
+
+        self.assertTrue(key.is_active())
+
+    def test_apikey_is_active_returns_false_for_expired_key(self):
+        """is_active() returns False when key is expired."""
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            expires_at=schema.DateTime.utcafter(days=-1),
+        )
+
+        self.assertFalse(key.is_active())
+
+    def test_apikey_is_active_returns_false_for_revoked_key(self):
+        """is_active() returns False when key is revoked."""
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            revoked_at=schema.DateTime.utcnow(),
+        )
+
+        self.assertFalse(key.is_active())
+
+    def test_apikey_is_expired_returns_false_without_expiry(self):
+        """is_expired() returns False when expires_at is None."""
         key = APIKey(
             id="key123",
             key_hash="hash123",
@@ -757,11 +795,34 @@ class TestAPIKey(unittest.TestCase):
             owner_id="user456",
         )
 
-        with self.assertRaises(NotImplementedError):
-            key.is_active()
+        self.assertFalse(key.is_expired())
 
-    def test_apikey_is_expired_not_implemented(self):
-        """is_expired() raises NotImplementedError."""
+    def test_apikey_is_expired_returns_false_for_future_expiry(self):
+        """is_expired() returns False when expires_at is in the future."""
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            expires_at=schema.DateTime.utcafter(days=1),
+        )
+
+        self.assertFalse(key.is_expired())
+
+    def test_apikey_is_expired_returns_true_for_past_expiry(self):
+        """is_expired() returns True when expires_at is in the past."""
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            expires_at=schema.DateTime.utcafter(days=-1),
+        )
+
+        self.assertTrue(key.is_expired())
+
+    def test_apikey_is_revoked_returns_false_without_revocation(self):
+        """is_revoked() returns False when revoked_at is None."""
         key = APIKey(
             id="key123",
             key_hash="hash123",
@@ -769,33 +830,118 @@ class TestAPIKey(unittest.TestCase):
             owner_id="user456",
         )
 
-        with self.assertRaises(NotImplementedError):
-            key.is_expired()
+        self.assertFalse(key.is_revoked())
 
-    def test_apikey_is_revoked_not_implemented(self):
-        """is_revoked() raises NotImplementedError."""
+    def test_apikey_is_revoked_returns_true_when_revoked(self):
+        """is_revoked() returns True when revoked_at is set."""
         key = APIKey(
             id="key123",
             key_hash="hash123",
             name="Test Key",
             owner_id="user456",
+            revoked_at=schema.DateTime.utcnow(),
         )
 
-        with self.assertRaises(NotImplementedError):
-            key.is_revoked()
+        self.assertTrue(key.is_revoked())
 
-    def test_apikey_has_scope_not_implemented(self):
-        """has_scope() raises NotImplementedError."""
+    def test_apikey_has_scope_returns_true_for_granted_scope(self):
+        """has_scope() returns True for a scope in the key's scopes."""
         key = APIKey(
             id="key123",
             key_hash="hash123",
             name="Test Key",
             owner_id="user456",
-            scopes=["read", "write"],
+            scopes=["traces:read", "traces:write"],
         )
 
-        with self.assertRaises(NotImplementedError):
-            key.has_scope("read")
+        self.assertTrue(key.has_scope("traces:read"))
+
+    def test_apikey_has_scope_returns_false_for_missing_scope(self):
+        """has_scope() returns False for a scope not in the key's scopes."""
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            scopes=["traces:read"],
+        )
+
+        self.assertFalse(key.has_scope("traces:write"))
+
+    def test_apikey_has_scope_matches_wildcards_exactly(self):
+        """has_scope() matches wildcard scopes only exactly.
+
+        Wildcard expansion (e.g. "traces:*" satisfying "traces:read")
+        is the authorization layer's responsibility (#575).
+        """
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            scopes=["traces:*"],
+        )
+
+        self.assertTrue(key.has_scope("traces:*"))
+        self.assertFalse(key.has_scope("traces:read"))
+
+    def test_apikey_has_scope_raises_typeerror_for_non_string(self):
+        """has_scope() raises TypeError for a non-string scope."""
+        key = APIKey(
+            id="key123",
+            key_hash="hash123",
+            name="Test Key",
+            owner_id="user456",
+            scopes=["read"],
+        )
+
+        with self.assertRaises(TypeError):
+            key.has_scope(["read"])  # pyright: ignore[reportArgumentType]
+
+    def test_apikey_validate_update_accepts_mutable_fields(self):
+        """validate_update() accepts valid updates to mutable fields."""
+        APIKey.validate_update({"name": "New Name"})
+
+        APIKey.validate_update({
+            "name": "New Name",
+            "scopes": ["traces:read", "traces:write"],
+            "rate_limit": 100,
+        })
+
+    def test_apikey_validate_update_accepts_null_rate_limit(self):
+        """validate_update() accepts rate_limit=None (unlimited)."""
+        APIKey.validate_update({"rate_limit": None})
+
+    def test_apikey_validate_update_rejects_immutable_fields(self):
+        """validate_update() rejects updates to immutable fields."""
+        with self.assertRaises(ValueError):
+            APIKey.validate_update({"revoked_at": schema.DateTime.utcnow()})
+
+    def test_apikey_validate_update_rejects_unknown_fields(self):
+        """validate_update() rejects fields that don't exist on the model."""
+        with self.assertRaises(ValueError):
+            APIKey.validate_update({"nonexistent": "value"})
+
+    def test_apikey_validate_update_rejects_invalid_scopes_type(self):
+        """validate_update() rejects non-list or non-string scopes."""
+        with self.assertRaises(ValueError):
+            APIKey.validate_update({"scopes": "traces:read"})
+
+        with self.assertRaises(ValueError):
+            APIKey.validate_update({"scopes": [1, 2, 3]})
+
+    def test_apikey_validate_update_rejects_invalid_rate_limit_type(self):
+        """validate_update() rejects non-integer rate_limit values."""
+        with self.assertRaises(ValueError):
+            APIKey.validate_update({"rate_limit": "unlimited"})
+
+        with self.assertRaises(ValueError):
+            APIKey.validate_update({"rate_limit": True})
+
+    def test_apikey_validate_update_rejects_empty_update(self):
+        """validate_update() rejects an empty update dict."""
+        with self.assertRaises(ValueError):
+            APIKey.validate_update({})
 
 
 if __name__ == "__main__":
