@@ -103,9 +103,8 @@ replaced (`AppCredentialsResource.issue`).
   campus session required, target allowlisted against the
   integration's `CONNECT_TARGETS`, `prompt=consent` forced, ask capped
   at the integration's registered scope set) — never at login: the
-  login-time `upstream_scope` parameter is **refused outright**
-  (#733 Phase 2 retirement) and is removed after its deprecation
-  window closes.
+  login-time `upstream_scope` parameter has been **removed** (#733
+  Phase 2 retirement); requests carrying it fail validation with 422.
 - **B4 — Workspace restriction.** Upstream logins remain bound to the
   configured workspace domain (existing `WORKSPACE_DOMAIN` check).
 - **B5 — User-scoped reads.** Upstream credentials are readable only per
@@ -133,8 +132,8 @@ replaced (`AppCredentialsResource.issue`).
   integration scopes, so there are no "base scopes" to fall back on).
   Integration releases are additionally capped by the integration's
   vault scope set. Denials on integration routes point at the connect
-  flow for re-consent, never at the deprecated login-time
-  `upstream_scope` path.
+  flow for re-consent, never at a login-time growth path (login never
+  carries upstream scopes).
 - **C4 — Audited.** Every bridge release *and* denial emits an audit
   event recording (client, user, provider, requested/granted scopes;
   integration releases add the integration slug). Connect and

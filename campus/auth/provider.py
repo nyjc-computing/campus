@@ -83,7 +83,6 @@ def authorize(
         redirect_uri: str,
         state: str,
         scope: str | None = None,
-        upstream_scope: str | None = None,
         *,
         hd: str | None = None,  # hosted domain (for Google)
 ) -> werkzeug.Response:
@@ -113,13 +112,6 @@ def authorize(
         - scope: str (optional)
             Space-separated list of Campus scopes requested by the
             client; must be within the session's scopes.
-        - upstream_scope: str (optional)
-            RETIRED (#733): rejected outright with 400 invalid_scope.
-            Login never carries upstream scopes; integrations connect
-            via the per-integration connect flow
-            (/auth/v1/google/<integration>/authorize). The parameter
-            itself is removed once this rejection has been live for
-            its deprecation window.
         - state: str
             Opaque value used by the client to maintain state between
             request and callback.
@@ -153,20 +145,6 @@ def authorize(
 
     # Check if client exists
     client = resources.client[client_id].get()
-
-    # Retired (#733 Phase 2): the login-time upstream_scope parameter
-    # is refused outright now that no callers remain (telemetry: the
-    # pre-implementation deprecated_call events + the consumer sweep).
-    # Integration scopes are obtained exclusively through the
-    # per-integration connect flow; the parameter itself is removed
-    # once this rejection has been live for its deprecation window.
-    if upstream_scope:
-        raise auth_errors.InvalidScopeError(
-            "upstream_scope is retired: login never carries upstream "
-            "scopes. Integrations connect via the integrations page "
-            "(/auth/v1/google/<integration>/authorize)",
-            disallowed_scopes=scopes.parse(upstream_scope),
-        )
 
     # RFC 6749 §3.1.2.2: validate the request's redirect_uri against the
     # client's registered redirect_uris. §4.1.2.1 requires rejecting the
@@ -225,16 +203,10 @@ def authorize(
                 session_scopes=app_session.scopes,
             )
 
-    # Upstream (third-party provider) scopes requested on behalf of
-    # this client are capped by the client's upstream_scopes allowlist
-    # (invariant B3, docs/auth-token-invariants.md). The login leg is
-    # Google; requests are merged with the proxy's base scopes at the
-    # google authorize endpoint and re-checked at broker release time.
-    upstream_requested = scopes.validate_upstream_for_client(
-        client.upstream_scopes,
-        "google",
-        upstream_scope,
-    )
+    # Login never carries upstream scopes (#733 Phase 2 retirement):
+    # the google authorize endpoint merges its own base identity
+    # scopes, and integration scopes are obtained exclusively through
+    # the per-integration connect flow.
 
     # Build verify_login callback URL with Campus session state
     verify_callback_url = url.full_url_for(
@@ -246,8 +218,6 @@ def authorize(
     params = {"target": verify_callback_url}
     if hd:
         params["hd"] = hd
-    if upstream_requested:
-        params["scope"] = " ".join(upstream_requested)
     oauth_authorize_url = url.full_url_for(
         'auth.google.authorize',
         **params

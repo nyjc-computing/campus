@@ -722,10 +722,11 @@ paths:
         Browser endpoint. Validates the request (fail-closed
         redirect_uri matching, RFC 6749 section 3.1.2.2), then
         redirects to the Google leg for authentication. `scope` must
-        be within the session's scopes; `upstream_scope` must be within
-        the client's `upstream_scopes["google"]` allowlist — violations
-        are rejected with 400 `invalid_scope` without redirecting.
-        On success: 302 to `/auth/v1/google/authorize?...`.
+        be within the session's scopes — violations are rejected with
+        400 `invalid_scope` without redirecting. Login never carries
+        upstream scopes (#733): the retired `upstream_scope` parameter
+        has been removed; requests carrying it fail validation with
+        422. On success: 302 to `/auth/v1/google/authorize?...`.
       parameters:
         - name: client_id
           in: query
@@ -756,18 +757,6 @@ paths:
           schema:
             type: string
           description: Space-delimited Campus scopes; must be within the session's scopes.
-        - name: upstream_scope
-          in: query
-          schema:
-            type: string
-          deprecated: true
-          description: >
-            Retired (#733 Phase 2): rejected outright with 400
-            `invalid_scope` — login never carries upstream scopes.
-            Integrations connect via
-            `/auth/v1/google/{integration}/authorize` instead. The
-            parameter is removed entirely once this rejection has been
-            live for its deprecation window.
         - name: hd
           in: query
           schema:

@@ -108,20 +108,17 @@ Re-covering a `missing_scopes` gap:
   **connect flow** (from the app's integrations page, or directly
   `GET /auth/v1/google/<integration>/authorize?target=<your
   callback>`). Consent is forced, so the stored grant always grows to
-  the integration's full cap. Never point users at the login
-  `upstream_scope` path — integration scopes are not obtainable at
-  login.
+  the integration's full cap. Integration scopes are not obtainable
+  at login.
 - **Identity route**: send the user through the normal login
-  authorize flow with `upstream_scope` set to the missing *identity*
-  scopes (deprecated mechanism, reserved for hypothetical
-  identity-client growth):
+  authorize flow (no scope parameters — login never carries upstream
+  scopes):
 
 ```
 GET /auth/v1/authorize
     ?client_id=<your client>
     &redirect_uri=<registered redirect_uri>
     &state=<new session id>
-    &upstream_scope=<space-delimited missing scopes>
 ```
 
 Google's incremental consent (`include_granted_scopes=true`) means
