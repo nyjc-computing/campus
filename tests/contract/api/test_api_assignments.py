@@ -360,11 +360,11 @@ class TestApiAssignmentsContract(unittest.TestCase):
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
     def test_update_missing_assignment_returns_error(self):
-        """PATCH /assignments/{assignment_id} for non-existent assignment returns 200.
+        """PATCH /assignments/{assignment_id} for non-existent assignment returns 409.
 
-        NOTE: Current API behavior returns 200 for missing assignments due to
-        NoChangesAppliedError being caught and returning None. This may be
-        intentional (idempotent updates) or a bug.
+        The memory collection backend used to silently no-op update_by_id on
+        a missing id (#761), masking PATCH-on-missing as 200; it now matches
+        the MongoDB backend and raises, which the resource maps to 409.
         """
         response = self.client.patch(
             "/api/v1/assignments/nonexistent_id/",
@@ -372,10 +372,10 @@ class TestApiAssignmentsContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        # Current behavior: returns 200 with empty body
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 409)
         data = response.get_json()
-        self.assertEqual(data, {})
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "CONFLICT")
 
     def test_delete_assignment(self):
         """DELETE /assignments/{assignment_id} removes the assignment."""

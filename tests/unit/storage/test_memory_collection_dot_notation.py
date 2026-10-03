@@ -214,10 +214,16 @@ class TestMemoryCollectionDotNotation(unittest.TestCase):
         self.assertIsInstance(doc["metadata"], dict)
         self.assertEqual(doc["metadata"]["count"], 5)
 
-    def test_update_nonexistent_document_no_error(self):
-        """Updating a non-existent document should not raise an error."""
-        # Should silently do nothing
-        self.collection.update_by_id("nonexistent", {"metadata.count": 5})
+    def test_update_nonexistent_document_raises(self):
+        """Updating a non-existent document raises NotFoundError (#761).
+
+        Mirrors the MongoDB backend; the memory backend used to silently
+        no-op, which masked PATCH-on-missing-circle as a 200.
+        """
+        from campus.storage.errors import NotFoundError
+
+        with self.assertRaises(NotFoundError):
+            self.collection.update_by_id("nonexistent", {"metadata.count": 5})
 
         # No document should have been created
         self.assertIsNone(self.collection.get_by_id("nonexistent"))

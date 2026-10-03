@@ -190,10 +190,13 @@ class MemoryCollection(CollectionInterface):
         Supports MongoDB-style dot notation for nested field updates:
         - {"a.b.c": 1} sets doc["a"]["b"]["c"] = 1
         - {"a.b.c": None} removes doc["a"]["b"]["c"]
+
+        Raises:
+            NotFoundError: If no document exists with the given ID
         """
         collection = self._get_collection()
         if doc_id not in collection:
-            return
+            raise NotFoundError(doc_id, self.name)
 
         # Merge the update (MongoDB-style update)
         doc = collection[doc_id].copy()

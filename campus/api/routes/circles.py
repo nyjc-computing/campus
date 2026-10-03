@@ -12,7 +12,6 @@ import campus.model
 import campus.yapper
 from campus import flask_campus
 from campus.common import schema
-from campus.common.errors import api_errors
 
 from .. import resources
 
@@ -66,34 +65,40 @@ def new_circle(
     Request Body (application/json):
         name: str (required)
             The name of the new circle.
+            Must not already be used by another circle.
         description: str (optional)
             An optional description of the circle.
         tag: CircleTag (required)
             The tag that categorizes the circle.
-        parents: dict[CirclePath, AccessValue] (optional)
-            A mapping of parent circle paths to access values.
-            At least one parent is required (defaults to "admin" if omitted).
-            The full path is of the form: `{parent path} / {circle_id}`.
+        parents: dict[CircleID, AccessValue] (optional)
+            A mapping of parent circle IDs to integer access values.
+            Omit to create a circle with no parents.
+            The root circle (tag "root") must not have parents.
 
     Responses:
         201 Created: dict
             JSON object representing the newly created circle.
             Example:
                 {
-                    "id": "design-team",
+                    "id": "circle_ab12cd34",
                     "name": "Design Team",
                     "description": "Handles UI/UX",
                     "tag": "project",
                     "parents": {
-                        "/root/admin": "admin"
+                        "circle_1a2b3c4d": 15
                     }
                 }
 
         400 Bad Request: None
             Returned if the request body is invalid or missing required fields.
 
+        409 Conflict: None
+            - Returned if another circle already uses the requested name
+              (best-effort, exact-match check).
+            - Returned if tag is "root" and parents were provided.
+
         422 Unprocessable Entity: None
-            Returned if validation fails (e.g., tag or parent format is incorrect).
+            Returned if validation fails (e.g., a required field is missing).
     """
     circle = resources.circle.new(
         name=name,
@@ -169,12 +174,12 @@ def get_circle_details(circle_id: str) -> flask_campus.JsonResponse:
             JSON object representing the circle details.
             Example:
                 {
-                    "id": "design-team",
+                    "id": "circle_ab12cd34",
                     "name": "Design Team",
                     "description": "Handles UI/UX",
                     "tag": "project",
                     "parents": {
-                        "/root/admin": "admin"
+                        "circle_1a2b3c4d": 15
                     },
                     "sources": {}
                 }
@@ -201,10 +206,10 @@ def edit_circle(
         *,
         circle_id: str,
         name: str,
-        description: str
+        description: str | None = None
 ) -> flask_campus.JsonResponse:
     """Summary:
-        Update the name and/or description of an existing circle.
+        Update the name, and optionally the description, of an existing circle.
 
     Method:
         PATCH /circles/{circle_id}
@@ -217,10 +222,12 @@ def edit_circle(
         None
 
     Request Body (application/json):
-        name: str (optional)
+        name: str (required)
             The new name for the circle.
+            Must not already be used by another circle.
         description: str (optional)
             The new description for the circle.
+            Unchanged if omitted.
 
     Responses:
         200 OK: dict
@@ -229,23 +236,24 @@ def edit_circle(
                 {}
 
         409 Conflict: None
-            Returned if the circle does not exist.
+            - Returned if the circle does not exist.
+            - Returned if another circle already uses the requested name
+              (best-effort, exact-match check).
+
+        422 Unprocessable Entity: None
+            Returned if validation fails (e.g., name is missing).
 
         500 Internal Server Error: None
             Returned if a storage-level error occurs during the update.
 
     Notes:
-        - At least one of `name` or `description` must be present in the request.
+        - `name` is required; `description` is unchanged when omitted.
         - If no changes are detected, the request is treated as a no-op (200 OK, no error).
         - Emits the event: `campus.circles.update`.
     """
-    updates = {}
-    if name:
-        updates["name"] = name
-    if description:
+    updates = {"name": name}
+    if description is not None:
         updates["description"] = description
-    if not updates:
-        raise api_errors.InvalidRequestError("Empty request body")
     resources.circle[schema.CampusID(circle_id)].update(**updates)
     yapper.emit('campus.circles.update', {"circle_id": circle_id})
     return {}, 200
