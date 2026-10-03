@@ -59,6 +59,12 @@ NULL file_hash and are not guarded. Mongo rewrite migrations take a
 document backup before writing — see migrations/_backup.py and the
 protocol doc's backup conventions.
 
+Startup visibility (#27 phase 4, #747): production-style boots call
+warn_if_pending() from main.create_app — one WARNING line naming every
+revision the ledger does not record as applied or historical. The check
+is fail-open (an unreachable ledger never blocks boot) and never runs
+anything: migrations stay manual, never auto-run from Campus apps.
+
 The `_migrations` DDL deliberately does not go through
 PostgreSQLTable.init_from_schema: that entry point is production-blocked,
 and standing up production is exactly when this runner is needed. The
@@ -67,6 +73,7 @@ ledger table is runner bookkeeping, not user schema.
 
 import argparse
 import hashlib
+import logging
 import re
 import sys
 from dataclasses import dataclass
@@ -74,6 +81,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from campus.common import env
+
+logger = logging.getLogger(__name__)
 
 LEDGER_TABLE = "_migrations"
 
@@ -112,6 +121,14 @@ MISSING_FILE = "missing-file"
 # apply() runs a file only when its ledger status is absent, failed
 # (retry) or pending; applied and historical files are skipped.
 APPLY_RUNNABLE = (APPLIED, FAILED, HISTORICAL)
+
+# #747: production-style environments — where startup init_from_model
+# is blocked, so only the runner can have brought the schema up to
+# date — log a startup WARNING when migrations are outstanding.
+# Non-production boots are unchanged: dev self-heals schema via
+# init_from_model. Literal, not devops.PRODUCTION, to keep this module
+# importable without the flask chain (devops imports deploy).
+PENDING_WARN_ENVS = ("production",)
 
 
 @dataclass(frozen=True)
@@ -398,6 +415,62 @@ def hash_mismatches(
         if current is not None and current != stored:
             mismatches.append((file, stored, current))
     return mismatches
+
+
+def warn_if_pending(env_name: str | None = None,
+                    migrations_dir: Path | None = None) -> list[str]:
+    """Log a WARNING when migrations are outstanding; never raise (#747).
+
+    Called at app startup (main.create_app) in production-style
+    environments — the ones where startup init_from_model is blocked, so
+    only the runner can have brought the schema up to date. Any revision
+    the ledger does not record as applied or historical (pending,
+    failed, or a ledger row whose file is gone) is named in one WARNING
+    line. Unlike the CLI commands this uses logging, not print: it runs
+    inside the app, where stdout is no one's console.
+
+    Fail-open by design: an unresolvable POSTGRESDB_URI, a missing
+    ledger table, a malformed migrations/ directory — any error is
+    logged at debug and swallowed. A pending migration never blocks
+    boot, and nothing here ever runs one. Outside PENDING_WARN_ENVS the
+    check returns before touching the database, so dev/test boots are
+    unchanged.
+
+    Returns the outstanding revisions (empty when clean, skipped, or on
+    error).
+    """
+    if env_name is None:
+        from campus.common import devops
+        env_name = devops.ENV
+    if env_name not in PENDING_WARN_ENVS:
+        return []
+    try:
+        files = discover_migration_files(migrations_dir or MIGRATIONS_DIR)
+        conn = _connect()
+        try:
+            rows = _fetch_ledger_rows(conn)
+        finally:
+            conn.close()
+        outstanding = [
+            (file, state) for file, state in compute_status(files, rows)
+            if state not in (APPLIED, HISTORICAL)
+        ]
+        if outstanding:
+            logger.warning(
+                "%s migration(s) not recorded applied at startup: %s — "
+                "run `python migrations/runner.py status` / `apply` "
+                "out-of-band; startup proceeding (apps never auto-run "
+                "migrations)",
+                len(outstanding),
+                ", ".join(f"{file.filename} [{state}]"
+                          for file, state in outstanding),
+            )
+        return [file.revision for file, _ in outstanding]
+    except Exception as e:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
+        logger.debug(
+            "migration pending-check skipped: %s: %s", type(e).__name__, e
+        )
+        return []
 
 
 def cmd_ensure(args, conn) -> int:

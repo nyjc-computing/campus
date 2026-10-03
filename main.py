@@ -65,6 +65,15 @@ def create_app(mode: str | None = None) -> flask.Flask:
             f"Module '{mode}' does not fulfill the AppModule protocol."
         )
     app = devops.deploy.create_app(module)
+    # Migrations phase 4 (#747): warn at startup when the ledger shows
+    # outstanding migrations. Production-style environments only, and
+    # fail-open twice over: warn_if_pending never raises, and the import
+    # is guarded so a deployment without migrations/ still boots.
+    try:
+        from migrations import runner
+        runner.warn_if_pending()
+    except Exception:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
+        logger.debug("migration pending-check unavailable", exc_info=True)
     return app
 
 
