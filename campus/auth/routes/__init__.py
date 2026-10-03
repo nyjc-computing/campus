@@ -15,6 +15,7 @@ __all__ = [
     "clients",
     "connections",
     "credentials",
+    "integrations",
     "logins",
     "oauth",
     "sessions",
@@ -32,7 +33,7 @@ from campus.common.errors.base import ErrorConstant
 
 from .. import resources
 from ..middleware import Authenticator
-from . import broker, clients, connections, credentials, logins, oauth, root, sessions, users, vaults
+from . import broker, clients, connections, credentials, integrations, logins, oauth, root, sessions, users, vaults
 
 # Route modules that require authentication
 _AUTHENTICATED_ROUTE_MODULES = [

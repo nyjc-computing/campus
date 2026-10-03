@@ -65,6 +65,8 @@ tags:
   - name: OAuth Proxies
     description: Browser login/consent with third-party identity providers
   - name: Credentials
+  - name: Integrations
+    description: Read-only catalog of first-party integrations (#688)
   - name: Token Bridge
   - name: Vaults
   - name: Root
@@ -1263,6 +1265,33 @@ paths:
         '400':
           description: OAuth error from Discord (HTML error page)
 
+  /integrations/v1/:
+    get:
+      tags: [Integrations]
+      summary: List the first-party integrations Campus offers
+      operationId: listIntegrations
+      description: |
+        Read-only view of the in-code integrations registry (#688,
+        #733): public metadata, the integration's configured scope
+        cap, and whether the connect flow is open. Computed from the
+        vault at call time: `connectable` is false for an unconfigured
+        registry stub or when `CONNECT_TARGETS` is empty — mirroring
+        the guards the connect route enforces. Public: everything here
+        is already observable by starting a connect flow; no vault
+        secrets are ever returned. Consumers build connect links from
+        `authorize_path`; `scopes` is the cap, not the ask (the
+        connect flow asks for exactly this set).
+      security: []
+      responses:
+        '200':
+          description: The integrations registry
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IntegrationEntry'
+
   /auth/v1/credentials/{provider}/:
     get:
       tags: [Credentials]
@@ -2125,6 +2154,44 @@ components:
         token for campus credentials. Third-party providers are refused
         by the credentials API (invariant B1) — their rows hold upstream
         refresh tokens that must never leave Campus.
+
+    IntegrationEntry:
+      type: object
+      required: [provider, slug, base_provider, title, description, scopes, connectable, authorize_path]
+      properties:
+        provider:
+          type: string
+          description: The namespaced provider string credentials are keyed under.
+          example: google.classroom
+        slug:
+          type: string
+          description: Registry slug (URL segment for connect routes).
+          example: classroom
+        base_provider:
+          type: string
+          description: The identity/login provider this integration extends.
+          example: google
+        title:
+          type: string
+          example: Google Classroom
+        description:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+          description: The integration's scope cap (vault SCOPES); empty while unconfigured.
+        connectable:
+          type: boolean
+          description: True when the vault client is configured AND the connect flow is open (CONNECT_TARGETS non-empty).
+        authorize_path:
+          type: string
+          description: >
+            Connect-flow path on this server; callers append
+            ?target=<urlencoded callback URL> (origin must be in the
+            integration's CONNECT_TARGETS).
+          example: /auth/v1/google/classroom/authorize
+      description: Public metadata only — never carries vault client secrets.
 
     BrokerRelease:
       type: object

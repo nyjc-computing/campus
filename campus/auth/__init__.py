@@ -113,6 +113,11 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     oauth_proxy.init_app(bp)
     routes.init_app(bp)
 
+    # Public integrations catalog at the top-level /integrations/v1
+    # (#688): outside the /auth/v1 prefix, no authentication.
+    from .routes import integrations as integrations_routes
+    integrations_routes.init_app(app)
+
     if isinstance(app, flask.Flask):
         from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY")
