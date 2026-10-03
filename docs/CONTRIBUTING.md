@@ -18,17 +18,67 @@ weekly → staging → main
 | `staging` | Pre-production validation | Maintainers (via PR) |
 | `main` | Production releases | Maintainers (via PR) |
 
-## Workflow
+## Concurrent Work Streams (Worktrees)
 
-### 1. Create a Feature Branch
+Multiple agent sessions and humans share this clone. A single checkout
+cannot host two branches at once — switching its branch under an active
+stream makes that stream's next commit land on the wrong branch (this
+caused an incident on 2026-10-03, recovered only by history surgery).
+The rule is therefore:
+
+- **The main checkout stays on `weekly`** and only ever takes `git pull`.
+- **Every task runs in its own worktree** — one worktree = one branch = one PR.
+- **Never `git checkout` inside another stream's worktree.**
+- **Worktrees are single-use**: remove the worktree and its venv once the
+  task's PRs are merged; build a fresh one for the next task. Never reuse
+  a venv across tasks.
+
+### Starting a task
 
 ```bash
-# Start from weekly
-git checkout weekly
-git pull origin weekly
+python scripts/worktree.py new feat/your-feature        # code work: worktree + .venv (~2 min)
+python scripts/worktree.py new docs/your-doc --no-venv  # docs-only: no venv
+python scripts/worktree.py list                         # who is working where
+```
 
-# Create your feature branch
-git checkout -b feature/your-feature-name
+The worktree is created as a sibling directory (`../campus-<slug>`) on a
+new branch off `origin/weekly`. Re-running `new` with an existing branch
+checks that branch out as-is (fresh venv still required — single-use
+policy). Then:
+
+```bash
+cd ../campus-your-feature
+.venv/Scripts/python.exe tests/run_tests.py unit    # Windows (.venv/bin/python elsewhere)
+```
+
+The script encodes the platform recipe: `D:\` is exFAT (no
+junctions/symlinks; PATH tricks lose to CreateProcess search order), so
+the worktree venv must be **real** — it is created from the main venv's
+interpreter, filled from the main venv's `pip freeze`, and the
+locally-built `campus_python` packages (not on any index) are copied
+across from the main site-packages. It also registers the worktree's
+`safe.directory` config.
+
+### Finishing a task
+
+```bash
+python scripts/worktree.py remove feat/your-feature
+```
+
+Removes the worktree directory (venv included), prunes, and clears its
+`safe.directory` entry. The branch is kept — branch deletion follows the
+normal post-merge cleanup. `remove` refuses to discard uncommitted
+changes (pass `--force-dirty` to override; untracked venv artifacts are
+always ignored).
+
+## Workflow
+
+### 1. Create a Worktree and Branch
+
+```bash
+# From anywhere in the repository (main checkout or another worktree)
+python scripts/worktree.py new feature/your-feature-name
+cd ../campus-your-feature-name
 ```
 
 ### 2. Make Changes
@@ -149,4 +199,4 @@ For code-level guidelines (patterns, architecture, imports), see:
 
 ---
 
-**Ready to contribute?** Create your feature branch from `weekly` and start building! 🚀
+**Ready to contribute?** Create your task worktree from `weekly` and start building! 🚀
