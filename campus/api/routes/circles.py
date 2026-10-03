@@ -47,8 +47,8 @@ def list_circles(tag: str | None = None) -> flask_campus.JsonResponse:
 @flask_campus.unpack_request
 def new_circle(
         name: str,
-        description: str,
         tag: str,
+        description: str = "",
         parents: dict[str, int] | None = None,
 ) -> flask_campus.JsonResponse:
     """Summary:

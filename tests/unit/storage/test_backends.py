@@ -612,7 +612,8 @@ class TestInsertMany(unittest.TestCase):
             with suppress(storage_errors.NotFoundError):
                 self.users_table.delete_by_id(row_id)
         for row_id in ("mem-1", "mem-2"):
-            self.mem_collection.delete_by_id(row_id)
+            with suppress(storage_errors.NotFoundError):
+                self.mem_collection.delete_by_id(row_id)
 
     def _user_row(self, row_id: str) -> dict:
         return {

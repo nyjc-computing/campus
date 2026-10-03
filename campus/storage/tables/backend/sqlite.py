@@ -651,15 +651,22 @@ class SQLiteTable(TableInterface):
             self.update_by_id(row[PK], update)
 
     def delete_by_id(self, row_id: str):
-        """Delete a row by its ID."""
+        """Delete a row by its ID.
+
+        Raises:
+            storage_errors.NotFoundError: If no row exists with the given ID
+        """
         conn = self.get_connection()
         # Serialize against other statements on the shared connection
         with _connection_locks[self.db_path]:
             cursor = conn.cursor()
             try:
                 cursor.execute(f"DELETE FROM {self.name} WHERE id = ?", (row_id,))
+                deleted_count = cursor.rowcount
             finally:
                 cursor.close()
+            if deleted_count == 0:
+                raise storage_errors.NotFoundError(row_id, self.name)
             conn.commit()
 
     def delete_matching(self, query: dict[str, Any]):

@@ -228,7 +228,6 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG #501: root circle with parents returns 422 (validation) instead of 409")
     def test_create_root_circle_with_parents_returns_error(self):
         """POST /circles/ with tag=root and parents returns 409."""
         response = self.client.post(
@@ -413,7 +412,6 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    @unittest.skip("API BUG: DELETE /circles/{id}/ for non-existent circle returns 200 instead of 409")
     def test_delete_missing_circle_returns_error(self):
         """DELETE /circles/{circle_id}/ for non-existent circle returns 409."""
         response = self.client.delete(

@@ -33,6 +33,7 @@ from typing import Any, Dict, List
 
 from campus.model import Model
 from campus.storage.documents.interface import PK, CollectionInterface
+from campus.storage.errors import NotFoundError
 from campus.storage.query import gt, gte, is_operator, lt, lte, ne
 
 
@@ -262,9 +263,15 @@ class MemoryCollection(CollectionInterface):
             self.update_by_id(doc[PK], update)
 
     def delete_by_id(self, doc_id: str):
-        """Delete a document by its ID."""
+        """Delete a document by its ID.
+
+        Raises:
+            NotFoundError: If no document exists with the given ID
+        """
         collection = self._get_collection()
-        collection.pop(doc_id, None)
+        if doc_id not in collection:
+            raise NotFoundError(doc_id, self.name)
+        collection.pop(doc_id)
 
     def delete_matching(self, query: Dict[str, Any]):
         """Delete documents matching a query."""
