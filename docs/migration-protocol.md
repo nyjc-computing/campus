@@ -14,8 +14,11 @@ applied to each environment, and how applied state is tracked.
 
 A migration is a single numbered Python file in `migrations/` at the repo
 root. Each file is self-contained: it carries its own `upgrade()` and
-`downgrade()` functions and is executed directly by an operator — there is
-no runner, no CLI command, and no automatic execution on deploy.
+`downgrade()` functions and is executed directly by an operator — there
+is no `apply` runner yet (#27 phase 2), and no automatic execution on
+deploy. `migrations/runner.py` exists for applied-state tracking only
+(`ensure|stamp|status` against the `_migrations` ledger table — see
+[Applied-migrations ledger](#applied-migrations-ledger)).
 
 Migrations target one of two storage families:
 
@@ -104,7 +107,8 @@ manual, per-service run:
    in the migration's docstring.
 4. Verify by exercising the affected flow, then record the run in the
    [ledger](#applied-migrations-ledger) below in the same PR that ships
-   the migration.
+   the migration: stamp the environment with
+   `python migrations/runner.py stamp <rev>` and update the mirror table.
 
 Alternatives when SSH is unavailable: `railway run -s campus.auth` locally
 (needs the DB reachable), or a temporary `ENV` flip + redeploy (mutates
@@ -112,22 +116,51 @@ running-service config twice — last resort).
 
 ## Applied-migrations ledger
 
-There is no in-database state table. **This ledger is the authoritative
-record of what has been applied where.** Update it in the same PR that
-adds the migration, and correct it whenever an environment's status
-changes. Statuses below verified as of 2026-10-03.
+As of 2026-10-03 (#27 phase 1), applied state is tracked in the
+`_migrations` table of the auth Postgres (`campus.auth-postgres`) —
+**the table is the authoritative record wherever it exists**. The table
+below is a human-readable mirror and the record of history that predates
+it. The table is created by the runner, not by a migration file, and
+records both storage families (Postgres DDL and Mongo backfills), since
+every migration runs in the campus.auth context where both secrets
+resolve.
+
+Runner commands (from a context where `POSTGRESDB_URI` resolves, e.g.
+`railway ssh` into campus.auth):
+
+```bash
+python migrations/runner.py ensure        # create _migrations (idempotent)
+python migrations/runner.py status        # applied/pending per migration file
+python migrations/runner.py stamp 005     # record one migration as applied (no run)
+python migrations/runner.py stamp all     # record every migration as applied
+```
+
+Each row records the revision, filename, `status` (currently `applied`),
+and the stamp time and operator (`applied_at`, `applied_by`); the
+`duration_ms`, `error` and `file_hash` columns are reserved for phase-3
+execution auditing (#27). Stamping records a migration as applied
+WITHOUT running it — the baseline bootstrap for environments that
+predate the ledger. **Update the mirror below in the same PR that adds
+a migration**, and correct it whenever an environment's status changes.
+
+Dev was baselined on 2026-10-03: `ensure` + `stamp 003`–`009`. 001–002
+could not be stamped: their target tables (`assignments`, `submissions`)
+are absent from both dev Postgres databases (verified by `to_regclass`
+against `campus.auth-postgres` and `campus.api-postgres` on 2026-10-03)
+— they predate the current service topology and remain historical only.
+Statuses below verified as of 2026-10-03.
 
 | Migration | Target | Purpose | Dev | Prod |
 |-----------|--------|---------|-----|------|
-| 001_add_assignments_table | Postgres | `assignments` table | historical (predates tracking) | not stood up |
-| 002_add_submissions_table | Postgres | `submissions` table | historical (predates tracking) | not stood up |
-| 003_add_api_traces_table | Postgres | `spans` table for audit tracing | live (verified 2026-10-01) | not stood up |
-| 004_add_vault_clients_public_columns | Postgres | public-client columns on `vault_clients` | self-healed (verified 2026-09-29) | not stood up |
-| 005_backfill_scope_string | Mongo | RFC 6749 scope-string rewrite + token field backfill | applied (2026-09-30) | not stood up |
-| 006_add_client_allowed_scopes | Postgres | per-client scope allowlists | applied (recorded 2026-10-02) | pending — run when service is stood up |
-| 007_add_client_upstream_scopes | Postgres | per-client upstream scope config | applied (recorded 2026-10-02) | pending — run when service is stood up |
-| 008_add_client_token_bridge | Postgres | token-bridge columns | applied (recorded 2026-10-02) | pending — run when service is stood up |
-| 009_create_app_credentials | Postgres | `app_credentials` for client_credentials grant | auto-init at startup (non-production) | pending — required; prod blocks `init_from_model` |
+| 001_add_assignments_table | Postgres | `assignments` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); not in ledger | not stood up |
+| 002_add_submissions_table | Postgres | `submissions` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); not in ledger | not stood up |
+| 003_add_api_traces_table | Postgres | `spans` table for audit tracing | applied (verified 2026-10-01; stamped 2026-10-03) | not stood up |
+| 004_add_vault_clients_public_columns | Postgres | public-client columns on `vault_clients` | applied (self-healed, verified 2026-09-29; stamped 2026-10-03) | not stood up |
+| 005_backfill_scope_string | Mongo | RFC 6749 scope-string rewrite + token field backfill | applied (2026-09-30; stamped 2026-10-03) | not stood up |
+| 006_add_client_allowed_scopes | Postgres | per-client scope allowlists | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
+| 007_add_client_upstream_scopes | Postgres | per-client upstream scope config | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
+| 008_add_client_token_bridge | Postgres | token-bridge columns | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
+| 009_create_app_credentials | Postgres | `app_credentials` for client_credentials grant | applied (auto-init at startup, non-production; stamped 2026-10-03) | pending — required; prod blocks `init_from_model` |
 
 Note: production currently has no `campus.auth` service (survey
 2026-09-29); "pending" rows become actionable only when it is stood up.
@@ -137,11 +170,15 @@ Note: production currently has no `campus.auth` service (survey
 These were the goals of the superseded #382 design that current practice
 does **not** meet; they are the remaining scope of issue #27:
 
-- **Applied-state tracking in the database** — no `_migrations` table; the
-  ledger above is maintained by hand and can drift from reality.
-- **Runner / CLI** — nothing enforces ordering, checks what is pending, or
-  wraps execution; each run is a hand-typed command with hand-checked
-  preconditions.
+- **Applied-state tracking in the database** — CLOSED by phase 1
+  (#744, 2026-10-03): the `_migrations` table and the
+  `migrations/runner.py` `ensure|stamp|status` commands; dev is stamped
+  and `status` matches the mirror above.
+- **Runner / CLI** — nothing yet enforces ordering, checks what is
+  pending before a deploy, or wraps execution; each run is a hand-typed
+  command with hand-checked preconditions. (Phase 2, #745, adds the
+  `apply` subcommand; the ledger runner exists but does not execute
+  migrations.)
 - **Rollback tooling** — `downgrade()` exists in every file but has never
   been exercised as part of a process, and data rewrites (005-style)
   cannot restore overwritten values.
