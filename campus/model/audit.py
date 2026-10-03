@@ -79,7 +79,12 @@ class APIKey(Model):
         """
         if self.expires_at is None:
             return False
-        return self.expires_at.to_datetime() < utc_time.now()
+        # Storage records carry plain strings for union-annotated
+        # fields (from_storage only coerces single-class annotations)
+        expires_at = self.expires_at
+        if isinstance(expires_at, str):
+            expires_at = schema.DateTime(expires_at)
+        return expires_at.to_datetime() < utc_time.now()
 
     def is_revoked(self) -> bool:
         """Check if the API key is revoked.
