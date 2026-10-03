@@ -14,11 +14,14 @@ applied to each environment, and how applied state is tracked.
 
 A migration is a single numbered Python file in `migrations/` at the repo
 root. Each file is self-contained: it carries its own `upgrade()` and
-`downgrade()` functions and is executed directly by an operator — there
-is no `apply` runner yet (#27 phase 2), and no automatic execution on
-deploy. `migrations/runner.py` exists for applied-state tracking only
-(`ensure|stamp|status` against the `_migrations` ledger table — see
-[Applied-migrations ledger](#applied-migrations-ledger)).
+`downgrade()` functions. Execution is operator-driven — nothing runs
+automatically on deploy. `migrations/runner.py` is the tool for both
+halves of that: it applies migrations in revision order (`apply`) and
+tracks applied state in the `_migrations` ledger table
+(`ensure|stamp|status` — see
+[Applied-migrations ledger](#applied-migrations-ledger)). Running a
+single migration script directly still works for special cases (e.g.
+a data backfill's dry-run mode).
 
 Migrations target one of two storage families:
 
@@ -99,16 +102,19 @@ manual, per-service run:
 2. The repo is at `/app`; credentials resolve from the service's
    environment variables.
 3. Run the migration:
-   `python migrations/NNN_slug.py` — for data backfills, dry-run first,
-   then `--apply`.
+   `python migrations/runner.py apply` runs every pending migration in
+   revision order and records each outcome in the ledger; scope a
+   deliberate partial run with `--up-to <rev>`.
+   For data backfills, run the migration's own dry-run first
+   (`python migrations/NNN_slug.py`, then `--apply` logic is what
+   `runner.py apply` invokes).
    Some migrations are guarded by `@block_env(PRODUCTION)`; where a guard
    must be bypassed for a deliberate production run, use a per-process
-   override (`ENV=development python migrations/NNN_slug.py`) and say so
-   in the migration's docstring.
-4. Verify by exercising the affected flow, then record the run in the
-   [ledger](#applied-migrations-ledger) below in the same PR that ships
-   the migration: stamp the environment with
-   `python migrations/runner.py stamp <rev>` and update the mirror table.
+   override (`ENV=development python migrations/runner.py apply`) and say
+   so in the migration's docstring.
+4. Verify by exercising the affected flow, then check the runner already
+   recorded the run (`python migrations/runner.py status`); update the
+   mirror table in the same PR that ships the migration.
 
 Alternatives when SSH is unavailable: `railway run -s campus.auth` locally
 (needs the DB reachable), or a temporary `ENV` flip + redeploy (mutates
@@ -129,31 +135,48 @@ Runner commands (from a context where `POSTGRESDB_URI` resolves, e.g.
 `railway ssh` into campus.auth):
 
 ```bash
-python migrations/runner.py ensure        # create _migrations (idempotent)
-python migrations/runner.py status        # applied/pending per migration file
-python migrations/runner.py stamp 005     # record one migration as applied (no run)
-python migrations/runner.py stamp all     # record every migration as applied
+python migrations/runner.py ensure             # create _migrations (idempotent)
+python migrations/runner.py status             # applied/pending per migration file
+python migrations/runner.py stamp 005          # record one migration as applied (no run)
+python migrations/runner.py stamp all          # record every migration as applied
+python migrations/runner.py stamp 001 --as historical   # record as never applicable here
+python migrations/runner.py apply              # run pending migrations in revision order
+python migrations/runner.py apply --up-to 008  # run pending migrations up to 008
 ```
 
-Each row records the revision, filename, `status` (currently `applied`),
-and the stamp time and operator (`applied_at`, `applied_by`); the
-`duration_ms`, `error` and `file_hash` columns are reserved for phase-3
-execution auditing (#27). Stamping records a migration as applied
-WITHOUT running it — the baseline bootstrap for environments that
-predate the ledger. **Update the mirror below in the same PR that adds
-a migration**, and correct it whenever an environment's status changes.
+Each row records the revision, filename, `status`, the stamp/run time
+and operator (`applied_at`, `applied_by`), and for failures the error
+text; the `duration_ms` and `file_hash` columns are reserved for
+phase-3 execution auditing (#27). Statuses:
+
+- `applied` — `upgrade()` ran to completion (or the row was stamped for
+  a baseline bootstrap)
+- `failed` — `upgrade()` raised; the error is recorded and `apply`
+  stops there (later migrations are not run). The next `apply` retries
+  the failed revision first — a success overwrites the failure row.
+- `historical` — recorded as never applicable to this environment
+  (e.g. 001–002 on dev: the migration predates the current topology and
+  its tables do not exist here). `apply` never runs a historical
+  revision.
+
+`stamp` records a status WITHOUT running anything — the baseline
+bootstrap and ledger-correction tool. **Update the mirror below in the
+same PR that adds a migration**, and correct it whenever an
+environment's status changes.
 
 Dev was baselined on 2026-10-03: `ensure` + `stamp 003`–`009`. 001–002
-could not be stamped: their target tables (`assignments`, `submissions`)
-are absent from both dev Postgres databases (verified by `to_regclass`
-against `campus.auth-postgres` and `campus.api-postgres` on 2026-10-03)
-— they predate the current service topology and remain historical only.
-Statuses below verified as of 2026-10-03.
+could not be stamped applied: their target tables (`assignments`,
+`submissions`) are absent from both dev Postgres databases (verified by
+`to_regclass` against `campus.auth-postgres` and `campus.api-postgres`
+on 2026-10-03) — they predate the current service topology. With the
+phase-2 runner they are recorded `--as historical`, so `status` reads
+up to date and `apply` is a no-op on dev. Statuses below verified as of
+2026-10-03.
 
 | Migration | Target | Purpose | Dev | Prod |
 |-----------|--------|---------|-----|------|
-| 001_add_assignments_table | Postgres | `assignments` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); not in ledger | not stood up |
-| 002_add_submissions_table | Postgres | `submissions` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); not in ledger | not stood up |
+| 001_add_assignments_table | Postgres | `assignments` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | not stood up |
+| 002_add_submissions_table | Postgres | `submissions` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | not stood up |
 | 003_add_api_traces_table | Postgres | `spans` table for audit tracing | applied (verified 2026-10-01; stamped 2026-10-03) | not stood up |
 | 004_add_vault_clients_public_columns | Postgres | public-client columns on `vault_clients` | applied (self-healed, verified 2026-09-29; stamped 2026-10-03) | not stood up |
 | 005_backfill_scope_string | Mongo | RFC 6749 scope-string rewrite + token field backfill | applied (2026-09-30; stamped 2026-10-03) | not stood up |
@@ -174,11 +197,10 @@ does **not** meet; they are the remaining scope of issue #27:
   (#744, 2026-10-03): the `_migrations` table and the
   `migrations/runner.py` `ensure|stamp|status` commands; dev is stamped
   and `status` matches the mirror above.
-- **Runner / CLI** — nothing yet enforces ordering, checks what is
-  pending before a deploy, or wraps execution; each run is a hand-typed
-  command with hand-checked preconditions. (Phase 2, #745, adds the
-  `apply` subcommand; the ledger runner exists but does not execute
-  migrations.)
+- **Runner / CLI** — CLOSED by phase 2 (#745, 2026-10-03): `apply`
+  enforces revision ordering, reports/records pending state, wraps each
+  migration with success/failure ledger rows, and stops on failure;
+  `--up-to` bounds deliberate partial runs.
 - **Rollback tooling** — `downgrade()` exists in every file but has never
   been exercised as part of a process, and data rewrites (005-style)
   cannot restore overwritten values.
