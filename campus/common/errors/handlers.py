@@ -166,11 +166,13 @@ def handle_token_error(
 
 def handle_werkzeug_error(
         err: werkzeug.exceptions.HTTPException
-) -> tuple[JsonDict, int]:
+) -> tuple[JsonDict, int] | tuple[JsonDict, int, dict[str, str]]:
     """Handle werkzeug errors.
 
     This function is used to handle werkzeug errors and return
-    standardised JSON responses.
+    standardised JSON responses. Every HTTPException is mapped to its
+    own status code and error code so that client errors (405, 400, ...)
+    are not masked as 500 INTERNAL_ERROR (#700).
 
     Reference: https://flask.palletsprojects.com/en/stable/errorhandling/
     """
@@ -181,8 +183,34 @@ def handle_werkzeug_error(
         case werkzeug.exceptions.InternalServerError():
             logger.exception("InternalServerError in %s: %s", module, err)
             return api_errors.InternalError().to_dict(), 500
+        case _ if err.code is None:
+            # Bare HTTPException carries no status code; treat as a server error
+            logger.exception("HTTPException in %s: %s", module, err)
+            return api_errors.InternalError().to_dict(), 500
         case _:
-            raise err
+            # Every other werkzeug HTTPException carries its own status code
+            # (405 MethodNotAllowed, 400 BadRequest, 415 UnsupportedMediaType, ...).
+            # Re-raising here fell through to the generic 500 handler, so client
+            # errors surfaced as 500 INTERNAL_ERROR (#700).
+            status = err.code
+            # "Method Not Allowed" -> "METHOD_NOT_ALLOWED"
+            error_code = str(err.name).upper().replace(" ", "_").replace("-", "_")
+            api_err = api_errors.APIError(
+                message=err.description or err.name,
+                error_code=error_code,
+            )
+            api_err.status_code = status
+            log_error_by_status(api_err, error_label="HTTPException")
+            headers: dict[str, str] = {}
+            if (
+                    isinstance(err, werkzeug.exceptions.MethodNotAllowed)
+                    and err.valid_methods
+            ):
+                # 405 responses MUST identify the allowed methods (RFC 9110)
+                headers["Allow"] = ", ".join(err.valid_methods)
+            if headers:
+                return api_err.to_dict(), status, headers
+            return api_err.to_dict(), status
 
 
 def handle_generic_error(err: Exception) -> tuple[JsonDict, int]:
