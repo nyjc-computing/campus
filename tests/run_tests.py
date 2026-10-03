@@ -92,6 +92,63 @@ def get_python_executable() -> str:
     return "python"
 
 
+def is_linked_worktree() -> bool:
+    """True when project_root is a linked git worktree, not the main
+    checkout.
+
+    Best-effort: any git failure returns False so the no-venv guard
+    below never blocks a working setup over tooling detection.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir", "--git-common-dir"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        git_dir, common_dir = result.stdout.split()
+        return Path(git_dir).resolve() != Path(common_dir).resolve()
+    except Exception:
+        return False
+
+
+def guard_worktree_venv() -> int:
+    """Refuse to run in a linked worktree that has no .venv.
+
+    Without a venv the runner silently falls back to whatever
+    interpreter is on PATH, and failures then look like code bugs (a
+    stale system site-packages campus_python broke contract tests with
+    an unrelated env error) instead of naming the actual cause. Linked
+    worktrees are created via scripts/worktree.py, which builds the
+    venv; a venv-less one means it was created manually or with
+    --no-venv. Never triggers in the main checkout or CI checkouts
+    (neither is a linked worktree).
+    """
+    if get_venv_executable("python") or not is_linked_worktree():
+        return 0
+    try:
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except Exception:
+        branch = "<type>/<slug>"
+    print(
+        "Error: this worktree has no .venv, so tests would run against "
+        "an arbitrary\nsystem Python — failures would look like code "
+        "bugs rather than the missing\nvenv. Recreate the worktree with "
+        "its venv (single-use policy):\n"
+        f"    python scripts/worktree.py remove {branch}\n"
+        f"    python scripts/worktree.py new {branch}\n"
+        'See docs/CONTRIBUTING.md, "Concurrent Work Streams (Worktrees)".'
+    )
+    return 1
+
+
 def set_test_environment() -> None:
     """Set environment variables for testing."""
     os.environ.setdefault("ENV", "testing")
@@ -284,6 +341,11 @@ Exit codes:
     )
 
     args = parser.parse_args()
+
+    # Structural gate before anything runs: a venv-less linked worktree
+    # must name its cause instead of producing phantom test failures.
+    if (code := guard_worktree_venv()) != 0:
+        return code
 
     # Determine timeout value
     timeout = None

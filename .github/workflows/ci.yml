@@ -6,11 +6,22 @@ name: CI
 # checks sit on "Expected — waiting for status to be reported" forever,
 # which made docs-only PRs unmergeable (#706). Docs-only change sets are
 # no-opped by the `changes` job plus per-step gating below instead.
+#
+# Deliberately NO branches filter on pull_request either: stacked PRs
+# (base = the branch of the PR below them, the #755 worktree-SOP way of
+# merging series) must get CI on every link — a base filter left stacked
+# links with no checks at all (#733 Phase 2: three stacked PRs could only
+# be validated by a local union run). A PR run builds head ⊕ base, which
+# for a stacked link is exactly the content that reaches `weekly` when
+# that link merges, so per-link runs are the correct validation point.
+# The `changes` job + step gating keep docs-only links cheap, and PR
+# events fire on head updates only — pushes to a base branch cannot loop
+# CI. The weekly ruleset is unaffected: it only applies to PRs targeting
+# `weekly`, whose checks were already being reported.
 on:
   push:
     branches: [main, staging, weekly]
   pull_request:
-    branches: [main, staging, weekly]
     types: [opened, synchronize, reopened, ready_for_review]
 
 env:
