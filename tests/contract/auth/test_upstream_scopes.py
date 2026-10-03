@@ -1,15 +1,15 @@
 """HTTP contract tests for upstream (third-party provider) scopes.
 
-These tests verify Campus's hosted incremental authorization for
-upstream providers (#705), per docs/auth-token-invariants.md B3:
+These tests verify Campus's upstream scope mechanics
+(docs/auth-token-invariants.md B3):
 
 - The Google authorize endpoint merges requested upstream scopes with
   the proxy's base scopes (email, profile) and forwards them to
   Google with include_granted_scopes=true.
-- The campus /authorize endpoint caps upstream scope requests against
-  the requesting client's registered upstream_scopes allowlist —
-  fail-closed: a client with no entry for a provider may request none
-  of that provider's scopes.
+- The campus /authorize endpoint REJECTS the login-time
+  upstream_scope parameter outright (#733 Phase 2 retirement: login
+  never carries upstream scopes; integrations connect via the
+  per-integration connect flow).
 - Client registration round-trips the upstream_scopes allowlist.
 """
 
@@ -121,36 +121,14 @@ class TestUpstreamScopesContract(unittest.TestCase):
             ["email", CLASSROOM_ROSTERS, "profile"],
         )
 
-    def test_authorize_forwards_allowed_upstream_scope(self):
-        """B3: upstream scopes within the allowlist reach the Google leg."""
+    def test_authorize_rejects_upstream_scope_despite_allowlist(self):
+        """#733 Phase 2: upstream_scope at /authorize is retired and
+        refused outright — even for a client whose allowlist would
+        have permitted the scopes."""
         client_id = self._create_client({"google": [CLASSROOM_ROSTERS]})
         session_id = self._create_session(client_id)
 
-        response = self.client.get(
-            "/auth/v1/authorize",
-            query_string={
-                "client_id": client_id,
-                "response_type": "code",
-                "redirect_uri": REGISTERED_URI,
-                "state": session_id,
-                "upstream_scope": CLASSROOM_ROSTERS,
-            },
-        )
-
-        self.assertEqual(response.status_code, 302)
-        location = response.headers.get("Location", "")
-        self.assertIn("/auth/v1/google/authorize", location)
-        self.assertIn("classroom.rosters", location)
-
-    def test_authorize_with_upstream_scope_warns_deprecated(self):
-        """Deprecated-call telemetry (#733): upstream_scope at /authorize
-        is logged + audited as a deprecated call but still succeeds."""
-        client_id = self._create_client({"google": [CLASSROOM_ROSTERS]})
-        session_id = self._create_session(client_id)
-
-        with self.assertLogs(
-                "campus.auth.provider", level="WARNING"
-        ) as captured:
+        with self.assertNoLogs("campus.auth.provider", level="WARNING"):
             response = self.client.get(
                 "/auth/v1/authorize",
                 query_string={
@@ -162,10 +140,10 @@ class TestUpstreamScopesContract(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(
-            any("Deprecated upstream_scope" in message for message in captured.output)
-        )
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
+        self.assertIn("retired", data["error"]["message"])
 
     def test_authorize_without_upstream_scope_does_not_warn(self):
         """Deprecated-call telemetry (#733): a plain authorize request
@@ -187,7 +165,9 @@ class TestUpstreamScopesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
 
     def test_authorize_rejects_unallowed_upstream_scope(self):
-        """B3: upstream scopes beyond the allowlist fail fail-closed."""
+        """#733 Phase 2: upstream_scope is refused with
+        AUTH_INVALID_SCOPE (the allowlist gate that preceded the
+        outright rejection)."""
         client_id = self._create_client({"google": []})
         session_id = self._create_session(client_id)
 
@@ -207,7 +187,8 @@ class TestUpstreamScopesContract(unittest.TestCase):
         self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
 
     def test_client_without_upstream_entry_rejects_any_upstream_scope(self):
-        """B3: no allowlist entry for a provider allows no extras."""
+        """#733 Phase 2: upstream_scope is refused outright, allowlist
+        entry or not."""
         client_id = self._create_client()
         session_id = self._create_session(client_id)
 

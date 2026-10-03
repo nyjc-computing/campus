@@ -46,7 +46,7 @@ from campus.common import env, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import secret, url, utc_time
 
-from . import get_yapper, resources, scopes
+from . import resources, scopes
 
 logger = logging.getLogger(__name__)
 
@@ -114,13 +114,12 @@ def authorize(
             Space-separated list of Campus scopes requested by the
             client; must be within the session's scopes.
         - upstream_scope: str (optional)
-            Space-separated upstream (Google) scopes requested on
-            behalf of the client, e.g. Classroom API scopes. Validated
-            against the client's registered upstream_scopes allowlist
-            (fail-closed); excess requests are rejected.
-            Deprecated: integration scopes belong on the per-integration
-            connect/broker routes; calls are warned + audited and the
-            parameter is slated for removal.
+            RETIRED (#733): rejected outright with 400 invalid_scope.
+            Login never carries upstream scopes; integrations connect
+            via the per-integration connect flow
+            (/auth/v1/google/<integration>/authorize). The parameter
+            itself is removed once this rejection has been live for
+            its deprecation window.
         - state: str
             Opaque value used by the client to maintain state between
             request and callback.
@@ -155,22 +154,19 @@ def authorize(
     # Check if client exists
     client = resources.client[client_id].get()
 
-    # Deprecation telemetry (pre-implementation for #733): the
-    # login-time upstream_scope parameter is slated for retirement once
-    # the per-integration connect flow replaces it. These events are
-    # the who-still-uses-old-paths inventory that gates that removal.
+    # Retired (#733 Phase 2): the login-time upstream_scope parameter
+    # is refused outright now that no callers remain (telemetry: the
+    # pre-implementation deprecated_call events + the consumer sweep).
+    # Integration scopes are obtained exclusively through the
+    # per-integration connect flow; the parameter itself is removed
+    # once this rejection has been live for its deprecation window.
     if upstream_scope:
-        logger.warning(
-            "Deprecated upstream_scope on /authorize (client %s): %s",
-            client_id,
-            upstream_scope,
+        raise auth_errors.InvalidScopeError(
+            "upstream_scope is retired: login never carries upstream "
+            "scopes. Integrations connect via the integrations page "
+            "(/auth/v1/google/<integration>/authorize)",
+            disallowed_scopes=scopes.parse(upstream_scope),
         )
-        get_yapper().emit('campus.auth.deprecated_call', {
-            "endpoint": "authorize",
-            "client_id": str(client_id),
-            "param": "upstream_scope",
-            "requested_scopes": scopes.parse(upstream_scope),
-        })
 
     # RFC 6749 §3.1.2.2: validate the request's redirect_uri against the
     # client's registered redirect_uris. §4.1.2.1 requires rejecting the
