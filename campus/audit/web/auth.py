@@ -32,7 +32,9 @@ campus.auth.provider) server-side:
    cookie session, then sends the browser to the trace list. The token
    is never exposed to browser JS.
 4. GET /audit/logout revokes the token (best-effort), clears the
-   session, and redirects to the landing page.
+   session, and routes the browser through the auth service's
+   /auth/v1/logout (clearing the campusauth SSO cookie, #791) back to
+   the landing page.
 
 Configuration (fail-closed: the UI is unusable without it):
 
@@ -465,7 +467,7 @@ def create_blueprint() -> flask.Blueprint:
     @bp.route('/logout')
     def logout() -> werkzeug.Response:
         """Revoke the access token (best-effort), clear the session,
-        and return the visitor to the landing page.
+        and sign the browser out of the campusauth SSO session.
         """
         session_data = flask.session.pop(SESSION_KEY, None)
         flask.session.pop(LOGIN_STATE_KEY, None)
@@ -477,6 +479,16 @@ def create_blueprint() -> flask.Blueprint:
             else:
                 auth.revoke_token(session_data["access_token"])
         flask.flash("You have been signed out of the Audit Web UI.")
-        return flask.redirect(flask.url_for("audit_ui.index"))
+        # Route the browser through the auth service's browser-session
+        # logout (#791): the OAuth login left a live campusauth SSO
+        # cookie that outlives this session. The landing page rides
+        # along as post_logout_redirect_uri — the auth service honors
+        # it when this deployment's origin is a registered client
+        # redirect_uri origin (#789), otherwise lands on its own "/".
+        auth_logout_url = url.add_query(
+            f"{_get_base_url()}/auth/v1/logout",
+            post_logout_redirect_uri=url.full_url_for("audit_ui.index"),
+        )
+        return flask.redirect(auth_logout_url)
 
     return bp

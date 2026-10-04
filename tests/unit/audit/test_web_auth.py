@@ -31,6 +31,7 @@ import os
 import time
 import unittest
 from unittest import mock
+from urllib.parse import parse_qs, urlparse
 
 import flask
 
@@ -128,6 +129,10 @@ class TestAuditWebAuthGate(unittest.TestCase):
         # must be present for non-fail-closed paths. USER_ID is on the
         # admin allowlist so the authenticated tests below see 200s.
         env_patch = mock.patch.dict(os.environ, {
+            # ENV is pinned: get_base_url("campus.auth") resolves to the
+            # canonical origin under testing; the developer shell may
+            # carry its own ENV (setdefault would not override it).
+            "ENV": "testing",
             "PUBLIC_URL": PUBLIC_URL,
             "AUDIT_OAUTH_CLIENT_ID": CLIENT_ID,
             "AUDIT_OAUTH_CLIENT_SECRET": CLIENT_SECRET,
@@ -409,14 +414,21 @@ class TestAuditWebAuthGate(unittest.TestCase):
         self.assertIn(b"access_denied", response.data)
 
     def test_logout_clears_session_revokes_token_and_redirects(self):
-        """Logout revokes the token, redirects to the landing page, and
+        """Logout revokes the token, routes the browser through the
+        auth-service logout carrying the landing target (#791), and
         re-gates the protected pages."""
         self._log_in()
 
         response = self.client.get("/audit/logout")
 
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.headers["Location"].endswith("/audit/"))
+        location = urlparse(response.headers["Location"])
+        self.assertEqual(location.scheme + "://" + location.netloc, PUBLIC_URL)
+        self.assertEqual(location.path, "/auth/v1/logout")
+        self.assertEqual(
+            parse_qs(location.query)["post_logout_redirect_uri"],
+            [f"{PUBLIC_URL}/audit/"]
+        )
         revoke_posts = [
             (path, body) for path, body in FakeAuthClient.calls
             if path == "/auth/v1/oauth/revoke"
