@@ -61,7 +61,7 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
             "key_hash": secret.hash_api_key(raw_api_key),  # Store the hash
             "name": "Test Auth Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
         # Lazy import storage to avoid initializing before test mode
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -225,7 +225,7 @@ class TestAuditAPIKeysListContract(unittest.TestCase):
             "key_hash": secret.hash_api_key(raw_api_key),
             "name": "Test Auth Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
         # Lazy import storage to avoid initializing before test mode
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -345,7 +345,7 @@ class TestAuditAPIKeyGetContract(unittest.TestCase):
             "key_hash": secret.hash_api_key(raw_api_key),
             "name": "Test Auth Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
         # Lazy import storage to avoid initializing before test mode
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -433,7 +433,7 @@ class TestAuditAPIKeyUpdateContract(unittest.TestCase):
             "key_hash": secret.hash_api_key(raw_api_key),
             "name": "Test Auth Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
         # Lazy import storage to avoid initializing before test mode
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -563,7 +563,7 @@ class TestAuditAPIKeyRevokeContract(unittest.TestCase):
             "key_hash": secret.hash_api_key(raw_api_key),
             "name": "Test Auth Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
         # Lazy import storage to avoid initializing before test mode
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -670,7 +670,7 @@ class TestAuditAPIKeyRegenerateContract(unittest.TestCase):
             "key_hash": secret.hash_api_key(raw_api_key),
             "name": "Test Auth Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
         # Lazy import storage to avoid initializing before test mode
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -786,7 +786,7 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
             "key_hash": secret.hash_api_key(raw_api_key),
             "name": "Test Auth Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
         apikeys_storage = campus.storage.tables.get_db("apikeys")
         apikeys_storage.insert_one(test_key_record)
@@ -823,7 +823,7 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
             "key_hash": secret.hash_api_key(expired_key_value),
             "name": "Expired Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
             "expires_at": schema.DateTime.utcafter(days=-1),  # Expired
         }
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -856,7 +856,7 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
             "key_hash": secret.hash_api_key(revoked_key_value),
             "name": "Revoked Key",
             "owner_id": "test-user",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
             "revoked_at": schema.DateTime.utcnow(),  # Revoked
         }
         apikeys_storage = campus.storage.tables.get_db("apikeys")
@@ -1013,6 +1013,119 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+
+class TestAuditAPIKeysScopeGateContract(unittest.TestCase):
+    """apikeys routes require apikeys:* scopes (#796).
+
+    A key that authenticates successfully but holds only other scopes
+    (e.g. a traces-only producer key) must get 403 on every management
+    route — authentication alone is not authorization.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.initialize()
+        cls.app = cls.manager.audit_app
+
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+        assert self.app
+        self.client = self.app.test_client()
+
+    def _insert_key(self, scopes: list[str]) -> str:
+        """Insert an API key with the given scopes; return the plaintext."""
+        from campus.common.utils import secret, uid
+
+        raw_api_key = secret.generate_audit_api_key()
+        test_key_record = {
+            "id": uid.generate_category_uid("apikey", length=16),
+            "created_at": schema.DateTime.utcnow(),
+            "key_hash": secret.hash_api_key(raw_api_key),
+            "name": f"Scoped Key ({','.join(scopes)})",
+            "owner_id": "test-user",
+            "scopes": scopes,
+        }
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        apikeys_storage.insert_one(test_key_record)
+        return raw_api_key
+
+    def test_traces_only_key_gets_403_on_all_management_routes(self):
+        """A traces-scoped (producer) key gets 403 everywhere on /apikeys."""
+        headers = {
+            "Authorization": f"Bearer {self._insert_key(['traces:read', 'traces:write'])}",
+            "Content-Type": "application/json",
+        }
+        target_id = "uid-apikey-doesnotexist0"
+
+        self.assertEqual(
+            self.client.get("/audit/v1/apikeys/", headers=headers).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/audit/v1/apikeys/",
+                json={"name": "K", "owner_id": "u", "scopes": ["read"]},
+                headers=headers,
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.get(
+                f"/audit/v1/apikeys/{target_id}/", headers=headers
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.patch(
+                f"/audit/v1/apikeys/{target_id}/",
+                json={"name": "K"},
+                headers=headers,
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.delete(
+                f"/audit/v1/apikeys/{target_id}/", headers=headers
+            ).status_code,
+            403,
+        )
+        self.assertEqual(
+            self.client.post(
+                f"/audit/v1/apikeys/{target_id}/regenerate",
+                headers=headers,
+            ).status_code,
+            403,
+        )
+
+    def test_read_scoped_key_can_list_but_not_mutate(self):
+        """apikeys:read allows reads; apikeys:write is required for mutations."""
+        read_headers = {
+            "Authorization": f"Bearer {self._insert_key(['apikeys:read'])}",
+            "Content-Type": "application/json",
+        }
+
+        self.assertEqual(
+            self.client.get("/audit/v1/apikeys/", headers=read_headers).status_code,
+            200,
+        )
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={"name": "K", "owner_id": "u", "scopes": ["read"]},
+            headers=read_headers,
+        )
+        self.assertEqual(response.status_code, 403)
+        error = response.get_json()["error"]
+        self.assertEqual(error["code"], "FORBIDDEN")
+        self.assertIn("apikeys:write", error["message"])
 
 
 if __name__ == "__main__":

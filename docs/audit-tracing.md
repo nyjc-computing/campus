@@ -69,18 +69,28 @@ table is the only accepted scheme.
 
 ## Minting and bootstrapping keys
 
-The key CRUD endpoints (`/audit/v1/apikeys`) themselves require an
-authenticated `audit_v1_` key, so the **first** key must be seeded
-out-of-band:
+Key scopes follow the `#575` model: producers hold `traces:*` scopes
+(`traces:write` to ingest spans, `traces:read`/`traces:search` to
+query); the **operator key** holds `apikeys:read`/`apikeys:write`,
+which gate all `/audit/v1/apikeys` routes (#796). A producer key can
+neither create keys nor elevate itself.
 
-1. **Bootstrap (no key exists yet):** generate a key with the same
-   format as `campus.common.utils.secret.generate_audit_api_key()`
-   (`audit_v1_` + 22-char base64url), insert
-   `sha256(key)` (hex, per `hash_api_key`) into the audit DB's
-   `apikeys` table (`key_hash` column, `revoked_at` NULL), e.g. over
-   the database's public proxy. Keep the plaintext for the producer env.
-2. **Subsequent keys:** `POST /audit/v1/apikeys/` with the existing key
-   (name, owner_id, scopes); the response contains the plaintext key.
+**Bootstrap (operator key):** set `AUDIT_OPERATOR_API_KEY=<plaintext>`
+on the campus.audit deployment. The service seeds it at startup under
+the fixed id `uid-apikey-operator-0000` (config:
+`AUDIT_OPERATOR_API_KEY_ID`) with `AUDIT_OPERATOR_API_KEY_SCOPES`,
+following the same idempotent startup-seed pattern as campus.auth's
+public client: an existing record is never modified — rotate by
+deleting that record and restarting with a new value. Manual recovery /
+initial setup: `AUDIT_OPERATOR_API_KEY=… python
+scripts/seed_audit_operator_key.py`. Generate the plaintext with
+`secret.generate_audit_api_key()` (`audit_v1_` + 22-char base64url);
+keep it out of the repo.
+
+**Subsequent (producer) keys:** `POST /audit/v1/apikeys/` with the
+operator key (name, owner_id, `scopes` such as
+`"traces:write,traces:read"`); the response contains the plaintext.
+Set it as `AUDIT_API_KEY` on the producer.
 
 Verify a key works: `GET /audit/v1/traces/` with
 `Authorization: Bearer <key>` → 200 (401 on failure).

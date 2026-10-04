@@ -81,6 +81,25 @@ DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 # ensure_public_client) so it cannot be missing after a database reset.
 PUBLIC_OAUTH_CLIENT_ID = "guest"
 
+# Audit service operator API key (#796). Stored under this fixed id in
+# the audit DB's apikeys table; seeded at audit service startup from the
+# AUDIT_OPERATOR_API_KEY env var (see campus.audit.resources.apikeys.
+# ensure_operator_key). This is the only key class that holds the
+# apikeys:* scopes, so key management survives the loss of every other
+# key. Rotation: delete this record and restart with a new env value.
+AUDIT_OPERATOR_API_KEY_ID = "uid-apikey-operator-0000"
+
+# Scopes seeded on the operator key: full API-key management plus every
+# traces scope, so one operator key can administer a deployment (and
+# re-seed producer keys) without further bootstrap.
+AUDIT_OPERATOR_API_KEY_SCOPES = [
+    "apikeys:read",
+    "apikeys:write",
+    "traces:read",
+    "traces:write",
+    "traces:search",
+]
+
 # Scopes requested by CLI/device apps (RFC 8628). The seeded public
 # client's allowlist is exactly this set, and device_authorize defaults
 # to it when the caller does not name scopes.
