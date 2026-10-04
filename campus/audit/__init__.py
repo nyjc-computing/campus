@@ -201,3 +201,45 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         # Lazy import to allow env setup
         from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY")
+
+    # Ensure the operator API key exists so API-key management survives
+    # the loss of every other key (#796). Runs on every startup
+    # (idempotent) so a database reset self-heals on the next deploy.
+    # Same loud-but-non-fatal policy as campus.auth's _seed_public_client.
+    _seed_operator_key()
+
+
+def _seed_operator_key() -> None:
+    """Seed the operator API key, logging loudly on failure.
+
+    The operator key cannot be created through the authenticated HTTP
+    API (chicken-and-egg: apikeys:write requires a key that holds it),
+    so it is seeded directly against storage from the
+    AUDIT_OPERATOR_API_KEY env var. A no-op when the variable is unset.
+
+    Failure to seed is logged at ERROR level with the recovery command
+    but does not abort startup, so an unrelated seed failure does not
+    take down the rest of the audit service.
+    """
+    import campus.config
+    from campus.common import env
+
+    if not env.get("AUDIT_OPERATOR_API_KEY"):
+        logger.debug(
+            "AUDIT_OPERATOR_API_KEY not set; skipping operator key seed"
+        )
+        return
+    try:
+        from .resources.apikeys import ensure_operator_key
+        if ensure_operator_key():
+            logger.info(
+                "Seeded audit operator key '%s'",
+                campus.config.AUDIT_OPERATOR_API_KEY_ID,
+            )
+    except Exception:
+        logger.exception(
+            "Failed to seed audit operator key '%s': API-key management "
+            "will be unavailable until the key exists. Recover with: "
+            "python scripts/seed_audit_operator_key.py",
+            campus.config.AUDIT_OPERATOR_API_KEY_ID,
+        )

@@ -15,9 +15,11 @@ File: tests/integration/test_audit_apikeys_lifecycle.py
 Issue: #541, #570
 """
 
+import os
 import unittest
 from contextlib import suppress
 
+import campus.config
 import campus.storage
 from campus.common import schema
 from campus.common.utils import secret, uid
@@ -70,7 +72,10 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         super().tearDown()  # Uses new API: flush_async()
 
     def _create_admin_api_key(self) -> tuple[str, str]:
-        """Create an admin API key for testing.
+        """Create an API key that can manage keys, for testing.
+
+        Holds the apikeys:* scopes the #796 gate requires on the
+        management routes (mirrors the seeded operator key).
 
         Returns:
             Tuple of (raw_api_key, api_key_id)
@@ -86,7 +91,7 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
             "key_hash": secret.hash_api_key(raw_api_key),
             "name": "Admin Key",
             "owner_id": "admin",
-            "scopes": ["admin"],
+            "scopes": ["apikeys:read", "apikeys:write"],
         }
 
         # Insert into storage
@@ -120,7 +125,7 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         body = {
             "name": "Test Lifecycle Key",
             "owner_id": "test-user",
-            "scopes": ["read", "write"],
+            "scopes": ["apikeys:read", "apikeys:write"],
             "rate_limit": 100,
         }
         body.update(overrides)
@@ -392,6 +397,225 @@ class TestAuditAPIKeyLifecycle(IsolatedIntegrationTestCase):
         record = apikeys_storage.get_by_id(api_key_id)
         self.assertIsNotNone(record)
         self.assertIsNotNone(record.get("revoked_at"))
+
+
+class TestAuditAPIKeyScopeGate(IsolatedIntegrationTestCase):
+    """Scope gate on the apikeys routes (#796).
+
+    Authentication alone is not authorization: a key without the
+    apikeys:* scopes (e.g. a traces-only producer key) must get 403 on
+    management routes, even when targeting its own record.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.audit_app = cls.manager.audit_app
+
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
+    def setUp(self):
+        super().setUp()
+
+        assert self.audit_app, "Audit app not initialized"
+        self.client = self.audit_app.test_client()
+
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        with suppress(campus.storage.errors.NoChangesAppliedError):
+            apikeys_storage.delete_matching({})
+
+    def _insert_key(self, scopes: list[str]) -> str:
+        """Insert an API key with the given scopes; return the plaintext."""
+        raw_api_key = secret.generate_audit_api_key()
+        api_key_record = {
+            "id": uid.generate_category_uid("apikey", length=16),
+            "created_at": schema.DateTime.utcnow(),
+            "key_hash": secret.hash_api_key(raw_api_key),
+            "name": f"Scoped Key ({','.join(scopes)})",
+            "owner_id": "test-user",
+            "scopes": scopes,
+        }
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        apikeys_storage.insert_one(api_key_record)
+        return raw_api_key
+
+    def test_key_cannot_elevate_its_own_scopes(self):
+        """A traces-only key PATCHing its own record to full scopes gets 403.
+
+        This is the exact self-elevation path that motivated #796.
+        """
+        own_key = self._insert_key(["traces:read", "traces:write"])
+        # Fetch this key's id from storage (only its hash is stored)
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        record = apikeys_storage.get_matching(
+            {"key_hash": secret.hash_api_key(own_key)}
+        )[0]
+
+        response = self.client.patch(
+            f"/audit/v1/apikeys/{record['id']}/",
+            json={"scopes": ["*"]},
+            headers={"Authorization": f"Bearer {own_key}"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        # The scopes were not changed
+        self.assertEqual(
+            apikeys_storage.get_by_id(record["id"])["scopes"],
+            ["traces:read", "traces:write"],
+        )
+
+    def test_operator_style_key_can_manage_keys_end_to_end(self):
+        """A key with apikeys:* scopes can create and revoke keys."""
+        operator_key = self._insert_key(
+            ["apikeys:read", "apikeys:write", "traces:write"]
+        )
+        headers = {"Authorization": f"Bearer {operator_key}"}
+
+        created = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Producer Key",
+                "owner_id": "test-user",
+                "scopes": ["traces:write", "traces:read"],
+            },
+            headers=headers,
+        )
+        self.assertEqual(created.status_code, 201)
+        producer = created.get_json()
+
+        # The created producer key can authenticate but not manage
+        producer_headers = {"Authorization": f"Bearer {producer['api_key']}"}
+        self.assertEqual(
+            self.client.get(
+                "/audit/v1/apikeys/", headers=producer_headers
+            ).status_code,
+            403,
+        )
+
+        # The operator key revokes it
+        self.assertEqual(
+            self.client.delete(
+                f"/audit/v1/apikeys/{producer['id']}/", headers=headers
+            ).status_code,
+            204,
+        )
+
+
+class TestOperatorKeyBootstrap(IsolatedIntegrationTestCase):
+    """Startup bootstrap of the operator API key (#796).
+
+    Mirrors campus.auth's public-client seed: fixed id, seed-if-missing,
+    an existing record is never modified, plaintext from
+    AUDIT_OPERATOR_API_KEY.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.audit_app = cls.manager.audit_app
+
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
+    def setUp(self):
+        super().setUp()
+
+        assert self.audit_app, "Audit app not initialized"
+        self.client = self.audit_app.test_client()
+
+        self.operator_key_id = campus.config.AUDIT_OPERATOR_API_KEY_ID
+        self.operator_scopes = list(
+            campus.config.AUDIT_OPERATOR_API_KEY_SCOPES
+        )
+
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        with suppress(campus.storage.errors.NoChangesAppliedError):
+            apikeys_storage.delete_matching({})
+
+    def _seed(self, plaintext: str) -> bool:
+        """Run ensure_operator_key with AUDIT_OPERATOR_API_KEY set."""
+        from unittest.mock import patch
+
+        from campus.audit.resources.apikeys import ensure_operator_key
+
+        with patch.dict(
+            os.environ, {"AUDIT_OPERATOR_API_KEY": plaintext}
+        ):
+            return ensure_operator_key()
+
+    def test_seed_creates_operator_key_with_expected_scopes(self):
+        """ensure_operator_key seeds the fixed-id key from the env var."""
+        plaintext = secret.generate_audit_api_key()
+
+        self.assertTrue(self._seed(plaintext))
+
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        record = apikeys_storage.get_by_id(self.operator_key_id)
+        self.assertEqual(record["name"], "operator")
+        self.assertEqual(record["scopes"], self.operator_scopes)
+        self.assertEqual(
+            record["key_hash"], secret.hash_api_key(plaintext)
+        )
+
+    def test_seed_is_idempotent_and_never_modifies_existing(self):
+        """Re-seeding is a no-op; the stored hash is left untouched."""
+        plaintext = secret.generate_audit_api_key()
+        self.assertTrue(self._seed(plaintext))
+
+        # A different plaintext must not replace the existing record
+        self.assertFalse(self._seed(secret.generate_audit_api_key()))
+
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        record = apikeys_storage.get_by_id(self.operator_key_id)
+        self.assertEqual(
+            record["key_hash"], secret.hash_api_key(plaintext)
+        )
+
+    def test_seed_skipped_when_env_unset(self):
+        """No AUDIT_OPERATOR_API_KEY: no seed, no error."""
+        from unittest.mock import patch
+
+        from campus.audit.resources.apikeys import ensure_operator_key
+
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(ensure_operator_key())
+
+        apikeys_storage = campus.storage.tables.get_db("apikeys")
+        with self.assertRaises(campus.storage.errors.NotFoundError):
+            apikeys_storage.get_by_id(self.operator_key_id)
+
+    def test_seed_rejects_invalid_key_format(self):
+        """A malformed AUDIT_OPERATOR_API_KEY fails loudly (ValueError)."""
+        with self.assertRaises(ValueError):
+            self._seed("not-a-valid-audit-key")
+
+    def test_seeded_operator_key_manages_keys_via_api(self):
+        """The seeded key authenticates and manages keys over HTTP.
+
+        End-to-end proof of the bootstrap's purpose: from just the env
+        var, key management becomes available again.
+        """
+        plaintext = secret.generate_audit_api_key()
+        self.assertTrue(self._seed(plaintext))
+
+        headers = {"Authorization": f"Bearer {plaintext}"}
+        self.assertEqual(
+            self.client.get("/audit/v1/apikeys/", headers=headers).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.post(
+                "/audit/v1/apikeys/",
+                json={
+                    "name": "Producer Key",
+                    "owner_id": "test-user",
+                    "scopes": ["traces:write", "traces:read"],
+                },
+                headers=headers,
+            ).status_code,
+            201,
+        )
 
 
 if __name__ == "__main__":
