@@ -227,11 +227,15 @@ def authorize(
     # browser touch, so it issues (or reuses) the campus_journey cookie
     # and records the id on the auth session — the server-to-server
     # /token exchange reads it from there later, since that call never
-    # carries browser cookies.
+    # carries browser cookies. The id is also stashed in flask.g so this
+    # request's own span gets the tag too: the middleware runs after the
+    # handler, but it reads cookies from the request, which predates the
+    # Set-Cookie on this response.
     journey_id = (
         flask.request.cookies.get(campus.config.JOURNEY_COOKIE)
         or uid.generate_category_uid("journey")
     )
+    flask.g.journey_id = journey_id
     resources.session[PROVIDER][state].update(journey_id=journey_id)
 
     response = flask.redirect(oauth_authorize_url)
