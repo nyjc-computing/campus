@@ -399,7 +399,7 @@ button[type="reset"] {
 
 .waterfall-ruler {
     display: grid;
-    grid-template-columns: minmax(180px, 34%) 1fr 3.5rem;
+    grid-template-columns: minmax(180px, 30%) 1fr 4.5rem 4rem 3.5rem;
     font-size: 0.72rem;
     color: var(--audit-muted);
     border-bottom: 1px solid var(--audit-border);
@@ -419,7 +419,7 @@ button[type="reset"] {
 
 .wf-row {
     display: grid;
-    grid-template-columns: minmax(180px, 34%) 1fr 3.5rem;
+    grid-template-columns: minmax(180px, 30%) 1fr 4.5rem 4rem 3.5rem;
     align-items: center;
     gap: 0.5rem;
     padding: 0.18rem 0;
@@ -481,6 +481,15 @@ button[type="reset"] {
 .wf-bar.client-error { background: var(--status-client-error); }
 .wf-bar.server-error { background: var(--status-server-error); }
 .wf-bar.pending { background: var(--status-pending); }
+
+.wf-start,
+.wf-time {
+    font-size: 0.72rem;
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: var(--audit-muted);
+    text-align: right;
+    white-space: nowrap;
+}
 
 .wf-status {
     font-size: 0.8rem;
@@ -797,6 +806,6 @@ a.landing-card:hover {
 
     .waterfall-ruler,
     .wf-row {
-        grid-template-columns: minmax(140px, 45%) 1fr 2.6rem;
+        grid-template-columns: minmax(140px, 45%) 1fr 3.6rem 3.2rem 2.6rem;
     }
 }

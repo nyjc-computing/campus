@@ -6,6 +6,7 @@ These models represent trace spans and computed views/aggregations
 for the audit service, including trace trees and summaries.
 """
 
+import datetime
 import typing
 from dataclasses import dataclass, field
 
@@ -20,6 +21,35 @@ __all__ = [
     "TraceTree",
     "TraceSummary",
 ]
+
+# Fallback for span records with an unparseable started_at: sorts before
+# every real timestamp (all Campus timestamps are tz-aware UTC), so such
+# spans become the tree root rather than disappearing.
+_EPOCH_FALLBACK = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+
+
+def _parse_started_at(span: dict) -> datetime.datetime | None:
+    """Parse a span record's started_at into an aware UTC datetime.
+
+    Storage records carry the ISO string; in-memory dicts may already
+    hold a schema.DateTime (a str subclass).
+    """
+    value = span.get("started_at")
+    if isinstance(value, schema.DateTime):
+        return value.to_datetime()
+    try:
+        return schema.DateTime(str(value)).to_datetime()
+    except (TypeError, ValueError):
+        return None
+
+
+def _span_start_key(span: dict) -> tuple[datetime.datetime, str]:
+    """Deterministic sort key for spans: (started_at, span_id)."""
+    parsed = _parse_started_at(span)
+    return (
+        parsed if parsed is not None else _EPOCH_FALLBACK,
+        str(span.get("span_id") or ""),
+    )
 
 
 @dataclass(eq=False, kw_only=True)
@@ -348,6 +378,12 @@ class TraceTree(InternalModel):
     def from_spans(cls: type[typing.Self], spans: list[dict]) -> typing.Self:
         """Build a trace tree from flat span list.
 
+        The root is the earliest-started span without a parent. Spans
+        whose parent was not ingested (or additional root spans, which
+        can appear in traces assembled from propagated X-Request-IDs)
+        are adopted under the root, ordered by started_at, so every
+        span stays visible in the waterfall (#794).
+
         Args:
             spans: Flat list of span records from storage
 
@@ -360,18 +396,41 @@ class TraceTree(InternalModel):
         # Build span map for O(1) lookup
         span_map: dict[str, dict] = {s["span_id"]: {**s, "children": []} for s in spans}
 
-        # Find root and organize children
-        root_dict = None
+        # Wire children to parents; collect spans with no parent in the
+        # set (root spans, or orphans whose parent is missing) as tops.
+        tops: list[dict] = []
         for span in spans:
-            span_id = span["span_id"]
+            node = span_map[span["span_id"]]
             parent_id = span.get("parent_span_id")
-            if parent_id is None:
-                root_dict = span_map[span_id]
+            if parent_id is None or parent_id == span["span_id"]:
+                # Root span (normalize self-parenting, which would cycle)
+                node["parent_span_id"] = None
+                tops.append(node)
             elif parent_id in span_map:
-                span_map[parent_id]["children"].append(span_map[span_id])
+                span_map[parent_id]["children"].append(node)
+            else:
+                # Orphan: parent span not ingested; adopt under the root
+                node["parent_span_id"] = None
+                tops.append(node)
 
-        # Build tree nodes
-        root = cls._build_node(root_dict, 0, 0.0) if root_dict else None
+        if not tops:
+            # Defensive: every span is somebody's child, which requires a
+            # parent cycle. Break it at the earliest span.
+            earliest = min(span_map.values(), key=_span_start_key)
+            parent_id = earliest.get("parent_span_id")
+            earliest["parent_span_id"] = None
+            if parent_id in span_map:
+                siblings = span_map[parent_id]["children"]
+                siblings[:] = [
+                    s for s in siblings if s["span_id"] != earliest["span_id"]
+                ]
+            tops = [earliest]
+
+        tops.sort(key=_span_start_key)
+        root_dict = tops[0]
+        root_dict["children"].extend(tops[1:])
+        root_dict["children"].sort(key=_span_start_key)
+        root = cls._build_node(root_dict, 0, 0.0)
 
         return cls(root=root)
 
@@ -387,18 +446,22 @@ class TraceTree(InternalModel):
         Args:
             span_dict: Span dict with children array
             depth: Current depth in tree
-            offset: Current offset from parent
+            offset: Offset from parent start in ms
 
         Returns:
             TraceTreeNode with nested children
         """
-        children_duration = 0.0
+        parent_start = _parse_started_at(span_dict)
         child_nodes: list[TraceTreeNode] = []
 
         for child_dict in span_dict.get("children", []):
-            child = cls._build_node(child_dict, depth + 1, children_duration)
+            child_start = _parse_started_at(child_dict)
+            if parent_start is not None and child_start is not None:
+                child_offset = max(0.0, (child_start - parent_start).total_seconds() * 1000)
+            else:
+                child_offset = 0.0
+            child = cls._build_node(child_dict, depth + 1, child_offset)
             child_nodes.append(child)
-            children_duration = max(children_duration, child.offset + child.duration_ms)
 
         node = TraceTreeNode(
             span_id=span_dict["span_id"],

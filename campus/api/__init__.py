@@ -121,6 +121,16 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     global campus
     campus = campus_python.Campus(timeout=60)
 
+    # Propagate trace context on authenticate calls to campus.auth so the
+    # auth span ingests as a child of the api request's span (#794).
+    # In tests the SDK is patched to TestCampusRequest, which has no
+    # requests.Session; those requests get headers from tests.flask_test.
+    from campus.audit.middleware import tracing
+
+    session = getattr(campus.auth.client, "_session", None)
+    if session is not None:
+        tracing.instrument_requests_session(session)
+
     from . import routes
 
     # Organise API routes under api blueprint

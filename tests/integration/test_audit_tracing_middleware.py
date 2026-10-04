@@ -670,6 +670,204 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         # (allowing 10x tolerance due to timing variations)
         self.assertLess(duration_ms, actual_duration * 10)
 
+    # Test 11: Parent span intake (#794)
+    def test_parent_span_header_recorded(self):
+        """Test that inbound X-Parent-Span-ID is recorded on the span."""
+        parent_span_id = "c" * 16
+        custom_trace_id = "e" * 32
+        response = self.auth_client.get(
+            "/test/health",
+            headers={
+                "X-Request-ID": custom_trace_id,
+                "X-Parent-Span-ID": parent_span_id,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("X-Request-ID"), custom_trace_id)
+
+        span = self._wait_for_span(custom_trace_id)
+        assert span, "Span not ingested"
+        self.assertEqual(span["parent_span_id"], parent_span_id)
+
+    def test_without_parent_header_span_is_root(self):
+        """Test that spans without X-Parent-Span-ID stay root spans."""
+        response = self.auth_client.get("/test/health")
+
+        self.assertEqual(response.status_code, 200)
+        trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
+
+        span = self._wait_for_span(trace_id)
+        assert span, "Span not ingested"
+        self.assertIsNone(span["parent_span_id"])
+
+    def test_started_at_precedes_ingestion(self):
+        """Test that started_at reflects request start, not ingestion time.
+
+        started_at is captured in before_request (#794); it must be
+        strictly before the span's arrival in storage (async ingest).
+        """
+        from campus.common import schema
+
+        response = self.auth_client.get("/test/health")
+        self.assertEqual(response.status_code, 200)
+
+        ingested_at = schema.DateTime.utcnow()
+        trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
+
+        span = self._wait_for_span(trace_id)
+        assert span, "Span not ingested"
+
+        # The request completed before we polled; its span must start
+        # before the post-response timestamp
+        self.assertLessEqual(
+            schema.DateTime(str(span["started_at"])).to_datetime(),
+            ingested_at.to_datetime(),
+        )
+
+
+class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
+    """End-to-end propagation: api request spawns a child auth span.
+
+    An authenticated request to campus.api triggers an authenticate call
+    to campus.auth through the campus_python client. With trace context
+    propagation (#794), the auth span must ingest under the api span in
+    the same trace, so the waterfall shows the spawned request as a
+    child of the originating request.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """Set up services for the test class using new API."""
+        super().setUpClass()
+
+        from campus.audit.resources.traces import TracesResource
+
+        TracesResource.init_storage()
+
+        cls.auth_app = cls.manager.auth_app
+        cls.apps_app = cls.manager.apps_app
+        cls.audit_app = cls.manager.audit_app
+
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
+
+    def setUp(self):
+        """Set up test clients and clear trace storage."""
+        super().setUp()
+
+        assert self.apps_app, "API app not initialized in setUp"
+        self.api_client = self.apps_app.test_client()
+        self.audit_client = self.audit_app.test_client()
+        self.basic_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+        self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
+
+        import campus.storage
+        from campus.audit.middleware import tracing
+        from campus.audit.resources.traces import traces_storage
+
+        tracing._audit_client = None
+        # Fresh executor per test: a previous class's teardown may have
+        # shut it down (spans would be silently dropped, #496)
+        tracing.recreate_executor()
+        with suppress(campus.storage.errors.NoChangesAppliedError):
+            traces_storage.delete_matching({})
+
+    def tearDown(self):
+        """Restore executor state between tests."""
+        super().tearDown()
+
+        from campus.audit.middleware import tracing
+        tracing._audit_client = None
+        tracing.recreate_executor()
+
+    def _get_spans(self, trace_id: str) -> list[dict]:
+        """Fetch all spans recorded for a trace from the audit API."""
+        response = self.audit_client.get(
+            f"/audit/v1/traces/{trace_id}/spans/",
+            headers=self.audit_headers,
+        )
+        if response.status_code != 200:
+            return []
+        return response.get_json().get("spans", [])
+
+    def _wait_for_span_count(self, trace_id: str, count: int, timeout: float = 3.0):
+        """Poll until a trace has at least `count` spans ingested."""
+        import time
+        start = time.time()
+        while time.time() - start < timeout:
+            spans = self._get_spans(trace_id)
+            if len(spans) >= count:
+                return spans
+            time.sleep(0.05)
+        return None
+
+    def test_000_dependencies(self):
+        """Verify span ingestion works before testing propagation."""
+        from campus.audit.middleware import tracing
+
+        # Fresh executor: pending shutdown from previous classes would
+        # silently drop spans (#496)
+        tracing.recreate_executor()
+
+        test_client = self.__class__.auth_app.test_client()
+        response = test_client.get("/test/health")
+        if response.status_code != 200:
+            self.fail_dependency(
+                f"Auth health check failed ({response.status_code})"
+            )
+
+        trace_id = response.headers.get("X-Request-ID")
+        if not trace_id:
+            self.fail_dependency("No X-Request-ID echoed; tracing not active")
+
+        if self._wait_for_span_count(trace_id, 1) is None:
+            self.fail_dependency(
+                "Span ingestion not working - spans are not being created"
+            )
+
+    def test_api_request_spawns_child_auth_span(self):
+        """An api request's authenticate call ingests as a child span."""
+        from campus.common import schema
+
+        response = self.api_client.get("/api/v1/circles/", headers=self.basic_headers)
+        trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "API response missing X-Request-ID"
+
+        # Expect the api span plus the spawned auth authenticate span
+        spans = self._wait_for_span_count(trace_id, 2)
+        assert spans is not None, (
+            f"Expected >=2 spans in trace, got {len(self._get_spans(trace_id))}"
+        )
+
+        roots = [s for s in spans if not s.get("parent_span_id")]
+        children = [s for s in spans if s.get("parent_span_id")]
+
+        self.assertEqual(len(roots), 1, f"Expected one root span, got {roots}")
+        root = roots[0]
+        self.assertTrue(
+            str(root["path"]).startswith("/api/"),
+            f"Root span should be the api request, got {root['path']}",
+        )
+
+        auth_children = [
+            s for s in children
+            if s.get("parent_span_id") == root["span_id"]
+            and str(s["path"]).startswith("/auth/")
+        ]
+        self.assertEqual(
+            len(auth_children), 1,
+            f"Expected one auth child span under the api span, got {children}",
+        )
+
+        # The child spawned during the request must start no earlier than
+        # the originating request
+        root_start = schema.DateTime(str(root["started_at"])).to_datetime()
+        child_start = schema.DateTime(str(auth_children[0]["started_at"])).to_datetime()
+        self.assertGreaterEqual(child_start, root_start)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -337,19 +337,71 @@ class TestTraceTree(unittest.TestCase):
         self.assertEqual(child1.children[0].span_id, "grandchild")
         self.assertEqual(len(child2.children), 0)
 
-    def test_treetree_from_spans_orphaned_spans_excluded(self):
-        """from_spans() ignores spans with non-existent parent."""
+    def test_treetree_from_spans_orphaned_spans_adopted_under_root(self):
+        """from_spans() adopts spans with non-existent parents under the root.
+
+        Orphaned spans (parent not ingested) must stay visible in the
+        waterfall rather than being dropped (#794).
+        """
         spans = [
             self._make_span_dict(span_id="root", parent_span_id=None),
-            self._make_span_dict(span_id="child", parent_span_id="root"),
-            self._make_span_dict(span_id="orphan", parent_span_id="nonexistent"),
+            self._make_span_dict(
+                span_id="child", parent_span_id="root",
+                started_at="2023-01-01T10:00:00.050Z",
+            ),
+            self._make_span_dict(
+                span_id="orphan", parent_span_id="nonexistent",
+                started_at="2023-01-01T10:00:00.100Z",
+            ),
         ]
 
         tree = TraceTree.from_spans(spans)
 
-        # Orphan should not appear in tree
-        self.assertEqual(len(tree.root.children), 1)
+        # Orphan is adopted under the root, after the real child
+        self.assertEqual(len(tree.root.children), 2)
         self.assertEqual(tree.root.children[0].span_id, "child")
+        self.assertEqual(tree.root.children[1].span_id, "orphan")
+        # The adopted span's parent link is normalized to the root
+        self.assertIsNone(tree.root.children[1].parent_span_id)
+
+    def test_treetree_from_spans_multiple_roots_earliest_becomes_root(self):
+        """from_spans() picks the earliest root; other roots hang under it."""
+        spans = [
+            self._make_span_dict(
+                span_id="root-later", parent_span_id=None,
+                started_at="2023-01-01T10:00:01.000Z",
+            ),
+            self._make_span_dict(
+                span_id="root-earliest", parent_span_id=None,
+                started_at="2023-01-01T10:00:00.000Z",
+            ),
+        ]
+
+        tree = TraceTree.from_spans(spans)
+
+        self.assertEqual(tree.root.span_id, "root-earliest")
+        self.assertEqual(len(tree.root.children), 1)
+        self.assertEqual(tree.root.children[0].span_id, "root-later")
+
+    def test_treetree_from_spans_children_sorted_by_start_time(self):
+        """Children are ordered by started_at regardless of input order."""
+        spans = [
+            self._make_span_dict(span_id="root", parent_span_id=None),
+            self._make_span_dict(
+                span_id="late", parent_span_id="root",
+                started_at="2023-01-01T10:00:00.200Z",
+            ),
+            self._make_span_dict(
+                span_id="early", parent_span_id="root",
+                started_at="2023-01-01T10:00:00.050Z",
+            ),
+        ]
+
+        tree = TraceTree.from_spans(spans)
+
+        self.assertEqual(
+            [c.span_id for c in tree.root.children], ["early", "late"]
+        )
 
     def test_treetree_from_spans_unordered_input(self):
         """from_spans() works regardless of input order."""
@@ -379,40 +431,71 @@ class TestTraceTree(unittest.TestCase):
         self.assertEqual(tree.root.children[0].depth, 1)
         self.assertEqual(tree.root.children[0].children[0].depth, 2)
 
-    def test_treetree_build_node_calculates_sibling_offset(self):
-        """_build_node() calculates offset for sequential siblings."""
+    def test_treetree_build_node_calculates_offset_from_timestamps(self):
+        """_build_node() derives each child's offset from started_at (#794)."""
         spans = [
-            self._make_span_dict(span_id="root", parent_span_id=None),
-            self._make_span_dict(span_id="child1", parent_span_id="root", duration_ms=30),
-            self._make_span_dict(span_id="child2", parent_span_id="root", duration_ms=20),
-            self._make_span_dict(span_id="child3", parent_span_id="root", duration_ms=10),
+            self._make_span_dict(
+                span_id="root", parent_span_id=None,
+                started_at="2023-01-01T10:00:00.000Z",
+            ),
+            self._make_span_dict(
+                span_id="child1", parent_span_id="root",
+                started_at="2023-01-01T10:00:00.030Z",
+            ),
+            self._make_span_dict(
+                span_id="child2", parent_span_id="root",
+                started_at="2023-01-01T10:00:00.050Z",
+            ),
         ]
 
         tree = TraceTree.from_spans(spans)
 
-        # child1 starts at offset 0
-        self.assertEqual(tree.root.children[0].offset, 0.0)
-        # child2 starts after child1 completes (30ms)
-        self.assertEqual(tree.root.children[1].offset, 30.0)
-        # child3 starts after child2 completes (30 + 20 = 50ms)
-        self.assertEqual(tree.root.children[2].offset, 50.0)
+        # Offsets are real start deltas from the parent, not cumulative
+        # sibling durations
+        self.assertEqual(tree.root.offset, 0.0)
+        self.assertEqual(tree.root.children[0].offset, 30.0)
+        self.assertEqual(tree.root.children[1].offset, 50.0)
 
-    def test_treetree_build_node_calculates_offset_with_nested_children(self):
-        """_build_node() accounts for nested children in offset calculation."""
+    def test_treetree_build_node_offset_nested_child_relative_to_parent(self):
+        """A grandchild's offset is relative to its own parent's start."""
         spans = [
-            self._make_span_dict(span_id="root", parent_span_id=None, duration_ms=100),
-            self._make_span_dict(span_id="child1", parent_span_id="root", duration_ms=40),
-            self._make_span_dict(span_id="grandchild", parent_span_id="child1", duration_ms=10),
-            self._make_span_dict(span_id="child2", parent_span_id="root", duration_ms=20),
+            self._make_span_dict(
+                span_id="root", parent_span_id=None,
+                started_at="2023-01-01T10:00:00.000Z",
+            ),
+            self._make_span_dict(
+                span_id="child", parent_span_id="root",
+                started_at="2023-01-01T10:00:00.020Z",
+            ),
+            self._make_span_dict(
+                span_id="grandchild", parent_span_id="child",
+                started_at="2023-01-01T10:00:00.045Z",
+            ),
         ]
 
         tree = TraceTree.from_spans(spans)
 
-        # child1 offset is 0 (first child)
+        self.assertEqual(tree.root.children[0].offset, 20.0)
+        self.assertEqual(
+            tree.root.children[0].children[0].offset, 25.0
+        )
+
+    def test_treetree_build_node_clamps_negative_offsets(self):
+        """A child with a skewed clock (start before parent) gets offset 0."""
+        spans = [
+            self._make_span_dict(
+                span_id="root", parent_span_id=None,
+                started_at="2023-01-01T10:00:00.100Z",
+            ),
+            self._make_span_dict(
+                span_id="child", parent_span_id="root",
+                started_at="2023-01-01T10:00:00.050Z",
+            ),
+        ]
+
+        tree = TraceTree.from_spans(spans)
+
         self.assertEqual(tree.root.children[0].offset, 0.0)
-        # child2 offset is after child1's total duration (40ms, not 30ms)
-        # because grandchild runs concurrently within child1
-        self.assertEqual(tree.root.children[1].offset, 40.0)
 
     def test_treetree_to_resource_with_root(self):
         """to_resource() returns root's resource dict."""
