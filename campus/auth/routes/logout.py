@@ -101,6 +101,13 @@ def logout() -> werkzeug.Response:
           signing out of Google itself is a per-app product choice,
           not a framework default (#785, out of scope).
 
+    Requests carrying `Sec-Fetch-Site: cross-site` (#797) still get
+    signed out, but the target is dropped (landing on "/"): first-party
+    apps share the registrable domain, so the app-initiated hop arrives
+    as `same-site`, while a foreign page embedding the logout URL gets
+    the nuisance-grade logout CSRF without the redirect. A missing
+    header (older browsers) is treated as allowed.
+
     Responses:
         302 Found: Redirect to the validated target.
     """
@@ -117,6 +124,8 @@ def logout() -> werkzeug.Response:
         registered_origins = set()
     target = flask.request.args.get("post_logout_redirect_uri") or "/"
     if not _is_safe_redirect(target, registered_origins):
+        target = "/"
+    if flask.request.headers.get("Sec-Fetch-Site") == "cross-site":
         target = "/"
     return flask.redirect(target)
 

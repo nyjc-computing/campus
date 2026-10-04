@@ -202,6 +202,57 @@ class TestAuthLogoutContract(unittest.TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], "/")
 
+    def test_logout_cross_site_initiator_drops_target(self):
+        """Sec-Fetch-Site: cross-site signs out but lands on "/" (#797)."""
+        self._register_client_redirect_uri()
+        self._seed_session()
+        response = self.client.get(
+            "/auth/v1/logout?post_logout_redirect_uri=/goodbye",
+            headers={"Sec-Fetch-Site": "cross-site"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/")
+
+    def test_logout_cross_site_initiator_drops_registered_target(self):
+        """Cross-site gets no redirect even to a registered origin."""
+        self._register_client_redirect_uri()
+        self._seed_session()
+        response = self.client.get(
+            "/auth/v1/logout?post_logout_redirect_uri="
+            f"{REGISTERED_ORIGIN}/goodbye",
+            headers={"Sec-Fetch-Site": "cross-site"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/")
+
+    def test_logout_same_site_initiator_keeps_target(self):
+        """First-party hops arrive as same-site and keep the landing."""
+        self._register_client_redirect_uri()
+        self._seed_session()
+        response = self.client.get(
+            "/auth/v1/logout?post_logout_redirect_uri="
+            f"{REGISTERED_ORIGIN}/goodbye",
+            headers={"Sec-Fetch-Site": "same-site"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers["Location"],
+            f"{REGISTERED_ORIGIN}/goodbye"
+        )
+
+    def test_logout_missing_sec_fetch_site_keeps_target(self):
+        """No Sec-Fetch-Site header (older browsers, curl) is allowed."""
+        self._seed_session()
+        response = self.client.get(
+            "/auth/v1/logout?post_logout_redirect_uri=/goodbye"
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], "/goodbye")
+
 
 if __name__ == "__main__":
     unittest.main()
