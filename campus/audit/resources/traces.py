@@ -31,6 +31,19 @@ MAX_PAGE_SIZE = 1000
 # headroom of 10x the requested trace count (approximate heuristic).
 _SPAN_FETCH_MULTIPLIER = 10
 
+# Journey membership lives in the free-form tags dict (#803), which the
+# storage query language cannot match inside — journey queries post-filter
+# spans in Python. This caps how many recent spans such a query scans.
+# Fine at the audit UI's scale (~20 viewers); promote journey_id to a
+# dedicated column only if this ever becomes slow.
+_JOURNEY_SPAN_SCAN_CAP = 20_000
+
+
+def _span_has_journey(span: dict, journey_id: str) -> bool:
+    """Check whether a span record carries the given journey tag (#803)."""
+    tags = span.get("tags") or {}
+    return tags.get("journey_id") == journey_id
+
 
 def _build_trace_tree(spans: list[dict]) -> model.TraceTree | None:
     """Build a hierarchical tree from flat span list.
@@ -118,6 +131,7 @@ def _query_trace_page(
         *,
         limit: int,
         cursor: str | None,
+        journey_id: str | None = None,
 ) -> TracePage:
     """Fetch one keyset-paginated page of trace summaries, newest first.
 
@@ -131,10 +145,18 @@ def _query_trace_page(
     limit * _SPAN_FETCH_MULTIPLIER spans, so a trace whose spans straddle
     the window edge may be summarized from partial data.
 
+    When journey_id is given, spans are additionally filtered on the
+    tags dict in Python (#803), which makes pages sparser: the fetch
+    window holds only ~limit * _SPAN_FETCH_MULTIPLIER recent spans, so
+    journey traces further back may be missed. Journey-tagged traces are
+    few and recent (login flows), so this is acceptable; the journeys
+    view uses journey() with its wider scan cap instead.
+
     Args:
         query: Storage query dict (filters shared by list and search)
         limit: Page size (clamped by parse_page_size)
         cursor: Opaque token from a previous page, or None for page 1
+        journey_id: Optional login-journey tag filter (#803)
 
     Returns:
         TracePage with up to limit summaries and next-page metadata
@@ -154,6 +176,9 @@ def _query_trace_page(
         )
     except campus.storage.errors.StorageError as e:
         raise api_errors.InternalError.from_exception(e) from e
+
+    if journey_id is not None:
+        spans = [s for s in spans if _span_has_journey(s, journey_id)]
 
     summaries = _build_trace_summaries(spans)
     summaries.sort(key=lambda s: (s.started_at, s.trace_id), reverse=True)
@@ -278,6 +303,7 @@ class TracesResource:
         api_key_id: str | None = None,
         client_id: str | None = None,
         user_id: str | None = None,
+        journey_id: str | None = None,
         since: str | None = None,
         until: str | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
@@ -291,6 +317,8 @@ class TracesResource:
             api_key_id: Filter by API key
             client_id: Filter by OAuth client
             user_id: Filter by user
+            journey_id: Filter by login-journey tag (#803); matched
+                against spans.tags in Python
             since: ISO 8601 timestamp (optional)
             until: ISO 8601 timestamp (optional)
             limit: Page size (should be clamped via parse_page_size)
@@ -318,7 +346,45 @@ class TracesResource:
         elif until:
             query["started_at"] = campus.storage.lte(until)
 
-        return _query_trace_page(query, limit=limit, cursor=cursor)
+        return _query_trace_page(
+            query,
+            limit=limit,
+            cursor=cursor,
+            journey_id=journey_id,
+        )
+
+    def journey(self, journey_id: str) -> "list[model.TraceSummary]":
+        """List every trace in one login journey, oldest first (#803).
+
+        A journey is the set of traces whose spans carry
+        tags.journey_id == journey_id — the browser hops of one login
+        flow plus its server-to-server /token exchange. Membership is
+        matched in Python from the tags dict (zero migrations); the scan
+        covers the most recent _JOURNEY_SPAN_SCAN_CAP spans, which is
+        the whole table at this service's scale.
+
+        Args:
+            journey_id: The campus_journey cookie value to group by
+
+        Returns:
+            TraceSummary instances in (started_at, trace_id) order
+        """
+        try:
+            spans = traces_storage.get_matching(
+                {},
+                order_by="started_at",
+                ascending=False,
+                limit=_JOURNEY_SPAN_SCAN_CAP,
+            )
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
+        member_spans = [
+            s for s in spans if _span_has_journey(s, journey_id)
+        ]
+        summaries = _build_trace_summaries(member_spans)
+        summaries.sort(key=lambda s: (s.started_at, s.trace_id))
+        return summaries
 
 
 class TraceResource:
