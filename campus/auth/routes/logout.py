@@ -10,29 +10,74 @@ the SSO session so the browser stops presenting a live campusauth
 cookie.
 """
 
+import logging
+from urllib.parse import urlparse
+
 import flask
 import werkzeug
+
+from .. import resources
+
+logger = logging.getLogger(__name__)
 
 # Create blueprint for the browser-session logout route.
 # No url_prefix: the route lives at the top level of /auth/v1.
 bp = flask.Blueprint('logout', __name__)
 
 
-def _is_safe_redirect(target: str) -> bool:
+def _registered_client_origins() -> set[tuple[str, str]]:
+    """Origins (scheme, netloc) of all registered client redirect_uris.
+
+    The post-logout allowlist source (#788): first-party apps already
+    register their OAuth callback redirect_uris — login validation is
+    fail-closed on them (#651, RFC 6749 §3.1.2.2) — so the service
+    knows their origins without new configuration. A deployment with
+    no registered redirect_uris degrades gracefully: every absolute
+    target is rejected and logout lands on "/".
+
+    Per-client matching (client_id/id_token_hint) is #301's job; any
+    app's logout may currently land on any registered app's origin.
+    All registered clients are first-party, so this is accepted.
+    """
+    origins: set[tuple[str, str]] = set()
+    for client in resources.client.list_all():
+        for redirect_uri in client.redirect_uris or []:
+            parsed = urlparse(redirect_uri)
+            if parsed.scheme in ("http", "https") and parsed.netloc:
+                origins.add(
+                    (parsed.scheme.lower(), parsed.netloc.lower())
+                )
+    return origins
+
+
+def _is_safe_redirect(
+        target: str,
+        registered_origins: set[tuple[str, str]],
+) -> bool:
     """Ensure URL is safe for redirect (prevents open redirect attacks).
 
-    Same relative-URL-only discipline as flask_campus.login_manager's
-    login `next` check (#785), hardened against the backslash spelling
-    of a protocol-relative URL (`/\\evil.example.com` normalizes to
-    `//evil.example.com` in browsers). #301's RP-initiated logout can
-    widen this to registered post-logout URIs when it absorbs this
-    endpoint.
+    Same-origin relative URLs only (the discipline of flask_campus's
+    login `next` check), hardened against the backslash spelling of a
+    protocol-relative URL (`/\\evil.example.com` normalizes to
+    `//evil.example.com` in browsers) — plus absolute URLs whose
+    origin is registered by an OAuth client (#788). Anything else,
+    including authorities carrying userinfo or backslashes, fails
+    closed.
     """
-    return (
-        target.startswith('/')
-        and not target.startswith('//')
-        and not target.startswith('/\\')
-    )
+    if target.startswith('/') and not target.startswith(('//', '/\\')):
+        return True
+    parsed = urlparse(target)
+    if (
+            parsed.scheme in ("http", "https")
+            and parsed.netloc
+            and "@" not in parsed.netloc
+            and "\\" not in parsed.netloc
+    ):
+        return (
+            parsed.scheme.lower(),
+            parsed.netloc.lower()
+        ) in registered_origins
+    return False
 
 
 @bp.get("/logout")
@@ -46,21 +91,32 @@ def logout() -> werkzeug.Response:
     browser to the validated target.
 
     Query parameters:
-        - post_logout_redirect_uri: optional same-origin path to land
-          on after sign-out. The OIDC parameter name is deliberate so
-          #301's optional RP-initiated logout (end_session_endpoint)
-          can adopt or absorb this endpoint. Absent, cross-origin or
-          otherwise unsafe targets fall back to "/". Google's browser
-          session is deliberately unaffected: signing out of Google
-          itself is a per-app product choice, not a framework default
-          (#785, out of scope).
+        - post_logout_redirect_uri: same-origin path, or an absolute
+          URL whose origin matches a registered client's redirect_uri
+          (#788), so sign-out can land the browser back on the calling
+          app. The OIDC parameter name is deliberate so #301's optional
+          RP-initiated logout (end_session_endpoint) can adopt or
+          absorb this endpoint. Absent or unsafe targets fall back to
+          "/". Google's browser session is deliberately unaffected:
+          signing out of Google itself is a per-app product choice,
+          not a framework default (#785, out of scope).
 
     Responses:
         302 Found: Redirect to the validated target.
     """
     flask.session.clear()
+    try:
+        registered_origins = _registered_client_origins()
+    except Exception:
+        # Fail closed: an allowlist lookup failure must not block the
+        # sign-out itself, only the redirect-back-to-app convenience.
+        logger.exception(
+            "Failed to list registered client redirect_uris; "
+            "post_logout_redirect_uri will only accept same-origin paths"
+        )
+        registered_origins = set()
     target = flask.request.args.get("post_logout_redirect_uri") or "/"
-    if not _is_safe_redirect(target):
+    if not _is_safe_redirect(target, registered_origins):
         target = "/"
     return flask.redirect(target)
 
