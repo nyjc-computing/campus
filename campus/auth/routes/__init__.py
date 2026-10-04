@@ -17,6 +17,7 @@ __all__ = [
     "credentials",
     "integrations",
     "logins",
+    "logout",
     "oauth",
     "sessions",
     "users",
@@ -33,7 +34,20 @@ from campus.common.errors.base import ErrorConstant
 
 from .. import resources
 from ..middleware import Authenticator
-from . import broker, clients, connections, credentials, integrations, logins, oauth, root, sessions, users, vaults
+from . import (
+    broker,
+    clients,
+    connections,
+    credentials,
+    integrations,
+    logins,
+    logout,
+    oauth,
+    root,
+    sessions,
+    users,
+    vaults,
+)
 
 # Route modules that require authentication
 _AUTHENTICATED_ROUTE_MODULES = [
@@ -148,3 +162,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # ever confirms the validity of the credentials in the request body (#614).
     root_blueprint = root.create_blueprint()
     app.register_blueprint(root_blueprint)
+
+    # Register the browser-session logout blueprint WITHOUT
+    # authentication (#785): the Flask session it clears IS the
+    # credential, so there is nothing to authenticate against. Like the
+    # OAuth routes it is publicly accessible, and idempotent.
+    logout_blueprint = logout.create_blueprint()
+    app.register_blueprint(logout_blueprint)
