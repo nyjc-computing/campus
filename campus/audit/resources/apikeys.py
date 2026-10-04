@@ -9,6 +9,7 @@ URL path mapping:
 
 __all__ = []
 
+import logging
 from typing import Any
 
 import campus.model as model
@@ -19,6 +20,84 @@ from campus.common.utils import secret
 from campus.storage import errors as storage_errors
 
 apikeys_storage = campus.storage.tables.get_db("apikeys")
+
+logger = logging.getLogger(__name__)
+
+
+def ensure_operator_key() -> bool:
+    """Ensure the audit operator API key exists (startup bootstrap).
+
+    The operator key is the only key class that holds the apikeys:*
+    scopes, so API-key management survives the loss of every other key
+    (#796: apikeys routes are scope-gated, so a key without
+    apikeys:write can neither create keys nor elevate itself).
+
+    This seed cannot go through the HTTP API: creating a key requires
+    an authenticated key with apikeys:write, which cannot exist before
+    the first one does (chicken-and-egg). It must be applied directly
+    against storage, from the AUDIT_OPERATOR_API_KEY env var.
+
+    Follows the campus.auth public-client bootstrap pattern
+    (ensure_public_client): runs on every startup, idempotent, and an
+    existing record is never modified — rotate by deleting this record
+    and restarting with a new AUDIT_OPERATOR_API_KEY value.
+
+    Returns:
+        True if the key was created, False if it already existed or
+        AUDIT_OPERATOR_API_KEY is unset (nothing to seed).
+
+    Raises:
+        ValueError: If AUDIT_OPERATOR_API_KEY is set but not a valid
+            audit API key format (it could never authenticate).
+        campus.storage.errors.StorageError: If the key record cannot
+            be read or created.
+    """
+    import campus.config
+    from campus.common import env
+
+    plaintext = env.get("AUDIT_OPERATOR_API_KEY")
+    if not plaintext:
+        return False
+    if not secret.is_valid_audit_api_key_format(plaintext):
+        raise ValueError(
+            "AUDIT_OPERATOR_API_KEY is set but not a valid audit API "
+            "key format. Expected: audit_v1_<22-char-base64url> "
+            "(see secret.generate_audit_api_key)"
+        )
+
+    key_id = schema.CampusID(campus.config.AUDIT_OPERATOR_API_KEY_ID)
+    try:
+        apikeys_storage.get_by_id(key_id)
+        return False
+    except storage_errors.NotFoundError:
+        pass
+
+    api_key = model.APIKey(
+        id=key_id,
+        name=schema.String("operator"),
+        owner_id=schema.UserID("campus-devops"),
+        scopes=[schema.String(scope)
+                for scope in campus.config.AUDIT_OPERATOR_API_KEY_SCOPES],
+        key_hash=schema.String(secret.hash_api_key(plaintext)),
+    )
+    try:
+        apikeys_storage.insert_one(api_key.to_storage())
+    except storage_errors.ConflictError:
+        # Either a concurrent worker seeded this key first, or the
+        # fixed id is held by some other record (never expected).
+        try:
+            apikeys_storage.get_by_id(key_id)
+            return False  # Concurrently seeded; desired end state reached
+        except storage_errors.NotFoundError:
+            logger.error(
+                "Cannot seed audit operator key '%s': the id is held "
+                "by a different record. Remove that record, then "
+                "restart the service to retry the seed.",
+                key_id,
+            )
+            return False
+    logger.info("Seeded audit operator key '%s'", key_id)
+    return True
 
 
 class APIKeysResource:

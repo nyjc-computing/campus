@@ -1,6 +1,12 @@
 """campus.audit.routes.api_keys
 
 API key management endpoints for the audit service.
+
+All routes require an authenticated audit API key with the appropriate
+apikeys:* scope (#796): apikeys:read for reads, apikeys:write for
+mutations. Only the operator key seeded at startup
+(campus.audit.resources.apikeys.ensure_operator_key) holds apikeys:*
+scopes, so key management cannot be hijacked by a scoped producer key.
 """
 
 __all__ = [
@@ -13,7 +19,7 @@ import campus.flask_campus as flask_campus
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
 
-from .. import resources
+from .. import decorators, resources
 from ..helpers import audit_events
 
 # Create blueprint for API key routes
@@ -82,6 +88,7 @@ def _validate_rate_limit_field(
 @bp.post("/")
 @flask_campus.unpack_request
 @audit_events.audit_event("audit.apikeys.new")
+@decorators.require_scopes("apikeys:write")
 def new(
         *,
         name: str,
@@ -132,6 +139,7 @@ DEFAULT_LIST_LIMIT = schema.Integer(50)
 
 @bp.get("/")
 @flask_campus.unpack_request
+@decorators.require_scopes("apikeys:read")
 def list_keys(
         *,
         owner_id: schema.UserID | None = None,
@@ -160,6 +168,7 @@ def list_keys(
 
 
 @bp.get("/<api_key_id>/")
+@decorators.require_scopes("apikeys:read")
 def get(
         api_key_id: schema.CampusID
 ) -> flask_campus.JsonResponse:
@@ -182,6 +191,7 @@ def get(
 @bp.patch("/<api_key_id>/")
 @flask_campus.unpack_request
 @audit_events.audit_event("audit.apikeys.update")
+@decorators.require_scopes("apikeys:write")
 def update(
         api_key_id: schema.CampusID,
         *,
@@ -244,6 +254,7 @@ def update(
 
 @bp.delete("/<api_key_id>/")
 @audit_events.audit_event("audit.apikeys.revoke")
+@decorators.require_scopes("apikeys:write")
 def revoke(
         api_key_id: schema.CampusID
 ) -> flask_campus.JsonResponse:
@@ -269,6 +280,7 @@ def revoke(
 
 @bp.post("/<api_key_id>/regenerate")
 @audit_events.audit_event("audit.apikeys.regenerate")
+@decorators.require_scopes("apikeys:write")
 def regenerate(
         api_key_id: schema.CampusID
 ) -> flask_campus.JsonResponse:
