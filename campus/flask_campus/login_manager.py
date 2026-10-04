@@ -10,7 +10,7 @@ import campus_python
 import flask
 import werkzeug
 
-from campus import flask_campus
+from campus import config, flask_campus
 from campus.common.utils import url
 
 
@@ -105,11 +105,20 @@ def _create_bp(
         return flask.redirect(next_url)
 
     @bp.get("/logout")
-    def logout():
-        """Sign Out of Campus Admin Portal."""
+    def logout() -> werkzeug.Response:
+        """Sign the browser out of the app and campusauth.
+
+        Revokes the login session record through the API (#776), then
+        redirects the browser through the auth service's browser-session
+        logout so the campusauth SSO cookie is cleared too (#785). The
+        auth service lands the browser on its own validated target,
+        which supersedes this app's post-logout redirect.
+        """
         campus.auth.logout()
-        resp = flask.redirect(url.full_url_for(default_endpoint))
-        return resp
+        auth_logout_url = (
+            f"{config.get_base_url('campus.auth')}/auth/v1/logout"
+        )
+        return flask.redirect(auth_logout_url)
 
     return bp
 
