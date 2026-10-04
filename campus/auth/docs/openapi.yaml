@@ -828,6 +828,35 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/v1/logout:
+    get:
+      tags: [OAuth Provider]
+      summary: Browser-session logout (SSO sign-out)
+      operationId: logout
+      description: |
+        Clears the auth service's Flask session (the campusauth SSO
+        session established by identity login) and expires its cookie,
+        then 302s the browser to the validated target (#785). The
+        login_sessions record revocation is the API half
+        (DELETE /auth/v1/logins/{session_id}/). Google's browser
+        session is deliberately unaffected.
+      parameters:
+        - name: post_logout_redirect_uri
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Same-origin path to land on after sign-out (OIDC parameter
+            name, so #301's RP-initiated logout can adopt this
+            endpoint). Cross-origin or otherwise unsafe values, and
+            absence, fall back to "/".
+      responses:
+        '302':
+          description: Redirect to the validated target (default "/")
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/v1/oauth/device_authorize:
     post:
       tags: [OAuth Provider]
