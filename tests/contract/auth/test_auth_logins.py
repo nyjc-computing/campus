@@ -229,6 +229,69 @@ class TestAuthLoginsContract(unittest.TestCase):
         )
         self.assertIn(get_response.status_code, (404, 400))
 
+    def test_delete_login_session_by_owning_client_without_cookie(self):
+        """DELETE /logins/{session_id}/ by the owning client needs no cookie.
+
+        Server-to-server clients hold the auth-service session cookie in
+        a per-process in-memory jar, so a second worker or a restarted
+        process cannot present the cookie its own POST /logins
+        established (#692). Revocation is allowed for the owning client:
+        the request is already authenticated with that client's
+        credentials, the same credentials that created the session.
+        """
+        create_response = self.client.post(
+            "/auth/v1/logins/",
+            json={
+                "client_id": env.CLIENT_ID,
+                "user_id": str(self.test_user_id),
+                "agent_string": self.test_agent
+            },
+            headers=self.auth_headers
+        )
+        session_id = create_response.get_json()["id"]
+
+        # A fresh test client models the second worker / restarted
+        # process: same Basic credentials, empty cookie jar.
+        fresh_worker = self.app.test_client()
+        del_response = fresh_worker.delete(
+            f"/auth/v1/logins/{session_id}/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(del_response.status_code, 200)
+
+        # Verify it's gone
+        get_response = self.client.get(
+            f"/auth/v1/logins/{session_id}/",
+            headers=self.auth_headers
+        )
+        self.assertIn(get_response.status_code, (404, 400))
+
+    def test_delete_foreign_login_session_without_cookie_returns_error(self):
+        """DELETE /logins/{session_id}/ without cookie or ownership errors.
+
+        The cookie-less revocation path is limited to sessions the
+        authenticated client owns; a session recorded against another
+        client_id stays unrevokable without the matching client-side
+        session cookie.
+        """
+        create_response = self.client.post(
+            "/auth/v1/logins/",
+            json={
+                "client_id": "foreign-client",
+                "user_id": str(self.test_user_id),
+                "agent_string": self.test_agent
+            },
+            headers=self.auth_headers
+        )
+        session_id = create_response.get_json()["id"]
+
+        fresh_worker = self.app.test_client()
+        del_response = fresh_worker.delete(
+            f"/auth/v1/logins/{session_id}/",
+            headers=self.auth_headers
+        )
+        self.assertIn(del_response.status_code, (404, 409))
+
     def test_create_login_without_auth(self):
         """POST /logins/ without auth returns 401."""
         response = self.client.post(

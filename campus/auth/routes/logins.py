@@ -56,8 +56,27 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Delete a login session.
 
     DELETE /logins/<session_id>/
+
+    A client-credentials (Basic) caller may revoke any session it owns
+    without presenting the auth-service session cookie (#692): that
+    cookie lives in the caller's per-process cookie jar, so a
+    multi-worker or restarted deployment cannot present the cookie its
+    own POST /logins established. Session creation is already scoped to
+    the client's credentials, so client-scoped revocation mirrors the
+    creation rights. Browser (cookie-carrying) revocation is unchanged.
     """
-    login_resource[session_id].delete()
+    session = login_resource[session_id].get()
+    current_client = getattr(flask.g, "current_client", None)
+    current_user = getattr(flask.g, "current_user", None)
+    if (
+            current_client is not None
+            and current_user is None
+            and str(session.client_id) == str(current_client.id)
+    ):
+        # Owning app client: skip the client-side (cookie) sync.
+        login_resource[session_id].delete(sync_client=False)
+    else:
+        login_resource[session_id].delete()
     get_yapper().emit('campus.logins.delete', {"session_id": session_id})
     return {}, 200
 

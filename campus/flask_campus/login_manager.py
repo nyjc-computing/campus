@@ -82,8 +82,22 @@ def _create_bp(
         Returns:
             Redirect to the destination stored in login_next session variable
         """
-        # Complete the OAuth flow (creates login session)
-        campus.auth.finalize(state=state, code=code, scope=scope)
+        # Complete the OAuth flow (creates login session). A rejected
+        # code (replayed single-use code, expired code) is routine in a
+        # browser flow — send the user back to sign-in instead of an
+        # unhandled 500 (#690).
+        try:
+            campus.auth.finalize(state=state, code=code, scope=scope)
+        except campus_python.errors.BadRequestError as err:
+            flask.current_app.logger.warning(
+                "finalize_login rejected: %s", err
+            )
+            flask.flash(
+                "Your sign-in session expired or was already used."
+                " Please sign in again.",
+                "warning"
+            )
+            return flask.redirect(flask.url_for('auth.login'))
         campus.auth.push_context()
 
         # Redirect to the original destination
@@ -118,14 +132,27 @@ class OAuthLoginManager:
         self.campus = campus_client or campus_python.Campus(timeout=60)
         self.default_endpoint = default_endpoint
 
+    def _push_context_hook(self) -> None:
+        """App-wide before_request hook that pushes the auth context.
+
+        Static asset requests never read g.user, so they skip the
+        upstream auth lookup (#689): a session-carrying browser
+        otherwise pays push_context's auth API calls on every stylesheet
+        and script, which can wedge a sync worker under load.
+        """
+        endpoint = flask.request.endpoint or ""
+        if endpoint == "static" or endpoint.endswith(".static"):
+            return
+        self.campus.auth.push_context()
+
     def init_app(self, app: flask.Flask | flask.Blueprint):
         """Initialize the login manager with the Flask app."""
         bp = _create_bp(self.campus, self.default_endpoint)
         app.register_blueprint(bp)
         if isinstance(app, flask.Flask):
-            app.before_request(self.campus.auth.push_context)
+            app.before_request(self._push_context_hook)
         elif isinstance(app, flask.Blueprint):
-            app.before_app_request(self.campus.auth.push_context)
+            app.before_app_request(self._push_context_hook)
 
     def login_required(self, view: Callable) -> Callable:
         """Decorator to protect routes that require authentication."""
