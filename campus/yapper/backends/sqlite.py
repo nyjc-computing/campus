@@ -19,8 +19,16 @@ class SQLiteResult(TypedDict):
     rowcount: int
 
 
-def dict_factory(cursor: sqlite3.Cursor, row: sqlite3.Row) -> dict[str, Any]:
-    """Convert SQLite rows to dictionaries."""
+def dict_factory(
+        cursor: sqlite3.Cursor,
+        row: tuple[Any, ...],
+) -> dict[str, Any]:
+    """Convert SQLite rows to dictionaries.
+
+    The row arrives as a plain tuple here: sqlite3 types row_factory
+    as receiving the raw row, so the annotation must not narrow it to
+    sqlite3.Row (pyright 1.1.414 enforces the stub signature).
+    """
     return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
 
 
