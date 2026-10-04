@@ -338,11 +338,34 @@ def build_span_from_context(
         "tags": {},  # No tags by default
         # Optional: populated by auth middleware if available
         "api_key_id": getattr(flask.g, "api_key_id", None),
-        "client_id": getattr(flask.g, "client_id", None),
-        "user_id": getattr(flask.g, "user_id", None),
+        # The shared Authenticator glue stashes the authenticated caller's
+        # full client/user under current_client/current_user (#802) —
+        # resource dicts via the SDK (campus.api), model objects
+        # in-process (campus.auth). Direct id attributes stay supported
+        # for deployment glue that stashes ids instead.
+        "client_id": (
+            _identity_id(getattr(flask.g, "current_client", None))
+            or getattr(flask.g, "client_id", None)
+        ),
+        "user_id": (
+            _identity_id(getattr(flask.g, "current_user", None))
+            or getattr(flask.g, "user_id", None)
+        ),
     }
 
     return span
+
+
+def _identity_id(value: typing.Any) -> str | None:
+    """Extract an id from an Authenticator identity object or dict (#802).
+
+    Returns None when the identity is missing or carries no id.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value.get("id")
+    return getattr(value, "id", None)
 
 
 def _extract_request_body(request: flask.Request) -> dict | str | None:

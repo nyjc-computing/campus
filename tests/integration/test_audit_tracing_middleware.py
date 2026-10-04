@@ -868,6 +868,64 @@ class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, Dependency
         child_start = schema.DateTime(str(auth_children[0]["started_at"])).to_datetime()
         self.assertGreaterEqual(child_start, root_start)
 
+    def test_authenticated_spans_carry_client_identity(self):
+        """Basic-auth spans record the authenticated client on both legs (#802).
+
+        One Basic-auth request through campus.api yields the api root span
+        (identity stashed as a resource dict via the SDK) and the spawned
+        auth authenticate span (stashed in-process as a model object).
+        Basic auth carries the client but no user.
+        """
+        response = self.api_client.get("/api/v1/circles/", headers=self.basic_headers)
+        trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "API response missing X-Request-ID"
+
+        spans = self._wait_for_span_count(trace_id, 2)
+        assert spans is not None, (
+            f"Expected >=2 spans in trace, got {len(self._get_spans(trace_id))}"
+        )
+
+        roots = [s for s in spans if not s.get("parent_span_id")]
+        self.assertEqual(len(roots), 1, f"Expected one root span, got {roots}")
+        root = roots[0]
+
+        self.assertEqual(
+            root.get("client_id"), env.CLIENT_ID,
+            f"api root span missing client identity: {root.get('client_id')}",
+        )
+        self.assertIsNone(root.get("user_id"))
+
+        # The auth child (/root/authenticate) stays identity-less: that
+        # route is deliberately unauthenticated (#614 chicken-and-egg) and
+        # never runs the Authenticator. The in-process auth leg is covered
+        # by test_auth_resource_span_carries_client_identity below.
+
+    def test_auth_resource_span_carries_client_identity(self):
+        """An auth resource route's span records the client (#802).
+
+        Exercises the in-process leg of the Authenticator glue, where the
+        stash is a model object rather than a resource dict.
+        """
+        auth_client = self.__class__.auth_app.test_client()
+        response = auth_client.get(
+            f"/auth/v1/clients/{env.CLIENT_ID}/",
+            headers=self.basic_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Auth response missing X-Request-ID"
+
+        spans = self._wait_for_span_count(trace_id, 1)
+        assert spans, "Span not ingested"
+        span = spans[0]
+
+        self.assertEqual(
+            span.get("client_id"), env.CLIENT_ID,
+            f"auth span missing client identity: {span.get('client_id')}",
+        )
+        self.assertIsNone(span.get("user_id"))
+
 
 if __name__ == "__main__":
     unittest.main()
