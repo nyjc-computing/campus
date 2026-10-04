@@ -28,6 +28,7 @@ __all__ = [
     "Feedback",
     "HttpHeader",
     "HttpHeaderWithAuth",
+    "Integration",
     "InternalModel",
     "LessonGroup",
     "LessonGroupMember",
@@ -68,6 +69,7 @@ from .credentials import AppCredentials, OAuthToken, UserCredentials
 from .device_code import DeviceCode
 from .emailotp import EmailOTP
 from .http.header import HttpHeader, HttpHeaderWithAuth
+from .integration import Integration
 from .login import LoginSession
 from .session import AuthSession
 from .timetable import (
