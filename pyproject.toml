@@ -25,7 +25,7 @@ pymongo = {extras = ["srv"], version = "^4.13.2"}
 boto3 = "^1.35.0"
 
 # Deployment orchestration dependencies (all services) - required for deployment
-gunicorn = "^21.2.0"
+gunicorn = "^26.2.0"
 werkzeug = "^3.0.0"
 
 [tool.poetry.group.dev.dependencies]

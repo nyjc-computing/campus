@@ -16,7 +16,6 @@ __all__ = [
 ]
 
 from collections.abc import Mapping
-from contextlib import suppress
 from typing import Any, Iterable, Protocol, Self, runtime_checkable
 
 from campus.common.http.errors import (
@@ -88,26 +87,12 @@ class JsonResponse(Protocol):
             return
 
         status = self.status_code
-        
-        # Try to get meaningful error details from response
-        try:
-            # First try to parse as JSON for structured error
-            response_data = self.json()
-            if isinstance(response_data, dict):
-                # Look for common error message fields
-                error_msg = (
-                    response_data.get('message') or 
-                    response_data.get('error') or 
-                    response_data.get('detail') or
-                    response_data.get('error_description')
-                )
-                error_msg or str(response_data)
-            else:
-                str(response_data)
-        except Exception:
-            # Fall back to response text if JSON parsing fails
-            with suppress(Exception):
-                self.text.strip() or f"HTTP {status}"
+
+        # The response body rides along verbatim as an exception note
+        # below, so no structured-detail parsing is needed here. (A
+        # previous draft computed an `error_msg` with fallback
+        # expressions but never used it — pyright 1.414 flagged the
+        # dead expressions and the block was removed.)
 
         match status:
             case 400:
