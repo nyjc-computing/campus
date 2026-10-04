@@ -4,17 +4,22 @@ App-side sign-out must end the campusauth SSO session, not just
 revoke the login_sessions record: the auth service holds its own
 Flask session behind its cookie (#785). /logout therefore redirects
 the browser through the auth service's browser-session logout
-endpoint, superseding the app's own post-logout redirect.
+endpoint, carrying this app's post-logout target along as
+post_logout_redirect_uri (#788): the auth service honors it when the
+origin is a registered client redirect_uri origin, otherwise lands
+the browser on its own "/".
 """
 
 import os
 import unittest
+from urllib.parse import parse_qs, urlparse
 
 import flask
 
 from campus.flask_campus.login_manager import OAuthLoginManager
 
-_AUTH_LOGOUT_URL = "https://campus.test/auth/v1/logout"
+_AUTH_BASE = "https://campus.test"
+_POST_LOGOUT_TARGET = "https://campus.test/"
 
 
 class _FakeAuth:
@@ -40,16 +45,21 @@ class TestLogoutRoutesThroughAuthService(unittest.TestCase):
     """GET /logout revokes, then redirects to the auth service logout."""
 
     def setUp(self):
-        # get_base_url resolves through ENV/PUBLIC_URL at call time;
-        # pin both and restore around each test.
+        # get_base_url and full_url_for resolve through ENV/PUBLIC_URL
+        # at call time; pin both and restore around each test.
         self.saved = {
             name: os.environ.get(name)
             for name in ("ENV", "PUBLIC_URL")
         }
         os.environ["ENV"] = "testing"
-        os.environ["PUBLIC_URL"] = "https://campus.test"
+        os.environ["PUBLIC_URL"] = _AUTH_BASE
         self.app = flask.Flask(__name__)
         self.app.secret_key = "test-secret"
+
+        @self.app.get("/")
+        def index():
+            return ""
+
         self.manager = OAuthLoginManager(
             campus_client=_FakeCampus()  # type: ignore[arg-type]
         )
@@ -68,16 +78,18 @@ class TestLogoutRoutesThroughAuthService(unittest.TestCase):
 
         self.assertTrue(self.manager.campus.auth.logged_out)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers["Location"], _AUTH_LOGOUT_URL)
+        location = urlparse(response.headers["Location"])
+        self.assertEqual(f"{location.scheme}://{location.netloc}", _AUTH_BASE)
+        self.assertEqual(location.path, "/auth/v1/logout")
 
-    def test_logout_redirect_target_is_auth_logout_endpoint(self):
-        """The browser is sent to /auth/v1/logout, not the app."""
+    def test_logout_carries_post_logout_redirect_target(self):
+        """The app's own post-logout target rides along (#788)."""
         response = self.client.get("/logout")
 
-        location = response.headers["Location"]
-        self.assertTrue(
-            location.endswith("/auth/v1/logout"),
-            f"expected the auth service logout endpoint, got {location}"
+        query = parse_qs(urlparse(response.headers["Location"]).query)
+        self.assertEqual(
+            query["post_logout_redirect_uri"],
+            [_POST_LOGOUT_TARGET]
         )
 
 

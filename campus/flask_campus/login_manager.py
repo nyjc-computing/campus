@@ -17,8 +17,12 @@ from campus.common.utils import url
 def _is_safe_redirect(redirect_url: str) -> bool:
     """Ensure URL is safe for redirect (prevents open redirect attacks)."""
     # Only allow relative URLs starting with /
-    # Reject protocol-relative URLs (//)
-    return redirect_url.startswith('/') and not redirect_url.startswith('//')
+    # Reject protocol-relative URLs (//), including the backslash
+    # spelling (/\): browsers normalize it to // before resolving
+    # (#788; the auth-service logout endpoint applies the same rule).
+    return redirect_url.startswith('/') and not redirect_url.startswith(
+        ('//', '/\\')
+    )
 
 
 def _create_bp(
@@ -110,13 +114,17 @@ def _create_bp(
 
         Revokes the login session record through the API (#776), then
         redirects the browser through the auth service's browser-session
-        logout so the campusauth SSO cookie is cleared too (#785). The
-        auth service lands the browser on its own validated target,
-        which supersedes this app's post-logout redirect.
+        logout so the campusauth SSO cookie is cleared too (#785). This
+        app's post-logout target rides along as post_logout_redirect_uri:
+        the auth service honors it when its origin matches a registered
+        client redirect_uri (#788), otherwise falls back to its own
+        landing ("/").
         """
         campus.auth.logout()
-        auth_logout_url = (
-            f"{config.get_base_url('campus.auth')}/auth/v1/logout"
+        post_logout_target = url.full_url_for(default_endpoint)
+        auth_logout_url = url.add_query(
+            f"{config.get_base_url('campus.auth')}/auth/v1/logout",
+            post_logout_redirect_uri=post_logout_target,
         )
         return flask.redirect(auth_logout_url)
 
