@@ -17,7 +17,7 @@ python = ">=3.11.0,<3.14"
 campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
 
 # Client library dependencies (minimal for HTTP requests)
-bcrypt = "^4.2.1"
+bcrypt = "^5.0.0"
 flask = "^3.0.0"
 requests = "^2.32.4"
 psycopg2-binary = "^2.9.0"
