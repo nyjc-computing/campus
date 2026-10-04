@@ -91,9 +91,11 @@ class TestRequireScopes(unittest.TestCase):
         def handler():
             return "ok"
 
-        with self.app.test_request_context():
-            with self.assertRaises(api_errors.ForbiddenError):
-                handler()
+        with (
+            self.app.test_request_context(),
+            self.assertRaises(api_errors.ForbiddenError),
+        ):
+            handler()
 
     def test_category_wildcard_grants_access(self):
         """A "traces:*" key scope satisfies concrete requirements."""

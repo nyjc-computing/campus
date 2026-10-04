@@ -45,9 +45,7 @@ def scope_matches(granted: str, required: str) -> bool:
         return True
     if granted == required:
         return True
-    if granted.endswith(":*") and required.startswith(granted[:-1]):
-        return True
-    return False
+    return granted.endswith(":*") and required.startswith(granted[:-1])
 
 
 def require_scopes(
