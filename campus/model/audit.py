@@ -10,7 +10,7 @@ import typing
 from dataclasses import dataclass, field
 
 from campus.common import schema
-from campus.common.utils import uid
+from campus.common.utils import uid, utc_time
 from campus.model.base import InternalModel, Model
 
 __all__ = [
@@ -24,7 +24,15 @@ __all__ = [
 
 @dataclass(eq=False, kw_only=True)
 class APIKey(Model):
-    # TODO: Docstring
+    """An API key issued for the campus.audit service.
+
+    Only the key hash is stored; the plaintext value is shown once at
+    creation and never persisted. Lifecycle is tracked through
+    expires_at/revoked_at, and access is scoped via the scopes list
+    (e.g. "traces:read", "traces:*").
+
+    Issue: #566
+    """
     id: schema.CampusID = field(default_factory=(
         lambda: uid.generate_category_uid("apikey", length=16)
     ))
@@ -63,22 +71,35 @@ class APIKey(Model):
 
     def is_expired(self) -> bool:
         """Check if the API key is expired.
-        
+
+        A key with no expires_at never expires.
+
         Returns:
             bool: True if the API key is expired, False otherwise.
         """
-        raise NotImplementedError("APIKey.is_expired() is not implemented yet.")
-    
+        if self.expires_at is None:
+            return False
+        # Storage records carry plain strings for union-annotated
+        # fields (from_storage only coerces single-class annotations)
+        expires_at = self.expires_at
+        if isinstance(expires_at, str):
+            expires_at = schema.DateTime(expires_at)
+        return expires_at.to_datetime() < utc_time.now()
+
     def is_revoked(self) -> bool:
         """Check if the API key is revoked.
-        
+
         Returns:
             bool: True if the API key is revoked, False otherwise.
         """
-        raise NotImplementedError("APIKey.is_revoked() is not implemented yet.")
+        return self.revoked_at is not None
 
     def has_scope(self, scope: str) -> bool:
         """Check if the API key has a specific scope.
+
+        Matching is exact: wildcard scopes stored on the key (e.g.
+        "traces:*", "*") only match themselves. Wildcard expansion is
+        the authorization layer's responsibility (#575).
 
         Args:
             scope (str): The scope to check for.
@@ -89,7 +110,43 @@ class APIKey(Model):
         Raises:
             TypeError: If the scope is not a string.
         """
-        raise NotImplementedError("APIKey.has_scope() is not implemented yet.")
+        if not isinstance(scope, str):
+            raise TypeError(
+                f"Scope must be a string, got {type(scope).__name__}"
+            )
+        return scope in self.scopes
+
+    @classmethod
+    def validate_update(cls, update: dict[str, typing.Any]) -> None:
+        """Validate an update dictionary against the APIKey model.
+
+        Extends the base mutability check with type validation for the
+        mutable fields.
+
+        Args:
+            update: Dictionary of fields to update
+
+        Raises:
+            ValueError: If any field is not mutable or has an invalid
+                value.
+        """
+        super().validate_update(update)
+        if "scopes" in update:
+            scopes = update["scopes"]
+            if not isinstance(scopes, list) or not all(
+                    isinstance(s, str) for s in scopes
+            ):
+                raise ValueError(
+                    "scopes must be a list of scope strings"
+                )
+        if "rate_limit" in update:
+            rate_limit = update["rate_limit"]
+            if rate_limit is not None and (
+                    isinstance(rate_limit, bool) or not isinstance(rate_limit, int)
+            ):
+                raise ValueError(
+                    "rate_limit must be an integer or None"
+                )
 
 
 @dataclass(eq=False, kw_only=True)

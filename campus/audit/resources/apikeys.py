@@ -117,8 +117,8 @@ class APIKeysResource:
             # Note: No actor tracking - campus.audit is standalone service with no users/clients
             return api_key, apikey_value
 
-    def verify(self, api_key: str) -> schema.CampusID | None:
-        """Verify if the provided API key is valid and return its ID.
+    def verify(self, api_key: str) -> model.APIKey | None:
+        """Verify if the provided API key is valid and return its record.
 
         This method scans all API keys to find a matching hash, since
         requests contain the API key value, not the ID.
@@ -127,11 +127,14 @@ class APIKeysResource:
             api_key: The plaintext API key to verify
 
         Returns:
-            The ID of the API key if valid and active, None otherwise
+            The API key model if valid and active (not expired or
+            revoked), None otherwise. The model carries the key's
+            scopes for the authorization layer (#575).
         """
         api_key_hash = secret.hash_api_key(api_key)
 
-        # Query for active (non-revoked) API keys with matching hash
+        # Query for non-revoked API keys with matching hash; expiry is
+        # checked on the model below
         query = {
             "key_hash": api_key_hash,
             "revoked_at": None
@@ -141,12 +144,14 @@ class APIKeysResource:
             results = apikeys_storage.get_matching(query, limit=1)
             if results:
                 key_record = model.APIKey.from_storage(results[0])
+                if not key_record.is_active():
+                    return None
                 # Update last_used timestamp for audit trail
                 apikeys_storage.update_by_id(
                     key_record.id,
                     {"last_used": schema.DateTime.utcnow()}
                 )
-                return key_record.id
+                return key_record
         except (storage_errors.NotFoundError, IndexError):
             pass
 
@@ -216,6 +221,7 @@ class APIKeyResource:
             **updates: key=value pairs to update
 
         Raises:
+            ForbiddenError if the API key has been revoked
             InvalidRequestError if one or more fields are invalid
             NotFoundError if the API key doesn't exist
         """
@@ -223,6 +229,16 @@ class APIKeyResource:
              raise api_errors.InvalidRequestError(
                  "No mutable fields provided for update"
              )
+        current = self.get()
+        if current is None:
+            raise api_errors.NotFoundError(
+                f"API key {self.api_key_id} not found"
+            ) from None
+        if current.is_revoked():
+            raise api_errors.ForbiddenError(
+                f"API key {self.api_key_id} has been revoked and can no "
+                "longer be updated"
+            )
         try:
             model.APIKey.validate_update(updates)
         except ValueError as e:

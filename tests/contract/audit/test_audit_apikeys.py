@@ -746,11 +746,12 @@ class TestAuditAPIKeyRegenerateContract(unittest.TestCase):
         self.assertEqual(key.scopes, ["read"])
 
 
-@unittest.skip("https://github.com/nyjc-computing/campus/issues/569 - Input validation bugs")
 class TestAuditAPIKeysEdgeCases(unittest.TestCase):
     """HTTP contract tests for edge cases and error conditions.
 
     Tests duplicate keys, invalid inputs, and boundary conditions.
+
+    Issue: #569
     """
 
     @classmethod
@@ -816,7 +817,6 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
         # Create an expired API key
         expired_key_value = secret.generate_audit_api_key()
         expired_key_id = uid.generate_category_uid("apikey", length=16)
-        from datetime import timedelta
         expired_record = {
             "id": expired_key_id,
             "created_at": schema.DateTime.utcnow(),
@@ -824,7 +824,7 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
             "name": "Expired Key",
             "owner_id": "test-user",
             "scopes": ["admin"],
-            "expires_at": schema.DateTime.utcnow() - timedelta(days=1),  # Expired
+            "expires_at": schema.DateTime.utcafter(days=-1),  # Expired
         }
         apikeys_storage = campus.storage.tables.get_db("apikeys")
         apikeys_storage.insert_one(expired_record)
@@ -990,14 +990,20 @@ class TestAuditAPIKeysEdgeCases(unittest.TestCase):
         # Should fail (404 or 403 depending on implementation)
         self.assertIn(response.status_code, [404, 403])
 
-    def test_list_with_invalid_limit_returns_400(self):
-        """GET /audit/v1/apikeys/?limit=invalid with non-integer limit returns 400."""
+    def test_list_with_invalid_limit_returns_422(self):
+        """GET /audit/v1/apikeys/?limit=invalid with non-integer limit returns 422.
+
+        #569 originally specified 400, but unparseable scalar values are
+        field-level validation failures (VALIDATION_FAILED, 422) per the
+        Campus API error spec — same contract as
+        test_check_client_access_invalid_permission_returns_422.
+        """
         response = self.client.get(
             "/audit/v1/apikeys/?limit=notanumber",
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
 
     def test_get_with_invalid_id_format_returns_404(self):
         """GET /audit/v1/apikeys/<id> with invalid ID format returns 404."""
