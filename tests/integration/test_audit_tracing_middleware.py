@@ -584,6 +584,40 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         request_body = span.get("request_body")
         assert request_body, "Request body not captured"
 
+    def test_sensitive_body_fields_redacted(self):
+        """Secrets in stored bodies/headers are masked before ingestion (#805)."""
+        test_data = {"client_id": env.CLIENT_ID, "client_secret": env.CLIENT_SECRET}
+        response = self.auth_client.post(
+            "/auth/v1/root/",
+            json=test_data,
+            headers=self.auth_headers,
+        )
+
+        trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
+
+        span = self._wait_for_span(trace_id)
+        assert span, "Span not ingested"
+
+        request_body = span.get("request_body") or {}
+        self.assertEqual(
+            request_body.get("client_id"), env.CLIENT_ID,
+            "Non-sensitive identifiers must stay visible",
+        )
+        self.assertEqual(
+            request_body.get("client_secret"), "[REDACTED]",
+            f"client_secret must not reach audit storage: {request_body}",
+        )
+        # Basic auth credentials live in the (stripped) Authorization
+        # header; the Cookie header of browser requests must be masked.
+        request_headers = span.get("request_headers") or {}
+        for name, value in request_headers.items():
+            if name.lower() == "cookie":
+                self.assertEqual(
+                    value, "[REDACTED]",
+                    "Cookie header must not reach audit storage",
+                )
+
     def test_request_body_captured_for_form_data(self):
         """Test that request body is captured for different content types."""
         # Use query parameters instead of POST body to test parameter

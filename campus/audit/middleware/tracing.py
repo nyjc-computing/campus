@@ -327,11 +327,11 @@ def build_span_from_context(
         "status_code": response.status_code,
         "method": request.method,
         "path": request.path,
-        "query_params": dict(request.args),
-        "request_headers": headers,
-        "request_body": request_body,
-        "response_headers": dict(response.headers),
-        "response_body": response_body,
+        "query_params": redact_sensitive(dict(request.args)),
+        "request_headers": redact_sensitive(headers),
+        "request_body": redact_sensitive(request_body),
+        "response_headers": redact_sensitive(dict(response.headers)),
+        "response_body": redact_sensitive(response_body),
         "client_ip": request.remote_addr,
         "user_agent": request.user_agent.string if request.user_agent else None,
         "error_message": None,  # No error for successful requests
@@ -366,6 +366,47 @@ def _identity_id(value: typing.Any) -> str | None:
     if isinstance(value, dict):
         return value.get("id")
     return getattr(value, "id", None)
+
+
+# Keys whose values must never reach audit storage (#805). Matched
+# case-insensitively with dashes normalized to underscores; the suffixes
+# catch variants (google_refresh_token, db_password, ...) without widening
+# to bare "_key"/"_code", which carry usable non-secret data.
+SENSITIVE_KEYS = frozenset({
+    "access_token", "api_key", "authorization", "client_secret",
+    "cookie", "device_code", "id_token", "passwd", "password",
+    "refresh_token", "secret", "set_cookie", "token",
+})
+_SENSITIVE_SUFFIXES = ("_secret", "_password", "_api_key", "_token")
+
+_REDACTED = "[REDACTED]"
+
+
+def _is_sensitive_key(key: typing.Any) -> bool:
+    if not isinstance(key, str):
+        return False
+    normalized = key.lower().replace("-", "_")
+    return (
+        normalized in SENSITIVE_KEYS
+        or normalized.endswith(_SENSITIVE_SUFFIXES)
+    )
+
+
+def redact_sensitive(value: typing.Any) -> typing.Any:
+    """Mask values stored under sensitive keys, recursively (#805).
+
+    Keyed redaction only: scalars and free-text bodies pass through
+    unchanged — text scrubbing needs sensitive-data marking (#806).
+    Returns a new structure; the input is not mutated.
+    """
+    if isinstance(value, dict):
+        return {
+            key: _REDACTED if _is_sensitive_key(key) else redact_sensitive(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_sensitive(item) for item in value]
+    return value
 
 
 def _extract_request_body(request: flask.Request) -> dict | str | None:
