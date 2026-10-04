@@ -170,5 +170,100 @@ class TestInstrumentRequestsSession(unittest.TestCase):
         self.assertFalse(tracing.instrument_requests_session(session))
 
 
+class TestSpanIdentityEnrichment(unittest.TestCase):
+    """build_span_from_context() maps the authenticated caller onto the span.
+
+    The shared Authenticator glue stashes full client/user objects under
+    flask.g.current_client/current_user (#802): resource dicts via the
+    SDK (campus.api), model objects in-process (campus.auth).
+    """
+
+    def setUp(self):
+        self.app = flask.Flask(__name__)
+
+    def _build_span(self) -> dict:
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+        return span
+
+    def test_dict_identities_mapped(self):
+        """Resource-dict identities (SDK path) land on the span by id."""
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            flask.g.current_client = {"id": "client-x", "name": "X"}
+            flask.g.current_user = {"id": "user-y"}
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["client_id"], "client-x")
+        self.assertEqual(span["user_id"], "user-y")
+
+    def test_object_identities_mapped(self):
+        """Model-object identities (auth in-process path) land by id."""
+        from types import SimpleNamespace
+
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            flask.g.current_client = SimpleNamespace(id="client-x")
+            flask.g.current_user = SimpleNamespace(id="user-y")
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["client_id"], "client-x")
+        self.assertEqual(span["user_id"], "user-y")
+
+    def test_unauthenticated_span_has_no_identity(self):
+        """No Authenticator stash, no identity on the span."""
+        span = self._build_span()
+
+        self.assertIsNone(span["client_id"])
+        self.assertIsNone(span["user_id"])
+
+    def test_client_only_identity(self):
+        """Basic-auth requests carry a client but no user."""
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            flask.g.current_client = {"id": "client-x"}
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["client_id"], "client-x")
+        self.assertIsNone(span["user_id"])
+
+    def test_direct_id_attributes_still_supported(self):
+        """Deployment glue stashing plain ids under client_id/user_id works."""
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            flask.g.client_id = "client-x"
+            flask.g.user_id = "user-y"
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["client_id"], "client-x")
+        self.assertEqual(span["user_id"], "user-y")
+
+
 if __name__ == "__main__":
     unittest.main()
