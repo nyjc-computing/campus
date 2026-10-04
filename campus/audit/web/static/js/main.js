@@ -68,6 +68,42 @@ function formatTimestamp(value) {
 }
 
 /**
+ * Render a journey chip linking to the grouped journey view (#803).
+ */
+function renderJourneyChip(journeyId) {
+    if (!journeyId) {
+        return '';
+    }
+    const href = `/audit/journeys/${encodeURIComponent(journeyId)}`;
+    return ` <a class="journey-chip" href="${href}" title="View login journey">${escapeHtml(journeyId)}</a>`;
+}
+
+/**
+ * Render one trace-summary row (shared by the traces list and the
+ * journey view). Expects the summary resource shape:
+ * {trace_id, started_at, duration_ms, span_count, root_span}.
+ */
+function renderTraceRow(summary) {
+    const root = summary.root_span || {};
+    const detailHref = `/audit/traces/${encodeURIComponent(summary.trace_id)}`;
+    const client = root.client_id || '—';
+    const user = root.user_id || '—';
+    const journeyId = (root.tags && root.tags.journey_id) || '';
+    return `
+        <tr>
+            <td class="trace-id"><a href="${detailHref}">${escapeHtml(summary.trace_id)}</a>${renderJourneyChip(journeyId)}</td>
+            <td title="${escapeHtml(summary.started_at || '')}">${escapeHtml(formatTimestamp(summary.started_at))}</td>
+            <td>${escapeHtml(root.method || '—')}</td>
+            <td class="wrap">${escapeHtml(root.path || '—')}</td>
+            <td>${renderStatusBadge(root.status_code)}</td>
+            <td>${escapeHtml(formatDuration(summary.duration_ms))}</td>
+            <td>${escapeHtml(summary.span_count)}</td>
+            <td class="wrap">${escapeHtml(client)}</td>
+            <td class="wrap">${escapeHtml(user)}</td>
+        </tr>`;
+}
+
+/**
  * Fetch JSON from the audit API and return the parsed body.
  * Throws an Error with a readable message on non-2xx responses.
  */

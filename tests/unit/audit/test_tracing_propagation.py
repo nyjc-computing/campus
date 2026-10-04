@@ -265,5 +265,81 @@ class TestSpanIdentityEnrichment(unittest.TestCase):
         self.assertEqual(span["user_id"], "user-y")
 
 
+class TestJourneyTagStamping(unittest.TestCase):
+    """build_span_from_context() stamps the login-journey tag (#803).
+
+    The journey id comes from the campus_journey cookie on browser hops;
+    the server-to-server /token exchange never carries the cookie, so its
+    handler stashes the id in flask.g for the middleware to pick up.
+    """
+
+    def setUp(self):
+        self.app = flask.Flask(__name__)
+
+    def _build_span(self) -> dict:
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+        return span
+
+    def test_cookie_stamps_journey_tag(self):
+        """A campus_journey cookie lands in the span's tags."""
+        import campus.config
+
+        cookie = f"{campus.config.JOURNEY_COOKIE}=journey_abc123"
+        with self.app.test_request_context("/", headers={"Cookie": cookie}):
+            tracing.start_span()
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["tags"], {"journey_id": "journey_abc123"})
+
+    def test_flask_g_journey_id_stamps_tag(self):
+        """A route-stashed journey id (the /token hop) lands in tags."""
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            flask.g.journey_id = "journey_g123"
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["tags"], {"journey_id": "journey_g123"})
+
+    def test_flask_g_takes_precedence_over_cookie(self):
+        """An explicit route stash wins over a stale cookie value."""
+        import campus.config
+
+        cookie = f"{campus.config.JOURNEY_COOKIE}=journey_cookie_val"
+        with self.app.test_request_context("/", headers={"Cookie": cookie}):
+            tracing.start_span()
+            flask.g.journey_id = "journey_g_val"
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["tags"], {"journey_id": "journey_g_val"})
+
+    def test_no_journey_leaves_tags_empty(self):
+        """Requests outside any login journey carry no tags."""
+        span = self._build_span()
+
+        self.assertEqual(span["tags"], {})
+
+
 if __name__ == "__main__":
     unittest.main()

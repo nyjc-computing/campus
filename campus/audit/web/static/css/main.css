@@ -254,6 +254,26 @@ button[type="reset"] {
     white-space: nowrap;
 }
 
+/* Journey chip on trace-list rows (#803): links to the grouped
+   journey view. Kept compact so the full trace ID stays readable. */
+.journey-chip {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.02rem 0.45rem;
+    border-radius: 999px;
+    background: #e8effa;
+    color: var(--audit-accent-dark);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+.journey-chip:hover {
+    background: #d8e5f7;
+    text-decoration: underline;
+}
+
 .trace-table thead th {
     background: #eef1f5;
     font-size: 0.7rem;

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Journey {{ journey_id[:24] }}… - Audit{% endblock %}
+
+{% block content %}
+<div id="journey-detail" data-journey-id="{{ journey_id }}">
+    <h2 class="page-title">Login journey</h2>
+    <p class="page-subtitle">
+        Every trace of one login flow, oldest first: the browser hops and the
+        token exchange. <code class="mono">{{ journey_id }}</code>
+    </p>
+
+    <div id="list-status" class="list-status" aria-live="polite"></div>
+
+    <div class="table-wrapper">
+        <table class="trace-table">
+            <thead>
+                <tr>
+                    <th>Trace ID</th>
+                    <th>Started</th>
+                    <th>Method</th>
+                    <th>Path</th>
+                    <th>Status</th>
+                    <th>Duration</th>
+                    <th>Spans</th>
+                    <th>Client</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody id="trace-table-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/audit/static/js/journey.js"></script>
+{% endblock %}

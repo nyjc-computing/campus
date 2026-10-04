@@ -10,6 +10,7 @@ Page map (docs/web-ui-requirements.md §2):
 - GET /audit/ - landing page (public: no login required)
 - GET /audit/traces - trace list (login required)
 - GET /audit/traces/<trace_id> - trace detail (login required)
+- GET /audit/journeys/<journey_id> - login-journey grouped view (login required)
 
 The trace list moved from /audit/ to /audit/traces when the landing
 page was added; the login gate (campus.audit.web.auth) exempts the
@@ -62,5 +63,15 @@ def create_blueprint() -> flask.Blueprint:
         drawer; data is loaded client-side from the UI data endpoints.
         """
         return flask.render_template('trace.html', trace_id=trace_id)
+
+    @bp.route('/journeys/<journey_id>')
+    def journey(journey_id: str) -> str:
+        """Render the login-journey grouped view (#803).
+
+        Lists every trace of one login flow (browser hops plus the
+        server-to-server token exchange) in start order; data is loaded
+        client-side from the UI data endpoints.
+        """
+        return flask.render_template('journey.html', journey_id=journey_id)
 
     return bp
