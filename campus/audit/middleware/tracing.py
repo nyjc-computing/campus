@@ -10,12 +10,19 @@ import time
 import typing
 
 import flask
+import requests
 
 from campus.audit.client import AuditClient
 from campus.common import schema
 from campus.common.utils import uid
 
 logger = logging.getLogger(__name__)
+
+# Trace context headers. X-Request-ID carries the trace_id on both the
+# inbound and outbound legs; X-Parent-Span-ID carries the caller's span_id
+# so the receiving service records its span as a child of the caller (#794).
+TRACE_ID_HEADER = "X-Request-ID"
+PARENT_SPAN_ID_HEADER = "X-Parent-Span-ID"
 
 class ExecutorManager:
     """Manages executor lifecycle with clear ownership and state tracking.
@@ -198,19 +205,26 @@ def _get_audit_client() -> AuditClient:
 
 
 def start_span() -> None:
-    """Start a root span for the incoming request.
+    """Start a span for the incoming request.
 
-    - Generates or reuses trace_id from X-Request-ID header
+    A request that arrives with trace context headers (X-Request-ID +
+    X-Parent-Span-ID, set by a calling campus service) becomes a child
+    span of the caller; otherwise it starts a new root span.
+
+    - Reuses trace_id from X-Request-ID header, or generates one
+    - Records parent_span_id from X-Parent-Span-ID header, if present
     - Generates span_id for this request
     - Stores timing data in flask.g
 
     Stores in flask.g:
         - trace_id: 32-char hex trace identifier
         - span_id: 16-char hex span identifier
-        - trace_start: timestamp for duration calculation
+        - parent_span_id: caller's span id, or None for root spans
+        - trace_start: perf_counter timestamp for duration calculation
+        - trace_started_at: wall-clock DateTime for the span's started_at
     """
     # Get or generate trace_id from X-Request-ID header
-    trace_id = flask.request.headers.get("X-Request-ID") or uid.generate_trace_id()
+    trace_id = flask.request.headers.get(TRACE_ID_HEADER) or uid.generate_trace_id()
 
     # Generate span_id for this request
     span_id = uid.generate_span_id()
@@ -218,7 +232,11 @@ def start_span() -> None:
     # Store in flask.g for use in after_request
     flask.g.trace_id = trace_id
     flask.g.span_id = span_id
+    flask.g.parent_span_id = flask.request.headers.get(PARENT_SPAN_ID_HEADER) or None
     flask.g.trace_start = time.perf_counter()
+    # Wall-clock start: recorded here so the span's started_at reflects
+    # when the request arrived, not when the span was ingested (#794).
+    flask.g.trace_started_at = schema.DateTime.utcnow()
 
 
 def end_span(response: flask.Response) -> flask.Response:
@@ -258,7 +276,7 @@ def end_span(response: flask.Response) -> flask.Response:
     _ingest_span_async(span)
 
     # Echo trace_id in response header
-    response.headers["X-Request-ID"] = trace_id
+    response.headers[TRACE_ID_HEADER] = trace_id
 
     return response
 
@@ -293,12 +311,18 @@ def build_span_from_context(
     # Get response body (truncated to 64KB)
     response_body = _extract_response_body(response)
 
+    # Span start: wall-clock time captured in start_span (before_request),
+    # not the ingestion time — waterfall offsets depend on it (#794).
+    started_at = getattr(flask.g, "trace_started_at", None) or schema.DateTime.utcnow()
+
     # Build span dict matching TraceSpan schema
     span = {
         "trace_id": trace_id,
         "span_id": span_id,
-        "parent_span_id": None,  # Root spans have no parent
-        "started_at": schema.DateTime.utcnow(),
+        # Set by start_span from the X-Parent-Span-ID header when the
+        # request was spawned by another traced campus service (#794)
+        "parent_span_id": getattr(flask.g, "parent_span_id", None),
+        "started_at": started_at,
         "duration_ms": round(duration_ms, 3),
         "status_code": response.status_code,
         "method": request.method,
@@ -512,3 +536,74 @@ def get_executor_state() -> dict:
         'initialized': _ingestion_executor_manager.is_initialized,
         'shutdown': _ingestion_executor_manager.is_shutdown,
     }
+
+
+def current_context() -> tuple[str, str] | None:
+    """Return the (trace_id, span_id) of the active traced request.
+
+    Returns None outside a request context, or when the request has no
+    active span (tracing disabled or middleware not yet run). Span
+    ingestion runs on a separate executor thread, so it never sees a
+    context here and stays unparented by design.
+    """
+    if not flask.has_request_context():
+        return None
+    trace_id = getattr(flask.g, "trace_id", None)
+    span_id = getattr(flask.g, "span_id", None)
+    if trace_id and span_id:
+        return trace_id, span_id
+    return None
+
+
+def propagation_headers() -> dict[str, str]:
+    """Headers to attach to an outbound request spawned by the current one.
+
+    Empty outside a traced request context. The receiving service's
+    tracing middleware turns these into a child span of the caller's
+    span (#794).
+    """
+    context = current_context()
+    if context is None:
+        return {}
+    return {
+        TRACE_ID_HEADER: context[0],
+        PARENT_SPAN_ID_HEADER: context[1],
+    }
+
+
+_INSTRUMENTED_ATTR = "_campus_trace_instrumented"
+
+
+def instrument_requests_session(session: requests.Session) -> bool:
+    """Wrap a requests.Session so its calls carry trace context headers.
+
+    Headers are computed at call time from the active request context, so
+    a shared session stays correct under concurrent requests, and calls
+    made outside a traced request (e.g. the span-ingestion executor
+    thread, startup code) are left untouched.
+
+    Idempotent: re-instrumenting a session is a no-op.
+
+    Args:
+        session: The requests.Session to instrument.
+
+    Returns:
+        True if the session was instrumented now, False if already done.
+    """
+    if getattr(session, _INSTRUMENTED_ATTR, False):
+        return False
+
+    original_request = session.request
+
+    def request(method, url, **kwargs):
+        extra = propagation_headers()
+        if extra:
+            headers = dict(kwargs.get("headers") or {})
+            for name, value in extra.items():
+                headers.setdefault(name, value)
+            kwargs["headers"] = headers
+        return original_request(method, url, **kwargs)
+
+    session.request = request
+    setattr(session, _INSTRUMENTED_ATTR, True)
+    return True

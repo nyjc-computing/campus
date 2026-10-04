@@ -238,12 +238,22 @@ class TestCampusRequest(JsonClient):
     def _get_auth_headers_dict(self) -> dict[str, str]:
         """Get authentication headers as dict for requests.
 
+        Trace context headers are merged in so cross-service requests
+        made while handling a traced request ingest as child spans,
+        mirroring the production requests.Session instrumentation (#794).
+
         Returns:
             Dictionary of HTTP headers for authentication
         """
         if self._override_auth_headers is not None:
-            return dict(self._override_auth_headers)
-        return dict(self._load_auth_headers())
+            headers = dict(self._override_auth_headers)
+        else:
+            headers = dict(self._load_auth_headers())
+        from campus.audit.middleware import tracing
+
+        for name, value in tracing.propagation_headers().items():
+            headers.setdefault(name, value)
+        return headers
 
     def get(self: Self, path: str, query: dict[str, Any] | None = None) -> FlaskTestResponse:
         """Sends a GET request.

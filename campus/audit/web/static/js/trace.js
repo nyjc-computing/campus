@@ -148,6 +148,8 @@
                     <div class="wf-track">
                         <div class="wf-bar ${statusBadgeClass(span.statusCode)}" style="${barStyle}"></div>
                     </div>
+                    <div class="wf-start" title="Start offset from the trace's first request">+${escapeHtml(formatDuration(span.offsetMs))}</div>
+                    <div class="wf-time" title="Duration">${escapeHtml(formatDuration(span.durationMs))}</div>
                     <div class="wf-status">${escapeHtml(status)}</div>
                 </div>`;
         }).join('');
@@ -171,7 +173,7 @@
             const label = i === ticks - 1 ? formatDuration(totalMs) : formatDuration(totalMs * frac);
             marks.push(`<span class="ruler-mark" style="left: ${(frac * 100).toFixed(3)}%">${escapeHtml(label)}</span>`);
         }
-        ruler.innerHTML = `<div class="ruler-spacer"></div><div class="ruler-track">${marks.join('')}</div><div class="ruler-status"></div>`;
+        ruler.innerHTML = `<div class="ruler-spacer"></div><div class="ruler-track">${marks.join('')}</div><div class="ruler-start"></div><div class="ruler-time"></div><div class="ruler-status"></div>`;
     }
 
     // ---------- span details drawer ----------

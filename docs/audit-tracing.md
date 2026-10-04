@@ -19,6 +19,31 @@ Parent epic: #424; enablement issue: #699.
   (`AUDIT_EVENTS_ENABLED=1`, login-attempt/API-key events) directly into
   its own storage.
 
+## Trace context propagation (#794)
+
+Requests spawned by a traced service become **child spans** of the
+originating request, which is what the audit UI's waterfall draws:
+
+- Inbound: `X-Request-ID` (trace id, pre-existing) and `X-Parent-Span-ID`
+  (caller's span id) promote the request from a new root to a child of
+  the caller's span, within the caller's trace.
+- Outbound: `tracing.instrument_requests_session()` wraps a
+  `requests.Session` so calls made while handling a traced request carry
+  both headers. `campus.api.init_app` instruments the `campus_python`
+  client's auth session (the `authenticate` call every api request
+  makes). Headers are computed per call — safe for shared sessions, and
+  calls from outside a request context (e.g. the ingestion executor
+  thread) stay unparented.
+- In tests, `tests.flask_test.TestCampusRequest` merges the same headers
+  so the api→auth chain behaves as in production.
+- Span `started_at` is the wall-clock request start (captured in
+  `before_request`), so waterfall offsets are real start deltas.
+- `TraceTree.from_spans` adopts spans whose parent was not ingested
+  under the earliest-started root — nothing disappears from the view.
+- Header trust matches `X-Request-ID`: internal observability only, not
+  a security boundary. W3C `traceparent` interop is possible future work,
+  as is moving the SDK session instrumentation into campus-api-python.
+
 ## Authentication (`AUDIT_API_KEY`)
 
 Producers authenticate to the audit API with a **Bearer `audit_v1_` API
