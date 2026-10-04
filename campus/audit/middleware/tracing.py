@@ -604,6 +604,8 @@ def instrument_requests_session(session: requests.Session) -> bool:
             kwargs["headers"] = headers
         return original_request(method, url, **kwargs)
 
-    session.request = request
+    # Instance-level override of the bound method: every requests verb
+    # funnels through Session.request, so one wrap covers all calls.
+    typing.cast(typing.Any, session).request = request
     setattr(session, _INSTRUMENTED_ATTR, True)
     return True
