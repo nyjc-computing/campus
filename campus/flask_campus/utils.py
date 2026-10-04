@@ -128,18 +128,19 @@ def _is_type_compatible(value: Any, annotation: Any) -> bool | None:
     if isinstance(annotation, type):
         if isinstance(value, annotation):
             # bool is an int subclass; reject True/False for int fields
-            if issubclass(annotation, int) and not issubclass(annotation, bool) \
-                    and isinstance(value, bool):
-                return False
-            return True
+            return not (
+                issubclass(annotation, int)
+                and not issubclass(annotation, bool)
+                and isinstance(value, bool)
+            )
         # Accept supertype values that the annotated schema class wraps:
         # plain str for str subclasses (schema.UserID, schema.DateTime),
         # plain int for int subclasses (schema.Integer), plain float for
         # float subclasses (schema.Number). Callers coerce in place.
-        for base in (str, int, float):
-            if isinstance(value, base) and issubclass(annotation, base):
-                return True
-        return False
+        return any(
+            isinstance(value, base) and issubclass(annotation, base)
+            for base in (str, int, float)
+        )
     return None
 
 
