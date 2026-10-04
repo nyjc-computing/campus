@@ -273,6 +273,41 @@ stateDiagram-v2
   routes (RFC 6750 wants 401); refresh tokens have no independent
   lifetime cap. Both are tracked as follow-ups.
 
+## Sign-out chain (#785/#788/#791)
+
+Sign-out has two halves: the **API half** revokes the login-session
+record (server-verified), and the **browser half** clears the auth
+service's own Flask session — the campusauth SSO cookie. Framework
+apps get both via `flask_campus`'s `/logout`; the audit UI gate wires
+the same chain itself:
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as App (/logout)
+    participant AU as campusauth (/auth/v1/logout)
+    B->>A: GET /logout
+    A->>AU: API: revoke login session (#776)
+    A->>B: 302 /auth/v1/logout<br>?post_logout_redirect_uri=<app landing>
+    AU->>AU: session.clear(), expire cookie
+    AU->>B: 302 to validated target (default "/")
+```
+
+`post_logout_redirect_uri` is honored when it is a same-origin path
+or an **absolute URL whose origin matches a registered client
+`redirect_uri` origin** (#789) — the registry that fail-closed login
+validation (#651) already requires, so a first-party app needs no
+extra registration to land back on its own page. Anything else fails
+closed to `/`: unregistered origins, http/https mismatch, userinfo or
+backslashes in the authority. Path is free within a registered
+origin; per-client matching (`client_id`, `id_token_hint`) awaits
+#301's RP-initiated logout.
+
+Residuals: Google's browser session is deliberately untouched
+(re-login costs an account-chooser round trip); logout is a plain GET,
+so a foreign page can sign a visitor out (logout CSRF — a nuisance,
+not a privilege issue).
+
 ## Scope algebra
 
 Campus implements Google-style **incremental scope authorization**
