@@ -31,25 +31,6 @@
         return params;
     }
 
-    function renderRow(summary) {
-        const root = summary.root_span || {};
-        const detailHref = `/audit/traces/${encodeURIComponent(summary.trace_id)}`;
-        const client = root.client_id || '—';
-        const user = root.user_id || '—';
-        return `
-            <tr>
-                <td class="trace-id"><a href="${detailHref}">${escapeHtml(summary.trace_id)}</a></td>
-                <td title="${escapeHtml(summary.started_at || '')}">${escapeHtml(formatTimestamp(summary.started_at))}</td>
-                <td>${escapeHtml(root.method || '—')}</td>
-                <td class="wrap">${escapeHtml(root.path || '—')}</td>
-                <td>${renderStatusBadge(root.status_code)}</td>
-                <td>${escapeHtml(formatDuration(summary.duration_ms))}</td>
-                <td>${escapeHtml(summary.span_count)}</td>
-                <td class="wrap">${escapeHtml(client)}</td>
-                <td class="wrap">${escapeHtml(user)}</td>
-            </tr>`;
-    }
-
     function setStatus(message, isError) {
         statusRegion.innerHTML = message
             ? `<span class="${isError ? 'error' : ''}">${escapeHtml(message)}</span>`
@@ -70,7 +51,7 @@
             }
             const data = await fetchJson(`${SEARCH_URL}?${params.toString()}`);
             const traces = data.traces || [];
-            tableBody.insertAdjacentHTML('beforeend', traces.map(renderRow).join(''));
+            tableBody.insertAdjacentHTML('beforeend', traces.map(renderTraceRow).join(''));
             state.cursor = (data.cursor && data.cursor.next) || null;
             state.hasMore = Boolean(data.cursor && data.cursor.has_more && state.cursor);
             const total = tableBody.rows.length;

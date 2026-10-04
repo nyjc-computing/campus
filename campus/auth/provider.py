@@ -44,7 +44,7 @@ import campus.model as model
 from campus import flask_campus
 from campus.common import env, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
-from campus.common.utils import secret, url, utc_time
+from campus.common.utils import secret, uid, url, utc_time
 
 from . import resources, scopes
 
@@ -222,7 +222,27 @@ def authorize(
         'auth.google.authorize',
         **params
     )
-    return flask.redirect(oauth_authorize_url)
+
+    # Login-journey correlation (#803): /authorize is the flow's first
+    # browser touch, so it issues (or reuses) the campus_journey cookie
+    # and records the id on the auth session — the server-to-server
+    # /token exchange reads it from there later, since that call never
+    # carries browser cookies.
+    journey_id = (
+        flask.request.cookies.get(campus.config.JOURNEY_COOKIE)
+        or uid.generate_category_uid("journey")
+    )
+    resources.session[PROVIDER][state].update(journey_id=journey_id)
+
+    response = flask.redirect(oauth_authorize_url)
+    response.set_cookie(
+        campus.config.JOURNEY_COOKIE,
+        journey_id,
+        max_age=campus.config.JOURNEY_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="Lax",
+    )
+    return response
 
 
 @flask_campus.unpack_request
@@ -312,6 +332,12 @@ def token(
     resources.session[PROVIDER][authsession.id].update(
         authorization_code=INVALIDATED
     )
+
+    # Login-journey correlation (#803): /token is a server-to-server call
+    # and never carries the browser cookie, so the journey id recorded at
+    # /authorize is surfaced to the tracing middleware via flask.g.
+    if authsession.journey_id:
+        flask.g.journey_id = authsession.journey_id
 
     if not authsession.user_id:
         raise auth_errors.InvalidRequestError(

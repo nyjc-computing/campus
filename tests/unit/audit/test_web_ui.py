@@ -8,6 +8,7 @@ File: tests/unit/audit/test_web_ui.py
 Issue: #429
 """
 
+import contextlib
 import unittest
 
 import flask
@@ -43,6 +44,8 @@ class TestAuditWebUI(unittest.TestCase):
         self.assertIn(b"trace-filters", response.data)
         self.assertIn(b"trace-table-body", response.data)
         self.assertIn(b"traces.js", response.data)
+        # Journey filter (#803) rides the standard filter form
+        self.assertIn(b'name="journey_id"', response.data)
 
     def test_trace_detail_page_renders_scaffold(self):
         """/audit/traces/<trace_id> renders the waterfall/drawer scaffold."""
@@ -60,9 +63,11 @@ class TestAuditWebUI(unittest.TestCase):
         expected_tokens = [
             ("/audit/static/css/main.css", b"wf-bar"),
             ("/audit/static/css/main.css", b"span-drawer"),
+            ("/audit/static/css/main.css", b"journey-chip"),
             ("/audit/static/js/main.js", b"escapeHtml"),
             ("/audit/static/js/traces.js", b"loadTraces"),
             ("/audit/static/js/trace.js", b"renderWaterfall"),
+            ("/audit/static/js/journey.js", b"loadJourney"),
         ]
         for path, token in expected_tokens:
             with self.subTest(path=path):
@@ -85,26 +90,46 @@ class TestAuditWebUI(unittest.TestCase):
 
         docs/web-ui-requirements.md §3.3/§7.1/§7.4: trace IDs render in
         full, unwrapped (td.trace-id keeps them on one line), timestamps
-        render as local YYYY-MM-DD HH:MM:SS.
+        render as local YYYY-MM-DD HH:MM:SS. The row renderer lives in
+        main.js (shared with the journey view, #803); traces.js just
+        calls it per row.
         """
         main_js = self.client.get("/audit/static/js/main.js").data
         traces_js = self.client.get("/audit/static/js/traces.js").data
         css = self.client.get("/audit/static/css/main.css").data
-        # Shared timestamp helper exists and is used
+        # Shared timestamp helper exists and is used by the row renderer
         self.assertIn(b"function formatTimestamp", main_js)
-        self.assertIn(b"formatTimestamp(summary.started_at)", traces_js)
+        self.assertIn(b"formatTimestamp(summary.started_at)", main_js)
         # The trace ID cell renders the full id with the no-wrap class;
         # the truncation helper is gone (dead code).
-        self.assertIn(b'<td class="trace-id">', traces_js)
+        self.assertIn(b'<td class="trace-id">', main_js)
         self.assertNotIn(b"formatTraceId", main_js)
         self.assertIn(b".trace-table td.trace-id", css)
-        # Detail links keep pointing at the detail route
-        self.assertIn(b"/audit/traces/${encodeURIComponent(summary.trace_id)}", traces_js)
+        # Detail links keep pointing at the detail route; the list page
+        # renders rows through the shared renderer
+        self.assertIn(b"/audit/traces/${encodeURIComponent(summary.trace_id)}", main_js)
+        self.assertIn(b"traces.map(renderTraceRow)", traces_js)
 
     def test_trace_js_targets_ui_data_endpoint(self):
         """trace.js must fetch the UI data endpoints, not the auth'd API."""
         response = self.client.get("/audit/static/js/trace.js")
         self.assertIn(b"/audit/api/traces", response.data)
+        self.assertNotIn(b"/audit/v1", response.data)
+
+    def test_journey_page_renders_scaffold(self):
+        """/audit/journeys/<journey_id> renders the grouped-view scaffold (#803)."""
+        journey_id = "journey_abc123"
+        response = self.client.get(f"/audit/journeys/{journey_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"trace-table-body", response.data)
+        self.assertIn(b'data-journey-id="journey_abc123"', response.data)
+        self.assertIn(b"journey.js", response.data)
+        self.assertNotIn(b"traces.js", response.data)
+
+    def test_journey_js_targets_ui_data_endpoint(self):
+        """journey.js must fetch the UI data endpoint, not the auth'd API."""
+        response = self.client.get("/audit/static/js/journey.js")
+        self.assertIn(b"/audit/api/journeys", response.data)
         self.assertNotIn(b"/audit/v1", response.data)
 
 
@@ -203,6 +228,103 @@ class TestAuditUIDataEndpoint(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertIn("error", response.get_json())
+
+    def test_get_journey_returns_member_traces_oldest_first(self):
+        """GET /audit/api/journeys/<id> lists tagged traces, oldest first (#803)."""
+        from campus.common import schema
+        from campus.model import audit as audit_model
+
+        seeded: list[str] = []
+
+        def _seed(trace_id: str, span_id: str, started_at: str, journey_id: str | None):
+            span = audit_model.TraceSpan(
+                trace_id=trace_id,
+                span_id=span_id,
+                method="GET",
+                path="/auth/v1/authorize",
+                status_code=302,
+                started_at=schema.DateTime(started_at),
+                duration_ms=5.0,
+                client_ip="127.0.0.1",
+                tags={"journey_id": journey_id} if journey_id else {},
+            )
+            result = TracesResource().ingest([span])
+            self.assertEqual(result["created"], [span.span_id])
+            seeded.append(span.span_id)
+
+        # Local import after storage init (see setUpClass)
+        from campus.audit.resources.traces import TracesResource, traces_storage
+
+        try:
+            _seed("a" * 32, "b" * 16, "2026-10-04T10:00:00+00:00", "journey_u1")
+            _seed("c" * 32, "d" * 16, "2026-10-04T10:01:00+00:00", "journey_u1")
+            _seed("e" * 32, "f" * 16, "2026-10-04T10:02:00+00:00", None)
+
+            response = self.client.get("/audit/api/journeys/journey_u1")
+            self.assertEqual(response.status_code, 200)
+            body = response.get_json()
+            self.assertEqual(body["journey_id"], "journey_u1")
+            self.assertEqual(body["trace_count"], 2)
+            self.assertEqual(
+                [t["trace_id"] for t in body["traces"]],
+                ["a" * 32, "c" * 32],
+            )
+            # Rows carry the journey chip data: root span tags surface the id
+            self.assertEqual(
+                body["traces"][0]["root_span"]["tags"]["journey_id"],
+                "journey_u1",
+            )
+
+            unknown = self.client.get("/audit/api/journeys/journey_missing")
+            self.assertEqual(unknown.status_code, 200)
+            self.assertEqual(unknown.get_json()["trace_count"], 0)
+        finally:
+            # This class has no per-test storage cleanup; remove the
+            # seeds so later tests (and the unfiltered list shape test)
+            # see an unchanged table.
+            for span_id in seeded:
+                with contextlib.suppress(Exception):
+                    traces_storage.delete_by_id(span_id)
+
+    def test_list_traces_filters_by_journey_id(self):
+        """GET /audit/api/traces?journey_id=... narrows to journey traces (#803)."""
+        from campus.audit.resources.traces import TracesResource, traces_storage
+        from campus.model import audit as audit_model
+
+        tagged = audit_model.TraceSpan(
+            trace_id="9" * 32,
+            span_id="8" * 16,
+            method="GET",
+            path="/auth/v1/verify_login",
+            status_code=302,
+            duration_ms=5.0,
+            client_ip="127.0.0.1",
+            tags={"journey_id": "journey_u2"},
+        )
+        untagged = audit_model.TraceSpan(
+            trace_id="7" * 32,
+            span_id="6" * 16,
+            method="GET",
+            path="/api/v1/circles/",
+            status_code=200,
+            duration_ms=5.0,
+            client_ip="127.0.0.1",
+        )
+        result = TracesResource().ingest([tagged, untagged])
+        self.assertEqual(sorted(result["created"]), sorted([tagged.span_id, untagged.span_id]))
+
+        try:
+            response = self.client.get("/audit/api/traces?journey_id=journey_u2")
+            self.assertEqual(response.status_code, 200)
+            body = response.get_json()
+            self.assertEqual(
+                [t["trace_id"] for t in body["traces"]],
+                ["9" * 32],
+            )
+        finally:
+            for span in (tagged, untagged):
+                with contextlib.suppress(Exception):
+                    traces_storage.delete_by_id(span.span_id)
 
 
 if __name__ == "__main__":
