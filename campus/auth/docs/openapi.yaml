@@ -847,10 +847,11 @@ paths:
           schema:
             type: string
           description: |
-            Same-origin path to land on after sign-out (OIDC parameter
+            Same-origin path, or an absolute URL whose origin matches a
+            registered client's redirect_uri (#788), so sign-out can
+            land the browser back on the calling app (OIDC parameter
             name, so #301's RP-initiated logout can adopt this
-            endpoint). Cross-origin or otherwise unsafe values, and
-            absence, fall back to "/".
+            endpoint). Unsafe values, and absence, fall back to "/".
       responses:
         '302':
           description: Redirect to the validated target (default "/")
