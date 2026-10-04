@@ -298,6 +298,35 @@ def _handle_device_code_grant(
             "device_code is required for device_code grant type"
         )
 
+    # NOTE: the single-use claim below is check-then-act (#356). This
+    # read and the delete in the "authorized" branch are not atomic, so
+    # two concurrent /oauth/token polls for the same device code could
+    # both observe "authorized" and both issue a token. The risk is
+    # considered negligible while ALL of the following hold; revisit
+    # #356 if any of them breaks:
+    #   1. Requests are serialized: the service is deployed with a
+    #      single sync gunicorn worker (single-worker decision, PR
+    #      #608), so no two requests overlap the read-to-delete window
+    #      below. Scaling past one worker or enabling threaded mode
+    #      voids this assumption.
+    #   2. Overlapping polls for one device code are practically
+    #      unreachable: the device code is a secret held only by the
+    #      initiating client, every /device_authorize call mints a
+    #      fresh code, and RFC 8628 clients poll serially at the
+    #      advertised interval; only an HTTP intermediary duplicate
+    #      landing within milliseconds could overlap. A mid-flight
+    #      state flip cannot yield a token either: the pending branch
+    #      raises immediately with no work between read and branch,
+    #      and nothing currently writes state="denied".
+    #   3. Blast radius is bounded even if it fires: both racers read
+    #      user_id from the same device code, so both tokens carry the
+    #      same user's scopes for the same client, and the credentials
+    #      update is last-writer-wins on token_id, leaving at most one
+    #      resolvable token (a same-user clobber, not escalation).
+    # If any assumption breaks, claim atomically by deleting BEFORE
+    # minting: delete_by_id raises NotFoundError when another request
+    # already consumed the code (rowcount-guarded in both the sqlite
+    # and postgres backends); map that to InvalidGrantError.
     try:
         dc = device_code_resource.get_by_device_code(device_code)
     except api_errors.NotFoundError:
@@ -365,7 +394,9 @@ def _handle_device_code_grant(
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
 
-        # Delete the device code as it's now used
+        # Delete the device code as it's now used. This is the closing
+        # edge of the #356 check-then-act window (see the race
+        # assumptions at the top of this handler).
         device_code_resource.delete(dc.id)
 
         get_yapper().emit('campus.oauth.token', {
