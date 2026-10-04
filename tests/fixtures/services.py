@@ -435,11 +435,13 @@ class ServiceManager:
         TracesResource.init_storage()
 
         # Create an audit API key for span ingestion
+        # Scopes follow the #575 scope model: traces:write for span
+        # POSTs, traces:read for trace/span queries (search included)
         apikey_resource = APIKeysResource()
         api_key_model, plaintext_key = apikey_resource.new(
             name="test-tracing-key",
             owner_id=str(env.CLIENT_ID),  # Use test client ID as owner
-            scopes="traces:ingest,traces:read,traces:search"
+            scopes="traces:write,traces:read"
         )
 
         # Set ACCESS_TOKEN so TestJsonClient uses Bearer authentication
