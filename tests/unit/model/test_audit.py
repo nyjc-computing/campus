@@ -1027,5 +1027,61 @@ class TestAPIKey(unittest.TestCase):
             APIKey.validate_update({})
 
 
+class TestTraceTreeIdentity(unittest.TestCase):
+    """Tree nodes carry span identity (#823).
+
+    The detail views serialize via TraceTreeNode; without identity
+    fields there, the detail page and the versioned detail API show
+    '—' client/user even when the spans have them — disagreeing with
+    the list summaries built from the full TraceSpan.
+    """
+
+    def _span(self, span_id, parent_id=None, **extra):
+        span = {
+            "span_id": span_id,
+            "trace_id": "t" * 32,
+            "parent_span_id": parent_id,
+            "method": "GET",
+            "path": "/api/test",
+            "status_code": 200,
+            "started_at": "2026-10-05T10:00:00Z",
+            "duration_ms": 10.0,
+            "error_message": None,
+            "client_id": "uid-client-abc",
+            "user_id": "user@nyjc.edu.sg",
+        }
+        span.update(extra)
+        return span
+
+    def test_from_spans_maps_identity_onto_nodes(self):
+        tree = TraceTree.from_spans([
+            self._span("root"),
+            self._span("child", parent_id="root"),
+        ])
+
+        self.assertEqual(tree.root.client_id, "uid-client-abc")
+        self.assertEqual(tree.root.user_id, "user@nyjc.edu.sg")
+        self.assertEqual(tree.root.children[0].client_id, "uid-client-abc")
+        self.assertEqual(tree.root.children[0].user_id, "user@nyjc.edu.sg")
+
+    def test_identity_absent_defaults_to_none(self):
+        span = self._span("root")
+        del span["client_id"]
+        del span["user_id"]
+
+        tree = TraceTree.from_spans([span])
+
+        self.assertIsNone(tree.root.client_id)
+        self.assertIsNone(tree.root.user_id)
+
+    def test_to_resource_includes_identity(self):
+        tree = TraceTree.from_spans([self._span("root")])
+
+        resource = tree.to_resource()
+
+        self.assertEqual(resource["client_id"], "uid-client-abc")
+        self.assertEqual(resource["user_id"], "user@nyjc.edu.sg")
+
+
 if __name__ == "__main__":
     unittest.main()

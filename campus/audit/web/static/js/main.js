@@ -81,6 +81,20 @@ function renderJourneyLine(journeyId) {
 }
 
 /**
+ * Truncated display form of a trace id (#823): first 12 chars plus an
+ * ellipsis keeps rows dense; the full id stays in the tooltip and the
+ * detail link.
+ */
+const TRACE_ID_DISPLAY_CHARS = 12;
+
+function renderTraceIdLabel(traceId) {
+    if (!traceId || traceId.length <= TRACE_ID_DISPLAY_CHARS + 1) {
+        return traceId || '';
+    }
+    return traceId.slice(0, TRACE_ID_DISPLAY_CHARS) + '…';
+}
+
+/**
  * Render one trace-summary row (shared by the traces list and the
  * group-by-journey view). Expects the summary resource shape:
  * {trace_id, started_at, duration_ms, span_count, root_span}.
@@ -97,15 +111,15 @@ function renderTraceRow(summary, opts) {
     const journeyLine = options.journeyView ? '' : renderJourneyLine(journeyId);
     return `
         <tr>
-            <td class="trace-id">${journeyLine}<a href="${detailHref}">${escapeHtml(summary.trace_id)}</a></td>
+            <td class="trace-id">${journeyLine}<a href="${detailHref}" title="${escapeHtml(summary.trace_id)}">${escapeHtml(renderTraceIdLabel(summary.trace_id))}</a></td>
             <td title="${escapeHtml(summary.started_at || '')}">${escapeHtml(formatTimestamp(summary.started_at))}</td>
             <td>${escapeHtml(root.method || '—')}</td>
             <td class="wrap">${escapeHtml(root.path || '—')}</td>
             <td>${renderStatusBadge(root.status_code)}</td>
             <td>${escapeHtml(formatDuration(summary.duration_ms))}</td>
             <td>${escapeHtml(summary.span_count)}</td>
-            <td class="wrap" title="${escapeHtml(root.client_id || '')}">${escapeHtml(client)}</td>
-            <td class="wrap">${escapeHtml(user)}</td>
+            <td title="${escapeHtml(root.client_id || '')}">${escapeHtml(client)}</td>
+            <td title="${escapeHtml(root.user_id || '')}">${escapeHtml(user)}</td>
         </tr>`;
 }
 
