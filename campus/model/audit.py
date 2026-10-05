@@ -329,6 +329,10 @@ class TraceTreeNode(InternalModel):
     # Client info (#826): same rationale — the detail metadata shows
     # the requesting user agent, which only the full span carried.
     user_agent: str | None = None
+    # Device (#825): same rationale — the detail metadata shows the
+    # device the request is attributed to. Lives in span tags, so the
+    # tree builder lifts it out to a first-class field.
+    device_id: str | None = None
 
     # Tree structure
     children: "list[TraceTreeNode]" = field(default_factory=list)
@@ -511,6 +515,7 @@ class TraceTree(InternalModel):
             client_id=span_dict.get("client_id"),
             user_id=span_dict.get("user_id"),
             user_agent=span_dict.get("user_agent"),
+            device_id=(span_dict.get("tags") or {}).get("device_id"),
             children=child_nodes,
             depth=depth,
             offset=offset,

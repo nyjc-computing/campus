@@ -288,6 +288,38 @@ class TestTraceTree(unittest.TestCase):
 
         self.assertIsNone(tree.root)
 
+    def test_treetree_from_spans_lifts_device_id_from_tags(self):
+        """The tree node exposes tags.device_id as a first-class field (#825).
+
+        The detail page reads node.device_id; without the lift it would
+        have to dig into tags, which the tree path does not carry.
+        """
+        spans = [
+            self._make_span_dict(
+                span_id="root",
+                parent_span_id=None,
+                tags={"journey_id": "journey1", "device_id": "uid-device-9f3c"},
+            ),
+        ]
+
+        tree = TraceTree.from_spans(spans)
+
+        self.assertEqual(tree.root.device_id, "uid-device-9f3c")
+
+    def test_treetree_from_spans_missing_tags_device_id_is_none(self):
+        """Spans without a device tag (pre-#825) yield device_id None."""
+        spans = [
+            self._make_span_dict(
+                span_id="root",
+                parent_span_id=None,
+                tags={"journey_id": "journey1"},
+            ),
+        ]
+
+        tree = TraceTree.from_spans(spans)
+
+        self.assertIsNone(tree.root.device_id)
+
     def test_treetree_from_spans_single_span_becomes_root(self):
         """from_spans() with single span creates root with no children."""
         spans = [self._make_span_dict(span_id="root", parent_span_id=None)]
