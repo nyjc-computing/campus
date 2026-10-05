@@ -8,9 +8,11 @@ a web interface for exploring and viewing audit traces.
 Page map (docs/web-ui-requirements.md §2):
 
 - GET /audit/ - landing page (public: no login required)
-- GET /audit/traces - trace list (login required)
+- GET /audit/traces - trace list; ?journey_id=<id> switches it to the
+  group-by-journey view (#803) (login required)
 - GET /audit/traces/<trace_id> - trace detail (login required)
-- GET /audit/journeys/<journey_id> - login-journey grouped view (login required)
+- GET /audit/journeys/<journey_id> - redirect to the journey view
+  (keeps earlier journey URLs working)
 
 The trace list moved from /audit/ to /audit/traces when the landing
 page was added; the login gate (campus.audit.web.auth) exempts the
@@ -20,6 +22,7 @@ landing page and this blueprint's static assets.
 __all__ = ["create_blueprint"]
 
 import flask
+import werkzeug
 
 
 def create_blueprint() -> flask.Blueprint:
@@ -65,13 +68,15 @@ def create_blueprint() -> flask.Blueprint:
         return flask.render_template('trace.html', trace_id=trace_id)
 
     @bp.route('/journeys/<journey_id>')
-    def journey(journey_id: str) -> str:
-        """Render the login-journey grouped view (#803).
+    def journey(journey_id: str) -> werkzeug.Response:
+        """Redirect journey-page links to the merged traces view (#803).
 
-        Lists every trace of one login flow (browser hops plus the
-        server-to-server token exchange) in start order; data is loaded
-        client-side from the UI data endpoints.
+        The journey view is /audit/traces?journey_id=<id>: the same
+        trace list switching to group-by-journey. This route keeps any
+        previously shared journey URLs working.
         """
-        return flask.render_template('journey.html', journey_id=journey_id)
+        return flask.redirect(
+            flask.url_for('audit_ui.traces', journey_id=journey_id)
+        )
 
     return bp

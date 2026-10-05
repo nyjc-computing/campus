@@ -230,9 +230,24 @@ button[type="reset"] {
 
 .trace-table {
     width: 100%;
+    /* Fixed layout + the colgroup shares below keep PATH — the most
+       important column — from being starved by long trace/journey ids. */
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 0.82rem;
 }
+
+/* Column shares (must sum to ~100%). Trace ID holds a full 32-char
+   hex id on one line; PATH gets the largest text share. */
+.col-trace-id { width: 25%; }
+.col-started { width: 13%; }
+.col-method { width: 5%; }
+.col-path { width: 28%; }
+.col-status { width: 6%; }
+.col-duration { width: 7%; }
+.col-spans { width: 4%; }
+.col-client { width: 8%; }
+.col-user { width: 4%; }
 
 .trace-table th,
 .trace-table td {
@@ -240,6 +255,8 @@ button[type="reset"] {
     padding: 0.3rem 0.6rem;
     border-bottom: 1px solid var(--audit-border);
     white-space: nowrap;
+    /* Fixed layout clips overflowing cells instead of stretching */
+    overflow: hidden;
 }
 
 .trace-table td.wrap {
@@ -254,24 +271,58 @@ button[type="reset"] {
     white-space: nowrap;
 }
 
-/* Journey chip on trace-list rows (#803): links to the grouped
-   journey view. Kept compact so the full trace ID stays readable. */
-.journey-chip {
-    display: inline-block;
-    margin-left: 0.4rem;
-    padding: 0.02rem 0.45rem;
-    border-radius: 999px;
-    background: #e8effa;
-    color: var(--audit-accent-dark);
-    font-size: 0.68rem;
-    font-weight: 600;
-    text-decoration: none;
-    vertical-align: middle;
+/* Journey correlation (#803): the journey id renders as small meta
+   text above the trace id (card-style meta line), linking to the
+   group-by-journey view. */
+.cell-journey {
+    font-size: 0.7rem;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.journey-chip:hover {
-    background: #d8e5f7;
+.cell-journey .journey-link {
+    color: var(--audit-accent);
+    font-weight: 600;
+}
+
+.cell-journey .journey-link:hover {
     text-decoration: underline;
+}
+
+/* Group-by-journey header card: the parent journey with its member
+   traces listed beneath it. */
+.journey-card {
+    background: var(--audit-surface);
+    border: 1px solid var(--audit-border);
+    border-left: 3px solid var(--audit-accent);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+}
+
+.journey-card-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--audit-muted);
+}
+
+.journey-card-id {
+    font-size: 0.95rem;
+    margin: 0.1rem 0 0.15rem;
+}
+
+.journey-card-meta {
+    color: var(--audit-muted);
+    font-size: 0.85rem;
+}
+
+/* In journey view the flat-list-only filters don't apply; the Journey
+   field and the action buttons stay. */
+.filter-form.journey-mode .flat-only {
+    display: none;
 }
 
 .trace-table thead th {
