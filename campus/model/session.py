@@ -31,6 +31,11 @@ class AuthSession(Model):
     authorization_code: str | None = None
     state: str | None = None
     target: schema.Url | None = None
+    # Login-journey correlation id (#803): the campus_journey cookie value
+    # observed at GET /authorize. Purely observational — copied to flask.g
+    # at /token so the token span joins the journey; never returned to
+    # clients. Null for pre-#803 sessions and non-browser flows.
+    journey_id: str | None = None
 
     def __post_init__(self, expiry_seconds: int | None):
         """Set expiry time based on creation timestamp.

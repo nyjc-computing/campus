@@ -37,6 +37,7 @@ def create_blueprint() -> flask.Blueprint:
         Query params (all optional):
             path: filter by endpoint path
             status: filter by HTTP status code
+            journey_id: filter by login-journey tag (#803)
             since: ISO 8601 timestamp
             until: ISO 8601 timestamp
             limit: page size, clamped to [1, MAX_PAGE_SIZE] (default
@@ -60,6 +61,7 @@ def create_blueprint() -> flask.Blueprint:
         page = traces_resource.search(
             path=flask.request.args.get("path") or None,
             status=status_int,
+            journey_id=flask.request.args.get("journey_id") or None,
             since=flask.request.args.get("since") or None,
             until=flask.request.args.get("until") or None,
             limit=traces_resource.parse_page_size(
@@ -70,6 +72,20 @@ def create_blueprint() -> flask.Blueprint:
         return {
             "traces": [s.to_resource() for s in page.summaries],
             "cursor": {"next": page.next_cursor, "has_more": page.has_more},
+        }, 200
+
+    @bp.route('/journeys/<journey_id>')
+    def get_journey(journey_id: str) -> flask_campus.JsonResponse:
+        """List the member traces of one login journey (#803).
+
+        Serves the journey page: every trace whose spans carry the
+        journey tag, oldest first, so the flow reads top to bottom.
+        """
+        summaries = traces_resource.journey(journey_id)
+        return {
+            "journey_id": journey_id,
+            "trace_count": len(summaries),
+            "traces": [s.to_resource() for s in summaries],
         }, 200
 
     @bp.route('/traces/<trace_id>')

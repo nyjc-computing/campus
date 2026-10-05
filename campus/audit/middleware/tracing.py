@@ -12,6 +12,7 @@ import typing
 import flask
 import requests
 
+import campus.config
 from campus.audit.client import AuditClient
 from campus.common import schema
 from campus.common.utils import uid
@@ -315,6 +316,15 @@ def build_span_from_context(
     # not the ingestion time — waterfall offsets depend on it (#794).
     started_at = getattr(flask.g, "trace_started_at", None) or schema.DateTime.utcnow()
 
+    # Login-journey correlation (#803): routes may stash the journey id
+    # in flask.g (the /token hop, which never sees the browser cookie),
+    # otherwise it comes from the campus_journey cookie set by
+    # campus.auth at the first login-flow touch.
+    journey_id = (
+        getattr(flask.g, "journey_id", None)
+        or request.cookies.get(campus.config.JOURNEY_COOKIE)
+    )
+
     # Build span dict matching TraceSpan schema
     span = {
         "trace_id": trace_id,
@@ -335,7 +345,8 @@ def build_span_from_context(
         "client_ip": request.remote_addr,
         "user_agent": request.user_agent.string if request.user_agent else None,
         "error_message": None,  # No error for successful requests
-        "tags": {},  # No tags by default
+        # Journey tag when the request belongs to a login journey (#803)
+        "tags": {"journey_id": journey_id} if journey_id else {},
         # Optional: populated by auth middleware if available
         "api_key_id": getattr(flask.g, "api_key_id", None),
         # The shared Authenticator glue stashes the authenticated caller's
