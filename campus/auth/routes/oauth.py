@@ -323,7 +323,35 @@ def _handle_device_code_grant(
 
     # Check the state of the device code
     if dc.state == "pending":
-        # User hasn't completed auth yet
+        # User hasn't completed auth yet. This is the RFC 8628 §3.5
+        # polling loop, so the advertised interval is enforced
+        # server-side (#355): the first poll is free (last_polled_at
+        # is unset, and clients may poll immediately after receiving
+        # the code), and consecutive allowed polls must be at least
+        # interval apart. Rejected polls do not refresh the timestamp,
+        # so a hammering client costs a read and a comparison.
+        # Terminal states below are not throttled: their polls don't
+        # loop, and the claim in the "authorized" branch serializes
+        # them (#356).
+        now = schema.DateTime.utcnow()
+        if dc.last_polled_at is not None:
+            elapsed = (
+                now.to_datetime() - dc.last_polled_at.to_datetime()
+            ).total_seconds()
+            if elapsed < dc.interval:
+                raise token_errors.SlowDownError(
+                    f"Polling too frequently; wait {dc.interval} "
+                    "seconds between polls"
+                )
+        try:
+            device_code_resource.update(dc.id, last_polled_at=now)
+        except api_errors.NotFoundError:
+            # Consumed between the read above and this write; the
+            # claim in the "authorized" branch is the atomic gate
+            # (#356).
+            raise token_errors.InvalidGrantError(
+                "Invalid or expired device code"
+            ) from None
         raise token_errors.AuthorizationPendingError(
             "Authorization pending"
         )

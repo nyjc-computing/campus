@@ -51,3 +51,32 @@ class TestDeviceCodeScopeStorage(unittest.TestCase):
         record.pop("scope")
         loaded = device_code.DeviceCode.from_storage(record)
         self.assertEqual(loaded.scopes, ["read", "write"])
+
+
+class TestDeviceCodeLastPolledAt(unittest.TestCase):
+    """last_polled_at (#355) defaults to None and round-trips."""
+
+    def test_unpolled_default_is_none(self):
+        self.assertIsNone(_make_dc().last_polled_at)
+
+    def test_storage_roundtrip(self):
+        dc = _make_dc()
+        dc.last_polled_at = schema.DateTime("2026-01-01T00:00:03+00:00")
+        loaded = device_code.DeviceCode.from_storage(dc.to_storage())
+        self.assertEqual(
+            loaded.last_polled_at, schema.DateTime("2026-01-01T00:00:03+00:00")
+        )
+
+    def test_from_storage_tolerates_missing_field(self):
+        # Legacy records written before #355 have no last_polled_at
+        record = _make_dc().to_storage()
+        record.pop("last_polled_at", None)
+        loaded = device_code.DeviceCode.from_storage(record)
+        self.assertIsNone(loaded.last_polled_at)
+
+    def test_from_storage_tolerates_null_field(self):
+        record = _make_dc().to_storage()
+        record["last_polled_at"] = None
+        self.assertIsNone(
+            device_code.DeviceCode.from_storage(record).last_polled_at
+        )

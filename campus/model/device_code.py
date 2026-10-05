@@ -42,6 +42,10 @@ class DeviceCode(Model):
     expires_at: schema.DateTime = None  # type: ignore
     # Minimum seconds between polling attempts
     interval: int = 5
+    # Timestamp of the last /token poll that passed the rate gate
+    # (#355). None until the first pending-state poll is recorded;
+    # legacy records without the field read back as None.
+    last_polled_at: schema.DateTime | None = None
     # Current state of the authorization flow
     state: str = "pending"  # pending, authorized, denied, expired
 
