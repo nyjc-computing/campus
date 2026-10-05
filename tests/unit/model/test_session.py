@@ -68,3 +68,22 @@ class TestAuthSessionScopeStorage(unittest.TestCase):
             scopes=["read"],
         )
         self.assertEqual(sess.expires_at, schema.DateTime("2026-01-01T00:02:00+00:00"))
+
+
+class TestAuthSessionJourneyId(unittest.TestCase):
+    """journey_id round-trips through storage and defaults to None (#803)."""
+
+    def test_journey_id_roundtrip(self):
+        sess = _make_session()
+        sess.journey_id = "journey_abc123"
+        loaded = session.AuthSession.from_storage(sess.to_storage())
+        self.assertEqual(loaded.journey_id, "journey_abc123")
+
+    def test_journey_id_defaults_to_none(self):
+        sess = _make_session()
+        self.assertIsNone(sess.journey_id)
+        # Legacy records (pre-#803) carry no journey_id key at all
+        record = sess.to_storage()
+        record.pop("journey_id", None)
+        loaded = session.AuthSession.from_storage(record)
+        self.assertIsNone(loaded.journey_id)

@@ -761,6 +761,94 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
             ingested_at.to_datetime(),
         )
 
+    # Login-journey correlation (#803)
+
+    def test_journey_cookie_stamps_span_tag(self):
+        """A request carrying campus_journey stores the journey tag (#803).
+
+        The cookie is set via the test client's cookie jar: this
+        werkzeug does not parse a raw Cookie header kwarg into
+        request.cookies.
+        """
+        import campus.config
+
+        self.auth_client.set_cookie(
+            campus.config.JOURNEY_COOKIE, "journey_itest_1"
+        )
+        response = self.auth_client.get("/test/health")
+        self.assertEqual(response.status_code, 200)
+
+        trace_id = response.headers.get("X-Request-ID")
+        assert trace_id, "Response headers missing X-Request-ID"
+
+        span = self._wait_for_span(trace_id)
+        assert span, "Span not ingested"
+        self.assertEqual(
+            (span.get("tags") or {}).get("journey_id"),
+            "journey_itest_1",
+            f"journey tag missing from span tags: {span.get('tags')}",
+        )
+
+    def _seed_journey_span(
+            self,
+            trace_id: str,
+            span_id: str,
+            started_at: str,
+            journey_id: str | None,
+    ) -> None:
+        """Insert one tagged span directly into storage for search tests."""
+        import campus.model as model
+        from campus.audit.resources.traces import traces_storage
+
+        span = model.TraceSpan.from_resource({
+            "trace_id": trace_id,
+            "span_id": span_id,
+            "method": "GET",
+            "path": "/auth/v1/authorize",
+            "status_code": 302,
+            "started_at": started_at,
+            "duration_ms": 5.0,
+            "client_ip": "127.0.0.1",
+            "tags": {"journey_id": journey_id} if journey_id else {},
+        })
+        traces_storage.insert_one(span.to_storage())
+
+    def test_search_filters_traces_by_journey_tag(self):
+        """search(journey_id=...) returns only traces tagged with it (#803)."""
+        from campus.audit.resources.traces import TracesResource
+
+        self._seed_journey_span("a" * 32, "b" * 16, "2026-10-04T10:00:00+00:00", "journey_s1")
+        self._seed_journey_span("c" * 32, "d" * 16, "2026-10-04T10:01:00+00:00", None)
+        self._seed_journey_span("e" * 32, "f" * 16, "2026-10-04T10:02:00+00:00", "journey_s2")
+
+        page = TracesResource().search(journey_id="journey_s1", limit=10)
+        self.assertEqual(
+            sorted(s.trace_id for s in page.summaries),
+            ["a" * 32],
+        )
+
+        # Without the filter, untagged traces are still listed
+        page_all = TracesResource().search(limit=10)
+        self.assertEqual(len(page_all.summaries), 3)
+
+    def test_journey_groups_member_traces_oldest_first(self):
+        """journey() lists each member trace once, in start order (#803)."""
+        from campus.audit.resources.traces import TracesResource
+
+        # trace c carries two tagged spans but must appear once
+        self._seed_journey_span("a" * 32, "b" * 16, "2026-10-04T10:00:00+00:00", "journey_j1")
+        self._seed_journey_span("c" * 32, "d" * 16, "2026-10-04T10:01:00+00:00", "journey_j1")
+        self._seed_journey_span("c" * 32, "e" * 16, "2026-10-04T10:01:05+00:00", "journey_j1")
+        self._seed_journey_span("f" * 32, "0" * 16, "2026-10-04T09:59:00+00:00", "journey_j1")
+        self._seed_journey_span("1" * 32, "2" * 16, "2026-10-04T10:02:00+00:00", None)
+
+        summaries = TracesResource().journey("journey_j1")
+        self.assertEqual(
+            [s.trace_id for s in summaries],
+            ["f" * 32, "a" * 32, "c" * 32],
+        )
+        self.assertEqual(TracesResource().journey("journey_missing"), [])
+
 
 class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
     """End-to-end propagation: api request spawns a child auth span.

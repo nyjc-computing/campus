@@ -75,6 +75,15 @@ DEFAULT_TOKEN_EXPIRY_DAYS = 7
 DEFAULT_DEVICE_CODE_EXPIRY_SECONDS = 600  # 10 minutes
 DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 
+# Browser login-journey correlation (#803). campus.auth sets this opaque
+# cookie at the first browser touch of the login flow (GET /authorize);
+# the tracing middleware stamps it into span tags so a login journey can
+# be viewed as one group. The final /token hop is server-to-server and
+# never carries the cookie, so its handler copies the journey id from the
+# auth session into flask.g for the middleware to pick up instead.
+JOURNEY_COOKIE = "campus_journey"
+JOURNEY_COOKIE_MAX_AGE = 1800  # seconds; ~30 min inactivity TTL
+
 # Public OAuth client ID for CLI/device apps (RFC 6749 Section 2.1)
 # Stored in the database as a client with is_public=True and no secret;
 # seeded at auth service startup (see campus.auth.resources.client.

@@ -68,6 +68,48 @@ function formatTimestamp(value) {
 }
 
 /**
+ * Render the journey meta line for a trace row (#803): the journey id
+ * as small text above the trace id, linking to the group-by-journey
+ * view (/audit/traces?journey_id=…).
+ */
+function renderJourneyLine(journeyId) {
+    if (!journeyId) {
+        return '';
+    }
+    const href = `/audit/traces?journey_id=${encodeURIComponent(journeyId)}`;
+    return `<div class="cell-journey"><a class="journey-link" href="${href}" title="View login journey">${escapeHtml(journeyId)}</a></div>`;
+}
+
+/**
+ * Render one trace-summary row (shared by the traces list and the
+ * group-by-journey view). Expects the summary resource shape:
+ * {trace_id, started_at, duration_ms, span_count, root_span}.
+ * opts.journeyView drops the per-row journey line — the group header
+ * already names the journey.
+ */
+function renderTraceRow(summary, opts) {
+    const options = opts || {};
+    const root = summary.root_span || {};
+    const detailHref = `/audit/traces/${encodeURIComponent(summary.trace_id)}`;
+    const client = root.client_id || '—';
+    const user = root.user_id || '—';
+    const journeyId = (root.tags && root.tags.journey_id) || '';
+    const journeyLine = options.journeyView ? '' : renderJourneyLine(journeyId);
+    return `
+        <tr>
+            <td class="trace-id">${journeyLine}<a href="${detailHref}">${escapeHtml(summary.trace_id)}</a></td>
+            <td title="${escapeHtml(summary.started_at || '')}">${escapeHtml(formatTimestamp(summary.started_at))}</td>
+            <td>${escapeHtml(root.method || '—')}</td>
+            <td class="wrap">${escapeHtml(root.path || '—')}</td>
+            <td>${renderStatusBadge(root.status_code)}</td>
+            <td>${escapeHtml(formatDuration(summary.duration_ms))}</td>
+            <td>${escapeHtml(summary.span_count)}</td>
+            <td class="wrap">${escapeHtml(client)}</td>
+            <td class="wrap">${escapeHtml(user)}</td>
+        </tr>`;
+}
+
+/**
  * Fetch JSON from the audit API and return the parsed body.
  * Throws an Error with a readable message on non-2xx responses.
  */
