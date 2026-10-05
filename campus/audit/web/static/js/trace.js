@@ -86,7 +86,8 @@
         document.getElementById('meta-started').textContent = formatTimestamp(root.started_at);
         document.getElementById('meta-request').innerHTML =
             `<span class="wf-method">${escapeHtml(root.method || '—')}</span> ${escapeHtml(root.path || '—')}`;
-        document.getElementById('meta-client').textContent = root.client_id || '—';
+        document.getElementById('meta-client').textContent = root.client_name || root.client_id || '—';
+        document.getElementById('meta-client').title = root.client_id || '';
         document.getElementById('meta-user').textContent = root.user_id || '—';
     }
 
@@ -264,7 +265,8 @@
             const span = await fetchJson(
                 `${TRACE_URL}/${encodeURIComponent(traceId)}/spans/${encodeURIComponent(rootSpanId)}`
             );
-            document.getElementById('meta-client').textContent = span.client_id || '—';
+            document.getElementById('meta-client').textContent = span.client_name || span.client_id || '—';
+            document.getElementById('meta-client').title = span.client_id || '';
             document.getElementById('meta-user').textContent = span.user_id || '—';
         } catch {
             // Keep the em-dash placeholders on failure.

@@ -91,7 +91,7 @@ function renderTraceRow(summary, opts) {
     const options = opts || {};
     const root = summary.root_span || {};
     const detailHref = `/audit/traces/${encodeURIComponent(summary.trace_id)}`;
-    const client = root.client_id || '—';
+    const client = root.client_name || root.client_id || '—';
     const user = root.user_id || '—';
     const journeyId = (root.tags && root.tags.journey_id) || '';
     const journeyLine = options.journeyView ? '' : renderJourneyLine(journeyId);
@@ -104,7 +104,7 @@ function renderTraceRow(summary, opts) {
             <td>${renderStatusBadge(root.status_code)}</td>
             <td>${escapeHtml(formatDuration(summary.duration_ms))}</td>
             <td>${escapeHtml(summary.span_count)}</td>
-            <td class="wrap">${escapeHtml(client)}</td>
+            <td class="wrap" title="${escapeHtml(root.client_id || '')}">${escapeHtml(client)}</td>
             <td class="wrap">${escapeHtml(user)}</td>
         </tr>`;
 }
