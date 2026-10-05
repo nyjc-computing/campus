@@ -62,6 +62,25 @@ def _session_key() -> str:
     return f"{PROVIDER}_session_id"
 
 
+def _stash_span_identity(
+        *,
+        client_id: schema.CampusID | str | None = None,
+        user_id: schema.UserID | str | None = None,
+) -> None:
+    """Stamp the current request's span with login-flow identity (#820).
+
+    Browser hops don't run the Authenticator, so nothing stashes
+    client/user for the tracing middleware's span enrichment (#794's
+    "auth spans missing client_id/user_id" flag). Same pattern as the
+    journey stash (#803): the middleware reads g.client_id/g.user_id
+    in after_request.
+    """
+    if client_id:
+        flask.g.client_id = str(client_id)
+    if user_id:
+        flask.g.user_id = str(user_id)
+
+
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
     """Initialize the OAuth2 provider by adding authorization and token
     routes.
@@ -181,6 +200,11 @@ def authorize(
         raise auth_errors.UnauthorizedClientError(
             f"Client mismatch: {client_id}"
         )
+
+    # Span identity (#820): stamp this browser hop's span with the
+    # login flow's client — the middleware reads g.client_id/g.user_id
+    # the same way it reads g.journey_id (#803).
+    _stash_span_identity(client_id=client_id)
 
     # The authorization code is delivered to the session's redirect_uri,
     # so it must be the same registered URI that the request presented.
@@ -330,6 +354,14 @@ def token(
         raise auth_errors.UnauthorizedClientError(
             f"Client mismatch: {client_id}"
         )
+
+    # Span identity (#820): the token exchange runs on behalf of the
+    # authorizing user even though it authenticates with client
+    # credentials — stamp the user onto the span alongside the client.
+    _stash_span_identity(
+        client_id=authsession.client_id,
+        user_id=authsession.user_id,
+    )
 
     # Invalidate authorization code to prevent reuse (single-use guarantee)
     # Session remains alive for finalization to retrieve target URL
@@ -494,6 +526,13 @@ def verify_login_and_redirect(
     authsession = resources.session[PROVIDER][state].update(
         user_id=user,
         authorization_code=authorization_code
+    )
+
+    # Span identity (#820): after verification the flow's client and
+    # the verified user are both known — stamp them onto this hop's span.
+    _stash_span_identity(
+        client_id=authsession.client_id,
+        user_id=authsession.user_id,
     )
 
     # NOTE: Token creation is now handled by /token endpoint
