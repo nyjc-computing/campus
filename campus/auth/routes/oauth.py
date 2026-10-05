@@ -298,35 +298,17 @@ def _handle_device_code_grant(
             "device_code is required for device_code grant type"
         )
 
-    # NOTE: the single-use claim below is check-then-act (#356). This
-    # read and the delete in the "authorized" branch are not atomic, so
-    # two concurrent /oauth/token polls for the same device code could
-    # both observe "authorized" and both issue a token. The risk is
-    # considered negligible while ALL of the following hold; revisit
-    # #356 if any of them breaks:
-    #   1. Requests are serialized: the service is deployed with a
-    #      single sync gunicorn worker (single-worker decision, PR
-    #      #608), so no two requests overlap the read-to-delete window
-    #      below. Scaling past one worker or enabling threaded mode
-    #      voids this assumption.
-    #   2. Overlapping polls for one device code are practically
-    #      unreachable: the device code is a secret held only by the
-    #      initiating client, every /device_authorize call mints a
-    #      fresh code, and RFC 8628 clients poll serially at the
-    #      advertised interval; only an HTTP intermediary duplicate
-    #      landing within milliseconds could overlap. A mid-flight
-    #      state flip cannot yield a token either: the pending branch
-    #      raises immediately with no work between read and branch,
-    #      and nothing currently writes state="denied".
-    #   3. Blast radius is bounded even if it fires: both racers read
-    #      user_id from the same device code, so both tokens carry the
-    #      same user's scopes for the same client, and the credentials
-    #      update is last-writer-wins on token_id, leaving at most one
-    #      resolvable token (a same-user clobber, not escalation).
-    # If any assumption breaks, claim atomically by deleting BEFORE
-    # minting: delete_by_id raises NotFoundError when another request
-    # already consumed the code (rowcount-guarded in both the sqlite
-    # and postgres backends); map that to InvalidGrantError.
+    # The state read above is check-then-act, but single-use is now
+    # enforced atomically (#356): the "authorized" branch claims the
+    # code by deleting it BEFORE minting, and delete_by_id is
+    # rowcount-guarded in every storage backend. Two concurrent polls
+    # that both observe "authorized" cannot both claim the code — the
+    # loser gets InvalidGrantError. A mid-flight flip to "denied" or
+    # "expired" cannot yield a token either: nothing writes "denied"
+    # today, and expiry is re-checked inside get_by_device_code. The
+    # remaining tradeoff is documented in the "authorized" branch:
+    # once claimed, a storage failure before token issuance consumes
+    # the code and the client must restart the flow.
     try:
         dc = device_code_resource.get_by_device_code(device_code)
     except api_errors.NotFoundError:
@@ -341,7 +323,35 @@ def _handle_device_code_grant(
 
     # Check the state of the device code
     if dc.state == "pending":
-        # User hasn't completed auth yet
+        # User hasn't completed auth yet. This is the RFC 8628 §3.5
+        # polling loop, so the advertised interval is enforced
+        # server-side (#355): the first poll is free (last_polled_at
+        # is unset, and clients may poll immediately after receiving
+        # the code), and consecutive allowed polls must be at least
+        # interval apart. Rejected polls do not refresh the timestamp,
+        # so a hammering client costs a read and a comparison.
+        # Terminal states below are not throttled: their polls don't
+        # loop, and the claim in the "authorized" branch serializes
+        # them (#356).
+        now = schema.DateTime.utcnow()
+        if dc.last_polled_at is not None:
+            elapsed = (
+                now.to_datetime() - dc.last_polled_at.to_datetime()
+            ).total_seconds()
+            if elapsed < dc.interval:
+                raise token_errors.SlowDownError(
+                    f"Polling too frequently; wait {dc.interval} "
+                    "seconds between polls"
+                )
+        try:
+            device_code_resource.update(dc.id, last_polled_at=now)
+        except api_errors.NotFoundError:
+            # Consumed between the read above and this write; the
+            # claim in the "authorized" branch is the atomic gate
+            # (#356).
+            raise token_errors.InvalidGrantError(
+                "Invalid or expired device code"
+            ) from None
         raise token_errors.AuthorizationPendingError(
             "Authorization pending"
         )
@@ -385,6 +395,16 @@ def _handle_device_code_grant(
             scopes=dc.scopes,
         )
 
+        # Claim the code atomically BEFORE any write: deletion is
+        # rowcount-guarded, so a concurrent poll that also observed
+        # "authorized" loses the claim here (#356). From this point
+        # the code is consumed; a storage failure before token
+        # issuance leaves it claimed and the client restarts the flow.
+        if not device_code_resource.claim(dc.id):
+            raise token_errors.InvalidGrantError(
+                "Device code already used or expired"
+            )
+
         try:
             # Store credentials using the resource
             credentials_resource["campus"][dc.user_id].update(
@@ -393,11 +413,6 @@ def _handle_device_code_grant(
             )
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
-
-        # Delete the device code as it's now used. This is the closing
-        # edge of the #356 check-then-act window (see the race
-        # assumptions at the top of this handler).
-        device_code_resource.delete(dc.id)
 
         get_yapper().emit('campus.oauth.token', {
             "grant_type": "device_code",

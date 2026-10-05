@@ -158,6 +158,120 @@ class TestOAuthIntegration(IntegrationTestCase):
         oauth_error = error_obj.get("details", {}).get("oauth_error", "")
         self.assertEqual(oauth_error, "authorization_pending")
 
+    def test_oauth_token_slow_down_on_fast_polls(self):
+        """RFC 8628 §3.5: re-polls inside the interval get slow_down (#355).
+
+        The first poll is free (clients may poll immediately after
+        receiving the code); from the second poll on, the pending
+        polling loop is throttled to the advertised interval.
+        """
+        create_response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            data={"client_id": "guest"},
+            content_type="application/x-www-form-urlencoded"
+        )
+        device_code = create_response.get_json()["device_code"]
+
+        def _poll():
+            return self.client.post(
+                "/auth/v1/oauth/token",
+                data={
+                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                    "device_code": device_code,
+                    "client_id": "guest",
+                },
+                content_type="application/x-www-form-urlencoded"
+            )
+
+        # First pending poll: allowed, records last_polled_at
+        first = _poll()
+        self.assertEqual(first.status_code, 400)
+        oauth_error = (
+            first.get_json().get("error", {})
+            .get("details", {}).get("oauth_error", "")
+        )
+        self.assertEqual(oauth_error, "authorization_pending")
+
+        # Immediate re-poll: inside the interval -> slow_down
+        second = _poll()
+        self.assertEqual(second.status_code, 400)
+        oauth_error = (
+            second.get_json().get("error", {})
+            .get("details", {}).get("oauth_error", "")
+        )
+        self.assertEqual(oauth_error, "slow_down")
+
+        # After the interval passes, polling is allowed again
+        from campus.auth.resources import device_code as device_code_resource
+        from campus.common import schema
+
+        dc = device_code_resource.get_by_device_code(device_code)
+        device_code_resource.update(
+            dc.id,
+            last_polled_at=schema.DateTime.utcafter(
+                schema.DateTime.utcnow(), seconds=-10
+            ),
+        )
+        third = _poll()
+        self.assertEqual(third.status_code, 400)
+        oauth_error = (
+            third.get_json().get("error", {})
+            .get("details", {}).get("oauth_error", "")
+        )
+        self.assertEqual(oauth_error, "authorization_pending")
+
+    def test_oauth_token_poll_not_throttled_after_authorize(self):
+        """Terminal polls are not throttled: authorized -> token (#355).
+
+        The pending poll records last_polled_at, and the authorized
+        poll lands well inside the interval; it must still return the
+        token (the claim, not the throttle, serializes terminal polls).
+        """
+        create_response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            data={"client_id": "guest"},
+            content_type="application/x-www-form-urlencoded"
+        )
+        create_data = create_response.get_json()
+        device_code = create_data["device_code"]
+        user_code = create_data["user_code"]
+
+        # Pending poll records the poll timestamp
+        pending = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "device_code": device_code,
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(pending.status_code, 400)
+
+        # Authorize immediately (well inside the interval)
+        with self.app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess['user_id'] = 'test@example.com'
+
+            authorize_response = client.post(
+                "/auth/v1/oauth/device/authorize",
+                json={"user_code": user_code, "user_id": "test@example.com"}
+            )
+            self.assertEqual(authorize_response.status_code, 200)
+
+        # The authorized poll must not be slow_downed
+        token_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "device_code": device_code,
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded"
+        )
+        self.assertEqual(token_response.status_code, 200)
+        self.assertIn("access_token", token_response.get_json())
+
     def test_oauth_verification_page(self):
         """Test the device verification page redirects unauthenticated users to login."""
         response = self.client.get("/auth/v1/oauth/device")
