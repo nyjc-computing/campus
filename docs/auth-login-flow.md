@@ -143,6 +143,18 @@ validated session scopes are granted. On success the browser is
 redirected to `/auth/v1/google/authorize` with `target` pointing at
 `/auth/v1/verify_login?state=<session id>`.
 
+`/authorize` also issues (or reuses) the **`campus_device` cookie**
+(#825): a long-lived (400 days), HttpOnly cookie on the auth origin
+whose value is a `uid-device-*` id stable per browser profile across
+re-logins and client apps. The id is recorded on the auth session, and
+the SDK copies it onto the login session it creates — login sessions
+(and their audit spans) therefore attribute to the browser that made
+them, not just to the user. It is deliberately *not* a `flask.session`
+key: device identity survives `/auth/v1/logout`'s `session.clear()`.
+Programmatic clients (CLIs) mint their own device id and pass it when
+creating their login session instead — in device flow the device is
+the machine running the CLI, never the authorizing browser.
+
 ### 3. Google leg (OAuth proxy)
 
 `GET /auth/v1/google/authorize` (`campus/auth/oauth_proxy/google/`)
@@ -433,6 +445,7 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
 | `PUBLIC_URL` | env (required) | — | canonical origin for every absolute redirect URL (#653); wrong value breaks the Google handoff |
 | `WORKSPACE_DOMAIN` | env | — | only emails on this domain may log in |
 | `DEFAULT_OAUTH_EXPIRY_MINUTES` | `campus/config.py` | 10 | auth session TTL |
+| `DEVICE_COOKIE` / `DEVICE_COOKIE_MAX_AGE` | `campus/config.py` | `campus_device` / 400 days | stable browser-profile identity cookie (#825) |
 | `DEFAULT_TOKEN_EXPIRY_DAYS` | `campus/config.py` | 7 | access token TTL |
 | `DEFAULT_DEVICE_CODE_EXPIRY_SECONDS` | `campus/config.py` | 600 | device code TTL |
 | `DEFAULT_DEVICE_CODE_POLL_INTERVAL` | `campus/config.py` | 5 | CLI poll interval |

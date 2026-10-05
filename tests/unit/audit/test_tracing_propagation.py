@@ -375,6 +375,95 @@ class TestJourneyTagStamping(unittest.TestCase):
         self.assertEqual(span["tags"], {})
 
 
+class TestDeviceTagStamping(unittest.TestCase):
+    """build_span_from_context() stamps the device tag (#825).
+
+    The device id comes from g.device — stashed by flask_campus's
+    push_context (login-session device_id) or campus.auth's login hops
+    (auth-session device_id) — with the campus_device cookie as the
+    browser-hop fallback.
+    """
+
+    def setUp(self):
+        self.app = flask.Flask(__name__)
+
+    def _build_span(self, headers: dict | None = None) -> dict:
+        with self.app.test_request_context("/", headers=headers or {}):
+            tracing.start_span()
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+        return span
+
+    def test_cookie_stamps_device_tag(self):
+        """A campus_device cookie lands in the span's tags."""
+        import campus.config
+
+        cookie = f"{campus.config.DEVICE_COOKIE}=uid-device-abc123"
+        span = self._build_span(headers={"Cookie": cookie})
+
+        self.assertEqual(span["tags"], {"device_id": "uid-device-abc123"})
+
+    def test_flask_g_device_stamps_tag(self):
+        """A route-stashed device id (push_context, /token) lands in tags."""
+        with self.app.test_request_context("/"):
+            tracing.start_span()
+            flask.g.device = "uid-device-g123"
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["tags"], {"device_id": "uid-device-g123"})
+
+    def test_flask_g_takes_precedence_over_cookie(self):
+        """An explicit route stash wins over the cookie value."""
+        import campus.config
+
+        cookie = f"{campus.config.DEVICE_COOKIE}=uid-device-cookie"
+        with self.app.test_request_context(
+                "/", headers={"Cookie": cookie}):
+            tracing.start_span()
+            flask.g.device = "uid-device-gstash"
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["tags"], {"device_id": "uid-device-gstash"})
+
+    def test_journey_and_device_tag_together(self):
+        """Journey and device tags coexist when both are present."""
+        import campus.config
+
+        cookie = (
+            f"{campus.config.JOURNEY_COOKIE}=journey_abc123; "
+            f"{campus.config.DEVICE_COOKIE}=uid-device-abc123"
+        )
+        span = self._build_span(headers={"Cookie": cookie})
+
+        self.assertEqual(
+            span["tags"],
+            {
+                "journey_id": "journey_abc123",
+                "device_id": "uid-device-abc123",
+            },
+        )
+
+    def test_no_device_leaves_tag_out(self):
+        """Requests with no device identity carry no device tag."""
+        span = self._build_span()
+
+        self.assertNotIn("device_id", span["tags"])
+
+
 class TestStaticRequestSkip(unittest.TestCase):
     """start_span() skips static-asset requests (#818)."""
 

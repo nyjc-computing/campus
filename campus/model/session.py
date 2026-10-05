@@ -36,6 +36,13 @@ class AuthSession(Model):
     # at /token so the token span joins the journey; never returned to
     # clients. Null for pre-#803 sessions and non-browser flows.
     journey_id: str | None = None
+    # Stable device identity (#825): the campus_device cookie value
+    # observed at GET /authorize. Unlike journey_id this is meant to be
+    # stable per browser profile across re-logins and client apps — the
+    # SDK copies it onto the login session it creates, and the login
+    # session's device_id is what spans carry. Null for pre-#825
+    # sessions, non-browser flows, and browsers with cookies cleared.
+    device_id: str | None = None
 
     def __post_init__(self, expiry_seconds: int | None):
         """Set expiry time based on creation timestamp.

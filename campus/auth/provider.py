@@ -66,6 +66,7 @@ def _stash_span_identity(
         *,
         client_id: schema.CampusID | str | None = None,
         user_id: schema.UserID | str | None = None,
+        device_id: str | None = None,
 ) -> None:
     """Stamp the current request's span with login-flow identity (#820).
 
@@ -73,12 +74,16 @@ def _stash_span_identity(
     client/user for the tracing middleware's span enrichment (#794's
     "auth spans missing client_id/user_id" flag). Same pattern as the
     journey stash (#803): the middleware reads g.client_id/g.user_id
-    in after_request.
+    in after_request. device_id (#825) rides the same mechanism; the
+    middleware also falls back to the campus_device cookie directly,
+    so this stash only matters where the cookie is absent (e.g. /token).
     """
     if client_id:
         flask.g.client_id = str(client_id)
     if user_id:
         flask.g.user_id = str(user_id)
+    if device_id:
+        flask.g.device = str(device_id)
 
 
 def init_app(app: flask.Blueprint | flask.Flask) -> None:
@@ -262,11 +267,35 @@ def authorize(
     flask.g.journey_id = journey_id
     resources.session[PROVIDER][state].update(journey_id=journey_id)
 
+    # Stable device identity (#825): /authorize also issues (or reuses)
+    # the campus_device cookie and records the id on the auth session.
+    # Unlike the journey id this value is stable per browser profile —
+    # it survives re-logins and is shared across client apps — so the
+    # SDK can copy it onto the login session it creates and every login
+    # from this browser attributes to the same device. Same g-stash
+    # reasoning as the journey id: the middleware reads cookies from
+    # the request, which predates the Set-Cookie on this response.
+    device_id = (
+        flask.request.cookies.get(campus.config.DEVICE_COOKIE)
+        or uid.generate_category_uid("device")
+    )
+    flask.g.device = device_id
+    resources.session[PROVIDER][state].update(device_id=device_id)
+
     response = flask.redirect(oauth_authorize_url)
     response.set_cookie(
         campus.config.JOURNEY_COOKIE,
         journey_id,
         max_age=campus.config.JOURNEY_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="Lax",
+    )
+    # Not a flask.session key on purpose (#825): /logout's
+    # session.clear() clears session state, never device identity.
+    response.set_cookie(
+        campus.config.DEVICE_COOKIE,
+        device_id,
+        max_age=campus.config.DEVICE_COOKIE_MAX_AGE,
         httponly=True,
         samesite="Lax",
     )
@@ -374,6 +403,12 @@ def token(
     # /authorize is surfaced to the tracing middleware via flask.g.
     if authsession.journey_id:
         flask.g.journey_id = authsession.journey_id
+
+    # Device identity (#825): same reasoning as the journey id — the
+    # device recorded at /authorize rides flask.g so the token-exchange
+    # span is attributed to the browser that started the login.
+    if authsession.device_id:
+        flask.g.device = authsession.device_id
 
     if not authsession.user_id:
         raise auth_errors.InvalidRequestError(

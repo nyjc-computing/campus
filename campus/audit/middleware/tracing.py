@@ -347,6 +347,18 @@ def build_span_from_context(
         or request.cookies.get(campus.config.JOURNEY_COOKIE)
     )
 
+    # Stable device attribution (#825): flask_campus's push_context
+    # stashes g.device from the request's login session, and campus.auth's
+    # login hops stash it from the auth session (/token) — the cookie
+    # fallback covers browser hops whose handlers didn't stash. The
+    # device-verification page intentionally tags spans with the
+    # *authorizing browser's* device id; the CLI's own device lives only
+    # on its login session (Lane 2, client-asserted).
+    device_id = (
+        getattr(flask.g, "device", None)
+        or request.cookies.get(campus.config.DEVICE_COOKIE)
+    )
+
     # Build span dict matching TraceSpan schema
     span = {
         "trace_id": trace_id,
@@ -370,8 +382,16 @@ def build_span_from_context(
         # empty-string no-header case to None.
         "user_agent": request.user_agent.string or None,
         "error_message": None,  # No error for successful requests
-        # Journey tag when the request belongs to a login journey (#803)
-        "tags": {"journey_id": journey_id} if journey_id else {},
+        # Journey/device tags when the request belongs to a login
+        # journey (#803) or an identified device (#825)
+        "tags": {
+            key: value
+            for key, value in (
+                ("journey_id", journey_id),
+                ("device_id", device_id),
+            )
+            if value
+        },
         # Optional: populated by auth middleware if available
         "api_key_id": getattr(flask.g, "api_key_id", None),
         # The shared Authenticator glue stashes the authenticated caller's
