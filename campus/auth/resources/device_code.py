@@ -226,6 +226,37 @@ class DeviceCodeResource:
         except Exception as e:
             raise api_errors.InternalError.from_exception(e) from e
 
+    def claim(
+            self,
+            device_code_id: schema.CampusID | str,
+    ) -> bool:
+        """Atomically consume a device code by deleting it.
+
+        Single-use claim for token issuance (#356): delete_by_id is
+        rowcount-guarded in every storage backend, so exactly one
+        request can consume a given device code; a concurrent claim
+        finds it already gone and returns False.
+
+        Unlike delete(), a NotFoundError is reported (as False) rather
+        than swallowed, because the caller's decision depends on
+        whether THIS call consumed the code.
+
+        Args:
+            device_code_id: The device code ID
+
+        Returns:
+            True if this call consumed the code, False if it was
+            already consumed or deleted.
+        """
+        device_code_id = schema.CampusID(device_code_id)
+        try:
+            device_code_storage.delete_by_id(device_code_id)
+        except campus.storage.errors.NotFoundError:
+            return False
+        except Exception as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        return True
+
     def sweep(
             self,
             *,
