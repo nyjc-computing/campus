@@ -46,6 +46,13 @@ class TestAuditWebUI(unittest.TestCase):
         self.assertIn(b"traces.js", response.data)
         # Journey filter (#803) rides the standard filter form
         self.assertIn(b'name="journey_id"', response.data)
+        # One merged template serves both views (#803): the group-by-
+        # journey header card lives here, filled in by traces.js when
+        # the journey_id URL param selects a journey
+        self.assertIn(b"journey-header", response.data)
+        self.assertIn(b"journey-card", response.data)
+        # PATH keeps its space via fixed column shares
+        self.assertIn(b"col-path", response.data)
 
     def test_trace_detail_page_renders_scaffold(self):
         """/audit/traces/<trace_id> renders the waterfall/drawer scaffold."""
@@ -63,11 +70,10 @@ class TestAuditWebUI(unittest.TestCase):
         expected_tokens = [
             ("/audit/static/css/main.css", b"wf-bar"),
             ("/audit/static/css/main.css", b"span-drawer"),
-            ("/audit/static/css/main.css", b"journey-chip"),
+            ("/audit/static/css/main.css", b"journey-card"),
             ("/audit/static/js/main.js", b"escapeHtml"),
             ("/audit/static/js/traces.js", b"loadTraces"),
             ("/audit/static/js/trace.js", b"renderWaterfall"),
-            ("/audit/static/js/journey.js", b"loadJourney"),
         ]
         for path, token in expected_tokens:
             with self.subTest(path=path):
@@ -76,14 +82,25 @@ class TestAuditWebUI(unittest.TestCase):
                 self.assertIn(token, response.data)
 
     def test_traces_js_targets_ui_data_endpoint(self):
-        """traces.js must fetch the UI data endpoint, not the auth'd API.
+        """traces.js must fetch the UI data endpoints, not the auth'd API.
 
-        The browser cannot call the versioned audit API (API-key auth), so
-        the list page must target /audit/api/traces.
+        The browser cannot call the versioned audit API (API-key auth),
+        so the list page must target /audit/api/traces for the flat list
+        and /audit/api/journeys for the group-by-journey view (#803).
         """
         response = self.client.get("/audit/static/js/traces.js")
         self.assertIn(b"/audit/api/traces", response.data)
+        self.assertIn(b"/audit/api/journeys", response.data)
         self.assertNotIn(b"/audit/v1/traces", response.data)
+
+    def test_traces_js_drives_filters_from_url_params(self):
+        """Filters live in the URL (#803): the form syncs from params on
+        load and back/forward, and Apply pushes form state into the URL.
+        """
+        traces_js = self.client.get("/audit/static/js/traces.js").data
+        self.assertIn(b"URLSearchParams(window.location.search)", traces_js)
+        self.assertIn(b"history.pushState", traces_js)
+        self.assertIn(b"popstate", traces_js)
 
     def test_traces_js_formats_ids_and_timestamps(self):
         """The list renders the full trace ID on one line and local datetimes.
@@ -116,21 +133,31 @@ class TestAuditWebUI(unittest.TestCase):
         self.assertIn(b"/audit/api/traces", response.data)
         self.assertNotIn(b"/audit/v1", response.data)
 
-    def test_journey_page_renders_scaffold(self):
-        """/audit/journeys/<journey_id> renders the grouped-view scaffold (#803)."""
+    def test_journey_id_renders_as_meta_line_above_trace_id(self):
+        """The journey id sits in small text above the trace id (#803).
+
+        Card-style meta line instead of a dedicated column: it links to
+        the group-by-journey view and is dropped in journey view itself
+        (the group header already names the journey).
+        """
+        main_js = self.client.get("/audit/static/js/main.js").data
+        self.assertIn(b'class="cell-journey"', main_js)
+        self.assertIn(b"/audit/traces?journey_id=${encodeURIComponent(journeyId)}", main_js)
+        self.assertIn(b"options.journeyView ? '' : renderJourneyLine(journeyId)", main_js)
+        # The old inline chip is gone
+        self.assertNotIn(b"journey-chip", main_js)
+        self.assertIn(b".cell-journey", self.client.get("/audit/static/css/main.css").data)
+
+    def test_journey_url_redirects_to_merged_traces_view(self):
+        """/audit/journeys/<id> redirects to /audit/traces?journey_id=<id> (#803)."""
         journey_id = "journey_abc123"
         response = self.client.get(f"/audit/journeys/{journey_id}")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(b"trace-table-body", response.data)
-        self.assertIn(b'data-journey-id="journey_abc123"', response.data)
-        self.assertIn(b"journey.js", response.data)
-        self.assertNotIn(b"traces.js", response.data)
-
-    def test_journey_js_targets_ui_data_endpoint(self):
-        """journey.js must fetch the UI data endpoint, not the auth'd API."""
-        response = self.client.get("/audit/static/js/journey.js")
-        self.assertIn(b"/audit/api/journeys", response.data)
-        self.assertNotIn(b"/audit/v1", response.data)
+        self.assertEqual(response.status_code, 302)
+        location = response.headers.get("Location", "")
+        self.assertTrue(
+            location.endswith(f"/audit/traces?journey_id={journey_id}"),
+            f"unexpected redirect target: {location}",
+        )
 
 
 class TestAuditUIDataEndpoint(unittest.TestCase):
