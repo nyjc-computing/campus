@@ -341,5 +341,58 @@ class TestJourneyTagStamping(unittest.TestCase):
         self.assertEqual(span["tags"], {})
 
 
+class TestStaticRequestSkip(unittest.TestCase):
+    """start_span() skips static-asset requests (#818)."""
+
+    def setUp(self):
+        self.app = flask.Flask(__name__)
+
+    def test_static_endpoint_not_spanned(self):
+        """A request resolved to the 'static' endpoint stores no span state."""
+        with self.app.test_request_context("/static/css/style.css"):
+            self.assertEqual(flask.request.endpoint, "static")
+            tracing.start_span()
+
+            self.assertFalse(hasattr(flask.g, "trace_id"))
+
+    def test_blueprint_static_not_spanned(self):
+        """Blueprint-own static endpoints (*.static) are skipped too."""
+        bp = flask.Blueprint(
+            "admin", __name__,
+            static_folder="static",
+            static_url_path="/admin/static",
+        )
+        self.app.register_blueprint(bp)
+        with self.app.test_request_context("/admin/static/x.css"):
+            self.assertEqual(flask.request.endpoint, "admin.static")
+            tracing.start_span()
+
+            self.assertFalse(hasattr(flask.g, "trace_id"))
+
+    def test_favicon_not_spanned(self):
+        """/favicon.ico has no route; it is skipped by path."""
+        with self.app.test_request_context("/favicon.ico"):
+            self.assertIsNone(flask.request.endpoint)
+            tracing.start_span()
+
+            self.assertFalse(hasattr(flask.g, "trace_id"))
+
+    def test_end_span_noops_after_skipped_start(self):
+        """end_span after a skipped start leaves the response untouched."""
+        with self.app.test_request_context("/static/css/style.css"):
+            tracing.start_span()
+            response = tracing.end_span(flask.Response(status=200))
+
+        self.assertNotIn(tracing.TRACE_ID_HEADER, response.headers)
+
+    def test_page_loads_are_still_spanned(self):
+        """HTML page loads are traced — the waterfall roots (#816)."""
+        with self.app.test_request_context("/dashboard"):
+            tracing.start_span()
+
+            self.assertEqual(len(flask.g.trace_id), 32)
+            self.assertIsNotNone(flask.g.span_id)
+
+
 if __name__ == "__main__":
     unittest.main()

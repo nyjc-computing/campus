@@ -21,6 +21,12 @@ Parent epic: #424; enablement issue: #699.
   `POST /audit/v1/traces/` (`{"spans": [span]}`) from a background
   thread pool. **Ingestion failures never affect user requests** — they
   degrade to warning logs (`Failed to ingest trace span`).
+- Static-asset requests (`static`/`*.static` endpoints,
+  `/favicon.ico`) are **not spanned** (#818): they can never carry
+  child spans (push_context skips static too, #689) and would only
+  flood the traces list with 1-span rows. HTML page loads stay traced —
+  they are the waterfall roots that give page-fired SDK calls
+  parentage (#816).
 - `campus.audit` does not self-trace, but can emit audit *events*
   (`AUDIT_EVENTS_ENABLED=1`, login-attempt/API-key events) directly into
   its own storage.
