@@ -205,6 +205,22 @@ def _get_audit_client() -> AuditClient:
     return _audit_client
 
 
+def is_static_request() -> bool:
+    """True for static-asset requests that are never worth a span (#818).
+
+    Static requests can never gain child spans — flask_campus's
+    push_context already skips static endpoints (#689), so no SDK calls
+    fire from them — they would only flood the traces list with 1-span
+    rows. ``/favicon.ico`` has no route (endpoint None), so it needs a
+    path check. HTML page loads are NOT static: they stay traced as the
+    waterfall roots that give page-fired SDK calls parentage (#816).
+    """
+    endpoint = flask.request.endpoint or ""
+    if endpoint == "static" or endpoint.endswith(".static"):
+        return True
+    return flask.request.path == "/favicon.ico"
+
+
 def start_span() -> None:
     """Start a span for the incoming request.
 
@@ -217,6 +233,9 @@ def start_span() -> None:
     - Generates span_id for this request
     - Stores timing data in flask.g
 
+    Static-asset requests (#818) are skipped entirely: no state is
+    stored, so the paired end_span() call becomes a no-op.
+
     Stores in flask.g:
         - trace_id: 32-char hex trace identifier
         - span_id: 16-char hex span identifier
@@ -224,6 +243,9 @@ def start_span() -> None:
         - trace_start: perf_counter timestamp for duration calculation
         - trace_started_at: wall-clock DateTime for the span's started_at
     """
+    if is_static_request():
+        return
+
     # Get or generate trace_id from X-Request-ID header
     trace_id = flask.request.headers.get(TRACE_ID_HEADER) or uid.generate_trace_id()
 
