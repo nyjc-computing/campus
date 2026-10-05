@@ -1,6 +1,7 @@
 # Audit Tracing Pipeline
 
-How request spans flow from producer services (`campus.auth`, `campus.api`)
+How request spans flow from producers — campus services (`campus.auth`,
+`campus.api`) and traced client apps (campus-classroom first, #816) —
 into the audit service (`campus.audit`), and how to enable the pipeline.
 Parent epic: #424; enablement issue: #699.
 
@@ -11,6 +12,11 @@ Parent epic: #424; enablement issue: #699.
   `AUDIT_TRACING_ENABLED=1` (read once at app creation — flipping the
   flag is a redeploy, not a runtime change). `campus.audit` does not
   trace its own requests.
+- Client apps that depend on `campus-suite` wire the same middleware
+  themselves: `campus.audit.middleware.init_app(app)` behind their own
+  `AUDIT_TRACING_ENABLED` gate (see the classroom app factory for the
+  reference wiring). A traced client app's requests become root spans,
+  and the campus SDK calls it makes become their child spans (#816).
 - The middleware wraps every request in a span and ingests it via HTTP
   `POST /audit/v1/traces/` (`{"spans": [span]}`) from a background
   thread pool. **Ingestion failures never affect user requests** — they
@@ -27,13 +33,17 @@ originating request, which is what the audit UI's waterfall draws:
 - Inbound: `X-Request-ID` (trace id, pre-existing) and `X-Parent-Span-ID`
   (caller's span id) promote the request from a new root to a child of
   the caller's span, within the caller's trace.
-- Outbound: `tracing.instrument_requests_session()` wraps a
-  `requests.Session` so calls made while handling a traced request carry
-  both headers. `campus.api.init_app` instruments the `campus_python`
-  client's auth session (the `authenticate` call every api request
-  makes). Headers are computed per call — safe for shared sessions, and
-  calls from outside a request context (e.g. the ingestion executor
-  thread) stay unparented.
+- Outbound: the `campus_python` SDK instruments its own sessions at
+  client construction (`campus_python.tracing.instrument_requests_session`,
+  campus-api-python#93), so every call made while handling a traced
+  request — campus.api's `authenticate`, a client app's session lookup —
+  carries both headers and lands as a child span. Headers are computed
+  per call from the active request context — safe for shared sessions,
+  and calls from outside a request context (e.g. the ingestion executor
+  thread) stay unparented. The mirrored copy in
+  `campus.audit.middleware.tracing` remains for server-side sessions
+  built on `campus.common.http`; the two are idempotent across each
+  other.
 - In tests, `tests.flask_test.TestCampusRequest` merges the same headers
   so the api→auth chain behaves as in production.
 - Span `started_at` is the wall-clock request start (captured in
@@ -41,8 +51,8 @@ originating request, which is what the audit UI's waterfall draws:
 - `TraceTree.from_spans` adopts spans whose parent was not ingested
   under the earliest-started root — nothing disappears from the view.
 - Header trust matches `X-Request-ID`: internal observability only, not
-  a security boundary. W3C `traceparent` interop is possible future work,
-  as is moving the SDK session instrumentation into campus-api-python.
+  a security boundary. W3C `traceparent` interop is possible future work
+  (it would extend both propagation implementations).
 
 ## Login-journey tagging (#803)
 
