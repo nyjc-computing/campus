@@ -170,6 +170,40 @@ class TestInstrumentRequestsSession(unittest.TestCase):
         self.assertFalse(tracing.instrument_requests_session(session))
 
 
+class TestUserAgentCapture(unittest.TestCase):
+    """build_span_from_context() captures the User-Agent (#826).
+
+    werkzeug 3's UserAgent object is falsy even when a UA header is
+    present, so a conditional on the object always took the None
+    branch and the field ingested empty on every span.
+    """
+
+    def setUp(self):
+        self.app = flask.Flask(__name__)
+
+    def _build_span(self, headers: dict) -> dict:
+        with self.app.test_request_context("/", headers=headers):
+            tracing.start_span()
+            return tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+    def test_user_agent_header_captured(self):
+        """A UA header lands in the span's user_agent field."""
+        span = self._build_span({"User-Agent": "Mozilla/5.0 TestBot/1.0"})
+
+        self.assertEqual(span["user_agent"], "Mozilla/5.0 TestBot/1.0")
+
+    def test_missing_user_agent_is_none(self):
+        """No UA header normalizes to None, not an empty string."""
+        span = self._build_span({})
+
+        self.assertIsNone(span["user_agent"])
+
+
 class TestSpanIdentityEnrichment(unittest.TestCase):
     """build_span_from_context() maps the authenticated caller onto the span.
 

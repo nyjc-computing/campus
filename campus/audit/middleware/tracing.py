@@ -365,7 +365,10 @@ def build_span_from_context(
         "response_headers": redact_sensitive(dict(response.headers)),
         "response_body": redact_sensitive(response_body),
         "client_ip": request.remote_addr,
-        "user_agent": request.user_agent.string if request.user_agent else None,
+        # werkzeug 3's UserAgent object is falsy even when a UA header is
+        # present (#826) — read .string unconditionally and normalize the
+        # empty-string no-header case to None.
+        "user_agent": request.user_agent.string or None,
         "error_message": None,  # No error for successful requests
         # Journey tag when the request belongs to a login journey (#803)
         "tags": {"journey_id": journey_id} if journey_id else {},

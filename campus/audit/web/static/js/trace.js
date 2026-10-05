@@ -89,6 +89,7 @@
         document.getElementById('meta-client').textContent = root.client_name || root.client_id || '—';
         document.getElementById('meta-client').title = root.client_id || '';
         document.getElementById('meta-user').textContent = root.user_id || '—';
+        document.getElementById('meta-user-agent').textContent = root.user_agent || '—';
     }
 
     // ---------- waterfall ----------
@@ -257,8 +258,9 @@
     // ---------- boot ----------
 
     /**
-     * The tree resource carries no identity fields, so fill the client and
-     * user metadata from the root span's full record once it arrives.
+     * The tree resource may predate the identity fields (older spans,
+     * cached data), so also fill the client/user/user-agent metadata
+     * from the root span's full record once it arrives.
      */
     async function loadIdentity(rootSpanId) {
         try {
@@ -268,6 +270,7 @@
             document.getElementById('meta-client').textContent = span.client_name || span.client_id || '—';
             document.getElementById('meta-client').title = span.client_id || '';
             document.getElementById('meta-user').textContent = span.user_id || '—';
+            document.getElementById('meta-user-agent').textContent = span.user_agent || '—';
         } catch {
             // Keep the em-dash placeholders on failure.
         }
