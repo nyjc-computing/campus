@@ -5,6 +5,7 @@ Trace ingestion and query endpoints for the audit service.
 Issue: #427
 """
 
+import logging
 from typing import Any
 
 import flask
@@ -14,10 +15,13 @@ from campus.common.errors import api_errors
 
 from .. import decorators
 from ..helpers import audit_events
+from ..resources import ratelimit
 from ..resources import traces as traces_resource
 
 # Create blueprint for trace routes
 bp = flask.Blueprint('audit_traces', __name__, url_prefix='/traces')
+
+logger = logging.getLogger(__name__)
 
 
 @bp.post("/")
@@ -66,6 +70,9 @@ def ingest_spans(
         201 Created with span IDs on success
         207 Multi-Status on partial failure
         400 Bad Request on invalid input
+        429 Too Many Requests when a rate-limit bucket is exceeded
+            (#831); the response carries Retry-After and the tripped
+            bucket key in the error details
 
     Note:
         Audit events are emitted for both successful ingestions (201/207)
@@ -83,6 +90,26 @@ def ingest_spans(
         ]
     except (KeyError, TypeError, ValueError) as e:
         raise api_errors.InvalidRequestError(f"Invalid span data: {e}") from e
+
+    # Rate-limit consumption happens before any span is stored (#831).
+    # All-or-nothing per batch: a tripped bucket denies the whole batch.
+    tripped_key, retry_after = ratelimit.consume_for_spans(
+        span_models,
+        api_key_id=getattr(flask.g, "api_key_id", None),
+    )
+    if tripped_key is not None:
+        # WARN with the bucket key is the misconfiguration-detection
+        # signal (#831); 429s are never recorded as spans.
+        logger.warning(
+            "audit ingest rate limit tripped: bucket=%s retry_after=%ds",
+            tripped_key,
+            retry_after,
+        )
+        raise api_errors.RateLimitError(
+            f"Rate limit exceeded; retry after {retry_after}s",
+            retry_after=retry_after,
+            bucket=tripped_key,
+        )
 
     result = traces_resource.ingest(span_models)
     return result, 201

@@ -9,9 +9,11 @@ External clients should access resources via API endpoints.
 
 __all__ = [
     "apikeys",
+    "ratelimit",
     "traces",
 ]
 
+from . import ratelimit
 from .apikeys import APIKeysResource
 from .traces import TracesResource
 

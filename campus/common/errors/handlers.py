@@ -156,11 +156,16 @@ def handle_authorization_error(
                 )
             )
 
-def handle_api_error(err: api_errors.APIError) -> tuple[JsonDict, int]:
+def handle_api_error(
+        err: api_errors.APIError,
+) -> tuple[JsonDict, int] | tuple[JsonDict, int, dict[str, str]]:
     """Handle API errors.
 
     This function is used to handle API errors and return
     standardised JSON responses following the API Error Handling Specification.
+
+    Errors may carry response headers (e.g. Retry-After on 429s);
+    non-empty headers are returned as a flask 3-tuple (#831).
 
     Reference: campus/api/docs/api-error-spec.md
     """
@@ -170,6 +175,8 @@ def handle_api_error(err: api_errors.APIError) -> tuple[JsonDict, int]:
     # Remove traceback and sensitive details in production for security reasons
     if devops.ENV == devops.PRODUCTION:
         err_dict["error"].pop("details", None)
+    if err.headers:
+        return err_dict, err.status_code, err.headers
     return err_dict, err.status_code
 
 

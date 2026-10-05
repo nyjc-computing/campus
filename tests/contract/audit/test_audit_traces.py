@@ -1192,5 +1192,130 @@ class TestAuditTracesScopeEnforcement(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class TestAuditTracesRateLimitContract(unittest.TestCase):
+    """Rate limiting on POST /audit/v1/traces (#831, Phase 3 of #538).
+
+    Ingest is limited by per-minute token buckets keyed by span identity
+    (client_id/user_id pair, or the producer API key for identity-less
+    spans). Over-limit batches get 429 with Retry-After and the tripped
+    bucket key; consumption is all-or-nothing per batch.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.initialize()
+        cls.app = cls.manager.audit_app
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+        assert self.app
+        self.client = self.app.test_client()
+
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Rate Limit Test Key",
+            owner_id="test-user",
+            scopes="traces:write",
+        )
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
+
+        # Small limit so tests can exhaust buckets quickly; read at
+        # request time, so this takes effect for every request below.
+        from campus.common import env
+        env.set('AUDIT_RATE_LIMIT_PER_MINUTE', '1')
+
+    def tearDown(self):
+        from campus.common import env
+        env.set('AUDIT_RATE_LIMIT_PER_MINUTE', '')
+
+    def _post_spans(self, *client_ids):
+        """POST one span per client_id (or an identity-less span).
+
+        Returns the flask response.
+        """
+        spans = []
+        for i, client_id in enumerate(client_ids):
+            span = {
+                "trace_id": f"{i:032x}",
+                "span_id": f"{i:016x}",
+                "parent_span_id": None,
+                "method": "GET",
+                "path": "/api/test",
+                "status_code": 200,
+                "started_at": "2023-01-01T10:00:00Z",
+                "duration_ms": 100.0,
+                "query_params": {},
+                "request_headers": {},
+                "request_body": None,
+                "response_headers": {},
+                "response_body": None,
+                "api_key_id": None,
+                "client_id": client_id,
+                "user_id": None,
+                "client_ip": "127.0.0.1",
+                "user_agent": "test-agent",
+                "error_message": None,
+                "tags": {},
+            }
+            spans.append(span)
+        return self.client.post(
+            "/audit/v1/traces/",
+            json={"spans": spans},
+            headers=self.auth_headers,
+        )
+
+    def test_ingest_429_when_bucket_exhausted(self):
+        """Second identity-less ingest inside a minute is 429."""
+        first = self._post_spans(None)
+        self.assertEqual(first.status_code, 201)
+
+        second = self._post_spans(None)
+        self.assertEqual(second.status_code, 429)
+        self.assertIn("Retry-After", second.headers)
+        self.assertGreaterEqual(int(second.headers["Retry-After"]), 1)
+
+        data = second.get_json()
+        self.assertEqual(data["error"]["code"], "RATE_LIMITED")
+        # Identity-less spans fall back to a bucket keyed by the
+        # authenticated producer API key id.
+        self.assertTrue(
+            data["error"]["details"]["bucket"].startswith("apikey=")
+        )
+
+    def test_denied_batch_consumes_nothing(self):
+        """An over-limit batch is denied whole, burning no tokens."""
+        # limit=1: a 2-span batch needs 2 tokens but the bucket holds 1.
+        denied = self._post_spans(None, None)
+        self.assertEqual(denied.status_code, 429)
+
+        # The bucket must still be full: a 1-span batch succeeds.
+        allowed = self._post_spans(None)
+        self.assertEqual(allowed.status_code, 201)
+
+    def test_identities_are_isolated(self):
+        """One exhausted identity does not affect other identities."""
+        first_a = self._post_spans("client-a")
+        self.assertEqual(first_a.status_code, 201)
+
+        first_b = self._post_spans("client-b")
+        self.assertEqual(first_b.status_code, 201)
+
+        second_a = self._post_spans("client-a")
+        self.assertEqual(second_a.status_code, 429)
+        self.assertEqual(
+            second_a.get_json()["error"]["details"]["bucket"],
+            "client=client-a",
+        )
+
+        # client-c's bucket is untouched by client-a's exhaustion.
+        first_c = self._post_spans("client-c")
+        self.assertEqual(first_c.status_code, 201)
+
+
 if __name__ == "__main__":
     unittest.main()

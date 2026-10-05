@@ -49,10 +49,19 @@ def raise_api_error(status: int, **body) -> NoReturn:
                 status=status,
                 **body
             )
+        case 429:
+            retry_after = body.pop("retry_after", None)
+            message = body.pop("message", "Rate limit exceeded")
+            raise RateLimitError(
+                message=message,
+                retry_after=retry_after,
+                **body
+            )
         case 422:
             errors = body.pop("errors", None)
+            message = body.pop("message", "Validation failed")
             raise ValidationError(
-                message=body.get("message", "Validation failed"),
+                message=message,
                 errors=errors,
                 **body
             )
@@ -158,6 +167,30 @@ class NotFoundError(APIError):
             **details
     ) -> None:
         super().__init__(message, error_code, **details)
+
+
+class RateLimitError(APIError):
+    """Rate limit exceeded error.
+
+    Error indicates that the client has sent too many requests in a
+    given amount of time. Carries retry_after (seconds until the caller
+    may retry), which the error handler emits as a Retry-After response
+    header. The tripped bucket key is passed via details so producers
+    can flag the right identity for their circuit breaker (#831).
+    """
+    status_code: int = 429
+
+    def __init__(
+            self,
+            message: str = "Rate limit exceeded",
+            error_code: str = ErrorConstant.RATE_LIMITED,
+            retry_after: int | float | None = None,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+        self.retry_after = retry_after
+        if retry_after is not None:
+            self.headers = {"Retry-After": str(max(1, int(retry_after)))}
 
 
 class UnauthorizedError(APIError):
