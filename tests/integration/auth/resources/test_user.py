@@ -95,18 +95,47 @@ class TestUsersResourceGetOrCreate(unittest.TestCase):
 
     def test_get_or_create_idempotent_multiple_calls(self):
         """Should return same user record across multiple calls with same email."""
-        # TODO
-        pass
+        email = schema.Email("idempotent_user@example.com")
+        name = "Idempotent_User"
+
+        first = self.resource.get_or_create(email, name)
+        second = self.resource.get_or_create(email, name)
+        third = self.resource.get_or_create(email, name)
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(second.id, third.id)
+        self.assertEqual(first.created_at, second.created_at)
+        self.assertEqual(first.created_at, third.created_at)
+        # Exactly one record exists for the email
+        matches = [u for u in self.resource.list() if u.email == email]
+        self.assertEqual(len(matches), 1)
 
     def test_new_creates_user_with_activated_at(self):
         """Should create user with activated_at timestamp when provided."""
-        # TODO
-        pass
+        email = schema.Email("activated_user@example.com")
+        name = "Activated_User"
+        activated_at = schema.DateTime("2026-01-15T08:30:00+00:00")
+
+        user = self.resource.new(
+            email=email, name=name, activated_at=activated_at
+        )
+
+        self.assertEqual(user.activated_at, activated_at)
+        # Verify the timestamp round-trips from storage
+        retrieved = self.resource[schema.UserID(email)].get()
+        self.assertEqual(retrieved.activated_at, activated_at)
 
     def test_new_creates_user_without_activated_at(self):
         """Should create user with null activated_at when not provided."""
-        # TODO
-        pass
+        email = schema.Email("unactivated_user@example.com")
+        name = "Unactivated_User"
+
+        user = self.resource.new(email=email, name=name)
+
+        self.assertIsNone(user.activated_at)
+        # Verify the null round-trips from storage
+        retrieved = self.resource[schema.UserID(email)].get()
+        self.assertIsNone(retrieved.activated_at)
 
     def test_list_returns_all_users(self):
         """Should return list of all users in storage."""
@@ -171,13 +200,34 @@ class TestUserResource(unittest.TestCase):
 
     def test_activate_sets_activated_at(self):
         """Should set activated_at timestamp when activating a user."""
-        # TODO
-        pass
+        from campus.common.errors import api_errors
+
+        email = schema.Email("activate_me@example.com")
+        self.resource.new(email=email, name="Activate_Me")
+        user = self.resource[schema.UserID(email)]
+
+        self.assertIsNone(user.get().activated_at)
+        user.activate()
+
+        activated = user.get()
+        self.assertIsNotNone(activated.activated_at)
+        # Activating again is rejected
+        with self.assertRaises(api_errors.InvalidRequestError):
+            user.activate()
 
     def test_delete_removes_user(self):
         """Should remove user from storage when deleted."""
-        # TODO
-        pass
+        from campus.common.errors import api_errors
+
+        email = schema.Email("delete_me@example.com")
+        self.resource.new(email=email, name="Delete_Me")
+        user = self.resource[schema.UserID(email)]
+        self.assertIsNotNone(user.get())
+
+        user.delete()
+
+        with self.assertRaises(api_errors.NotFoundError):
+            user.get()
 
 
 if __name__ == '__main__':

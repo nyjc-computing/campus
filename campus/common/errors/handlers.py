@@ -4,6 +4,7 @@ Error handler functions for Flask error handling.
 """
 
 import logging
+import pathlib
 import sys
 import traceback
 
@@ -17,14 +18,42 @@ from .base import JsonDict
 
 logger = logging.getLogger(__name__)
 
+# Package root for this copy of campus: handlers.py lives at
+# <pkg>/campus/common/errors/handlers.py, and handler frames themselves are
+# never the origin of an error.
+_CAMPUS_PKG_DIR = pathlib.Path(__file__).resolve().parents[2]
+_HANDLER_DIR = pathlib.Path(__file__).resolve().parent
+
+
+def _select_campus_frame(frames) -> str | None:
+    """Return the outermost frame inside the campus package, if any.
+
+    Adapter and client libraries raise from their own modules; the campus
+    frame that made the failing call is the actionable one in logs (#620).
+    """
+    for frame in frames:
+        path = pathlib.Path(frame.filename).resolve()
+        if (
+                path.is_relative_to(_CAMPUS_PKG_DIR)
+                and not path.is_relative_to(_HANDLER_DIR)
+        ):
+            return frame.filename
+    return None
+
 
 def get_caller() -> str:
-    """Return the filename of the module where the exception was raised."""
+    """Return the filename of the campus module where the error originated.
+
+    Walks the traceback from the outermost frame and names the first campus
+    package frame, so unhandled exceptions log the campus code responsible
+    rather than the adapter or client library raise site (#620). Falls back
+    to the innermost frame when the chain contains no campus frames.
+    """
     tb = sys.exc_info()[2]
     if tb:
         frames = traceback.extract_tb(tb)
         if frames:
-            return frames[-1].filename
+            return _select_campus_frame(frames) or frames[-1].filename
     return "unknown"
 
 
