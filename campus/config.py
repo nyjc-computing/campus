@@ -84,6 +84,17 @@ DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 JOURNEY_COOKIE = "campus_journey"
 JOURNEY_COOKIE_MAX_AGE = 1800  # seconds; ~30 min inactivity TTL
 
+# Action-journey correlation (#828). Set by the journeys middleware
+# (campus.audit.middleware.journeys) on page navigations and refreshed
+# on every request with an active journey, so one user-initiated action
+# episode — page load, its XHRs and form posts, and the server-to-server
+# calls they spawn (joined via forwarded X-Journey-ID headers) — groups
+# as one journey. Deliberately short and sliding: episodes end on idle
+# expiry (or an app's fresh=True journey boundary), never spanning a
+# whole session. Distinct from JOURNEY_COOKIE (login flows).
+ACTION_JOURNEY_COOKIE = "campus_action_journey"
+ACTION_JOURNEY_COOKIE_MAX_AGE = 600  # seconds; ~10 min idle window
+
 # Stable device identity (#825). campus.auth sets this opaque cookie at
 # GET /authorize and reuses it on every later login from the same browser
 # profile, so login sessions (and their spans) can be attributed to a

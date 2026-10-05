@@ -3,10 +3,12 @@
 Request tracing middleware for Campus audit API.
 
 This module provides automatic span capture for HTTP requests flowing
-through campus.auth and campus.api deployments.
+through campus.auth and campus.api deployments, and the action-journey
+lifecycle (#828) that groups related requests into user-initiated
+episodes.
 """
 
-__all__ = ["init_app"]
+__all__ = ["init_app", "init_journeys"]
 
 import flask
 
@@ -48,3 +50,29 @@ def init_app(app: flask.Flask) -> None:
             The response with X-Request-ID header added.
         """
         return tracing.end_span(response)
+
+
+def init_journeys(
+        app: flask.Flask | flask.Blueprint,
+        *,
+        mint_on_navigation: bool = True,
+) -> None:
+    """Initialize the action-journey lifecycle (#828).
+
+    Adopts or mints a journey id per request (see .journeys for the
+    lifecycle) and keeps the campus_action_journey cookie alive, so a
+    user-initiated action episode — page load, its XHRs and form posts,
+    and the server-to-server calls they spawn — groups as one journey
+    in the audit UI.
+
+    Args:
+        app: The Flask app, or a blueprint for scoped opt-in.
+        mint_on_navigation: Mint on page navigations with no active
+            journey. Pass False for services whose browser surface is
+            the login flow itself (campus.auth, #803) or that serve no
+            browser pages (campus.api) — they adopt forwarded
+            X-Journey-ID headers only.
+    """
+    from . import journeys
+
+    journeys.init_journeys(app, mint_on_navigation=mint_on_navigation)

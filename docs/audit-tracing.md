@@ -81,6 +81,39 @@ migrations) and is matched in Python over a capped recent-span scan —
 fine at the audit UI's scale; promote to a dedicated column only if
 that ever gets slow.
 
+## Action journeys (#828)
+
+Login journeys correlate the login flow itself; **action journeys**
+group one user-initiated *action episode* — the page load that began
+it, its XHRs and form posts, and the server-to-server calls those
+spawn (which are already one trace each via propagation; the journey
+stitches across browser requests). Same `tags.journey_id` mechanism,
+different lifecycle, owned by `campus.audit.middleware.journeys`:
+
+- **Adopt:** each request picks up the journey from the
+  `X-Journey-ID` header (SDK-forwarded child call, or an app minting
+  client-side) or the `campus_action_journey` cookie (same-origin
+  XHRs/form posts/redirect GETs carry it automatically). Static
+  requests are skipped (#819).
+- **Mint:** a page navigation (`Sec-Fetch-Mode: navigate` or
+  `Accept: text/html`) with no active journey starts a new episode —
+  the navigation is the user-initiated origin, no client code needed.
+- **Continue:** the cookie is set/refreshed on every journeyed
+  request (sliding ~10 min window), so POST-redirect-GET flows stay
+  whole; idle expiry ends the episode. No explicit end state.
+- **Name:** `@flask_campus.journey("submit-assignment")` on a view
+  attaches a human label (`tags.journey_name`) for journey cards;
+  `fresh=True` forces a hard episode boundary mid-visit. Soft by
+  default: adopting never fragments an ongoing episode.
+
+Enable with `init_journeys(app)` (or on a blueprint for scoped
+opt-in). Services whose browser surface is the login flow itself
+(campus.auth) or that serve no browser pages (campus.api) register
+with `mint_on_navigation=False`: adopt-only, so SDK-forwarded headers
+still join their spans to the caller's journey. The SDK
+(`campus_python.tracing`) forwards `X-Journey-ID` on outbound calls
+made inside a journeyed request.
+
 ## Authentication (`AUDIT_API_KEY`)
 
 Producers authenticate to the audit API with a **Bearer `audit_v1_` API
