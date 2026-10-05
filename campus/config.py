@@ -84,6 +84,16 @@ DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 JOURNEY_COOKIE = "campus_journey"
 JOURNEY_COOKIE_MAX_AGE = 1800  # seconds; ~30 min inactivity TTL
 
+# Stable device identity (#825). campus.auth sets this opaque cookie at
+# GET /authorize and reuses it on every later login from the same browser
+# profile, so login sessions (and their spans) can be attributed to a
+# device across re-logins and across client apps. Deliberately a standalone
+# cookie, NOT a flask.session key: it is device identity, not session
+# state, so /auth/v1/logout's session.clear() must not clear it.
+DEVICE_COOKIE = "campus_device"
+# 400 days is Chrome's maximum cookie lifetime cap.
+DEVICE_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
+
 # Public OAuth client ID for CLI/device apps (RFC 6749 Section 2.1)
 # Stored in the database as a client with is_public=True and no secret;
 # seeded at auth service startup (see campus.auth.resources.client.
