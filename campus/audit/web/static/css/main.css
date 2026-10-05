@@ -237,17 +237,19 @@ button[type="reset"] {
     font-size: 0.82rem;
 }
 
-/* Column shares (must sum to ~100%). Trace ID holds a full 32-char
-   hex id on one line; PATH gets the largest text share. */
-.col-trace-id { width: 25%; }
+/* Column shares (must sum to ~100%). Trace IDs display truncated
+   (#823) with the full id in the tooltip; CLIENT/USER hold resolved
+   names and emails, single-line with ellipsis — full values in their
+   tooltips. PATH keeps the largest text share. */
+.col-trace-id { width: 14%; }
 .col-started { width: 13%; }
 .col-method { width: 5%; }
-.col-path { width: 28%; }
+.col-path { width: 25%; }
 .col-status { width: 6%; }
 .col-duration { width: 7%; }
 .col-spans { width: 4%; }
-.col-client { width: 8%; }
-.col-user { width: 4%; }
+.col-client { width: 12%; }
+.col-user { width: 14%; }
 
 .trace-table th,
 .trace-table td {
@@ -255,8 +257,10 @@ button[type="reset"] {
     padding: 0.3rem 0.6rem;
     border-bottom: 1px solid var(--audit-border);
     white-space: nowrap;
-    /* Fixed layout clips overflowing cells instead of stretching */
+    /* Fixed layout clips overflowing cells instead of stretching;
+       ellipsis marks the clip (values are tooltip'd where useful) */
     overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .trace-table td.wrap {
@@ -264,9 +268,9 @@ button[type="reset"] {
     word-break: break-all;
 }
 
-/* Trace IDs render in full on one line; the wrapper scrolls
-   horizontally instead. Higher specificity than the small-screen
-   white-space override at the bottom of this file. */
+/* Trace IDs display truncated (#823); keep the label on one line.
+   Higher specificity than the small-screen white-space override at
+   the bottom of this file. */
 .trace-table td.trace-id {
     white-space: nowrap;
 }

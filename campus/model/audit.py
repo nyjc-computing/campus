@@ -298,6 +298,12 @@ class TraceTreeNode(InternalModel):
     duration_ms: float
     error_message: str | None
 
+    # Identity (#823): the summary path exposes these via the full
+    # TraceSpan; the tree path must too, or the detail page and the
+    # versioned detail API disagree with the list on the same spans.
+    client_id: str | None = None
+    user_id: str | None = None
+
     # Tree structure
     children: "list[TraceTreeNode]" = field(default_factory=list)
 
@@ -321,6 +327,8 @@ class TraceTreeNode(InternalModel):
             "started_at": self.started_at,  # DateTime is already a string
             "duration_ms": self.duration_ms,
             "error_message": self.error_message,
+            "client_id": self.client_id,
+            "user_id": self.user_id,
             "children": [child.to_resource() for child in self.children],
             "depth": self.depth,
             "offset": self.offset,
@@ -473,6 +481,8 @@ class TraceTree(InternalModel):
             started_at=span_dict["started_at"],
             duration_ms=span_dict.get("duration_ms", 0),
             error_message=span_dict.get("error_message"),
+            client_id=span_dict.get("client_id"),
+            user_id=span_dict.get("user_id"),
             children=child_nodes,
             depth=depth,
             offset=offset,
