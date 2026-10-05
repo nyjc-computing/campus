@@ -16,6 +16,7 @@ import campus.flask_campus as flask_campus
 from campus.common.errors import api_errors
 
 from ..resources import traces as traces_resource
+from . import clientnames
 
 
 def create_blueprint() -> flask.Blueprint:
@@ -70,7 +71,9 @@ def create_blueprint() -> flask.Blueprint:
             cursor=flask.request.args.get("cursor"),
         )
         return {
-            "traces": [s.to_resource() for s in page.summaries],
+            "traces": clientnames.enrich_summaries(
+                [s.to_resource() for s in page.summaries]
+            ),
             "cursor": {"next": page.next_cursor, "has_more": page.has_more},
         }, 200
 
@@ -85,7 +88,9 @@ def create_blueprint() -> flask.Blueprint:
         return {
             "journey_id": journey_id,
             "trace_count": len(summaries),
-            "traces": [s.to_resource() for s in summaries],
+            "traces": clientnames.enrich_summaries(
+                [s.to_resource() for s in summaries]
+            ),
         }, 200
 
     @bp.route('/traces/<trace_id>')
@@ -98,7 +103,10 @@ def create_blueprint() -> flask.Blueprint:
         tree = traces_resource[trace_id].get_tree()
         if tree is None or tree.root is None:
             return {"error": f"Trace {trace_id} not found"}, 404
-        return {"trace_id": trace_id, "root_span": tree.to_resource()}, 200
+        return {
+            "trace_id": trace_id,
+            "root_span": clientnames.enrich_tree(tree.to_resource()),
+        }, 200
 
     @bp.route('/traces/<trace_id>/spans/<span_id>')
     def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
