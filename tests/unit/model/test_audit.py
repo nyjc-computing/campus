@@ -1082,6 +1082,25 @@ class TestTraceTreeIdentity(unittest.TestCase):
         self.assertEqual(resource["client_id"], "uid-client-abc")
         self.assertEqual(resource["user_id"], "user@nyjc.edu.sg")
 
+    def test_from_spans_maps_user_agent(self):
+        """user_agent rides the tree node like client/user (#826)."""
+        spans = [self._span("root", user_agent="Mozilla/5.0 TestBot/1.0")]
+
+        tree = TraceTree.from_spans(spans)
+
+        self.assertEqual(tree.root.user_agent, "Mozilla/5.0 TestBot/1.0")
+        self.assertEqual(
+            tree.to_resource()["user_agent"], "Mozilla/5.0 TestBot/1.0"
+        )
+
+    def test_user_agent_absent_defaults_to_none(self):
+        span = self._span("root")
+        span.pop("user_agent", None)
+
+        tree = TraceTree.from_spans([span])
+
+        self.assertIsNone(tree.root.user_agent)
+
 
 if __name__ == "__main__":
     unittest.main()

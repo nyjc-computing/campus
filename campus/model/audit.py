@@ -303,6 +303,9 @@ class TraceTreeNode(InternalModel):
     # versioned detail API disagree with the list on the same spans.
     client_id: str | None = None
     user_id: str | None = None
+    # Client info (#826): same rationale — the detail metadata shows
+    # the requesting user agent, which only the full span carried.
+    user_agent: str | None = None
 
     # Tree structure
     children: "list[TraceTreeNode]" = field(default_factory=list)
@@ -329,6 +332,7 @@ class TraceTreeNode(InternalModel):
             "error_message": self.error_message,
             "client_id": self.client_id,
             "user_id": self.user_id,
+            "user_agent": self.user_agent,
             "children": [child.to_resource() for child in self.children],
             "depth": self.depth,
             "offset": self.offset,
@@ -483,6 +487,7 @@ class TraceTree(InternalModel):
             error_message=span_dict.get("error_message"),
             client_id=span_dict.get("client_id"),
             user_id=span_dict.get("user_id"),
+            user_agent=span_dict.get("user_agent"),
             children=child_nodes,
             depth=depth,
             offset=offset,
