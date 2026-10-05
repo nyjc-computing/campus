@@ -88,6 +88,21 @@ POSTGRESDB_URI="postgresql://..."    # auth service database
 
 Other configuration is managed via `campus.auth.vaults`.
 
+### Running Locally Without External Databases
+
+Campus can run entirely on local storage backends — SQLite tables, in-memory
+documents, and local file objects — with no Postgres or MongoDB required:
+
+```bash
+STORAGE_MODE=1 DEPLOY=campus.api poetry run python main.py
+# or
+STORAGE_MODE=1 DEPLOY=campus.auth poetry run python main.py
+```
+
+This is the same mode the test suites use, so data is not durable across
+runs; it is meant for local development and smoke testing. Backend selection
+lives in `campus/storage/testing.py`.
+
 ## Documentation Index
 
 | Document | Purpose |
