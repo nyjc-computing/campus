@@ -36,6 +36,7 @@ __all__ = [
     "Model",
     "OAuthToken",
     "Question",
+    "RateLimitBucket",
     "Response",
     "Submission",
     "Timetable",
@@ -52,7 +53,7 @@ __all__ = [
     "VenueBooking",
 ]
 
-from .audit import APIKey, TraceSpan, TraceSummary, TraceTree, TraceTreeNode
+from .audit import APIKey, RateLimitBucket, TraceSpan, TraceSummary, TraceTree, TraceTreeNode
 from .base import InternalModel, Model
 from .booking import Venue, VenueBooking
 from .circle import Circle

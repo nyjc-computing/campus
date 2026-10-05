@@ -16,6 +16,7 @@ from campus.model.base import InternalModel, Model
 
 __all__ = [
     "APIKey",
+    "RateLimitBucket",
     "TraceSpan",
     "TraceTreeNode",
     "TraceTree",
@@ -50,6 +51,28 @@ def _span_start_key(span: dict) -> tuple[datetime.datetime, str]:
         parsed if parsed is not None else _EPOCH_FALLBACK,
         str(span.get("span_id") or ""),
     )
+
+
+@dataclass(eq=False, kw_only=True)
+class RateLimitBucket(InternalModel):
+    """Token-bucket state for one audit rate-limit key (#538 Phase 3, #831).
+
+    One row per active identity bucket; consumed by
+    campus.audit.resources.ratelimit before span ingestion.
+
+    Attributes:
+        id: Encoded bucket key (storage PK). Encodes the identity tuple
+            ("client"/"user") or the producer API key fallback.
+        tokens: Remaining burst capacity, in spans.
+        last_refill: Unix epoch seconds of the last refill.
+    """
+
+    id: str = field(
+        default="",
+        metadata={"resource": False}  # PK only, hidden from API
+    )
+    tokens: float = 0.0
+    last_refill: float = 0.0
 
 
 @dataclass(eq=False, kw_only=True)

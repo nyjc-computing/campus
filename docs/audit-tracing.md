@@ -176,3 +176,24 @@ Verify a key works: `GET /audit/v1/traces/` with
 
 Roll out one producer at a time (canary) — ingestion is fail-safe, so a
 misconfigured producer only loses spans, never requests.
+
+## Rate limiting on ingest (#831)
+
+`POST /audit/v1/traces/` enforces a per-minute token bucket per
+identity, keyed by the span's tagged identity in priority order:
+`client_id`+`user_id` pair → `user_id` → `client_id` → the producer
+API key (identity-less spans, e.g. pre-auth login hops). Device IDs are
+deliberately not a key (ephemeral, unbounded cardinality).
+
+- Over-limit batches are denied whole with `429 RATE_LIMITED`, a
+  `Retry-After` header, and the tripped bucket key in
+  `error.details.bucket`. 429s are logged at WARN by audit and never
+  recorded as spans.
+- Legit services should never come near the limit; a WARN 429 is the
+  misconfiguration-detection signal.
+- Config: `AUDIT_RATE_LIMIT_PER_MINUTE` on **campus.audit** (default
+  600, pending tuning against real dev traffic).
+- Producers keep failing open today; the follow-on campus-python
+  circuit breaker (#831) will 503 producer requests while a bucket is
+  tripped. Design:
+  [Phase 3 design on #538](https://github.com/nyjc-computing/campus/issues/538#issuecomment-5996377544).

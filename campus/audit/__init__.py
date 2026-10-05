@@ -146,9 +146,11 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # Ensure audit tables exist (idempotent CREATE TABLE IF NOT EXISTS),
     # mirroring auth's startup init for ClientsResource.
     from .resources.apikeys import APIKeysResource
+    from .resources.ratelimit import init_storage as init_ratelimit_storage
     from .resources.traces import TracesResource
     APIKeysResource.init_storage()
     TracesResource.init_storage()
+    init_ratelimit_storage()
 
     # Organise audit routes under audit blueprint
     bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')

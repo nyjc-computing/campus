@@ -89,6 +89,7 @@ class ErrorConstant(str):
     INTERNAL_ERROR = "INTERNAL_ERROR"
     INVALID_REQUEST = "INVALID_REQUEST"
     NOT_FOUND = "NOT_FOUND"
+    RATE_LIMITED = "RATE_LIMITED"
     UNAUTHORIZED = "UNAUTHORIZED"
 
     # Validation errors
@@ -121,17 +122,22 @@ class APIError(Exception):
     message: str
     error_code: ErrorConstant
     details: JsonDict
+    headers: dict[str, str]
 
     def __init__(
             self,
             message: str,
             error_code: str,
+            headers: dict[str, str] | None = None,
             **details
     ) -> None:
         super().__init__(message)
         self.message = message
         self.error_code = ErrorConstant(error_code)
         self.details = details
+        # Optional response headers (e.g. Retry-After on 429s); emitted
+        # by the flask error handler when non-empty.
+        self.headers = dict(headers) if headers else {}
 
     def to_dict(self) -> dict[str, Any]:
         """Convert the error to a dictionary.
