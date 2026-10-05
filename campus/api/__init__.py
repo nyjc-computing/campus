@@ -145,6 +145,13 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # Apply authentication to all API routes
     bp.before_request(campus_authenticator.authenticate)
 
+    # Action journeys (#828), adopt-only: campus.api serves no browser
+    # pages, so there is nothing to mint on — adopting SDK-forwarded
+    # X-Journey-ID headers lets api spans join the caller's action
+    # journey (e.g. a classroom submit and its assignment POST).
+    from campus.audit.middleware import init_journeys
+    init_journeys(app, mint_on_navigation=False)
+
     app.register_blueprint(bp)
 
     if isinstance(app, flask.Flask):

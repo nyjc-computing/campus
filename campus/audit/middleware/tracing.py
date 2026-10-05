@@ -347,6 +347,11 @@ def build_span_from_context(
         or request.cookies.get(campus.config.JOURNEY_COOKIE)
     )
 
+    # Action-journey name (#828): an optional human label stashed by
+    # flask_campus's @journey decorator ("submit-assignment") for the
+    # journey view's cards.
+    journey_name = getattr(flask.g, "journey_name", None)
+
     # Stable device attribution (#825): flask_campus's push_context
     # stashes g.device from the request's login session, and campus.auth's
     # login hops stash it from the auth session (/token) — the cookie
@@ -383,11 +388,13 @@ def build_span_from_context(
         "user_agent": request.user_agent.string or None,
         "error_message": None,  # No error for successful requests
         # Journey/device tags when the request belongs to a login
-        # journey (#803) or an identified device (#825)
+        # journey (#803), an identified device (#825), or a named
+        # action journey (#828)
         "tags": {
             key: value
             for key, value in (
                 ("journey_id", journey_id),
+                ("journey_name", journey_name),
                 ("device_id", device_id),
             )
             if value

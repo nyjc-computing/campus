@@ -113,6 +113,14 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     oauth_proxy.init_app(bp)
     routes.init_app(bp)
 
+    # Action journeys (#828), adopt-only: auth's browser surface IS the
+    # login flow — already journeyed via the campus_journey cookie
+    # (#803) — so minting navigations here would fork login journeys.
+    # Adopting SDK-forwarded X-Journey-ID headers still lets auth spans
+    # join the caller's action journey.
+    from campus.audit.middleware import init_journeys
+    init_journeys(app, mint_on_navigation=False)
+
     # Public integrations catalog at the top-level /integrations/v1
     # (#688): outside the /auth/v1 prefix, no authentication.
     from .routes import integrations as integrations_routes

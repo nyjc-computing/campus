@@ -3,6 +3,7 @@
 Common utility functions for validation of flask requests and responses.
 """
 
+from .journeys import journey
 from .login_manager import OAuthLoginManager
 from .types import (
     HtmlResponse,
@@ -30,6 +31,7 @@ __all__ = [
     "get_user_agent",
     "get_request_headers",
     "get_request_payload",
+    "journey",
     "unpack_into",
     "unpack_request",
     "validate_request_and_extract_json",
