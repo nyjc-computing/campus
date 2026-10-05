@@ -13,7 +13,7 @@ from campus.audit.web import clientnames
 
 def _reset_cache():
     clientnames._names = {}
-    clientnames._fetched_at = 0.0
+    clientnames._fetched_at = None
 
 
 class TestGetClientNames(unittest.TestCase):

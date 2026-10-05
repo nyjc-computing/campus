@@ -30,7 +30,9 @@ _CACHE_TTL_SECONDS = 300.0
 
 _lock = threading.Lock()
 _names: dict[str, str] = {}
-_fetched_at: float = 0.0  # time.monotonic() of last successful fetch
+# None = never fetched. Not 0.0: time.monotonic() is seconds-since-boot
+# on Linux, and a fresh CI/VM host can legitimately read < TTL.
+_fetched_at: float | None = None
 
 
 def _fetch_client_names() -> dict[str, str]:
@@ -87,7 +89,9 @@ def get_client_names(client_ids: typing.Iterable[str]) -> dict[str, str]:
     if not wanted:
         return {}
     with _lock:
-        if (time.monotonic() - _fetched_at) >= _CACHE_TTL_SECONDS:
+        if _fetched_at is None or (
+            time.monotonic() - _fetched_at
+        ) >= _CACHE_TTL_SECONDS:
             try:
                 _names = _fetch_client_names()
                 _fetched_at = time.monotonic()
