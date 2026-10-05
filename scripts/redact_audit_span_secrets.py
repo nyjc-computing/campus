@@ -92,6 +92,55 @@ def encode(value: object) -> object:
     return value
 
 
+def scan_and_redact(cursor, conn, apply: bool) -> None:
+    """Walk the spans table in keyset batches, redacting as we go.
+
+    Batching keeps memory flat regardless of table size; each batch
+    commits on its own so progress survives an interrupted run (the
+    redaction is idempotent, so re-running is safe).
+    """
+    mode = "APPLY" if apply else "DRY RUN"
+    per_column: dict[str, int] = dict.fromkeys(REDACTED_COLUMNS, 0)
+    scanned = updated = 0
+    last_id = ""
+    while True:
+        cursor.execute(
+            f"SELECT id, {', '.join(REDACTED_COLUMNS)} FROM spans "
+            "WHERE id > %s ORDER BY id LIMIT 500",
+            (last_id,),
+        )
+        rows = cursor.fetchall()
+        if not rows:
+            break
+        last_id = rows[-1]["id"]
+        for row in rows:
+            scanned += 1
+            row_updates: dict[str, object] = {}
+            for col in REDACTED_COLUMNS:
+                value = decode(row[col])
+                redacted = redact_sensitive(value)
+                if redacted != value:
+                    row_updates[col] = encode(redacted)
+                    per_column[col] += 1
+            if row_updates and apply:
+                assignments = ", ".join(f"{col} = %s" for col in row_updates)
+                cursor.execute(
+                    f"UPDATE spans SET {assignments} WHERE id = %s",
+                    [*row_updates.values(), row["id"]],
+                )
+                updated += 1
+        conn.commit()
+        print(f"[{mode}] batch done: {scanned} scanned, {updated} updated so far")
+
+    print(f"[{mode}] spans scanned: {scanned}")
+    for col, count in per_column.items():
+        print(f"[{mode}]   {col}: {count} row(s) with secrets")
+    if not apply:
+        print("[DRY RUN] no rows written; rerun with --apply")
+    else:
+        print(f"[APPLY] updated {updated} row(s)")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
@@ -100,43 +149,8 @@ def main(argv: list[str] | None = None) -> int:
         print("POSTGRESDB_URI not set; nothing to do.", file=sys.stderr)
         return 1
 
-    with psycopg2.connect(uri, connect_timeout=TIMEOUT) as conn, \
-            conn.cursor(cursor_factory=RealDictCursor) as cursor:
-            cursor.execute(
-                f"SELECT id, {', '.join(REDACTED_COLUMNS)} FROM spans"
-            )
-            rows = cursor.fetchall()
-
-            updates: list[tuple[str, dict]] = []
-            per_column: dict[str, int] = dict.fromkeys(REDACTED_COLUMNS, 0)
-            for row in rows:
-                row_updates: dict[str, object] = {}
-                for col in REDACTED_COLUMNS:
-                    value = decode(row[col])
-                    redacted = redact_sensitive(value)
-                    if redacted != value:
-                        row_updates[col] = encode(redacted)
-                        per_column[col] += 1
-                if row_updates:
-                    updates.append((row["id"], row_updates))
-
-            mode = "DRY RUN" if not args.apply else "APPLY"
-            print(f"[{mode}] spans scanned: {len(rows)}")
-            for col, count in per_column.items():
-                print(f"[{mode}]   {col}: {count} row(s) with secrets")
-            print(f"[{mode}] rows to update: {len(updates)}")
-
-            if not args.apply:
-                print("[DRY RUN] no rows written; rerun with --apply")
-                return 0
-
-            for row_id, row_updates in updates:
-                assignments = ", ".join(f"{col} = %s" for col in row_updates)
-                cursor.execute(
-                    f"UPDATE spans SET {assignments} WHERE id = %s",
-                    [*row_updates.values(), row_id],
-                )
-            print(f"[APPLY] updated {len(updates)} row(s)")
+    with psycopg2.connect(uri, connect_timeout=TIMEOUT) as conn, conn.cursor(cursor_factory=RealDictCursor) as cursor:
+        scan_and_redact(cursor, conn, apply=args.apply)
 
     return 0
 

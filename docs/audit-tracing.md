@@ -44,6 +44,27 @@ originating request, which is what the audit UI's waterfall draws:
   a security boundary. W3C `traceparent` interop is possible future work,
   as is moving the SDK session instrumentation into campus-api-python.
 
+## Login-journey tagging (#803)
+
+Each browser hop of a login flow is its own trace (navigations do not
+replay `X-Request-ID`), so campus.auth correlates them out-of-band:
+
+- `GET /auth/v1/authorize` — the flow's first browser touch — sets an
+  opaque `campus_journey` cookie (~30 min Max-Age, SameSite=Lax) and
+  records the id on the auth session.
+- The tracing middleware stamps every span's `tags.journey_id` from that
+  cookie; the server-to-server `POST /auth/v1/token` (which never
+  carries the cookie) copies the id from the auth session into
+  `flask.g`, and the middleware stamps it from there.
+- `GET /audit/v1/traces/search?journey_id=...` filters traces by the
+  tag; the audit web UI groups a journey at `/audit/journeys/<id>` and
+  chips journey traces in the traces list.
+
+Journey membership lives in the free-form `tags` dict (zero
+migrations) and is matched in Python over a capped recent-span scan —
+fine at the audit UI's scale; promote to a dedicated column only if
+that ever gets slow.
+
 ## Authentication (`AUDIT_API_KEY`)
 
 Producers authenticate to the audit API with a **Bearer `audit_v1_` API

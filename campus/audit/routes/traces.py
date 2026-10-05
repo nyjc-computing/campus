@@ -203,6 +203,7 @@ def search_traces(
         api_key_id: str | None = None,
         client_id: str | None = None,
         user_id: str | None = None,
+        journey_id: str | None = None,
         since: str | None = None,
         until: str | None = None,
         limit: str | int | None = None,
@@ -216,6 +217,7 @@ def search_traces(
         api_key_id: Filter by API key
         client_id: Filter by OAuth client
         user_id: Filter by user
+        journey_id: Filter by login-journey tag (#803)
         since: ISO 8601 timestamp (optional)
         until: ISO 8601 timestamp (optional)
         limit: page size, clamped to [1, MAX_PAGE_SIZE] (default
@@ -244,6 +246,7 @@ def search_traces(
         api_key_id=api_key_id,
         client_id=client_id,
         user_id=user_id,
+        journey_id=journey_id,
         since=since,
         until=until,
         limit=traces_resource.parse_page_size(limit),

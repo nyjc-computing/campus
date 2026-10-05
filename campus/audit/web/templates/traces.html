@@ -6,24 +6,36 @@
 <h2 class="page-title">Traces</h2>
 <p class="page-subtitle">Recent request traces across Campus services, newest first.</p>
 
+{# Group-by-journey header (#803): filled in by traces.js when the
+   journey_id URL param selects one journey. #}
+<section id="journey-header" class="journey-card" hidden>
+    <div class="journey-card-label">Login journey</div>
+    <div class="journey-card-id mono" id="journey-card-id"></div>
+    <div class="journey-card-meta" id="journey-card-meta"></div>
+</section>
+
 <form id="trace-filters" class="filter-form" autocomplete="off">
-    <div class="filter-field">
+    <div class="filter-field flat-only">
         <label for="filter-path">Path</label>
         <input type="text" id="filter-path" name="path" placeholder="/api/v1/...">
     </div>
-    <div class="filter-field">
+    <div class="filter-field flat-only">
         <label for="filter-status">Status</label>
         <input type="number" id="filter-status" name="status" min="100" max="599" placeholder="e.g. 404">
     </div>
-    <div class="filter-field">
+    <div class="filter-field flat-only">
         <label for="filter-since">Since</label>
         <input type="datetime-local" id="filter-since" name="since">
     </div>
-    <div class="filter-field">
+    <div class="filter-field flat-only">
         <label for="filter-until">Until</label>
         <input type="datetime-local" id="filter-until" name="until">
     </div>
     <div class="filter-field">
+        <label for="filter-journey">Journey</label>
+        <input type="text" id="filter-journey" name="journey_id" placeholder="journey_…">
+    </div>
+    <div class="filter-field flat-only">
         <label for="filter-limit">Limit</label>
         <select id="filter-limit" name="limit">
             <option value="25">25</option>
@@ -43,6 +55,19 @@
 
 <div class="table-wrapper">
     <table class="trace-table">
+        {# Fixed layout with explicit shares so PATH — the most important
+           column — keeps its space regardless of neighbouring content. #}
+        <colgroup>
+            <col class="col-trace-id">
+            <col class="col-started">
+            <col class="col-method">
+            <col class="col-path">
+            <col class="col-status">
+            <col class="col-duration">
+            <col class="col-spans">
+            <col class="col-client">
+            <col class="col-user">
+        </colgroup>
         <thead>
             <tr>
                 <th>Trace ID</th>
