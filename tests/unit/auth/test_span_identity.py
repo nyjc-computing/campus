@@ -43,6 +43,19 @@ class TestStashSpanIdentity(unittest.TestCase):
             self.assertEqual(flask.g.client_id, "uid-client-abc")
             self.assertIsInstance(flask.g.client_id, str)
 
+    def test_device_id_stashed_as_g_device(self):
+        """device_id (#825) rides the same stash, under g.device."""
+        with self.app.test_request_context("/"):
+            provider._stash_span_identity(device_id="uid-device-abc")
+
+            self.assertEqual(flask.g.device, "uid-device-abc")
+
+    def test_missing_device_id_not_stashed(self):
+        with self.app.test_request_context("/"):
+            provider._stash_span_identity(device_id=None)
+
+            self.assertFalse(hasattr(flask.g, "device"))
+
 
 if __name__ == "__main__":
     unittest.main()
