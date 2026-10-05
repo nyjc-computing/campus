@@ -11,6 +11,7 @@ import flask
 import werkzeug
 
 from campus import config, flask_campus
+from campus.common import env
 from campus.common.utils import url
 
 
@@ -161,6 +162,18 @@ class OAuthLoginManager:
         if endpoint == "static" or endpoint.endswith(".static"):
             return
         self.campus.auth.push_context()
+
+        # Span identity (#820): the audit tracing middleware reads
+        # g.user_id / g.client_id when building this request's span.
+        # Page loads are the waterfall roots, so stamping them here is
+        # what lets the audit UI attribute a page load to the app's
+        # client and the signed-in user.
+        user = getattr(flask.g, "user", None)
+        if user is not None and getattr(user, "id", None):
+            flask.g.user_id = user.id
+        client_id = env.get("CLIENT_ID")
+        if client_id:
+            flask.g.client_id = client_id
 
     def init_app(self, app: flask.Flask | flask.Blueprint):
         """Initialize the login manager with the Flask app."""
