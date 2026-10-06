@@ -292,6 +292,103 @@ class TestAuthLoginsContract(unittest.TestCase):
         )
         self.assertIn(del_response.status_code, (404, 409))
 
+    def _mint_bearer_token(self, user_id: str) -> str:
+        """Run a device flow as user_id and return the access token."""
+        create_response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            data={"client_id": "guest"},
+            content_type="application/x-www-form-urlencoded",
+        )
+        device_data = create_response.get_json()
+
+        with self.app.test_client() as browser:
+            with browser.session_transaction() as sess:
+                sess["user_id"] = user_id
+            authorize_response = browser.post(
+                "/auth/v1/oauth/device/authorize",
+                json={"user_code": device_data["user_code"], "user_id": user_id},
+            )
+            self.assertEqual(authorize_response.status_code, 200)
+
+        token_response = self.client.post(
+            "/auth/v1/oauth/token",
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+                "device_code": device_data["device_code"],
+                "client_id": "guest",
+            },
+            content_type="application/x-www-form-urlencoded",
+        )
+        self.assertEqual(token_response.status_code, 200)
+        return token_response.get_json()["access_token"]
+
+    def test_bearer_user_revokes_own_login_session(self):
+        """DELETE /logins/{id}/ with Bearer works for the owning user (#837).
+
+        Non-browser clients (the CLI) create their login session
+        server-side and hold no auth-service cookie, so revocation must
+        work on the presenting user's own bearer token alone.
+        """
+        device_user = "contract.test@campus.test"
+        token = self._mint_bearer_token(device_user)
+        create_response = self.client.post(
+            "/auth/v1/logins/",
+            json={
+                "client_id": "guest",
+                "user_id": device_user,
+                "device_id": "uid-device-cli-test",
+                "agent_string": "campus-cli/test",
+            },
+            headers=self.auth_headers,
+        )
+        session_id = create_response.get_json()["id"]
+
+        # A fresh client models the CLI: bearer credentials only, no
+        # cookie jar — the cookie-synced delete path cannot apply.
+        fresh_client = self.app.test_client()
+        del_response = fresh_client.delete(
+            f"/auth/v1/logins/{session_id}/",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(del_response.status_code, 200)
+
+        get_response = self.client.get(
+            f"/auth/v1/logins/{session_id}/",
+            headers=self.auth_headers,
+        )
+        self.assertIn(get_response.status_code, (404, 400))
+
+    def test_bearer_user_cannot_revoke_foreign_login_session(self):
+        """A bearer token may not revoke another user's login session."""
+        token = self._mint_bearer_token("contract.test@campus.test")
+        create_response = self.client.post(
+            "/auth/v1/logins/",
+            json={
+                "client_id": env.CLIENT_ID,
+                "user_id": str(self.test_user_id),
+                "agent_string": self.test_agent,
+            },
+            headers=self.auth_headers,
+        )
+        session_id = create_response.get_json()["id"]
+
+        # A fresh client models the CLI: bearer credentials only, no
+        # cookie jar from a prior browser-style POST /logins.
+        fresh_client = self.app.test_client()
+        del_response = fresh_client.delete(
+            f"/auth/v1/logins/{session_id}/",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        # Falls through to the cookie-synced path, which requires the
+        # browser session: 404 without deleting the record.
+        self.assertIn(del_response.status_code, (404, 409))
+
+        get_response = self.client.get(
+            f"/auth/v1/logins/{session_id}/",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(get_response.status_code, 200)
+
     def test_create_login_without_auth(self):
         """POST /logins/ without auth returns 401."""
         response = self.client.post(

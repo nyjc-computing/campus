@@ -439,6 +439,35 @@ class TestDeviceTagStamping(unittest.TestCase):
 
         self.assertEqual(span["tags"], {"device_id": "uid-device-gstash"})
 
+    def test_device_header_stamps_tag(self):
+        """An X-Campus-Device header (CLI API calls) lands in tags (#837)."""
+        import campus.config
+
+        span = self._build_span(
+            headers={campus.config.DEVICE_ID_HEADER: "uid-device-cli42"}
+        )
+
+        self.assertEqual(span["tags"], {"device_id": "uid-device-cli42"})
+
+    def test_flask_g_takes_precedence_over_device_header(self):
+        """A route stash wins over a client-asserted device header."""
+        import campus.config
+
+        with self.app.test_request_context(
+                "/",
+                headers={campus.config.DEVICE_ID_HEADER: "uid-device-claim"},
+        ):
+            tracing.start_span()
+            flask.g.device = "uid-device-session"
+            span = tracing.build_span_from_context(
+                flask.g.trace_id,
+                flask.g.span_id,
+                flask.Response(status=200),
+                duration_ms=1.0,
+            )
+
+        self.assertEqual(span["tags"], {"device_id": "uid-device-session"})
+
     def test_journey_and_device_tag_together(self):
         """Journey and device tags coexist when both are present."""
         import campus.config

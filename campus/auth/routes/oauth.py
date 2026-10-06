@@ -420,13 +420,18 @@ def _handle_device_code_grant(
             "user_id": str(dc.user_id),
         })
 
-        # Return token response
+        # Return token response. user_id is echoed (#837) like the
+        # authorization-code grant does from the session: public clients
+        # have no secret and no other way to learn who authorized them,
+        # and the CLI needs it to create its login-session record.
+        # RFC 8628 §3.5 permits additional response parameters.
         return {
             "access_token": access_token,
             "token_type": "Bearer",
             "expires_in": campus.config.DEFAULT_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
             "refresh_token": refresh_tok,
             "scope": " ".join(dc.scopes),
+            "user_id": str(dc.user_id),
         }, 200
     else:
         raise api_errors.InternalError(
