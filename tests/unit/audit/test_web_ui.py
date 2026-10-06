@@ -162,6 +162,45 @@ class TestAuditWebUI(unittest.TestCase):
         )
 
 
+class TestAuditRootRoute(unittest.TestCase):
+    """The service root / serves the public landing page (#842)."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Lazy import: campus.audit pulls in storage modules at import time.
+        # See AGENTS.md - Storage Initialization Order.
+        from campus.audit.web import ui
+
+        app = flask.Flask(__name__)
+        app.config["TESTING"] = True
+        app.register_blueprint(ui.create_blueprint())
+        app.register_blueprint(ui.create_root_blueprint())
+        cls.client = app.test_client()
+
+    def test_root_serves_landing_page(self):
+        """/ is public and serves the same landing as /audit/ (#842)."""
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content_type, "text/html; charset=utf-8")
+        self.assertIn(b"Browse traces", response.data)
+        self.assertIn(b"/audit/traces", response.data)
+        # No trace data on the landing page
+        self.assertNotIn(b"trace-filters", response.data)
+
+    def test_root_is_get_only(self):
+        """Only GET/HEAD are routed at / (page route, no API semantics)."""
+        response = self.client.post("/")
+        self.assertEqual(response.status_code, 405)
+
+    def test_root_and_audit_path_both_render(self):
+        """/ and /audit/ coexist: both serve the landing page."""
+        root_response = self.client.get("/")
+        audit_response = self.client.get("/audit/")
+        self.assertEqual(root_response.status_code, 200)
+        self.assertEqual(audit_response.status_code, 200)
+        self.assertEqual(root_response.data, audit_response.data)
+
+
 class TestAuditUIDataEndpoint(unittest.TestCase):
     """Verify the UI data endpoints serve trace data in the API's shape."""
 

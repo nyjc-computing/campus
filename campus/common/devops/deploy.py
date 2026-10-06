@@ -8,6 +8,7 @@ from typing import Protocol, runtime_checkable
 
 import flask
 from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.routing import BuildError
 
 import campus.common.errors
 from campus.common import devops, env, introspect
@@ -50,6 +51,64 @@ def configure_for_codespace(app: flask.Flask) -> None:
     env.set('PUBLIC_URL', f"https://{env.HOSTNAME}")
 
 
+def has_rule(app: flask.Flask, rule: str) -> bool:
+    """Check whether the app already maps the given URL rule."""
+    return any(mapped.rule == rule for mapped in app.url_map.iter_rules())
+
+
+def register_health(app: flask.Flask) -> None:
+    """Register the health check endpoint at /health (#842).
+
+    Campus convention: /health is the endpoint deployment platforms and
+    monitors should ping. Idempotent, so development and deployment
+    configuration can be applied to the same app in tests.
+    """
+    if has_rule(app, '/health'):
+        return
+
+    @app.get('/health')
+    def health_check():
+        return {
+            'status': 'healthy',
+            'deployment': env.DEPLOY,
+            'environment': devops.ENV,
+        }, 200
+
+
+def register_generic_landing(app: flask.Flask) -> None:
+    """Register a minimal landing page at / unless the service has one (#842).
+
+    Campus convention: / is a landing page, not a 404 or a JSON blob.
+    Services with a web UI (campus.audit) register their own root route;
+    this generic page covers the API-only services. If deployments are
+    later proxied under a single domain, landing pages move to subpaths.
+    """
+    if has_rule(app, '/'):
+        return
+
+    @app.get('/')
+    def landing():
+        return flask.render_template_string(
+            """
+            <!doctype html>
+            <html lang="en">
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <title>{{service}} — Campus</title>
+            </head>
+            <body>
+                <h1>{{service}}</h1>
+                <p>A Campus service. This service exposes a JSON API; there
+                    is no web UI here.</p>
+                <p><a href="/health">Health check</a></p>
+            </body>
+            </html>
+            """,
+            service=env.DEPLOY or "Campus service",
+        )
+
+
 def configure_for_development(app: flask.Flask) -> None:
     """Configure the Flask app for development.
 
@@ -63,8 +122,23 @@ def configure_for_development(app: flask.Flask) -> None:
     if is_codespace():
         configure_for_codespace(app)
 
+    register_health(app)
+
+    # Services that own / (campus.audit, #842) keep their landing page
+    # in development too; the route index below is for the API-only
+    # services, where it doubles as the dev landing page.
+    if has_rule(app, '/'):
+        return
+
     @app.get('/')
     def index():
+        # The login link only exists on deployments that register the
+        # auth test_login route and set PUBLIC_URL; omit it elsewhere
+        # instead of raising.
+        try:
+            login_url = url.full_url_for('auth.test_login')
+        except (OSError, BuildError):
+            login_url = None
         return flask.render_template_string(
             """
             <h1>Campus Development Server</h1>
@@ -77,35 +151,32 @@ def configure_for_development(app: flask.Flask) -> None:
                 {% endfor %}
             </ul>
             <p>
-                <a href="{{login_url}}">Click here to log in</a>
+                {% if login_url %}<a href="{{login_url}}">Click here to log in</a>{% endif %}
             </p>
             """,
             deploy=env.DEPLOY,
-            hostname=env.HOSTNAME,
-            port=env.PORT,
+            hostname=env.get("HOSTNAME", "localhost"),
+            port=env.get("PORT", "5000"),
             url_map=app.url_map,
-            login_url=url.full_url_for('auth.test_login')
+            login_url=login_url
         )
 
 
 def configure_for_deployment(app: flask.Flask) -> None:
     """Configure the Flask app for deployment.
 
-    - adds health check route
+    - adds health check and landing page routes (#842)
     """
     # HOSTNAME environment variable should be set in deployment platform
-    
-    # Health check route for deployments
-    # Many services expect a 200 response from the root URL to verify the
-    # service is running
-    @app.route('/')
-    def health_check():
-        return {
-            'status': 'healthy',
-            'deployment': env.DEPLOY,
-            'environment': devops.ENV,
-        }, 200
-    return
+
+    # Health check endpoint (#842): deployment platforms and monitors
+    # ping /health to verify the service is running.
+    register_health(app)
+
+    # Landing page (#842): every deployment serves HTML at /; services
+    # with a web UI provide their own (registered during init_app,
+    # before this runs).
+    register_generic_landing(app)
 
 
 def _is_tracing_enabled() -> bool:
