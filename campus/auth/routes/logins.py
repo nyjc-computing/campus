@@ -63,17 +63,38 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     multi-worker or restarted deployment cannot present the cookie its
     own POST /logins established. Session creation is already scoped to
     the client's credentials, so client-scoped revocation mirrors the
-    creation rights. Browser (cookie-carrying) revocation is unchanged.
+    creation rights.
+
+    A Bearer caller may revoke a session record that attributes to its
+    own user (#837): non-browser clients (the CLI) create their login
+    session server-side and hold no auth-service cookie, so the
+    cookie-synced delete path can never work for them. No new risk —
+    the same bearer can already revoke the underlying token outright
+    via POST /oauth/revoke. Browser (cookie-carrying) revocation is
+    unchanged.
     """
     session = login_resource[session_id].get()
     current_client = getattr(flask.g, "current_client", None)
     current_user = getattr(flask.g, "current_user", None)
+    # Bearer auth resolves the user as a dict (#802 glue); Basic callers
+    # have no user at all.
+    current_user_id = (
+        current_user.get("id") if isinstance(current_user, dict)
+        else getattr(current_user, "id", None)
+    ) if current_user else None
     if (
             current_client is not None
             and current_user is None
             and str(session.client_id) == str(current_client.id)
     ):
         # Owning app client: skip the client-side (cookie) sync.
+        login_resource[session_id].delete(sync_client=False)
+    elif (
+            current_user_id is not None
+            and session.user_id is not None
+            and str(session.user_id) == str(current_user_id)
+    ):
+        # Owning user (Bearer): server-side delete only, same reason.
         login_resource[session_id].delete(sync_client=False)
     else:
         login_resource[session_id].delete()
