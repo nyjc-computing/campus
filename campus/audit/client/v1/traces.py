@@ -10,11 +10,32 @@ URL path mapping:
     /audit/v1/traces/search         → Search traces
 """
 
+import contextlib
 from typing import Any, Optional
 
 from campus.common.http.interface import JsonClient, JsonResponse
 
 from ..interface import SLASH, Resource, ResourceCollection, ResourceRoot
+
+
+def _import_ratelimit():
+    """Import the SDK breaker module lazily (it ships in campus_python).
+
+    Kept behind a function so a missing/stale campus_python (older
+    deployments pre-#831) only degrades to no observation, never an
+    import error at module load.
+    """
+    from campus_python.audit import ratelimit as campus_python_audit_ratelimit
+
+    return campus_python_audit_ratelimit
+
+
+def _safe_json(response: JsonResponse) -> Any:
+    """Best-effort JSON parse for breaker observation."""
+    try:
+        return response.json()
+    except Exception:
+        return None
 
 
 class Traces(ResourceCollection):
@@ -80,6 +101,16 @@ class Traces(ResourceCollection):
             client.traces.new(span1, span2, span3)
         """
         response = self.client.post(self.make_path(), json={"spans": list(spans)})
+        # Feed the ingest circuit breaker before raising (#831): audit
+        # 429s trip the bucket (Retry-After + tripped key from the
+        # body), 2xx clears expired trips. Observation is guarded and
+        # can never break ingestion; the error still raises as normal.
+        with contextlib.suppress(Exception):
+            _import_ratelimit().breaker.observe(
+                response.status_code,
+                response.headers,
+                _safe_json(response),
+            )
         response.raise_for_status()
         return response
 
