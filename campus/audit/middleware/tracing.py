@@ -221,6 +221,75 @@ def is_static_request() -> bool:
     return flask.request.path == "/favicon.ico"
 
 
+def check_rate_gate() -> flask.Response | None:
+    """Fail-closed gate for the audit ingest rate limit (#831).
+
+    When AUDIT_TRACING_FAIL_CLOSED=1 (opt-in per deployment), requests
+    whose identity bucket is tripped in the SDK's ingest circuit
+    breaker (campus_python.audit.ratelimit — fed by this client's 429s)
+    are short-circuited with 503 + Retry-After before any view runs.
+    Off by default: producers run fail-open until flipped, per the
+    ratified rollout (design comment on campus#538).
+
+    The gate is per-identity when identity is already resolvable at
+    request entry (app-level hooks run before blueprint-level ones, so
+    e.g. campus.auth's session resolution has run); it degrades to the
+    producer's learned apikey= fallback bucket (coarse) otherwise.
+
+    Registered BEFORE start_span so a gated request never opens a span
+    (end_span no-ops without span state — no wasted ingest against a
+    bucket that audit is currently rejecting anyway).
+    """
+    from campus.common import env
+
+    if env.get("AUDIT_TRACING_FAIL_CLOSED") != "1":
+        return None
+
+    # importlib with a string name: the module is optional (a stale
+    # campus_python predating #831 lacks it) and opaque resolution
+    # keeps type checkers happy against older SDK installs.
+    import importlib
+
+    try:
+        ratelimit = importlib.import_module("campus_python.audit.ratelimit")
+    except ImportError:
+        logger.error(
+            "AUDIT_TRACING_FAIL_CLOSED=1 but campus_python lacks "
+            "audit.ratelimit (stale SDK); rate gate disabled"
+        )
+        return None
+
+    retry_after = ratelimit.breaker.check_request(
+        client_id=(
+            _identity_id(getattr(flask.g, "current_client", None))
+            or getattr(flask.g, "client_id", None)
+        ),
+        user_id=(
+            _identity_id(getattr(flask.g, "current_user", None))
+            or getattr(flask.g, "user_id", None)
+        ),
+    )
+    if retry_after is None:
+        return None
+
+    logger.warning(
+        "audit ingest breaker tripped; failing request closed "
+        "(retry_after=%ds)",
+        retry_after,
+    )
+    response = flask.jsonify({
+        "error": {
+            "code": "RATE_LIMITED",
+            "message": f"Rate limit exceeded; retry after {retry_after}s",
+            "details": {},
+            "request_id": None,
+        }
+    })
+    response.status_code = 503
+    response.headers["Retry-After"] = str(max(1, int(retry_after)))
+    return response
+
+
 def start_span() -> None:
     """Start a span for the incoming request.
 

@@ -28,6 +28,15 @@ def init_app(app: flask.Flask) -> None:
     from . import tracing
 
     @app.before_request
+    def audit_rate_gate():
+        """Fail-closed gate for audit ingest rate limiting (#831).
+
+        Registered before start_span so a gated (503) request never
+        opens a span. No-op unless AUDIT_TRACING_FAIL_CLOSED=1.
+        """
+        return tracing.check_rate_gate()
+
+    @app.before_request
     def start_span():
         """Start a root span for each incoming request.
 
