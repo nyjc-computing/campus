@@ -160,16 +160,16 @@ class TestClientObserveHook(unittest.TestCase):
         traces, response = self._traces_with_response(
             201, {"created": ["s1"]}, raises=False
         )
-        import builtins
+        import importlib
 
-        real_import = builtins.__import__
+        real_import_module = importlib.import_module
 
         def blocked_import(name, *args, **kwargs):
-            if name.startswith("campus_python"):
+            if name == "campus_python.audit.ratelimit":
                 raise ImportError("simulated stale SDK")
-            return real_import(name, *args, **kwargs)
+            return real_import_module(name, *args, **kwargs)
 
-        with mock.patch("builtins.__import__", side_effect=blocked_import):
+        with mock.patch("importlib.import_module", side_effect=blocked_import):
             traces.new({"span_id": "s1"})  # no raise
         self.assertEqual(response.status_code, 201)
 

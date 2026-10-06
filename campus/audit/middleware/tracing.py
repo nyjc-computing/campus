@@ -245,8 +245,13 @@ def check_rate_gate() -> flask.Response | None:
     if env.get("AUDIT_TRACING_FAIL_CLOSED") != "1":
         return None
 
+    # importlib with a string name: the module is optional (a stale
+    # campus_python predating #831 lacks it) and opaque resolution
+    # keeps type checkers happy against older SDK installs.
+    import importlib
+
     try:
-        import campus_python.audit.ratelimit as ratelimit
+        ratelimit = importlib.import_module("campus_python.audit.ratelimit")
     except ImportError:
         logger.error(
             "AUDIT_TRACING_FAIL_CLOSED=1 but campus_python lacks "

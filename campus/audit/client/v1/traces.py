@@ -21,13 +21,17 @@ from ..interface import SLASH, Resource, ResourceCollection, ResourceRoot
 def _import_ratelimit():
     """Import the SDK breaker module lazily (it ships in campus_python).
 
-    Kept behind a function so a missing/stale campus_python (older
-    deployments pre-#831) only degrades to no observation, never an
-    import error at module load.
+    Resolved via importlib with a string name: the module is optional
+    (a stale campus_python predating #831 lacks it), and opaque
+    resolution keeps type checkers happy against older SDK installs.
+    Returns None when unavailable — callers degrade to no observation.
     """
-    from campus_python.audit import ratelimit as campus_python_audit_ratelimit
+    import importlib
 
-    return campus_python_audit_ratelimit
+    try:
+        return importlib.import_module("campus_python.audit.ratelimit")
+    except ImportError:
+        return None
 
 
 def _safe_json(response: JsonResponse) -> Any:
@@ -103,14 +107,16 @@ class Traces(ResourceCollection):
         response = self.client.post(self.make_path(), json={"spans": list(spans)})
         # Feed the ingest circuit breaker before raising (#831): audit
         # 429s trip the bucket (Retry-After + tripped key from the
-        # body), 2xx clears expired trips. Observation is guarded and
-        # can never break ingestion; the error still raises as normal.
+        # body), 2xx clears expired trips. Observation is guarded — a
+        # breaker failure or a stale SDK can never break ingestion.
         with contextlib.suppress(Exception):
-            _import_ratelimit().breaker.observe(
-                response.status_code,
-                response.headers,
-                _safe_json(response),
-            )
+            ratelimit_module = _import_ratelimit()
+            if ratelimit_module is not None:
+                ratelimit_module.breaker.observe(
+                    response.status_code,
+                    response.headers,
+                    _safe_json(response),
+                )
         response.raise_for_status()
         return response
 
