@@ -7,10 +7,15 @@ One decorator is the entire API surface app authors touch:
     from campus import flask_campus
 
     @app.post("/assignments/submit")
-    @flask_campus.journey("submit-assignment")
+    @flask_campus.journey("campus.submissions.submit")
     def submit_assignment(): ...
 
-``@journey`` names the user action the view serves. The journey id
+``@journey`` names the user action the view serves. Names follow the
+yapper emission convention (``campus.<subject>[.<sub>].<action>``) and
+reuse the same labels (#840): an emission is the event an episode
+culminates in, so a journey named ``campus.submissions.submit`` reads
+as "the episode that ended in that emission". Mint a new label (same
+format) only when no emission exists for the action. The journey id
 itself is adopted from the active request when one exists (the journeys
 middleware's cookie/header adoption, or a previous hop of the same
 episode) and minted fresh only when there is none — so decorating a
@@ -56,7 +61,9 @@ def journey(
     """Mark a view as part of a (named) user-action journey.
 
     Args:
-        name: Human label for the journey ("submit-assignment"); lands
+        name: Label for the journey, following the yapper emission
+            convention (``campus.<subject>[.<sub>].<action>``) and
+            reusing the emission label where one exists (#840); lands
             in the span's tags.journey_name for the journey view cards.
         fresh: Start a NEW journey for this request even if one is
             active — a hard action boundary mid-episode. Default False:

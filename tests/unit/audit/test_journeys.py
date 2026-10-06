@@ -199,7 +199,7 @@ class TestJourneyDecorator(unittest.TestCase):
         init_journeys(app)
 
         @app.get("/named")
-        @journey("submit-assignment", **dec_kwargs)
+        @journey("campus.submissions.submit", **dec_kwargs)
         def named():
             return {
                 "journey_id": flask.g.journey_id,
@@ -219,13 +219,13 @@ class TestJourneyDecorator(unittest.TestCase):
             },
         )
         self.assertEqual(resp.json["journey_id"], "uid-journey-active1")
-        self.assertEqual(resp.json["journey_name"], "submit-assignment")
+        self.assertEqual(resp.json["journey_name"], "campus.submissions.submit")
 
     def test_mints_and_names_when_no_journey_active(self):
         client = self._app()
         resp = client.get("/named", headers={"Accept": "application/json"})
         self.assertTrue(resp.json["journey_id"].startswith("uid-journey-"))
-        self.assertEqual(resp.json["journey_name"], "submit-assignment")
+        self.assertEqual(resp.json["journey_name"], "campus.submissions.submit")
         # Standalone continuation: the cookie is set even mid-episode.
         self.assertIn(
             f"{campus.config.ACTION_JOURNEY_COOKIE}={resp.json['journey_id']}",
@@ -243,7 +243,7 @@ class TestJourneyDecorator(unittest.TestCase):
         )
         self.assertNotEqual(resp.json["journey_id"], "uid-journey-active1")
         self.assertTrue(resp.json["journey_id"].startswith("uid-journey-"))
-        self.assertEqual(resp.json["journey_name"], "submit-assignment")
+        self.assertEqual(resp.json["journey_name"], "campus.submissions.submit")
 
 
 class TestSpanTags(unittest.TestCase):
@@ -266,7 +266,7 @@ class TestSpanTags(unittest.TestCase):
         with self.app.test_request_context("/"):
             tracing.start_span()
             flask.g.journey_id = "uid-journey-x"
-            flask.g.journey_name = "submit-assignment"
+            flask.g.journey_name = "campus.submissions.submit"
             span = tracing.build_span_from_context(
                 flask.g.trace_id,
                 flask.g.span_id,
@@ -274,7 +274,7 @@ class TestSpanTags(unittest.TestCase):
                 duration_ms=1.0,
             )
 
-        self.assertEqual(span["tags"]["journey_name"], "submit-assignment")
+        self.assertEqual(span["tags"]["journey_name"], "campus.submissions.submit")
         self.assertEqual(span["tags"]["journey_id"], "uid-journey-x")
 
     def test_no_name_leaves_tag_out(self):

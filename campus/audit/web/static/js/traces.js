@@ -93,7 +93,18 @@
 
     function renderJourneyHeader(journeyId, traces) {
         journeyHeader.hidden = false;
-        journeyCardId.textContent = journeyId;
+        // Named journeys (#840): the yapper-style label attached by
+        // @flask_campus.journey rides member spans' tags; the raw id
+        // stays visible as the card's secondary line.
+        const named = traces.find(
+            (t) => t.root_span && t.root_span.tags &&
+                t.root_span.tags.journey_name
+        );
+        journeyCardId.textContent =
+            (named && named.root_span.tags.journey_name) || journeyId;
+        if (named) {
+            journeyCardId.title = journeyId;
+        }
         const totalMs = traces.reduce(
             (sum, trace) => sum + (Number(trace.duration_ms) || 0),
             0

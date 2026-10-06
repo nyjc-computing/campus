@@ -101,10 +101,16 @@ different lifecycle, owned by `campus.audit.middleware.journeys`:
 - **Continue:** the cookie is set/refreshed on every journeyed
   request (sliding ~10 min window), so POST-redirect-GET flows stay
   whole; idle expiry ends the episode. No explicit end state.
-- **Name:** `@flask_campus.journey("submit-assignment")` on a view
-  attaches a human label (`tags.journey_name`) for journey cards;
+- **Name:** `@flask_campus.journey("campus.submissions.submit")` on a
+  view attaches a label (`tags.journey_name`) for journey cards;
   `fresh=True` forces a hard episode boundary mid-visit. Soft by
-  default: adopting never fragments an ongoing episode.
+  default: adopting never fragments an ongoing episode. Names follow
+  the yapper emission convention and reuse the same labels (#840): a
+  journey is the episode that culminates in an emission, so the label
+  is the emission's — mint a new one (same
+  `campus.<subject>[.<sub>].<action>` format) only when the action has
+  no emission. The audit UI shows the name on journey cards and list
+  meta lines, falling back to the id.
 
 Enable with `init_journeys(app)` (or on a blueprint for scoped
 opt-in). Services whose browser surface is the login flow itself

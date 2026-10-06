@@ -143,7 +143,9 @@ class TestAuditWebUI(unittest.TestCase):
         main_js = self.client.get("/audit/static/js/main.js").data
         self.assertIn(b'class="cell-journey"', main_js)
         self.assertIn(b"/audit/traces?journey_id=${encodeURIComponent(journeyId)}", main_js)
-        self.assertIn(b"options.journeyView ? '' : renderJourneyLine(journeyId)", main_js)
+        self.assertIn(b"renderJourneyLine(journeyId, journeyName)", main_js)
+        # Named journeys (#840): the label wins over the raw id.
+        self.assertIn(b"const label = journeyName || journeyId", main_js)
         # The old inline chip is gone
         self.assertNotIn(b"journey-chip", main_js)
         self.assertIn(b".cell-journey", self.client.get("/audit/static/css/main.css").data)
