@@ -7,6 +7,8 @@ a web interface for exploring and viewing audit traces.
 
 Page map (docs/web-ui-requirements.md §2):
 
+- GET / - service root: serves the landing page (campus-wide
+  convention, #842: / is a landing page, /health is the health check)
 - GET /audit/ - landing page (public: no login required)
 - GET /audit/traces - trace list; ?journey_id=<id> switches it to the
   group-by-journey view (#803) (login required)
@@ -19,10 +21,33 @@ page was added; the login gate (campus.audit.web.auth) exempts the
 landing page and this blueprint's static assets.
 """
 
-__all__ = ["create_blueprint"]
+__all__ = ["create_blueprint", "create_root_blueprint"]
 
 import flask
 import werkzeug
+
+
+def create_root_blueprint() -> flask.Blueprint:
+    """Create a blueprint serving the service root path / (#842).
+
+    Campus convention: / is a landing page and /health is the health
+    check endpoint (registered by devops.deploy). Audit owns / because
+    it has a web UI: the landing page is served at both / and /audit/.
+    This blueprint is public (no login gate) and only registered for
+    standalone deployments (campus.audit init_app on a Flask app).
+    """
+    bp = flask.Blueprint(
+        'audit_root',
+        __name__,
+        template_folder='templates',
+    )
+
+    @bp.get('/')
+    def root() -> str:
+        """Render the landing page at the service root (#842)."""
+        return flask.render_template('index.html')
+
+    return bp
 
 
 def create_blueprint() -> flask.Blueprint:

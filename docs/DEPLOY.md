@@ -110,7 +110,10 @@ The web UI fails closed until configured — UI pages return 503 and
    These are explicit to the web UI gate (not the ambient
    `CLIENT_ID`/`CLIENT_SECRET` pair), mirroring `AUDIT_API_KEY` (#699).
 
-4. **Verify** (no login needed for the first two):
+4. **Verify** (no login needed for the first three):
+   - `GET /` → 200, the landing page (campus-wide convention, #842:
+     `/` is a landing page, `/health` is the health check)
+   - `GET /health` → 200 JSON (public)
    - `GET /audit/` unauthenticated → 302 `/audit/login` → 302 auth
      `/auth/v1/authorize?...` → 302 Google
    - `GET /audit/api/traces` unauthenticated → 401 JSON

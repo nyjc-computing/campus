@@ -198,6 +198,11 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     app.register_blueprint(web.auth.create_blueprint())
 
     if isinstance(app, flask.Flask):
+        # Service root / (#842): audit has a web UI, so it serves the
+        # public landing page at the hostname root (campus-wide
+        # convention: / is a landing page, /health is the health check;
+        # deploy.configure_* adds /health). Standalone deployments only.
+        app.register_blueprint(web.ui.create_root_blueprint())
         # Register error handlers for proper error responses
         handlers.init_app(app)
         # Lazy import to allow env setup
