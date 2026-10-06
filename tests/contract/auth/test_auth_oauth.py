@@ -97,6 +97,17 @@ class TestAuthOAuthTokenContract(unittest.TestCase):
         self.assertNotEqual(data["access_token"], original["access_token"])
         self.assertNotEqual(data["refresh_token"], original["refresh_token"])
 
+    def test_device_code_grant_echoes_user_id(self):
+        """The device-code grant echoes the authorizing user (#837).
+
+        Public clients have no secret and no session to echo from — the
+        CLI needs the user id to create its login-session record, the
+        same way the authorization-code grant echoes session.user_id.
+        """
+        data = self._complete_device_flow()
+
+        self.assertEqual(data["user_id"], "contract.test@campus.test")
+
     def test_refresh_token_is_single_use(self):
         """A rotated-out refresh token is rejected on replay (invalid_grant)."""
         original = self._complete_device_flow()

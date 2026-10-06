@@ -105,6 +105,13 @@ DEVICE_COOKIE = "campus_device"
 # 400 days is Chrome's maximum cookie lifetime cap.
 DEVICE_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
 
+# Device header (#837): non-browser clients (CLIs, scripts) cannot carry
+# the campus_device cookie — they present it on API calls as this header
+# instead. The tracing middleware falls back to it after flask.g.device
+# and before the cookie. Keep in lockstep with the SDK's
+# campus_python.tracing.DEVICE_ID_HEADER (mirrors the X-Journey-ID pair).
+DEVICE_ID_HEADER = "X-Campus-Device"
+
 # Public OAuth client ID for CLI/device apps (RFC 6749 Section 2.1)
 # Stored in the database as a client with is_public=True and no secret;
 # seeded at auth service startup (see campus.auth.resources.client.

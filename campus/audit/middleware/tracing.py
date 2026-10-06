@@ -358,9 +358,12 @@ def build_span_from_context(
     # fallback covers browser hops whose handlers didn't stash. The
     # device-verification page intentionally tags spans with the
     # *authorizing browser's* device id; the CLI's own device lives only
-    # on its login session (Lane 2, client-asserted).
+    # on its login session (Lane 2, client-asserted). Non-browser
+    # clients present their device id on API calls as X-Campus-Device
+    # (#837), which wins only when nothing better is known.
     device_id = (
         getattr(flask.g, "device", None)
+        or request.headers.get(campus.config.DEVICE_ID_HEADER)
         or request.cookies.get(campus.config.DEVICE_COOKIE)
     )
 
