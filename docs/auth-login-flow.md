@@ -503,6 +503,22 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
    new behavior in the resource layer.
 9. **Auth session TTL is swept, not checked per-read**: a stale
    session may pass validation until the next sweep.
+10. **Google consent screens cannot tell you a user's Classroom
+    role** (observed 2026-10-07 on dev): the `google.classroom`
+    integration scope set — including `classroom.addons.teacher` and
+    `classroom.addons.student` — renders the same canonical scope
+    descriptions to a teacher and a student Workspace account. Google
+    describes the *scopes*, not the signer's role, so any role gate
+    (add-ons teacher checks, `teacherId=me` queries) surfaces only at
+    Classroom API-call time. Verify a user's role by calling the
+    Classroom API as that user, never by reading consent UX.
+11. **Client `/logout` does not end the Campus SSO session** (#844):
+    it clears the client app's session only. A browser that hits any
+    other client's login route immediately afterwards re-authenticates
+    silently — no Google handoff, no interaction — as the previous
+    user. When switching identities (e.g. E2E between accounts), sign
+    out at `accounts.google.com` as well, and never treat "logged out
+    of the app" as "no campus.auth session".
 
 ## Client-side checklist
 
