@@ -8,10 +8,25 @@ It should be lightweight and have minimal dependencies.
 This module provides attribute and function-style access to environment
 variables. Use attribute access (env.VAR_NAME) for direct access to
 environment variables, or use the get() function for default values.
+
+It also hosts the deployment-environment helpers (the Env constants,
+ENV, the block_env/confirm_action_in_env/require_env decorators and
+load_dotenv), folded in from campus.common.devops so that common code
+can gate on the environment without pulling in campus.deploy.
 """
 
 import os
-from typing import Any, Callable, cast, overload
+from functools import wraps
+from logging import getLogger
+from typing import Any, Callable, Literal, cast, overload
+from warnings import warn
+
+# Deployment environments
+Env = Literal["development", "testing", "staging", "production"]
+DEVELOPMENT = "development"
+TESTING = "testing"
+STAGING = "staging"
+PRODUCTION = "production"
 
 # Expected environment variables (for type checking)
 # `bool` type env vars accept only a "0" or "1".
@@ -26,7 +41,7 @@ GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN: str  # domain for port forwarding in C
 CLIENT_ID: str  # Campus client ID
 CLIENT_SECRET: str  # Campus client secret
 DEPLOY: str  # Campus deployment, (campus.auth, campus.api, campus.audit)
-ENV: str  # deployment environment (development, staging, production)
+ENV: str  # deployment environment (Env); defaults to DEVELOPMENT when unset
 HOSTNAME: str  # dev-server bind host / Codespaces URL derivation; NOT used for URL generation
 PUBLIC_URL: str  # required canonical public origin (scheme://host[:port]) for absolute URL generation
 PORT: str  # port for running development server
@@ -240,6 +255,96 @@ def require(*envvars: str) -> None:
         )
 
 
+def _current_env() -> str:
+    """Return the current deployment environment, read dynamically.
+
+    Resolves in the same order as env.ENV attribute access: an explicit
+    module attribute first (e.g. set by tests), then the ENV environment
+    variable, defaulting to DEVELOPMENT when unset. The old
+    campus.common.devops.ENV froze this value at import time; it is now
+    read at call time so env.set("ENV", ...) takes effect immediately.
+    """
+    if (value := globals().get("ENV")) is not None:
+        return value
+    return os.getenv("ENV", DEVELOPMENT)
+
+
+def block_env(*envs: str):
+    """Decorator to block function execution in specified environments.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if _current_env() in envs:
+                raise RuntimeError(
+                    f"ENV={_current_env()}: {func.__name__}() cannot be called in {envs} environment."
+                )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def confirm_action_in_env(*envs, prompt: str = "Proceed? (y/N): "):
+    """
+    Decorator to require user confirmation before executing a function in specified environments.
+    If the current environment matches one of the specified envs, prompt the user before running.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if _current_env() in envs:
+                warn(f"Calling {func.__name__}() in {_current_env()} environment.", stacklevel=2)
+                if input(prompt).lower() == 'y':
+                    return func(*args, **kwargs)
+                else:
+                    getLogger(__name__).info("Action cancelled.")
+                    return None
+            else:
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def load_dotenv() -> bool:
+    """Load environment variables from a .env file if it exists.
+
+    Values are written to os.environ so they are visible to env.get(),
+    env.contains(), env.require() and attribute access alike.
+    Existing environment variables are not overridden.
+
+    Returns True if .env file was found and loaded, False otherwise.
+    """
+    dotenv_path = os.path.join(os.getcwd(), ".env")
+    if os.path.exists(dotenv_path):
+        with open(dotenv_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    key, value = line.split("=", 1)
+                    key = key.strip()
+                    value = value.strip(" \"\'")
+                    os.environ.setdefault(key, value)
+        return True
+    return False
+
+
+def require_env(*envs: str):
+    """Decorator to require specified environments for function execution.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if _current_env() not in envs:
+                raise RuntimeError(
+                    f"ENV={_current_env()}: {func.__name__}() requires {envs} environment."
+                )
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 # Module-level __getattr__ for attribute-style access
 def __getattr__(name: str) -> str:
     """Get environment variable by name via attribute access.
@@ -250,11 +355,16 @@ def __getattr__(name: str) -> str:
         name (str): Name of the environment variable.
 
     Returns:
-        str: Value of the environment variable.
+        str: Value of the environment variable. env.ENV defaults to
+        DEVELOPMENT when the ENV environment variable is unset.
 
     Raises:
         AttributeError: If the environment variable is not set.
     """
+    if name == "ENV":
+        # Dynamic, like every other env.ENV read: evaluated at access
+        # time, assuming development if not defined.
+        return os.getenv("ENV", DEVELOPMENT)
     if contains(name) and (var := get(name)):
         return var
     raise AttributeError(

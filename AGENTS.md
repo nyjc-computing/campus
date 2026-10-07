@@ -145,7 +145,7 @@ Import packages, not individual functions. This preserves context and prevents n
 
 ```python
 # Good
-from campus.common import utils, devops
+from campus.common import utils, env
 
 # Bad - loses context
 from campus.common.utils import uid, utc_time

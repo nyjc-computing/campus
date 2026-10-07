@@ -236,16 +236,16 @@ Shared utilities used across services.
 
 **Key modules:**
 - `utils` - ID generation, time handling
-- `devops` - Environment detection
+- `env` - Environment access, env gating decorators, .env loading
 - `errors` - Standardized error types
 - `http` - HTTP utilities
 
 ```python
-from campus.common import utils, devops, errors
+from campus.common import utils, env, errors
 
 user_id = utils.uid()
 timestamp = utils.utc_time()
-env = devops.ENV
+environment = env.ENV
 ```
 
 ### Entity Models (`campus.model`)

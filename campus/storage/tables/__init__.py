@@ -12,7 +12,7 @@ __all__ = [
     "get_db",
 ]
 
-from campus.common import devops
+from campus.common import env
 
 from .interface import TableInterface
 
@@ -25,7 +25,7 @@ def get_db(name: str):
     if is_test_mode():
         from .backend.sqlite import SQLiteTable
         return SQLiteTable(name)
-    elif devops.ENV in (devops.STAGING, devops.PRODUCTION):
+    elif env.ENV in (env.STAGING, env.PRODUCTION):
         from .backend.postgres import PostgreSQLTable
         return PostgreSQLTable(name)
     else:

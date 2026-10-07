@@ -15,7 +15,7 @@ import unittest
 
 import flask
 
-from campus.common.devops.deploy import create_app
+from campus.deploy import create_app
 from tests.fixtures import services
 
 

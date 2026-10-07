@@ -31,7 +31,7 @@ import threading
 from contextlib import suppress
 from typing import Any, Optional
 
-from campus.common import devops
+from campus.common import env
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors as storage_errors
@@ -675,7 +675,7 @@ class SQLiteTable(TableInterface):
         for row in matching_rows:
             self.delete_by_id(row[PK])
 
-    @devops.block_env(devops.PRODUCTION)
+    @env.block_env(env.PRODUCTION)
     def init_from_model(self, name: str, model: type[InternalModel | Model]) -> None:
         """Initialize the table from a Campus model definition."""
         conn = self.get_connection()
@@ -689,7 +689,7 @@ class SQLiteTable(TableInterface):
                 cursor.close()
             conn.commit()
 
-    @devops.block_env(devops.PRODUCTION)
+    @env.block_env(env.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
 

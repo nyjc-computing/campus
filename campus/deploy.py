@@ -1,7 +1,13 @@
-"""campus.common.devops.deploy
+"""campus.deploy
 
 This module handles development- and deployment-related tasks for the Campus
-application.
+application: app creation (create_app), environment-specific configuration
+(Codespaces, development, deployment) and the /health and / route
+conventions (#842).
+
+It lives at the top level (moved out of campus.common.devops) because it
+orchestrates whole services: it pulls in Flask and campus.audit middleware,
+which environment-agnostic code in campus.common must not depend on.
 """
 
 from typing import Protocol, runtime_checkable
@@ -11,7 +17,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import BuildError
 
 import campus.common.errors
-from campus.common import devops, env, introspect
+from campus.common import env, introspect
 from campus.common.utils import url
 
 # pylint disable=unnecessary-ellipsis
@@ -71,7 +77,7 @@ def register_health(app: flask.Flask) -> None:
         return {
             'status': 'healthy',
             'deployment': env.DEPLOY,
-            'environment': devops.ENV,
+            'environment': env.ENV,
         }, 200
 
 
@@ -191,8 +197,6 @@ def _is_tracing_enabled() -> bool:
     Raises:
         OSError: If AUDIT_TRACING_ENABLED has an invalid value (not "0" or "1")
     """
-    from campus.common import env
-
     # Use get_flag() for automatic "1"/"0" to bool conversion with validation
     # Default to enabled (True) for safety - tracing is critical for observability
     return env.get_flag("AUDIT_TRACING_ENABLED", True)

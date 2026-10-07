@@ -117,9 +117,9 @@ def handle_authorization_error(
         # API request - return JSON error response
         # Use envelope format for API consistency
         err_dict = err.to_dict(envelope_format=True)
-        from campus.common import devops
+        from campus.common import env
         # Remove details in production for security reasons
-        if devops.ENV == devops.PRODUCTION:
+        if env.ENV == env.PRODUCTION:
             err_dict["error"].pop("details", None)
         # Return appropriate status code from the error
         return err_dict, err.status_code
@@ -138,8 +138,8 @@ def handle_authorization_error(
 
     else:
         # Ambiguous request - in development, raise an error to help debugging
-        from campus.common import devops
-        if devops.ENV == devops.PRODUCTION:
+        from campus.common import env
+        if env.ENV == env.PRODUCTION:
             # In production, default to JSON for safety
             err_dict = err.to_dict(envelope_format=True)
             return err_dict, err.status_code
@@ -171,9 +171,9 @@ def handle_api_error(
     """
     log_error_by_status(err)
     err_dict = err.to_dict()
-    from campus.common import devops
+    from campus.common import env
     # Remove traceback and sensitive details in production for security reasons
-    if devops.ENV == devops.PRODUCTION:
+    if env.ENV == env.PRODUCTION:
         err_dict["error"].pop("details", None)
     if err.headers:
         return err_dict, err.status_code, err.headers
@@ -193,9 +193,9 @@ def handle_token_error(
     """
     log_error_by_status(err)
     err_dict = err.to_dict(envelope_format=True)
-    from campus.common import devops
+    from campus.common import env
     # Remove details in production for security reasons
-    if devops.ENV == devops.PRODUCTION:
+    if env.ENV == env.PRODUCTION:
         err_dict["error"].pop("details", None)
     return err_dict, err.status_code
 

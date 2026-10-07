@@ -137,7 +137,7 @@ class TestConfigureForCodespace(unittest.TestCase):
         _restore_env(self.saved)
 
     def test_public_url_set_from_codespace_domain(self):
-        from campus.common.devops import deploy
+        from campus import deploy
 
         os.environ["CODESPACE_NAME"] = "fuzzy-waddle-giggle"
         os.environ["GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN"] = "app.github.dev"

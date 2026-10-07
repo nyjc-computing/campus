@@ -38,7 +38,7 @@ __all__ = [
     "get_bucket",
 ]
 
-from campus.common import devops
+from campus.common import env
 
 from .interface import BucketInterface, ObjectMetadata
 
@@ -71,7 +71,7 @@ def get_bucket(name: str) -> BucketInterface:
     if is_test_mode():
         from .backend.local import LocalBucket
         return LocalBucket(name)
-    elif devops.ENV in (devops.STAGING, devops.PRODUCTION):
+    elif env.ENV in (env.STAGING, env.PRODUCTION):
         from .backend.railway import RailwayBucket
         return RailwayBucket(name)
     else:

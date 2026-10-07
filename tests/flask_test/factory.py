@@ -27,7 +27,7 @@ def create_test_app(module):
         app = create_test_app(campus.auth)
         # App is ready for FlaskTestClient testing
     """
-    from campus.common.devops.deploy import create_app
+    from campus.deploy import create_app
     from tests.fixtures import setup
 
     from .configure import configure_for_testing

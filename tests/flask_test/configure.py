@@ -5,7 +5,7 @@ Configuration utilities for Flask apps in testing environments.
 
 import flask
 
-from campus.common import devops, env
+from campus.common import env
 
 
 def configure_for_testing(app: flask.Flask) -> None:
@@ -37,7 +37,7 @@ def configure_for_testing(app: flask.Flask) -> None:
         from campus.storage.testing import is_test_mode
         return {
             'status': 'healthy',
-            'environment': devops.ENV,
+            'environment': env.ENV,
             'testing': True,
             'service': app.name,
             'storage_mode': 'test' if is_test_mode() else 'production'

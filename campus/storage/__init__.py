@@ -34,7 +34,7 @@ __all__ = [
     "is_operator",
 ]
 
-from campus.common import devops
+from campus.common import env
 
 from . import documents, objects, tables
 from .documents import CollectionInterface
@@ -59,8 +59,8 @@ def get_bucket(name: str):
     return objects.get_bucket(name)
 
 
-@devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
+@env.block_env(env.PRODUCTION)
+@env.confirm_action_in_env(env.STAGING)
 def purge_tables() -> None:
     """Purge all tables in the database.
 
@@ -74,8 +74,8 @@ def purge_tables() -> None:
     _purge_tables()
 
 
-@devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
+@env.block_env(env.PRODUCTION)
+@env.confirm_action_in_env(env.STAGING)
 def purge_collections() -> None:
     """Purge all collections in the database.
 
@@ -89,8 +89,8 @@ def purge_collections() -> None:
     _purge_collections()
 
 
-@devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
+@env.block_env(env.PRODUCTION)
+@env.confirm_action_in_env(env.STAGING)
 def purge_all() -> None:
     """Purge all tables, collections, and buckets.
 
@@ -105,8 +105,8 @@ def purge_all() -> None:
     purge_buckets()
 
 
-@devops.block_env(devops.PRODUCTION)
-@devops.confirm_action_in_env(devops.STAGING)
+@env.block_env(env.PRODUCTION)
+@env.confirm_action_in_env(env.STAGING)
 def purge_buckets() -> None:
     """Purge all objects in buckets.
 

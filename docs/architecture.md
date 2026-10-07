@@ -85,8 +85,15 @@ Shared modules used by every service:
 - `schema`: OpenAPI-aligned types (str/int subclasses such as `DateTime`, `CampusID`, `Email`); start symbol searches here for type definitions
 - `errors`: error taxonomy (API errors, token errors, validation errors) raised by routes
 - `utils`: general helpers (uids, time, secrets)
-- `env`: environment variable access
-- `validation`, `http`, `devops`: request validation, HTTP plumbing, deployment helpers
+- `env`: environment variable access; deployment-environment constants and gating decorators (`block_env` / `confirm_action_in_env` / `require_env`); `.env` loading
+- `validation`, `http`: request validation, HTTP plumbing
+
+### `campus.deploy`
+Flask app orchestration for deployments (moved out of the former
+`campus.common.devops`, which it must not pull into `campus.common`):
+- `create_app`: single entrypoint for building a deployment app from AppModules
+- `configure_for_development` / `configure_for_deployment` / `configure_for_codespace`
+- `register_health` / `register_generic_landing`: the /health and / conventions (#842)
 
 ### `campus.model`
 Entity representation (no business logic):

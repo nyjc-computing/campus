@@ -95,7 +95,7 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
 
     Note: For creating new Flask applications, use the recommended
     pattern:
-        from campus.common.devops.deploy import create_app
+        from campus.deploy import create_app
         import campus.apps
         app = create_app(campus.apps)
 
@@ -161,10 +161,10 @@ def _init_auth_tables() -> None:
     schema management is handled by migrations/scripts (see migration
     009 for app_credentials), so initialization is skipped there.
     """
-    from campus.common import devops
+    from campus.common import env
 
     try:
-        if devops.ENV != devops.PRODUCTION:
+        if env.ENV != env.PRODUCTION:
             from .resources.credentials import CredentialsResource
             CredentialsResource.init_storage()
     except Exception:
@@ -188,14 +188,14 @@ def _seed_public_client() -> None:
     take down the rest of the auth service.
     """
     import campus.config
-    from campus.common import devops
+    from campus.common import env
 
     # Ensure the clients tables exist and their schema is aligned for
     # public client support before seeding (both no-ops if up to date).
     # In production, schema management is handled by migrations/scripts,
     # so table initialization is blocked there.
     try:
-        if devops.ENV != devops.PRODUCTION:
+        if env.ENV != env.PRODUCTION:
             from .resources.client import (
                 ClientsResource,
                 ensure_public_client_schema,

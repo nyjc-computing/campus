@@ -5,7 +5,7 @@ Functions for MongoDB database management during testing.
 
 from pymongo import MongoClient
 
-from campus.common import devops, env
+from campus.common import env
 
 
 def get_mongodb_uri(database_name: str | None = None) -> str:
@@ -113,7 +113,7 @@ def ensure_database_exists(database_name: str) -> None:
         ) from e
 
 
-@devops.require_env(devops.TESTING)
+@env.require_env(env.TESTING)
 def purge_database(database_name: str) -> None:
     """Purge (drop and recreate) a MongoDB database for clean testing state.
 

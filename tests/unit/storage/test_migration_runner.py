@@ -10,11 +10,14 @@ package because a tests/unit/migrations package would shadow the
 repo-root migrations/ directory under unittest discovery.
 """
 
+import os
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
+
+from campus.common import env
 
 
 def _pg_error(pgcode: str) -> Exception:
@@ -1024,17 +1027,27 @@ class TestWarnIfPending(unittest.TestCase):
             outstanding = self._warn({}, connect=connect)
         self.assertEqual(outstanding, [])
 
-    def test_default_env_reads_devops(self):
+    def test_default_env_reads_env(self):
         rows = {
             "001": self._ledger_row("001", "001_a.py", "applied"),
             "002": self._ledger_row("002", "002_b.py", "applied"),
         }
-        with patch("campus.common.devops.ENV", "production"), \
-                self.assertLogs(self.LOGGER, level="WARNING"):
-            outstanding = self._warn(rows, env=None)
-        self.assertEqual(outstanding, ["003"])
-        with patch("campus.common.devops.ENV", "development"), \
-                self.assertNoLogs(self.LOGGER, level="WARNING"):
+        # env.ENV is dynamic (read at call time), so set the ENV
+        # variable instead of patching a module attribute; restore the
+        # previous value afterwards.
+        original = os.environ.get("ENV")
+        env.set("ENV", "production")
+        try:
+            with self.assertLogs(self.LOGGER, level="WARNING"):
+                outstanding = self._warn(rows, env=None)
+            self.assertEqual(outstanding, ["003"])
+        finally:
+            if original is None:
+                env.delete("ENV")
+            else:
+                env.set("ENV", original)
+        # ENV unset falls back to DEVELOPMENT: outside the warn envs.
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
             outstanding = self._warn(rows, env=None)
         self.assertEqual(outstanding, [])
 

@@ -198,7 +198,6 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
         # Lazy import to avoid storage initialization issues
         import flask
 
-        from campus.common import devops
         from campus.common.errors import init_app
         from campus.common.errors.auth_errors import (
             UnauthorizedClientError,
@@ -208,7 +207,6 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
         self.app.config["TESTING"] = True
         self.UnauthorizedClientError = UnauthorizedClientError
         self.AuthorizationError = AuthorizationError
-        self.devops = devops
 
         # Save original ENV
         self.original_env = os.environ.get("ENV")
@@ -290,24 +288,21 @@ class TestAuthorizationErrorHandler(unittest.TestCase):
 
     def test_ambiguous_request_in_production_returns_json(self):
         """Ambiguous requests default to JSON in production for safety."""
-        # Use devops.PRODUCTION constant for reliable check
-        original = self.devops.ENV
-        self.devops.ENV = self.devops.PRODUCTION
+        # The handler reads env.ENV dynamically, so setting the ENV
+        # variable is enough; tearDown restores the original value.
+        os.environ["ENV"] = "production"
 
-        try:
-            err = self.UnauthorizedClientError("Invalid credentials")
+        err = self.UnauthorizedClientError("Invalid credentials")
 
-            with self.app.test_request_context(
-                "/some/unknown/path",
-                headers={"Accept": "text/html"}
-            ):
-                from campus.common.errors.handlers import handle_authorization_error
-                response, status_code = handle_authorization_error(err)
+        with self.app.test_request_context(
+            "/some/unknown/path",
+            headers={"Accept": "text/html"}
+        ):
+            from campus.common.errors.handlers import handle_authorization_error
+            response, status_code = handle_authorization_error(err)
 
-                self.assertEqual(status_code, 400)
-                self.assertIn("error", response)
-        finally:
-            self.devops.ENV = original
+            self.assertEqual(status_code, 400)
+            self.assertIn("error", response)
 
 
 if __name__ == "__main__":

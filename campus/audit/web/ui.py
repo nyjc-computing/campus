@@ -31,7 +31,7 @@ def create_root_blueprint() -> flask.Blueprint:
     """Create a blueprint serving the service root path / (#842).
 
     Campus convention: / is a landing page and /health is the health
-    check endpoint (registered by devops.deploy). Audit owns / because
+    check endpoint (registered by campus.deploy). Audit owns / because
     it has a web UI: the landing page is served at both / and /audit/.
     This blueprint is public (no login gate) and only registered for
     standalone deployments (campus.audit init_app on a Flask app).
