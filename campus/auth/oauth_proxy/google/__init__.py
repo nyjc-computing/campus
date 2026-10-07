@@ -135,10 +135,19 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             target: schema.Url,
             hd: str | None = HD_DEFAULT,
             login_hint: schema.Email | None = None,
-            prompt: PROMPT_OPTION | None = None,
+            prompt: PROMPT_OPTION | None = "select_account",
             scope: str | None = None,
     ) -> werkzeug.Response:
         """Prepares the Google OAuth authorization URL and redirects to it.
+
+        prompt defaults to select_account (#844): every identity login
+        must stop at Google's account chooser, so a browser that still
+        holds a Google session after logging out of a campus app cannot
+        silently re-authenticate as the previous user on the next app's
+        login. Standard SaaS SSO semantics: sign-out ends the campus
+        session, Google's stays alive, and the next login shows the
+        picker. Callers may still pass an explicit prompt query param
+        to override.
 
         scope (space-delimited) requests upstream Google scopes beyond
         the proxy's base set (email, profile), merged via

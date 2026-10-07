@@ -75,7 +75,7 @@ sequenceDiagram
     A-->>U: 302 /auth/v1/google/authorize
     U->>A: GET /auth/v1/google/authorize
     A-->>U: 302 accounts.google.com
-    U->>G: sign in + consent (Workspace domain)
+    U->>G: account chooser (prompt=select_account, #844)<br/>+ sign in + consent (Workspace domain)
     G-->>U: 302 /auth/v1/google/callback
     U->>A: GET /auth/v1/google/callback
     A->>G: exchange code, fetch userinfo
@@ -315,10 +315,12 @@ backslashes in the authority. Path is free within a registered
 origin; per-client matching (`client_id`, `id_token_hint`) awaits
 #301's RP-initiated logout.
 
-Residuals: Google's browser session is deliberately untouched
-(re-login costs an account-chooser round trip); logout is a plain GET,
-so a foreign page can sign a visitor out (logout CSRF — a nuisance,
-not a privilege issue).
+Residuals: Google's browser session is deliberately untouched, and
+Google approval is never silent — identity login always sends
+`prompt=select_account` (#844), so re-login after logout stops at the
+account chooser instead of silently re-authenticating as the previous
+user. Logout is a plain GET, so a foreign page can sign a visitor out
+(logout CSRF — a nuisance, not a privilege issue).
 
 ## Scope algebra
 
