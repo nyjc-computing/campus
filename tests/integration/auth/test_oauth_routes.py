@@ -314,6 +314,48 @@ class TestOAuthIntegration(IntegrationTestCase):
             # Should contain the device verification form
             self.assertIn("Enter User Code", response.get_data(as_text=True))
 
+    def test_device_page_names_the_authorizing_account(self):
+        """The device page shows which account will be authorized (#852).
+
+        The browser's SSO session silently decides who authorizes the
+        device, so the page must name that identity and offer the
+        logout-based switch-account escape hatch.
+        """
+        with self.app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess['user_id'] = 'test@example.com'
+
+            response = client.get("/auth/v1/oauth/device")
+            self.assertEqual(response.status_code, 200)
+            page = response.get_data(as_text=True)
+            # The signed-in identity is on the page next to the form
+            self.assertIn("test@example.com", page)
+            self.assertIn("Sign in as a different user", page)
+            # The escape hatch routes through the browser-session logout
+            # and back to the device page (same-origin relative target)
+            self.assertIn("/auth/v1/logout?post_logout_redirect_uri=", page)
+            self.assertIn("/auth/v1/oauth/device", page)
+
+    def test_device_page_prefilled_code_does_not_auto_submit(self):
+        """A pre-filled user code must not self-authorize (#852).
+
+        verification_uri_complete used to auto-click Authorize on load,
+        binding the grant to whatever SSO session the browser held with
+        no chance to check. The code is still pre-filled, but the user
+        must click Authorize themselves.
+        """
+        with self.app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess['user_id'] = 'test@example.com'
+
+            response = client.get("/auth/v1/oauth/device?user_code=ABCD-1234")
+            self.assertEqual(response.status_code, 200)
+            page = response.get_data(as_text=True)
+            # Code is pre-filled for the user to confirm
+            self.assertIn('value="ABCD-1234"', page)
+            # But nothing clicks Authorize on the page's behalf
+            self.assertNotIn("submitBtn.click()", page)
+
     def test_user_query_parameter_ignored(self):
         """Test that user query parameter is ignored (security fix)."""
         # Try to access with user query parameter (old insecure method)
