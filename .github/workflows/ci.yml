@@ -110,16 +110,20 @@ jobs:
     needs: [changes, ruff]
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    # The matrix EXPANDS into the check-run names the `weekly` ruleset
-    # requires verbatim ("Sanity Check (3.11)", "Unit Tests (3.11)", ...).
+    # Python support tiers: 3.11-3.13 are security-status releases —
+    # officially supported; the `weekly` ruleset requires their check-run
+    # names verbatim ("Sanity Check (3.11)", "Unit Tests (3.11)", ...).
     # Renaming a job or editing python-version strands the ruleset: the
-    # required names stop being reported and every PR blocks. Note 3.13
-    # runs but is not ruleset-required. Update the ruleset in the same
-    # PR as any rename or matrix change.
+    # required names stop being reported and every PR blocks. Update the
+    # ruleset in the same PR as any rename or security-tier matrix change.
+    # 3.14 is bugfix-status (unofficial "eventually"): its legs run for
+    # signal but never block, and their check names must never enter the
+    # ruleset.
+    continue-on-error: ${{ matrix.python-version == '3.14' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - name: Docs-only fast exit
         run: |
@@ -160,10 +164,12 @@ jobs:
     needs: [changes, ruff]
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    # Bugfix-tier leg: 3.14 runs for signal but never blocks (see sanity-check).
+    continue-on-error: ${{ matrix.python-version == '3.14' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - name: Docs-only fast exit
         run: |
@@ -205,10 +211,12 @@ jobs:
     needs: [changes, sanity-check, type-check]
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    # Bugfix-tier leg: 3.14 runs for signal but never blocks (see sanity-check).
+    continue-on-error: ${{ matrix.python-version == '3.14' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - name: Docs-only fast exit
         run: |
@@ -250,10 +258,12 @@ jobs:
     needs: [changes, unit-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    # Bugfix-tier leg: 3.14 runs for signal but never blocks (see sanity-check).
+    continue-on-error: ${{ matrix.python-version == '3.14' }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - name: Docs-only fast exit
         run: |
@@ -296,11 +306,12 @@ jobs:
     needs: [changes, contract-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 8
-    continue-on-error: ${{ github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
+    # Non-blocking on the weekly release gate and for the bugfix-tier 3.14 leg.
+    continue-on-error: ${{ matrix.python-version == '3.14' || github.base_ref == 'weekly' || (github.event_name == 'push' && github.ref_name == 'weekly') }}
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        python-version: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - name: Docs-only fast exit
         run: |
