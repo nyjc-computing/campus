@@ -109,6 +109,23 @@ replaced (`AppCredentialsResource.issue`).
   configured workspace domain (existing `WORKSPACE_DOMAIN` check).
 - **B5 — User-scoped reads.** Upstream credentials are readable only per
   `(provider, user)`; no endpoint exposes tokens across users.
+- **B6 — The integration scope cap is a reviewed contract.** An
+  integration's vault `SCOPES` value is the single cap behind three
+  surfaces at once: the connect flow's consent ask, the broker's
+  release-time scope gate, and the public catalog (`GET
+  /integrations/v1/`). Consumers build feature gates on it —
+  campus-classroom enforces `classroom.coursework.students` locally
+  against the released grant for its Send-to-Classroom flow — so
+  **changing a `SCOPES` value is an intentional, reviewed act**, not a
+  deployment detail: keep the catalog endpoint the machine-readable
+  source of truth, re-verify with at least one consumer after a change,
+  and never narrow below what a shipped consumer feature requires
+  without a coordinated plan. Silent drift below the documented set
+  breaks consumer features for freshly connected accounts while existing
+  grants keep working (observed live: campus#850 — the dev cap lost
+  `classroom.coursework.students`, ungrantable by any fresh connect
+  until restored; campus#854 covers the missing write authorization that
+  let the cap be rewritten by an unprivileged client).
 
 ### C — Token bridge `[bridge]` (phase P3)
 
@@ -179,6 +196,7 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | B3 | P2 | **enforced** | identity growth: `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check in C3. Integration growth: connect flow guards (`routes/oauth_proxy/google` authorize + `oauth_proxy/google/proxy.py::_validate_connect_binding`, `prompt=consent` forced); `tests/contract/auth/test_integrations.py` |
 | B4 | P2 | **preserved** | `WORKSPACE_DOMAIN` checks in `google/proxy.py::handle_auth_callback`, `provider.verify_login` |
 | B5 | P2/P3 | **enforced** | credentials resource keying `(provider, user, client)`; broker releases keyed to the bearer token's own user |
+| B6 | P3 | **documented** | this invariant + the catalog endpoint (`routes/integrations.py`, `GET /integrations/v1/`); consumer-side gates (campus-classroom `CLASSROOM_SCOPES_SEND`) verify the cap end-to-end; write-path authorization tracked in campus#854 |
 | C1 | P3 | **enforced** | `routes/broker.py::_authorize_bridge_call` (bearer user + confidential + token_bridge flag, fail-closed); `test_token_broker.py` unflagged/public/basic/missing-credential cases |
 | C2 | P3 | **enforced** | broker response built explicitly (access token, expiry, scope only); `test_token_broker.py::test_release_returns_minimal_upstream_token` |
 | C3 | P3 | **enforced** | `validate_upstream_for_client` (C3a, keyed by the provider string) + integration absent-key-deny (`routes/broker.py`, both routes) + stored-grant coverage check (C3b) with machine-readable `missing_scopes`; `test_token_broker.py::test_min_scopes_*`, `test_integrations.py` broker cases, `test_connections.py::TestBrokerNamespacedGuardContract` |
