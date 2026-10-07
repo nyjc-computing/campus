@@ -619,7 +619,7 @@ name = "campus-api-python"
 version = "0.3.0"
 description = "Campus API for Python projects"
 optional = false
-python-versions = ">=3.11,<3.14"
+python-versions = ">=3.11,<3.15"
 groups = ["main"]
 files = []
 develop = false
@@ -631,8 +631,8 @@ flask = "^3.0.0"
 [package.source]
 type = "git"
 url = "https://github.com/nyjc-computing/campus-api-python.git"
-reference = "main"
-resolved_reference = "9caf58b84ade2c804dc83688527f2525f2954701"
+reference = "py-support-policy"
+resolved_reference = "194abe55d934e4f1499b9cd007139f5a2e5608f6"
 
 [[package]]
 name = "certifi"
@@ -1884,5 +1884,5 @@ watchdog = ["watchdog (>=2.3)"]
 
 [metadata]
 lock-version = "2.1"
-python-versions = ">=3.11.0,<3.14"
-content-hash = "7d6dcd0fc37d697dc6f6931ceb4852315923f63930add4ef4a4784b65d0da4c4"
+python-versions = ">=3.11.0,<3.15"
+content-hash = "830a9d5e8cb21f9d388ca69a0e6b37d0762ec85693b4cac853048681d970fbbe"
