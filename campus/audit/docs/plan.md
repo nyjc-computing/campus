@@ -174,7 +174,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @bp.before_request
 def authenticate():
     """Validate API key for audit endpoints."""
-    from campus.common.webauth import http
+    from campus.webauth import http
     from campus.common.errors import auth_errors
 
     # Health check is public

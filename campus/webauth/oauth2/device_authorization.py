@@ -1,4 +1,4 @@
-"""campus.common.webauth.oauth2.device_authorization
+"""campus.webauth.oauth2.device_authorization
 
 OAuth2 Device Authorization Flow schemas and models.
 

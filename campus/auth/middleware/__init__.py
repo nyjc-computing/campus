@@ -7,8 +7,8 @@ from typing import Any, Callable, TypedDict
 
 import flask
 
-from campus import flask_campus
-from campus.common import schema, webauth
+from campus import flask_campus, webauth
+from campus.common import schema
 from campus.common.errors import api_errors, auth_errors
 
 # Type stubs

@@ -1,4 +1,4 @@
-"""Unit tests for campus.common.webauth.http Authorization handling.
+"""Unit tests for campus.webauth.http Authorization handling.
 
 Regression tests for #725: malformed Authorization header values must
 surface as UnauthorizedError (401) at the webauth boundary, never as a
@@ -12,7 +12,7 @@ import unittest
 os.environ["ENV"] = "development"
 
 from campus.common.errors import api_errors
-from campus.common.webauth import http as webauth_http
+from campus.webauth import http as webauth_http
 
 
 def _basic(client_id: str, client_secret: str) -> str:

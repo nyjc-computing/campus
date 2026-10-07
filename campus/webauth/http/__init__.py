@@ -1,4 +1,4 @@
-"""campus.auth.webauth.http
+"""campus.webauth.http
 
 HTTP Authentication configs and models.
 
@@ -14,10 +14,10 @@ __all__ = [
 
 from typing import Literal
 
-import campus.model
 from campus.common.errors import api_errors, token_errors
 
 from .. import base
+from ..models import HttpHeader, HttpHeaderWithAuth
 
 HttpScheme = Literal["basic", "bearer"]
 
@@ -37,7 +37,7 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             provider: str,
             scheme: HttpScheme,
             *,
-            header: campus.model.HttpHeaderWithAuth
+            header: HttpHeaderWithAuth
     ):
         super().__init__(provider)
         self.scheme = scheme
@@ -48,14 +48,14 @@ class HttpAuthenticationScheme(base.SecurityScheme):
             cls,
             *,
             provider: str,
-            http_header: campus.model.HttpHeaderWithAuth | dict[str, str]
+            http_header: HttpHeaderWithAuth | dict[str, str]
     ) -> "HttpAuthenticationScheme":
         """Create an HTTP authentication scheme from an HTTP header."""
         import logging
         logger = logging.getLogger(__name__)
-        header = campus.model.HttpHeader.from_header(http_header)
+        header = HttpHeader.from_header(http_header)
 
-        if not isinstance(header, campus.model.HttpHeaderWithAuth):
+        if not isinstance(header, HttpHeaderWithAuth):
             logger.warning("Missing Authorization header.")
             # RFC 7235: a request missing its authentication credentials
             # is Unauthorized (401), not an OAuth flow error (#614).

@@ -11,7 +11,7 @@ import logging
 
 import flask
 
-from campus.common import webauth
+from campus import webauth
 from campus.common.errors import api_errors, auth_errors
 from campus.common.utils import secret
 
