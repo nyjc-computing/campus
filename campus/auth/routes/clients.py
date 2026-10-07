@@ -3,7 +3,19 @@
 Flask routes for Campus client management.
 
 These routes handle creating, listing, retrieving, and deleting clients.
-Admin operations require ALL permissions, read operations require READ permissions.
+Client records are deployment registration data (redirect URIs, scope
+caps, the token-bridge flag), so every route is authorization-gated,
+not just authenticated (#854):
+
+- the operator principal (AUTH_OPERATOR_CLIENT_IDS) may manage every
+  client: register, update (including scope caps and the token-bridge
+  flag), delete, rotate secrets, and administer vault access grants;
+- any other authenticated client may manage only itself: read its own
+  record, update its own profile fields (name, description,
+  redirect_uris — never the scope caps or token_bridge), rotate its
+  own secret, and list clients (ids and display names only — the audit
+  UI resolves client names this way);
+- user bearer tokens are denied on every route regardless of scope.
 
 Authentication is handled in a global routes.before_request hook.
 """
@@ -14,7 +26,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import get_yapper, scopes
+from .. import authz, get_yapper, scopes
 from ..resources import client as client_resource
 
 # Create blueprint for client management routes
@@ -32,9 +44,12 @@ def new(
         upstream_scopes: dict[str, list[str]] | None = None,
         token_bridge: bool = False
 ) -> flask_campus.JsonResponse:
-    """Create a new vault client.
+    """Register a new client.
 
     POST /clients/
+    Authorization: operator only (#854) — client registration mints a
+    new principal.
+
     Body: {
         "name": "Client Name",
         "description": "Client description",
@@ -70,6 +85,7 @@ def new(
     release endpoint (invariant C1): confidential clients only, never
     public ones.
     """
+    authz.require_operator("register clients")
     if is_public and token_bridge:
         raise api_errors.InvalidRequestError(
             "Public clients cannot be granted token bridge access",
@@ -93,17 +109,23 @@ def list_all() -> flask_campus.JsonResponse:
     """List all clients
 
     GET /clients
+    Authorization: any client principal (#854) — the resource carries
+    display metadata only (no secret material), and the audit UI
+    resolves client ids to names through this route. User bearer
+    tokens are denied.
+
     Returns: {
         "clients": [
             {
                 "id": "client_abc123",
-                "name": "Client Name", 
+                "name": "Client Name",
                 "description": "Client description",
                 "created_at": "2025-07-20T10:30:00Z"
             }
         ]
     }
     """
+    authz.forbid_user_principal("list clients")
     clients = [
         client.to_resource()
         for client in client_resource.list_all()
@@ -114,15 +136,15 @@ def list_all() -> flask_campus.JsonResponse:
 @bp.delete("/<client_id>/")
 @flask_campus.unpack_request
 def delete_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Delete a vault client
+    """Delete a client
 
-    DELETE /client/{client_id}
-    Returns: {
-        "status": "success",
-        "client_id": "client_abc123",
-        "action": "deleted"
-    }
+    DELETE /clients/{client_id}
+    Authorization: operator only (#854) — even the client itself may
+    not delete its own record.
+
+    Returns: {}
     """
+    authz.require_operator("delete clients")
     client_resource[client_id].delete()
     get_yapper().emit('campus.clients.delete', {"client_id": client_id})
     return {}, 200
@@ -134,15 +156,18 @@ def get_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Get details of a specific client
 
     GET /clients/{client_id}
+    Authorization: the client itself, or operator (#854).
+
     Returns: {
         "client": {
             "id": "client_abc123",
             "name": "Client Name",
-            "description": "Client description", 
+            "description": "Client description",
             "created_at": "2025-07-20T10:30:00Z"
         }
     }
     """
+    authz.require_self_or_operator(client_id, "view")
     client = client_resource[client_id].get()
     return client.to_resource(), 200
 
@@ -153,8 +178,12 @@ def revoke_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Revoke a client's secret and generate a new one.
 
     POST /clients/{client_id}/revoke
+    Authorization: the client itself (rotating its own credential is
+    self-management), or operator (#854).
+
     Returns: {"secret": new_secret}
     """
+    authz.require_self_or_operator(client_id, "rotate the secret of")
     new_secret = client_resource[client_id].revoke()
     get_yapper().emit("campus.clients.revoke", {"client_id": client_id})
     return {"secret": new_secret}, 200
@@ -174,6 +203,10 @@ def update_client(
     """Update a client's details.
 
     PATCH /clients/{client_id}
+    Authorization: the client itself may update its profile fields
+    (name, description, redirect_uris) but not its scope caps or the
+    token-bridge flag; the operator may update everything (#854).
+
     Body: {
         "name": "New Client Name",
         "description": "New description",
@@ -197,8 +230,17 @@ def update_client(
     (docs/auth-token-invariants.md A1): sessions and device codes may
     only request scopes it contains. upstream_scopes caps the
     third-party provider scopes the client may be granted through the
-    OAuth proxies (invariant B3).
+    OAuth proxies (invariant B3). allowed_scopes, upstream_scopes and
+    token_bridge are operator-controlled: a self-managing client
+    changing them is rejected (403).
     """
+    authz.require_self_or_operator(client_id, "update")
+    if not authz.is_operator():
+        authz.require_operator_only_client_fields({
+            "allowed_scopes": allowed_scopes,
+            "upstream_scopes": upstream_scopes,
+            "token_bridge": token_bridge,
+        })
     updates = {}
     if name is not None:
         updates["name"] = name
@@ -238,11 +280,14 @@ def get_client_access(
     """Check a client's access.
 
     GET /clients/{client_id}/access
+    Authorization: the client itself, or operator (#854).
+
     Returns: {
         "client_id": "client_abc123",
         "access": int
     }
     """
+    authz.require_self_or_operator(client_id, "view the vault access of")
     if vault:
         access = client_resource[client_id].access.get(vault)
         return {"vault": vault, "access": access}, 200
@@ -261,11 +306,14 @@ def check_client_access(
     """Check a client's access.
 
     GET /clients/{client_id}/access/check
+    Authorization: the client itself, or operator (#854).
+
     Returns: {
         "client_id": "client_abc123",
         "has_access": true
     }
     """
+    authz.require_self_or_operator(client_id, "check the vault access of")
     has_access = client_resource[client_id].access.check(
         vault_label=vault,
         permission=permission
@@ -307,6 +355,9 @@ def grant_client_access(
     """Grant a client access to a vault.
 
     POST /clients/{client_id}/access/grant
+    Authorization: operator only (#854) — vault access administration
+    is never self-service, not even on the client's own record.
+
     Body: {
         "vault": "vault_label",
         "permission": permission_to_grant[int]
@@ -317,6 +368,7 @@ def grant_client_access(
         "permission": updated_permission[int]
     }
     """
+    authz.require_operator("grant vault access")
     client_resource[client_id].access.grant(
         vault_label=vault,
         permission=permission
@@ -336,6 +388,8 @@ def revoke_client_access(
     """Revoke a client's access to a vault.
 
     POST /clients/{client_id}/access/revoke
+    Authorization: operator only (#854).
+
     Body: {
         "vault": "vault_label",
         "permission": permission_to_revoke[int]
@@ -346,6 +400,7 @@ def revoke_client_access(
         "permission": updated_permission[int]
     }
     """
+    authz.require_operator("revoke vault access")
     client_resource[client_id].access.revoke(
         vault_label=vault,
         permission=permission
@@ -365,6 +420,8 @@ def update_client_access(
     """Update (replace) a client's access permissions for a vault.
 
     PATCH /clients/{client_id}/access/
+    Authorization: operator only (#854).
+
     Body: {
         "vault": "vault_label",
         "permission": new_permission[int]
@@ -375,6 +432,7 @@ def update_client_access(
         "permission": updated_permission[int]
     }
     """
+    authz.require_operator("update vault access")
     client_resource[client_id].access.update(
         vault_label=vault,
         permission=permission

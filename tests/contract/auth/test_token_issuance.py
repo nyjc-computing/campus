@@ -105,12 +105,16 @@ class TestTokenIssuanceContract(unittest.TestCase):
         # Minted tokens carry a refresh token for the refresh grant
         self.assertTrue(data["refresh_token"])
 
-        # The token authenticates as a bearer credential
+        # The token authenticates as a bearer credential. Management
+        # routes deny user tokens outright (#854), so the probe is the
+        # denial itself: 403 FORBIDDEN (authenticated but unauthorized),
+        # never 401 (which would mean the token failed to resolve).
         listing = self.client.get(
             "/auth/v1/clients/",
             headers=self._bearer_headers(data["id"]),
         )
-        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.status_code, 403)
+        self.assertEqual(listing.get_json()["error"]["code"], "FORBIDDEN")
 
     def test_wider_reauth_unions_scopes(self):
         """A3/A4: a wider re-authorization unions into the grant."""
