@@ -631,8 +631,8 @@ flask = "^3.0.0"
 [package.source]
 type = "git"
 url = "https://github.com/nyjc-computing/campus-api-python.git"
-reference = "py-support-policy"
-resolved_reference = "194abe55d934e4f1499b9cd007139f5a2e5608f6"
+reference = "main"
+resolved_reference = "bcfbdaadf001f031f9eede39ec221089e37c2067"
 
 [[package]]
 name = "certifi"
@@ -1885,4 +1885,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "830a9d5e8cb21f9d388ca69a0e6b37d0762ec85693b4cac853048681d970fbbe"
+content-hash = "65ce003493daa81a8ca3225df15b6b84afc5e7de94c4e934e4ca9b9a2ac04d8b"
