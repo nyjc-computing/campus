@@ -4,10 +4,37 @@ Base Model class.
 """
 
 import dataclasses
+import types
 import typing
 from dataclasses import dataclass
 
 from campus.common import schema
+
+
+def _coercible_str_type(hint: typing.Any) -> type | None:
+    """Resolve the str subclass a type hint declares, if any.
+
+    Handles plain annotations (schema.DateTime) and Optional unions
+    (schema.DateTime | None): storage/resource round-trips keep no
+    subclass, so Optional[schema.*] fields must coerce too (#847).
+    Returns None for non-str hints (Model, list, bare unions of
+    multiple non-None members, ...).
+    """
+    field_type = hint
+    origin = typing.get_origin(field_type)
+    # PEP 604 `X | None` unions have origin types.UnionType; subscripted
+    # typing.Union has origin typing.Union. Both are Optional-style.
+    if origin is typing.Union or origin is types.UnionType:
+        members = [
+            arg for arg in typing.get_args(field_type)
+            if arg is not type(None)
+        ]
+        if len(members) != 1:
+            return None
+        field_type = members[0]
+    if isinstance(field_type, type) and issubclass(field_type, str):
+        return field_type
+    return None
 
 
 class FieldMeta(typing.TypedDict):
@@ -101,10 +128,11 @@ class InternalModel(typing.Protocol):
             if (isinstance(value, dict) and isinstance(field_type, type)
                     and issubclass(field_type, Model)):
                 value = field_type.from_resource(value)
-            elif (isinstance(value, str) and isinstance(field_type, type)
-                    and issubclass(field_type, str)
-                    and not isinstance(value, field_type)):
-                value = field_type(value)
+            else:
+                str_type = _coercible_str_type(field_type)
+                if str_type is not None and isinstance(value, str) \
+                        and not isinstance(value, str_type):
+                    value = str_type(value)
             if field.init:
                 init_kwargs[field.name] = value
             else:
@@ -125,7 +153,8 @@ class InternalModel(typing.Protocol):
         Storage records carry plain strings (JSON/BSON); values for
         fields annotated as str subclasses (schema.DateTime, CampusID,
         Email, Url, ...) are coerced to the annotated type, mirroring
-        from_resource().
+        from_resource(). Optional annotations (schema.DateTime | None)
+        coerce too (#847) — storage round-trips keep no subclass.
         """
         try:
             hints = typing.get_type_hints(cls)
@@ -148,11 +177,10 @@ class InternalModel(typing.Protocol):
                     f"Required field '{f.name}' not found in storage record "
                     f"for model '{cls.__name__}'"
                 )
-            field_type = hints.get(f.name)
-            if (isinstance(value, str) and isinstance(field_type, type)
-                    and issubclass(field_type, str)
-                    and not isinstance(value, field_type)):
-                value = field_type(value)
+            str_type = _coercible_str_type(hints.get(f.name))
+            if str_type is not None and isinstance(value, str) \
+                    and not isinstance(value, str_type):
+                value = str_type(value)
             return value
 
         return cls(

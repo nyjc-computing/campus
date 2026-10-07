@@ -220,6 +220,22 @@ class TestOAuthIntegration(IntegrationTestCase):
         )
         self.assertEqual(oauth_error, "authorization_pending")
 
+        # Regression (#847): a storage round-trip (Mongo/BSON) hands the
+        # model a plain str, not schema.DateTime — the throttle must
+        # still slow_down instead of 500ing on .to_datetime().
+        dc = device_code_resource.get_by_device_code(device_code)
+        device_code_resource.update(
+            dc.id,
+            last_polled_at=str(schema.DateTime.utcnow()),
+        )
+        fourth = _poll()
+        self.assertEqual(fourth.status_code, 400)
+        oauth_error = (
+            fourth.get_json().get("error", {})
+            .get("details", {}).get("oauth_error", "")
+        )
+        self.assertEqual(oauth_error, "slow_down")
+
     def test_oauth_token_poll_not_throttled_after_authorize(self):
         """Terminal polls are not throttled: authorized -> token (#355).
 

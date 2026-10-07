@@ -67,6 +67,17 @@ class TestDeviceCodeLastPolledAt(unittest.TestCase):
             loaded.last_polled_at, schema.DateTime("2026-01-01T00:00:03+00:00")
         )
 
+    def test_from_storage_coerces_plain_str_last_polled_at(self):
+        """A plain str last_polled_at coerces to schema.DateTime (#847).
+
+        Mongo/BSON round-trips keep no subclass; without coercion the
+        #830 throttle's .to_datetime() 500s on the second poll.
+        """
+        record = _make_dc().to_storage()
+        record["last_polled_at"] = str(schema.DateTime.utcnow())
+        loaded = device_code.DeviceCode.from_storage(record)
+        self.assertIsInstance(loaded.last_polled_at, schema.DateTime)
+
     def test_from_storage_tolerates_missing_field(self):
         # Legacy records written before #355 have no last_polled_at
         record = _make_dc().to_storage()
