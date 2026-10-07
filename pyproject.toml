@@ -11,10 +11,18 @@ readme = "README.md"
 packages = [{include = "campus"}]
 
 [tool.poetry.dependencies]
-python = ">=3.11.0,<3.14"
+# Python support tiers (python.org release status):
+# - security (3.11-3.13): officially supported; CI-required.
+# - bugfix (3.14): unofficial ("not yet but eventually"); CI-tested with
+#   failures allowed; never deployed to prod.
+python = ">=3.11.0,<3.15"
 
 # Campus internal dependencies
-campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
+# INTERIM: pinned to the widening branch of campus-api-python so this lock
+# can admit bugfix-tier 3.14; flip back to branch = "main" in a follow-up
+# PR once that branch's own PR merges (main's constraint must cover <3.15
+# before this lock can track it).
+campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "py-support-policy"}
 
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^5.0.0"
