@@ -2,6 +2,13 @@
 
 Flask routes for credentials management.
 
+Credential records ARE bearer credentials: a campus-provider record's
+id doubles as its access token and its fields include refresh material,
+so the whole blueprint requires the operator principal
+(AUTH_OPERATOR_CLIENT_IDS) (#854) — previously any authenticated
+principal could list every live campus token. Third-party provider
+records are refused outright (invariant B1).
+
 Authentication is handled in a global routes.before_request hook.
 """
 
@@ -12,6 +19,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
 
+from .. import authz
 from ..resources import credentials as creds_resource
 
 # Create blueprint for session management routes
@@ -48,6 +56,8 @@ def get_by_token(
     a provider.
 
     GET /credentials/{provider}
+    Authorization: operator only (#854).
+
     Query Params: {
         "token_id": token_id (optional)
     }
@@ -55,6 +65,7 @@ def get_by_token(
         "credentials": { ... }
     }
     """
+    authz.require_operator("read credential records")
     _reject_non_campus_provider(provider)
     if token_id:
         credentials = creds_resource[provider].get(token_id)
@@ -78,10 +89,13 @@ def delete_by_user(
     """Delete credentials for a specific provider and user ID.
 
     DELETE /credentials/{provider}/{user_id}
+    Authorization: operator only (#854).
+
     Returns: {
         "success": true
     }
     """
+    authz.require_operator("delete credential records")
     client_id = flask.g.current_client.id
     _reject_non_campus_provider(provider)
     creds_resource[provider][user_id].delete(client_id)
@@ -98,11 +112,14 @@ def get_by_user(
     """Get credentials for a specific provider and user ID.
 
     GET /credentials/{provider}/{user_id}
+    Authorization: operator only (#854).
+
     Query Params: {
         "client_id": <optional_client_id>
     }
     Returns: { ... }
     """
+    authz.require_operator("read credential records")
     _reject_non_campus_provider(provider)
     client_id = client_id or flask.g.current_client.id
     assert client_id  # Authorization already done by this point
@@ -120,12 +137,15 @@ def update_credentials(
     """Update credentials for a specific provider and user ID.
 
     PATCH /credentials/{provider}/{user_id}
+    Authorization: operator only (#854).
+
     Body: {
         "client_id": "client_id",
         "token": { ... }
     }
     Returns: {}
     """
+    authz.require_operator("update credential records")
     _reject_non_campus_provider(provider)
     client_id = flask.g.current_client.id
     try:
@@ -163,6 +183,8 @@ def new_credentials(
     """Issue new credentials for a specific provider and user ID.
 
     POST /credentials/{provider}/{user_id}
+    Authorization: operator only (#854).
+
     Body: {
         "client_id": "client_id",
         "scopes": [...],
@@ -172,6 +194,7 @@ def new_credentials(
         "credentials": { ... }
     }
     """
+    authz.require_operator("issue credential records")
     _reject_non_campus_provider(provider)
     client_id = flask.g.current_client.id
     credentials = creds_resource[provider][user_id].new(

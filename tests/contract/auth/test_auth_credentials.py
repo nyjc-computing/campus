@@ -38,10 +38,10 @@ class TestAuthCredentialsContract(unittest.TestCase):
 
     def setUp(self):
         self.client = self.app.test_client()
-        # Use the default test client for Basic Auth
+        # Use the default test client for Basic Auth. The credentials
+        # API is operator-only (#854): the operator manages credential
+        # records, user bearers authenticate nothing here.
         self.basic_auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
-        # Bearer auth headers for our test user
-        self.bearer_auth_headers = get_bearer_auth_headers(self.bearer_token)
 
     def test_list_credentials_requires_auth(self):
         """GET /credentials/{provider}/ without auth returns 401."""
@@ -82,7 +82,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         """GET /credentials/{provider}/{user_id} returns user credentials."""
         response = self.client.get(
             f"/auth/v1/credentials/campus/{self.test_user_id}",
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 200)
@@ -96,7 +96,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         """GET /credentials/{provider}/nonexistent returns 404."""
         response = self.client.get(
             "/auth/v1/credentials/campus/nonexistent@campus.test",
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 404)
@@ -111,7 +111,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
                 "scopes": ["read", "write"],
                 "expires_in": 3600
             },
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 201)
@@ -130,7 +130,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         response = self.client.post(
             f"/auth/v1/credentials/campus/{self.test_user_id}",
             json={},  # Missing scopes and expires_in
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 422)
@@ -150,7 +150,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
                     "expires_in": 7200
                 }
             },
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 200)
@@ -165,7 +165,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
                 "scopes": ["read"],
                 "expiry_seconds": 3600
             },
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 422)
@@ -177,7 +177,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         response = self.client.post(
             f"/auth/v1/credentials/campus/{self.test_user_id}",
             json={"scopes": ["read"]},
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 422)
@@ -201,7 +201,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         response = self.client.patch(
             f"/auth/v1/credentials/campus/{self.test_user_id}",
             json={"token": token.to_resource()},
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 200)
@@ -222,7 +222,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
                     "expires_in": 7200,
                 }
             },
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 200)
@@ -237,7 +237,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         response = self.client.patch(
             f"/auth/v1/credentials/campus/{self.test_user_id}",
             json={"token": {}},  # No expires_at or expiry_seconds
-            headers=self.bearer_auth_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 422)
@@ -247,18 +247,23 @@ class TestAuthCredentialsContract(unittest.TestCase):
         self.assertIn("token", fields)
 
     def test_delete_credentials(self):
-        """DELETE /credentials/{provider}/{user_id} deletes credentials."""
+        """DELETE /credentials/{provider}/{user_id} deletes credentials.
+
+        The credentials API is operator-only (#854), so the operator
+        client deletes the record; the temp user's bearer is then used
+        only to verify the credential no longer authenticates.
+        """
         # Create a temporary user with credentials
         from tests.fixtures.tokens import create_test_token
         temp_user_id = schema.UserID("temp.user@campus.test")
         temp_token = create_test_token(temp_user_id)
         temp_headers = get_bearer_auth_headers(temp_token)
 
-        # Delete the credentials
+        # Delete the credentials as the operator
         response = self.client.delete(
             f"/auth/v1/credentials/campus/{temp_user_id}",
             json={},
-            headers=temp_headers
+            headers=self.basic_auth_headers
         )
 
         self.assertEqual(response.status_code, 200)

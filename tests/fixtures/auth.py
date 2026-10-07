@@ -29,6 +29,7 @@ def init():
     - SECRET_KEY: The vault service's secret key
     - CLIENT_ID: Test client identifier
     - CLIENT_SECRET: Test client secret for authentication
+    - AUTH_OPERATOR_CLIENT_IDS: The test client (deployment operator, #854)
 
     Prerequisites:
     - ENV must be 'testing'
@@ -88,6 +89,15 @@ def init():
     # Set client credentials in environment for test authentication
     env.set('CLIENT_ID', client_id)
     env.set('CLIENT_SECRET', secret)
+
+    # Make the test client the deployment operator (#854): the contract
+    # and integration suites register clients, administer vault access,
+    # and manage users/credentials through the HTTP API, all of which
+    # require the operator principal. Individual vault labels still
+    # require their own access grants (fixtures/yapper.py grants
+    # "campus.yapper"), which keeps the per-label bitflag model
+    # exercised on every run.
+    env.set('AUTH_OPERATOR_CLIENT_IDS', str(client_id))
 
     # Grant the test client full access to the 'vault' label
     client_resource.access.grant("vault", ClientAccess.ALL)

@@ -748,9 +748,15 @@ class TestOAuthIntegration(IntegrationTestCase):
         self.assertEqual(oauth_error, "invalid_request")
 
     def _bearer_credentials_status(self, user_id: str, token: str) -> int:
-        """Probe a bearer-authenticated endpoint with the given access token."""
+        """Probe a bearer-authenticated endpoint with the given access token.
+
+        Uses the connections list, a user self-service route: a valid
+        user token gets 200, a revoked one 401. (The credentials API is
+        operator-only since #854, so it can no longer serve as the
+        probe — a valid user token gets 403 there.)
+        """
         response = self.app.test_client().get(
-            f"/auth/v1/credentials/campus/{user_id}",
+            "/auth/v1/connections/",
             headers={"Authorization": f"Bearer {token}"}
         )
         return response.status_code

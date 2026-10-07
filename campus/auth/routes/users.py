@@ -3,7 +3,10 @@
 Flask routes for Campus user management.
 
 These routes handle creating, listing, retrieving, and deleting Campus
-users.
+users. User administration is a deployment-management surface, so every
+route requires the operator principal (AUTH_OPERATOR_CLIENT_IDS) — any
+authenticated principal used to be able to list, create, and delete
+users (#854). User bearer tokens are denied regardless of scope.
 
 Authentication is handled in a global routes.before_request hook.
 """
@@ -16,7 +19,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import get_yapper
+from .. import authz, get_yapper
 from ..resources import user as user_resource
 
 # Create blueprint for user management routes
@@ -29,8 +32,11 @@ def get_all() -> flask_campus.JsonResponse:
     """Get all users.
 
     GET /users
+    Authorization: operator only (#854).
+
     Returns: List[User]
     """
+    authz.require_operator("list users")
     users = user_resource.list()
     return {"users": [user.to_resource() for user in users]}, 200
 
@@ -41,6 +47,8 @@ def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
     """Create a new Campus user.
 
     POST /users
+    Authorization: operator only (#854).
+
     Body: {
         "email": "user@example.com",
         "name": "User Name"
@@ -48,6 +56,7 @@ def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
 
     Returns: User
     """
+    authz.require_operator("create users")
     # Note that no client_secret is generated here
     # Apps are expected to generate the secret separately
     user = user_resource.new(email=email, name=name)
@@ -60,8 +69,11 @@ def activate(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Activate a user
 
     POST /users/{user_id}/activate
+    Authorization: operator only (#854).
+
     Returns: User
     """
+    authz.require_operator("activate users")
     user_resource[user_id].activate()
     activated_user = user_resource[user_id].get()
     get_yapper().emit('campus.users.activate', {"user_id": str(user_id)})
@@ -74,8 +86,11 @@ def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Delete a user
 
     DELETE /users/{user_id}
+    Authorization: operator only (#854).
+
     Returns: {}
     """
+    authz.require_operator("delete users")
     user_resource[user_id].delete()
     get_yapper().emit('campus.users.delete', {"user_id": str(user_id)})
     return {}, 200
@@ -87,8 +102,11 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Get details of a specific user
 
     GET /users/{user_id}
+    Authorization: operator only (#854).
+
     Returns: User
     """
+    authz.require_operator("view user records")
     if user_id is None:
         raise api_errors.InvalidRequestError("user_id is None - check URL path")
     if not user_id:

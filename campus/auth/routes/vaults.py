@@ -2,8 +2,18 @@
 
 Flask routes for vault management.
 
-These routes handle creating, listing, retrieving, and deleting vaults.
-Admin operations require ALL permissions, read operations require READ permissions.
+These routes handle creating, listing, retrieving, and deleting vault
+keys. Vault labels hold deployment secrets (upstream OAuth client
+credentials, scope caps, service configuration), so every route is
+authorization-gated, not just authenticated (#854):
+
+- the operator principal (AUTH_OPERATOR_CLIENT_IDS) may manage every
+  label;
+- any other authenticated client may only touch a label where it holds
+  the matching vault_access bitflags: READ to list or read keys,
+  CREATE or UPDATE to set, DELETE to delete (granted via
+  /clients/{id}/access/ by the operator);
+- user bearer tokens are denied on every route regardless of scope.
 
 Authentication is handled in a global routes.before_request hook.
 """
@@ -12,8 +22,9 @@ import flask
 
 from campus import flask_campus
 from campus.common.errors import api_errors
+from campus.model.client import ClientAccess
 
-from .. import get_yapper
+from .. import authz, get_yapper
 from ..resources import vault as vault_resource
 
 # Create blueprint for vault management routes
@@ -26,6 +37,7 @@ def keys(label: str) -> flask_campus.JsonResponse:
     """Get the keys for a specific vault.
 
     GET /vaults/{label}/
+    Authorization: READ vault access on {label}, or operator.
 
     Returns: [
         key_1,
@@ -33,6 +45,7 @@ def keys(label: str) -> flask_campus.JsonResponse:
         ...
     ]
     """
+    authz.require_vault_permission(label, ClientAccess.READ)
     keys = vault_resource[label].keys()
     return {"keys": keys}, 200
 
@@ -43,8 +56,11 @@ def delete(label: str, key: str) -> flask_campus.JsonResponse:
     """Delete a key from a vault.
 
     DELETE /vaults/{label}/{key}
+    Authorization: DELETE vault access on {label}, or operator.
+
     Returns: {}
     """
+    authz.require_vault_permission(label, ClientAccess.DELETE)
     del vault_resource[label][key]
     get_yapper().emit('campus.vaults.key.delete', {"label": label, "key": key})
     return {}, 200
@@ -56,11 +72,13 @@ def get(label: str, key: str) -> flask_campus.JsonResponse:
     """Get a specific key from a vault.
 
     GET /vaults/{label}/{key}
+    Authorization: READ vault access on {label}, or operator.
 
     Returns: {
         "key": "value"
     }
     """
+    authz.require_vault_permission(label, ClientAccess.READ)
     try:
         value = vault_resource[label][key]
     except KeyError:
@@ -74,6 +92,9 @@ def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
     """Set a specific key in a vault.
 
     POST /vaults/{label}/{key}
+    Authorization: CREATE or UPDATE vault access on {label}, or
+    operator (set is create-or-update, so either bit authorizes it).
+
     Body: {
         "value": "new_value"
     }
@@ -81,6 +102,9 @@ def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
         "key": "value"
     }
     """
+    authz.require_vault_permission(
+        label, ClientAccess.CREATE | ClientAccess.UPDATE
+    )
     vault_resource[label][key] = value
     get_yapper().emit('campus.vaults.key.update', {"label": label, "key": key})
     return {"key": value}, 200
