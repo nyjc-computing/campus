@@ -607,8 +607,21 @@ def device_verification(user_code: str | None = None):
     POST /device - Handles form submission for non-JS clients
     """
     import html
+    import re
 
-    from flask import redirect, render_template_string, request, session
+    from flask import redirect, render_template_string, request, session, url_for
+
+    # Accept the user code from both the path and the query string:
+    # verification_uri_complete is "/device?user_code=XXXX-XXXX", and the
+    # form should pre-fill it. Query values are format-checked before
+    # being interpolated anywhere (the path param already carried the
+    # same risk; this keeps the new surface no wider). The code is
+    # pre-filled but NEVER auto-submitted (#852): the user must see which
+    # account is authorizing and click Authorize themselves.
+    if not user_code:
+        query_user_code = request.args.get('user_code', '')
+        if re.fullmatch(r"[A-Z0-9]{4}-[A-Z0-9]{4}", query_user_code):
+            user_code = query_user_code
 
     # Check if user is authenticated (for both GET and POST)
     # User must be logged in to authorize a device code
@@ -624,6 +637,19 @@ def device_verification(user_code: str | None = None):
             target=login_callback
         )
         return flask.redirect(oauth_authorize_url)
+
+    # The browser's SSO session silently decides who authorizes the device,
+    # so the page must name that account (#852). The escape hatch routes
+    # through the browser-session logout and back to this page (code
+    # pre-filled), forcing the Google account chooser on the next login.
+    device_path = (
+        url_for('auth.oauth.device_verification', user_code=user_code)
+        if user_code
+        else url_for('auth.oauth.device_verification')
+    )
+    logout_url = url.add_query(
+        '/auth/v1/logout', post_logout_redirect_uri=device_path
+    )
 
     # Handle POST for non-JS fallback
     if request.method == "POST":
@@ -803,6 +829,20 @@ def device_verification(user_code: str | None = None):
                 border-radius: 4px;
                 font-family: 'Courier New', monospace;
             }
+            .identity {
+                background: #f0f4ff;
+                border: 1px solid #d5dcf5;
+                border-radius: 8px;
+                padding: 10px 14px;
+                margin-bottom: 20px;
+                font-size: 13px;
+                color: #333;
+                text-align: center;
+                line-height: 1.6;
+            }
+            .identity a {
+                color: #667eea;
+            }
             .spinner {
                 display: inline-block;
                 width: 16px;
@@ -889,6 +929,7 @@ def device_verification(user_code: str | None = None):
                 <div class="success-icon"></div>
                 <h2>Authorization Complete!</h2>
                 <p>Your device has been successfully authorized.</p>
+                <p id="successUserId" style="margin-top: 8px; font-weight: 600;"></p>
                 <p style="margin-top: 12px;">You can now return to your CLI application.</p>
                 <div class="countdown">
                     <span id="countdownText">Returning to your CLI in <span id="countdownTimer">5</span> seconds...</span>
@@ -915,6 +956,14 @@ def device_verification(user_code: str | None = None):
                     Enter that code below to complete the authentication process.
                 </div>
 
+                {% if session_user_id %}
+                <div class="identity">
+                    Signed in as <strong>{{ session_user_id }}</strong> — this
+                    device will be authorized for that account.
+                    <a href="{{ logout_url }}">Not you? Sign in as a different user</a>
+                </div>
+                {% endif %}
+
                 <div id="errorAlert" class="alert error"></div>
                 <div id="successAlert" class="alert success"></div>
 
@@ -937,7 +986,7 @@ def device_verification(user_code: str | None = None):
                             maxlength="9"
                             pattern="[A-Z0-9]{4}-[A-Z0-9]{4}"
                             required
-                            {{ 'value="' + safe_user_code + '"' if safe_user_code else '' }}
+                            {% if safe_user_code %}value="{{ safe_user_code }}"{% endif %}
                         >
                         <input type="hidden" name="redirect_url" value="{{ request.url }}">
                     </div>
@@ -1031,6 +1080,8 @@ def device_verification(user_code: str | None = None):
                     });
 
                     if (authResponse.ok) {
+                        document.getElementById('successUserId').textContent =
+                            'Authorized as ' + userId;
                         showSuccessState();
                     } else {
                         const errorData = await authResponse.json();
@@ -1141,8 +1192,11 @@ def device_verification(user_code: str | None = None):
                 userCodeInput.focus();
             }
 
-            // Pre-filled user code - auto-submit if valid
-            {{ 'if (userCodeInput.value.length === 9) { submitBtn.click(); }' if user_code and status != 'success' and status != 'error' else '' }}
+            // Pre-filled user code (verification_uri_complete) is NOT
+            // auto-submitted: the user must see which account is authorizing
+            // and click Authorize themselves (#852 — the auto-submit once
+            // bound device grants to whatever SSO session the browser held,
+            // with no chance to check).
 
             // Handle URL-based error states for non-JS redirects
             const urlParams = new URLSearchParams(window.location.search);
@@ -1168,6 +1222,8 @@ def device_verification(user_code: str | None = None):
         status=status,
         error_code=error_code,
         error_messages=error_messages,
+        session_user_id=str(user_id) if user_id else None,
+        logout_url=logout_url,
     )
 
 
