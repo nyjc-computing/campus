@@ -512,13 +512,18 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
     (add-ons teacher checks, `teacherId=me` queries) surfaces only at
     Classroom API-call time. Verify a user's role by calling the
     Classroom API as that user, never by reading consent UX.
-11. **Client `/logout` does not end the Campus SSO session** (#844):
-    it clears the client app's session only. A browser that hits any
-    other client's login route immediately afterwards re-authenticates
-    silently — no Google handoff, no interaction — as the previous
-    user. When switching identities (e.g. E2E between accounts), sign
-    out at `accounts.google.com` as well, and never treat "logged out
-    of the app" as "no campus.auth session".
+11. **Logout ends the campus session, not the Google one** (#844,
+    #846): app `/logout` routes through `/auth/v1/logout` and really
+    does clear the campus session — what survives is Google's own
+    browser session, which (before #846) silently approved the next
+    login as the previous user. Identity login now always sends
+    `prompt=select_account` (default on `/auth/v1/google/authorize`),
+    so re-login stops at Google's account chooser and the identity
+    pick is explicit. There is no campus.auth-cookie shortcut past
+    the Google leg — every login round-trips accounts.google.com —
+    so a harvested campus session cookie cannot script a login. The
+    stored Google refresh credential also survives logout (deliberate
+    residual; shared-machine parity means signing out of Google too).
 
 ## Client-side checklist
 
