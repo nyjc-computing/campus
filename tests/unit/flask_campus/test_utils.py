@@ -6,6 +6,7 @@ that do not convert.
 """
 
 import unittest
+from typing import Literal
 
 from campus.common.errors import ValidationError
 from campus.flask_campus import utils
@@ -110,6 +111,60 @@ class TestUnpackIntoCoercion(unittest.TestCase):
         )
         self.assertEqual(permission, 1)
         self.assertEqual(rest, {"extra": "2"})
+
+
+class TestUnpackIntoLiteral(unittest.TestCase):
+    """Literal-annotated params validate by exact membership (#844).
+
+    A Literal member answered None ("cannot check") in the compat
+    check and is not a type, so `Literal[...] | None` used to reject
+    every non-None value: any string prompt 422'd. The Google identity
+    authorize route is the first caller to rely on a non-None Literal
+    default.
+    """
+
+    def setUp(self):
+        self.prompt_union = (
+            Literal["consent", "login", "none", "select_account"] | None
+        )
+
+    def test_literal_union_accepts_member(self):
+        def handler(prompt: self.prompt_union = "select_account"):
+            return prompt
+
+        self.assertEqual(
+            utils.unpack_into(handler, prompt="login"), "login"
+        )
+
+    def test_literal_union_default_applies_when_absent(self):
+        def handler(prompt: self.prompt_union = "select_account"):
+            return prompt
+
+        self.assertEqual(
+            utils.unpack_into(handler), "select_account"
+        )
+
+    def test_literal_union_rejects_non_member(self):
+        def handler(prompt: self.prompt_union = "select_account"):
+            return prompt
+
+        with self.assertRaises(ValidationError) as ctx:
+            utils.unpack_into(handler, prompt="bogus")
+        codes = {e["field"]: e["code"] for e in ctx.exception.field_errors}
+        self.assertEqual(codes["prompt"], "INVALID_TYPE")
+
+    def test_bare_literal_annotation_validates_membership(self):
+        def handler(prompt="x"):
+            return prompt
+
+        handler.__annotations__["prompt"] = Literal[
+            "consent", "login"
+        ]
+        self.assertEqual(
+            utils.unpack_into(handler, prompt="consent"), "consent"
+        )
+        with self.assertRaises(ValidationError):
+            utils.unpack_into(handler, prompt="bogus")
 
 
 if __name__ == "__main__":

@@ -112,8 +112,9 @@ def _is_type_compatible(value: Any, annotation: Any) -> bool | None:
     (unresolvable or generic forms not covered here).
 
     Unions (including `X | None`) accept a value matching any member.
-    Plain-str values are accepted for str-subclass annotations (the
-    schema classes, e.g. schema.UserID): callers coerce in place.
+    Literal annotations check exact membership. Plain-str values are
+    accepted for str-subclass annotations (the schema classes, e.g.
+    schema.UserID): callers coerce in place.
     """
     if annotation is inspect.Parameter.empty or annotation is Any:
         return None
@@ -123,6 +124,14 @@ def _is_type_compatible(value: Any, annotation: Any) -> bool | None:
             _is_type_compatible(value, arg) is True
             for arg in typing.get_args(annotation)
         )
+    if origin is typing.Literal:
+        # Literal members are exact values, so membership is directly
+        # checkable — unlike a schema class there is nothing to coerce.
+        # Returning None here would make any `Literal[...] | None`
+        # union reject every non-None value (the NoneType member
+        # always answers False), so this branch is load-bearing for
+        # e.g. the OAuth prompt parameter (#844).
+        return value in typing.get_args(annotation)
     if origin in (list, dict):
         return isinstance(value, origin)
     if isinstance(annotation, type):
