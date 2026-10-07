@@ -172,7 +172,7 @@ def process():
 
 ### `get_request_headers`
 
-Get request headers as a `campus.model.HttpHeader` dictionary.
+Get request headers as a `campus.webauth.models.HttpHeader` dictionary.
 
 ```python
 from campus.flask_campus import get_request_headers
@@ -180,7 +180,7 @@ from campus.flask_campus import get_request_headers
 @app.before_request
 def log_headers():
     headers = get_request_headers()
-    # Returns campus.model.HttpHeader (dict-like)
+    # Returns campus.webauth.models.HttpHeader (dict-like)
 ```
 
 ### `get_user_agent`

@@ -1,9 +1,9 @@
-"""Unit tests for campus.model.http.header authorization models."""
+"""Unit tests for campus.webauth.models.header authorization models."""
 
 import base64
 import unittest
 
-from campus.model.http.header import HttpAuthProperty
+from campus.webauth.models.header import HttpAuthProperty
 
 
 class TestHttpAuthPropertyScheme(unittest.TestCase):

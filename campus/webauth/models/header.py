@@ -1,6 +1,6 @@
-"""campus.model.http.header
+"""campus.webauth.models.header
 
-Campus model representation of HTTP headers.
+Campus webauth representation of HTTP headers.
 """
 
 __all__ = [

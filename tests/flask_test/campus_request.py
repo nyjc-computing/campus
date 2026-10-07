@@ -19,7 +19,7 @@ from urllib.parse import urljoin
 import flask
 from campus_python.json_client.interface import JsonClient
 
-import campus.model
+from campus.webauth.models import HttpHeader
 
 from .response import FlaskTestResponse
 
@@ -171,17 +171,17 @@ class TestCampusRequest(JsonClient):
         return path
 
     @property
-    def headers(self) -> campus.model.HttpHeader:
+    def headers(self) -> HttpHeader:
         """Get the currently configured headers.
 
         Returns the headers that would be sent with requests.
         """
         # Return override headers if set, otherwise load from environment
         if self._override_auth_headers is not None:
-            return campus.model.HttpHeader(**self._override_auth_headers)
+            return HttpHeader(**self._override_auth_headers)
         return self._load_auth_headers()
 
-    def _load_auth_headers(self) -> campus.model.HttpHeader:
+    def _load_auth_headers(self) -> HttpHeader:
         """Load authentication headers from environment variables.
 
         Returns:
@@ -192,16 +192,16 @@ class TestCampusRequest(JsonClient):
         # Try ACCESS_TOKEN first (Bearer auth)
         access_token = env.get("ACCESS_TOKEN")
         if access_token:
-            return campus.model.HttpHeader.from_bearer_token(access_token)
+            return HttpHeader.from_bearer_token(access_token)
 
         # Try CLIENT_ID and CLIENT_SECRET (Basic auth)
         client_id = env.get("CLIENT_ID")
         client_secret = env.get("CLIENT_SECRET")
         if client_id and client_secret:
-            return campus.model.HttpHeader.from_credentials(client_id, client_secret)
+            return HttpHeader.from_credentials(client_id, client_secret)
 
         # Return empty headers for unauthenticated requests
-        return campus.model.HttpHeader()
+        return HttpHeader()
 
     def reset_authorization(self) -> None:
         """Reset authorization back to client credentials from environment.
@@ -221,7 +221,7 @@ class TestCampusRequest(JsonClient):
             client_id: Client ID for basic auth
             secret: Client secret for basic auth
         """
-        self._override_auth_headers = campus.model.HttpHeader.from_credentials(
+        self._override_auth_headers = HttpHeader.from_credentials(
             client_id, secret
         )
 
@@ -231,7 +231,7 @@ class TestCampusRequest(JsonClient):
         Args:
             token: Bearer token
         """
-        self._override_auth_headers = campus.model.HttpHeader.from_bearer_token(
+        self._override_auth_headers = HttpHeader.from_bearer_token(
             token
         )
 

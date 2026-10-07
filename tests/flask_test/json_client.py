@@ -14,7 +14,7 @@ import flask
 
 from campus.common import env
 from campus.common.http.interface import JsonDict, JsonResponse
-from campus.model import HttpHeader
+from campus.webauth.models import HttpHeader
 
 from .campus_request import get_test_app
 from .response import FlaskTestResponse

@@ -86,13 +86,19 @@ Shared modules used by every service:
 - `errors`: error taxonomy (API errors, token errors, validation errors) raised by routes
 - `utils`: general helpers (uids, time, secrets)
 - `env`: environment variable access
-- `validation`, `webauth`, `http`, `devops`: request validation, OAuth2 client flows, HTTP plumbing, deployment helpers
+- `validation`, `http`, `devops`: request validation, HTTP plumbing, deployment helpers
 
 ### `campus.model`
 Entity representation (no business logic):
 - Dataclass definitions (User, Circle, Client, Session, Token, etc.)
-- HTTP headers and credentials
+- Credentials (OAuth tokens, user and app credentials)
 - Pure data structures with keyword-only init
+
+### `campus.webauth`
+Web authentication shared by services (imports model and common):
+- OAuth2 client flows (authorization code, client credentials, device authorization)
+- HTTP Basic/Bearer authentication scheme
+- HTTP header models (`HttpHeader`, `HttpHeaderWithAuth`)
 
 ### `campus.storage`
 Data persistence interfaces:

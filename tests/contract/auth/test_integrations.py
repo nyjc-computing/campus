@@ -28,7 +28,7 @@ from urllib.parse import parse_qs, urlparse
 import campus.model
 from campus.common import env, schema
 from campus.common.errors import api_errors
-from campus.common.webauth.oauth2 import authorization_code as oauth2_scheme
+from campus.webauth.oauth2 import authorization_code as oauth2_scheme
 from tests.fixtures import services
 from tests.fixtures.tokens import get_basic_auth_headers
 

@@ -12,7 +12,8 @@ import werkzeug
 
 import campus.config
 import campus.model
-from campus.common import schema, webauth
+from campus import webauth
+from campus.common import schema
 from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import url
 

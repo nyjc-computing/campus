@@ -1,4 +1,4 @@
-"""campus.common.webauth.oauth2.authorization_code
+"""campus.webauth.oauth2.authorization_code
 
 OAuth2 Authorization Code flow schemas and models.
 

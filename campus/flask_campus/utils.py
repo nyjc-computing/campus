@@ -12,9 +12,9 @@ from typing import (
 
 import flask
 
-import campus.model
 from campus.common.errors import FieldError, ValidationError, api_errors
 from campus.common.validation import record
+from campus.webauth.models import HttpHeader
 
 from . import parameter, types
 
@@ -28,7 +28,7 @@ def get_user_agent() -> str:
     return flask.request.headers.get("User-Agent", "Unknown")
 
 
-def get_request_headers() -> campus.model.HttpHeader:
+def get_request_headers() -> HttpHeader:
     """Get the headers from the Flask request as a dictionary."""
     if not flask.has_request_context():
         raise (
@@ -36,7 +36,7 @@ def get_request_headers() -> campus.model.HttpHeader:
         ) from None
 
     headers_items = list(flask.request.headers.items())
-    result = campus.model.HttpHeader(headers_items)
+    result = HttpHeader(headers_items)
     return result
 
 

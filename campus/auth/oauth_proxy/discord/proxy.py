@@ -11,7 +11,8 @@ import flask
 import werkzeug
 
 import campus.config
-from campus.common import schema, webauth
+from campus import webauth
+from campus.common import schema
 from campus.common.errors import auth_errors
 from campus.common.utils import url
 
