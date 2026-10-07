@@ -3,31 +3,31 @@
 Configuration for Campus base URLs and service mappings.
 
 This module provides environment-aware configuration for service base URLs
-using the common.devops environment enums for consistency.
+using the campus.common.env environment enums for consistency.
 
 Base URLs are bare service origins (no API path suffix); clients append
 the service's own route prefix (e.g. /auth/v1, /audit/v1) themselves.
 """
 
-from campus.common import devops
+from campus.common import env
 
 Url = str
 
 BASE_URLS = {
     "campus.auth": {
-        devops.PRODUCTION: "https://auth.campus.nyjc.app",
-        devops.STAGING: "https://auth.campus.nyjc.dev",
-        devops.DEVELOPMENT: "https://campusauth-development.up.railway.app",
+        env.PRODUCTION: "https://auth.campus.nyjc.app",
+        env.STAGING: "https://auth.campus.nyjc.dev",
+        env.DEVELOPMENT: "https://campusauth-development.up.railway.app",
     },
     "campus.api": {
-        devops.PRODUCTION: "https://api.campus.nyjc.app",
-        devops.STAGING: "https://api.campus.nyjc.dev",
-        devops.DEVELOPMENT: "https://campusapi-development.up.railway.app",
+        env.PRODUCTION: "https://api.campus.nyjc.app",
+        env.STAGING: "https://api.campus.nyjc.dev",
+        env.DEVELOPMENT: "https://campusapi-development.up.railway.app",
     },
     "campus.audit": {
-        devops.PRODUCTION: "https://audit.campus.nyjc.app",
-        devops.STAGING: "https://audit.campus.nyjc.dev",
-        devops.DEVELOPMENT: "https://campusaudit-development.up.railway.app",
+        env.PRODUCTION: "https://audit.campus.nyjc.app",
+        env.STAGING: "https://audit.campus.nyjc.dev",
+        env.DEVELOPMENT: "https://campusaudit-development.up.railway.app",
     },
 }
 
@@ -56,11 +56,10 @@ def get_base_url(app_name: str) -> Url:
         raise ValueError(f"No base URL registered for service: {app_name}")
     # Lazy import: url pulls in flask; keep campus.config importable
     # without a web framework.
-    from campus.common import env
     from campus.common.utils import url
 
-    app_env = env.get("ENV", devops.DEVELOPMENT)
-    if app_env == devops.TESTING:
+    app_env = env.get("ENV", env.DEVELOPMENT)
+    if app_env == env.TESTING:
         return url.canonical_origin()
     url_by_env = BASE_URLS[app_name]
     if app_env not in url_by_env:

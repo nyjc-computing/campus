@@ -9,7 +9,8 @@ from typing import Optional
 
 from flask import Flask
 
-from campus.common import devops, env
+from campus import deploy
+from campus.common import env
 
 from . import api, auth, setup, storage, yapper
 
@@ -67,8 +68,8 @@ class ServiceManager:
         """
         # Ensure we're running in testing mode
         # env.ENV is mutable and can be set for testing purposes
-        if env.get("ENV") != devops.TESTING:
-            env.set('ENV', devops.TESTING)
+        if env.get("ENV") != env.TESTING:
+            env.set('ENV', env.TESTING)
 
         # Set up test environment BEFORE any service initialization
         # This must happen before auth/yapper/api init since they create campus_python.Campus()
@@ -146,7 +147,7 @@ class ServiceManager:
         # "Token only available for Bearer Authentication."
         self._ensure_audit_api_key()
 
-        self.auth_app = devops.deploy.create_app(campus.auth)
+        self.auth_app = deploy.create_app(campus.auth)
         flask_test.configure_for_testing(self.auth_app)
 
         # Register auth app with its base URL and path prefix for test routing
@@ -172,7 +173,7 @@ class ServiceManager:
 
         # Create Flask app for campus.api service
         import campus.api
-        self.apps_app = devops.deploy.create_app(campus.api)
+        self.apps_app = deploy.create_app(campus.api)
         flask_test.configure_for_testing(self.apps_app)
 
         # Register api app with path prefix for test routing
@@ -185,7 +186,7 @@ class ServiceManager:
         # Storage initialization happens in init_app() and in tests
 
         # Create Flask app for campus.audit service
-        self.audit_app = devops.deploy.create_app(campus.audit)
+        self.audit_app = deploy.create_app(campus.audit)
         flask_test.configure_for_testing(self.audit_app)
 
         # Register audit app with path prefix for test routing

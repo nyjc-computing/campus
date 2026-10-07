@@ -1,4 +1,4 @@
-"""Unit tests for devops.deploy route configuration (#842).
+"""Unit tests for campus.deploy route configuration (#842).
 
 Campus convention: every deployment serves a landing page at / and a
 health check at /health. Services with a web UI (campus.audit) provide
@@ -12,8 +12,8 @@ import unittest
 
 import flask
 
+from campus import deploy
 from campus.common import env
-from campus.common.devops import deploy
 
 
 class DeployConfigTestCase(unittest.TestCase):

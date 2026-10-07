@@ -126,8 +126,9 @@ APPLY_RUNNABLE = (APPLIED, FAILED, HISTORICAL)
 # is blocked, so only the runner can have brought the schema up to
 # date — log a startup WARNING when migrations are outstanding.
 # Non-production boots are unchanged: dev self-heals schema via
-# init_from_model. Literal, not devops.PRODUCTION, to keep this module
-# importable without the flask chain (devops imports deploy).
+# init_from_model. Literal, not env.PRODUCTION, to keep this module
+# importable without the campus package (campus.common is imported
+# lazily in warn_if_pending).
 PENDING_WARN_ENVS = ("production",)
 
 
@@ -440,8 +441,8 @@ def warn_if_pending(env_name: str | None = None,
     error).
     """
     if env_name is None:
-        from campus.common import devops
-        env_name = devops.ENV
+        from campus.common import env
+        env_name = env.ENV
     if env_name not in PENDING_WARN_ENVS:
         return []
     try:

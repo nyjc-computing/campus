@@ -32,7 +32,7 @@ from typing import Any
 import psycopg2
 from psycopg2.extras import RealDictCursor, execute_values
 
-from campus.common import devops, env
+from campus.common import env
 from campus.common.utils import datacls
 from campus.model import InternalModel, Model, constraints
 from campus.storage import errors
@@ -532,7 +532,7 @@ class PostgreSQLTable(TableInterface):
                     )
                 conn.commit()
     
-    @devops.block_env(devops.PRODUCTION)
+    @env.block_env(env.PRODUCTION)
     def init_from_model(
             self,
             name: str,
@@ -545,7 +545,7 @@ class PostgreSQLTable(TableInterface):
             cursor.execute(create_table_sql)
             conn.commit()
 
-    @devops.block_env(devops.PRODUCTION)
+    @env.block_env(env.PRODUCTION)
     def init_from_schema(self, schema: str) -> None:
         """Initialize the table with the given SQL schema.
 
@@ -561,7 +561,7 @@ class PostgreSQLTable(TableInterface):
             conn.commit()
 
 
-@devops.block_env(devops.PRODUCTION)
+@env.block_env(env.PRODUCTION)
 def purge_tables() -> None:
     """Purge all tables by dropping and recreating the schema.
 

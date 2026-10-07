@@ -12,7 +12,7 @@ Dot notation examples:
 
 import unittest
 
-from campus.common import devops, env
+from campus.common import env
 from campus.storage.documents.backend.memory import MemoryCollection
 
 
@@ -22,8 +22,8 @@ class TestMemoryCollectionDotNotation(unittest.TestCase):
     def setUp(self):
         """Set up test environment before each test."""
         # Ensure test mode
-        if env.get("ENV") != devops.TESTING:
-            env.set('ENV', devops.TESTING)
+        if env.get("ENV") != env.TESTING:
+            env.set('ENV', env.TESTING)
 
         # Reset storage for clean state
         MemoryCollection.reset_storage()

@@ -83,7 +83,7 @@ from campus.auth import resources as auth_resources
 from campus.api import resources
 
 # Common utilities
-from campus.common import utils, devops
+from campus.common import utils, env
 import campus.storage
 import campus.model as model
 

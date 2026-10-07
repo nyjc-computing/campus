@@ -163,9 +163,9 @@ class APIError(Exception):
         if self.details:
             error_obj["details"] = dict(self.details)
 
-        # Add traceback in development mode for server errors
-        # We can't use campus.common.devops to do an env check here
-        # because it would create a circular import.
+        # Add traceback in development mode for server errors.
+        # os.getenv is used directly rather than campus.common.env to
+        # keep the error taxonomy dependency-light.
         if 500 <= self.status_code < 600:
             import os
             if os.getenv("ENV", "development") == "development":

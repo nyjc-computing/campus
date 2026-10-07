@@ -55,13 +55,13 @@ def ensure_public_client_schema() -> None:
     in production (schema changes go through migrations; apply
     migrations/004, 006, 007 and 008).
     """
-    from campus.common import devops
+    from campus.common import env
     from campus.storage.testing import is_test_mode
 
     if is_test_mode():
         return
 
-    if devops.ENV == devops.PRODUCTION:
+    if env.ENV == env.PRODUCTION:
         return
 
     client_storage.init_from_schema(_CLIENT_SCHEMA_SQL)

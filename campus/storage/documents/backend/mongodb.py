@@ -32,7 +32,7 @@ from pymongo.collection import Collection
 from pymongo.database import Database
 from pymongo.errors import BulkWriteError, DuplicateKeyError
 
-from campus.common import devops, env
+from campus.common import env
 from campus.model.base import Model
 from campus.storage.documents.interface import PK, CollectionInterface
 from campus.storage.errors import ConflictError, NoChangesAppliedError, NotFoundError, StorageError
@@ -364,7 +364,7 @@ class MongoDBCollection(CollectionInterface):
         if result.deleted_count == 0:
             raise NoChangesAppliedError("delete", query, self.name)
 
-    @devops.block_env(devops.PRODUCTION)
+    @env.block_env(env.PRODUCTION)
     def init_collection(self) -> None:
         """Initialize the collection.
 
@@ -386,7 +386,7 @@ class MongoDBCollection(CollectionInterface):
             self._db = None
             self._collection = None
     
-    @devops.block_env(devops.PRODUCTION)
+    @env.block_env(env.PRODUCTION)
     def init_from_model(self, name: str, model: type[Model]) -> None:
         """Initialize the table from a Campus model definition."""
         # Document stores do not need any initialization from model
@@ -395,7 +395,7 @@ class MongoDBCollection(CollectionInterface):
         pass
 
 
-@devops.block_env(devops.PRODUCTION)
+@env.block_env(env.PRODUCTION)
 def purge_collections() -> None:
     """Purge all collections by dropping the entire database.
 

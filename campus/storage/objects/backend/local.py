@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from campus.common import devops
+from campus.common import env
 from campus.storage import errors
 from campus.storage.objects.interface import BucketInterface, ObjectMetadata
 
@@ -298,7 +298,7 @@ class LocalBucket(BucketInterface):
             ) from e
 
 
-@devops.block_env(devops.PRODUCTION)
+@env.block_env(env.PRODUCTION)
 def purge_buckets() -> None:
     """Purge all local bucket storage.
 

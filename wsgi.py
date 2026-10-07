@@ -13,7 +13,7 @@ The deployment mode is determined by the DEPLOY environment variable.
 """
 
 import main
-from campus.common.devops import deploy
+from campus import deploy
 
 # WSGI application instance for production deployment
 app = main.create_app()

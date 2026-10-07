@@ -6,7 +6,7 @@ Test token creation utilities for integration tests.
 import base64
 from contextlib import suppress
 
-from campus.common import devops, env, schema
+from campus.common import env, schema
 
 
 def create_test_token(
@@ -38,8 +38,8 @@ def create_test_token(
     from campus.model import ClientAccess
 
     # Ensure we're in test mode
-    if env.get("ENV") != devops.TESTING:
-        env.set('ENV', devops.TESTING)
+    if env.get("ENV") != env.TESTING:
+        env.set('ENV', env.TESTING)
 
     client_id = env.CLIENT_ID
 

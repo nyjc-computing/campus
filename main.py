@@ -19,7 +19,8 @@ import logging
 
 import flask
 
-from campus.common import devops, env
+from campus import deploy
+from campus.common import env
 from campus.logging_config import configure_logging
 
 # Configure logging with OAuth debugging enabled
@@ -60,11 +61,11 @@ def create_app(mode: str | None = None) -> flask.Flask:
         raise RuntimeError(
             f"Unable to create app for deployment mode '{mode}': {e}"
         ) from e
-    if not isinstance(module, devops.deploy.AppModule):
+    if not isinstance(module, deploy.AppModule):
         raise TypeError(
             f"Module '{mode}' does not fulfill the AppModule protocol."
         )
-    app = devops.deploy.create_app(module)
+    app = deploy.create_app(module)
     # Migrations phase 4 (#747): warn at startup when the ledger shows
     # outstanding migrations. Production-style environments only, and
     # fail-open twice over: warn_if_pending never raises, and the import
@@ -79,8 +80,7 @@ def create_app(mode: str | None = None) -> flask.Flask:
 
 def main(deployment: str | None = None):
     """Development server entry point for testing Campus services locally"""
-    from campus.common import devops
-    assert env.ENV == devops.DEVELOPMENT, (
+    assert env.ENV == env.DEVELOPMENT, (
         "main() should only be called in development environment for "
         "testing purposes"
     )
@@ -89,7 +89,7 @@ def main(deployment: str | None = None):
         env.set('DEPLOY', deployment)
     # Create app instance for development server
     app = create_app(deployment)
-    devops.deploy.configure_for_development(app)
+    deploy.configure_for_development(app)
 
     print("📝 For production deployment, use wsgi.py with Gunicorn")
     host = "0.0.0.0"

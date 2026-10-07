@@ -1,4 +1,4 @@
-"""Unit tests for campus.common.devops.load_dotenv.
+"""Unit tests for campus.common.env.load_dotenv.
 
 These tests verify that .env values are loaded into os.environ so that
 env.get(), env.contains(), env.require() and attribute access all see
@@ -15,7 +15,7 @@ import tempfile
 import unittest
 
 from campus.common import env
-from campus.common.devops import load_dotenv
+from campus.common.env import load_dotenv
 
 DOTENV_VAR = "CAMPUS_TEST_DOTENV_VAR"
 DOTENV_QUOTED_VAR = "CAMPUS_TEST_DOTENV_QUOTED_VAR"
