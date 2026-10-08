@@ -1,20 +1,29 @@
 """campus.common.errors.handlers
 
 Error handler functions for Flask error handling.
+
+These handlers run inside a Flask app, but flask/werkzeug are imported
+lazily (TYPE_CHECKING for annotations, function-local for runtime use)
+so that `campus.common.errors` — and therefore `campus.common` — stays
+importable without a web framework (#861).
 """
+
+from __future__ import annotations
 
 import logging
 import pathlib
 import sys
 import traceback
-
-import flask
-import werkzeug.exceptions
+from typing import TYPE_CHECKING
 
 from campus.common.utils import url
 
 from . import api_errors, auth_errors, token_errors
 from .base import JsonDict
+
+if TYPE_CHECKING:
+    import flask
+    import werkzeug.exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +99,8 @@ def handle_authorization_error(
 
     In development mode, raises BadRequest for ambiguous requests.
     """
+    import flask  # deferred: campus.common must import without flask (#861)
+
     log_error_by_status(err)
 
     # Determine if this is an API request (expects JSON) or OAuth browser flow (expects redirect)
@@ -212,6 +223,8 @@ def handle_werkzeug_error(
 
     Reference: https://flask.palletsprojects.com/en/stable/errorhandling/
     """
+    import werkzeug.exceptions  # deferred: see module docstring (#861)
+
     module = get_caller()
     match err:
         case werkzeug.exceptions.NotFound():
@@ -268,6 +281,8 @@ def init_app(app: flask.Flask) -> None:
 
     This function is used to register the error handlers for the app.
     """
+    import werkzeug.exceptions  # deferred: see module docstring (#861)
+
     app.register_error_handler(
         auth_errors.AuthorizationError, handle_authorization_error
     )
