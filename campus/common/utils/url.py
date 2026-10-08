@@ -1,12 +1,13 @@
 """campus.common.utils.url
 
 This module provides utility functions for URL manipulation and validation.
+
+Only `full_url_for` needs Flask, and it imports it lazily at call time:
+this module must stay importable without a web framework (#861).
 """
 
 import typing
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
-
-import flask
 
 
 def create_url(
@@ -77,16 +78,36 @@ def full_url_for(
 ) -> str:
     """Get the full URL for the current request.
 
+    The only function here that needs Flask: the import is deferred to
+    call time (Python's import machinery loads Flask once; repeated
+    calls pay only a sys.modules lookup).
+
     Args:
         endpoint: The endpoint name (Flask view function name).
         hostname: Optional explicit override. When omitted, the URL is
                   built from the canonical origin (see `canonical_origin`).
         **kwargs: Additional arguments to build the URL. Passed to
                   `url_for`.
+
+    Raises:
+        ImportError: If Flask is not installed. campus.common.utils
+            deliberately does not depend on Flask; either add Flask to
+            the project or use the flask-free helpers (create_url /
+            canonical_origin / add_query).
     """
     # Validate that endpoint does not contain scheme or domain
     if urlparse(endpoint).scheme or urlparse(endpoint).netloc:
         raise ValueError("Endpoint should not contain scheme or domain.")
+    try:
+        import flask
+    except ImportError as exc:
+        raise ImportError(
+            "full_url_for() requires Flask, which is not installed in "
+            "this environment. campus.common.utils does not depend on "
+            "Flask by design: either add Flask to the project, or use "
+            "the flask-free helpers (create_url / canonical_origin / "
+            "add_query)."
+        ) from exc
     if not hostname:
         parse_result = urlparse(canonical_origin())
         protocol = parse_result.scheme

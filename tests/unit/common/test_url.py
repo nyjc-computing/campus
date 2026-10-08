@@ -7,7 +7,11 @@ was removed (#652): deployments that only set HOSTNAME must migrate.
 """
 
 import os
+import subprocess
+import sys
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 import flask
 
@@ -118,6 +122,45 @@ class TestFullUrlFor(_AppContextTestCase):
         with self.app.test_request_context("/login"), \
                 self.assertRaises(ValueError):
             url.full_url_for("https://evil.test/finalize_login")
+
+
+class TestFullUrlForFlaskDependency(unittest.TestCase):
+    """full_url_for is the only flask-requiring function in
+    campus.common.utils; the import is deferred to call time so the
+    module (and campus.common) imports without a web framework (#861).
+    """
+
+    def test_full_url_for_raises_helpful_error_without_flask(self):
+        # Hiding flask from sys.modules simulates a project without
+        # Flask installed; the caller expects a guided ImportError.
+        with patch.dict(sys.modules, {"flask": None}), \
+                self.assertRaises(ImportError) as ctx:
+            url.full_url_for("some_endpoint")
+        self.assertIn("does not depend on Flask", str(ctx.exception))
+
+    def test_import_common_does_not_pull_flask(self):
+        """`import campus.common` must not import flask or werkzeug.
+
+        Runs in a subprocess for a clean sys.modules (this test process
+        imports flask at module scope).
+        """
+        repo_root = Path(__file__).resolve().parents[3]
+        code = (
+            "import sys\n"
+            "import campus.common\n"
+            "pulled = [m for m in ('flask', 'werkzeug') if m in sys.modules]\n"
+            "assert not pulled, f'campus.common pulled in {pulled}'\n"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            cwd=repo_root,
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            f"stderr:\n{result.stderr}",
+        )
 
 
 class TestConfigureForCodespace(unittest.TestCase):
