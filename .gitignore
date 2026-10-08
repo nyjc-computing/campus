@@ -180,3 +180,6 @@ replit.nix
 
 # System files
 *.DS_Store
+
+# Git worktrees (in-repo worktree directories)
+.worktrees/
