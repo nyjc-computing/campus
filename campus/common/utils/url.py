@@ -2,8 +2,27 @@
 
 This module provides utility functions for URL manipulation and validation.
 
-Only `full_url_for` needs Flask, and it imports it lazily at call time:
-this module must stay importable without a web framework (#861).
+**Flask is not a dependency of this module** (nor of the rest of
+campus.common): importing this module must succeed in any project,
+flask-less ones included (#861). The one function that needs Flask,
+`full_url_for`, imports it lazily at call time and raises a guided
+ImportError when it is missing.
+
+Rationale: `full_url_for` is request-context work — every caller already
+runs inside a Flask app — while this module is imported at package scope
+by campus.common, which must not pay for a web framework at import time.
+Python loads an imported module exactly once, so the per-call
+`import flask` costs only a sys.modules lookup after the first call;
+there is nothing further to cache.
+
+Caveats:
+- Do NOT hoist the flask import to module level — not even as a tidy-up
+  or because tooling suggests reordering. That silently reinstates the
+  campus.common→flask edge (#861).
+- A call-time dependency means a call-time failure: anything that calls
+  `full_url_for` needs test coverage exercising the Flask-present path,
+  while this module's tests cover the Flask-absent error path (see
+  TestFullUrlForFlaskDependency in tests/unit/common/test_url.py).
 """
 
 import typing
@@ -98,6 +117,14 @@ def full_url_for(
     # Validate that endpoint does not contain scheme or domain
     if urlparse(endpoint).scheme or urlparse(endpoint).netloc:
         raise ValueError("Endpoint should not contain scheme or domain.")
+    # flask is imported HERE, at call time — not at module level. That is
+    # a deliberate pattern, not an oversight: campus.common must import
+    # without Flask (#861). If you are editing this function, keep the
+    # import local; hoisting it to module level reinstates the
+    # campus.common→flask edge and breaks flask-less consumers at import
+    # time. Python loads the module once, so this costs only a
+    # sys.modules lookup per call. See the module docstring for the full
+    # rationale and the test-coverage caveat.
     try:
         import flask
     except ImportError as exc:

@@ -2,10 +2,22 @@
 
 Error handler functions for Flask error handling.
 
-These handlers run inside a Flask app, but flask/werkzeug are imported
-lazily (TYPE_CHECKING for annotations, function-local for runtime use)
-so that `campus.common.errors` — and therefore `campus.common` — stays
-importable without a web framework (#861).
+**Flask is not a dependency of this module** (nor of the rest of
+campus.common): importing this module must succeed in any project,
+flask-less ones included (#861). These handlers only ever RUN inside a
+live Flask app's error path, so flask/werkzeug are imported lazily —
+TYPE_CHECKING for the annotations (`from __future__ import annotations`
+makes them evaluate lazily at runtime), function-local for the runtime
+uses in the handlers below.
+
+Caveats:
+- Do NOT hoist the flask/werkzeug imports to module level — not even as
+  a tidy-up or because tooling suggests reordering. That silently
+  reinstates the campus.common→flask edge (#861).
+- New handlers must import flask/werkzeug inside the function that uses
+  them (same pattern as the existing ones), and need test coverage
+  exercising the Flask-present path — the error-response suites in
+  tests/unit/common/ and tests/contract/ cover the existing handlers.
 """
 
 from __future__ import annotations
@@ -22,6 +34,10 @@ from . import api_errors, auth_errors, token_errors
 from .base import JsonDict
 
 if TYPE_CHECKING:
+    # Annotation-only names. Do NOT merge these into module-level runtime
+    # imports: hoisting flask/werkzeug reinstates the campus.common→flask
+    # edge that this module exists to avoid (#861). See the module
+    # docstring for the rationale and the test-coverage caveat.
     import flask
     import werkzeug.exceptions
 
@@ -99,7 +115,7 @@ def handle_authorization_error(
 
     In development mode, raises BadRequest for ambiguous requests.
     """
-    import flask  # deferred: campus.common must import without flask (#861)
+    import flask  # deferred, do not hoist (#861) — see module docstring
 
     log_error_by_status(err)
 
@@ -223,7 +239,7 @@ def handle_werkzeug_error(
 
     Reference: https://flask.palletsprojects.com/en/stable/errorhandling/
     """
-    import werkzeug.exceptions  # deferred: see module docstring (#861)
+    import werkzeug.exceptions  # deferred, do not hoist (#861) — see module docstring
 
     module = get_caller()
     match err:
@@ -281,7 +297,7 @@ def init_app(app: flask.Flask) -> None:
 
     This function is used to register the error handlers for the app.
     """
-    import werkzeug.exceptions  # deferred: see module docstring (#861)
+    import werkzeug.exceptions  # deferred, do not hoist (#861) — see module docstring
 
     app.register_error_handler(
         auth_errors.AuthorizationError, handle_authorization_error
