@@ -406,7 +406,8 @@ CLIs and other input-constrained clients use RFC 8628 instead
 4. The CLI polls `POST /auth/v1/oauth/token` with
    `grant_type=urn:ietf:params:oauth:grant-type:device_code` until it
    gets tokens (10 min code TTL, 5 s poll interval). Device-code
-   scopes are fixed to `read write` and validated against the
+   scopes default to `read write`; the request may carry an explicit
+   `scope` (campus-cli `--scope`, #865), validated against the
    client's `allowed_scopes` allowlist at request time and again at
    issuance.
 

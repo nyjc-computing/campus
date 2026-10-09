@@ -195,3 +195,47 @@ class TestScopeAlgebraContract(unittest.TestCase):
             json={"client_id": "guest"},
         )
         self.assertEqual(seeded_response.status_code, 200)
+
+    def test_device_authorize_scope_parameter(self):
+        """A7/A1: an explicit device-code scope is allowlist-validated.
+
+        campus-cli passes --scope through to device_authorize (#865):
+        the requested scopes must lie within the client's allowlist,
+        and an absent scope keeps the default CLI set.
+        """
+        client_id = self._create_client(
+            [REGISTERED_URI], ["read", "clients:write"]
+        )
+
+        # In-allowlist request: accepted.
+        response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            json={"client_id": client_id, "scope": "read"},
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # Out-of-allowlist request: rejected fail-closed.
+        response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            json={"client_id": client_id, "scope": "read clients:admin"},
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
+
+        # An absent scope still validates the default CLI set against
+        # the allowlist: this client's lacks "write", so it fails.
+        response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            json={"client_id": client_id},
+        )
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "AUTH_INVALID_SCOPE")
+
+        # The seeded public client covers the default set.
+        seeded_response = self.client.post(
+            "/auth/v1/oauth/device_authorize",
+            json={"client_id": "guest", "scope": "read"},
+        )
+        self.assertEqual(seeded_response.status_code, 200)
