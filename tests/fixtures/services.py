@@ -269,6 +269,8 @@ class ServiceManager:
             env.delete("ACCESS_TOKEN")
         if env.contains("AUTH_OPERATOR_CLIENT_IDS"):
             env.delete("AUTH_OPERATOR_CLIENT_IDS")
+        if env.contains("AUTH_ADMIN_USER_IDS"):
+            env.delete("AUTH_ADMIN_USER_IDS")
 
         # Clean up audit client configuration
         from campus.audit.client import AuditClient
@@ -384,6 +386,8 @@ class ServiceManager:
             env.delete("ACCESS_TOKEN")
         if env.contains("AUTH_OPERATOR_CLIENT_IDS"):
             env.delete("AUTH_OPERATOR_CLIENT_IDS")
+        if env.contains("AUTH_ADMIN_USER_IDS"):
+            env.delete("AUTH_ADMIN_USER_IDS")
 
     # === NEW LIFECYCLE API (Issue #518) ===
     # These methods provide a cleaner, more predictable lifecycle for integration tests.

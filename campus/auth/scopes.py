@@ -7,11 +7,12 @@ client's registered allowlist (`Client.allowed_scopes`, fail-closed).
 These helpers are the single implementation of that algebra so the
 session, authorization-code, and device-code paths cannot drift.
 
-Invariants: docs/auth-token-invariants.md A1-A7.
+Invariants: docs/auth-token-invariants.md A1-A8.
 """
 
 __all__ = [
     "covers",
+    "grants",
     "parse",
     "parse_upstream",
     "union",
@@ -20,6 +21,15 @@ __all__ = [
 ]
 
 from campus.common.errors import auth_errors
+
+# Management-scope levels for the <resource>:<level> convention (#865).
+# A higher level implies the lower ones on the same resource: a token
+# granted clients:admin satisfies a clients:read requirement.
+_SCOPE_LEVELS = {
+    "read": 0,
+    "write": 1,
+    "admin": 2,
+}
 
 
 def parse(value: str | list[str] | None) -> list[str]:
@@ -57,6 +67,30 @@ def parse_upstream(
 def covers(granted: list[str], requested: list[str]) -> bool:
     """Return True if every requested scope is in the granted set."""
     return set(requested) <= set(granted)
+
+
+def grants(granted: list[str], required: str) -> bool:
+    """Return True if the granted scopes confer `required` (#865).
+
+    Management scopes follow the `<resource>:<read|write|admin>`
+    convention and are monotonic within a resource: `clients:admin`
+    satisfies a `clients:write` requirement, which satisfies
+    `clients:read`. Scopes of a different resource never match, and a
+    required scope outside the convention needs an exact match.
+    """
+    resource, _, level = required.partition(":")
+    required_level = _SCOPE_LEVELS.get(level)
+    if required_level is None:
+        return required in granted
+    for scope in granted:
+        scope_resource, sep, scope_level = scope.partition(":")
+        if (
+                sep
+                and scope_resource == resource
+                and _SCOPE_LEVELS.get(scope_level, -1) >= required_level
+        ):
+            return True
+    return False
 
 
 def union(*scope_sets: list[str]) -> list[str]:

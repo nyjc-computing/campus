@@ -93,12 +93,19 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
             str(err),
             error_code=ErrorConstant.AUTH_TOKEN_INVALID,
         ) from None
+    token = credentials.token
     return {
         "client": client,
         # Bearer authentication carries the user context (the token's
         # owner); basic (client-credentials) auth has none. The token
         # bridge uses this to bind releases to the authenticated user.
-        "user": {"id": str(credentials.user_id)},
+        # Scopes ride along for the management-scope gates (#865):
+        # authz reads them from this dict, fail-closed (missing token
+        # record or no scopes means no management authority).
+        "user": {
+            "id": str(credentials.user_id),
+            "scopes": list(token.scopes) if token else [],
+        },
     }
 
 

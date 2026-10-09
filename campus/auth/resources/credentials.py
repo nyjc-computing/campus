@@ -132,11 +132,15 @@ class ProviderCredentialsResource:
     def get(self, token_id: str) -> model.UserCredentials:
         """Get credentials by token ID.
 
+        The linked token record is loaded onto the returned credential
+        so callers see the granted scopes (bearer authentication needs
+        them for the management-scope gates, #865).
+
         Args:
             token_id: The token identifier
 
         Returns:
-            UserCredentials instance
+            UserCredentials instance with its token loaded
         """
         query: dict[str, str] = {
             "provider": self.provider,
@@ -148,7 +152,12 @@ class ProviderCredentialsResource:
                 f"Credentials for provider {self.provider} "
                 f"and token {token_id} not found."
             )
-        return model.UserCredentials.from_storage(records[0])
+        credentials = model.UserCredentials.from_storage(records[0])
+        if credentials.token_id:
+            token_record = token_storage.get_by_id(credentials.token_id)
+            if token_record:
+                credentials.token = model.OAuthToken.from_storage(token_record)
+        return credentials
 
     def get_by_refresh_token(
             self,

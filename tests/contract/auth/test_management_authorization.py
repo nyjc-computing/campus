@@ -1,4 +1,4 @@
-"""HTTP contract tests for management-route authorization (#854).
+"""HTTP contract tests for management-route authorization (#854, #865).
 
 These tests verify that the management blueprints (vaults, clients,
 users, credentials) authorize, not merely authenticate:
@@ -9,11 +9,13 @@ users, credentials) authorize, not merely authenticate:
   operator-controlled fields (allowed_scopes, upstream_scopes,
   token_bridge) or vault-access grants;
 - user bearer tokens are denied on every management route regardless
-  of their scopes.
+  of their scopes — except designated admin users (#865) acting on
+  the clients blueprint with the matching management scope: both the
+  AUTH_ADMIN_USER_IDS listing and the scope are required, ANDed.
 
 The fixtures make the default test client (env.CLIENT_ID) the
-deployment operator; a second "limited" confidential client and a user
-bearer token exercise the denied shapes.
+deployment operator; a second "limited" confidential client and user
+bearer tokens exercise the denied shapes.
 """
 
 import unittest
@@ -36,6 +38,8 @@ PRIVATE_VAULT = "authz-private-label"
 # Throwaway label for the operator grant test, so the limited client's
 # SHARED grant stays READ-only regardless of test execution order.
 GRANT_VAULT = "authz-grant-label"
+# Throwaway label for the #865 admin-user vault-access grant tests.
+ADMIN_GRANT_VAULT = "authz-admin-grant-label"
 
 
 class TestManagementAuthorization(unittest.TestCase):
@@ -357,6 +361,308 @@ class TestManagementAuthorization(unittest.TestCase):
             "/auth/v1/credentials/campus/", headers=self.operator_headers
         )
         self.assertEqual(response.status_code, 200)
+
+
+class TestDesignatedAdminUsers(unittest.TestCase):
+    """Management-scope authorization for designated admin users (#865).
+
+    The issue's test matrix, per gated clients route: a user principal
+    acts only when BOTH legs hold — its id is listed in
+    AUTH_ADMIN_USER_IDS AND its token carries the required management
+    scope. Designation without the scope and scope without designation
+    are both 403, with messages that distinguish the failed leg.
+
+    Operator-client and client-self-service behavior are asserted
+    unchanged by TestManagementAuthorization. Every user token here is
+    minted through the operator client itself (env.CLIENT_ID is the
+    operator in these fixtures), so the non-designated denials also
+    prove a user never inherits the operator role of the client it was
+    minted through (#854).
+    """
+
+    # The designated admins (listed in AUTH_ADMIN_USER_IDS — one per
+    # scope variant, since a user's credentials row holds a single
+    # live token) and a regular user (not listed) carrying every
+    # clients:* scope: scope alone must never confer authority.
+    ADMIN_USER_IDS = [
+        "authz.865.admin.read@campus.test",
+        "authz.865.admin.write@campus.test",
+        "authz.865.admin.admin@campus.test",
+        # Designated but holding only generic end-user scopes: the
+        # capability leg fails.
+        "authz.865.admin.plain@campus.test",
+    ]
+    OTHER_USER = "authz.865.other@campus.test"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.auth_app
+
+        # Another client's record for the cross-client read/write tests.
+        cls.limited_id, cls.limited_secret = create_test_client_credentials(
+            name="authz-865-limited-client",
+            description="Non-operator client for #865 admin-user tests",
+        )
+        # A dedicated target the admin user may mutate freely (secret
+        # rotation, scope caps, deletion); operator-registered so the
+        # tests never widen the limited client's authority.
+        suffix = uuid.uuid4().hex[:8]
+        response = cls.app.test_client().post(
+            "/auth/v1/clients/",
+            json={
+                "name": f"authz-865-target-{suffix}",
+                "description": "Admin-user mutation target (#865)",
+            },
+            headers=get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET),
+        )
+        assert response.status_code == 200, response.get_json()
+        cls.target_id = response.get_json()["id"]
+
+        # One token per user (the credentials row holds a single live
+        # token), so the designated legs are separate users per scope;
+        # the non-designated user carries every clients:* scope at once
+        # to prove scope alone suffices for nothing.
+        cls.admin_read = create_test_token(
+            cls.ADMIN_USER_IDS[0], scopes=["clients:read"]
+        )
+        cls.admin_write = create_test_token(
+            cls.ADMIN_USER_IDS[1], scopes=["clients:write"]
+        )
+        cls.admin_admin = create_test_token(
+            cls.ADMIN_USER_IDS[2], scopes=["clients:admin"]
+        )
+        cls.admin_plain = create_test_token(
+            cls.ADMIN_USER_IDS[3], scopes=["read", "write"]
+        )
+        cls.other_all = create_test_token(
+            cls.OTHER_USER,
+            scopes=["clients:read", "clients:write", "clients:admin"],
+        )
+
+        # Leg 1 (identity): the designated users, listed at request
+        # time (comma-separated). Unset/empty means no user admins —
+        # asserted explicitly by test_empty_allowlist_denies_designated_user.
+        env.set("AUTH_ADMIN_USER_IDS", ",".join(cls.ADMIN_USER_IDS))
+
+    @classmethod
+    def tearDownClass(cls):
+        if env.contains("AUTH_ADMIN_USER_IDS"):
+            env.delete("AUTH_ADMIN_USER_IDS")
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self.admin_read_headers = get_bearer_auth_headers(self.admin_read)
+        self.admin_write_headers = get_bearer_auth_headers(self.admin_write)
+        self.admin_admin_headers = get_bearer_auth_headers(self.admin_admin)
+        self.admin_plain_headers = get_bearer_auth_headers(self.admin_plain)
+        self.other_all_headers = get_bearer_auth_headers(self.other_all)
+        self.operator_headers = get_basic_auth_headers(
+            env.CLIENT_ID, env.CLIENT_SECRET
+        )
+
+    def assert_forbidden(self, response):
+        """Assert a 403 with the standard FORBIDDEN error envelope."""
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "FORBIDDEN")
+        return data["error"]["message"]
+
+    # --- clients:read — list and get any record ---
+
+    def test_read_matrix(self):
+        """Designated+scope acts; each single-leg denial is 403."""
+        for path in ("/auth/v1/clients/",
+                     f"/auth/v1/clients/{self.limited_id}/"):
+            response = self.client.get(path, headers=self.admin_read_headers)
+            self.assertEqual(response.status_code, 200)
+
+            # clients:write implies read (scopes.grants implication).
+            response = self.client.get(path, headers=self.admin_write_headers)
+            self.assertEqual(response.status_code, 200)
+
+            response = self.client.get(path, headers=self.admin_plain_headers)
+            message = self.assert_forbidden(response)
+            self.assertIn("clients:read", message)
+
+            response = self.client.get(path, headers=self.other_all_headers)
+            message = self.assert_forbidden(response)
+            self.assertIn("designated admin", message)
+
+    def test_read_unlisted_scope_implied_by_admin(self):
+        """clients:admin also implies clients:read."""
+        response = self.client.get(
+            "/auth/v1/clients/", headers=self.admin_admin_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
+    # --- clients:write — benign fields on any client ---
+
+    def test_write_matrix(self):
+        """PATCH of a benign field follows the same two-leg matrix."""
+        response = self.client.patch(
+            f"/auth/v1/clients/{self.limited_id}/",
+            json={"description": "Updated by clients:write admin (#865)"},
+            headers=self.admin_write_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.patch(
+            f"/auth/v1/clients/{self.limited_id}/",
+            json={"description": "x"},
+            headers=self.admin_read_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:write", message)
+
+        response = self.client.patch(
+            f"/auth/v1/clients/{self.limited_id}/",
+            json={"description": "x"},
+            headers=self.other_all_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("designated admin", message)
+
+    def test_write_cannot_touch_operator_only_fields(self):
+        """clients:write stays below the scope caps; clients:admin may."""
+        response = self.client.patch(
+            f"/auth/v1/clients/{self.target_id}/",
+            json={"allowed_scopes": ["read"]},
+            headers=self.admin_write_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
+
+        response = self.client.patch(
+            f"/auth/v1/clients/{self.target_id}/",
+            json={"allowed_scopes": ["read"]},
+            headers=self.admin_admin_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+    # --- clients:admin — register, rotate, delete, vault grants ---
+
+    def test_admin_registers_and_deletes(self):
+        """Designated+clients:admin registers a client; write cannot."""
+        suffix = uuid.uuid4().hex[:8]
+        response = self.client.post(
+            "/auth/v1/clients/",
+            json={
+                "name": f"authz-865-registered-{suffix}",
+                "description": "Registered by a clients:admin user (#865)",
+            },
+            headers=self.admin_write_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
+
+        response = self.client.post(
+            "/auth/v1/clients/",
+            json={
+                "name": f"authz-865-registered-{suffix}",
+                "description": "Registered by a clients:admin user (#865)",
+            },
+            headers=self.other_all_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("designated admin", message)
+
+        response = self.client.post(
+            "/auth/v1/clients/",
+            json={
+                "name": f"authz-865-registered-{suffix}",
+                "description": "Registered by a clients:admin user (#865)",
+            },
+            headers=self.admin_admin_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        registered_id = response.get_json()["id"]
+
+        # Deletion is clients:admin too — including on this registered
+        # client, and for the client itself.
+        response = self.client.delete(
+            f"/auth/v1/clients/{registered_id}/",
+            json={},
+            headers=self.admin_admin_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_admin_rotates_secrets(self):
+        """Secret rotation is clients:admin, not clients:write."""
+        response = self.client.post(
+            f"/auth/v1/clients/{self.target_id}/revoke",
+            json={},
+            headers=self.admin_write_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
+
+        response = self.client.post(
+            f"/auth/v1/clients/{self.target_id}/revoke",
+            json={},
+            headers=self.admin_admin_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("secret", response.get_json())
+
+    def test_admin_administers_vault_access(self):
+        """Vault-access grants are clients:admin; views are read."""
+        response = self.client.get(
+            f"/auth/v1/clients/{self.target_id}/access/",
+            headers=self.admin_read_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            f"/auth/v1/clients/{self.target_id}/access/grant",
+            json={"vault": ADMIN_GRANT_VAULT, "permission": ClientAccess.READ},
+            headers=self.admin_write_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
+
+        response = self.client.post(
+            f"/auth/v1/clients/{self.target_id}/access/grant",
+            json={"vault": ADMIN_GRANT_VAULT, "permission": ClientAccess.READ},
+            headers=self.other_all_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("designated admin", message)
+
+        response = self.client.post(
+            f"/auth/v1/clients/{self.target_id}/access/grant",
+            json={"vault": ADMIN_GRANT_VAULT, "permission": ClientAccess.READ},
+            headers=self.admin_admin_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+    # --- reserved vocabularies and fail-closed defaults ---
+
+    def test_reserved_vocabularies_deny_users(self):
+        """vaults/users/credentials stay operator-only (#865 phasing)."""
+        for method, path, kwargs in (
+            ("get", "/auth/v1/users/", {}),
+            ("get", "/auth/v1/credentials/campus/", {}),
+            ("get", f"/auth/v1/vaults/{SHARED_VAULT}/", {}),
+        ):
+            response = getattr(self.client, method)(
+                path, headers=self.admin_admin_headers, **kwargs
+            )
+            self.assert_forbidden(response)
+
+    def test_empty_allowlist_denies_designated_user(self):
+        """An unset allowlist means no user admins (deploy is a no-op)."""
+        env.delete("AUTH_ADMIN_USER_IDS")
+        self.addCleanup(
+            env.set, "AUTH_ADMIN_USER_IDS", ",".join(self.ADMIN_USER_IDS)
+        )
+        response = self.client.get(
+            "/auth/v1/clients/", headers=self.admin_read_headers
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("designated admin", message)
 
 
 if __name__ == '__main__':

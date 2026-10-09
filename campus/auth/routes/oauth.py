@@ -71,12 +71,14 @@ def unpack_oauth_request(func):
 @unpack_oauth_request
 def device_authorize(
         client_id: schema.CampusID,
+        scope: str | None = None,
 ) -> flask_campus.JsonResponse:
     """Request a device code for OAuth 2.0 Device Authorization Flow.
 
     POST /oauth/device_authorize
     Body: {
-        "client_id": "guest"
+        "client_id": "guest",
+        "scope": "read write"  # Optional
     }
     Returns: {
         "device_code": "...",
@@ -86,6 +88,12 @@ def device_authorize(
         "expires_in": 600,
         "interval": 5
     }
+
+    An absent or empty scope defaults to the standard CLI scope set
+    (invariant A1: the default is still validated against the client's
+    allowlist). Callers such as campus-cli pass --scope through here
+    (#865); the requested scopes must lie within the client's
+    registered allowlist or the request is rejected with invalid_scope.
 
     Reference: https://datatracker.ietf.org/doc/html/rfc8628#section-3.1
     """
@@ -105,13 +113,17 @@ def device_authorize(
 
     # Fail-closed scope allowlist (invariant A7,
     # docs/auth-token-invariants.md): a device code may only carry
-    # scopes within the client's registered allowlist.
-    scopes.validate_for_client(client.allowed_scopes, DEFAULT_CLI_SCOPES)
+    # scopes within the client's registered allowlist — including the
+    # default CLI set when no scope was requested.
+    requested_scopes = scopes.validate_for_client(
+        client.allowed_scopes,
+        scope if scope else DEFAULT_CLI_SCOPES,
+    )
 
     # Create device code
     device_code = device_code_resource.create(
         client_id=client_id,
-        scopes=DEFAULT_CLI_SCOPES,
+        scopes=requested_scopes,
     )
 
     # Build verification URIs from the canonical public origin

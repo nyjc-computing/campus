@@ -15,7 +15,15 @@ not just authenticated (#854):
   redirect_uris — never the scope caps or token_bridge), rotate its
   own secret, and list clients (ids and display names only — the audit
   UI resolves client names this way);
-- user bearer tokens are denied on every route regardless of scope.
+- designated admin users (#865) may act with their own user
+  credentials where the route's management scope matches their token:
+  clients:read to list/get any record (including vault-access views),
+  clients:write to update benign fields on any client, clients:admin
+  to register, delete, rotate secrets, set scope caps and administer
+  vault-access grants. Both the AUTH_ADMIN_USER_IDS listing and the
+  scope are required (ANDed, fail-closed);
+- any other user bearer token is denied on every route regardless of
+  scope.
 
 Authentication is handled in a global routes.before_request hook.
 """
@@ -47,8 +55,8 @@ def new(
     """Register a new client.
 
     POST /clients/
-    Authorization: operator only (#854) — client registration mints a
-    new principal.
+    Authorization: operator only, plus designated admin users holding
+    clients:admin (#865) — client registration mints a new principal.
 
     Body: {
         "name": "Client Name",
@@ -85,7 +93,9 @@ def new(
     release endpoint (invariant C1): confidential clients only, never
     public ones.
     """
-    authz.require_operator("register clients")
+    authz.require_operator(
+        "register clients", admin_scope=authz.CLIENTS_ADMIN
+    )
     if is_public and token_bridge:
         raise api_errors.InvalidRequestError(
             "Public clients cannot be granted token bridge access",
@@ -109,10 +119,11 @@ def list_all() -> flask_campus.JsonResponse:
     """List all clients
 
     GET /clients
-    Authorization: any client principal (#854) — the resource carries
-    display metadata only (no secret material), and the audit UI
-    resolves client ids to names through this route. User bearer
-    tokens are denied.
+    Authorization: any client principal (#854), or a designated admin
+    user with clients:read (#865) — the resource carries display
+    metadata only (no secret material), and the audit UI resolves
+    client ids to names through this route. Other user bearer tokens
+    are denied.
 
     Returns: {
         "clients": [
@@ -125,7 +136,9 @@ def list_all() -> flask_campus.JsonResponse:
         ]
     }
     """
-    authz.forbid_user_principal("list clients")
+    # Designated admin users with clients:read may list too (#865);
+    # any client principal keeps its existing listing authority.
+    authz.require_admin_user(authz.CLIENTS_READ, "list clients")
     clients = [
         client.to_resource()
         for client in client_resource.list_all()
@@ -139,12 +152,15 @@ def delete_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Delete a client
 
     DELETE /clients/{client_id}
-    Authorization: operator only (#854) — even the client itself may
-    not delete its own record.
+    Authorization: operator only, or a designated admin user with
+    clients:admin (#865) — even the client itself may not delete its
+    own record.
 
     Returns: {}
     """
-    authz.require_operator("delete clients")
+    authz.require_operator(
+        "delete clients", admin_scope=authz.CLIENTS_ADMIN
+    )
     client_resource[client_id].delete()
     get_yapper().emit('campus.clients.delete', {"client_id": client_id})
     return {}, 200
@@ -156,7 +172,8 @@ def get_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
     """Get details of a specific client
 
     GET /clients/{client_id}
-    Authorization: the client itself, or operator (#854).
+    Authorization: the client itself, or operator (#854), or a
+    designated admin user with clients:read (#865).
 
     Returns: {
         "client": {
@@ -167,7 +184,9 @@ def get_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
         }
     }
     """
-    authz.require_self_or_operator(client_id, "view")
+    authz.require_self_or_operator(
+        client_id, "view", admin_scope=authz.CLIENTS_READ
+    )
     client = client_resource[client_id].get()
     return client.to_resource(), 200
 
@@ -179,11 +198,16 @@ def revoke_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
 
     POST /clients/{client_id}/revoke
     Authorization: the client itself (rotating its own credential is
-    self-management), or operator (#854).
+    self-management), or operator (#854), or a designated admin user
+    with clients:admin (#865).
 
     Returns: {"secret": new_secret}
     """
-    authz.require_self_or_operator(client_id, "rotate the secret of")
+    authz.require_self_or_operator(
+        client_id,
+        "rotate the secret of",
+        admin_scope=authz.CLIENTS_ADMIN,
+    )
     new_secret = client_resource[client_id].revoke()
     get_yapper().emit("campus.clients.revoke", {"client_id": client_id})
     return {"secret": new_secret}, 200
@@ -205,7 +229,9 @@ def update_client(
     PATCH /clients/{client_id}
     Authorization: the client itself may update its profile fields
     (name, description, redirect_uris) but not its scope caps or the
-    token-bridge flag; the operator may update everything (#854).
+    token-bridge flag; the operator may update everything (#854);
+    designated admin users may update benign fields with clients:write
+    and the scope caps with clients:admin (#865).
 
     Body: {
         "name": "New Client Name",
@@ -234,13 +260,17 @@ def update_client(
     token_bridge are operator-controlled: a self-managing client
     changing them is rejected (403).
     """
-    authz.require_self_or_operator(client_id, "update")
-    if not authz.is_operator():
-        authz.require_operator_only_client_fields({
-            "allowed_scopes": allowed_scopes,
-            "upstream_scopes": upstream_scopes,
-            "token_bridge": token_bridge,
-        })
+    authz.require_self_or_operator(
+        client_id, "update", admin_scope=authz.CLIENTS_WRITE
+    )
+    # Raises unless the caller is the operator client or a designated
+    # admin user holding clients:admin (allowed_scopes/upstream_scopes/
+    # token_bridge are never self-service, #865).
+    authz.require_operator_only_client_fields({
+        "allowed_scopes": allowed_scopes,
+        "upstream_scopes": upstream_scopes,
+        "token_bridge": token_bridge,
+    })
     updates = {}
     if name is not None:
         updates["name"] = name
@@ -280,14 +310,19 @@ def get_client_access(
     """Check a client's access.
 
     GET /clients/{client_id}/access
-    Authorization: the client itself, or operator (#854).
+    Authorization: the client itself, or operator (#854), or a
+    designated admin user with clients:read (#865).
 
     Returns: {
         "client_id": "client_abc123",
         "access": int
     }
     """
-    authz.require_self_or_operator(client_id, "view the vault access of")
+    authz.require_self_or_operator(
+        client_id,
+        "view the vault access of",
+        admin_scope=authz.CLIENTS_READ,
+    )
     if vault:
         access = client_resource[client_id].access.get(vault)
         return {"vault": vault, "access": access}, 200
@@ -306,14 +341,19 @@ def check_client_access(
     """Check a client's access.
 
     GET /clients/{client_id}/access/check
-    Authorization: the client itself, or operator (#854).
+    Authorization: the client itself, or operator (#854), or a
+    designated admin user with clients:read (#865).
 
     Returns: {
         "client_id": "client_abc123",
         "has_access": true
     }
     """
-    authz.require_self_or_operator(client_id, "check the vault access of")
+    authz.require_self_or_operator(
+        client_id,
+        "check the vault access of",
+        admin_scope=authz.CLIENTS_READ,
+    )
     has_access = client_resource[client_id].access.check(
         vault_label=vault,
         permission=permission
@@ -355,8 +395,9 @@ def grant_client_access(
     """Grant a client access to a vault.
 
     POST /clients/{client_id}/access/grant
-    Authorization: operator only (#854) — vault access administration
-    is never self-service, not even on the client's own record.
+    Authorization: operator only (#854), or a designated admin user
+    with clients:admin (#865) — vault access administration is never
+    self-service, not even on the client's own record.
 
     Body: {
         "vault": "vault_label",
@@ -368,7 +409,9 @@ def grant_client_access(
         "permission": updated_permission[int]
     }
     """
-    authz.require_operator("grant vault access")
+    authz.require_operator(
+        "grant vault access", admin_scope=authz.CLIENTS_ADMIN
+    )
     client_resource[client_id].access.grant(
         vault_label=vault,
         permission=permission
@@ -388,7 +431,8 @@ def revoke_client_access(
     """Revoke a client's access to a vault.
 
     POST /clients/{client_id}/access/revoke
-    Authorization: operator only (#854).
+    Authorization: operator only (#854), or a designated admin user
+    with clients:admin (#865).
 
     Body: {
         "vault": "vault_label",
@@ -400,7 +444,9 @@ def revoke_client_access(
         "permission": updated_permission[int]
     }
     """
-    authz.require_operator("revoke vault access")
+    authz.require_operator(
+        "revoke vault access", admin_scope=authz.CLIENTS_ADMIN
+    )
     client_resource[client_id].access.revoke(
         vault_label=vault,
         permission=permission
@@ -420,7 +466,8 @@ def update_client_access(
     """Update (replace) a client's access permissions for a vault.
 
     PATCH /clients/{client_id}/access/
-    Authorization: operator only (#854).
+    Authorization: operator only (#854), or a designated admin user
+    with clients:admin (#865).
 
     Body: {
         "vault": "vault_label",
@@ -432,7 +479,9 @@ def update_client_access(
         "permission": updated_permission[int]
     }
     """
-    authz.require_operator("update vault access")
+    authz.require_operator(
+        "update vault access", admin_scope=authz.CLIENTS_ADMIN
+    )
     client_resource[client_id].access.update(
         vault_label=vault,
         permission=permission
