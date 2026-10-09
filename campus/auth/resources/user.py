@@ -156,4 +156,10 @@ class UserResource:
             NotFoundError: If user not found
         """
         model.User.validate_update(updates)
-        user_storage.update_by_id(self.user_id, updates)
+        try:
+            user_storage.update_by_id(self.user_id, updates)
+        except campus.storage.errors.NotFoundError:
+            raise api_errors.NotFoundError(
+                f"User '{self.user_id}' not found",
+                user_id=self.user_id
+            ) from None

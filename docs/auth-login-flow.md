@@ -414,7 +414,11 @@ CLIs and other input-constrained clients use RFC 8628 instead
    scopes default to `read write`; the request may carry an explicit
    `scope` (campus-cli `--scope`, #865), validated against the
    client's `allowed_scopes` allowlist at request time and again at
-   issuance.
+   issuance. Management scopes beyond the default set are opt-in:
+   e.g. `--scope clients:write` for client management (#865) or
+   `--scope users:admin` for user management (campus-cli#42) — the
+   latter also requires the caller's user id to be listed in
+   `AUTH_USERS_ADMIN_USER_IDS` (invariant A8).
 
 ## Endpoint reference
 

@@ -204,13 +204,14 @@ class TestScopeAlgebraContract(unittest.TestCase):
         and an absent scope keeps the default CLI set.
         """
         client_id = self._create_client(
-            [REGISTERED_URI], ["read", "clients:write"]
+            [REGISTERED_URI], ["read", "clients:write", "users:mod"]
         )
 
-        # In-allowlist request: accepted.
+        # In-allowlist request: accepted — including a management
+        # scope of the users vocabulary (#42).
         response = self.client.post(
             "/auth/v1/oauth/device_authorize",
-            json={"client_id": client_id, "scope": "read"},
+            json={"client_id": client_id, "scope": "read users:mod"},
         )
         self.assertEqual(response.status_code, 200)
 

@@ -154,7 +154,7 @@ Set environment variables in Railway dashboard:
 - Start command: `gunicorn --bind "0.0.0.0:$PORT" --timeout 120 wsgi:app`
 
 On the **campus.auth** service, configure the management-authorization
-allowlists (both read at request time, comma-separated, unset/empty =
+allowlists (all read at request time, comma-separated, unset/empty =
 fail-closed deny):
 
 - `AUTH_OPERATOR_CLIENT_IDS`: client ids granted the deployment-operator
@@ -166,7 +166,16 @@ fail-closed deny):
   listed user must also hold the management scope on its token, which
   requires widening the campus-cli client's `allowed_scopes` first and
   logging in with `campus auth login --scope clients:write`. Scope
-  alone never confers authority; vaults/users/credentials stay
+  alone never confers authority.
+- `AUTH_USERS_ADMIN_USER_IDS`: user ids granted user-management
+  authority with their own bearer tokens (campus-cli#42), separate
+  from `AUTH_ADMIN_USER_IDS` so clients-admins are not automatically
+  users-admins (generalization matrix: campus#872). Same two ANDed
+  legs; per-action floors: `users:read` lists/gets,
+  `users:mod` activates, `users:write` creates/updates, `users:admin`
+  deletes — e.g. widen the campus-cli client's `allowed_scopes` with
+  the users scopes and log in with
+  `campus auth login --scope users:admin`. vaults/credentials stay
   operator-only. See `campus/auth/authz.py` and
   docs/auth-token-invariants.md (A8).
 

@@ -2,16 +2,18 @@
 
 Flask routes for Campus user management.
 
-These routes handle creating, listing, retrieving, and deleting Campus
-users. User administration is a deployment-management surface, so every
-route requires the operator principal (AUTH_OPERATOR_CLIENT_IDS) — any
-authenticated principal used to be able to list, create, and delete
-users (#854). User bearer tokens are denied regardless of scope.
+These routes handle creating, listing, retrieving, updating,
+activating, and deleting Campus users. User administration is a
+deployment-management surface: every route requires the operator
+principal (AUTH_OPERATOR_CLIENT_IDS), or — since campus-cli#42 — a
+designated admin user (#865) whose id is listed in
+AUTH_USERS_ADMIN_USER_IDS and whose bearer token carries the matching
+users:* management scope (read: list/get; mod: activate; write:
+create/update; admin: delete). Any authenticated principal used to be
+able to list, create, and delete users (#854).
 
 Authentication is handled in a global routes.before_request hook.
 """
-
-from typing import Any
 
 import flask
 
@@ -32,11 +34,12 @@ def get_all() -> flask_campus.JsonResponse:
     """Get all users.
 
     GET /users
-    Authorization: operator only (#854).
+    Authorization: operator, or designated admin with users:read
+    (campus-cli#42).
 
     Returns: List[User]
     """
-    authz.require_operator("list users")
+    authz.require_operator("list users", admin_scope=authz.USERS_READ)
     users = user_resource.list()
     return {"users": [user.to_resource() for user in users]}, 200
 
@@ -47,7 +50,8 @@ def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
     """Create a new Campus user.
 
     POST /users
-    Authorization: operator only (#854).
+    Authorization: operator, or designated admin with users:write
+    (campus-cli#42).
 
     Body: {
         "email": "user@example.com",
@@ -56,7 +60,7 @@ def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
 
     Returns: User
     """
-    authz.require_operator("create users")
+    authz.require_operator("create users", admin_scope=authz.USERS_WRITE)
     # Note that no client_secret is generated here
     # Apps are expected to generate the secret separately
     user = user_resource.new(email=email, name=name)
@@ -69,11 +73,12 @@ def activate(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Activate a user
 
     POST /users/{user_id}/activate
-    Authorization: operator only (#854).
+    Authorization: operator, or designated admin with users:mod or
+    higher (campus-cli#42).
 
     Returns: User
     """
-    authz.require_operator("activate users")
+    authz.require_operator("activate users", admin_scope=authz.USERS_MOD)
     user_resource[user_id].activate()
     activated_user = user_resource[user_id].get()
     get_yapper().emit('campus.users.activate', {"user_id": str(user_id)})
@@ -86,11 +91,12 @@ def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Delete a user
 
     DELETE /users/{user_id}
-    Authorization: operator only (#854).
+    Authorization: operator, or designated admin with users:admin
+    (campus-cli#42).
 
     Returns: {}
     """
-    authz.require_operator("delete users")
+    authz.require_operator("delete users", admin_scope=authz.USERS_ADMIN)
     user_resource[user_id].delete()
     get_yapper().emit('campus.users.delete', {"user_id": str(user_id)})
     return {}, 200
@@ -102,11 +108,14 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
     """Get details of a specific user
 
     GET /users/{user_id}
-    Authorization: operator only (#854).
+    Authorization: operator, or designated admin with users:read
+    (campus-cli#42).
 
     Returns: User
     """
-    authz.require_operator("view user records")
+    authz.require_operator(
+        "view user records", admin_scope=authz.USERS_READ
+    )
     if user_id is None:
         raise api_errors.InvalidRequestError("user_id is None - check URL path")
     if not user_id:
@@ -117,14 +126,31 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
 
 @bp.patch("/<user_id>/")
 @flask_campus.unpack_request
-def update(user_id: schema.UserID, **updates: Any) -> flask_campus.JsonResponse:
-    """Update a user
+def update(user_id: schema.UserID, name: str | None = None) -> flask_campus.JsonResponse:
+    """Update a user's display name.
 
     PATCH /users/{user_id}
-    Body: any (ignored; update not implemented yet)
+    Authorization: operator, or designated admin with users:write
+    (campus-cli#42).
+
+    Body: {"name": "New Name"} — name only: a user's id IS its email
+    (identity), and activation runs through the /activate endpoint, so
+    no other field is patchable.
+
     Returns: User
     """
-    return {}, 501
+    authz.require_operator("update users", admin_scope=authz.USERS_WRITE)
+    updates = {}
+    if name is not None:
+        updates["name"] = name
+    if not updates:
+        raise api_errors.InvalidRequestError(
+            "No updatable fields provided: only 'name' is patchable"
+        )
+    user_resource[user_id].update(**updates)
+    updated_user = user_resource[user_id].get()
+    get_yapper().emit('campus.users.update', {"user_id": str(user_id)})
+    return updated_user.to_resource(), 200
 
 
 def create_blueprint() -> flask.Blueprint:

@@ -10,9 +10,9 @@ Users Endpoints Reference:
 - GET    /users/                    - List all users (requires auth)
 - POST   /users/                    - Create new user (requires auth)
 - GET    /users/{user_id}/          - Get specific user (requires auth)
-- PATCH  /users/{user_id}/          - Update user (requires auth, returns 501)
+- PATCH  /users/{user_id}/          - Update user name (requires auth; name only)
 - DELETE /users/{user_id}/          - Delete user (requires auth)
-- POST   /users/{user_id}/activate  - Activate a user (requires auth)
+- POST  /users/{user_id}/activate   - Activate a user (requires auth)
 """
 
 import unittest
@@ -142,8 +142,8 @@ class TestAuthUsersContract(unittest.TestCase):
 
         self.assertIn(response.status_code, (404, 400))
 
-    def test_update_user_returns_501(self):
-        """PATCH /users/{user_id} returns 501 (not implemented)."""
+    def test_update_user_name(self):
+        """PATCH /users/{user_id} renames the user (#42)."""
         user_id = self._create_test_user("patch.test@example.com", "Patch Test User")
 
         response = self.client.patch(
@@ -152,7 +152,51 @@ class TestAuthUsersContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 501)
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["id"], str(user_id))
+        self.assertEqual(data["name"], "Updated Name")
+
+        get_response = self.client.get(
+            f"/auth/v1/users/{user_id}/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(get_response.get_json()["name"], "Updated Name")
+
+    def test_update_user_rejects_identity_fields(self):
+        """PATCH /users/{user_id} accepts no identity fields (#42).
+
+        A user's id IS its email, so only 'name' is patchable: an
+        unknown field is rejected by strict body validation (422), and
+        a body without any patchable field is a 400, not a silent
+        no-op.
+        """
+        user_id = self._create_test_user(
+            "patch.identity@example.com", "Patch Identity User"
+        )
+
+        response = self.client.patch(
+            f"/auth/v1/users/{user_id}/",
+            json={"email": "moved@example.com"},
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 422)
+
+        response = self.client.patch(
+            f"/auth/v1/users/{user_id}/",
+            json={},
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_update_missing_user_returns_error(self):
+        """PATCH /users/{user_id} for a non-existent user returns 404."""
+        response = self.client.patch(
+            "/auth/v1/users/does_not_exist@example.com/",
+            json={"name": "Nobody"},
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 404)
 
     def test_delete_user(self):
         """DELETE /users/{user_id} removes the user."""
