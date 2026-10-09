@@ -24,11 +24,15 @@ from campus.common.errors import auth_errors
 
 # Management-scope levels for the <resource>:<level> convention (#865).
 # A higher level implies the lower ones on the same resource: a token
-# granted clients:admin satisfies a clients:read requirement.
+# granted clients:admin satisfies a clients:read requirement. "mod"
+# sits between read and write (campus-cli#42): moderation-style
+# actions such as activating a user that fall short of record
+# creation.
 _SCOPE_LEVELS = {
     "read": 0,
-    "write": 1,
-    "admin": 2,
+    "mod": 1,
+    "write": 2,
+    "admin": 3,
 }
 
 
@@ -72,11 +76,12 @@ def covers(granted: list[str], requested: list[str]) -> bool:
 def grants(granted: list[str], required: str) -> bool:
     """Return True if the granted scopes confer `required` (#865).
 
-    Management scopes follow the `<resource>:<read|write|admin>`
-    convention and are monotonic within a resource: `clients:admin`
-    satisfies a `clients:write` requirement, which satisfies
-    `clients:read`. Scopes of a different resource never match, and a
-    required scope outside the convention needs an exact match.
+    Management scopes follow the `<resource>:<read|mod|write|admin>`
+    convention and are monotonic within a resource: `users:admin`
+    satisfies a `users:write` requirement, which satisfies
+    `users:mod`, which satisfies `users:read`. Scopes of a different
+    resource never match, and a required scope outside the convention
+    needs an exact match.
     """
     resource, _, level = required.partition(":")
     required_level = _SCOPE_LEVELS.get(level)

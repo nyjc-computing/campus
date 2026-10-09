@@ -1,8 +1,10 @@
 """Unit tests for the scope algebra helpers (campus.auth.scopes).
 
 Covers the management-scope implication added for #865: within the
-`<resource>:<read|write|admin>` convention a higher level satisfies a
-lower requirement on the same resource, and never across resources.
+`<resource>:<read|mod|write|admin>` convention a higher level
+satisfies a lower requirement on the same resource, and never across
+resources. The "mod" level sits between read and write
+(campus-cli#42).
 """
 
 import unittest
@@ -39,6 +41,15 @@ class TestGrants(unittest.TestCase):
     def test_lower_level_never_implies_higher(self):
         self.assertFalse(scopes.grants(["clients:read"], "clients:write"))
         self.assertFalse(scopes.grants(["clients:write"], "clients:admin"))
+
+    def test_mod_level_sits_between_read_and_write(self):
+        """users:mod implies read; write and admin imply mod (#42)."""
+        self.assertTrue(scopes.grants(["users:mod"], "users:read"))
+        self.assertTrue(scopes.grants(["users:write"], "users:mod"))
+        self.assertTrue(scopes.grants(["users:admin"], "users:mod"))
+        self.assertFalse(scopes.grants(["users:read"], "users:mod"))
+        self.assertFalse(scopes.grants(["users:mod"], "users:write"))
+        self.assertFalse(scopes.grants(["clients:admin"], "users:mod"))
 
     def test_other_resource_never_grants(self):
         self.assertFalse(scopes.grants(["vaults:admin"], "clients:read"))
