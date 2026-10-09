@@ -78,8 +78,11 @@ replaced (`AppCredentialsResource.issue`).
 - **A7 — Device flow uses the same algebra.** Device codes (RFC 8628)
   carry scopes validated against the client allowlist at
   `device_authorize`; token issuance from an approved device code
-  follows A3/A4 like any other grant. The device-authorization request
-  may carry an explicit `scope` (campus-cli `--scope`, #865), which is
+  mints exactly the device code's validated scopes — no union (the
+  A3/A4 accumulation is specific to the authorization-code
+  exchange); a wider scope set requires a fresh device
+  authorization. The device-authorization request may carry an
+  explicit `scope` (campus-cli `--scope`, #865), which is
   allowlist-validated like any other; an absent scope keeps the
   default CLI set (itself allowlist-validated).
 - **A8 — Management scopes never self-confer (#865).** Management
