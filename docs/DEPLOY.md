@@ -153,6 +153,23 @@ Set environment variables in Railway dashboard:
 - `PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}`
 - Start command: `gunicorn --bind "0.0.0.0:$PORT" --timeout 120 wsgi:app`
 
+On the **campus.auth** service, configure the management-authorization
+allowlists (both read at request time, comma-separated, unset/empty =
+fail-closed deny):
+
+- `AUTH_OPERATOR_CLIENT_IDS`: client ids granted the deployment-operator
+  role on every management blueprint — register/update/delete clients,
+  manage users, credentials, and vault access (#854). Typically the
+  campus-admin portal's client id.
+- `AUTH_ADMIN_USER_IDS`: user ids granted limited client-management
+  authority with their own bearer tokens (#865). Two ANDed legs: a
+  listed user must also hold the management scope on its token, which
+  requires widening the campus-cli client's `allowed_scopes` first and
+  logging in with `campus auth login --scope clients:write`. Scope
+  alone never confers authority; vaults/users/credentials stay
+  operator-only. See `campus/auth/authz.py` and
+  docs/auth-token-invariants.md (A8).
+
 **Note:** The `--timeout 120` flag sets a 2-minute timeout (vs default 30s) to handle OAuth flows and external API calls.
 
 ### Replit
