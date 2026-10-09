@@ -21,12 +21,27 @@ Contract tests are organized by service area into subdirectories:
 
 | File | Invariants Tested |
 |------|-------------------|
-| `test_auth_vault.py` | Vault CRUD requires auth, returns 401 without, 404 for missing keys |
 | `test_auth_clients.py` | Client CRUD, validation, access control |
-| `test_auth_credentials.py` | Token creation, bearer token validation |
+| `test_auth_credentials.py` | Credentials endpoints: token creation, bearer token validation |
+| `test_auth_logins.py` | Login endpoint redirects, error handling |
+| `test_auth_logout.py` | Browser-session logout (#785): unauthenticated, idempotent |
+| `test_auth_oauth.py` | OAuth token endpoint (device-code and refresh grants) |
+| `test_auth_root.py` | `/root/authenticate` service credential validation |
 | `test_auth_sessions.py` | Session lifecycle, OAuth flow |
 | `test_auth_users.py` | User CRUD, activation flows |
-| `test_auth_logins.py` | Login endpoint redirects, error handling |
+| `test_auth_vault.py` | Vault CRUD requires auth, returns 401 without, 404 for missing keys |
+| `test_authorize.py` | `/authorize` endpoint (A6 scope checks) |
+| `test_connections.py` | Connections surface (#733 Phase 2), C5 disconnect semantics |
+| `test_device_cookie.py` | Stable device cookie (#825) |
+| `test_device_verification_consent.py` | Device consent page discloses requested scopes (#867) |
+| `test_google_login_prompt.py` | Google login prompt policy (#844) |
+| `test_integrations.py` | Per-integration upstream OAuth (#733 Phase 1), B3 connect-flow guards |
+| `test_integrations_registry.py` | Integrations registry endpoint (#688) |
+| `test_management_authorization.py` | Management-route authorization (#854): operator principal, client self-service, vault bitflags; designated admin users (#865) |
+| `test_scope_algebra.py` | Campus scope algebra (A1/A6/A7 allowlist enforcement) |
+| `test_token_broker.py` | Token bridge (`/auth/v1/broker`, C1–C5) |
+| `test_token_issuance.py` | Campus token issuance on `/token` (A2–A5) |
+| `test_upstream_scopes.py` | Upstream (third-party provider) scopes (B3) |
 
 ### API Service Contracts (`api/`)
 

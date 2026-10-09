@@ -189,6 +189,15 @@ poetry run python tests/run_tests.py contract      # HTTP contracts (also a bloc
 - [ ] Will you use `run_tests.py` for testing?
 - [ ] Do you understand the storage-model-resources pattern?
 
+## Before You Open a PR
+
+- [ ] Check that documentation (including `campus/auth/docs/openapi.yaml`
+      and other specs) is up to date with the implementation: new or
+      changed endpoints, parameters, error shapes, and behavior belong
+      in the specs alongside the code — the OpenAPI file drifted behind
+      `device_authorize`'s `scope` parameter (#866), which is the
+      failure mode this check exists to prevent.
+
 ---
 
 **New to Campus?** Start with [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
