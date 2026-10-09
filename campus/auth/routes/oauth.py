@@ -46,11 +46,22 @@ _SCOPE_CONSENT_LABELS: dict[str, tuple[str, str]] = {
         "Manage clients",
         "Register and delete clients, rotate secrets, set scope caps",
     ),
+    "users:read": ("View users", "View Campus user records"),
+    "users:mod": ("Activate users", "Activate Campus user accounts"),
+    "users:write": (
+        "Manage users",
+        "Create, rename and activate Campus users",
+    ),
+    "users:admin": (
+        "Fully manage users",
+        "Delete Campus users; includes all lower user management",
+    ),
 }
 
 # Verbs for the generic <resource>:<level> fallback (#867)
 _SCOPE_LEVEL_VERBS = {
     "read": "View",
+    "mod": "Moderate",
     "write": "Manage",
     "admin": "Fully manage",
 }
@@ -61,8 +72,8 @@ def _describe_scope(scope: str) -> dict:
 
     Known scopes get a curated label and description; a
     <resource>:<level> scope outside the known set degrades to
-    "view/manage <resource>"; anything else renders as the raw scope
-    token.
+    "view/moderate/manage <resource>"; anything else renders as the raw
+    scope token.
     """
     if scope in _SCOPE_CONSENT_LABELS:
         label, description = _SCOPE_CONSENT_LABELS[scope]
