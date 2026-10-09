@@ -31,6 +31,51 @@ bp = flask.Blueprint('oauth', __name__, url_prefix='/oauth')
 # Default scopes for CLI clients (the seeded public client's allowlist)
 DEFAULT_CLI_SCOPES = campus.config.DEFAULT_CLI_SCOPES
 
+# Human-readable consent labels for the known scope vocabulary (#867).
+# The device verification page is the consent surface for the device
+# flow, and a device code may carry an explicit scope set (campus-cli
+# --scope, #865) — including management scopes. Scopes outside this
+# map fall back to a <resource>:<level> reading, then to the raw
+# scope token.
+_SCOPE_CONSENT_LABELS: dict[str, tuple[str, str]] = {
+    "read": ("View Campus data", "Read access to Campus resources"),
+    "write": ("Manage Campus data", "Create and update Campus resources"),
+    "clients:read": ("View clients", "View OAuth client records"),
+    "clients:write": ("Update clients", "Update client details"),
+    "clients:admin": (
+        "Manage clients",
+        "Register and delete clients, rotate secrets, set scope caps",
+    ),
+}
+
+# Verbs for the generic <resource>:<level> fallback (#867)
+_SCOPE_LEVEL_VERBS = {
+    "read": "View",
+    "write": "Manage",
+    "admin": "Fully manage",
+}
+
+
+def _describe_scope(scope: str) -> dict:
+    """Return consent-display fields for one scope (#867).
+
+    Known scopes get a curated label and description; a
+    <resource>:<level> scope outside the known set degrades to
+    "view/manage <resource>"; anything else renders as the raw scope
+    token.
+    """
+    if scope in _SCOPE_CONSENT_LABELS:
+        label, description = _SCOPE_CONSENT_LABELS[scope]
+        return {"scope": scope, "label": label, "description": description}
+    resource, sep, level = scope.partition(":")
+    if sep and level in _SCOPE_LEVEL_VERBS:
+        return {
+            "scope": scope,
+            "label": f"{_SCOPE_LEVEL_VERBS[level]} {resource}",
+            "description": None,
+        }
+    return {"scope": scope, "label": scope, "description": None}
+
 
 def _get_oauth_payload() -> dict:
     """Get request payload for OAuth endpoints.
@@ -711,6 +756,35 @@ def device_verification(user_code: str | None = None):
     # Escape user_code for safe HTML attribute use
     safe_user_code = html.escape(user_code) if user_code else None
 
+    # Consent disclosure (#867): the page is the consent surface for
+    # the device flow, and a device code may carry an explicit scope
+    # set (--scope pass-through, #865) that includes management
+    # scopes. A pre-filled code is looked up so the page renders what
+    # it is about to authorize before the user clicks Authorize, and
+    # expired/used codes get a notice instead of an Authorize offer.
+    # Best-effort: both submit paths re-check the code's state, and a
+    # user-entered code (no pre-fill) is authorized blind as before.
+    consent_scopes: list[dict] | None = None
+    consent_client_name: str | None = None
+    consent_notice: str | None = None
+    if user_code:
+        dc = device_code_resource.peek_by_user_code(user_code)
+        if dc is not None:
+            if dc.state == "pending" and not dc.is_expired():
+                consent_scopes = [_describe_scope(s) for s in dc.scopes]
+                try:
+                    consent_client_name = (
+                        client_resource[dc.client_id].get().name
+                    )
+                except api_errors.NotFoundError:
+                    consent_client_name = None
+            elif dc.state == "denied":
+                consent_notice = error_messages['denied']
+            elif dc.state == "expired" or dc.is_expired():
+                consent_notice = error_messages['expired']
+            else:
+                consent_notice = error_messages['already_used']
+
     template = """
     <!DOCTYPE html>
     <html lang="en">
@@ -855,6 +929,57 @@ def device_verification(user_code: str | None = None):
             .identity a {
                 color: #667eea;
             }
+            .scopes {
+                background: #f8f9ff;
+                border: 1px solid #d5dcf5;
+                border-radius: 8px;
+                padding: 14px 16px;
+                margin-bottom: 20px;
+                font-size: 14px;
+                color: #333;
+            }
+            .scopes-title {
+                margin-bottom: 8px;
+                line-height: 1.5;
+            }
+            .scopes ul {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+            .scopes li {
+                padding: 8px 0;
+                border-top: 1px solid #e6eaf9;
+                line-height: 1.5;
+            }
+            .scopes li:first-child {
+                border-top: none;
+            }
+            .scope-label {
+                display: block;
+                font-weight: 600;
+            }
+            .scope-desc {
+                display: block;
+                color: #666;
+                font-size: 13px;
+            }
+            .scopes code {
+                display: inline-block;
+                margin-top: 2px;
+                background: #e8ebfa;
+                padding: 1px 6px;
+                border-radius: 4px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                color: #555;
+            }
+            .scope-note {
+                margin-top: 10px;
+                color: #666;
+                font-size: 12px;
+                line-height: 1.5;
+            }
             .spinner {
                 display: inline-block;
                 width: 16px;
@@ -976,6 +1101,29 @@ def device_verification(user_code: str | None = None):
                 </div>
                 {% endif %}
 
+                {% if consent_scopes %}
+                <div class="scopes" role="group" aria-label="Requested permissions">
+                    <div class="scopes-title">
+                        {% if consent_client_name %}<strong>{{ consent_client_name }}</strong>{% else %}The requesting application{% endif %}
+                        is requesting permission to:
+                    </div>
+                    <ul>
+                        {% for scope_info in consent_scopes %}
+                        <li>
+                            <span class="scope-label">{{ scope_info.label }}</span>
+                            {% if scope_info.description %}<span class="scope-desc">{{ scope_info.description }}</span>{% endif %}
+                            <code>{{ scope_info.scope }}</code>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <div class="scope-note">If you approve, all of these permissions are granted together as a set.</div>
+                </div>
+                {% endif %}
+
+                {% if consent_notice %}
+                <div class="alert error show" role="alert">{{ consent_notice }}</div>
+                {% endif %}
+
                 <div id="errorAlert" class="alert error"></div>
                 <div id="successAlert" class="alert success"></div>
 
@@ -1002,7 +1150,7 @@ def device_verification(user_code: str | None = None):
                         >
                         <input type="hidden" name="redirect_url" value="{{ request.url }}">
                     </div>
-                    <button type="submit" class="btn" id="submitBtn">
+                    <button type="submit" class="btn" id="submitBtn"{% if consent_notice %} disabled{% endif %}>
                         Authorize
                     </button>
                     <noscript>
@@ -1236,6 +1384,9 @@ def device_verification(user_code: str | None = None):
         error_messages=error_messages,
         session_user_id=str(user_id) if user_id else None,
         logout_url=logout_url,
+        consent_scopes=consent_scopes,
+        consent_client_name=consent_client_name,
+        consent_notice=consent_notice,
     )
 
 

@@ -158,6 +158,28 @@ class DeviceCodeResource:
 
         return device_code_obj
 
+    def peek_by_user_code(
+            self,
+            user_code: str,
+    ) -> model.DeviceCode | None:
+        """Get a device code by user code in any state, without side effects.
+
+        Unlike get_by_user_code, this never raises NotFoundError for an
+        expired code and does not flip state to "expired" on read. The
+        verification page (#867) uses it to tell pending, expired, and
+        already-used codes apart at render time.
+
+        Args:
+            user_code: The user code string
+
+        Returns:
+            DeviceCode instance, or None if no record exists
+        """
+        records = device_code_storage.get_matching({"user_code": user_code})
+        if not records:
+            return None
+        return model.DeviceCode.from_storage(records[0])
+
     def update(
             self,
             device_code_id: schema.CampusID | str,
