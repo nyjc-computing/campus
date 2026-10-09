@@ -867,9 +867,15 @@ paths:
       summary: Start a device authorization (RFC 8628 section 3.1)
       operationId: deviceAuthorize
       description: |
-        Public. The client's `allowed_scopes` must cover the default
-        CLI scopes (`read write`) or the request fails with
-        `invalid_scope` (invariant A7). Accepts JSON or form-encoded.
+        Public. An absent `scope` defaults to the standard CLI scope
+        set (`read write`); an explicit `scope` (campus-cli --scope
+        pass-through, #865) is validated fail-closed against the
+        client's `allowed_scopes` like any other, and the default set
+        is validated too — either way the request fails with
+        `invalid_scope` outside the allowlist (invariant A7). The
+        returned `verification_uri_complete` pre-fills the device
+        consent page, which discloses the requested scopes before the
+        user authorizes (#867). Accepts JSON or form-encoded.
       requestBody:
         required: true
         content:
@@ -881,6 +887,12 @@ paths:
                 client_id:
                   type: string
                   example: guest
+                scope:
+                  type: string
+                  description: Space-delimited scopes to carry on the
+                    device code (and the token minted from it); must lie
+                    within the client's registered `allowed_scopes`.
+                  example: read write
           application/x-www-form-urlencoded:
             schema:
               type: object
@@ -888,6 +900,11 @@ paths:
               properties:
                 client_id:
                   type: string
+                scope:
+                  type: string
+                  description: Space-delimited scopes to carry on the
+                    device code (and the token minted from it); must lie
+                    within the client's registered `allowed_scopes`.
       responses:
         '200':
           description: Device authorization response
