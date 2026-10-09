@@ -400,7 +400,12 @@ CLIs and other input-constrained clients use RFC 8628 instead
    `device_code`, a `user_code`, and the verification URL.
 2. The user opens `/auth/v1/oauth/device[/:user_code]` in a browser.
    If they have no Campus login cookie, the page redirects through
-   the *same* Google leg as above (steps 3–4) and returns.
+   the *same* Google leg as above (steps 3–4) and returns. The page
+   is the consent surface: with a pre-filled code it shows the
+   requesting client and the code's requested scopes
+   (Google-consent-style, #867) above the Authorize button, and an
+   expired or already-used code gets a notice instead of an
+   Authorize offer.
 3. Submitting the user code binds `user_id` and marks the device code
    `authorized`.
 4. The CLI polls `POST /auth/v1/oauth/token` with
