@@ -157,6 +157,7 @@ class TestErrorCodes(unittest.TestCase):
             "INTERNAL_ERROR",
             "INVALID_REQUEST",
             "NOT_FOUND",
+            "RATE_LIMITED",
             "UNAUTHORIZED",
             "VALIDATION_FAILED",
         }
