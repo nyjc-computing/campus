@@ -93,7 +93,7 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
             str(err),
             error_code=ErrorConstant.AUTH_TOKEN_INVALID,
         ) from None
-    token = credentials.token
+    token_record = credentials.token
     return {
         "client": client,
         # Bearer authentication carries the user context (the token's
@@ -104,7 +104,7 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
         # record or no scopes means no management authority).
         "user": {
             "id": str(credentials.user_id),
-            "scopes": list(token.scopes) if token else [],
+            "scopes": list(token_record.scopes) if token_record else [],
         },
     }
 
