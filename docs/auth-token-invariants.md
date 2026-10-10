@@ -87,15 +87,17 @@ replaced (`AppCredentialsResource.issue`).
   default CLI set (itself allowlist-validated).
 - **A8 — Management scopes never self-confer (#865).** Management
   authority for a user principal requires two ANDed legs, fail-closed:
-  the user id is listed in the vocabulary's designated-admin env var,
-  and the token carries the required management scope
-  (`<resource>:<read|mod|write|admin>`, monotonic within a resource;
-  v1 vocabulary: clients and users). The list is per vocabulary
-  (campus#872): `users:*` scopes consult `AUTH_USERS_ADMIN_USER_IDS`
-  (campus-cli#42); every other vocabulary consults
-  `AUTH_ADMIN_USER_IDS` — a clients-designated admin is not a
-  users-admin, and vice versa. Neither leg alone suffices — scope
-  alone must never confer management authority (the exact regression
+  the user holds a grant row in the access-grant store (#883) whose
+  level covers the required management scope, and the token carries
+  that scope (`<resource>:<read|mod|write|admin>`, monotonic within
+  a resource; vocabulary: users #887, clients #888 — both grantable
+  rows, clients capped at write by umbrella decision 4; vaults are
+  per-label rows with `vaults:*` scopes, #889). Since the DB-only
+  ruling (#887, umbrella decision 3) the designated-admin env vars
+  (`AUTH_ADMIN_USER_IDS`, `AUTH_USERS_ADMIN_USER_IDS`) are no longer
+  read at request time — designation in one vocabulary never crosses
+  to another (#872). Neither leg alone suffices — scope alone must
+  never confer management authority (the exact regression
   #854 closed) — and a user never inherits the operator role of the
   client it was minted through. The ceiling stays operator-controlled
   end to end: a user token can carry a management scope only if the
@@ -247,7 +249,7 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | A5 | P1 | **enforced** | `provider.token` issues via `credentials.update()` (deletes superseded record, #678); `test_token_issuance.py::test_superseded_token_stops_authenticating` |
 | A6 | P1 | **enforced** | `routes/sessions.py::_validated_campus_scopes` + `provider.authorize` scope-param check; `test_scope_algebra.py::test_authorize_scope_*` |
 | A7 | P1 | **enforced** | `routes/oauth.py::device_authorize` + device grant re-check; `test_scope_algebra.py::test_device_authorize_respects_allowlist`, `::test_device_authorize_scope_parameter` |
-| A8 | #865 | **enforced** | `campus/auth/authz.py::require_admin_user` (+ `scopes.grants` implication; per-vocabulary lists, campus#872); `test_management_authorization.py::TestDesignatedAdminUsers` (clients) and `::TestDesignatedUsersAdmins` (users, campus-cli#42), `tests/unit/auth/test_scopes.py` |
+| A8 | #865 | **enforced** | `campus/auth/authz.py::_require_user_designation` (grant-row identity + `scopes.grants` capability, #887/#888); `test_management_authorization.py::TestDesignatedAdminUsers` (clients) and `::TestDesignatedUsersAdmins` (users), `tests/unit/auth/test_scopes.py`, `tests/integration/auth/test_authz_grants.py` |
 | A9 | #881 | **enforced** | `campus/auth/authz.py::require_admin_user_or_operator` gates PATCH /clients/{id}/ (client self-PATCH → 403 citing `clients:write`; reads/rotation keep `require_self_or_operator`); user-attribution stamp via `campus/audit/middleware/tracing.py` (#802); `test_management_authorization.py::test_client_self_patch_denied_881`, `::test_write_matrix_mutation_is_audited_881` |
 | B1 | P2/P3 | **enforced** | `credentials.new()` provider assertion + credentials API refuses non-campus providers (`routes/credentials.py::_reject_non_campus_provider`); `test_token_broker.py::test_credentials_api_refuses_third_party_provider`. Integration clients custody: vault labels + in-code registry (`campus/auth/integrations.py`, #733) |
 | B2 | P2/P3 | **enforced** | credentials API lockdown closes the token-embedding read path; broker responses are built explicitly without refresh tokens; no proxy path returns/logs refresh tokens |
