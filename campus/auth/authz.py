@@ -37,23 +37,23 @@ Principals:
   the /clients/{id}/access/ routes administer. Where a reviewed
   exception to read-only is granted, the rationale is recorded on the
   client's description so auditors see why.
-- Designated admin users (#865): user principals whose ids are listed
-  in a designated-admin env var (comma-separated, read at request
-  time, mirroring AUTH_OPERATOR_CLIENT_IDS) and whose bearer token
-  carries the required management scope
-  (`<resource>:<read|mod|write|admin>`, e.g. clients:write). The list
-  is per vocabulary (campus#872): users:* scopes consult
-  AUTH_USERS_ADMIN_USER_IDS, every other vocabulary consults
-  AUTH_ADMIN_USER_IDS. Both legs are required and ANDed: designation
-  without the scope confers nothing, and scope without designation
-  must never confer management authority (the exact regression #854
-  closed). Unset/empty means the deployment has no designated admins
-  for that vocabulary. The ceiling stays operator-controlled end to
-  end: a user token can carry a management scope only if the minting
-  client's allowed_scopes cap includes it (docs/auth-token-invariants.md
-  A1/A8). Users never inherit the operator role of the client they
-  were minted through, and management mutations by user principals
-  land in campus.audit stamped with the acting user id (#802).
+- Designated admin users (#865): user principals designated by the
+  access-grant store (#883) — a grant row for the vocabulary whose
+  level covers the required management scope
+  (`<resource>:<read|mod|write|admin>`, e.g. users:write) — with the
+  bearer token carrying that scope. Both legs are required and
+  ANDed: designation without the scope confers nothing, and scope
+  without designation must never confer management authority (the
+  exact regression #854 closed). The users blueprint consults the
+  store exclusively (#887, DB-only: AUTH_USERS_ADMIN_USER_IDS is no
+  longer read); the clients blueprint still consults the transitional
+  AUTH_ADMIN_USER_IDS env list until #888 retires it. The ceiling
+  stays operator-controlled end to end: a user token can carry a
+  management scope only if the minting client's allowed_scopes cap
+  includes it (docs/auth-token-invariants.md A1/A8). Users never
+  inherit the operator role of the client they were minted through,
+  and management mutations by user principals land in campus.audit
+  stamped with the acting user id (#802).
 - User principals (other): bearer tokens minted for an end user
   (device flow, browser sessions). They carry end-user authority only
   and are denied on every management route regardless of scope;
@@ -75,10 +75,6 @@ __all__ = [
     "CLIENTS_ADMIN",
     "CLIENTS_READ",
     "CLIENTS_WRITE",
-    "USERS_ADMIN",
-    "USERS_MOD",
-    "USERS_READ",
-    "USERS_WRITE",
     "admin_user_ids",
     "forbid_user_principal",
     "has_admin_scope",
@@ -113,30 +109,20 @@ OPERATOR_CLIENT_IDS_ENVVAR = "AUTH_OPERATOR_CLIENT_IDS"
 # unset or empty means the deployment has no user admins.
 ADMIN_USER_IDS_ENVVAR = "AUTH_ADMIN_USER_IDS"
 
-# Comma-separated user ids granted management authority over the users
-# blueprint specifically (campus-cli#42). Kept separate from
-# AUTH_ADMIN_USER_IDS so clients-admins are not automatically
-# users-admins; the generalization matrix is tracked in campus#872.
-USERS_ADMIN_USER_IDS_ENVVAR = "AUTH_USERS_ADMIN_USER_IDS"
-
-# Management-scope vocabulary, v1: clients (#865) and users
-# (campus-cli#42). clients:read lists/gets any client record;
-# clients:write updates benign fields on any client (name, description,
-# redirect_uris); clients:admin registers, deletes, rotates secrets,
-# sets scope caps (allowed_scopes, upstream_scopes, token_bridge) and
-# administers vault-access grants. users:read lists/gets any user
-# record; users:mod activates a user; users:write creates and updates
-# users (implies mod); users:admin deletes users (implies write). The
+# Management-scope vocabulary, v1: clients (#865, still on the
+# transitional env list until #888) and users (#887, store-backed).
+# clients:read lists/gets any client record; clients:write updates
+# benign fields on any client (name, description, redirect_uris);
+# clients:admin registers, deletes, rotates secrets, sets scope caps
+# (allowed_scopes, upstream_scopes, token_bridge) and administers
+# vault-access grants. users:read lists/gets any user record;
+# users:mod activates a user; users:write creates and updates users
+# (implies mod); users:admin deletes users (implies write). The
 # vaults/credentials vocabularies stay reserved (operator-only) until
 # a need exists.
 CLIENTS_READ = "clients:read"
 CLIENTS_WRITE = "clients:write"
 CLIENTS_ADMIN = "clients:admin"
-
-USERS_READ = "users:read"
-USERS_MOD = "users:mod"
-USERS_WRITE = "users:write"
-USERS_ADMIN = "users:admin"
 
 # Client record fields reserved for the clients:admin scope: the scope
 # caps and the token-bridge flag are operator-controlled registration
@@ -196,20 +182,6 @@ def admin_user_ids(envvar: str = ADMIN_USER_IDS_ENVVAR) -> frozenset[str]:
     })
 
 
-# Per-vocabulary designated-admin lists (campus#872): a users:*
-# scope checks AUTH_USERS_ADMIN_USER_IDS; every other vocabulary
-# falls back to the general AUTH_ADMIN_USER_IDS list.
-_SCOPE_ADMIN_ENVVARS = {
-    "users": USERS_ADMIN_USER_IDS_ENVVAR,
-}
-
-
-def _admin_envvar_for_scope(scope: str) -> str:
-    """The designated-admin env var governing `scope`'s resource."""
-    resource = scope.partition(":")[0]
-    return _SCOPE_ADMIN_ENVVARS.get(resource, ADMIN_USER_IDS_ENVVAR)
-
-
 def is_operator() -> bool:
     """Return True if the authenticated client is a deployment operator.
 
@@ -250,7 +222,7 @@ def has_admin_scope(required: str) -> bool:
         return False
     user = flask.g.current_user
     return (
-        str(user.get("id")) in admin_user_ids(_admin_envvar_for_scope(required))
+        str(user.get("id")) in admin_user_ids()
         and scopes.grants(_user_token_scopes(), required)
     )
 
@@ -296,15 +268,15 @@ def forbid_user_principal(action: str) -> None:
 def require_admin_user(scope: str, action: str) -> None:
     """Require a designated admin user token carrying `scope` (#865).
 
-    The user-principal leg of the management gates: passes only if
-    the caller is a user principal AND its id is listed in the
-    governing env var AND the token's scopes cover `scope`. The env
-    var is per vocabulary (campus#872): users:* scopes consult
-    AUTH_USERS_ADMIN_USER_IDS; every other vocabulary consults
-    AUTH_ADMIN_USER_IDS. Neither leg alone suffices — scope alone
-    must never confer management authority (#854). A no-op for
-    client principals: the operator and self-service rules apply to
-    them.
+    The user-principal leg of the transitional clients-vocabulary
+    gate (env-var identity AND token scope) — retained until #888
+    moves the clients blueprint onto the access-grant store
+    (#887 retired the users leg). Passes only if the caller is a
+    user principal AND its id is listed in AUTH_ADMIN_USER_IDS AND
+    the token's scopes cover `scope`. Neither leg alone suffices —
+    scope alone must never confer management authority (#854). A
+    no-op for client principals: the operator and self-service
+    rules apply to them.
 
     Raises:
         api_errors.ForbiddenError: Distinguishing the failed leg —
@@ -314,11 +286,10 @@ def require_admin_user(scope: str, action: str) -> None:
     if not is_user_principal():
         return
     user = flask.g.current_user
-    envvar = _admin_envvar_for_scope(scope)
-    if str(user.get("id")) not in admin_user_ids(envvar):
+    if str(user.get("id")) not in admin_user_ids():
         raise api_errors.ForbiddenError(
             f"Only designated admin users may {action} (#865): this "
-            f"user id is not listed in {envvar} on the "
+            f"user id is not listed in {ADMIN_USER_IDS_ENVVAR} on the "
             "campus.auth deployment"
         )
     if not scopes.grants(_user_token_scopes(), scope):

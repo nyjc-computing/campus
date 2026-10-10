@@ -77,6 +77,11 @@ paths:
       tags: [Users]
       summary: List all users
       operationId: listUsers
+      description: >
+        Authorization (#887): the operator principal, or a designated
+        admin user holding a users:read grant row (access-grant store,
+        /auth/v1/grants) whose token carries the scope — both legs
+        required. AUTH_USERS_ADMIN_USER_IDS is no longer consulted.
       responses:
         '200':
           description: Users

@@ -729,7 +729,7 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             )
             message = self.assert_forbidden(response)
             if path.endswith("users/"):
-                self.assertIn("AUTH_USERS_ADMIN_USER_IDS", message)
+                self.assertIn("No access grant designates", message)
 
     def test_empty_allowlist_denies_designated_user(self):
         """An unset allowlist means no user admins (deploy is a no-op)."""
@@ -745,22 +745,24 @@ class TestDesignatedAdminUsers(unittest.TestCase):
 
 class TestDesignatedUsersAdmins(unittest.TestCase):
     """Management-scope authorization for the users blueprint
-    (campus-cli#42).
+    (campus-cli#42; store-backed since #887).
 
-    Mirrors TestDesignatedAdminUsers for the users:* vocabulary. The
-    identity leg is AUTH_USERS_ADMIN_USER_IDS — separate from
-    AUTH_ADMIN_USER_IDS (campus#872): a clients-designated admin is
-    not a users-admin, and vice versa. Per-action floors: users:read
+    The identity leg is a users:* grant row in the access-grant
+    store (#883) — AUTH_USERS_ADMIN_USER_IDS is no longer consulted
+    (#887, DB-only ruling). A clients-designated admin (the
+    transitional AUTH_ADMIN_USER_IDS list, #888) is not a
+    users-admin, and vice versa. Per-action floors: users:read
     lists/gets, users:mod activates, users:write creates and updates
     (implies mod), users:admin deletes (implies write).
     """
 
-    # One designated user per scope variant (a credentials row holds a
-    # single live token), plus one designated-but-scopeless user (the
-    # capability leg fails) and one user listed ONLY in
-    # AUTH_ADMIN_USER_IDS while carrying every users:* scope: the
-    # per-vocabulary isolation proof — neither the scopes nor the
-    # wrong list confer anything.
+    # One grant-row admin per level (a credentials row holds a single
+    # live token), plus one designated-but-scopeless user (the
+    # capability leg fails) and one user carrying every users:*
+    # scope with NO users grant row — listed only in the transitional
+    # clients env list: the per-vocabulary isolation proof — neither
+    # the scopes nor the wrong vocabulary's designation confer
+    # anything.
     USERS_ADMIN_IDS = [
         "authz.42.admin.read@campus.test",
         "authz.42.admin.mod@campus.test",
@@ -801,16 +803,28 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
                 ],
             ),
         }
-        env.set("AUTH_USERS_ADMIN_USER_IDS", ",".join(cls.USERS_ADMIN_IDS))
-        # The clients-designated list names the every-users-scope user,
-        # proving the two lists gate disjoint vocabularies (campus#872).
+        # Grant rows are the identity leg (#887): one per admin,
+        # at the level their token scope carries. The plain admin is
+        # fully designated (admin row) but its token holds no users:*
+        # scope — the capability leg fails.
+        from campus.auth.resources.grant import grants as grants_store
+        for admin_id, level in (
+            (cls.USERS_ADMIN_IDS[0], "read"),
+            (cls.USERS_ADMIN_IDS[1], "mod"),
+            (cls.USERS_ADMIN_IDS[2], "write"),
+            (cls.USERS_ADMIN_IDS[3], "admin"),
+            (cls.USERS_ADMIN_IDS[4], "admin"),
+        ):
+            grants_store.grant("user", admin_id, "users", level=level)
+        # The transitional clients-designated env list names the
+        # every-users-scope user, proving the clients designation and
+        # the users grant rows gate disjoint vocabularies (#872, #888).
         env.set("AUTH_ADMIN_USER_IDS", cls.CLIENTS_ONLY_ADMIN)
 
     @classmethod
     def tearDownClass(cls):
-        for var in ("AUTH_USERS_ADMIN_USER_IDS", "AUTH_ADMIN_USER_IDS"):
-            if env.contains(var):
-                env.delete(var)
+        if env.contains("AUTH_ADMIN_USER_IDS"):
+            env.delete("AUTH_ADMIN_USER_IDS")
         cls.manager.cleanup()
 
     def setUp(self):
@@ -864,8 +878,7 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
                 path, headers=self.headers["clients_only"]
             )
             message = self.assert_forbidden(response)
-            self.assertIn("designated admin", message)
-            self.assertIn("AUTH_USERS_ADMIN_USER_IDS", message)
+            self.assertIn("No access grant designates", message)
 
     # --- users:mod — activate (implies read) ---
 
@@ -891,7 +904,7 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
             headers=self.headers["clients_only"],
         )
         message = self.assert_forbidden(response)
-        self.assertIn("designated admin", message)
+        self.assertIn("No access grant designates", message)
 
     # --- users:write — create and update (implies mod) ---
 
@@ -932,7 +945,7 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
             headers=self.headers["clients_only"],
         )
         message = self.assert_forbidden(response)
-        self.assertIn("AUTH_USERS_ADMIN_USER_IDS", message)
+        self.assertIn("No access grant designates", message)
 
     def test_update_matrix(self):
         """PATCH renames with users:write; identity fields stay fixed."""
@@ -988,7 +1001,7 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
             headers=self.headers["clients_only"],
         )
         message = self.assert_forbidden(response)
-        self.assertIn("designated admin", message)
+        self.assertIn("No access grant designates", message)
 
         response = self.client.delete(
             f"/auth/v1/users/{self.target_id}/",
@@ -1026,19 +1039,21 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
 
     # --- fail-closed defaults and per-vocabulary isolation ---
 
-    def test_unset_users_allowlist_denies(self):
-        """An unset AUTH_USERS_ADMIN_USER_IDS means no users-admins."""
-        env.delete("AUTH_USERS_ADMIN_USER_IDS")
+    def test_no_grant_row_means_no_admin(self):
+        """Deleting the grant row removes the designation (#887)."""
+        from campus.auth.resources.grant import grants as grants_store
+        grants_store.revoke(
+            "user", self.USERS_ADMIN_IDS[0], "users", level="read"
+        )
         self.addCleanup(
-            env.set,
-            "AUTH_USERS_ADMIN_USER_IDS",
-            ",".join(self.USERS_ADMIN_IDS),
+            grants_store.grant,
+            "user", self.USERS_ADMIN_IDS[0], "users", level="read",
         )
         response = self.client.get(
             "/auth/v1/users/", headers=self.headers["read"]
         )
         message = self.assert_forbidden(response)
-        self.assertIn("designated admin", message)
+        self.assertIn("No access grant designates", message)
 
 
 if __name__ == '__main__':
