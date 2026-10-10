@@ -1243,6 +1243,16 @@ class TestSuperAdminRoot(unittest.TestCase):
         self.assertEqual(data["error"]["code"], "FORBIDDEN")
         return data["error"]["message"]
 
+    def test_root_lists_clients(self):
+        # The listing route calls require_admin_user directly (the
+        # legacy any-client-lists path) — the root must pass it too
+        # (caught live on dev post-#900: registration passed while
+        # listing 403'd).
+        response = self.client.get(
+            "/auth/v1/clients/", headers=self.root_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
     def test_root_passes_users_without_rows_or_scopes(self):
         response = self.client.get(
             "/auth/v1/users/", headers=self.root_headers
