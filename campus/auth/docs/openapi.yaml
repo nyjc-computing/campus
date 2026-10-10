@@ -1684,6 +1684,145 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/v1/grants/:
+    get:
+      tags: [Access Grants]
+      summary: List access-grant rows (the admin matrix)
+      description: >
+        The "who can administer what" matrix query (#872, #883).
+        The operator lists every row; a same-vocabulary admin (a
+        user holding <vocabulary>:admin via a grant row AND a token
+        scope) may list scoped to resource_type=<their vocabulary>.
+        Unfiltered listing requires the operator.
+      operationId: listAccessGrants
+      parameters:
+        - name: grantee_type
+          in: query
+          schema: {type: string, enum: [client, user]}
+        - name: grantee_id
+          in: query
+          schema: {type: string}
+        - name: resource_type
+          in: query
+          schema: {type: string, enum: [vault, clients, users, credentials]}
+        - name: resource_id
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: Grant rows matching the filters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantRowList'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Access Grants]
+      summary: Grant access (create a row, or raise an existing one)
+      description: >
+        Operator, or a same-vocabulary admin. Vault bits OR into the
+        existing mask; management levels never downgrade. Guards
+        (#883): no self-grants by user principals; vocabulary-level
+        clients:admin rows are rejected (operator-equivalent); the
+        credentials vocabulary and user-principal vault grants stay
+        reserved until #889.
+      operationId: grantAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantRowInput'
+      responses:
+        '201':
+          description: The resulting grant row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantRow'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/grants/check:
+    get:
+      tags: [Access Grants]
+      summary: Check whether a grantee's row covers a permission
+      operationId: checkAccessGrant
+      parameters:
+        - name: grantee_type
+          in: query
+          required: true
+          schema: {type: string, enum: [client, user]}
+        - name: grantee_id
+          in: query
+          required: true
+          schema: {type: string}
+        - name: resource_type
+          in: query
+          required: true
+          schema: {type: string, enum: [vault, clients, users, credentials]}
+        - name: resource_id
+          in: query
+          schema: {type: string}
+        - name: bits
+          in: query
+          schema: {type: integer}
+        - name: level
+          in: query
+          schema: {type: string, enum: [read, mod, write, admin]}
+      responses:
+        '200':
+          description: Whether the row covers the requested permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantCheckResult'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/grants/revoke:
+    post:
+      tags: [Access Grants]
+      summary: Revoke access (clear vault bits, delete covered levels)
+      description: >
+        Vault rows delete at zero bits; a revoked level's row is
+        deleted when the held level covers it. Operator, or a
+        same-vocabulary admin; user principals may not revoke their
+        own grants.
+      operationId: revokeAccessGrant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantRowInput'
+      responses:
+        '200':
+          description: The remaining grant row, or null when deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrantRow'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /auth/v1/grants/{grant_id}:
+    delete:
+      tags: [Access Grants]
+      summary: Delete a grant row outright
+      operationId: deleteAccessGrant
+      parameters:
+        - name: grant_id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Deleted
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/v1/vaults/{label}/:
     get:
       tags: [Vaults]
@@ -1958,6 +2097,74 @@ components:
       minimum: 1
       maximum: 15
       description: READ=1, CREATE=2, UPDATE=4, DELETE=8; combine with bitwise OR.
+
+    GrantRow:
+      type: object
+      required: [id, created_at, grantee_type, grantee_id, resource_type, resource_id]
+      properties:
+        id:
+          type: string
+        created_at:
+          type: string
+        grantee_type:
+          type: string
+          enum: [client, user]
+        grantee_id:
+          type: string
+        resource_type:
+          type: string
+          enum: [vault, clients, users, credentials]
+        resource_id:
+          type: string
+          description: Vault label for vault grants; empty for vocabulary-level grants
+        bits:
+          type: integer
+          nullable: true
+          description: CRUD bitflag mask — vault grants only
+        level:
+          type: string
+          nullable: true
+          enum: [read, mod, write, admin]
+          description: Scope level — management grants only
+
+    GrantRowInput:
+      type: object
+      required: [grantee_type, grantee_id, resource_type]
+      properties:
+        grantee_type:
+          type: string
+          enum: [client, user]
+        grantee_id:
+          type: string
+        resource_type:
+          type: string
+          enum: [vault, clients, users, credentials]
+        resource_id:
+          type: string
+          default: ""
+        bits:
+          type: integer
+          nullable: true
+        level:
+          type: string
+          nullable: true
+          enum: [read, mod, write, admin]
+
+    GrantRowList:
+      type: object
+      required: [grants]
+      properties:
+        grants:
+          type: array
+          items:
+            $ref: '#/components/schemas/GrantRow'
+
+    GrantCheckResult:
+      type: object
+      required: [granted]
+      properties:
+        granted:
+          type: boolean
 
     AccessGrant:
       type: object

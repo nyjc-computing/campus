@@ -542,7 +542,13 @@ def require_resource_permission(
     if is_operator():
         return
     if resource == _VAULT_RESOURCE:
-        assert bits is not None
+        if bits is None:
+            # Reached with no bitflag operand (e.g. an admin route
+            # asking for vault authority): fail closed, not 500.
+            raise api_errors.ForbiddenError(
+                "Vault access requires a client principal holding "
+                "the matching bitflags"
+            )
         _require_vault_bitflags(instance or "", bits)
         return
     client = getattr(flask.g, "current_client", None)

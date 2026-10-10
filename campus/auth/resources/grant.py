@@ -281,7 +281,7 @@ class GrantsResource:
             _scope(resource_type, level),
         )
 
-    def list(self, **filters: str) -> list[dict]:
+    def list(self, **filters: str | None) -> list[dict]:
         """List grant rows by any combination of key columns.
 
         This is the "who can administer what" matrix query (#872,
