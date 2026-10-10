@@ -16,6 +16,7 @@ kept out of models.
 
 __all__ = [
     "APIKey",
+    "AccessGrant",
     "AppCredentials",
     "Assignment",
     "AuthSession",
@@ -67,6 +68,7 @@ from .client import Client, ClientAccess
 from .credentials import AppCredentials, OAuthToken, UserCredentials
 from .device_code import DeviceCode
 from .emailotp import EmailOTP
+from .grant import AccessGrant
 from .integration import Integration
 from .login import LoginSession
 from .session import AuthSession
