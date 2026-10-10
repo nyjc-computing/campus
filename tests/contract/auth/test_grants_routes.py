@@ -350,5 +350,82 @@ class TestGrantsRoutes(unittest.TestCase):
             self.assert_forbidden(response)
 
 
+
+class TestGrantsRootMatrix(unittest.TestCase):
+    """The super-admin root reads the unfiltered matrix (#906).
+
+    Regression: list_grants used `assert resource_type is not None`
+    as flow control behind require_operator — written when
+    require_operator always raised for user principals. #900 wired
+    is_super_admin() into that gate, so the root fell through to the
+    assert and unfiltered lists 500'd. Filtered lists (which route
+    to _require_grant_admin, root-wired) always worked.
+    """
+
+    ROOT = "grants.906.root@campus.test"
+    PLAIN = "grants.906.plain@campus.test"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.auth_app
+
+        # Generic end-user scopes only: the root needs no management
+        # scopes, and the plain user must gain nothing from the env
+        # var being set.
+        cls.root_token = create_test_token(cls.ROOT, scopes=["read"])
+        cls.plain_token = create_test_token(cls.PLAIN, scopes=["read"])
+        env.set("AUTH_SUPER_ADMIN", cls.ROOT)
+
+    @classmethod
+    def tearDownClass(cls):
+        if env.contains("AUTH_SUPER_ADMIN"):
+            env.delete("AUTH_SUPER_ADMIN")
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self.root_headers = get_bearer_auth_headers(self.root_token)
+        self.plain_headers = get_bearer_auth_headers(self.plain_token)
+
+    def test_root_lists_unfiltered_matrix(self):
+        """The exact #906 repro: unfiltered list is 200, not 500."""
+        response = self.client.get(GRANTS_BASE + "/", headers=self.root_headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("grants", response.get_json())
+
+    def test_root_lists_filtered(self):
+        """Filtered lists keep working for the root."""
+        response = self.client.get(
+            GRANTS_BASE + "/",
+            query_string={"resource_type": "users"},
+            headers=self.root_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_plain_user_unfiltered_still_denied(self):
+        """Non-root users still need the operator (or a vocabulary)."""
+        response = self.client.get(
+            GRANTS_BASE + "/", headers=self.plain_headers
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_root_check_endpoint_still_passes(self):
+        """The shared gate _require_grant_admin stays root-wired."""
+        response = self.client.get(
+            GRANTS_BASE + "/check",
+            query_string={
+                "grantee_type": "user",
+                "grantee_id": self.ROOT,
+                "resource_type": "users",
+                "level": "read",
+            },
+            headers=self.root_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.get_json()["granted"], bool)
+
+
 if __name__ == "__main__":
     unittest.main()
