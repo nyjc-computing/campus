@@ -153,31 +153,69 @@ Set environment variables in Railway dashboard:
 - `PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}`
 - Start command: `gunicorn --bind "0.0.0.0:$PORT" --timeout 120 wsgi:app`
 
-On the **campus.auth** service, configure the management-authorization
-allowlists (all read at request time, comma-separated, unset/empty =
-fail-closed deny):
+On the **campus.auth** service, configure the operator allowlist
+(read at request time, comma-separated, unset/empty = fail-closed
+deny):
 
 - `AUTH_OPERATOR_CLIENT_IDS`: client ids granted the deployment-operator
-  role on every management blueprint — register/update/delete clients,
-  manage users, credentials, and vault access (#854). Typically the
-  campus-admin portal's client id.
-- `AUTH_ADMIN_USER_IDS`: user ids granted limited client-management
-  authority with their own bearer tokens (#865). Two ANDed legs: a
-  listed user must also hold the management scope on its token, which
-  requires widening the campus-cli client's `allowed_scopes` first and
-  logging in with `campus auth login --scope clients:write`. Scope
-  alone never confers authority.
-- `AUTH_USERS_ADMIN_USER_IDS`: user ids granted user-management
-  authority with their own bearer tokens (campus-cli#42), separate
-  from `AUTH_ADMIN_USER_IDS` so clients-admins are not automatically
-  users-admins (generalization matrix: campus#872). Same two ANDed
-  legs; per-action floors: `users:read` lists/gets,
-  `users:mod` activates, `users:write` creates/updates, `users:admin`
-  deletes — e.g. widen the campus-cli client's `allowed_scopes` with
-  the users scopes and log in with
-  `campus auth login --scope users:admin`. vaults/credentials stay
-  operator-only. See `campus/auth/authz.py` and
-  docs/auth-token-invariants.md (A8).
+  role on every management blueprint (#854) — the non-delegable root
+  used to bootstrap all other authority. Typically the campus-admin
+  portal's client id.
+
+#### Management authority: the access-grant store (#883)
+
+Everyone else's management authority lives in the **access-grant
+store**, administered via `POST /auth/v1/grants` (the operator, or a
+same-vocabulary admin) and queried with `GET /auth/v1/grants` — that
+query **is** the "who can administer what" matrix (campus#872): one
+API call, no env audit. A designated user needs BOTH legs, ANDed and
+fail-closed: a grant row whose level covers the action, and a token
+carrying the scope (which requires widening the minting client's
+`allowed_scopes` first — see invariant A8).
+
+- `users` vocabulary: `users:read` lists/gets, `users:mod` activates,
+  `users:write` creates/updates, `users:admin` deletes.
+- `clients` vocabulary: grantable up to `clients:write` (benign field
+  updates). A vocabulary-level `clients:admin` row is
+  operator-equivalent and rejected (umbrella decision 4): register,
+  delete, secret rotation and scope caps are operator-only.
+- `vaults` vocabulary (#889): per-label rows at read/write/admin
+  (READ→read, CREATE|UPDATE→write, DELETE/ALL→admin) plus
+  `vaults:<level>` token scopes; administering vault grants is
+  operator-only. Clients keep vault bitflags via
+  `/clients/{id}/access/`.
+- `credentials` vocabulary: closed — routes stay operator-only.
+
+The designated-admin env vars (`AUTH_ADMIN_USER_IDS`,
+`AUTH_USERS_ADMIN_USER_IDS`) were **retired** by the DB-only ruling
+(#887/#888, umbrella decision 3) and are no longer read at request
+time. A `SUPER_ADMIN` env-nominated root user account is tracked in
+campus#897 (umbrella decision 8); once it lands, the matrix answer is
+the grants query plus two env roots (`AUTH_OPERATOR_CLIENT_IDS` and
+the super-admin).
+
+**Seed runbook (once per deployment, at or before the cutover).**
+Grant rows are inert until the gated code deploys, so seeding early
+is safe; seeding late means fail-closed lockout for anyone but the
+operator. With operator credentials:
+
+```sh
+POST /auth/v1/grants/            # Basic auth of an operator client
+{"grantee_type": "user", "grantee_id": "admin@domain.edu.sg",
+ "resource_type": "users", "level": "admin"}
+```
+
+Break-glass alternative when only service SSH is available
+(`railway ssh -s campus.auth`):
+
+```sh
+cd /app && PYTHONPATH=/app .venv/bin/python -c '
+from campus.auth.resources.grant import grants
+grants.grant("user", "admin@domain.edu.sg", "users", level="admin")'
+```
+
+See `campus/auth/authz.py`, campus#883 (the epic and its decision
+record), and docs/auth-token-invariants.md (A8).
 
 **Note:** The `--timeout 120` flag sets a 2-minute timeout (vs default 30s) to handle OAuth flows and external API calls.
 
