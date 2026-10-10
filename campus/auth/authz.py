@@ -321,6 +321,8 @@ def require_admin_user(scope: str, action: str) -> None:
     """
     if not is_user_principal():
         return
+    if is_super_admin():
+        return
     resource, _, level = scope.partition(":")
     _require_user_designation(resource, level)
 
