@@ -1191,5 +1191,143 @@ class TestUserVaultAccess(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
 
 
+class TestSuperAdminRoot(unittest.TestCase):
+    """The env-nominated super-admin root account (#897, decision 8).
+
+    The root holds full privileges on every resource with no grant
+    rows and no token-scope requirement (the identity leg alone
+    suffices) — including the surfaces that are operator-only for
+    everyone else: admin-level clients actions, credentials, vault
+    access, and vault grant administration. Its token here carries
+    only generic end-user scopes on purpose. Shape guards still
+    apply to it (clients:admin rows stay ungrantable), and no other
+    principal gains anything from the env var being set.
+    """
+
+    ROOT = "authz.897.root@campus.test"
+    OTHER = "authz.897.other@campus.test"
+    LABEL = "authz-897-label"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.auth_app
+
+        from campus.auth import resources as auth_resources
+        auth_resources.vault[cls.LABEL]["KEY"] = "root-visible"
+        # Deliberately generic scopes: the root needs no management
+        # scopes on its token.
+        cls.root_token = create_test_token(
+            cls.ROOT, scopes=["read"], grant_vault_access=False
+        )
+        cls.other_token = create_test_token(
+            cls.OTHER, scopes=["users:admin"], grant_vault_access=False
+        )
+        env.set("AUTH_SUPER_ADMIN", cls.ROOT)
+
+    @classmethod
+    def tearDownClass(cls):
+        if env.contains("AUTH_SUPER_ADMIN"):
+            env.delete("AUTH_SUPER_ADMIN")
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self.root_headers = get_bearer_auth_headers(self.root_token)
+        self.other_headers = get_bearer_auth_headers(self.other_token)
+
+    def assert_forbidden(self, response):
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "FORBIDDEN")
+        return data["error"]["message"]
+
+    def test_root_passes_users_without_rows_or_scopes(self):
+        response = self.client.get(
+            "/auth/v1/users/", headers=self.root_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_root_passes_admin_level_clients_actions(self):
+        import uuid as _uuid
+        response = self.client.post(
+            "/auth/v1/clients/",
+            json={
+                "name": f"authz-897-root-{_uuid.uuid4().hex[:6]}",
+                "description": "Registered by the super-admin root (#897)",
+            },
+            headers=self.root_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+        registered = response.get_json()["id"]
+        response = self.client.delete(
+            f"/auth/v1/clients/{registered}/",
+            json={},
+            headers=self.root_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_root_passes_operator_only_credentials(self):
+        response = self.client.get(
+            "/auth/v1/credentials/campus/", headers=self.root_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_root_reads_vaults_without_rows(self):
+        response = self.client.get(
+            f"/auth/v1/vaults/{self.LABEL}/", headers=self.root_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_root_administers_vault_grants(self):
+        response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": self.OTHER,
+                "resource_type": "vault",
+                "resource_id": "authz-897-granted",
+                "level": "read",
+            },
+            headers=self.root_headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_root_may_self_grant(self):
+        response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": self.ROOT,
+                "resource_type": "users",
+                "level": "admin",
+            },
+            headers=self.root_headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_clients_admin_shape_rejection_still_applies(self):
+        response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": self.OTHER,
+                "resource_type": "clients",
+                "level": "admin",
+            },
+            headers=self.root_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("operator-equivalent", message)
+
+    def test_env_var_confers_nothing_on_other_principals(self):
+        # A users:admin-scoped user with no grant row stays denied.
+        response = self.client.get(
+            "/auth/v1/users/", headers=self.other_headers
+        )
+        self.assert_forbidden(response)
+
+
 if __name__ == '__main__':
     unittest.main()

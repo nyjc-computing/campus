@@ -189,10 +189,21 @@ carrying the scope (which requires widening the minting client's
 The designated-admin env vars (`AUTH_ADMIN_USER_IDS`,
 `AUTH_USERS_ADMIN_USER_IDS`) were **retired** by the DB-only ruling
 (#887/#888, umbrella decision 3) and are no longer read at request
-time. A `SUPER_ADMIN` env-nominated root user account is tracked in
-campus#897 (umbrella decision 8); once it lands, the matrix answer is
-the grants query plus two env roots (`AUTH_OPERATOR_CLIENT_IDS` and
-the super-admin).
+time.
+
+#### The super-admin root account (#897, umbrella decision 8)
+
+`AUTH_SUPER_ADMIN` names one user account by email — the human
+break-glass root, holding **full privileges on every resource with no
+grant rows and no token-scope requirement** (the identity leg alone
+suffices; the minting client's scope cap does not bound it — the one
+deliberate A8 exception). The matrix answer is the grants query plus
+two env roots: `AUTH_OPERATOR_CLIENT_IDS` (the machine root) and
+`AUTH_SUPER_ADMIN` (the human root). Use the root primarily to seed
+sub-admin grants via `POST /auth/v1/grants`, then sign out:
+safeguarding the account (a dedicated, rarely used identity such as
+`campus-admin@domain.edu.sg`) is the deployer's responsibility. The
+`clients:admin` grant-shape rejection applies to the root too.
 
 **Seed runbook (once per deployment, at or before the cutover).**
 Grant rows are inert until the gated code deploys, so seeding early

@@ -20,6 +20,13 @@ designated admin users (#865), never client principals.
 
 Principals:
 
+- Super-admin root (#897, decision 8): the single user account
+  nominated by AUTH_SUPER_ADMIN (matched by account email), holding
+  full privileges on every resource with no grant rows and no
+  token-scope requirement — the human break-glass root, used
+  primarily to seed sub-admin grants. Authority comes from the
+  account's own identity, never from the minting client; the
+  clients:admin grant-shape rejection still applies to it.
 - Operator clients: confidential clients whose ids are listed in the
   AUTH_OPERATOR_CLIENT_IDS env var (comma-separated, read at request
   time so deployments can rotate the list without a code change). The
@@ -85,6 +92,7 @@ __all__ = [
     "forbid_user_principal",
     "has_admin_scope",
     "is_operator",
+    "is_super_admin",
     "operator_client_ids",
     "require_admin_user",
     "require_admin_user_or_operator",
@@ -94,6 +102,7 @@ __all__ = [
     "require_self_or_operator",
     "require_vault_permission",
     "session_user_visible",
+    "super_admin_email",
 ]
 
 import flask
@@ -109,6 +118,15 @@ from . import scopes
 # deployment (e.g. the campus-admin portal's client); unset means no
 # principal may manage the deployment.
 OPERATOR_CLIENT_IDS_ENVVAR = "AUTH_OPERATOR_CLIENT_IDS"
+
+# The env-nominated super-admin root account (#897, decision 8): one
+# user account (recommended: a dedicated, rarely used one) holding
+# full privileges on every resource with no grant rows and no
+# token-scope requirement — the identity leg alone suffices. Read at
+# request time; the value is the account email. Safeguarding the
+# account is the deployer's responsibility; its primary use is
+# seeding sub-admin grants via /grants/.
+SUPER_ADMIN_ENVVAR = "AUTH_SUPER_ADMIN"
 
 # Management-scope vocabulary, v1: clients (#888, store-backed;
 # grantable up to write — admin rows are operator-equivalent,
@@ -169,6 +187,35 @@ def operator_client_ids() -> frozenset[str]:
     })
 
 
+def super_admin_email() -> str | None:
+    """The env-nominated super-admin account email, if configured.
+
+    Read at request time (not import time), mirroring
+    operator_client_ids: unset or empty means the deployment has no
+    super-admin root.
+    """
+    raw = env.get(SUPER_ADMIN_ENVVAR) or ""
+    return raw.strip() or None
+
+
+def is_super_admin() -> bool:
+    """True if the caller is the env-nominated super-admin (#897).
+
+    Authority comes from the account's own identity — never from the
+    client it was minted through — so this is only meaningful for
+    user principals and is matched against the principal's record
+    email (enriched at authentication time). Fail-closed: no env var
+    or no email on the principal means no root.
+    """
+    if not is_user_principal():
+        return False
+    email = super_admin_email()
+    if email is None:
+        return False
+    user = flask.g.current_user
+    return str(user.get("email") or "") == email
+
+
 def is_operator() -> bool:
     """Return True if the authenticated client is a deployment operator.
 
@@ -207,6 +254,8 @@ def has_admin_scope(required: str) -> bool:
     """
     if not is_user_principal():
         return False
+    if is_super_admin():
+        return True
     resource, _, level = required.partition(":")
     try:
         _require_user_designation(resource, level)
@@ -226,8 +275,10 @@ def session_user_visible(session_client_id: str | None) -> bool:
     (the #854 rule — a user principal is never the session's client),
     and the users routes remain the user-facing path.
     """
-    if is_user_principal() or session_client_id is None:
+    if session_client_id is None:
         return False
+    if is_user_principal():
+        return is_super_admin()
     client = getattr(flask.g, "current_client", None)
     if client is not None and str(client.id) == str(session_client_id):
         return True
@@ -287,6 +338,8 @@ def require_operator(action: str, admin_scope: str | None = None) -> None:
             user principal or a non-operator client.
     """
     if is_user_principal():
+        if is_super_admin():
+            return
         if admin_scope is None:
             forbid_user_principal(action)
         else:
@@ -322,6 +375,8 @@ def require_admin_user_or_operator(
             require_admin_user).
     """
     if is_user_principal():
+        if is_super_admin():
+            return
         require_admin_user(admin_scope, action)
         return
     if is_operator():
@@ -357,6 +412,8 @@ def require_self_or_operator(
             client.
     """
     if is_user_principal():
+        if is_super_admin():
+            return
         if admin_scope is None:
             forbid_user_principal(action)
         else:
@@ -525,6 +582,8 @@ def require_resource_permission(
         api_errors.ForbiddenError: If the caller lacks authority.
     """
     if is_user_principal():
+        if is_super_admin():
+            return
         assert level is not None  # gates always name a level
         _require_user_designation(resource, level, instance or "")
         return

@@ -70,8 +70,12 @@ def _require_grant_admin(resource_type: str) -> None:
     vault grants is authority over every label's secrets.
     """
     if resource_type == "vault":
-        # User principals are settled first (#854): a user minted
-        # through the operator client must not inherit the bypass.
+        # The super-admin root passes (#897): full privileges. Other
+        # user principals are settled before the operator check
+        # (#854): a user minted through the operator client must not
+        # inherit the bypass.
+        if authz.is_super_admin():
+            return
         if authz.is_user_principal() or not authz.is_operator():
             raise api_errors.ForbiddenError(
                 "Vault grant administration is operator-only (#889): "
@@ -83,8 +87,13 @@ def _require_grant_admin(resource_type: str) -> None:
 
 
 def _forbid_self_grant(grantee_type: str, grantee_id: str) -> None:
-    """Reject a user principal administering its own grant (#883)."""
-    if authz.is_user_principal():
+    """Reject a user principal administering its own grant (#883).
+
+    The super-admin root is exempt (#897): it cannot escalate (it
+    already holds everything), and self-grants are how a root names
+    itself for day-to-day tooling if ever wanted.
+    """
+    if authz.is_user_principal() and not authz.is_super_admin():
         user = flask.g.current_user
         if (
                 grantee_type == "user"

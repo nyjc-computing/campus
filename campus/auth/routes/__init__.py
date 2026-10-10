@@ -97,6 +97,23 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
             error_code=ErrorConstant.AUTH_TOKEN_INVALID,
         ) from None
     token_record = credentials.token
+    # The user record's email rides along for the super-admin match
+    # (#897: the env var names the account by email, and the bearer's
+    # id alone is not a reliable email). The credential's user
+    # identifier resolves as a user id first; test fixtures key
+    # credentials by the full email, so an email-shaped identifier
+    # falls back to its localpart (user ids never contain "@").
+    # Fail-closed: an unresolved record simply means no root.
+    user_email = None
+    for candidate in (
+        credentials.user_id,
+        str(credentials.user_id).partition("@")[0],
+    ):
+        try:
+            user_email = resources.user[candidate].get().email
+            break
+        except api_errors.NotFoundError:
+            continue
     return {
         "client": client,
         # Bearer authentication carries the user context (the token's
@@ -107,6 +124,7 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
         # record or no scopes means no management authority).
         "user": {
             "id": str(credentials.user_id),
+            "email": user_email,
             "scopes": list(token_record.scopes) if token_record else [],
         },
     }

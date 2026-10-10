@@ -1695,10 +1695,11 @@ paths:
       summary: List access-grant rows (the admin matrix)
       description: >
         The "who can administer what" matrix query (#872, #883).
-        The operator lists every row; a same-vocabulary admin (a
+        The operator and the super-admin root (#897,
+        AUTH_SUPER_ADMIN) list every row; a same-vocabulary admin (a
         user holding <vocabulary>:admin via a grant row AND a token
         scope) may list scoped to resource_type=<their vocabulary>.
-        Unfiltered listing requires the operator.
+        Unfiltered listing requires the operator or the root.
       operationId: listAccessGrants
       parameters:
         - name: grantee_type
@@ -1726,8 +1727,9 @@ paths:
       tags: [Access Grants]
       summary: Grant access (create a row, or raise an existing one)
       description: >
-        Operator, or a same-vocabulary admin. Vault bits OR into the
-        existing mask; management levels never downgrade. Guards
+        The operator, the super-admin root (#897), or a
+        same-vocabulary admin. Vault bits OR into the existing mask;
+        management levels never downgrade. Guards
         (#883): no self-grants by user principals; vocabulary-level
         clients:admin rows are rejected (operator-equivalent); the
         credentials vocabulary and user-principal vault grants stay

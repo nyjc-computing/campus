@@ -102,7 +102,12 @@ replaced (`AppCredentialsResource.issue`).
   client it was minted through. The ceiling stays operator-controlled
   end to end: a user token can carry a management scope only if the
   minting client's `allowed_scopes` cap includes it (A1), so every
-  user-admin grant is an operator decision twice over.
+  user-admin grant is an operator decision twice over. Sole exception
+  (#897, umbrella decision 8): the env-nominated super-admin root
+  (`AUTH_SUPER_ADMIN`, matched by account email) needs neither leg —
+  its authority is the identity alone, unbounded by the minting
+  client's scope cap; safeguarding that account is the deployer's
+  responsibility.
 - **A9 — Client principals are read-only; mutations are
   user-attributable (#881).** Client principals hold the bare minimum
   access their role needs — the vault role (per-label `vault_access`
