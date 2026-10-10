@@ -4,15 +4,17 @@ Defines access control utilities for Campus authentication and vault access.
 """
 
 from campus.common.errors import api_errors
+from campus.model.client import ClientAccess
 
-# Access permission bitflags
-# Each permission is a power of 2, allowing them to be combined with | (OR)
-READ = 1    # 0001 in binary - Can read existing secrets
-CREATE = 2  # 0010 in binary - Can create new secrets
-UPDATE = 4  # 0100 in binary - Can modify existing secrets
-DELETE = 8  # 1000 in binary - Can delete secrets
-# 1111 in binary - All permissions (value: 15)
-ALL = READ | CREATE | UPDATE | DELETE
+# Access permission bitflags. The single definition lives on the
+# ClientAccess model (#884); this module re-exports it alongside the
+# permission-name conversion helpers. Each permission is a power of 2,
+# allowing them to be combined with | (OR).
+READ = ClientAccess.READ      # Can read existing secrets
+CREATE = ClientAccess.CREATE  # Can create new secrets
+UPDATE = ClientAccess.UPDATE  # Can modify existing secrets
+DELETE = ClientAccess.DELETE  # Can delete secrets
+ALL = ClientAccess.ALL        # All permissions (value: 15)
 
 
 class PermissionError(Exception):

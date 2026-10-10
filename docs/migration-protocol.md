@@ -286,6 +286,7 @@ up to date and `apply` is a no-op on dev. Statuses below verified as of
 | 007_add_client_upstream_scopes | Postgres | per-client upstream scope config | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
 | 008_add_client_token_bridge | Postgres | token-bridge columns | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
 | 009_create_app_credentials | Postgres | `app_credentials` for client_credentials grant | applied (auto-init at startup, non-production; stamped 2026-10-03) | pending — required; prod blocks `init_from_model` |
+| 010_create_access_grants | Postgres | `access_grants` store (#883/#884), backfilling and retiring `vault_access` | pending — run on deploy; non-prod self-heals the table but existing `vault_access` rows need the backfill | pending — required; prod blocks `init_from_model` |
 
 Note: production currently has no `campus.auth` service (survey
 2026-09-29); "pending" rows become actionable only when it is stood up.

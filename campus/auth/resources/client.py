@@ -13,10 +13,11 @@ import campus.model as model
 import campus.storage
 from campus.common import env, schema
 from campus.common.errors import api_errors, auth_errors
-from campus.common.utils import secret, uid
+from campus.common.utils import secret
+
+from . import grant as grant_resource
 
 client_storage = campus.storage.get_table("vault_clients")
-access_storage = campus.storage.get_table("vault_access")
 
 logger = logging.getLogger(__name__)
 
@@ -78,11 +79,15 @@ def _get_client_permissions(
     Returns:
         Dictionary mapping vault labels to permission bitflags
     """
-    access_records = access_storage.get_matching({"client_id": client_id})
+    access_records = grant_resource.grant_storage.get_matching({
+        "grantee_type": "client",
+        "grantee_id": client_id,
+        "resource_type": "vault",
+    })
     permissions: dict[str, int] = {}
     for record in access_records:
-        label = schema.String(record["label"])
-        access_flag = schema.Integer(record["access"])
+        label = schema.String(record["resource_id"])
+        access_flag = schema.Integer(record["bits"])
         permissions[label] = access_flag
     return permissions
 
@@ -96,12 +101,15 @@ def _get_all_client_permissions() -> dict[str, dict[str, int]]:
     Returns:
         Dictionary mapping vault labels to permission bitflags
     """
-    access_records = access_storage.get_matching({})
+    access_records = grant_resource.grant_storage.get_matching({
+        "grantee_type": "client",
+        "resource_type": "vault",
+    })
     permissions: dict[str, dict[str, int]] = {}
     for record in access_records:
-        label = schema.String(record["label"])
-        access_flag = schema.Integer(record["access"])
-        client_id = record["client_id"]
+        label = schema.String(record["resource_id"])
+        access_flag = schema.Integer(record["bits"])
+        client_id = record["grantee_id"]
         if client_id not in permissions:
             permissions[client_id] = {}
         permissions[client_id][label] = access_flag
@@ -178,9 +186,7 @@ class ClientsResource:
     def init_storage() -> None:
         """Initialize storage for client authentication."""
         client_storage.init_from_model("vault_clients", model.Client)
-        access_storage.init_from_model(
-            "vault_access", model.ClientAccess
-        )
+        grant_resource.grants.init_storage()
 
     def __getitem__(
             self,
@@ -389,7 +395,14 @@ class ClientResource:
 
 
 class ClientAccessResource:
-    """Represents the client access resource in Campus API Schema."""
+    """Vault-access view over the access-grant store (#884).
+
+    Preserves the pre-#884 public surface and semantics of the
+    vault_access table, now as (client grantee, vault resource) grant
+    rows administered by the same /clients/{id}/access/ routes. The
+    generalized GrantsResource (campus.auth.resources.grant) is the
+    full store; this class is the vault compatibility layer.
+    """
 
     def __init__(self, parent: "ClientResource"):
         self._parent = parent
@@ -402,17 +415,17 @@ class ClientAccessResource:
         """Check if client has required permission for vault label.
 
         Args:
-            client_id: The authenticated client ID
             vault_label: The vault label to check access for
-            required_permission: The permission bitflag required (READ,
-            CREATE, UPDATE, DELETE)
+            permission: The permission bitflag required (READ, CREATE,
+            UPDATE, DELETE)
 
-        Raises:
-            VaultAccessDeniedError: If client lacks the required permission
+        Returns:
+            True if any requested bit is held on the label
         """
-        client = self._parent.get()
-        vault_access = client.permissions.get(vault_label, 0)
-        return bool(vault_access & permission)
+        return grant_resource.grants.check(
+            "client", self._parent.client_id, "vault", vault_label,
+            bits=permission,
+        )
 
     def get(
             self,
@@ -426,8 +439,10 @@ class ClientAccessResource:
         Returns:
             The permission bitflag for the vault label
         """
-        client = self._parent.get()
-        return client.permissions.get(vault_label, 0)
+        row = grant_resource.grants.get(
+            "client", self._parent.client_id, "vault", vault_label
+        )
+        return int(row["bits"]) if row else 0
 
     def grant(
             self,
@@ -438,28 +453,13 @@ class ClientAccessResource:
 
         Args:
             vault_label: The vault label to grant access for
-            permission: The permission bitflag to grant
+            permission: The permission bitflag to grant (OR-ed into
+            any existing mask)
         """
-        client_id = self._parent.client_id
-        records = access_storage.get_matching({
-            "client_id": client_id,
-            "label": vault_label,
-        })
-        if records:
-            current_access = records[0]["access"]
-            new_access = current_access | permission
-            access_storage.update_by_id(
-                records[0]["id"],
-                {"access": new_access}
-            )
-        else:
-            access_storage.insert_one({
-                "id": uid.generate_category_uid("vault_access"),
-                "created_at": schema.DateTime.utcnow(),
-                "client_id": client_id,
-                "label": vault_label,
-                "access": permission,
-            })
+        grant_resource.grants.grant(
+            "client", self._parent.client_id, "vault", vault_label,
+            bits=permission,
+        )
 
     def list(self) -> dict[str, int]:
         """List all vault access permissions for the client.
@@ -467,16 +467,12 @@ class ClientAccessResource:
         Returns:
             Dictionary mapping vault labels to permission bitflags
         """
-        client_id = self._parent.client_id
-        access_records = access_storage.get_matching(
-            {"client_id": client_id}
+        rows = grant_resource.grants.list(
+            grantee_type="client",
+            grantee_id=self._parent.client_id,
+            resource_type="vault",
         )
-        permissions: dict[str, int] = {}
-        for record in access_records:
-            label = record["label"]
-            access_flag = record["access"]
-            permissions[label] = access_flag
-        return permissions
+        return {row["resource_id"]: int(row["bits"]) for row in rows}
 
     def revoke(
             self,
@@ -487,24 +483,13 @@ class ClientAccessResource:
 
         Args:
             vault_label: The vault label to revoke access for
-            permission: The permission bitflag to revoke
+            permission: The permission bitflag to revoke (the grant
+            row is deleted when no bits remain)
         """
-        client_id = self._parent.client_id
-        records = access_storage.get_matching({
-            "client_id": client_id,
-            "label": vault_label,
-        })
-        if not records:
-            return
-        current_access = records[0]["access"]
-        new_access = current_access & ~permission
-        if new_access == 0:
-            access_storage.delete_by_id(records[0]["id"])
-        else:
-            access_storage.update_by_id(
-                records[0]["id"],
-                {"access": new_access}
-            )
+        grant_resource.grants.revoke(
+            "client", self._parent.client_id, "vault", vault_label,
+            bits=permission,
+        )
 
     def update(
             self,
@@ -515,29 +500,10 @@ class ClientAccessResource:
 
         Args:
             vault_label: The vault label to update access for
-            permission: The permission bitflag to set (replaces existing)
+            permission: The permission bitflag to set (replaces the
+            existing mask; zero deletes the grant)
         """
-        client_id = self._parent.client_id
-        records = access_storage.get_matching({
-            "client_id": client_id,
-            "label": vault_label,
-        })
-        if permission == 0:
-            # If permission is 0, delete the access record if it exists
-            if records:
-                access_storage.delete_by_id(records[0]["id"])
-        elif records:
-            # Update existing record with new permission
-            access_storage.update_by_id(
-                records[0]["id"],
-                {"access": permission}
-            )
-        else:
-            # Create new record with the permission
-            access_storage.insert_one({
-                "id": uid.generate_category_uid("vault_access"),
-                "created_at": schema.DateTime.utcnow(),
-                "client_id": client_id,
-                "label": vault_label,
-                "access": permission,
-            })
+        grant_resource.grants.update(
+            "client", self._parent.client_id, "vault", vault_label,
+            bits=permission,
+        )
