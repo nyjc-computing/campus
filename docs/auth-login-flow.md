@@ -417,8 +417,9 @@ CLIs and other input-constrained clients use RFC 8628 instead
    issuance. Management scopes beyond the default set are opt-in:
    e.g. `--scope clients:write` for client management (#865) or
    `--scope users:admin` for user management (campus-cli#42) — the
-   latter also requires the caller's user id to be listed in
-   `AUTH_USERS_ADMIN_USER_IDS` (invariant A8).
+   latter also requires a matching grant row in the access-grant
+   store (#887; the designated-admin env vars are retired), or the
+   env-nominated super-admin root (#897) — invariant A8.
 
 ## Endpoint reference
 

@@ -110,8 +110,9 @@ replaced (`AppCredentialsResource.issue`).
   responsibility.
 - **A9 — Client principals are read-only; mutations are
   user-attributable (#881).** Client principals hold the bare minimum
-  access their role needs — the vault role (per-label `vault_access`
-  bitflags, granted by an operator and reviewed) — which in most
+  access their role needs — the vault role (per-label vault grant
+  bitflags in the access-grant store, #884, granted by an operator
+  and reviewed) — which in most
   cases means read-only. A client may read its own record and rotate
   its own secret, and nothing else on the registration surface:
   every mutation of registration data (`name`, `description`,
@@ -261,7 +262,7 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | B3 | P2 | **enforced** | identity growth: `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check in C3. Integration growth: connect flow guards (`routes/oauth_proxy/google` authorize + `oauth_proxy/google/proxy.py::_validate_connect_binding`, `prompt=consent` forced); `tests/contract/auth/test_integrations.py` |
 | B4 | P2 | **preserved** | `WORKSPACE_DOMAIN` checks in `google/proxy.py::handle_auth_callback`, `provider.verify_login` |
 | B5 | P2/P3 | **enforced** | credentials resource keying `(provider, user, client)`; broker releases keyed to the bearer token's own user |
-| B6 | P3 | **enforced** | this invariant + the catalog endpoint (`routes/integrations.py`, `GET /integrations/v1/`); consumer-side gates (campus-classroom `CLASSROOM_SCOPES_SEND`) verify the cap end-to-end; vault write-path authorization is the operator/vault_access gate (`campus/auth/authz.py`, #854; `tests/contract/auth/test_management_authorization.py`) |
+| B6 | P3 | **enforced** | this invariant + the catalog endpoint (`routes/integrations.py`, `GET /integrations/v1/`); consumer-side gates (campus-classroom `CLASSROOM_SCOPES_SEND`) verify the cap end-to-end; vault write-path authorization is the vault gate — operator, client bitflags, or per-label user grant rows (`campus/auth/authz.py`, #854/#889; `tests/contract/auth/test_management_authorization.py`) |
 | C1 | P3 | **enforced** | `routes/broker.py::_authorize_bridge_call` (bearer user + confidential + token_bridge flag, fail-closed); `test_token_broker.py` unflagged/public/basic/missing-credential cases |
 | C2 | P3 | **enforced** | broker response built explicitly (access token, expiry, scope only); `test_token_broker.py::test_release_returns_minimal_upstream_token` |
 | C3 | P3 | **enforced** | `validate_upstream_for_client` (C3a, keyed by the provider string) + integration absent-key-deny (`routes/broker.py`, both routes) + stored-grant coverage check (C3b) with machine-readable `missing_scopes`; `test_token_broker.py::test_min_scopes_*`, `test_integrations.py` broker cases, `test_connections.py::TestBrokerNamespacedGuardContract` |
