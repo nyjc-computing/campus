@@ -88,6 +88,10 @@ class TestGrantsStore(GrantsTestCase):
         self.assertFalse(
             grants.check("client", "cl_a", "vault", "label1", bits=1)
         )
+        # A vacuous mask checks False (the pre-#884 held & 0 semantics)
+        self.assertFalse(
+            grants.check("client", "cl_a", "vault", "label1", bits=0)
+        )
 
     def test_level_grant_never_downgrades(self):
         from campus.auth.resources.grant import grants

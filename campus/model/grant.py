@@ -34,7 +34,9 @@ class AccessGrant(Model):
     grantee_id: schema.CampusID
     resource_type: schema.String  # "vault" | "clients" | "users" | "credentials"
     # Vault label for vault grants; empty string for vocabulary-level grants
-    resource_id: schema.String = ""
+    resource_id: schema.String = field(
+        default_factory=lambda: schema.String("")
+    )
     # CRUD bitflag mask (READ|CREATE|UPDATE|DELETE) — vault grants only
     bits: schema.Integer | None = None
     # Scope level (read|mod|write|admin) — management grants only

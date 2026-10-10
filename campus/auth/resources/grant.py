@@ -144,16 +144,19 @@ class GrantsResource:
             })
             return
         if resource_type == VAULT:
+            assert bits is not None
             grant_storage.update_by_id(existing["id"], {
                 "bits": int(existing["bits"]) | bits,
             })
-        elif not scopes.grants(
-            [_scope(resource_type, existing["level"])],
-            _scope(resource_type, level),
-        ):
-            grant_storage.update_by_id(existing["id"], {
-                "level": level,
-            })
+        else:
+            assert level is not None
+            if not scopes.grants(
+                [_scope(resource_type, existing["level"])],
+                _scope(resource_type, level),
+            ):
+                grant_storage.update_by_id(existing["id"], {
+                    "level": level,
+                })
 
     def revoke(
             self,
@@ -184,6 +187,7 @@ class GrantsResource:
         if existing is None:
             return
         if resource_type == VAULT:
+            assert bits is not None
             remaining = int(existing["bits"]) & ~bits
             if remaining == 0:
                 grant_storage.delete_by_id(existing["id"])
@@ -191,11 +195,13 @@ class GrantsResource:
                 grant_storage.update_by_id(existing["id"], {
                     "bits": remaining,
                 })
-        elif scopes.grants(
-            [_scope(resource_type, existing["level"])],
-            _scope(resource_type, level),
-        ):
-            grant_storage.delete_by_id(existing["id"])
+        else:
+            assert level is not None
+            if scopes.grants(
+                [_scope(resource_type, existing["level"])],
+                _scope(resource_type, level),
+            ):
+                grant_storage.delete_by_id(existing["id"])
 
     def update(
             self,
@@ -261,15 +267,15 @@ class GrantsResource:
         via the monotonic scope algebra.
         """
         self._validate(grantee_type, resource_type, bits, level)
-        if resource_type == VAULT and bits == 0:
-            return
         existing = self._load(
             grantee_type, grantee_id, resource_type, resource_id
         )
         if existing is None:
             return False
         if resource_type == VAULT:
+            assert bits is not None
             return bool(int(existing["bits"]) & bits)
+        assert level is not None
         return scopes.grants(
             [_scope(resource_type, existing["level"])],
             _scope(resource_type, level),
