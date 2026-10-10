@@ -416,9 +416,11 @@ CLIs and other input-constrained clients use RFC 8628 instead
    client's `allowed_scopes` allowlist at request time and again at
    issuance. Management scopes beyond the default set are opt-in:
    e.g. `--scope clients:write` for client management (#865) or
-   `--scope users:admin` for user management (campus-cli#42) — the
-   latter also requires the caller's user id to be listed in
-   `AUTH_USERS_ADMIN_USER_IDS` (invariant A8).
+   `--scope users:admin` for user management (campus-cli#42). A
+   management scope alone still confers nothing: the account must
+   also hold the matching row in the access-grant store
+   (`/auth/v1/grants/`, #883) — see invariant A8; the
+   `AUTH_SUPER_ADMIN` root is the sole exception.
 
 ## Endpoint reference
 
