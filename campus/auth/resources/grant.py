@@ -74,10 +74,11 @@ class GrantsResource:
                 resource_type=resource_type,
                 accepted_values=list(_RESOURCE_TYPES),
             )
-        if resource_type == VAULT:
+        if resource_type == VAULT and grantee_type == "client":
             if level is not None or bits is None:
                 raise api_errors.InvalidRequestError(
-                    "Vault grants carry a bitflag mask, not a scope level"
+                    "Client vault grants carry a bitflag mask, not a "
+                    "scope level"
                 )
             if not 0 <= bits <= ClientAccess.ALL:
                 raise api_errors.InvalidRequestError(
@@ -87,9 +88,11 @@ class GrantsResource:
                     ),
                 )
         else:
+            # Management vocabularies, and vault rows for user
+            # grantees (#889 decision-1 mapping): scope levels.
             if bits is not None or level not in _LEVELS:
                 raise api_errors.InvalidRequestError(
-                    "Management grants carry a scope level, not bitflags",
+                    "These grants carry a scope level, not bitflags",
                     accepted_values=list(_LEVELS),
                 )
 
@@ -126,7 +129,7 @@ class GrantsResource:
         existing level — monotonic, fail-closed.
         """
         self._validate(grantee_type, resource_type, bits, level)
-        if resource_type == VAULT and bits == 0:
+        if resource_type == VAULT and grantee_type == "client" and bits == 0:
             return
         existing = self._load(
             grantee_type, grantee_id, resource_type, resource_id
@@ -143,7 +146,7 @@ class GrantsResource:
                 "level": level,
             })
             return
-        if resource_type == VAULT:
+        if resource_type == VAULT and grantee_type == "client":
             assert bits is not None
             grant_storage.update_by_id(existing["id"], {
                 "bits": int(existing["bits"]) | bits,
@@ -179,14 +182,14 @@ class GrantsResource:
         above the held level is a no-op.
         """
         self._validate(grantee_type, resource_type, bits, level)
-        if resource_type == VAULT and bits == 0:
+        if resource_type == VAULT and grantee_type == "client" and bits == 0:
             return
         existing = self._load(
             grantee_type, grantee_id, resource_type, resource_id
         )
         if existing is None:
             return
-        if resource_type == VAULT:
+        if resource_type == VAULT and grantee_type == "client":
             assert bits is not None
             remaining = int(existing["bits"]) & ~bits
             if remaining == 0:
@@ -219,7 +222,7 @@ class GrantsResource:
             grantee_type, grantee_id, resource_type, resource_id
         )
         if existing is None:
-            if resource_type == VAULT and bits == 0:
+            if resource_type == VAULT and grantee_type == "client" and bits == 0:
                 return
             grant_storage.insert_one({
                 "id": uid.generate_category_uid("grant", length=8),
@@ -231,7 +234,7 @@ class GrantsResource:
                 "bits": bits,
                 "level": level,
             })
-        elif resource_type == VAULT and bits == 0:
+        elif resource_type == VAULT and grantee_type == "client" and bits == 0:
             grant_storage.delete_by_id(existing["id"])
         else:
             grant_storage.update_by_id(existing["id"], {
@@ -272,7 +275,7 @@ class GrantsResource:
         )
         if existing is None:
             return False
-        if resource_type == VAULT:
+        if resource_type == VAULT and grantee_type == "client":
             assert bits is not None
             return bool(int(existing["bits"]) & bits)
         assert level is not None

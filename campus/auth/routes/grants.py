@@ -16,9 +16,10 @@ Administration matrix (umbrella decision 5, #883):
   vocabulary only. Administration requires the admin level, the top
   of each vocabulary, so no principal can grant above its own level
   (structurally enforced);
-- vault grants are operator-only to administer: the vault vocabulary
-  is reserved for user principals until #889, so the gate denies
-  every non-operator on it;
+- vault grants are operator-only to administer (#889): a
+  vocabulary-level vaults:admin would read as authority over every
+  label's secrets, so no user leg exists for vault grant
+  administration — fail-closed until a need is pinned;
 - clients may not administer grants at all (clients are never
   designated admins, #854/#865).
 
@@ -31,9 +32,11 @@ mutation regardless of the caller:
 - no operator-equivalent rows: a vocabulary-level clients:admin grant
   would recreate the operator outside AUTH_OPERATOR_CLIENT_IDS, so it
   is rejected outright;
-- reserved vocabularies stay closed: credentials grants and
-  user-principal vault grants are rejected until #889 pins their
-  matrices.
+- reserved vocabulary stays closed: credentials grants are
+  rejected (its routes are operator-only, #889);
+- vault grant rows must name their label (#889): a vault row with
+  an empty resource_id is inert (per-label checks never match it)
+  and is rejected as a shape error.
 
 Bootstrap: the operator env-var leg (AUTH_OPERATOR_CLIENT_IDS) mints
 the first grants (break-glass); every later grant flows through here
@@ -62,9 +65,20 @@ def _require_grant_admin(resource_type: str) -> None:
     principals before the operator bypass — a user minted through
     the operator client must not inherit its role (#854). A user
     needs <resource_type>:admin via a grant row AND a token scope;
-    the vault vocabulary is therefore operator-only (reserved for
-    users until #889); clients are denied everywhere (#854).
+    clients are denied everywhere (#854). Vault grant
+    administration is operator-only outright (#889): administering
+    vault grants is authority over every label's secrets.
     """
+    if resource_type == "vault":
+        # User principals are settled first (#854): a user minted
+        # through the operator client must not inherit the bypass.
+        if authz.is_user_principal() or not authz.is_operator():
+            raise api_errors.ForbiddenError(
+                "Vault grant administration is operator-only (#889): "
+                "administering grants over vault labels is authority "
+                "over every label's secrets"
+            )
+        return
     authz.require_resource_permission(resource_type, "admin")
 
 
@@ -87,6 +101,7 @@ def _forbid_forbidden_shapes(
         grantee_type: str,
         resource_type: str,
         level: str | None,
+        resource_id: str = "",
 ) -> None:
     """Reject grant shapes the epic keeps closed (#883 decisions 4, 5).
 
@@ -102,14 +117,15 @@ def _forbid_forbidden_shapes(
         )
     if resource_type == "credentials":
         raise api_errors.ForbiddenError(
-            "The credentials vocabulary is reserved (#883): its "
-            "routes are operator-only until campus#889 pins a "
-            "grants matrix for it"
+            "The credentials vocabulary stays closed (#889): its "
+            "routes are operator-only and grant rows for it would "
+            "be inert"
         )
-    if resource_type == "vault" and grantee_type == "user":
-        raise api_errors.ForbiddenError(
-            "Vault grants for user principals are reserved (#883) "
-            "until campus#889 pins their matrix"
+    if resource_type == "vault" and not resource_id:
+        raise api_errors.InvalidRequestError(
+            "Vault grant rows must name their label (#889): an "
+            "empty resource_id never matches a per-label access "
+            "check"
         )
 
 
@@ -211,7 +227,9 @@ def grant(
     """
     _require_grant_admin(resource_type)
     _forbid_self_grant(grantee_type, grantee_id)
-    _forbid_forbidden_shapes(grantee_type, resource_type, level)
+    _forbid_forbidden_shapes(
+        grantee_type, resource_type, level, resource_id
+    )
     grants.grant(
         grantee_type, grantee_id, resource_type, resource_id,
         bits=bits, level=level,

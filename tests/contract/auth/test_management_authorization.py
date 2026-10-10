@@ -1069,5 +1069,127 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
         self.assertIn("No access grant designates", message)
 
 
+class TestUserVaultAccess(unittest.TestCase):
+    """Per-label vault access for user principals (#889).
+
+    The pinned matrix: the operator bypasses; client principals keep
+    bitflags; a user needs a (vault, label, level) grant row AND a
+    vaults:* token scope, with READ->read, CREATE|UPDATE->write,
+    DELETE/ALL->admin. Vault grant ADMINISTRATION stays operator-only,
+    and the credentials vocabulary stays closed.
+    """
+
+    LABEL = "authz-889-label"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.auth_app
+
+        from campus.auth import resources as auth_resources
+        auth_resources.vault[cls.LABEL]["SECRET"] = "user-leg-target"
+        cls.reader_token = create_test_token(
+            "authz.889.reader@campus.test", scopes=["vaults:read"]
+        )
+        cls.noscope_token = create_test_token(
+            "authz.889.noscope@campus.test", scopes=["read"]
+        )
+        from campus.auth.resources.grant import grants as grants_store
+        # reader: both legs at read. noscope: row without scope.
+        for uid in ("authz.889.reader@campus.test",
+                    "authz.889.noscope@campus.test"):
+            grants_store.grant("user", uid, "vault", cls.LABEL, level="read")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self.operator_headers = get_basic_auth_headers(
+            env.CLIENT_ID, env.CLIENT_SECRET
+        )
+        self.reader_headers = get_bearer_auth_headers(self.reader_token)
+        self.noscope_headers = get_bearer_auth_headers(self.noscope_token)
+
+    def assert_forbidden(self, response):
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "FORBIDDEN")
+        return data["error"]["message"]
+
+    def test_read_passes_with_row_and_scope(self):
+        response = self.client.get(
+            f"/auth/v1/vaults/{self.LABEL}/", headers=self.reader_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_write_denied_at_read_level(self):
+        response = self.client.post(
+            f"/auth/v1/vaults/{self.LABEL}/NEWKEY",
+            json={"value": "x"},
+            headers=self.reader_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("vaults:write", message)
+
+    def test_row_without_scope_denied(self):
+        response = self.client.get(
+            f"/auth/v1/vaults/{self.LABEL}/", headers=self.noscope_headers
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("Token lacks 'vaults:read'", message)
+
+    def test_ungranted_label_denied(self):
+        response = self.client.get(
+            "/auth/v1/vaults/authz-889-other/", headers=self.reader_headers
+        )
+        self.assert_forbidden(response)
+
+    def test_vault_grant_administration_is_operator_only(self):
+        response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": "authz.889.target@campus.test",
+                "resource_type": "vault",
+                "resource_id": "authz-889-other",
+                "level": "read",
+            },
+            headers=self.reader_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("operator-only", message)
+
+    def test_vault_row_without_label_rejected(self):
+        response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": "authz.889.target@campus.test",
+                "resource_type": "vault",
+                "resource_id": "",
+                "level": "read",
+            },
+            headers=self.operator_headers,
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_operator_grants_user_vault_row(self):
+        response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": "authz.889.noscope@campus.test",
+                "resource_type": "vault",
+                "resource_id": "authz-889-other",
+                "level": "read",
+            },
+            headers=self.operator_headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
+
 if __name__ == '__main__':
     unittest.main()

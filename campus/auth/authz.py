@@ -51,7 +51,9 @@ Principals:
   The clients vocabulary is grantable up to clients:write: a
   vocabulary-level clients:admin row is operator-equivalent and is
   rejected by the grant routes (decision 4), so clients:admin-level
-  actions are operator-only by construction. The ceiling stays
+  actions are operator-only by construction. The vaults vocabulary
+  grants per-label user access at read/write/admin (#889), but
+  administering vault GRANTS stays operator-only. The ceiling stays
   operator-controlled end to end: a user token can carry a
   management scope only if the minting client's allowed_scopes cap
   includes it (docs/auth-token-invariants.md A1/A8). Users never
@@ -60,9 +62,10 @@ Principals:
   stamped with the acting user id (#802).
 - User principals (other): bearer tokens minted for an end user
   (device flow, browser sessions). They carry end-user authority only
-  and are denied on every management route regardless of scope;
-  blueprints whose scope vocabulary is still reserved (vaults,
-  credentials) deny them outright.
+  and are denied on every management route regardless of scope,
+  except per-label vault access via grant rows and vaults:* scopes
+  (#889); the credentials vocabulary denies them outright (still
+  operator-only).
 
 Enforcement lives in the route modules (the resources must stay
 ungated for in-process callers such as the OAuth proxies and the
@@ -421,7 +424,11 @@ def require_operator_only_client_fields(updates: dict) -> None:
         )
 
 
-def _require_user_designation(resource: str, level: str) -> None:
+def _require_user_designation(
+        resource: str,
+        level: str,
+        instance: str = "",
+) -> None:
     """The two-leg designation check for the current user principal.
 
     Identity leg: a grant row in the access-grant store (#883) whose
@@ -438,10 +445,11 @@ def _require_user_designation(resource: str, level: str) -> None:
     from .resources.grant import grants
 
     user = flask.g.current_user
-    row = grants.get("user", str(user.get("id")), resource)
+    row = grants.get("user", str(user.get("id")), resource, instance)
     held = row.get("level") if row else None
-    required = f"{resource}:{level}"
-    if not held or not scopes.grants([f"{resource}:{held}"], required):
+    vocabulary = _scope_name(resource)
+    required = f"{vocabulary}:{level}"
+    if not held or not scopes.grants([f"{vocabulary}:{held}"], required):
         raise api_errors.ForbiddenError(
             f"No access grant designates this user for "
             f"'{required}' (#883): designated authority is "
@@ -456,10 +464,36 @@ def _require_user_designation(resource: str, level: str) -> None:
 
 
 # The vault vocabulary in the generalized gate (#885): vault rows
-# carry bitflags (ClientAccess) rather than scope levels, and the
-# vocabulary stays reserved for user principals until #889 pins their
-# matrix.
+# carry bitflags (ClientAccess) for client principals. Since #889,
+# user principals access vault labels through per-label grant rows
+# and vaults:* token scopes, with the umbrella decision-1 mapping
+# READ->read, CREATE|UPDATE->write, DELETE/ALL->admin (the
+# destructive bit caps the level; mod is unused for vaults).
 _VAULT_RESOURCE = "vault"
+
+
+# Store resource_type -> management-scope name: the vault resource
+# is scoped as "vaults:*" on tokens (#889); every other vocabulary
+# shares its store name.
+_SCOPE_RESOURCE_NAMES = {
+    _VAULT_RESOURCE: "vaults",
+}
+
+
+def _scope_name(resource: str) -> str:
+    """The token-scope vocabulary name for a store resource_type."""
+    return _SCOPE_RESOURCE_NAMES.get(resource, resource)
+
+
+def _bits_to_level(bits: int) -> str:
+    """The minimum vault scope level covering a bitflag mask (#889)."""
+    from campus.model.client import ClientAccess
+
+    if bits & ClientAccess.DELETE:
+        return "admin"
+    if bits & (ClientAccess.CREATE | ClientAccess.UPDATE):
+        return "write"
+    return "read"
 
 
 def require_resource_permission(
@@ -491,10 +525,8 @@ def require_resource_permission(
         api_errors.ForbiddenError: If the caller lacks authority.
     """
     if is_user_principal():
-        if resource == _VAULT_RESOURCE:
-            forbid_user_principal(f"access the vault '{instance}'")
         assert level is not None  # gates always name a level
-        _require_user_designation(resource, level)
+        _require_user_designation(resource, level, instance or "")
         return
     if is_operator():
         return
@@ -552,10 +584,12 @@ def _require_vault_bitflags(label: str, bits: int) -> None:
 def require_vault_permission(label: str, permission: int) -> None:
     """Require vault_access permission on a vault label (#854).
 
-    Thin wrapper over require_resource_permission (#885), behavior
-    identical: the operator client bypasses the bitflag check; user
-    bearer tokens are denied outright (checked first, so a user never
-    inherits the minting client's operator role); any other client
+    Thin wrapper over require_resource_permission (#885; user legs
+    since #889): the operator client bypasses; a user principal needs
+    a per-label vault grant row whose level covers the mapped level
+    (READ->read, CREATE|UPDATE->write, DELETE->ALL->admin) AND a
+    vaults:* token scope — checked first, so a user never inherits
+    the minting client's operator role (#854); any other client
     principal must hold the requested bitflag(s) for the label in its
     vault grant.
 
@@ -563,5 +597,8 @@ def require_vault_permission(label: str, permission: int) -> None:
         api_errors.ForbiddenError: If the caller lacks the permission.
     """
     require_resource_permission(
-        _VAULT_RESOURCE, instance=label, bits=permission
+        _VAULT_RESOURCE,
+        level=_bits_to_level(permission),
+        instance=label,
+        bits=permission,
     )
