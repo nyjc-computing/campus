@@ -70,6 +70,7 @@ __all__ = [
     "require_operator_only_client_fields",
     "require_self_or_operator",
     "require_vault_permission",
+    "session_user_visible",
 ]
 
 import flask
@@ -230,6 +231,25 @@ def has_admin_scope(required: str) -> bool:
         str(user.get("id")) in admin_user_ids(_admin_envvar_for_scope(required))
         and scopes.grants(_user_token_scopes(), required)
     )
+
+
+def session_user_visible(session_client_id: str | None) -> bool:
+    """True if the current principal may see a session's embedded user (#879).
+
+    Only the session-owning client (the app that created the session
+    and drives its login flow) and the deployment operator may receive
+    the user record embedded in session reads and finalization: the
+    owning client needs it to hydrate the signed-in user without the
+    operator-gated users routes. User bearer tokens get nothing here
+    (the #854 rule — a user principal is never the session's client),
+    and the users routes remain the user-facing path.
+    """
+    if is_user_principal() or session_client_id is None:
+        return False
+    client = getattr(flask.g, "current_client", None)
+    if client is not None and str(client.id) == str(session_client_id):
+        return True
+    return is_operator()
 
 
 def forbid_user_principal(action: str) -> None:

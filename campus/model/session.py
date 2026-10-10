@@ -11,6 +11,7 @@ from campus.common import schema
 from campus.common.utils import uid, utc_time
 
 from .base import Model
+from .user import User
 
 
 @dataclass(eq=False, kw_only=True)
@@ -43,6 +44,17 @@ class AuthSession(Model):
     # session's device_id is what spans carry. Null for pre-#825
     # sessions, non-browser flows, and browsers with cookies cleared.
     device_id: str | None = None
+    # Session user record, embedded by the auth service on session
+    # reads and finalization for the session-owning client (#879):
+    # flask_campus apps hydrate the signed-in user from here instead of
+    # calling the operator-gated users routes. Never stored — the
+    # field is populated transiently at the route layer and is null on
+    # records and on responses to non-owning principals. The hint is
+    # not Optional so from_resource recurses into the nested record.
+    user: User = field(
+        default=None,  # type: ignore[assignment]
+        metadata={"storage": False},
+    )
 
     def __post_init__(self, expiry_seconds: int | None):
         """Set expiry time based on creation timestamp.
@@ -86,6 +98,18 @@ class AuthSession(Model):
         record.pop("scopes", None)
         record["scope"] = self.scope
         return record
+
+    def to_resource(self) -> dict:
+        """Convert to a resource dictionary.
+
+        The embedded user (#879), when present, serializes recursively:
+        the base implementation would emit the User model object, which
+        is not JSON-serializable.
+        """
+        resource = super().to_resource()
+        if self.user is not None:
+            resource["user"] = self.user.to_resource()
+        return resource
 
     @classmethod
     def from_storage(cls, record: dict) -> "AuthSession":

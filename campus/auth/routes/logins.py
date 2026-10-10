@@ -7,16 +7,37 @@ These routes handle Campus user logins.
 Authentication is handled in a global routes.before_request hook.
 """
 
+import contextlib
+
 import flask
 
 from campus import flask_campus
 from campus.common import schema
+from campus.common.errors import api_errors
 
-from .. import get_yapper
+from .. import authz, get_yapper
 from ..resources import login as login_resource
+from ..resources import user as user_resource
 
 # Create blueprint for login management routes
 bp = flask.Blueprint('logins', __name__, url_prefix='/logins')
+
+
+def _embed_login_user(loginsession) -> None:
+    """Attach the login session's user record for the owning client (#879).
+
+    Same contract as the sessions blueprint's _embed_session_user:
+    flask_campus apps hydrate the signed-in user from login-session
+    reads instead of the operator-gated users routes; visibility is
+    decided by authz.session_user_visible and a missing record
+    degrades to a response without the embed.
+    """
+    if not loginsession.user_id:
+        return
+    if not authz.session_user_visible(loginsession.client_id):
+        return
+    with contextlib.suppress(api_errors.NotFoundError):
+        loginsession.user = user_resource[loginsession.user_id].get()
 
 
 @bp.post("/")
@@ -109,6 +130,7 @@ def get(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     GET /logins/<session_id>/
     """
     loginsession = login_resource[session_id].get()
+    _embed_login_user(loginsession)
     return loginsession.to_resource(), 200
 
 
