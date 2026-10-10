@@ -10,11 +10,14 @@ not just authenticated (#854):
 - the operator principal (AUTH_OPERATOR_CLIENT_IDS) may manage every
   client: register, update (including scope caps and the token-bridge
   flag), delete, rotate secrets, and administer vault access grants;
-- any other authenticated client may manage only itself: read its own
-  record, update its own profile fields (name, description,
-  redirect_uris — never the scope caps or token_bridge), rotate its
-  own secret, and list clients (ids and display names only — the audit
-  UI resolves client names this way);
+- any other authenticated client is read-only on registration data
+  (#881: client principals hold the bare minimum their role needs,
+  and a shared client secret cannot satisfy attribution for
+  mutations): it may read its own record, rotate its own secret
+  (always human-mediated — the rotated secret must be written into
+  the deployment env by an operator), and list clients (ids and
+  display names only — the audit UI resolves client names this way);
+  it may never update any client record, including its own;
 - designated admin users (#865) may act with their own user
   credentials where the route's management scope matches their token:
   clients:read to list/get any record (including vault-access views),
@@ -227,11 +230,13 @@ def update_client(
     """Update a client's details.
 
     PATCH /clients/{client_id}
-    Authorization: the client itself may update its profile fields
-    (name, description, redirect_uris) but not its scope caps or the
-    token-bridge flag; the operator may update everything (#854);
+    Authorization: the operator may update everything (#854);
     designated admin users may update benign fields with clients:write
-    and the scope caps with clients:admin (#865).
+    and the scope caps with clients:admin (#865). Client principals
+    are read-only on client records, including their own (#881):
+    mutating registration data must be attributable to a user, so a
+    client-principal PATCH is rejected (403) with the error pointing
+    at the clients:write user-principal path.
 
     Body: {
         "name": "New Client Name",
@@ -257,11 +262,12 @@ def update_client(
     only request scopes it contains. upstream_scopes caps the
     third-party provider scopes the client may be granted through the
     OAuth proxies (invariant B3). allowed_scopes, upstream_scopes and
-    token_bridge are operator-controlled: a self-managing client
-    changing them is rejected (403).
+    token_bridge are operator-controlled: a designated admin user
+    needs clients:admin to set them, and client principals are
+    rejected on every PATCH (#881).
     """
-    authz.require_self_or_operator(
-        client_id, "update", admin_scope=authz.CLIENTS_WRITE
+    authz.require_admin_user_or_operator(
+        authz.CLIENTS_WRITE, "update client records"
     )
     # Raises unless the caller is the operator client or a designated
     # admin user holding clients:admin (allowed_scopes/upstream_scopes/

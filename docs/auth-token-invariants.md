@@ -101,6 +101,39 @@ replaced (`AppCredentialsResource.issue`).
   end to end: a user token can carry a management scope only if the
   minting client's `allowed_scopes` cap includes it (A1), so every
   user-admin grant is an operator decision twice over.
+- **A9 — Client principals are read-only; mutations are
+  user-attributable (#881).** Client principals hold the bare minimum
+  access their role needs — the vault role (per-label `vault_access`
+  bitflags, granted by an operator and reviewed) — which in most
+  cases means read-only. A client may read its own record and rotate
+  its own secret, and nothing else on the registration surface:
+  every mutation of registration data (`name`, `description`,
+  `redirect_uris`, the scope caps, `token_bridge`), including on the
+  client's own record, is denied with a 403 whose message points at
+  the `clients:write` user-principal path. Mutating admin actions
+  must be attributable to a user (the operator client, or a
+  designated admin user per A8): a shared client secret cannot
+  satisfy accountability — any holder could have made the change
+  (the nyxchange#77 scenario). Secret rotation stays
+  client-self-service because it is human-mediated by construction:
+  the rotated secret must be written into the deployment's env, and
+  deployments never hold the credentials to do that headless — there
+  is no legitimate no-human loop to preserve. Where a reviewed
+  exception to read-only is granted, the rationale is recorded on
+  the client's `description` so auditors see why. Dynamic callback
+  registration (preview environments, domain migrations) and runtime
+  self-modification of auth config are explicitly out of scope:
+  exact-match host validation (#651) stays simple, and environments
+  that genuinely need dynamic callbacks front through an
+  oauth-proxy-style gateway (a separate design track).
+
+  **Downstream impact (migration note).** Apps that relied on
+  client-principal self-service PATCH of their own record must move
+  to a user-principal path: a designated admin user with
+  `clients:write` (A8) or the operator. nyxchange's self-registered
+  `redirect_uri` (2026-10-09) predates this ruling and needs no
+  grandfathering — the entry is already set; future registration
+  changes go through an admin.
 
 ### B — Upstream credential custody `[upstream]` (phase P2)
 
@@ -215,6 +248,7 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | A6 | P1 | **enforced** | `routes/sessions.py::_validated_campus_scopes` + `provider.authorize` scope-param check; `test_scope_algebra.py::test_authorize_scope_*` |
 | A7 | P1 | **enforced** | `routes/oauth.py::device_authorize` + device grant re-check; `test_scope_algebra.py::test_device_authorize_respects_allowlist`, `::test_device_authorize_scope_parameter` |
 | A8 | #865 | **enforced** | `campus/auth/authz.py::require_admin_user` (+ `scopes.grants` implication; per-vocabulary lists, campus#872); `test_management_authorization.py::TestDesignatedAdminUsers` (clients) and `::TestDesignatedUsersAdmins` (users, campus-cli#42), `tests/unit/auth/test_scopes.py` |
+| A9 | #881 | **enforced** | `campus/auth/authz.py::require_admin_user_or_operator` gates PATCH /clients/{id}/ (client self-PATCH → 403 citing `clients:write`; reads/rotation keep `require_self_or_operator`); user-attribution stamp via `campus/audit/middleware/tracing.py` (#802); `test_management_authorization.py::test_client_self_patch_denied_881`, `::test_write_matrix_mutation_is_audited_881` |
 | B1 | P2/P3 | **enforced** | `credentials.new()` provider assertion + credentials API refuses non-campus providers (`routes/credentials.py::_reject_non_campus_provider`); `test_token_broker.py::test_credentials_api_refuses_third_party_provider`. Integration clients custody: vault labels + in-code registry (`campus/auth/integrations.py`, #733) |
 | B2 | P2/P3 | **enforced** | credentials API lockdown closes the token-embedding read path; broker responses are built explicitly without refresh tokens; no proxy path returns/logs refresh tokens |
 | B3 | P2 | **enforced** | identity growth: `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check in C3. Integration growth: connect flow guards (`routes/oauth_proxy/google` authorize + `oauth_proxy/google/proxy.py::_validate_connect_binding`, `prompt=consent` forced); `tests/contract/auth/test_integrations.py` |
