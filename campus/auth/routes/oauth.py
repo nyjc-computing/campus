@@ -56,6 +56,19 @@ _SCOPE_CONSENT_LABELS: dict[str, tuple[str, str]] = {
         "Fully manage users",
         "Delete Campus users; includes all lower user management",
     ),
+    "vaults:read": (
+        "View vault secrets",
+        "Read secrets from vault labels granted to you",
+    ),
+    "vaults:write": (
+        "Manage vault secrets",
+        "Create and update secrets in vault labels granted to you",
+    ),
+    "vaults:admin": (
+        "Fully manage vault secrets",
+        "Delete secrets in vault labels granted to you; includes "
+        "lower vault access",
+    ),
 }
 
 # Verbs for the generic <resource>:<level> fallback (#867)

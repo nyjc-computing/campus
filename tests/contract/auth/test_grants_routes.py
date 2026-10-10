@@ -271,7 +271,9 @@ class TestGrantsRoutes(unittest.TestCase):
         )
         self.assert_forbidden(response)
 
-    def test_user_principal_vault_grant_rejected(self):
+    def test_user_vault_rows_carry_levels_not_bits(self):
+        # #889: user vault grants are per-label level rows; bitflags
+        # are the client-grantee grammar.
         response = self.client.post(
             f"{GRANTS_BASE}/",
             json={
@@ -283,7 +285,7 @@ class TestGrantsRoutes(unittest.TestCase):
             },
             headers=self.operator_headers,
         )
-        self.assert_forbidden(response)
+        self.assertEqual(response.status_code, 400)
 
     # --- anti-escalation ---
 

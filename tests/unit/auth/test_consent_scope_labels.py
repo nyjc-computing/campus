@@ -44,6 +44,24 @@ class TestUsersScopeLabels(unittest.TestCase):
             },
         )
 
+    def test_vaults_read_label(self):
+        self.assertEqual(
+            _describe_scope("vaults:read")["label"],
+            "View vault secrets",
+        )
+
+    def test_vaults_write_label(self):
+        self.assertEqual(
+            _describe_scope("vaults:write")["label"],
+            "Manage vault secrets",
+        )
+
+    def test_vaults_admin_label(self):
+        self.assertEqual(
+            _describe_scope("vaults:admin")["label"],
+            "Fully manage vault secrets",
+        )
+
     def test_users_admin_label(self):
         self.assertEqual(
             _describe_scope("users:admin"),

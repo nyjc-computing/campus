@@ -149,15 +149,43 @@ class TestResourceGate(unittest.TestCase):
                 "users", "write",
             )
 
-    def test_user_denied_on_the_reserved_vault_vocabulary(self):
+    def test_user_vault_access_needs_row_and_scope(self):
+        from campus.auth import authz
         from campus.auth.resources.grant import grants
-        # Even a vault-shaped grant row must not open the vocabulary
-        grants.grant("client", LIMITED_ID, "vault", "email", bits=15)
+        from campus.model.client import ClientAccess
+
+        # No legs: denied
         with self.assertRaises(api_errors.ForbiddenError):
             self.gate(
-                {"current_user": user_principal("u1", ["read"])},
+                {"current_user": user_principal("u1", ["vaults:read"])},
                 "vault", "read", instance="email",
             )
+        # Row without scope: denied
+        grants.grant("user", "u1", "vault", "email", level="read")
+        with self.assertRaises(api_errors.ForbiddenError):
+            self.gate(
+                {"current_user": user_principal("u1", [])},
+                "vault", "read", instance="email",
+            )
+        # Both legs at read: read passes, write denied
+        with (
+            mock.patch.dict(os.environ, OPERATOR_ENV),
+            self.app.test_request_context(),
+        ):
+            flask.g.current_user = user_principal("u1", ["vaults:read"])
+            authz.require_vault_permission("email", ClientAccess.READ)
+            with self.assertRaises(api_errors.ForbiddenError):
+                authz.require_vault_permission(
+                    "email", ClientAccess.CREATE | ClientAccess.UPDATE
+                )
+        # Admin row+scope covers everything, including DELETE
+        grants.update("user", "u1", "vault", "email", level="admin")
+        with (
+            mock.patch.dict(os.environ, OPERATOR_ENV),
+            self.app.test_request_context(),
+        ):
+            flask.g.current_user = user_principal("u1", ["vaults:admin"])
+            authz.require_vault_permission("email", ClientAccess.ALL)
 
     def test_user_never_inherits_the_operator_role(self):
         # A user bearer minted through the operator client sets
