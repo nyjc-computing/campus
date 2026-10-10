@@ -1226,9 +1226,14 @@ def device_verification(user_code: str | None = None):
                     return;
                 }
 
-                // Check if user is logged in
-                // Use relative path since /users/me is now under /oauth/
-                const response = await fetch('./users/me', {
+                // Check if user is logged in. Absolute paths (#904):
+                // a relative ./users/me resolves against the page URL,
+                // and under the path-form route (/device/<code>) it
+                // becomes /device/users/me — a 404 that rendered as
+                // "not logged in" right after the different-user flow
+                // (which lands on the path-form page via the logout
+                // redirect).
+                const response = await fetch('{{ users_me_url }}', {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -1251,7 +1256,7 @@ def device_verification(user_code: str | None = None):
                 submitBtn.innerHTML = 'Processing <span class="spinner"></span>';
 
                 try {
-                    const authResponse = await fetch('./device/authorize', {
+                    const authResponse = await fetch('{{ device_authorize_url }}', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -1407,6 +1412,10 @@ def device_verification(user_code: str | None = None):
         error_code=error_code,
         error_messages=error_messages,
         session_user_id=str(user_id) if user_id else None,
+        users_me_url=url.full_url_for('auth.oauth.users_me'),
+        device_authorize_url=url.full_url_for(
+            'auth.oauth.device_authorize_submit'
+        ),
         logout_url=logout_url,
         consent_scopes=consent_scopes,
         consent_client_name=consent_client_name,
