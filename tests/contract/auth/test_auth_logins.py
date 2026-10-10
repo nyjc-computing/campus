@@ -443,5 +443,128 @@ class TestAuthLoginsContract(unittest.TestCase):
         self.assertIn(get_response.status_code, (404, 400))
 
 
+class TestLoginUserEmbedding(unittest.TestCase):
+    """Login-session reads embed the user record for the session-owning
+    client or the operator (#879); other principals get no user data.
+
+    flask_campus push_context resolves the signed-in user from the
+    login-session read instead of the operator-gated GET /users/{id}.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.auth_app
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+
+        assert self.app
+        self.client = self.app.test_client()
+        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+        self.test_agent = "Mozilla/5.0 Test Agent"
+
+    def _create_user(self, user_id: str) -> None:
+        from contextlib import suppress
+
+        from campus.auth.resources.user import user_storage
+
+        with suppress(Exception):
+            user_storage.delete_by_id(user_id)
+        user_storage.insert_one({
+            "id": user_id,
+            "created_at": "2024-01-01T00:00:00+00:00",
+            "email": user_id,
+            "name": "Login User",
+            "activated_at": None,
+        })
+
+    def _create_login(self, user_id: str) -> str:
+        resp = self.client.post(
+            "/auth/v1/logins/",
+            json={
+                "client_id": env.CLIENT_ID,
+                "user_id": user_id,
+                "agent_string": self.test_agent,
+            },
+            headers=self.auth_headers,
+        )
+        assert resp.status_code == 200, resp.get_json()
+        return resp.get_json()["id"]
+
+    def _create_other_client(self) -> "tuple[str, str]":
+        """Create a fresh non-owner, non-operator client.
+
+        Returns (client_id, client_secret); the secret is only ever
+        revealed at rotation time, so this is the one chance to hold it.
+        """
+        resp = self.client.post(
+            "/auth/v1/clients/",
+            json={"name": "other-app", "description": "not the owner"},
+            headers=self.auth_headers,
+        )
+        other_id = resp.get_json()["id"]
+        resp = self.client.post(
+            f"/auth/v1/clients/{other_id}/revoke",
+            json={},
+            headers=self.auth_headers,
+        )
+        assert resp.status_code == 200, resp.get_json()
+        return other_id, resp.get_json()["secret"]
+
+    def _other_client_headers(self, other_id: str, other_secret: str) -> dict:
+        """Basic headers for the given non-owner client."""
+        return get_basic_auth_headers(other_id, other_secret)
+
+    def test_get_embeds_user_for_owning_client(self):
+        """GET /logins/{id}/ embeds the user for the owning client."""
+        user_id = "login.user@example.com"
+        self._create_user(user_id)
+        login_id = self._create_login(user_id)
+
+        response = self.client.get(
+            f"/auth/v1/logins/{login_id}/",
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["user"]["id"], user_id)
+        self.assertEqual(data["user"]["email"], user_id)
+
+    def test_get_omits_user_for_other_client(self):
+        """GET /logins/{id}/ omits the user for a non-owner client."""
+        user_id = "login.user2@example.com"
+        self._create_user(user_id)
+        login_id = self._create_login(user_id)
+        other_id, other_secret = self._create_other_client()
+
+        response = self.client.get(
+            f"/auth/v1/logins/{login_id}/",
+            headers=self._other_client_headers(other_id, other_secret),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.get_json().get("user"))
+
+    def test_get_without_user_record_returns_null_user(self):
+        """A missing user record degrades to a null embed, not a 500."""
+        user_id = "login.ghost@example.com"
+        login_id = self._create_login(user_id)
+
+        response = self.client.get(
+            f"/auth/v1/logins/{login_id}/",
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.get_json().get("user"))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -7,18 +7,40 @@ These routes handle sessions.
 Authentication is handled in a global routes.before_request hook.
 """
 
+import contextlib
+
 import flask
 
 import campus.config
 from campus import flask_campus
 from campus.common import schema
+from campus.common.errors import api_errors
 
-from .. import get_yapper, scopes
+from .. import authz, get_yapper, scopes
 from ..resources import client as client_resource
 from ..resources import session as session_resource
+from ..resources import user as user_resource
 
 # Create blueprint for session management routes
 bp = flask.Blueprint('sessions', __name__, url_prefix='/sessions')
+
+
+def _embed_session_user(authsession) -> None:
+    """Attach the session user's record for the owning client (#879).
+
+    flask_campus apps hydrate the signed-in user from session reads
+    and finalization instead of the operator-gated users routes. The
+    resources are ungated for in-process callers by design; the
+    visibility decision is made here via authz.session_user_visible.
+    A missing user record mid-flow degrades to a response without the
+    embed rather than failing the session read.
+    """
+    if not authsession.user_id:
+        return
+    if not authz.session_user_visible(authsession.client_id):
+        return
+    with contextlib.suppress(api_errors.NotFoundError):
+        authsession.user = user_resource[authsession.user_id].get()
 
 
 def _validated_campus_scopes(
@@ -157,7 +179,10 @@ def delete_provider_session(
         "target": <url>
     }
     """
-    target = session_resource[provider][session_id].finalize()
+    session = session_resource[provider][session_id]
+    authsession = session.get()
+    _embed_session_user(authsession)
+    target = session.finalize()
     get_yapper().emit(
         'campus.sessions.finalize',
         {
@@ -165,7 +190,7 @@ def delete_provider_session(
             "session_id": str(session_id)
         }
     )
-    return {"target": target}, 200
+    return authsession.to_resource() | {"target": target}, 200
 
 
 @bp.get("/<provider>/<session_id>/")
@@ -183,6 +208,7 @@ def get_provider_session(
     }
     """
     authsession = session_resource[provider][session_id].get()
+    _embed_session_user(authsession)
     get_yapper().emit(
         'campus.sessions.get',
         {
