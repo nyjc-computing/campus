@@ -13,10 +13,12 @@ users, credentials) authorize, not merely authenticate:
 - user bearer tokens are denied on every management route regardless
   of their scopes — except designated admin users (#865) acting on
   the clients and users blueprints with the matching management
-  scope: both the vocabulary's designated-admin listing
-  (AUTH_ADMIN_USER_IDS for clients, AUTH_USERS_ADMIN_USER_IDS for
-  users — campus-cli#42, campus#872) and the scope are required,
-  ANDed.
+  scope: both a grant row in the access-grant store (#883; users
+  since #887, clients since #888 — the env-var lists are retired)
+  and the scope are required, ANDed. The clients vocabulary is
+  grantable up to write: clients:admin rows are operator-equivalent
+  (umbrella decision 4), so admin-level clients actions are
+  operator-only.
 
 The fixtures make the default test client (env.CLIENT_ID) the
 deployment operator; a second "limited" confidential client and user
@@ -410,10 +412,13 @@ class TestDesignatedAdminUsers(unittest.TestCase):
     """Management-scope authorization for designated admin users (#865).
 
     The issue's test matrix, per gated clients route: a user principal
-    acts only when BOTH legs hold — its id is listed in
-    AUTH_ADMIN_USER_IDS AND its token carries the required management
-    scope. Designation without the scope and scope without designation
-    are both 403, with messages that distinguish the failed leg.
+    acts only when BOTH legs hold — a clients:* grant row in the
+    access-grant store (#888) AND its token carries the required
+    management scope. Designation without the scope and scope without
+    designation are both 403, with messages that distinguish the
+    failed leg. Rows are grantable up to clients:write (decision 4):
+    admin-level actions — register, delete, secret rotation,
+    vault-access administration — are operator-only.
 
     Operator-client and client-self-service behavior are asserted
     unchanged by TestManagementAuthorization. Every user token here is
@@ -423,10 +428,10 @@ class TestDesignatedAdminUsers(unittest.TestCase):
     minted through (#854).
     """
 
-    # The designated admins (listed in AUTH_ADMIN_USER_IDS — one per
-    # scope variant, since a user's credentials row holds a single
-    # live token) and a regular user (not listed) carrying every
-    # clients:* scope: scope alone must never confer authority.
+    # The designated admins (grant rows — one per scope variant,
+    # since a user's credentials row holds a single live token) and a
+    # regular user (no row) carrying every clients:* scope: scope
+    # alone must never confer authority.
     ADMIN_USER_IDS = [
         "authz.865.admin.read@campus.test",
         "authz.865.admin.write@campus.test",
@@ -484,15 +489,23 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             scopes=["clients:read", "clients:write", "clients:admin"],
         )
 
-        # Leg 1 (identity): the designated users, listed at request
-        # time (comma-separated). Unset/empty means no user admins —
-        # asserted explicitly by test_empty_allowlist_denies_designated_user.
-        env.set("AUTH_ADMIN_USER_IDS", ",".join(cls.ADMIN_USER_IDS))
+        # Leg 1 (identity): grant rows in the access-grant store
+        # (#888). The admin-variant holder's row sits at write — the
+        # highest grantable level (decision 4) — so its admin-scope
+        # actions are denied as ungrantable, asserted by the
+        # admin-level tests below. No row means no designation —
+        # asserted by test_no_grant_row_denies_designated_user.
+        from campus.auth.resources.grant import grants as grants_store
+        for admin_id, level in (
+            (cls.ADMIN_USER_IDS[0], "read"),
+            (cls.ADMIN_USER_IDS[1], "write"),
+            (cls.ADMIN_USER_IDS[2], "write"),
+            (cls.ADMIN_USER_IDS[3], "write"),
+        ):
+            grants_store.grant("user", admin_id, "clients", level=level)
 
     @classmethod
     def tearDownClass(cls):
-        if env.contains("AUTH_ADMIN_USER_IDS"):
-            env.delete("AUTH_ADMIN_USER_IDS")
         cls.manager.cleanup()
 
     def setUp(self):
@@ -532,7 +545,7 @@ class TestDesignatedAdminUsers(unittest.TestCase):
 
             response = self.client.get(path, headers=self.other_all_headers)
             message = self.assert_forbidden(response)
-            self.assertIn("designated admin", message)
+            self.assertIn("No access grant designates", message)
 
     def test_read_unlisted_scope_implied_by_admin(self):
         """clients:admin also implies clients:read."""
@@ -566,7 +579,7 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             headers=self.other_all_headers,
         )
         message = self.assert_forbidden(response)
-        self.assertIn("designated admin", message)
+        self.assertIn("No access grant designates", message)
 
     def test_write_matrix_mutation_is_audited_881(self):
         """A9/#881: the user-principal PATCH emits its audit event.
@@ -599,7 +612,8 @@ class TestDesignatedAdminUsers(unittest.TestCase):
         self.assertEqual(update_events[0].get("client_id"), self.limited_id)
 
     def test_write_cannot_touch_operator_only_fields(self):
-        """clients:write stays below the scope caps; clients:admin may."""
+        """The scope caps are operator-only for users (#888): rows cap
+        at write, so clients:admin-level authority is ungrantable."""
         response = self.client.patch(
             f"/auth/v1/clients/{self.target_id}/",
             json={"allowed_scopes": ["read"]},
@@ -613,7 +627,8 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             json={"allowed_scopes": ["read"]},
             headers=self.admin_admin_headers,
         )
-        self.assertEqual(response.status_code, 200)
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
 
     # --- clients:admin — register, rotate, delete, vault grants ---
 
@@ -640,30 +655,26 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             headers=self.other_all_headers,
         )
         message = self.assert_forbidden(response)
-        self.assertIn("designated admin", message)
+        self.assertIn("No access grant designates", message)
 
+        # Admin-level actions are operator-only (#888, decision 4):
+        # a clients:admin row is operator-equivalent and ungrantable,
+        # so even the admin-scoped user is denied — identity leg
+        # first (row caps at write).
         response = self.client.post(
             "/auth/v1/clients/",
             json={
                 "name": f"authz-865-registered-{suffix}",
-                "description": "Registered by a clients:admin user (#865)",
+                "description": "Register attempt by admin-scope user (#888)",
             },
             headers=self.admin_admin_headers,
         )
-        self.assertEqual(response.status_code, 200)
-        registered_id = response.get_json()["id"]
-
-        # Deletion is clients:admin too — including on this registered
-        # client, and for the client itself.
-        response = self.client.delete(
-            f"/auth/v1/clients/{registered_id}/",
-            json={},
-            headers=self.admin_admin_headers,
-        )
-        self.assertEqual(response.status_code, 200)
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
 
     def test_admin_rotates_secrets(self):
-        """Secret rotation is clients:admin, not clients:write."""
+        """Secret rotation is operator-only for users (#888): rows cap
+        at write, so clients:admin-level is ungrantable."""
         response = self.client.post(
             f"/auth/v1/clients/{self.target_id}/revoke",
             json={},
@@ -677,11 +688,12 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             json={},
             headers=self.admin_admin_headers,
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("secret", response.get_json())
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
 
     def test_admin_administers_vault_access(self):
-        """Vault-access grants are clients:admin; views are read."""
+        """Vault-access grant views are read; administration is
+        operator-only for users (#888, decision 4)."""
         response = self.client.get(
             f"/auth/v1/clients/{self.target_id}/access/",
             headers=self.admin_read_headers,
@@ -702,14 +714,15 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             headers=self.other_all_headers,
         )
         message = self.assert_forbidden(response)
-        self.assertIn("designated admin", message)
+        self.assertIn("No access grant designates", message)
 
         response = self.client.post(
             f"/auth/v1/clients/{self.target_id}/access/grant",
             json={"vault": ADMIN_GRANT_VAULT, "permission": ClientAccess.READ},
             headers=self.admin_admin_headers,
         )
-        self.assertEqual(response.status_code, 200)
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:admin", message)
 
     # --- reserved vocabularies and fail-closed defaults ---
 
@@ -731,17 +744,21 @@ class TestDesignatedAdminUsers(unittest.TestCase):
             if path.endswith("users/"):
                 self.assertIn("No access grant designates", message)
 
-    def test_empty_allowlist_denies_designated_user(self):
-        """An unset allowlist means no user admins (deploy is a no-op)."""
-        env.delete("AUTH_ADMIN_USER_IDS")
+    def test_no_grant_row_denies_designated_user(self):
+        """Deleting the grant row removes the designation (#888)."""
+        from campus.auth.resources.grant import grants as grants_store
+        grants_store.revoke(
+            "user", self.ADMIN_USER_IDS[0], "clients", level="read"
+        )
         self.addCleanup(
-            env.set, "AUTH_ADMIN_USER_IDS", ",".join(self.ADMIN_USER_IDS)
+            grants_store.grant,
+            "user", self.ADMIN_USER_IDS[0], "clients", level="read",
         )
         response = self.client.get(
             "/auth/v1/clients/", headers=self.admin_read_headers
         )
         message = self.assert_forbidden(response)
-        self.assertIn("designated admin", message)
+        self.assertIn("No access grant designates", message)
 
 class TestDesignatedUsersAdmins(unittest.TestCase):
     """Management-scope authorization for the users blueprint
@@ -749,9 +766,8 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
 
     The identity leg is a users:* grant row in the access-grant
     store (#883) — AUTH_USERS_ADMIN_USER_IDS is no longer consulted
-    (#887, DB-only ruling). A clients-designated admin (the
-    transitional AUTH_ADMIN_USER_IDS list, #888) is not a
-    users-admin, and vice versa. Per-action floors: users:read
+    (#887, DB-only ruling); the clients vocabulary followed in #888.
+    Designation in one vocabulary never crosses to another (#872). Per-action floors: users:read
     lists/gets, users:mod activates, users:write creates and updates
     (implies mod), users:admin deletes (implies write).
     """
@@ -816,15 +832,12 @@ class TestDesignatedUsersAdmins(unittest.TestCase):
             (cls.USERS_ADMIN_IDS[4], "admin"),
         ):
             grants_store.grant("user", admin_id, "users", level=level)
-        # The transitional clients-designated env list names the
-        # every-users-scope user, proving the clients designation and
-        # the users grant rows gate disjoint vocabularies (#872, #888).
-        env.set("AUTH_ADMIN_USER_IDS", cls.CLIENTS_ONLY_ADMIN)
+        # The isolation user carries every users:* scope but holds no
+        # grant rows in any vocabulary (#888 retired the clients env
+        # list): scope alone confers nothing anywhere.
 
     @classmethod
     def tearDownClass(cls):
-        if env.contains("AUTH_ADMIN_USER_IDS"):
-            env.delete("AUTH_ADMIN_USER_IDS")
         cls.manager.cleanup()
 
     def setUp(self):

@@ -44,11 +44,15 @@ Principals:
   bearer token carrying that scope. Both legs are required and
   ANDed: designation without the scope confers nothing, and scope
   without designation must never confer management authority (the
-  exact regression #854 closed). The users blueprint consults the
-  store exclusively (#887, DB-only: AUTH_USERS_ADMIN_USER_IDS is no
-  longer read); the clients blueprint still consults the transitional
-  AUTH_ADMIN_USER_IDS env list until #888 retires it. The ceiling
-  stays operator-controlled end to end: a user token can carry a
+  exact regression #854 closed). Both the users (#887) and clients
+  (#888) blueprints consult the store exclusively — the
+  AUTH_ADMIN_USER_IDS / AUTH_USERS_ADMIN_USER_IDS env lists are no
+  longer read at request time (DB-only ruling, umbrella decision 3).
+  The clients vocabulary is grantable up to clients:write: a
+  vocabulary-level clients:admin row is operator-equivalent and is
+  rejected by the grant routes (decision 4), so clients:admin-level
+  actions are operator-only by construction. The ceiling stays
+  operator-controlled end to end: a user token can carry a
   management scope only if the minting client's allowed_scopes cap
   includes it (docs/auth-token-invariants.md A1/A8). Users never
   inherit the operator role of the client they were minted through,
@@ -75,7 +79,6 @@ __all__ = [
     "CLIENTS_ADMIN",
     "CLIENTS_READ",
     "CLIENTS_WRITE",
-    "admin_user_ids",
     "forbid_user_principal",
     "has_admin_scope",
     "is_operator",
@@ -104,13 +107,9 @@ from . import scopes
 # principal may manage the deployment.
 OPERATOR_CLIENT_IDS_ENVVAR = "AUTH_OPERATOR_CLIENT_IDS"
 
-# Comma-separated user ids granted limited management authority (#865).
-# A listed user still needs the matching management scope on its token;
-# unset or empty means the deployment has no user admins.
-ADMIN_USER_IDS_ENVVAR = "AUTH_ADMIN_USER_IDS"
-
-# Management-scope vocabulary, v1: clients (#865, still on the
-# transitional env list until #888) and users (#887, store-backed).
+# Management-scope vocabulary, v1: clients (#888, store-backed;
+# grantable up to write — admin rows are operator-equivalent,
+# umbrella decision 4) and users (#887, store-backed).
 # clients:read lists/gets any client record; clients:write updates
 # benign fields on any client (name, description, redirect_uris);
 # clients:admin registers, deletes, rotates secrets, sets scope caps
@@ -167,21 +166,6 @@ def operator_client_ids() -> frozenset[str]:
     })
 
 
-def admin_user_ids(envvar: str = ADMIN_USER_IDS_ENVVAR) -> frozenset[str]:
-    """Parse a designated-admin user-id allowlist (#865).
-
-    Read at request time (not import time), exactly mirroring
-    operator_client_ids: an unset or empty var means the deployment
-    has no designated admins for that vocabulary.
-    """
-    raw = env.get(envvar) or ""
-    return frozenset({
-        user_id.strip()
-        for user_id in raw.split(",")
-        if user_id.strip()
-    })
-
-
 def is_operator() -> bool:
     """Return True if the authenticated client is a deployment operator.
 
@@ -212,19 +196,20 @@ def _user_token_scopes() -> list[str]:
 
 
 def has_admin_scope(required: str) -> bool:
-    """True if the caller is a designated admin user (#865) whose
-    token carries a scope conferring `required`.
+    """True if the caller is a designated admin user (#865/#888)
+    whose grant row and token both cover `required`.
 
     Both legs ANDed, fail-closed: a client principal (or a user
-    principal with no scopes visible) never satisfies this.
+    principal failing either leg) never satisfies this.
     """
     if not is_user_principal():
         return False
-    user = flask.g.current_user
-    return (
-        str(user.get("id")) in admin_user_ids()
-        and scopes.grants(_user_token_scopes(), required)
-    )
+    resource, _, level = required.partition(":")
+    try:
+        _require_user_designation(resource, level)
+    except api_errors.ForbiddenError:
+        return False
+    return True
 
 
 def session_user_visible(session_client_id: str | None) -> bool:
@@ -268,35 +253,22 @@ def forbid_user_principal(action: str) -> None:
 def require_admin_user(scope: str, action: str) -> None:
     """Require a designated admin user token carrying `scope` (#865).
 
-    The user-principal leg of the transitional clients-vocabulary
-    gate (env-var identity AND token scope) — retained until #888
-    moves the clients blueprint onto the access-grant store
-    (#887 retired the users leg). Passes only if the caller is a
-    user principal AND its id is listed in AUTH_ADMIN_USER_IDS AND
-    the token's scopes cover `scope`. Neither leg alone suffices —
-    scope alone must never confer management authority (#854). A
-    no-op for client principals: the operator and self-service
-    rules apply to them.
+    The user-principal designation leg, store-backed since #888: the
+    identity leg is a grant row in the access-grant store (#883)
+    whose level covers `scope`, AND the bearer token must carry it.
+    Neither leg alone suffices — scope alone must never confer
+    management authority (#854). A no-op for client principals: the
+    operator and self-service rules apply to them.
 
     Raises:
         api_errors.ForbiddenError: Distinguishing the failed leg —
-            "not a designated admin" (identity) vs "token lacks
-            `<scope>`" (capability).
+            "no access grant designates this user" (identity) vs
+            "token lacks `<scope>`" (capability).
     """
     if not is_user_principal():
         return
-    user = flask.g.current_user
-    if str(user.get("id")) not in admin_user_ids():
-        raise api_errors.ForbiddenError(
-            f"Only designated admin users may {action} (#865): this "
-            f"user id is not listed in {ADMIN_USER_IDS_ENVVAR} on the "
-            "campus.auth deployment"
-        )
-    if not scopes.grants(_user_token_scopes(), scope):
-        raise api_errors.ForbiddenError(
-            f"Token lacks '{scope}' (#865): designated admin users "
-            f"must hold the '{scope}' management scope to {action}"
-        )
+    resource, _, level = scope.partition(":")
+    _require_user_designation(resource, level)
 
 
 def require_operator(action: str, admin_scope: str | None = None) -> None:
@@ -449,6 +421,40 @@ def require_operator_only_client_fields(updates: dict) -> None:
         )
 
 
+def _require_user_designation(resource: str, level: str) -> None:
+    """The two-leg designation check for the current user principal.
+
+    Identity leg: a grant row in the access-grant store (#883) whose
+    level covers `resource:level`. Capability leg: the bearer token
+    carries it. Either leg alone fails with a message naming the
+    failed leg. Fail-closed on missing or malformed rows (umbrella
+    decision 6).
+
+    Raises:
+        api_errors.ForbiddenError: On a failed leg.
+    """
+    # Lazy import: keeps the authz module importable ahead of the
+    # storage backend's test-mode initialization.
+    from .resources.grant import grants
+
+    user = flask.g.current_user
+    row = grants.get("user", str(user.get("id")), resource)
+    held = row.get("level") if row else None
+    required = f"{resource}:{level}"
+    if not held or not scopes.grants([f"{resource}:{held}"], required):
+        raise api_errors.ForbiddenError(
+            f"No access grant designates this user for "
+            f"'{required}' (#883): designated authority is "
+            "administered via the access-grant store"
+        )
+    if not scopes.grants(_user_token_scopes(), required):
+        raise api_errors.ForbiddenError(
+            f"Token lacks '{required}' (#865): a designated user "
+            "must hold the management scope to act on this "
+            "resource"
+        )
+
+
 # The vault vocabulary in the generalized gate (#885): vault rows
 # carry bitflags (ClientAccess) rather than scope levels, and the
 # vocabulary stays reserved for user principals until #889 pins their
@@ -487,28 +493,8 @@ def require_resource_permission(
     if is_user_principal():
         if resource == _VAULT_RESOURCE:
             forbid_user_principal(f"access the vault '{instance}'")
-        # Lazy import: keeps the authz module importable ahead of the
-        # storage backend's test-mode initialization.
-        from .resources.grant import grants
-
-        user = flask.g.current_user
-        row = grants.get(
-            "user", str(user.get("id")), resource, instance or ""
-        )
-        held = row.get("level") if row else None
-        required = f"{resource}:{level}"
-        if not held or not scopes.grants([f"{resource}:{held}"], required):
-            raise api_errors.ForbiddenError(
-                f"No access grant designates this user for "
-                f"'{required}' (#883): designated authority is "
-                "administered via the access-grant store"
-            )
-        if not scopes.grants(_user_token_scopes(), required):
-            raise api_errors.ForbiddenError(
-                f"Token lacks '{required}' (#865): a designated user "
-                "must hold the management scope to act on this "
-                "resource"
-            )
+        assert level is not None  # gates always name a level
+        _require_user_designation(resource, level)
         return
     if is_operator():
         return

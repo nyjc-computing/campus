@@ -23,8 +23,10 @@ not just authenticated (#854):
   clients:read to list/get any record (including vault-access views),
   clients:write to update benign fields on any client, clients:admin
   to register, delete, rotate secrets, set scope caps and administer
-  vault-access grants. Both the AUTH_ADMIN_USER_IDS listing and the
-  scope are required (ANDed, fail-closed);
+  vault-access grants. Both the clients grant row in the
+  access-grant store (#888) and the scope are required (ANDed,
+  fail-closed; rows cap at clients:write — admin-level actions are
+  operator-only, #883 decision 4);
 - any other user bearer token is denied on every route regardless of
   scope.
 

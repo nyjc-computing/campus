@@ -332,7 +332,7 @@ paths:
       tags: [Clients]
       summary: Update a client
       operationId: updateClient
-      description: '`is_public` cannot be changed after creation. Public clients cannot be granted `token_bridge`. Authorization (#881): the operator principal or a designated admin user (`clients:write` for benign fields — name, description, redirect_uris; `clients:admin` for the scope caps and `token_bridge`); client principals are read-only on their own records — their PATCH is rejected with 403 pointing at `clients:write`.'
+      description: '`is_public` cannot be changed after creation. Public clients cannot be granted `token_bridge`. Authorization (#881, #888): the operator principal, or a designated admin user holding a `clients` grant row (access-grant store, `/auth/v1/grants`) whose token carries the scope — `clients:write` for benign fields (name, description, redirect_uris). The scope caps and `token_bridge` are operator-only for users: grant rows cap at `clients:write` (#883 decision 4). Client principals are read-only on their own records — their PATCH is rejected with 403 pointing at the user-principal path.'
       parameters:
         - $ref: '#/components/parameters/ClientId'
       requestBody:
