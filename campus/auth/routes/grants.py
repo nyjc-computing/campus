@@ -158,17 +158,21 @@ def list_grants(
     (resource_type=<their vocabulary>).
 
     Query: grantee_type, grantee_id, resource_type, resource_id
-    (all optional; unfiltered requires the operator).
+    (all optional; unfiltered requires the operator or the
+    super-admin root, #906).
 
     Returns: {"grants": [AccessGrant]}
     """
     if authz.is_user_principal():
         # Users see exactly one vocabulary — the one they administer.
+        # The super-admin root is the exception: it reads the whole
+        # matrix unfiltered (#906 — it passes require_operator, so
+        # the former assert-as-flow-control 500'd here instead).
         if resource_type is None:
-            # require_operator raises for user principals here
-            authz.require_operator("list access grants")
-        assert resource_type is not None
-        _require_grant_admin(resource_type)
+            if not authz.is_super_admin():
+                authz.require_operator("list access grants")
+        else:
+            _require_grant_admin(resource_type)
     elif not authz.is_operator():
         authz.require_operator("list access grants")
     rows = grants.list(
