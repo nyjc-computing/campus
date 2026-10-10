@@ -63,6 +63,12 @@ Principals:
 Enforcement lives in the route modules (the resources must stay
 ungated for in-process callers such as the OAuth proxies and the
 connect flow).
+
+The generalized gate (#883, #885): require_resource_permission backs
+every vocabulary with the access-grant store — a designated user needs
+a grant row AND a token scope, clients keep vault bitflags, and the
+operator bypasses. The per-blueprint rollout (users first, #887)
+swaps each route family onto it.
 """
 
 __all__ = [
@@ -82,6 +88,7 @@ __all__ = [
     "require_admin_user_or_operator",
     "require_operator",
     "require_operator_only_client_fields",
+    "require_resource_permission",
     "require_self_or_operator",
     "require_vault_permission",
     "session_user_visible",
@@ -471,28 +478,96 @@ def require_operator_only_client_fields(updates: dict) -> None:
         )
 
 
-def require_vault_permission(label: str, permission: int) -> None:
-    """Require vault_access permission on a vault label (#854).
+# The vault vocabulary in the generalized gate (#885): vault rows
+# carry bitflags (ClientAccess) rather than scope levels, and the
+# vocabulary stays reserved for user principals until #889 pins their
+# matrix.
+_VAULT_RESOURCE = "vault"
 
-    Authorization model for the vaults blueprint:
 
-    - the operator client bypasses the bitflag check;
-    - user bearer tokens are denied outright;
-    - any other client principal must hold the requested bitflag(s)
-      for the label in its vault_access records (the permission model
-      administered via /clients/{id}/access/). A mask matches when the
-      client holds ANY of its bits, so POST set accepts a client with
-      either CREATE or UPDATE.
+def require_resource_permission(
+        resource: str,
+        level: str | None = None,
+        instance: str | None = None,
+        *,
+        bits: int | None = None,
+) -> None:
+    """Require designated authority over a management resource (#883, #885).
 
-    Fail-closed: a client with no vault_access record for the label is
-    denied, as is a deployment with no operator configured.
+    The generalized gate over the access-grant store. User principals
+    are consulted first so a user never inherits the minting client's
+    operator role (#854):
+
+    - a user principal needs BOTH legs of the #865 model, identity leg
+      moved to the store (umbrella decision 3): a grant row whose
+      level covers `resource:level` AND a token scope covering it —
+      either leg alone confers nothing. Fail-closed on a missing or
+      malformed row (umbrella decision 6). On the vault vocabulary
+      user bearers are denied outright, exactly as before, until #889
+      pins their matrix;
+    - the operator client bypasses every check;
+    - any other client principal is denied on the level vocabularies
+      (clients are never designated admins, #854/#865) and keeps
+      bitflag semantics on vault labels (`bits`).
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks authority.
+    """
+    if is_user_principal():
+        if resource == _VAULT_RESOURCE:
+            forbid_user_principal(f"access the vault '{instance}'")
+        # Lazy import: keeps the authz module importable ahead of the
+        # storage backend's test-mode initialization.
+        from .resources.grant import grants
+
+        user = flask.g.current_user
+        row = grants.get(
+            "user", str(user.get("id")), resource, instance or ""
+        )
+        held = row.get("level") if row else None
+        required = f"{resource}:{level}"
+        if not held or not scopes.grants([f"{resource}:{held}"], required):
+            raise api_errors.ForbiddenError(
+                f"No access grant designates this user for "
+                f"'{required}' (#883): designated authority is "
+                "administered via the access-grant store"
+            )
+        if not scopes.grants(_user_token_scopes(), required):
+            raise api_errors.ForbiddenError(
+                f"Token lacks '{required}' (#865): a designated user "
+                "must hold the management scope to act on this "
+                "resource"
+            )
+        return
+    if is_operator():
+        return
+    if resource == _VAULT_RESOURCE:
+        assert bits is not None
+        _require_vault_bitflags(instance or "", bits)
+        return
+    client = getattr(flask.g, "current_client", None)
+    who = f"Client '{client.id}'" if client else "Client principals"
+    raise api_errors.ForbiddenError(
+        f"{who} hold no '{resource}' management authority (#854): "
+        "management routes accept the operator, designated user "
+        "grants, or the resource client itself, never other clients"
+    )
+
+
+def _require_vault_bitflags(label: str, bits: int) -> None:
+    """Vault bitflag check for client principals (#854, unchanged).
+
+    The caller has already settled the operator and user-principal
+    legs; a client principal must hold the requested bitflag(s) for
+    the label in its vault grant (administered via
+    /clients/{id}/access/). A mask matches when the client holds ANY
+    of its bits, so POST set accepts a client with either CREATE or
+    UPDATE. Fail-closed: no grant row for the label is denied, as is
+    an unauthenticated caller.
 
     Raises:
         api_errors.ForbiddenError: If the caller lacks the permission.
     """
-    forbid_user_principal(f"access the vault '{label}'")
-    if is_operator():
-        return
     client = getattr(flask.g, "current_client", None)
     if client is None:
         raise api_errors.ForbiddenError(
@@ -503,9 +578,27 @@ def require_vault_permission(label: str, permission: int) -> None:
     from .resources import client as client_resource
 
     held = client_resource[client.id].access.get(label)
-    if not held & permission:
+    if not held & bits:
         raise api_errors.ForbiddenError(
-            f"Client '{client.id}' lacks {_describe_bitflags(permission)} "
+            f"Client '{client.id}' lacks {_describe_bitflags(bits)} "
             f"access to vault '{label}': grant it via "
             f"/clients/{client.id}/access/ as the operator"
         )
+
+
+def require_vault_permission(label: str, permission: int) -> None:
+    """Require vault_access permission on a vault label (#854).
+
+    Thin wrapper over require_resource_permission (#885), behavior
+    identical: the operator client bypasses the bitflag check; user
+    bearer tokens are denied outright (checked first, so a user never
+    inherits the minting client's operator role); any other client
+    principal must hold the requested bitflag(s) for the label in its
+    vault grant.
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks the permission.
+    """
+    require_resource_permission(
+        _VAULT_RESOURCE, instance=label, bits=permission
+    )
