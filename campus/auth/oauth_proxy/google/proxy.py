@@ -228,6 +228,17 @@ class GoogleAuthProxy(base.AuthProxy):
                 domain=user_email.domain
             )
         user_id = schema.UserID(userinfo["email"])
+        # Provision the user record on every identity verification
+        # (#903): this callback is the one hop all login flows share —
+        # app login and the device flow — so a first-time sign-in must
+        # leave a users row. Tokens alone are not enough: the bearer
+        # principal carries the record email (#897), session-user
+        # hydration reads the record (#879), and users routes serve
+        # from it. Idempotent; mirrors provider.py's name fallback.
+        resources.user.get_or_create(
+            email=user_email,
+            name=userinfo.get("name") or str(user_id).split("@")[0],
+        )
         if self.integration is not None:
             self._validate_connect_binding(user_id, granted_scopes)
         # Store/update token
