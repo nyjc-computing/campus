@@ -37,7 +37,7 @@ Contract tests are organized by service area into subdirectories:
 | `test_google_login_prompt.py` | Google login prompt policy (#844) |
 | `test_integrations.py` | Per-integration upstream OAuth (#733 Phase 1), B3 connect-flow guards |
 | `test_integrations_registry.py` | Integrations registry endpoint (#688) |
-| `test_management_authorization.py` | Management-route authorization (#854): operator principal, client self-service, vault bitflags; designated admin users (#865) |
+| `test_management_authorization.py` | Management-route authorization (#854): operator principal, client self-service reads/rotation (#881), vault bitflags; designated admin users (#865) |
 | `test_scope_algebra.py` | Campus scope algebra (A1/A6/A7 allowlist enforcement) |
 | `test_token_broker.py` | Token bridge (`/auth/v1/broker`, C1–C5) |
 | `test_token_issuance.py` | Campus token issuance on `/token` (A2–A5) |

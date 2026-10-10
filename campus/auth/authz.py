@@ -1,13 +1,22 @@
 """campus.auth.authz
 
 Fail-closed authorization for campus.auth management blueprints (#854,
-#865).
+#865, #881).
 
 Authentication (campus.auth.middleware) establishes who is calling and
 pushes the principal into flask.g; this module decides what the
 principal may do on the management blueprints (vaults, clients, users,
 credentials). Every helper fails closed: a principal that matches no
 rule is denied.
+
+Design intent (#881): client principals hold the bare minimum access
+their role needs — the vault role — which in most cases means
+read-only; where a client genuinely needs write access it is granted
+reviewed vault_access bitflags per label. Mutating admin actions
+(registering a redirect_uri, editing registration data) must be
+attributable to a user: a shared client secret cannot satisfy
+accountability, so those mutations are reserved for the operator and
+designated admin users (#865), never client principals.
 
 Principals:
 
@@ -19,11 +28,15 @@ Principals:
   an unset or empty var means the deployment has no operator at all.
 - Client principals: authenticated confidential clients (HTTP Basic,
   or an app-scoped client_credentials bearer, which resolves to the
-  client itself). A client may manage only itself — read its record,
-  update its profile fields, rotate its own secret — and may touch a
-  vault label only where it holds the matching vault_access bitflag
+  client itself). A client is read-only on registration data (#881):
+  it may read its own record and rotate its own secret (rotation is
+  human-mediated by construction — the rotated secret must be written
+  into the deployment env by an operator), and it may touch a vault
+  label only where it holds the matching vault_access bitflag
   (campus.model.client.ClientAccess), the per-label permission model
-  the /clients/{id}/access/ routes administer.
+  the /clients/{id}/access/ routes administer. Where a reviewed
+  exception to read-only is granted, the rationale is recorded on the
+  client's description so auditors see why.
 - Designated admin users (#865): user principals whose ids are listed
   in a designated-admin env var (comma-separated, read at request
   time, mirroring AUTH_OPERATOR_CLIENT_IDS) and whose bearer token
@@ -66,6 +79,7 @@ __all__ = [
     "is_operator",
     "operator_client_ids",
     "require_admin_user",
+    "require_admin_user_or_operator",
     "require_operator",
     "require_operator_only_client_fields",
     "require_self_or_operator",
@@ -117,10 +131,11 @@ USERS_MOD = "users:mod"
 USERS_WRITE = "users:write"
 USERS_ADMIN = "users:admin"
 
-# Client record fields a client may NOT change on itself: the scope
+# Client record fields reserved for the clients:admin scope: the scope
 # caps and the token-bridge flag are operator-controlled registration
-# data (docs/auth-token-invariants.md A1/B3/C1); self-service edits
-# would let a client widen its own authority.
+# data (docs/auth-token-invariants.md A1/B3/C1); a client-principal
+# edit would let the client widen its own authority (and client
+# principals may not PATCH at all post-#881).
 _OPERATOR_ONLY_CLIENT_FIELDS = (
     "allowed_scopes",
     "upstream_scopes",
@@ -256,8 +271,9 @@ def forbid_user_principal(action: str) -> None:
     """Reject end-user bearer tokens on management routes (#854).
 
     A user token's scopes (and the client it was minted through) carry
-    no management authority: management routes are for the operator
-    and self-managing clients only.
+    no management authority: management routes are for the operator,
+    designated admin users (#865), and the read/rotate self-service
+    client principals keep (#881).
 
     Retained for the blueprints whose management-scope vocabulary is
     reserved (#865): vaults, users, credentials.
@@ -331,6 +347,40 @@ def require_operator(action: str, admin_scope: str | None = None) -> None:
         )
 
 
+def require_admin_user_or_operator(
+        admin_scope: str,
+        action: str,
+) -> None:
+    """Require a designated admin user or the operator for `action` (#881).
+
+    Mutating admin actions must be attributable to a user principal: a
+    shared client secret cannot satisfy accountability, so client
+    principals — including the client whose record is being changed —
+    are denied, and the error points at the user-principal path (the
+    `admin_scope` vocabulary, #865) alongside the operator. The client
+    leg of this gate is what narrowed PATCH /clients/{id}/: reads and
+    human-mediated secret rotation stay self-service
+    (require_self_or_operator), record mutations do not.
+
+    Raises:
+        api_errors.ForbiddenError: If the caller is a client principal
+            other than the operator, or a user principal failing
+            either designated-admin leg (identity/capability, as
+            require_admin_user).
+    """
+    if is_user_principal():
+        require_admin_user(admin_scope, action)
+        return
+    if is_operator():
+        return
+    raise api_errors.ForbiddenError(
+        f"Client principals may not {action} (#881): mutating admin "
+        "actions must be attributable to a user — use a designated "
+        f"admin user token with '{admin_scope}' (#865) or the operator "
+        f"principal ({OPERATOR_CLIENT_IDS_ENVVAR})"
+    )
+
+
 def require_self_or_operator(
         client_id: str,
         action: str,
@@ -339,7 +389,9 @@ def require_self_or_operator(
     """Require the operator principal or the named client itself.
 
     "Self" means the authenticated client IS the client named in the
-    path: clients may manage their own record but not anyone else's.
+    path: clients may act on their own record (reads and secret
+    rotation — record mutations are user-attributable, #881, see
+    require_admin_user_or_operator) but not on anyone else's.
 
     User principals are denied unless the action opens a
     management-scope vocabulary (#865): with `admin_scope` set, a
@@ -371,13 +423,16 @@ def require_self_or_operator(
 def require_operator_only_client_fields(updates: dict) -> None:
     """Reject operator-only field edits by non-admin principals.
 
-    Called on the PATCH /clients/{id}/ self-management path after
-    require_self_or_operator: a client renaming itself or registering
-    its own redirect URIs is fine, but the scope caps and the
-    token-bridge flag are operator-controlled. The operator client may
-    set them, and so may a designated admin user whose token carries
-    clients:admin (#865) — a clients:write admin user is still limited
-    to benign fields.
+    Called on the PATCH /clients/{id}/ path after
+    require_admin_user_or_operator: client principals never reach it
+    (#881 denies them on the whole route), so the live check is the
+    user leg — a clients:write admin user is limited to benign fields
+    (name, description, redirect_uris); only a clients:admin user (or
+    the operator) may set the scope caps and the token-bridge flag.
+    The client-principal branch stays as fail-closed defense in depth:
+    it independently rejects a non-operator client attempting these
+    fields even if a future route wires this helper without the #881
+    gate.
 
     Raises:
         api_errors.ForbiddenError: If any operator-only field is
@@ -410,7 +465,7 @@ def require_operator_only_client_fields(updates: dict) -> None:
     ]
     if attempted:
         raise api_errors.ForbiddenError(
-            f"Self-management may not change {', '.join(attempted)}: "
+            f"Client principals may not change {', '.join(attempted)}: "
             "these are operator-controlled registration fields "
             "(docs/auth-token-invariants.md A1/B3/C1)"
         )

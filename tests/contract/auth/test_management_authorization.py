@@ -1,13 +1,15 @@
-"""HTTP contract tests for management-route authorization (#854, #865).
+"""HTTP contract tests for management-route authorization (#854, #865, #881).
 
 These tests verify that the management blueprints (vaults, clients,
 users, credentials) authorize, not merely authenticate:
 
 - vault labels are gated by the client's vault_access bitflags, with
   the operator principal (AUTH_OPERATOR_CLIENT_IDS) bypassing them;
-- clients may manage only their own record, and never the
-  operator-controlled fields (allowed_scopes, upstream_scopes,
-  token_bridge) or vault-access grants;
+- clients are read-only on registration data (#881): they may read
+  their own record and rotate their own secret, but never update any
+  client record (the 403 points at the clients:write user-principal
+  path), touch the operator-controlled fields (allowed_scopes,
+  upstream_scopes, token_bridge), or administer vault-access grants;
 - user bearer tokens are denied on every management route regardless
   of their scopes — except designated admin users (#865) acting on
   the clients and users blueprints with the matching management
@@ -23,6 +25,7 @@ bearer tokens exercise the denied shapes.
 
 import unittest
 import uuid
+from unittest import mock
 
 from campus.common import env
 from campus.model.client import ClientAccess
@@ -102,6 +105,7 @@ class TestManagementAuthorization(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
         data = response.get_json()
         self.assertEqual(data["error"]["code"], "FORBIDDEN")
+        return data["error"]["message"]
 
     # --- vault labels: vault_access bitflags gate every verb ---
 
@@ -256,7 +260,7 @@ class TestManagementAuthorization(unittest.TestCase):
             self.assert_forbidden(response)
 
     def test_client_self_management_allowed(self):
-        """A client reads, updates and rotates its own record."""
+        """A client reads and rotates its own record (mutations: #881)."""
         response = self.client.get(
             "/auth/v1/clients/", headers=self.limited_headers
         )
@@ -269,12 +273,16 @@ class TestManagementAuthorization(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["id"], self.limited_id)
 
+        # Self-PATCH used to be allowed (#854); #881 narrowed it —
+        # mutations must be attributable to a user, so even the
+        # client's own record is denied (asserted fully below).
         response = self.client.patch(
             f"/auth/v1/clients/{self.limited_id}/",
-            json={"description": "Updated by self (#854)"},
+            json={"description": "Updated by self (#881 denies this)"},
             headers=self.limited_headers,
         )
-        self.assertEqual(response.status_code, 200)
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:write", message)
 
         response = self.client.post(
             f"/auth/v1/clients/{self.limited_id}/revoke",
@@ -297,8 +305,40 @@ class TestManagementAuthorization(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
+    def test_client_self_patch_denied_881(self):
+        """A9/#881: client-principal PATCH of its own record is 403.
+
+        Even benign profile fields (name, description, redirect_uris)
+        are user-attributable mutations now: the error must point the
+        caller at the clients:write user-principal path, not at the
+        operator allowlist.
+        """
+        for field, value in (
+            ("name", "Renamed by self"),
+            ("description", "Updated by self"),
+            ("redirect_uris", ["https://self.example/cb"]),
+        ):
+            response = self.client.patch(
+                f"/auth/v1/clients/{self.limited_id}/",
+                json={field: value},
+                headers=self.limited_headers,
+            )
+            message = self.assert_forbidden(response)
+            self.assertIn("clients:write", message)
+            self.assertIn("#881", message)
+
+        # The app-scoped bearer is the same client principal (#739) and
+        # gets the same denial.
+        response = self.client.patch(
+            f"/auth/v1/clients/{self.limited_id}/",
+            json={"description": "x"},
+            headers=self.app_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("clients:write", message)
+
     def test_client_scope_caps_operator_controlled(self):
-        """Self-management may not widen its own authority (#854)."""
+        """The scope caps stay above every client principal (#854, #881)."""
         for field, value in (
             ("allowed_scopes", ["read", "write", "admin"]),
             ("upstream_scopes", {"google": ["scope"]}),
@@ -527,6 +567,36 @@ class TestDesignatedAdminUsers(unittest.TestCase):
         )
         message = self.assert_forbidden(response)
         self.assertIn("designated admin", message)
+
+    def test_write_matrix_mutation_is_audited_881(self):
+        """A9/#881: the user-principal PATCH emits its audit event.
+
+        The mutation path #881 keeps is the attributable one, so the
+        campus.clients.update emission must fire on the clients:write
+        leg. (The span's user_id stamp — flask.g.current_user →
+        campus.audit — is covered in tests/unit/audit/
+        test_tracing_propagation.py, #802; the contract harness cannot
+        read cross-service audit spans, #570.)
+        """
+        with mock.patch(
+                "campus.auth.routes.clients.get_yapper"
+        ) as yapper_factory:
+            response = self.client.patch(
+                f"/auth/v1/clients/{self.limited_id}/",
+                json={"description": "Audited clients:write update (#881)"},
+                headers=self.admin_write_headers,
+            )
+        self.assertEqual(response.status_code, 200)
+        emissions = [
+            call.args
+            for call in yapper_factory.return_value.emit.call_args_list
+        ]
+        update_events = [
+            payload for event, payload in emissions
+            if event == "campus.clients.update"
+        ]
+        self.assertEqual(len(update_events), 1)
+        self.assertEqual(update_events[0].get("client_id"), self.limited_id)
 
     def test_write_cannot_touch_operator_only_fields(self):
         """clients:write stays below the scope caps; clients:admin may."""
