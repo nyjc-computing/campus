@@ -193,6 +193,24 @@ class RateLimitError(APIError):
             self.headers = {"Retry-After": str(max(1, int(retry_after)))}
 
 
+class ServiceUnavailableError(APIError):
+    """Service unavailable error.
+
+    Error indicates that a dependency the service needs to fulfil the
+    request (e.g. the email sender for OTP delivery) is unreachable or
+    failing, so the request should be retried later.
+    """
+    status_code: int = 503
+
+    def __init__(
+            self,
+            message: str = "Service temporarily unavailable",
+            error_code: str = ErrorConstant.SERVICE_UNAVAILABLE,
+            **details
+    ) -> None:
+        super().__init__(message, error_code, **details)
+
+
 class UnauthorizedError(APIError):
     """Unauthorized error.
 
