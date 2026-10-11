@@ -1853,7 +1853,7 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
-  /auth/v1/vaults/{label}/{key}:
+  /auth/v1/vaults/{label}/{key}/:
     get:
       tags: [Vaults]
       summary: Get a vault value

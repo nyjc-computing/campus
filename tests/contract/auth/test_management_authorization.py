@@ -114,21 +114,21 @@ class TestManagementAuthorization(unittest.TestCase):
     def test_vault_read_with_grant_succeeds(self):
         """GET on a label with a READ grant serves the key list and keys."""
         for path in (f"/auth/v1/vaults/{SHARED_VAULT}/",
-                     f"/auth/v1/vaults/{SHARED_VAULT}/READABLE"):
+                     f"/auth/v1/vaults/{SHARED_VAULT}/READABLE/"):
             response = self.client.get(path, headers=self.limited_headers)
             self.assertEqual(response.status_code, 200)
 
     def test_vault_write_denied_with_read_only_grant(self):
         """POST/DELETE on a READ-only label are denied (403)."""
         response = self.client.post(
-            f"/auth/v1/vaults/{SHARED_VAULT}/NEWKEY",
+            f"/auth/v1/vaults/{SHARED_VAULT}/NEWKEY/",
             json={"value": "x"},
             headers=self.limited_headers,
         )
         self.assert_forbidden(response)
 
         response = self.client.delete(
-            f"/auth/v1/vaults/{SHARED_VAULT}/READABLE",
+            f"/auth/v1/vaults/{SHARED_VAULT}/READABLE/",
             json={},
             headers=self.limited_headers,
         )
@@ -138,10 +138,10 @@ class TestManagementAuthorization(unittest.TestCase):
         """A grant on one label confers nothing on another label."""
         for method, path, kwargs in (
             ("get", f"/auth/v1/vaults/{PRIVATE_VAULT}/", {}),
-            ("get", f"/auth/v1/vaults/{PRIVATE_VAULT}/SECRET", {}),
-            ("post", f"/auth/v1/vaults/{PRIVATE_VAULT}/NEWKEY",
+            ("get", f"/auth/v1/vaults/{PRIVATE_VAULT}/SECRET/", {}),
+            ("post", f"/auth/v1/vaults/{PRIVATE_VAULT}/NEWKEY/",
              {"json": {"value": "x"}}),
-            ("delete", f"/auth/v1/vaults/{PRIVATE_VAULT}/SECRET",
+            ("delete", f"/auth/v1/vaults/{PRIVATE_VAULT}/SECRET/",
              {"json": {}}),
         ):
             response = getattr(self.client, method)(
@@ -153,12 +153,12 @@ class TestManagementAuthorization(unittest.TestCase):
         """User bearer tokens cannot touch vaults regardless of scope."""
         for method, path, kwargs in (
             ("get", f"/auth/v1/vaults/{SHARED_VAULT}/", {}),
-            ("get", f"/auth/v1/vaults/{SHARED_VAULT}/READABLE", {}),
-            ("post", f"/auth/v1/vaults/{SHARED_VAULT}/NEWKEY",
+            ("get", f"/auth/v1/vaults/{SHARED_VAULT}/READABLE/", {}),
+            ("post", f"/auth/v1/vaults/{SHARED_VAULT}/NEWKEY/",
              {"json": {"value": "x"}}),
-            ("delete", f"/auth/v1/vaults/{SHARED_VAULT}/READABLE",
+            ("delete", f"/auth/v1/vaults/{SHARED_VAULT}/READABLE/",
              {"json": {}}),
-            ("get", f"/auth/v1/vaults/{PRIVATE_VAULT}/SECRET", {}),
+            ("get", f"/auth/v1/vaults/{PRIVATE_VAULT}/SECRET/", {}),
         ):
             response = getattr(self.client, method)(
                 path, headers=self.user_headers, **kwargs
@@ -168,7 +168,7 @@ class TestManagementAuthorization(unittest.TestCase):
     def test_vault_operator_bypasses_bitflags(self):
         """The operator manages any label without per-label grants."""
         response = self.client.post(
-            f"/auth/v1/vaults/{PRIVATE_VAULT}/OPERATORKEY",
+            f"/auth/v1/vaults/{PRIVATE_VAULT}/OPERATORKEY/",
             json={"value": "v"},
             headers=self.operator_headers,
         )
@@ -1127,7 +1127,7 @@ class TestUserVaultAccess(unittest.TestCase):
 
     def test_write_denied_at_read_level(self):
         response = self.client.post(
-            f"/auth/v1/vaults/{self.LABEL}/NEWKEY",
+            f"/auth/v1/vaults/{self.LABEL}/NEWKEY/",
             json={"value": "x"},
             headers=self.reader_headers,
         )

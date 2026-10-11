@@ -32,7 +32,7 @@ class TestAuthVaultContract(unittest.TestCase):
 
     def test_get_secret_no_auth_returns_401(self):
         """GET /vaults/{label}/{key} without auth returns 401."""
-        response = self.client.get("/auth/v1/vaults/vault/SECRET_KEY")
+        response = self.client.get("/auth/v1/vaults/vault/SECRET_KEY/")
 
         self.assertEqual(response.status_code, 401)
         data = response.get_json()
@@ -43,7 +43,7 @@ class TestAuthVaultContract(unittest.TestCase):
     def test_get_secret_missing_returns_404(self):
         """GET /vaults/{label}/{key} for missing key returns 404."""
         response = self.client.get(
-            "/auth/v1/vaults/vault/MISSING_KEY",
+            "/auth/v1/vaults/vault/MISSING_KEY/",
             headers=self.auth_headers
         )
 
@@ -58,7 +58,7 @@ class TestAuthVaultContract(unittest.TestCase):
         """SET then GET secret returns the value."""
         # Set a secret
         set_response = self.client.post(
-            "/auth/v1/vaults/vault/TEST_KEY",
+            "/auth/v1/vaults/vault/TEST_KEY/",
             json={"value": "test123"},
             headers=self.auth_headers
         )
@@ -68,7 +68,7 @@ class TestAuthVaultContract(unittest.TestCase):
 
         # Get it back
         get_response = self.client.get(
-            "/auth/v1/vaults/vault/TEST_KEY",
+            "/auth/v1/vaults/vault/TEST_KEY/",
             headers=self.auth_headers
         )
         self.assertEqual(get_response.status_code, 200)
@@ -79,12 +79,12 @@ class TestAuthVaultContract(unittest.TestCase):
         """GET /vaults/{label}/ returns list of keys."""
         # Set up some keys
         self.client.post(
-            "/auth/v1/vaults/vault/KEY1",
+            "/auth/v1/vaults/vault/KEY1/",
             json={"value": "v1"},
             headers=self.auth_headers
         )
         self.client.post(
-            "/auth/v1/vaults/vault/KEY2",
+            "/auth/v1/vaults/vault/KEY2/",
             json={"value": "v2"},
             headers=self.auth_headers
         )
@@ -104,14 +104,14 @@ class TestAuthVaultContract(unittest.TestCase):
         """DELETE /vaults/{label}/{key} removes the secret."""
         # Set a secret
         self.client.post(
-            "/auth/v1/vaults/vault/DEL_KEY",
+            "/auth/v1/vaults/vault/DEL_KEY/",
             json={"value": "v"},
             headers=self.auth_headers
         )
 
         # Delete it (note: DELETE requires empty JSON body due to unpack_request decorator)
         del_response = self.client.delete(
-            "/auth/v1/vaults/vault/DEL_KEY",
+            "/auth/v1/vaults/vault/DEL_KEY/",
             json={},
             headers=self.auth_headers
         )
@@ -119,7 +119,7 @@ class TestAuthVaultContract(unittest.TestCase):
 
         # Verify it's gone
         get_response = self.client.get(
-            "/auth/v1/vaults/vault/DEL_KEY",
+            "/auth/v1/vaults/vault/DEL_KEY/",
             headers=self.auth_headers
         )
         self.assertEqual(get_response.status_code, 404)
