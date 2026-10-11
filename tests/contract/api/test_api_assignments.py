@@ -230,11 +230,10 @@ class TestApiAssignmentsContract(unittest.TestCase):
         self.assertIn("title", data)
         self.assertIn("description", data)
 
-    @unittest.skip("API BUG #407: request without trailing slash is 308-redirected, never reaches auth")
     def test_get_assignment_requires_auth(self):
-        """GET /assignments/{assignment_id} without auth returns 401."""
+        """GET /assignments/{assignment_id}/ without auth returns 401."""
         response = self.client.get(
-            "/api/v1/assignments/some_id"
+            "/api/v1/assignments/some_id/"
         )
 
         self.assertEqual(response.status_code, 401)

@@ -103,7 +103,7 @@ def create_submission(
     return resource, 201
 
 
-@bp.get('/by-assignment/<string:assignment_id>')
+@bp.get('/by-assignment/<string:assignment_id>/')
 def list_submissions_by_assignment(
     assignment_id: str,
 ) -> flask_campus.JsonResponse:
@@ -111,7 +111,7 @@ def list_submissions_by_assignment(
         List submissions for a specific assignment.
 
     Method:
-        GET /submissions/by-assignment/{assignment_id}
+        GET /submissions/by-assignment/{assignment_id}/
 
     Responses:
         200 OK: dict
@@ -121,7 +121,7 @@ def list_submissions_by_assignment(
     return {"data": [submission.to_resource() for submission in result]}, 200
 
 
-@bp.get('/by-student/<string:student_id>')
+@bp.get('/by-student/<string:student_id>/')
 def list_submissions_by_student(
     student_id: str,
 ) -> flask_campus.JsonResponse:
@@ -129,7 +129,7 @@ def list_submissions_by_student(
         List submissions from a specific student.
 
     Method:
-        GET /submissions/by-student/{student_id}
+        GET /submissions/by-student/{student_id}/
 
     Responses:
         200 OK: dict

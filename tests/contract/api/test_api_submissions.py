@@ -171,7 +171,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
         self._create_test_submission()
 
         response = self.client.get(
-            f"/api/v1/submissions/by-assignment/{self.test_assignment_id}",
+            f"/api/v1/submissions/by-assignment/{self.test_assignment_id}/",
             headers=self.auth_headers
         )
 
@@ -187,7 +187,7 @@ class TestApiSubmissionsContract(unittest.TestCase):
         self._create_test_submission()
 
         response = self.client.get(
-            f"/api/v1/submissions/by-student/{self.test_student_id}",
+            f"/api/v1/submissions/by-student/{self.test_student_id}/",
             headers=self.auth_headers
         )
 
