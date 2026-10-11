@@ -81,7 +81,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
     def test_get_credentials_by_user_id(self):
         """GET /credentials/{provider}/{user_id} returns user credentials."""
         response = self.client.get(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             headers=self.basic_auth_headers
         )
 
@@ -95,7 +95,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
     def test_get_credentials_missing_user_returns_404(self):
         """GET /credentials/{provider}/nonexistent returns 404."""
         response = self.client.get(
-            "/auth/v1/credentials/campus/nonexistent@campus.test",
+            "/auth/v1/credentials/campus/nonexistent@campus.test/",
             headers=self.basic_auth_headers
         )
 
@@ -106,7 +106,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         new_user_id = schema.UserID("new.user@campus.test")
 
         response = self.client.post(
-            f"/auth/v1/credentials/campus/{new_user_id}",
+            f"/auth/v1/credentials/campus/{new_user_id}/",
             json={
                 "scopes": ["read", "write"],
                 "expires_in": 3600
@@ -128,7 +128,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         convention introduced by #347.
         """
         response = self.client.post(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             json={},  # Missing scopes and expires_in
             headers=self.basic_auth_headers
         )
@@ -142,7 +142,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         """PATCH /credentials/{provider}/{user_id} updates credentials."""
 
         response = self.client.patch(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             json={
                 "token": {
                     "id": self.bearer_token,
@@ -160,7 +160,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         item 2: the deprecation window closed; only expires_in is
         accepted)."""
         response = self.client.post(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             json={
                 "scopes": ["read"],
                 "expiry_seconds": 3600
@@ -175,7 +175,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
     def test_create_credentials_missing_expiry_returns_422(self):
         """POST without expires_in/expiry_seconds returns 422."""
         response = self.client.post(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             json={"scopes": ["read"]},
             headers=self.basic_auth_headers
         )
@@ -199,7 +199,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         )
 
         response = self.client.patch(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             json={"token": token.to_resource()},
             headers=self.basic_auth_headers
         )
@@ -214,7 +214,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         must already accept that shape (#655).
         """
         response = self.client.patch(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             json={
                 "token": {
                     "id": self.bearer_token,
@@ -235,7 +235,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         surface as an unhandled error (500).
         """
         response = self.client.patch(
-            f"/auth/v1/credentials/campus/{self.test_user_id}",
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
             json={"token": {}},  # No expires_at or expiry_seconds
             headers=self.basic_auth_headers
         )
@@ -261,7 +261,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
 
         # Delete the credentials as the operator
         response = self.client.delete(
-            f"/auth/v1/credentials/campus/{temp_user_id}",
+            f"/auth/v1/credentials/campus/{temp_user_id}/",
             json={},
             headers=self.basic_auth_headers
         )
@@ -272,7 +272,7 @@ class TestAuthCredentialsContract(unittest.TestCase):
         # authenticates, so the request is rejected as 401 invalid_token
         # (RFC 6750 §3.1, #729) rather than a resource 404.
         get_response = self.client.get(
-            f"/auth/v1/credentials/campus/{temp_user_id}",
+            f"/auth/v1/credentials/campus/{temp_user_id}/",
             headers=temp_headers
         )
         self.assertEqual(get_response.status_code, 401)

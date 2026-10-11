@@ -80,7 +80,7 @@ def get_by_token(
         }, 200
 
 
-@bp.delete("/<provider>/<user_id>")
+@bp.delete("/<provider>/<user_id>/")
 @flask_campus.unpack_request
 def delete_by_user(
         provider: str,
@@ -88,7 +88,7 @@ def delete_by_user(
 ) -> flask_campus.JsonResponse:
     """Delete credentials for a specific provider and user ID.
 
-    DELETE /credentials/{provider}/{user_id}
+    DELETE /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).
 
     Returns: {
@@ -102,7 +102,7 @@ def delete_by_user(
     return {}, 200
 
 
-@bp.get("/<provider>/<user_id>")
+@bp.get("/<provider>/<user_id>/")
 @flask_campus.unpack_request
 def get_by_user(
         provider: str,
@@ -111,7 +111,7 @@ def get_by_user(
 ) -> flask_campus.JsonResponse:
     """Get credentials for a specific provider and user ID.
 
-    GET /credentials/{provider}/{user_id}
+    GET /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).
 
     Query Params: {
@@ -127,7 +127,7 @@ def get_by_user(
     return credentials.to_resource(), 200
 
 
-@bp.patch("/<provider>/<user_id>")
+@bp.patch("/<provider>/<user_id>/")
 @flask_campus.unpack_request
 def update_credentials(
         provider: str,
@@ -136,7 +136,7 @@ def update_credentials(
 ) -> flask_campus.JsonResponse:
     """Update credentials for a specific provider and user ID.
 
-    PATCH /credentials/{provider}/{user_id}
+    PATCH /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).
 
     Body: {
@@ -172,7 +172,7 @@ def update_credentials(
     return {}, 200
 
 
-@bp.post("/<provider>/<user_id>")
+@bp.post("/<provider>/<user_id>/")
 @flask_campus.unpack_request
 def new_credentials(
         provider: str,
@@ -182,7 +182,7 @@ def new_credentials(
 ) -> flask_campus.JsonResponse:
     """Issue new credentials for a specific provider and user ID.
 
-    POST /credentials/{provider}/{user_id}
+    POST /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).
 
     Body: {
@@ -215,9 +215,9 @@ def create_blueprint() -> flask.Blueprint:
 
     # Manually register routes (mimicking the decorator behavior)
     new_bp.add_url_rule("/<provider>/", "get_by_token", get_by_token, methods=["GET"])
-    new_bp.add_url_rule("/<provider>/<user_id>", "delete_by_user", delete_by_user, methods=["DELETE"])
-    new_bp.add_url_rule("/<provider>/<user_id>", "get_by_user", get_by_user, methods=["GET"])
-    new_bp.add_url_rule("/<provider>/<user_id>", "update_credentials", update_credentials, methods=["PATCH"])
-    new_bp.add_url_rule("/<provider>/<user_id>", "new_credentials", new_credentials, methods=["POST"])
+    new_bp.add_url_rule("/<provider>/<user_id>/", "delete_by_user", delete_by_user, methods=["DELETE"])
+    new_bp.add_url_rule("/<provider>/<user_id>/", "get_by_user", get_by_user, methods=["GET"])
+    new_bp.add_url_rule("/<provider>/<user_id>/", "update_credentials", update_credentials, methods=["PATCH"])
+    new_bp.add_url_rule("/<provider>/<user_id>/", "new_credentials", new_credentials, methods=["POST"])
 
     return new_bp

@@ -50,12 +50,12 @@ def keys(label: str) -> flask_campus.JsonResponse:
     return {"keys": keys}, 200
 
 
-@bp.delete("/<label>/<key>")
+@bp.delete("/<label>/<key>/")
 @flask_campus.unpack_request
 def delete(label: str, key: str) -> flask_campus.JsonResponse:
     """Delete a key from a vault.
 
-    DELETE /vaults/{label}/{key}
+    DELETE /vaults/{label}/{key}/
     Authorization: DELETE vault access on {label}, or operator.
 
     Returns: {}
@@ -66,12 +66,12 @@ def delete(label: str, key: str) -> flask_campus.JsonResponse:
     return {}, 200
 
 
-@bp.get("/<label>/<key>")
+@bp.get("/<label>/<key>/")
 @flask_campus.unpack_request
 def get(label: str, key: str) -> flask_campus.JsonResponse:
     """Get a specific key from a vault.
 
-    GET /vaults/{label}/{key}
+    GET /vaults/{label}/{key}/
     Authorization: READ vault access on {label}, or operator.
 
     Returns: {
@@ -86,12 +86,12 @@ def get(label: str, key: str) -> flask_campus.JsonResponse:
     return {"key": value}, 200
 
 
-@bp.post("/<label>/<key>")
+@bp.post("/<label>/<key>/")
 @flask_campus.unpack_request
 def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
     """Set a specific key in a vault.
 
-    POST /vaults/{label}/{key}
+    POST /vaults/{label}/{key}/
     Authorization: CREATE or UPDATE vault access on {label}, or
     operator (set is create-or-update, so either bit authorizes it).
 
@@ -120,8 +120,8 @@ def create_blueprint() -> flask.Blueprint:
 
     # Manually register routes (mimicking the decorator behavior)
     new_bp.add_url_rule("/<label>/", "keys", keys, methods=["GET"])
-    new_bp.add_url_rule("/<label>/<key>", "delete", delete, methods=["DELETE"])
-    new_bp.add_url_rule("/<label>/<key>", "get", get, methods=["GET"])
-    new_bp.add_url_rule("/<label>/<key>", "set", set, methods=["POST"])
+    new_bp.add_url_rule("/<label>/<key>/", "delete", delete, methods=["DELETE"])
+    new_bp.add_url_rule("/<label>/<key>/", "get", get, methods=["GET"])
+    new_bp.add_url_rule("/<label>/<key>/", "set", set, methods=["POST"])
 
     return new_bp

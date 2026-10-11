@@ -1383,7 +1383,7 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
-  /auth/v1/credentials/{provider}/{user_id}:
+  /auth/v1/credentials/{provider}/{user_id}/:
     get:
       tags: [Credentials]
       summary: Get a user's campus credentials for the calling client
@@ -1853,7 +1853,7 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
-  /auth/v1/vaults/{label}/{key}:
+  /auth/v1/vaults/{label}/{key}/:
     get:
       tags: [Vaults]
       summary: Get a vault value

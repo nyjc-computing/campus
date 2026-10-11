@@ -316,13 +316,13 @@ class TestTokenBrokerContract(unittest.TestCase):
         self.assertEqual(get_response.status_code, 403)
 
         user_response = self.client.get(
-            f"/auth/v1/credentials/google/{USER_ID}",
+            f"/auth/v1/credentials/google/{USER_ID}/",
             headers=self.auth_headers,
         )
         self.assertEqual(user_response.status_code, 403)
 
         patch_response = self.client.patch(
-            f"/auth/v1/credentials/google/{USER_ID}",
+            f"/auth/v1/credentials/google/{USER_ID}/",
             json={"token": {"id": "smuggled", "expires_in": 3600}},
             headers=self.auth_headers,
         )

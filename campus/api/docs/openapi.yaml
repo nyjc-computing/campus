@@ -936,7 +936,7 @@ paths:
         '401':
           $ref: '#/components/responses/UnauthorizedResponse'
 
-  /submissions/by-assignment/{assignment_id}:
+  /submissions/by-assignment/{assignment_id}/:
     get:
       summary: List submissions by assignment
       description: List submissions for a specific assignment
@@ -962,7 +962,7 @@ paths:
                       type: object
                       description: Submission resource
 
-  /submissions/by-student/{student_id}:
+  /submissions/by-student/{student_id}/:
     get:
       summary: List submissions by student
       description: List submissions from a specific student
