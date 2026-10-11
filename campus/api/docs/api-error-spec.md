@@ -38,6 +38,7 @@ This specification applies to:
 | Status | Meaning               | Usage                        |
 | ------ | --------------------- | ---------------------------- |
 | 500    | Internal Server Error | Unhandled server failure     |
+| 503    | Service Unavailable   | Required dependency (e.g. email sender) is down; retry later |
 | 502    | Bad Gateway           | Upstream dependency failure  |
 | 503    | Service Unavailable   | Temporary outage or overload |
 | 504    | Gateway Timeout       | Upstream timeout             |

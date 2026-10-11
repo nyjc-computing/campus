@@ -10,15 +10,39 @@ EmailOTP Endpoints Reference:
 - POST /emailotp/request - Request a new OTP for email authentication
 - POST /emailotp/verify  - Verify an OTP for email authentication
 
-IMPORTANT: The /emailotp/request endpoint sends an actual email during testing.
-Tests should be designed to handle this gracefully or mock the email sender.
+The /emailotp/request endpoint would send an actual email, so setUp
+patches the route module's email-sender factory with a recording fake
+(hermetic, no SMTP dependency). OTP plaintexts are never exposed over
+HTTP; tests that need a valid OTP generate it via direct resource
+access (resources.emailotp.request returns the plaintext).
 """
 
 import unittest
+from unittest import mock
 
 from campus.common import schema
 from tests.fixtures import services
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
+
+
+class FakeEmailSender:
+    """Records emails instead of sending them; configurable failures."""
+
+    def __init__(self):
+        self.sent: list[dict] = []
+        self.error: dict | None = None
+
+    def send_email(self, *, recipient, subject, body, html_body=None,
+                   attachments=None) -> dict:
+        if self.error is not None:
+            return self.error
+        self.sent.append({
+            "recipient": recipient,
+            "subject": subject,
+            "body": body,
+            "html_body": html_body,
+        })
+        return {}
 
 
 class TestApiEmailOtpContract(unittest.TestCase):
@@ -54,6 +78,16 @@ class TestApiEmailOtpContract(unittest.TestCase):
         self.token = create_test_token(self.user_id)
         self.auth_headers = get_bearer_auth_headers(self.token)
 
+        # Patch the email-sender factory so /emailotp/request records
+        # sends instead of talking to SMTP (#502).
+        self.fake_sender = FakeEmailSender()
+        patcher = mock.patch(
+            "campus.api.routes.emailotp.create_email_sender",
+            return_value=self.fake_sender,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     # Request OTP Tests
 
     def test_request_otp_requires_auth(self):
@@ -69,14 +103,8 @@ class TestApiEmailOtpContract(unittest.TestCase):
         self.assertIn("code", data["error"])
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
-    @unittest.skip("Skipped: Sends actual email - verify with mocked email sender")
     def test_request_otp(self):
-        """POST /emailotp/request generates and sends OTP.
-
-        NOTE: This test sends an actual email. To run this test:
-        1. Configure a test email provider
-        2. Mock the email sender in the fixture
-        """
+        """POST /emailotp/request generates and sends OTP (sender mocked)."""
         response = self.client.post(
             "/api/v1/emailotp/request",
             json={"email": self.test_email},
@@ -87,6 +115,25 @@ class TestApiEmailOtpContract(unittest.TestCase):
         data = response.get_json()
         self.assertIn("message", data)
         self.assertEqual(data["message"], "OTP sent")
+        # The OTP email must have been handed to the (faked) sender
+        self.assertEqual(len(self.fake_sender.sent), 1)
+        self.assertEqual(self.fake_sender.sent[0]["recipient"], self.test_email)
+        self.assertIn("OTP", self.fake_sender.sent[0]["subject"])
+
+    def test_request_otp_sender_error_returns_503(self):
+        """POST /emailotp/request maps sender failure to 503, not 500 (#502)."""
+        self.fake_sender.error = {"message": ("connection refused",)}
+
+        response = self.client.post(
+            "/api/v1/emailotp/request",
+            json={"email": self.test_email},
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 503)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "SERVICE_UNAVAILABLE")
 
     def test_request_otp_missing_email_returns_error(self):
         """POST /emailotp/request without email returns error."""
@@ -98,19 +145,18 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip(
-        "API BUG #502: empty email passes validation and resources.emailotp.request() 500s - emailotp storage "
-        "table is not initialised in the test harness"
-    )
     def test_request_otp_empty_email_returns_error(self):
-        """POST /emailotp/request with empty email returns error."""
+        """POST /emailotp/request with empty email returns 422 (#347 convention)."""
         response = self.client.post(
             "/api/v1/emailotp/request",
             json={"email": ""},
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
+        self.assertEqual(data["error"]["errors"][0]["field"], "email")
 
     # Verify OTP Tests
 
@@ -150,7 +196,6 @@ class TestApiEmailOtpContract(unittest.TestCase):
 
         self.assertIn(response.status_code, (400, 422))
 
-    @unittest.skip("API BUG #502: emailotp storage table not initialised in the harness; verify flow cannot run")
     def test_verify_otp_not_found_returns_error(self):
         """POST /emailotp/verify for email with no OTP returns 409."""
         response = self.client.post(
@@ -168,24 +213,25 @@ class TestApiEmailOtpContract(unittest.TestCase):
         self.assertIn("code", data["error"])
         self.assertEqual(data["error"]["code"], "CONFLICT")
 
-    @unittest.skip("API BUG #502: emailotp storage table not initialised in the harness; verify flow cannot run")
     def test_verify_invalid_otp_returns_error(self):
-        """POST /emailotp/verify with invalid OTP returns 401."""
-        # First request an OTP (we'll skip actually sending)
-        # For now just test that invalid OTP fails
+        """POST /emailotp/verify with wrong code for a live OTP returns 401."""
+        from campus.api import resources
+
+        # Seed a real OTP so the mismatch path (not the not-found path) runs
+        resources.emailotp.request(self.test_email)
+
         response = self.client.post(
             "/api/v1/emailotp/verify",
             json={
                 "email": self.test_email,
-                "otp": "999999"  # Invalid OTP
+                "otp": "999999"  # Invalid OTP (real codes are random; a
+                                 # collision would be a 1-in-10^6 flake)
             },
             headers=self.auth_headers
         )
 
-        # Should return 409 (OTP not found) or 401 (invalid OTP)
-        self.assertIn(response.status_code, (401, 409))
+        self.assertEqual(response.status_code, 401)
 
-    @unittest.skip("Skipped: Requires OTP generation - use mock or direct resource access")
     def test_verify_valid_otp_succeeds(self):
         """POST /emailotp/verify with valid OTP returns 200.
 
@@ -211,7 +257,6 @@ class TestApiEmailOtpContract(unittest.TestCase):
         self.assertIn("message", data)
         self.assertEqual(data["message"], "OTP verified")
 
-    @unittest.skip("Skipped: Requires OTP generation - use mock or direct resource access")
     def test_verify_expired_otp_returns_error(self):
         """POST /emailotp/verify with expired OTP returns 401.
 
@@ -241,7 +286,6 @@ class TestApiEmailOtpContract(unittest.TestCase):
         self.assertIn("code", data["error"])
         self.assertEqual(data["error"]["code"], "UNAUTHORIZED")
 
-    @unittest.skip("Skipped: Requires OTP generation - use mock or direct resource access")
     def test_otp_full_flow(self):
         """Full OTP flow: request -> verify -> revoke.
 

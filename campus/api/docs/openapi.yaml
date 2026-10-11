@@ -18,6 +18,7 @@ info:
     - `VALIDATION_FAILED` (422): Request validation failed with field-level errors
     - `CONFLICT` (409): Resource state conflict
     - `INTERNAL_ERROR` (500): Unexpected server error
+    - `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later
 
   version: 0.1.0
   contact:
@@ -367,6 +368,19 @@ components:
             error:
               code: INTERNAL_ERROR
               message: An unexpected error occurred
+              request_id: null
+
+    ServiceUnavailableResponse:
+      description: A dependency needed to fulfil the request (e.g. the
+        email sender) is unavailable; retry later
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              code: SERVICE_UNAVAILABLE
+              message: Service temporarily unavailable
               request_id: null
 
 paths:
@@ -1201,8 +1215,12 @@ paths:
                     example: OTP sent
         '400':
           $ref: '#/components/responses/BadRequestResponse'
+        '422':
+          $ref: '#/components/responses/ValidationErrorResponse'
         '500':
           $ref: '#/components/responses/InternalErrorResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailableResponse'
 
   /emailotp/verify:
     post:
@@ -1238,8 +1256,16 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequestResponse'
         '401':
-          description: Invalid OTP
+          description: OTP expired or invalid
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: No OTP exists for this email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          $ref: '#/components/responses/ValidationErrorResponse'

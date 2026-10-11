@@ -7,6 +7,7 @@ Web API for Campus services.
 # use within campus.api only.
 __all__ = ["init_app"]
 
+import logging
 from typing import Any
 
 import campus_python
@@ -15,6 +16,8 @@ import flask
 from campus.auth.middleware import Authenticator
 from campus.common import schema
 from campus.common.errors import api_errors
+
+logger = logging.getLogger(__name__)
 
 # Other local imports are intentionally omitted to avoid circular
 # dependencies.
@@ -110,12 +113,40 @@ campus_authenticator = Authenticator(
 )
 
 
+def _init_api_tables() -> None:
+    """Initialize the SQL-backed api storage tables, logging loudly on failure.
+
+    CREATE TABLE IF NOT EXISTS per table (idempotent), so a fresh or
+    reset deployment self-heals on the next deploy. Document-backed
+    resources (assignments, circles, submissions, ...) auto-create
+    their collections and need no such call. In production, schema
+    management is handled by migrations/scripts, so initialization is
+    skipped there. Same self-heal policy as campus.auth's
+    _init_auth_tables.
+    """
+    from campus.common import env
+
+    try:
+        if env.ENV != env.PRODUCTION:
+            from .resources.emailotp import EmailOTPResource
+            EmailOTPResource.init_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize api storage tables: email OTP "
+            "request/verify will fail until the tables exist. Recover "
+            "by running the resource init against the database."
+        )
+
+
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the API blueprint with the given Flask app."""
     from campus.common import env
 
     # Register deployment-specific getsecret function
     env.register_getsecret(_api_getsecret)
+
+    # Ensure the SQL-backed api storage tables exist before first use.
+    _init_api_tables()
 
     # Initialize campus client after test fixtures have set up the vault
     global campus
