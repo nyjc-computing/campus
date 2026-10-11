@@ -355,18 +355,16 @@ class TestAuditTracesGetTreeContract(unittest.TestCase):
         traces_storage = campus.storage.tables.get_db("spans")
         traces_storage.delete_matching({})  # Empty query deletes all rows
 
-    @unittest.skip("API BUG #407: request without trailing slash is 308-redirected, never reaches auth")
     def test_get_trace_requires_authentication(self):
-        """GET /audit/v1/traces/<id> requires authentication."""
-        response = self.client.get("/audit/v1/traces/abc123")
+        """GET /audit/v1/traces/<id>/ requires authentication."""
+        response = self.client.get("/audit/v1/traces/abc123/")
 
         self.assertEqual(response.status_code, 401)
 
-    @unittest.skip("API BUG #407: request without trailing slash is 308-redirected, never reaches the route")
     def test_get_trace_not_found_returns_404(self):
-        """GET /audit/v1/traces/<id> with non-existent trace returns 404."""
+        """GET /audit/v1/traces/<id>/ with non-existent trace returns 404."""
         response = self.client.get(
-            "/audit/v1/traces/doesnotexist",
+            "/audit/v1/traces/doesnotexist/",
             headers=self.auth_headers
         )
 
