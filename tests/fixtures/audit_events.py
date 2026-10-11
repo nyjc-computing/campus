@@ -28,21 +28,29 @@ def get_audit_spans(event_type: str | None = None, limit: int = 50) -> list[dict
     """
     from campus.audit.resources.traces import traces_storage
 
-    # Build query for audit events
-    # Audit events have path equal to event type (exact match)
-    # Empty query gets all spans - filtered for audit events in Python
-    query = {"path": event_type} if event_type else {}
-
+    # Audit events are TraceSpans whose `path` is the HTTP request path;
+    # the event type lives in `tags.event_type` (see
+    # campus/audit/helpers/audit_events.py::emit_audit_event). The
+    # storage layer can't query nested JSON, so fetch broadly and
+    # filter in Python.
     try:
         spans = traces_storage.get_matching(
-            query,
+            {},
             order_by="started_at",
             ascending=False,
             limit=limit * 10  # Get more to filter for audit events
         )
-        # Filter to only audit events (path starts with "audit.")
-        if not event_type:
-            spans = [s for s in spans if s.get("path", "").startswith("audit.")]
+        if event_type:
+            spans = [
+                s for s in spans
+                if (s.get("tags") or {}).get("event_type") == event_type
+            ]
+        else:
+            # Filter to only audit events (any event_type tag)
+            spans = [
+                s for s in spans
+                if (s.get("tags") or {}).get("event_type", "").startswith("audit.")
+            ]
         return spans[:limit]
     except campus.storage.errors.StorageError:
         return []
