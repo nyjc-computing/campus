@@ -12,7 +12,7 @@ import logging
 import flask
 
 from campus import webauth
-from campus.common.errors import api_errors, auth_errors
+from campus.common.errors import api_errors
 from campus.common.utils import secret
 
 from . import resources
@@ -56,7 +56,7 @@ def _authenticate_audit_api_key() -> None:
             provider="campus",
             http_header=dict(flask.request.headers)
         )
-    except auth_errors.AuthorizationError:
+    except api_errors.UnauthorizedError:
         # No Authorization header present - emit audit event and raise proper error for 401 response
         emit_audit_event(
             data={"event_type": "audit.apikeys.auth.failed", "reason": "Missing API key"},
