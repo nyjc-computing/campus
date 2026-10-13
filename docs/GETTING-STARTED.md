@@ -17,6 +17,10 @@ For those familiar with Python/Flask projects:
 2. [development-guidelines.md](development-guidelines.md) - Architecture patterns and abstractions
 3. [PACKAGING.md](PACKAGING.md) - Monorepo structure and distribution
 
+### 🎓 Student App Authors
+Building an app that signs in through Campus (not working on the Campus codebase itself):
+1. [student-app-walkthrough.md](student-app-walkthrough.md) - from-zero path: scaffold, SSO, API calls, deploy
+
 ### 🚀 DevOps/Infrastructure
 For deployment and operations:
 1. [DEPLOY.md](../DEPLOY.md) - Deployment options
@@ -108,6 +112,7 @@ lives in `campus/storage/testing.py`.
 | Document | Purpose |
 |----------|---------|
 | [AGENTS.md](../AGENTS.md) | Quick reference for humans and AI assistants |
+| [student-app-walkthrough.md](student-app-walkthrough.md) | From-zero guide for apps that sign in through Campus |
 | [architecture.md](architecture.md) | System design and component overview |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and branch strategy |
 | [development-guidelines.md](development-guidelines.md) | Coding patterns and best practices |
