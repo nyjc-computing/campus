@@ -39,6 +39,8 @@ from urllib.parse import parse_qs, urlparse
 
 import flask
 
+from campus.common.http.interface import JsonResponse
+
 PUBLIC_URL = "https://campus.test"
 CLIENT_ID = "auditweb.test"
 CLIENT_SECRET = "auditweb-secret"
@@ -48,12 +50,25 @@ USER_ID = "teacher@nyjc.edu.sg"
 ADMIN_ID = "ng_jun_siang@nyjc.edu.sg"
 
 
-class FakeResponse:
-    """Minimal JSON response double for the auth transport."""
+class FakeResponse(JsonResponse):
+    """JSON response double for the auth transport.
+
+    An explicit JsonResponse subclass so the client double satisfies
+    JsonClient (#926); the boolean/error helpers are inherited. The
+    gate only reads status_code, json(), and text.
+    """
 
     def __init__(self, status_code: int, body: dict):
-        self.status_code = status_code
+        self._status_code = status_code
         self._body = body
+
+    @property
+    def status_code(self) -> int:
+        return self._status_code
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {}
 
     def json(self) -> dict:
         return self._body
@@ -64,15 +79,24 @@ class FakeResponse:
 
 
 class FakeAuthClient:
-    """In-memory double for the gate's campus.auth HTTP client."""
+    """In-memory double for the gate's campus.auth HTTP client.
 
-    calls: list[tuple[str, dict | None]] = []
+    Implements the full JsonClient protocol surface so assigning it to
+    AuthClient.json_client_class type-checks (#926); only post is ever
+    called.
+    """
 
-    def __init__(self, base_url: str | None = None):
-        self.base_url = base_url or "https://auth.test"
+    calls: list[tuple[str, dict]] = []
+
+    def __init__(self, base_url: str | None = None, **kwargs: object):
+        self.base_url: str | None = base_url or "https://auth.test"
+
+    def get(self, path: str, params: dict | None = None) -> FakeResponse:
+        return FakeResponse(404, {"error": f"unexpected path {path}"})
 
     def post(self, path: str, json: dict | None = None) -> FakeResponse:
-        type(self).calls.append((path, json))
+        # Record {} for bodyless posts so assertions can subscript bodies.
+        type(self).calls.append((path, json or {}))
         if path == "/auth/v1/sessions/campus/":
             return FakeResponse(200, {
                 "id": SESSION_ID,
@@ -91,6 +115,15 @@ class FakeAuthClient:
             })
         if path == "/auth/v1/oauth/revoke":
             return FakeResponse(200, {})
+        return FakeResponse(404, {"error": f"unexpected path {path}"})
+
+    def put(self, path: str, json: dict | None = None) -> FakeResponse:
+        return FakeResponse(404, {"error": f"unexpected path {path}"})
+
+    def delete(self, path: str, json: dict | None = None) -> FakeResponse:
+        return FakeResponse(404, {"error": f"unexpected path {path}"})
+
+    def patch(self, path: str, json: object = None) -> FakeResponse:
         return FakeResponse(404, {"error": f"unexpected path {path}"})
 
 
@@ -562,12 +595,28 @@ class TestAdminAllowlistParsing(unittest.TestCase):
 
 
 class FailingAuthClient:
-    """Auth-service double that always fails, for the error paths."""
+    """Auth-service double that always fails, for the error paths.
 
-    def __init__(self, base_url: str | None = None):
-        self.base_url = base_url or "https://auth.test"
+    Full JsonClient surface, like FakeAuthClient (#926); only post is
+    ever called.
+    """
+
+    def __init__(self, base_url: str | None = None, **kwargs: object):
+        self.base_url: str | None = base_url or "https://auth.test"
+
+    def get(self, path: str, params: dict | None = None) -> FakeResponse:
+        return FakeResponse(500, {"error": "auth service is down"})
 
     def post(self, path: str, json: dict | None = None) -> FakeResponse:
+        return FakeResponse(500, {"error": "auth service is down"})
+
+    def put(self, path: str, json: dict | None = None) -> FakeResponse:
+        return FakeResponse(500, {"error": "auth service is down"})
+
+    def delete(self, path: str, json: dict | None = None) -> FakeResponse:
+        return FakeResponse(500, {"error": "auth service is down"})
+
+    def patch(self, path: str, json: object = None) -> FakeResponse:
         return FakeResponse(500, {"error": "auth service is down"})
 
 

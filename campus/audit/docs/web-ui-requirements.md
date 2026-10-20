@@ -350,8 +350,10 @@ API/CLI privilege and does not admit a browser session on its own.
 - **Every sign-in is audited (#917):** a success emits
   `audit.apikeys.auth.success` with the key id and the owner label; a
   refusal emits `audit.apikeys.auth.failed` with a reason
-  (`invalid_key`, `insufficient_scope`, `csrf_failed`,
-  `missing_key`) and, when the key is known, its id. These are the
+  (`invalid_key`, `invalid_format`, `insufficient_scope`,
+  `csrf_failed`, `missing_key`) and, when the key is known, its id.
+  Malformed keys are refused by a format check before verification,
+  with the same user-facing 401 as an unknown key. These are the
   same event types the versioned API emits, so one query answers
   "who authenticated with which key" across both surfaces. The
   plaintext key is never part of an event: it travels in the form

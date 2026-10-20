@@ -213,6 +213,38 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
         redirect = self.client.get("/audit/traces")
         self.assertEqual(redirect.status_code, 302)
 
+    def test_malformed_key_rejected_before_verification(self):
+        """A malformed key never reaches verify() (#920): the format
+        check refuses it with the same generic 401 first."""
+        from campus.audit.web import auth
+
+        with mock.patch.object(auth, "apikeys_resource") as fake_store:
+            fake_store.verify.return_value = None
+            response = self._sign_in("definitely-not-a-key")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIn(b"Invalid API key", response.data)
+        fake_store.verify.assert_not_called()
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 302
+        )
+
+    def test_revoked_key_cannot_sign_in(self):
+        """A key revoked before sign-in gets the same generic 401, and
+        no session is set (#925: revocation was previously covered only
+        mid-session)."""
+        record, plaintext = self._mint_key()
+
+        from campus.audit.resources import apikeys
+        apikeys[record.id].revoke()
+
+        response = self._sign_in(plaintext)
+        self.assertEqual(response.status_code, 401)
+        self.assertIn(b"Invalid API key", response.data)
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 302
+        )
+
     def test_key_without_read_scope_is_refused(self):
         """A valid key holding neither web-UI capability (traces:read,
         apikeys:write) gets 403 at login. apikeys:read alone is an
@@ -318,6 +350,30 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
 
         response = self.client.get("/audit/traces")
         self.assertEqual(response.status_code, 403)
+
+    def test_key_record_resolved_once_per_request(self):
+        """Within one request the key record resolves once however many
+        capability checks run (#921); each new request starts cold (the
+        revocation and downgrade tests above pin that half)."""
+        from campus.audit.resources import apikeys
+        from campus.audit.web import auth
+
+        class _CountingResource:
+            resolves = 0
+
+            def __getitem__(self, key_id):
+                _CountingResource.resolves += 1
+                return apikeys[key_id]
+
+        _, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+
+        with mock.patch.object(
+            auth, "apikeys_resource", _CountingResource()
+        ):
+            caps = self.client.get("/__capabilities")
+        self.assertEqual(caps.status_code, 200)
+        self.assertEqual(_CountingResource.resolves, 1)
 
     def test_session_expiry_treated_as_logged_out(self):
         """A session dict whose expires_at has passed is unauthenticated."""
@@ -437,10 +493,23 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
             self.client.get("/audit/traces").status_code, 200
         )
 
-        class _Resp:
+        from campus.common.http.interface import JsonResponse
+
+        class _Resp(JsonResponse):
+            # Explicit JsonResponse subclass so FakeAuth satisfies
+            # JsonClient (#926); the boolean/error helpers are
+            # inherited. The sign-in flow reads status_code/json/text.
             def __init__(self, status_code, body):
-                self.status_code = status_code
+                self._status_code = status_code
                 self._body = body
+
+            @property
+            def status_code(self):
+                return self._status_code
+
+            @property
+            def headers(self):
+                return {}
 
             def json(self):
                 return self._body
@@ -450,8 +519,15 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
                 return json.dumps(self._body)
 
         class FakeAuth:
-            def __init__(self, base_url=None):
-                self.base_url = base_url or "https://auth.test"
+            # Full JsonClient surface so the double satisfies the
+            # protocol (#926); only post is ever called.
+            def __init__(self, base_url=None, **kwargs):
+                self.base_url: str | None = (
+                    base_url or "https://auth.test"
+                )
+
+            def get(self, path, params=None):
+                return _Resp(404, {"error": path})
 
             def post(self, path, json=None):
                 if path == "/auth/v1/sessions/campus/":
@@ -463,6 +539,15 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
                         "scope": "",
                         "user_id": "teacher@nyjc.edu.sg",
                     })
+                return _Resp(404, {"error": path})
+
+            def put(self, path, json=None):
+                return _Resp(404, {"error": path})
+
+            def delete(self, path, json=None):
+                return _Resp(404, {"error": path})
+
+            def patch(self, path, json=None):
                 return _Resp(404, {"error": path})
 
         from campus.audit.web.auth import AuthClient
