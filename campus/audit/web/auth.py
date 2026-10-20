@@ -563,11 +563,13 @@ def create_blueprint() -> flask.Blueprint:
             )
 
         # POST: validate the CSRF token (single-use — a failed attempt
-        # must not leave a valid token replayable).
+        # must not leave a valid token replayable). The comparison runs
+        # on bytes: compare_digest() raises TypeError on non-ASCII str,
+        # and the submitted token is raw form data.
         issued = flask.session.pop(KEY_LOGIN_CSRF_KEY, None)
         submitted = flask.request.form.get('csrf_token', '')
         if not isinstance(issued, str) or not hmac.compare_digest(
-                issued, str(submitted)):
+                issued.encode('utf-8'), str(submitted).encode('utf-8')):
             return _key_login_error(
                 "Your form session expired. Please try again.", 400
             )

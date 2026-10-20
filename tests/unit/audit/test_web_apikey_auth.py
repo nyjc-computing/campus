@@ -301,6 +301,28 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
         )
         self.assertEqual(stale.status_code, 400)
 
+    def test_non_ascii_csrf_token_rejected(self):
+        """A non-ASCII csrf_token gets 400, not a 500.
+
+        hmac.compare_digest() raises TypeError when either argument
+        holds non-ASCII characters, and the submitted token is raw form
+        data — the comparison must run on bytes.
+        """
+        _, plaintext = self._mint_key()
+
+        form = self.client.get("/audit/login/key")
+        response = self.client.post(
+            "/audit/login/key",
+            data={
+                "csrf_token": self._csrf_from(form) + "é",
+                "api_key": plaintext,
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 302
+        )
+
     def test_logout_clears_local_session_only(self):
         """API-key logout stays local: no auth-service redirect, and a
         later request is unauthenticated. The key itself stays valid —
