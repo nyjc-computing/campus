@@ -83,7 +83,7 @@ class TestAuditWebGateContract(unittest.TestCase):
     def test_non_admin_session_gets_403(self):
         """An authenticated session for a non-allowlisted user gets 403.
 
-        The admin allowlist (AUDIT_ADMINS) gates pages and data
+        The superadmin allowlist (AUDIT_ADMINS) gates pages and data
         endpoints for logged-in users; the landing page stays public.
         """
         with mock.patch.dict(

@@ -4,19 +4,29 @@ Browser OAuth gate for the Audit Web UI (docs/web-ui-requirements.md §5).
 
 The gated surface: all UI pages under /audit (except the public landing
 page and this blueprint's static assets) and the /audit/api/* data
-endpoints require a logged-in user who is on the admin allowlist;
+endpoints require a logged-in session that holds the right capability;
 /audit/v1/* keeps its API-key authentication and is unaffected.
 
-Admin allowlist (temporary stopgap until a proper admin/role gate):
+Two capabilities, and how a session earns them (#928):
+
+- can_view_traces(): read the trace list, the trace pages and the
+  /audit/api/* data endpoints.
+- can_manage_keys(): manage audit API keys (mint, re-scope, rotate,
+  revoke). The surface for this is the key-management page (#927).
+
+Superadmin class (temporary stopgap until a proper admin/role gate):
 
 - AUDIT_ADMINS: comma-separated campus.auth user ids (emails), compared
   case-insensitively; whitespace around entries is ignored. Intended
   for a handful of accounts (<= 5).
+- A member of this list is a campus.audit **superadmin**: it holds
+  both capabilities (manage keys, read traces). The list is read per
+  request, so changes take effect without touching the login session.
 - An unset or empty variable means no one has access (fail-closed,
   mirroring the OAuth credential handling below).
 - Authenticated users not on the list get a 403 page (403 JSON on
   /audit/api/*). The landing page, login page, and static assets stay
-  reachable without admin rights.
+  reachable without superadmin rights.
 
 API-key sign-in (#915, development only): a second login path at
 /audit/login/key accepts an audit API key (the Bearer credentials
@@ -26,9 +36,14 @@ stays self-contained and user-blind: the key's owner_id is an
 email-format label shown as the session identity, never resolved
 against any user store.
 
-- Only keys whose scopes cover traces:read (wildcard-aware) may sign
-  in; the session stores the key id, the owner label, and an expiry —
-  never the plaintext key (cookie sessions are signed, not encrypted).
+- An API-key session is never a superadmin by virtue of existing: it
+  holds exactly the capabilities its scopes grant — traces:read for
+  the trace viewer, apikeys:write for key management. A key may sign in
+  with either capability; each surface then checks the one it needs,
+  so a key with apikeys:write gains no trace access, and a key with
+  traces:read gains no key management. The session stores the key id,
+  the owner label, and an expiry — never the plaintext key (cookie
+  sessions are signed, not encrypted).
 - Every request re-resolves the key record by id, so revocation,
   expiry, and scope changes take effect mid-session.
 - The routes exist only when ENV=development (404 elsewhere), keeping
@@ -70,8 +85,10 @@ auth-service requests through a test double, mirroring AuditClient.
 
 __all__ = [
     "AuthClient",
+    "can_manage_keys",
+    "can_view_traces",
     "create_blueprint",
-    "is_admin",
+    "current_actor",
     "is_authenticated",
     "require_login_api",
     "require_login_page",
@@ -109,9 +126,24 @@ KEY_LOGIN_CSRF_KEY = "audit_key_login_csrf"
 # expires_at; each request also re-checks revocation (see _api_key).
 KEY_SESSION_TTL_SECONDS = 12 * 60 * 60
 
-# The least scope an API key must hold to use the trace viewer —
-# the same read privilege /audit/v1/traces requires of API callers.
+# The two web-UI capabilities (#928). AUDIT_ADMINS is the campus.audit
+# superadmin list — its members hold both. On the API-key side the
+# same capabilities are scope-granted, so a key session is only ever
+# as privileged as its scopes.
 UI_READ_SCOPE = "traces:read"
+UI_KEY_MANAGE_SCOPE = "apikeys:write"
+
+# A key may sign in to the web UI with either capability; each surface
+# then checks the capability it needs. apikeys:read (listing keys)
+# alone is not enough to sign in — it is an API/CLI privilege, and the
+# CLI already covers key listing for operators.
+UI_SIGN_IN_SCOPES = (UI_READ_SCOPE, UI_KEY_MANAGE_SCOPE)
+
+# Actor classes for audit attribution (#928): the audit trail must be
+# able to tell a superadmin account apart from an API key, and name
+# which one acted.
+ACTOR_SUPERADMIN = "superadmin"
+ACTOR_API_KEY = "api_key"
 
 # UI endpoints reachable without a login: the landing page and the UI
 # blueprint's static assets (the landing and login pages need their CSS
@@ -295,8 +327,9 @@ def _oauth_session() -> dict | None:
 def _api_key_session() -> dict | None:
     """Return the API-key session dict if present and unexpired.
 
-    Expiry alone is not sufficient for access — is_admin() re-resolves
-    the key record so revocation and scope changes apply immediately.
+    Expiry alone is not sufficient for access — can_view_traces() and
+    can_manage_keys() re-resolve the key record so revocation and scope
+    changes apply immediately.
     """
     session_data = flask.session.get(APIKEY_SESSION_KEY)
     if not isinstance(session_data, dict):
@@ -371,44 +404,108 @@ def _admin_emails() -> frozenset[str]:
     )
 
 
-def is_admin() -> bool:
-    """Check whether the logged-in session may use the trace viewer.
+def _is_superadmin_oauth() -> bool:
+    """Whether the OAuth session belongs to a campus.audit superadmin.
 
-    OAuth logins: membership in the AUDIT_ADMINS allowlist (read per
-    request so allowlist changes take effect without touching the
-    login session). API-key logins (#915): the re-resolved key record
-    must be active and hold scopes covering traces:read — the same
-    read privilege the versioned API demands of its callers.
+    The AUDIT_ADMINS list is read per request, so allowlist changes
+    take effect without touching the login session.
+    """
+    oauth = _oauth_session()
+    if oauth is None:
+        return False
+    user_id = oauth.get("user_id")
+    return (
+        isinstance(user_id, str)
+        and user_id.strip().lower() in _admin_emails()
+    )
+
+
+def _key_has_scope(key_record: typing.Any, required: str) -> bool:
+    """Whether an API-key record holds a scope (wildcard-aware)."""
+    return any(
+        scope_matches(granted, required)
+        for granted in key_record.scopes
+    )
+
+
+def can_view_traces() -> bool:
+    """Whether the logged-in session may read traces.
+
+    OAuth logins: the session must belong to a campus.audit superadmin
+    (the AUDIT_ADMINS list) — a superadmin reads traces by definition.
+    API-key logins (#915): the re-resolved key record must be active
+    and hold the traces:read scope — the same read privilege
+    /audit/v1/traces demands of its callers.
+    """
+    if _oauth_session() is not None:
+        return _is_superadmin_oauth()
+    key_record = _api_key()
+    if key_record is None:
+        return False
+    return _key_has_scope(key_record, UI_READ_SCOPE)
+
+
+def can_manage_keys() -> bool:
+    """Whether the logged-in session may manage audit API keys.
+
+    OAuth logins: the session must belong to a campus.audit superadmin
+    (the AUDIT_ADMINS list) — managing keys is what superadmin means.
+    API-key logins (#915): the re-resolved key record must be active
+    and hold the apikeys:write scope — the same privilege
+    /audit/v1/apikeys demands of its callers. An API key never gains
+    key management by virtue of being a key: it is granted scope by
+    scope, exactly like the versioned API.
+    """
+    if _oauth_session() is not None:
+        return _is_superadmin_oauth()
+    key_record = _api_key()
+    if key_record is None:
+        return False
+    return _key_has_scope(key_record, UI_KEY_MANAGE_SCOPE)
+
+
+def current_actor() -> tuple[str, str] | None:
+    """Identify the acting principal of the current session.
+
+    Returns (actor_class, actor_id):
+
+    - ("superadmin", <campus.auth user id>) for an OAuth superadmin
+      session. campus.audit has no user store and its spans carry
+      user_id=None by design, so the id is a label the audit trail
+      records, not an account campus.audit resolves.
+    - ("api_key", <key id>) for an API-key session. The key id is
+      also the span's api_key_id, so the trail attributes the action
+      to the key that performed it.
+
+    Returns None when there is no usable session. Used for audit
+    attribution of web-originated actions (#917, #927).
     """
     oauth = _oauth_session()
     if oauth is not None:
         user_id = oauth.get("user_id")
-        return (
-            isinstance(user_id, str)
-            and user_id.strip().lower() in _admin_emails()
-        )
+        if isinstance(user_id, str) and user_id:
+            return (ACTOR_SUPERADMIN, user_id)
+        return None
     key_record = _api_key()
     if key_record is None:
-        return False
-    return any(
-        scope_matches(granted, UI_READ_SCOPE)
-        for granted in key_record.scopes
-    )
+        return None
+    return (ACTOR_API_KEY, key_record.id)
 
 
 def require_login_page() -> werkzeug.Response | None:
     """Before-request gate for UI page routes: redirect to login.
 
-    Returns None to allow the request when the user is authenticated
-    AND on the admin allowlist, or when the request targets a public
-    endpoint (landing page, static assets). Authenticated non-admins
-    get a 403 page rather than a login redirect (re-authenticating
-    cannot help; the page tells them how to get access).
+    Returns None to allow the request when the session is
+    authenticated AND holds the trace-view capability, or when the
+    request targets a public endpoint (landing page, static assets).
+    An authenticated session without the capability gets a 403 page
+    rather than a login redirect (re-authenticating cannot help; the
+    page says which capability is missing).
     """
     if flask.request.endpoint in PUBLIC_UI_ENDPOINTS:
         return None
     if is_authenticated():
-        if is_admin():
+        if can_view_traces():
             return None
         return _forbidden_page()
     try:
@@ -425,30 +522,59 @@ def require_login_page() -> werkzeug.Response | None:
 def require_login_api() -> flask_campus.JsonResponse | werkzeug.Response | None:
     """Before-request gate for UI data endpoints: 401 JSON when not
     logged in (browsers redirect pages; fetch() callers get 401), and
-    403 JSON for logged-in non-admins.
+    403 JSON for a session without the trace-view capability.
     """
     if is_authenticated():
-        if is_admin():
+        if can_view_traces():
             return None
-        user_id = _session_user_id() or "unknown"
+        identity = _session_user_id() or "unknown"
         logger.warning(
-            "Audit UI data access denied for non-admin user %s", user_id
+            "Audit UI data access denied for %s (no %s capability)",
+            identity, UI_READ_SCOPE,
         )
         return {
             "error": (
-                "Admin access required: this account is not on the "
-                "audit admin allowlist."
+                "Access denied: this session cannot read traces. "
+                f"{_missing_capability_reason()}"
             )
         }, 403
     return {"error": "Authentication required. Visit /audit/login."}, 401
 
 
+def _missing_capability_reason() -> str:
+    """Explain why the current session cannot read traces.
+
+    The two session kinds fail for different reasons, and the page
+    says which: a Campus account that is not on the superadmin list
+    needs an allowlist entry; an API key needs the traces:read scope.
+    """
+    if _oauth_session() is not None:
+        return (
+            "Your account is not a campus.audit superadmin. Superadmins "
+            "are the accounts on the AUDIT_ADMINS list; they may manage "
+            "API keys and read traces."
+        )
+    key_record = _api_key()
+    key_id = key_record.id if key_record is not None else "unknown"
+    return (
+        f"Your API key ({key_id}) does not include the {UI_READ_SCOPE} "
+        "scope, which the trace viewer requires."
+    )
+
+
 def _forbidden_page() -> flask.Response:
-    """Render the 403 page for authenticated non-admin visitors."""
-    user_id = _session_user_id() or "unknown"
-    logger.warning("Audit UI access denied for non-admin user %s", user_id)
+    """Render the 403 page for sessions without the trace capability."""
+    identity = _session_user_id() or "unknown"
+    logger.warning(
+        "Audit UI access denied for %s (no %s capability)",
+        identity, UI_READ_SCOPE,
+    )
     return flask.Response(
-        flask.render_template("forbidden.html", user_id=user_id),
+        flask.render_template(
+            "forbidden.html",
+            identity=identity,
+            reason=_missing_capability_reason(),
+        ),
         status=403,
         mimetype="text/html",
     )
@@ -519,16 +645,17 @@ def create_blueprint() -> flask.Blueprint:
     def login() -> werkzeug.Response | str:
         """Render the login page.
 
-        Authenticated admins are sent straight to the trace list;
-        authenticated non-admins get the forbidden page (re-logging in
-        cannot help); everyone else sees a page with a button that
-        starts the OAuth flow at /audit/login/start (a proper login
-        page rather than an immediate redirect to the auth service).
+        A session that may read traces is sent straight to the trace
+        list; an authenticated session without that capability gets
+        the forbidden page (re-logging in cannot help); everyone else
+        sees a page with a button that starts the OAuth flow at
+        /audit/login/start (a proper login page rather than an
+        immediate redirect to the auth service).
         In development the page also links to the API-key sign-in
         form (#915).
         """
         if is_authenticated():
-            if is_admin():
+            if can_view_traces():
                 return flask.redirect(flask.url_for("audit_ui.traces"))
             return _forbidden_page()
         return flask.render_template(
@@ -543,10 +670,11 @@ def create_blueprint() -> flask.Blueprint:
         GET renders a paste-key form (CSRF-protected); POST verifies
         the key in-process against the apikeys store — the same
         verify() the versioned API uses — and establishes an API-key
-        session when the key is active and its scopes cover
-        traces:read. The plaintext key is used once for verification
-        and never stored: the session carries only the key id, the
-        owner_id label, and an expiry.
+        session when the key is active and its scopes grant one of the
+        web UI's capabilities (traces:read to read traces, apikeys:write
+        to manage keys; #928). The plaintext key is used once for
+        verification and never stored: the session carries only the key
+        id, the owner_id label, and an expiry.
 
         Development-only by construction: both methods 404 in every
         other environment.
@@ -554,7 +682,7 @@ def create_blueprint() -> flask.Blueprint:
         if not _is_development():
             flask.abort(404)
         if flask.request.method == 'GET':
-            if is_authenticated() and is_admin():
+            if is_authenticated() and can_view_traces():
                 return flask.redirect(flask.url_for("audit_ui.traces"))
             csrf_token = secrets.token_urlsafe(32)
             flask.session[KEY_LOGIN_CSRF_KEY] = csrf_token
@@ -586,16 +714,20 @@ def create_blueprint() -> flask.Blueprint:
                 "(audit_v1_…) and that it has not been revoked or expired.",
                 401,
             )
+        # A key may sign in with either web-UI capability (#928); each
+        # surface checks the one it needs afterwards.
         if not any(
-                scope_matches(granted, UI_READ_SCOPE)
-                for granted in record.scopes):
+                scope_matches(granted, required)
+                for granted in record.scopes
+                for required in UI_SIGN_IN_SCOPES):
             logger.warning(
                 "Audit UI API-key sign-in denied: key %s lacks %s",
-                record.id, UI_READ_SCOPE,
+                record.id, " or ".join(UI_SIGN_IN_SCOPES),
             )
             return _key_login_error(
                 f"This key does not include the {UI_READ_SCOPE} scope "
-                "needed for the trace viewer.",
+                "(to read traces) or the "
+                f"{UI_KEY_MANAGE_SCOPE} scope (to manage API keys).",
                 403,
             )
         # The session expiry is capped by the key's own expires_at:

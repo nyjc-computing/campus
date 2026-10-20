@@ -9,6 +9,9 @@ campus/audit/web/auth.py (docs/web-ui-requirements.md §5.3):
 - A valid key with scopes covering traces:read establishes a session
   (wildcards traces:* and * qualify); the session grants the gated UI
   pages and /audit/api/* like an admin OAuth login.
+- The two web-UI capabilities are separate (#928): a key holding
+  apikeys:write may sign in but gains no trace access, and a key
+  holding traces:read gains no key management.
 - Unknown, revoked, and expired keys are refused with one generic
   401; keys lacking the read scope get 403.
 - The session stores no plaintext key; revocation, scope downgrade,
@@ -52,6 +55,19 @@ def create_gated_app() -> flask.Flask:
     app.register_blueprint(data_blueprint)
 
     app.register_blueprint(auth.create_blueprint())
+
+    # Test probe: report the session's capabilities and actor (#928).
+    # Registered outside the gated blueprints so it also answers for
+    # unauthenticated sessions.
+    @app.get("/__capabilities")
+    def capabilities():
+        actor = auth.current_actor()
+        return {
+            "view_traces": auth.can_view_traces(),
+            "manage_keys": auth.can_manage_keys(),
+            "actor": list(actor) if actor else None,
+        }
+
     return app
 
 
@@ -181,15 +197,67 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
         self.assertEqual(redirect.status_code, 302)
 
     def test_key_without_read_scope_is_refused(self):
-        """A valid key lacking traces:read scope gets 403 at login."""
+        """A valid key holding neither web-UI capability (traces:read,
+        apikeys:write) gets 403 at login. apikeys:read alone is an
+        API/CLI privilege and does not admit a browser session."""
         _, plaintext = self._mint_key(scopes="apikeys:read")
 
         response = self._sign_in(plaintext)
 
         self.assertEqual(response.status_code, 403)
         self.assertIn(b"traces:read", response.data)
+        self.assertIn(b"apikeys:write", response.data)
         self.assertEqual(
             self.client.get("/audit/traces").status_code, 302
+        )
+
+    def test_key_management_key_signs_in_but_cannot_read_traces(self):
+        """A key holding apikeys:write may sign in, and gains no trace
+        access: the two capabilities are separate (#928)."""
+        _, plaintext = self._mint_key(scopes="apikeys:write")
+
+        response = self._sign_in(plaintext)
+
+        self.assertEqual(response.status_code, 302)
+        caps = self.client.get("/__capabilities").get_json()
+        self.assertFalse(caps["view_traces"])
+        self.assertTrue(caps["manage_keys"])
+        # The trace surfaces refuse it...
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 403
+        )
+        self.assertEqual(
+            self.client.get("/audit/api/traces").status_code, 403
+        )
+        # ...and the 403 names the scope it lacks, not the allowlist.
+        page = self.client.get("/audit/traces")
+        self.assertIn(b"traces:read", page.data)
+        self.assertNotIn(b"AUDIT_ADMINS", page.data)
+
+    def test_trace_key_holds_no_key_management(self):
+        """A traces:read key may read traces and may not manage keys
+        (#928)."""
+        _, plaintext = self._mint_key(scopes="traces:read")
+        self._sign_in(plaintext)
+
+        caps = self.client.get("/__capabilities").get_json()
+        self.assertTrue(caps["view_traces"])
+        self.assertFalse(caps["manage_keys"])
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 200
+        )
+
+    def test_current_actor_names_the_key(self):
+        """current_actor() reports the api_key class and the key id, so
+        the audit trail attributes the action to that key (#928)."""
+        from campus.audit.web import auth
+
+        record, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+
+        caps = self.client.get("/__capabilities").get_json()
+        self.assertEqual(
+            caps["actor"], [auth.ACTOR_API_KEY, record.id]
         )
 
     def test_expired_key_cannot_sign_in(self):
