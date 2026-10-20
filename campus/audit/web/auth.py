@@ -18,6 +18,22 @@ Admin allowlist (temporary stopgap until a proper admin/role gate):
   /audit/api/*). The landing page, login page, and static assets stay
   reachable without admin rights.
 
+API-key sign-in (#915, development only): a second login path at
+/audit/login/key accepts an audit API key (the Bearer credentials
+minted via /audit/v1/apikeys) instead of the OAuth flow, so holders of
+a scoped key can use the trace viewer in the browser. campus.audit
+stays self-contained and user-blind: the key's owner_id is an
+email-format label shown as the session identity, never resolved
+against any user store.
+
+- Only keys whose scopes cover traces:read (wildcard-aware) may sign
+  in; the session stores the key id, the owner label, and an expiry —
+  never the plaintext key (cookie sessions are signed, not encrypted).
+- Every request re-resolves the key record by id, so revocation,
+  expiry, and scope changes take effect mid-session.
+- The routes exist only when ENV=development (404 elsewhere), keeping
+  key-based sign-in a development-environment feature by construction.
+
 The gate drives Campus Auth's authorization-code flow (RFC 6749 §4.1,
 campus.auth.provider) server-side:
 
@@ -61,7 +77,9 @@ __all__ = [
     "require_login_page",
 ]
 
+import hmac
 import logging
+import secrets
 import time
 import typing
 
@@ -73,11 +91,27 @@ from campus.common import env
 from campus.common.http import DefaultClient, HttpClientError, JsonClient
 from campus.common.utils import url
 
+from ..decorators import scope_matches
+from ..resources import apikeys as apikeys_resource
+
 logger = logging.getLogger(__name__)
 
 # Signed-cookie session keys
 SESSION_KEY = "audit_oauth"
 LOGIN_STATE_KEY = "audit_login_state"
+# API-key sign-in (#915): a parallel session shape. Mutually exclusive
+# with SESSION_KEY — signing in one way clears the other.
+APIKEY_SESSION_KEY = "audit_apikey"
+# CSRF token for the paste-key form (mirrors LOGIN_STATE_KEY's role)
+KEY_LOGIN_CSRF_KEY = "audit_key_login_csrf"
+
+# API-key sessions live at most 12h and never past the key's own
+# expires_at; each request also re-checks revocation (see _api_key).
+KEY_SESSION_TTL_SECONDS = 12 * 60 * 60
+
+# The least scope an API key must hold to use the trace viewer —
+# the same read privilege /audit/v1/traces requires of API callers.
+UI_READ_SCOPE = "traces:read"
 
 # UI endpoints reachable without a login: the landing page and the UI
 # blueprint's static assets (the landing and login pages need their CSS
@@ -239,27 +273,89 @@ class AuthClient:
             )
 
 
-def is_authenticated() -> bool:
-    """Check the Flask session for a live audit UI login."""
+def _is_development() -> bool:
+    """Whether API-key sign-in (#915) may exist in this deployment."""
+    return env.ENV == env.DEVELOPMENT
+
+
+def _oauth_session() -> dict | None:
+    """Return the live OAuth session dict, if any (auth + expiry)."""
     session_data = flask.session.get(SESSION_KEY)
     if not isinstance(session_data, dict):
-        return False
+        return None
     access_token = session_data.get("access_token")
     expires_at = session_data.get("expires_at")
     if not access_token or not isinstance(expires_at, (int, float)):
-        return False
-    return bool(time.time() < expires_at)
+        return None
+    if not time.time() < expires_at:
+        return None
+    return session_data
+
+
+def _api_key_session() -> dict | None:
+    """Return the API-key session dict if present and unexpired.
+
+    Expiry alone is not sufficient for access — is_admin() re-resolves
+    the key record so revocation and scope changes apply immediately.
+    """
+    session_data = flask.session.get(APIKEY_SESSION_KEY)
+    if not isinstance(session_data, dict):
+        return None
+    expires_at = session_data.get("expires_at")
+    if not isinstance(expires_at, (int, float)) or not time.time() < expires_at:
+        return None
+    return session_data
+
+
+def _api_key():
+    """Resolve the session's API-key record, or None if it is gone.
+
+    Re-read per request (never cached): a revoked, expired, or deleted
+    key ends the session's access on the very next request. Storage
+    misses raise NotFoundError, translated to None here.
+    """
+    from campus.storage import errors as storage_errors
+
+    session_data = _api_key_session()
+    if session_data is None:
+        return None
+    key_id = session_data.get("api_key_id")
+    if not isinstance(key_id, str) or not key_id:
+        return None
+    try:
+        record = apikeys_resource[key_id].get()
+    except storage_errors.NotFoundError:
+        return None
+    if record is None or not record.is_active():
+        return None
+    return record
+
+
+def is_authenticated() -> bool:
+    """Check the Flask session for a live audit UI login (OAuth or
+    API-key). API-key logins additionally require the key record to
+    still be active."""
+    if _oauth_session() is not None:
+        return True
+    return _api_key() is not None
 
 
 def _session_user_id() -> str | None:
-    """Return the logged-in user's campus.auth user id, if any."""
-    session_data = flask.session.get(SESSION_KEY)
-    if not isinstance(session_data, dict):
+    """Return the logged-in identity, if any: the campus.auth user id
+    for OAuth logins, or the key's owner_id label for API-key logins
+    (a display string, never resolved against a user store)."""
+    oauth = _oauth_session()
+    if oauth is not None:
+        user_id = oauth.get("user_id")
+        if isinstance(user_id, str) and user_id:
+            return user_id
         return None
-    user_id = session_data.get("user_id")
-    if not isinstance(user_id, str) or not user_id:
-        return None
-    return user_id
+    key_session = _api_key_session()
+    if key_session is not None:
+        owner_id = key_session.get("owner_id")
+        if isinstance(owner_id, str) and owner_id:
+            return owner_id
+    return None
 
 
 def _admin_emails() -> frozenset[str]:
@@ -276,14 +372,28 @@ def _admin_emails() -> frozenset[str]:
 
 
 def is_admin() -> bool:
-    """Check whether the logged-in user is on the AUDIT_ADMINS
-    allowlist.
+    """Check whether the logged-in session may use the trace viewer.
 
-    Read per-request so allowlist changes take effect without touching
-    the login session.
+    OAuth logins: membership in the AUDIT_ADMINS allowlist (read per
+    request so allowlist changes take effect without touching the
+    login session). API-key logins (#915): the re-resolved key record
+    must be active and hold scopes covering traces:read — the same
+    read privilege the versioned API demands of its callers.
     """
-    user_id = _session_user_id()
-    return user_id is not None and user_id.strip().lower() in _admin_emails()
+    oauth = _oauth_session()
+    if oauth is not None:
+        user_id = oauth.get("user_id")
+        return (
+            isinstance(user_id, str)
+            and user_id.strip().lower() in _admin_emails()
+        )
+    key_record = _api_key()
+    if key_record is None:
+        return False
+    return any(
+        scope_matches(granted, UI_READ_SCOPE)
+        for granted in key_record.scopes
+    )
 
 
 def require_login_page() -> werkzeug.Response | None:
@@ -354,6 +464,45 @@ def _error_page(message: str, status: int) -> flask.Response:
     )
 
 
+def _key_login_error(message: str, status: int) -> flask.Response:
+    """Re-render the paste-key form with an error (#915).
+
+    A fresh CSRF token is issued each render — the form re-submits
+    cleanly after any failure.
+    """
+    csrf_token = secrets.token_urlsafe(32)
+    flask.session[KEY_LOGIN_CSRF_KEY] = csrf_token
+    return flask.Response(
+        flask.render_template(
+            'login_key.html', error=message, csrf_token=csrf_token
+        ),
+        status=status,
+        mimetype="text/html",
+    )
+
+
+def _key_expiry_epoch(record: typing.Any) -> float:
+    """Convert a key record's expires_at to epoch seconds.
+
+    Storage records carry plain strings for union-annotated fields
+    (mirrors APIKey.is_expired's handling); far-future for anything
+    unparseable so the session TTL never extends past a real date by
+    accident of a bad value.
+    """
+    from campus.common import schema
+
+    value = record.expires_at
+    if isinstance(value, str):
+        try:
+            value = schema.DateTime(value)
+        except (TypeError, ValueError):
+            return float("inf")
+    try:
+        return value.to_datetime().timestamp()
+    except (AttributeError, OverflowError, OSError, ValueError):
+        return float("inf")
+
+
 def create_blueprint() -> flask.Blueprint:
     """Create a Flask blueprint for the OAuth gate routes.
 
@@ -375,12 +524,100 @@ def create_blueprint() -> flask.Blueprint:
         cannot help); everyone else sees a page with a button that
         starts the OAuth flow at /audit/login/start (a proper login
         page rather than an immediate redirect to the auth service).
+        In development the page also links to the API-key sign-in
+        form (#915).
         """
         if is_authenticated():
             if is_admin():
                 return flask.redirect(flask.url_for("audit_ui.traces"))
             return _forbidden_page()
-        return flask.render_template('login.html')
+        return flask.render_template(
+            'login.html',
+            apikey_login_available=_is_development(),
+        )
+
+    @bp.route('/login/key', methods=['GET', 'POST'])
+    def login_key() -> werkzeug.Response | str:
+        """Sign in with an audit API key (#915, development only).
+
+        GET renders a paste-key form (CSRF-protected); POST verifies
+        the key in-process against the apikeys store — the same
+        verify() the versioned API uses — and establishes an API-key
+        session when the key is active and its scopes cover
+        traces:read. The plaintext key is used once for verification
+        and never stored: the session carries only the key id, the
+        owner_id label, and an expiry.
+
+        Development-only by construction: both methods 404 in every
+        other environment.
+        """
+        if not _is_development():
+            flask.abort(404)
+        if flask.request.method == 'GET':
+            if is_authenticated() and is_admin():
+                return flask.redirect(flask.url_for("audit_ui.traces"))
+            csrf_token = secrets.token_urlsafe(32)
+            flask.session[KEY_LOGIN_CSRF_KEY] = csrf_token
+            return flask.render_template(
+                'login_key.html', csrf_token=csrf_token
+            )
+
+        # POST: validate the CSRF token (single-use — a failed attempt
+        # must not leave a valid token replayable). The comparison runs
+        # on bytes: compare_digest() raises TypeError on non-ASCII str,
+        # and the submitted token is raw form data.
+        issued = flask.session.pop(KEY_LOGIN_CSRF_KEY, None)
+        submitted = flask.request.form.get('csrf_token', '')
+        if not isinstance(issued, str) or not hmac.compare_digest(
+                issued.encode('utf-8'), str(submitted).encode('utf-8')):
+            return _key_login_error(
+                "Your form session expired. Please try again.", 400
+            )
+        api_key = (flask.request.form.get('api_key') or '').strip()
+        if not api_key:
+            return _key_login_error("Enter an API key.", 400)
+        # One generic failure for unknown, revoked, and expired keys
+        # alike, so the form does not leak which keys exist.
+        record = apikeys_resource.verify(api_key)
+        if record is None:
+            logger.warning("Audit UI API-key sign-in failed: invalid key")
+            return _key_login_error(
+                "Invalid API key. Check that you copied the full key "
+                "(audit_v1_…) and that it has not been revoked or expired.",
+                401,
+            )
+        if not any(
+                scope_matches(granted, UI_READ_SCOPE)
+                for granted in record.scopes):
+            logger.warning(
+                "Audit UI API-key sign-in denied: key %s lacks %s",
+                record.id, UI_READ_SCOPE,
+            )
+            return _key_login_error(
+                f"This key does not include the {UI_READ_SCOPE} scope "
+                "needed for the trace viewer.",
+                403,
+            )
+        # The session expiry is capped by the key's own expires_at:
+        # is_expired() guards the record, but the cookie should not
+        # outlive the key either.
+        expires_at = time.time() + KEY_SESSION_TTL_SECONDS
+        if record.expires_at is not None:
+            expires_at = min(expires_at, _key_expiry_epoch(record))
+        # Signing in one way clears the other: a browser moving from
+        # an OAuth session to a key session (or back) should never
+        # carry both.
+        flask.session.pop(SESSION_KEY, None)
+        flask.session[APIKEY_SESSION_KEY] = {
+            "api_key_id": record.id,
+            "owner_id": str(record.owner_id),
+            "expires_at": expires_at,
+        }
+        logger.info(
+            "Audit UI API-key sign-in: key %s (owner %s)",
+            record.id, record.owner_id,
+        )
+        return flask.redirect(flask.url_for("audit_ui.traces"))
 
     @bp.route('/login/start')
     def login_start() -> werkzeug.Response:
@@ -462,15 +699,27 @@ def create_blueprint() -> flask.Blueprint:
             "scope": token.get("scope") or "",
             "user_id": token.get("user_id") or "unknown",
         }
+        # Mutual exclusivity with API-key sessions (#915): the newest
+        # login wins, the browser never carries both session shapes.
+        flask.session.pop(APIKEY_SESSION_KEY, None)
         return flask.redirect(flask.url_for("audit_ui.traces"))
 
     @bp.route('/logout')
     def logout() -> werkzeug.Response:
-        """Revoke the access token (best-effort), clear the session,
-        and sign the browser out of the campusauth SSO session.
+        """Sign the browser out of the Audit Web UI.
+
+        OAuth sessions: revoke the access token (best-effort), clear
+        the session, and route through the auth service's browser
+        logout. API-key sessions (#915): clear the local session only —
+        the key itself stays valid for API/CLI use; revoking it is a
+        key-management action, not part of signing out of the viewer.
         """
         session_data = flask.session.pop(SESSION_KEY, None)
+        key_session = flask.session.pop(APIKEY_SESSION_KEY, None)
         flask.session.pop(LOGIN_STATE_KEY, None)
+        if key_session is not None and session_data is None:
+            flask.flash("You have been signed out of the Audit Web UI.")
+            return flask.redirect(flask.url_for("audit_ui.index"))
         if isinstance(session_data, dict) and session_data.get("access_token"):
             try:
                 auth = AuthClient()
