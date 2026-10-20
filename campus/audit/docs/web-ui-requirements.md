@@ -1,7 +1,7 @@
 # Audit Web UI Requirements
 
-**Document Version:** 1.2
-**Date:** 2026-04-16 (updated 2026-10-02: landing page, login page, dense table; admin allowlist gate)
+**Document Version:** 1.3
+**Date:** 2026-04-16 (updated 2026-10-20: superadmin class and the two web-UI capabilities — see §5.2; API-key sign-in — see §5.3)
 **Parent Issue:** #429
 **Related:** [campus-trace-api-prd-v3.md](./campus-trace-api-prd-v3.md)
 
@@ -31,15 +31,18 @@ The Audit Web UI is a browser-based dashboard for exploring API traces captured 
 | Page | Path | Purpose | Access |
 |------|------|---------|--------|
 | Landing | `/audit/` | Service intro; links to the trace list and login | Public |
-| Trace List | `/audit/traces` | Browse and filter traces | Login required |
-| Trace Detail | `/audit/traces/<trace_id>` | View waterfall and span details | Login required |
+| Trace List | `/audit/traces` | Browse and filter traces | `can_view_traces()` (§5.2) |
+| Trace Detail | `/audit/traces/<trace_id>` | View waterfall and span details | `can_view_traces()` (§5.2) |
 | Login | `/audit/login` | Sign-in page (button starts the OAuth flow) | Public |
-| (Future) Metrics | `/audit/metrics` | Performance dashboards | Login required |
+| API-key sign-in | `/audit/login/key` | Paste-key sign-in (development only) | Public (development only) |
+| (Future) Metrics | `/audit/metrics` | Performance dashboards | `can_view_traces()` (§5.2) |
 
 > **Changed (2026-10):** the trace list moved from `/audit/` to
 > `/audit/traces` when the public landing page was added; `/audit/login`
 > became a real page (its button starts the flow at
 > `/audit/login/start`), and logout redirects back to the landing page.
+> **Changed (2026-10, #915/#928):** the API-key sign-in page was added,
+> and "login required" was replaced by the named capabilities of §5.2.
 
 ### 2.2 Navigation
 
@@ -263,28 +266,47 @@ The gate **fails closed**: if `AUDIT_OAUTH_CLIENT_ID` /
 503 and `/audit/api/*` returns 401 — the UI is never silently open.
 
 **Protected Routes:**
-- All `/audit/*` UI pages require authentication AND admin allowlist
-  membership (§5.2)
+- All `/audit/*` UI pages require authentication AND the trace-view
+  capability (§5.2)
 - Exceptions: the landing page `/audit/`, the UI's static assets
   (needed by the public pages), and `/audit/v1/health`;
   `/audit/v1/*` keeps its API-key authentication (unchanged)
 
 ### 5.2 Authorization
 
-> **Implemented (2026-10, temporary stopgap).** Access is limited to
-> accounts on the `AUDIT_ADMINS` allowlist: a comma-separated list of
+> **Implemented (2026-10, temporary stopgap).** `AUDIT_ADMINS` is the
+> campus.audit **superadmin** list: a comma-separated list of
 > campus.auth user ids (emails), compared case-insensitively, with
 > whitespace around entries ignored. Unset or empty means **no one**
-> has access (fail-closed). Authenticated non-admins get a 403 page
-> (403 JSON on `/audit/api/*`); the allowlist is read per-request, so
-> changes take effect on the next request. Keep the list small
-> (≤ 5 accounts) — a proper admin/role gate is planned to replace
-> this mechanism.
+> has access (fail-closed). A superadmin holds both web-UI
+> capabilities — managing API keys and reading traces. Authenticated
+> sessions without the capability get a 403 page (403 JSON on
+> `/audit/api/*`) that names what is missing; the allowlist is read
+> per-request, so changes take effect on the next request. Keep the
+> list small (≤ 5 accounts) — a proper admin/role gate is planned to
+> replace this mechanism.
+
+**Capabilities.** The web UI has exactly two capabilities, and a
+session must hold the one the surface needs:
+
+| Capability | Held by a Campus account | Held by an API key |
+|---|---|---|
+| `can_view_traces()` — read the trace list, trace pages and `/audit/api/*` | on the `AUDIT_ADMINS` list | key holding `traces:read` |
+| `can_manage_keys()` — manage audit API keys (mint, re-scope, rotate, revoke) | on the `AUDIT_ADMINS` list | key holding `apikeys:write` |
+
+The two session kinds are not interchangeable: an API key is granted
+scope by scope, exactly like the versioned API, so a key with
+`apikeys:write` gains no trace access and a key with `traces:read`
+gains no key management. A Campus account is a superadmin or it is
+not — the list is a single class. `apikeys:read` (listing keys) is an
+API/CLI privilege and does not admit a browser session on its own.
 
 **Access Control:**
-- Only authenticated users on the `AUDIT_ADMINS` allowlist can view traces
+- Only superadmin accounts (or API keys holding `traces:read`) can view traces
 - Users can only view traces from clients they have access to (enforced by API)
 - In development, API-key sessions (§5.3) may also view traces
+- The key-management surface (the page itself is #927) is gated on
+  `can_manage_keys()`
 
 ### 5.3 API-key sign-in (#915, development only)
 
@@ -297,9 +319,11 @@ The gate **fails closed**: if `AUDIT_OAUTH_CLIENT_ID` /
 - `GET/POST /audit/login/key` (CSRF-protected paste form) verifies the
   key in-process with the same `verify()` the versioned API uses
   (rejects revoked/expired keys, updates `last_used`).
-- A key may sign in only if its scopes cover `traces:read`
-  (wildcard-aware: `traces:*` / `*` qualify). Keys with narrower or
-  no scopes are refused at login.
+- A key may sign in if its scopes cover **either** web-UI capability —
+  `traces:read` (to read traces) or `apikeys:write` (to manage keys)
+  — wildcard-aware (`traces:*` / `apikeys:*` / `*` qualify). Keys with
+  neither are refused at login. Each surface then checks the
+  capability it needs, so signing in does not grant both.
 - The session stores only the key id, the key's `owner_id` label
   (display-only, never resolved against a user store), and an expiry:
   12h from issue, capped by the key's own `expires_at`. The plaintext

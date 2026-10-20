@@ -8,8 +8,10 @@
     <p class="page-subtitle">
         Paste an audit API key issued to you (it starts with
         <span class="mono">audit_v1_</span>). The key must include the
-        <span class="mono">traces:read</span> scope. It is verified
-        once and never stored in your browser.
+        <span class="mono">traces:read</span> scope (to read traces) or
+        the <span class="mono">apikeys:write</span> scope (to manage
+        API keys). It is verified once and never stored in your
+        browser.
     </p>
     {% if error %}
     <div class="flash-messages" role="alert">

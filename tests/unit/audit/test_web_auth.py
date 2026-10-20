@@ -8,6 +8,9 @@ docs/web-ui-requirements.md §5 (issue #696):
 - Unauthenticated data endpoint requests get 401 JSON.
 - Authenticated users not on the AUDIT_ADMINS allowlist get a 403 page
   (403 JSON on /audit/api/*); an unset/empty allowlist denies everyone.
+- AUDIT_ADMINS is the campus.audit *superadmin* list (#928): a member
+  holds both web-UI capabilities (read traces, manage keys), and
+  current_actor() names the actor for audit attribution.
 - The gate fails closed (503/401) when the OAuth client is unconfigured
   (the landing page stays reachable).
 - GET /audit/login renders the login page (authenticated visitors are
@@ -107,6 +110,19 @@ def create_gated_app() -> flask.Flask:
     app.register_blueprint(data_blueprint)
 
     app.register_blueprint(auth.create_blueprint())
+
+    # Test probe: report the session's capabilities and actor (#928).
+    # Registered outside the gated blueprints so it also answers for
+    # unauthenticated sessions.
+    @app.get("/__capabilities")
+    def capabilities():
+        actor = auth.current_actor()
+        return {
+            "view_traces": auth.can_view_traces(),
+            "manage_keys": auth.can_manage_keys(),
+            "actor": list(actor) if actor else None,
+        }
+
     return app
 
 
@@ -237,6 +253,58 @@ class TestAuditWebAuthGate(unittest.TestCase):
             response = self.client.get("/audit/traces")
 
         self.assertEqual(response.status_code, 200)
+
+    def test_superadmin_holds_both_capabilities(self):
+        """A member of the superadmin list holds both capabilities:
+        reading traces and managing API keys (#928)."""
+        self._log_in()
+
+        caps = self.client.get("/__capabilities").get_json()
+        self.assertTrue(caps["view_traces"])
+        self.assertTrue(caps["manage_keys"])
+
+    def test_non_superadmin_holds_neither_capability(self):
+        """An authenticated account off the list holds neither: the
+        list is the superadmin class, so there is no lesser
+        authenticated class (#928)."""
+        self._log_in()
+
+        with mock.patch.dict(os.environ, {"AUDIT_ADMINS": ADMIN_ID}):
+            caps = self.client.get("/__capabilities").get_json()
+
+        self.assertFalse(caps["view_traces"])
+        self.assertFalse(caps["manage_keys"])
+
+    def test_current_actor_names_the_superadmin(self):
+        """current_actor() reports the superadmin class and the
+        campus.auth user id, for audit attribution (#928)."""
+        from campus.audit.web import auth
+
+        self._log_in()
+
+        caps = self.client.get("/__capabilities").get_json()
+        self.assertEqual(
+            caps["actor"], [auth.ACTOR_SUPERADMIN, USER_ID]
+        )
+
+    def test_current_actor_is_none_without_a_session(self):
+        """With no session there is no actor to attribute."""
+        caps = self.client.get("/__capabilities").get_json()
+        self.assertIsNone(caps["actor"])
+        self.assertFalse(caps["view_traces"])
+        self.assertFalse(caps["manage_keys"])
+
+    def test_forbidden_page_explains_the_missing_capability(self):
+        """The 403 page says a Campus account needs the superadmin list
+        (#928) rather than only 'not on the allowlist'."""
+        self._log_in()
+
+        with mock.patch.dict(os.environ, {"AUDIT_ADMINS": ADMIN_ID}):
+            response = self.client.get("/audit/traces")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(b"superadmin", response.data)
+        self.assertIn(b"AUDIT_ADMINS", response.data)
 
     def test_unconfigured_gate_returns_503_on_pages(self):
         """Without OAuth client config, gated pages fail closed with 503."""
