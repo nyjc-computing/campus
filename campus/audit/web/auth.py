@@ -100,6 +100,7 @@ __all__ = [
     "can_view_traces",
     "create_blueprint",
     "current_actor",
+    "forbidden_page",
     "is_authenticated",
     "require_login_api",
     "require_login_page",
@@ -575,7 +576,7 @@ def _missing_capability_reason() -> str:
     )
 
 
-def _forbidden_page() -> flask.Response:
+def _forbidden_page(reason: str | None = None) -> flask.Response:
     """Render the 403 page for sessions without the trace capability."""
     identity = _session_user_id() or "unknown"
     logger.warning(
@@ -586,11 +587,20 @@ def _forbidden_page() -> flask.Response:
         flask.render_template(
             "forbidden.html",
             identity=identity,
-            reason=_missing_capability_reason(),
+            reason=reason or _missing_capability_reason(),
         ),
         status=403,
         mimetype="text/html",
     )
+
+
+def forbidden_page(reason: str) -> flask.Response:
+    """Render the 403 page for a session missing another capability.
+
+    The key-management surface (#927) uses this: its missing capability
+    is not the trace-view one, so it says so in its own words.
+    """
+    return _forbidden_page(reason)
 
 
 def _error_page(message: str, status: int) -> flask.Response:

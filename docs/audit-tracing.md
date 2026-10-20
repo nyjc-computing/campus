@@ -203,6 +203,12 @@ An audit API key is a bearer credential: whoever holds it can read
 every trace in the deployment. Mint one per person, with the
 narrowest scope that does the job and an expiry.
 
+In the development environment, the audit web UI has a key-management
+page (`/audit/keys`) where an operator can do all of this in the
+browser — list, mint, re-scope, rotate, revoke. It is gated on the
+key-management capability (§5.2) and acts as the session, so the audit
+trail attributes each change to whoever made it.
+
 ## Enabling on a deployment
 
 1. Set `AUDIT_API_KEY=<key>` on the producer.

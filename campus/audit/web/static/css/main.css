@@ -887,6 +887,82 @@ a.landing-card:hover {
     margin: 0.25rem 0 0;
 }
 
+/* Key-management page (#927) */
+.keys-card {
+    max-width: 42rem;
+}
+
+.keys-list {
+    margin-top: 1.5rem;
+}
+
+.keys-table {
+    width: 100%;
+}
+
+.keys-table td.key-actions {
+    min-width: 18rem;
+}
+
+.keys-table td.key-actions form {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+    margin: 0 0 0.35rem;
+}
+
+.keys-table td.key-actions form .form-input {
+    margin: 0;
+    flex: 1;
+}
+
+.keys-table td.key-actions .login-note {
+    margin: 0.35rem 0 0;
+}
+
+.key-state {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+}
+
+.key-active {
+    background: var(--audit-accent);
+    color: #fff;
+}
+
+.key-revoked {
+    background: transparent;
+    border: 1px solid var(--audit-border);
+    color: var(--audit-muted);
+}
+
+.minted-key {
+    word-break: break-all;
+    background: var(--audit-surface);
+    border: 1px solid var(--audit-border);
+    border-radius: 4px;
+    padding: 0.5rem 0.6rem;
+    margin: 0.5rem 0;
+    user-select: all;
+}
+
+.btn-small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.btn-danger {
+    border-color: #d73a4a;
+    color: #d73a4a;
+}
+
+.btn-danger:hover {
+    background: #d73a4a;
+    color: #fff;
+}
+
 /* Footer */
 .audit-footer {
     border-top: 1px solid var(--audit-border);

@@ -35,6 +35,7 @@ The Audit Web UI is a browser-based dashboard for exploring API traces captured 
 | Trace Detail | `/audit/traces/<trace_id>` | View waterfall and span details | `can_view_traces()` (§5.2) |
 | Login | `/audit/login` | Sign-in page (button starts the OAuth flow) | Public |
 | API-key sign-in | `/audit/login/key` | Paste-key sign-in (development only) | Public (development only) |
+| API keys | `/audit/keys` | Mint, re-scope, rotate, revoke API keys | `can_manage_keys()` (§5.2) |
 | (Future) Metrics | `/audit/metrics` | Performance dashboards | `can_view_traces()` (§5.2) |
 
 > **Changed (2026-10):** the trace list moved from `/audit/` to
@@ -361,6 +362,41 @@ API/CLI privilege and does not admit a browser session on its own.
   `ENV=development`; the login page shows the second button only in
   development. Dev databases are per-deployment, so minted keys do
   not exist in other environments.
+
+### 5.4 Key-management page (#927)
+
+> **Implemented (2026-10, #927).** A page for the operator who has to
+> grant access: list the deployment's API keys, mint one, re-scope it,
+> rotate it, revoke it. The page is gated on the key-management
+> capability (§5.2), **not** on the trace-view one — a session that may
+> read traces cannot mint keys, and a session that may mint keys is not
+> automatically allowed to read traces.
+
+**The surface:** `/audit/keys` (list + mint form), with
+`POST /audit/keys/new`, `POST /audit/keys/<id>/scopes`,
+`POST /audit/keys/<id>/rotate` and `POST /audit/keys/<id>/revoke`. The
+POSTs are CSRF-protected with a single-use token, in the session.
+
+**It acts as the session, never as the operator key.** The resources
+layer is called in-process, so no key material passes through the
+server, and each mutation is attributed to the session that made it:
+the key id for an API-key session, the campus.auth account for a
+superadmin session.
+
+**The plaintext is shown once.** A minted or rotated key's plaintext
+appears in the response that created it, is served `Cache-Control:
+no-store`, and is never stored — not in the session, not in the audit
+trail, not in a log line. The server keeps only the key's hash, so a
+lost key is rotated or replaced, never recovered.
+
+**Everything it does is audited.** The page emits the same event types
+the versioned API does — `audit.apikeys.new`, `.update`, `.regenerate`,
+`.revoke` — so one query covers both surfaces.
+
+**The page says the quiet part out loud:** an audit API key is a bearer
+credential equivalent to the privileges of its scopes, on every trace in
+the deployment, and revocation is the only way to withdraw access a
+holder was given.
 
 ---
 
