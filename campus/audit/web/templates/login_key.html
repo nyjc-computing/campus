@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in with API key - Campus Audit{% endblock %}
+
+{% block content %}
+<section class="login-card">
+    <h2 class="page-title">Sign in with an API key</h2>
+    <p class="page-subtitle">
+        Paste an audit API key issued to you (it starts with
+        <span class="mono">audit_v1_</span>). The key must include the
+        <span class="mono">traces:read</span> scope. It is verified
+        once and never stored in your browser.
+    </p>
+    {% if error %}
+    <div class="flash-messages" role="alert">
+        <p class="flash-message">{{ error }}</p>
+    </div>
+    {% endif %}
+    <form method="post" action="/audit/login/key">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="form-label" for="api_key">API key</label>
+        <input class="form-input mono" type="password" id="api_key"
+               name="api_key" autocomplete="off" autofocus
+               placeholder="audit_v1_…" required>
+        <button class="btn btn-primary btn-wide" type="submit">Sign in</button>
+    </form>
+    <p class="login-note">
+        <a href="/audit/login">Use your Campus account instead</a>
+    </p>
+</section>
+{% endblock %}

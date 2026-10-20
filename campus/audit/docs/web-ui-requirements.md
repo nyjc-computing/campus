@@ -284,6 +284,36 @@ The gate **fails closed**: if `AUDIT_OAUTH_CLIENT_ID` /
 **Access Control:**
 - Only authenticated users on the `AUDIT_ADMINS` allowlist can view traces
 - Users can only view traces from clients they have access to (enforced by API)
+- In development, API-key sessions (§5.3) may also view traces
+
+### 5.3 API-key sign-in (#915, development only)
+
+> **Implemented (2026-10, #915).** A second login path for holders of
+> audit API keys (the Bearer credentials minted via `/audit/v1/apikeys`),
+> so scoped keys issued for the dev environment (e.g. to students) can
+> use the trace viewer in the browser. campus.audit stays
+> self-contained and user-blind — nothing here calls campus.auth.
+
+- `GET/POST /audit/login/key` (CSRF-protected paste form) verifies the
+  key in-process with the same `verify()` the versioned API uses
+  (rejects revoked/expired keys, updates `last_used`).
+- A key may sign in only if its scopes cover `traces:read`
+  (wildcard-aware: `traces:*` / `*` qualify). Keys with narrower or
+  no scopes are refused at login.
+- The session stores only the key id, the key's `owner_id` label
+  (display-only, never resolved against a user store), and an expiry:
+  12h from issue, capped by the key's own `expires_at`. The plaintext
+  key is never stored — cookie sessions are signed, not encrypted.
+- Every gated request re-resolves the key record by id, so
+  revocation, expiry, and scope changes end access on the next
+  request, mid-session.
+- API-key and OAuth sessions are mutually exclusive; signing in one
+  way clears the other. Logout for an API-key session clears the
+  local session only (the key itself stays valid for API/CLI use).
+- **Development-only by construction:** both methods 404 unless
+  `ENV=development`; the login page shows the second button only in
+  development. Dev databases are per-deployment, so minted keys do
+  not exist in other environments.
 
 ---
 

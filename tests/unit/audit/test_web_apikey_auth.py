@@ -1,0 +1,380 @@
+"""Unit tests for the audit web UI API-key sign-in (#915).
+
+These tests verify the development-only API-key login path added to
+campus/audit/web/auth.py (docs/web-ui-requirements.md §5.3):
+
+- GET/POST /audit/login/key 404 outside the development environment;
+  the login page links to it only in development.
+- The paste form is CSRF-protected (missing/mismatched token → 400).
+- A valid key with scopes covering traces:read establishes a session
+  (wildcards traces:* and * qualify); the session grants the gated UI
+  pages and /audit/api/* like an admin OAuth login.
+- Unknown, revoked, and expired keys are refused with one generic
+  401; keys lacking the read scope get 403.
+- The session stores no plaintext key; revocation, scope downgrade,
+  and expiry end access on the next request (record re-resolved
+  per request).
+- Logout for an API-key session clears the local session only (no
+  auth-service hop); the key itself stays valid.
+
+Keys are minted in-process via campus.audit.resources.apikeys (no HTTP
+key-management surface needed), mirroring the operator's mint.
+
+File: tests/unit/audit/test_web_apikey_auth.py
+Issue: #915
+"""
+
+import re
+import unittest
+from datetime import datetime, timedelta, timezone
+from unittest import mock
+
+import flask
+
+OWNER = "student@nyjc.edu.sg"
+CSRF_INPUT_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
+
+
+def create_gated_app() -> flask.Flask:
+    """Build an app wired like campus.audit.init_app gates the UI."""
+    from campus.audit.web import auth, data, ui
+
+    app = flask.Flask(__name__)
+    app.config["TESTING"] = True
+    app.secret_key = "test-secret-key"
+
+    ui_blueprint = ui.create_blueprint()
+    ui_blueprint.before_request(auth.require_login_page)
+    app.register_blueprint(ui_blueprint)
+
+    data_blueprint = data.create_blueprint()
+    data_blueprint.before_request(auth.require_login_api)
+    app.register_blueprint(data_blueprint)
+
+    app.register_blueprint(auth.create_blueprint())
+    return app
+
+
+class TestAuditWebAPIKeyAuth(unittest.TestCase):
+    """Verify the API-key sign-in route and session gate."""
+
+    @classmethod
+    def setUpClass(cls):
+        # Lazy import: campus.audit pulls in storage modules at import
+        # time. See AGENTS.md - Storage Initialization Order.
+        from campus.audit.resources.apikeys import APIKeysResource
+        from campus.audit.resources.traces import TracesResource
+
+        APIKeysResource.init_storage()
+        TracesResource.init_storage()
+        cls.app = create_gated_app()
+
+    def setUp(self):
+        import os
+
+        # ENV=development enables the /audit/login/key route (#915 is
+        # a development-only feature); individual tests override it to
+        # check the 404. AUDIT_ADMINS is empty so passing these tests
+        # cannot happen through the OAuth admin path.
+        env_patch = mock.patch.dict(os.environ, {
+            "ENV": "development",
+            "PUBLIC_URL": "https://campus.test",
+            "AUDIT_OAUTH_CLIENT_ID": "auditweb.test",
+            "AUDIT_OAUTH_CLIENT_SECRET": "auditweb-secret",
+            "AUDIT_ADMINS": "",
+        })
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        self.client = self.app.test_client()
+        self._key_seq = 0
+
+    def _mint_key(self, scopes="traces:read", expires_at=None):
+        """Mint a key in-process; returns (record, plaintext)."""
+        from campus.audit.resources import apikeys
+
+        self._key_seq += 1
+        return apikeys.new(
+            name=f"unit key {self._key_seq}",
+            owner_id=OWNER,
+            scopes=scopes,
+            expires_at=expires_at,
+        )
+
+    def _csrf_from(self, response) -> str:
+        """Extract the CSRF token from a rendered paste-key form."""
+        match = CSRF_INPUT_RE.search(response.get_data(as_text=True))
+        assert match, "rendered form carries no csrf_token input"
+        return match.group(1)
+
+    def _sign_in(self, plaintext):
+        """Drive the full GET-form → POST-key login dance."""
+        form = self.client.get("/audit/login/key")
+        return self.client.post(
+            "/audit/login/key",
+            data={
+                "csrf_token": self._csrf_from(form),
+                "api_key": plaintext,
+            },
+        )
+
+    def test_route_404_outside_development(self):
+        """GET and POST /audit/login/key only exist in development."""
+        import os
+
+        for env_value in ("testing", "staging", "production"):
+            with mock.patch.dict(os.environ, {"ENV": env_value}):
+                self.assertEqual(
+                    self.client.get("/audit/login/key").status_code, 404
+                )
+                self.assertEqual(
+                    self.client.post(
+                        "/audit/login/key", data={"api_key": "x"}
+                    ).status_code,
+                    404,
+                )
+
+    def test_login_page_links_key_signin_only_in_development(self):
+        """The login page shows the second button only in development."""
+        import os
+
+        page = self.client.get("/audit/login")
+        self.assertIn(b"/audit/login/key", page.data)
+
+        with mock.patch.dict(os.environ, {"ENV": "testing"}):
+            page = self.client.get("/audit/login")
+        self.assertNotIn(b"/audit/login/key", page.data)
+
+    def test_valid_key_signs_in_and_unlocks_ui(self):
+        """A traces:read key establishes a session covering pages and
+        data endpoints, with the owner label as the identity."""
+        _, plaintext = self._mint_key()
+
+        response = self._sign_in(plaintext)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/audit/traces"))
+        page = self.client.get("/audit/traces")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(OWNER.encode(), page.data)
+        data = self.client.get("/audit/api/traces")
+        self.assertEqual(data.status_code, 200)
+        self.assertIn("traces", data.get_json())
+
+    def test_wildcard_scopes_qualify(self):
+        """traces:* and * both satisfy the traces:read requirement."""
+        for scopes in ("traces:*", "*"):
+            with self.subTest(scopes=scopes):
+                _, plaintext = self._mint_key(scopes=scopes)
+                self.client = self.app.test_client()
+                response = self._sign_in(plaintext)
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(
+                    self.client.get("/audit/traces").status_code, 200
+                )
+
+    def test_unknown_key_is_refused(self):
+        """An unknown key gets the generic 401; no session is set."""
+        response = self._sign_in("audit_v1_" + "x" * 22)
+        self.assertEqual(response.status_code, 401)
+        self.assertIn(b"Invalid API key", response.data)
+        redirect = self.client.get("/audit/traces")
+        self.assertEqual(redirect.status_code, 302)
+
+    def test_key_without_read_scope_is_refused(self):
+        """A valid key lacking traces:read scope gets 403 at login."""
+        _, plaintext = self._mint_key(scopes="apikeys:read")
+
+        response = self._sign_in(plaintext)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(b"traces:read", response.data)
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 302
+        )
+
+    def test_expired_key_cannot_sign_in(self):
+        """verify() rejects expired keys, so login fails with 401."""
+        from campus.common import schema
+
+        past = schema.DateTime(
+            (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        )
+        _, plaintext = self._mint_key(expires_at=past)
+
+        response = self._sign_in(plaintext)
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_revocation_ends_session_immediately(self):
+        """Revoking the key mid-session un-authenticates the browser."""
+        record, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 200
+        )
+
+        from campus.audit.resources import apikeys
+        apikeys[record.id].revoke()
+
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 302
+        )
+        api_data = self.client.get("/audit/api/traces")
+        self.assertEqual(api_data.status_code, 401)
+
+    def test_scope_downgrade_ends_session_access(self):
+        """Removing traces:read from a live key downgrades the session
+        to the 403 path on the next request."""
+        record, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+
+        from campus.audit.resources import apikeys
+        apikeys[record.id].update(scopes=["other:read"])
+
+        response = self.client.get("/audit/traces")
+        self.assertEqual(response.status_code, 403)
+
+    def test_session_expiry_treated_as_logged_out(self):
+        """A session dict whose expires_at has passed is unauthenticated."""
+        import time
+
+        with self.client.session_transaction() as sess:
+            sess["audit_apikey"] = {
+                "api_key_id": "whatever",
+                "owner_id": OWNER,
+                "expires_at": time.time() - 1,
+            }
+
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 302
+        )
+
+    def test_session_ttl_capped_by_key_expiry(self):
+        """The cookie session never outlives the key's expires_at."""
+        import time
+
+        from campus.common import schema
+
+        soon = schema.DateTime(
+            (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        )
+        _, plaintext = self._mint_key(expires_at=soon)
+        self._sign_in(plaintext)
+
+        with self.client.session_transaction() as sess:
+            expires_at = sess["audit_apikey"]["expires_at"]
+        self.assertLessEqual(expires_at, time.time() + 3600)
+        self.assertGreater(expires_at, time.time())
+
+    def test_plaintext_key_never_stored_in_session(self):
+        """The session carries id/owner/expiry only — not the key."""
+        _, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+
+        with self.client.session_transaction() as sess:
+            key_session = dict(sess.get("audit_apikey", {}))
+            raw = repr(sess)
+
+        self.assertNotIn(plaintext, raw)
+        self.assertEqual(
+            sorted(key_session),
+            ["api_key_id", "expires_at", "owner_id"],
+        )
+
+    def test_missing_or_mismatched_csrf_rejected(self):
+        """POSTs without a valid single-use CSRF token get 400."""
+        _, plaintext = self._mint_key()
+
+        no_token = self.client.post(
+            "/audit/login/key", data={"api_key": plaintext}
+        )
+        self.assertEqual(no_token.status_code, 400)
+
+        form = self.client.get("/audit/login/key")
+        self.client.post(  # consume the token (single-use)
+            "/audit/login/key",
+            data={"csrf_token": self._csrf_from(form), "api_key": ""},
+        )
+        stale = self.client.post(
+            "/audit/login/key",
+            data={"csrf_token": self._csrf_from(form), "api_key": plaintext},
+        )
+        self.assertEqual(stale.status_code, 400)
+
+    def test_logout_clears_local_session_only(self):
+        """API-key logout stays local: no auth-service redirect, and a
+        later request is unauthenticated. The key itself stays valid —
+        signing in again with it still works."""
+        record, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+
+        response = self.client.get("/audit/logout")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/audit/"))
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 302
+        )
+        again = self._sign_in(plaintext)
+        self.assertEqual(again.status_code, 302)
+
+    def test_oauth_login_clears_apikey_session(self):
+        """The two session shapes are mutually exclusive: completing
+        the OAuth callback replaces a live key session."""
+        import json
+        from urllib.parse import parse_qs, urlparse
+
+        _, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 200
+        )
+
+        class _Resp:
+            def __init__(self, status_code, body):
+                self.status_code = status_code
+                self._body = body
+
+            def json(self):
+                return self._body
+
+            @property
+            def text(self):
+                return json.dumps(self._body)
+
+        class FakeAuth:
+            def __init__(self, base_url=None):
+                self.base_url = base_url or "https://auth.test"
+
+            def post(self, path, json=None):
+                if path == "/auth/v1/sessions/campus/":
+                    return _Resp(200, {"id": "sess_1"})
+                if path == "/auth/v1/token":
+                    return _Resp(200, {
+                        "access_token": "tok",
+                        "expires_in": 3600,
+                        "scope": "",
+                        "user_id": "teacher@nyjc.edu.sg",
+                    })
+                return _Resp(404, {"error": path})
+
+        from campus.audit.web.auth import AuthClient
+        AuthClient.json_client_class = FakeAuth
+        self.addCleanup(setattr, AuthClient, "json_client_class", None)
+
+        start = self.client.get("/audit/login/start")
+        state = parse_qs(urlparse(start.headers["Location"]).query)[
+            "state"
+        ][0]
+        callback = self.client.get(
+            f"/audit/callback?code=code_1&state={state}"
+        )
+
+        self.assertEqual(callback.status_code, 302)
+        with self.client.session_transaction() as sess:
+            self.assertNotIn("audit_apikey", sess)
+            self.assertIn("audit_oauth", sess)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -16,5 +16,10 @@
         You will be redirected to the Campus login page and returned to
         the Audit Web UI afterwards.
     </p>
+    {% if apikey_login_available %}
+    <hr class="login-divider">
+    <p class="login-note">Have an audit API key instead?</p>
+    <a class="btn btn-wide" href="/audit/login/key">Sign in with an API key</a>
+    {% endif %}
 </section>
 {% endblock %}

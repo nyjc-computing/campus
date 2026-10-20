@@ -845,6 +845,48 @@ a.landing-card:hover {
     margin: 0.75rem 0 0;
 }
 
+/* API-key sign-in form (#915) */
+.login-divider {
+    border: 0;
+    border-top: 1px solid var(--audit-border);
+    margin: 1.25rem 0;
+}
+
+.login-card form {
+    margin: 0.75rem 0 0;
+    text-align: left;
+}
+
+.form-label {
+    display: block;
+    color: var(--audit-muted);
+    font-size: 0.85rem;
+    margin: 0 0 0.25rem;
+}
+
+.form-input {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    padding: 0.45rem 0.6rem;
+    margin: 0 0 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--audit-border);
+    background: var(--audit-surface);
+    color: var(--audit-text);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--audit-accent);
+}
+
+.login-card .form-input + .btn-wide {
+    width: 100%;
+    margin: 0.25rem 0 0;
+}
+
 /* Footer */
 .audit-footer {
     border-top: 1px solid var(--audit-border);
