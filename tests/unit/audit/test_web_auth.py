@@ -33,6 +33,7 @@ import json
 import os
 import time
 import unittest
+from contextlib import suppress
 from unittest import mock
 from urllib.parse import parse_qs, urlparse
 
@@ -558,6 +559,183 @@ class TestAdminAllowlistParsing(unittest.TestCase):
             self.assertEqual(auth._admin_emails(), frozenset())
         with mock.patch.dict(os.environ, {"AUDIT_ADMINS": "  "}):
             self.assertEqual(auth._admin_emails(), frozenset())
+
+
+class FailingAuthClient:
+    """Auth-service double that always fails, for the error paths."""
+
+    def __init__(self, base_url: str | None = None):
+        self.base_url = base_url or "https://auth.test"
+
+    def post(self, path: str, json: dict | None = None) -> FakeResponse:
+        return FakeResponse(500, {"error": "auth service is down"})
+
+
+class TestAuditWebOAuthSignInEvents(unittest.TestCase):
+    """Verify the audit trail of the web UI OAuth sign-in (#932).
+
+    A superadmin signing in through Campus Auth authenticates the
+    browser, but no credential of its own — the trail records the
+    account, not a key. The event types are therefore distinct from
+    the API-key sign-in's audit.apikeys.*: audit.ui.auth.*.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # Lazy import: campus.audit pulls in storage modules at import
+        # time. See AGENTS.md - Storage Initialization Order.
+        from campus.audit.resources.traces import TracesResource
+
+        TracesResource.init_storage()
+        cls.app = create_gated_app()
+
+    def setUp(self):
+        FakeAuthClient.calls = []
+        env_patch = mock.patch.dict(os.environ, {
+            "ENV": "testing",
+            "PUBLIC_URL": PUBLIC_URL,
+            "AUDIT_OAUTH_CLIENT_ID": CLIENT_ID,
+            "AUDIT_OAUTH_CLIENT_SECRET": CLIENT_SECRET,
+            "AUDIT_ADMINS": USER_ID,
+            "AUDIT_EVENTS_ENABLED": "1",
+        })
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        from campus.audit.web.auth import AuthClient
+        AuthClient.json_client_class = FakeAuthClient
+        self.addCleanup(self._reset_auth_client)
+        self.client = self.app.test_client()
+        # The events land in the shared traces table, which other unit
+        # tests expect to be empty — remember what was there so
+        # tearDown can remove only what this test added.
+        self._spans_before = {s["id"] for s in self._all_spans()}
+
+    def tearDown(self):
+        from campus.audit.resources.traces import traces_storage
+        from campus.storage import errors as storage_errors
+
+        for span in self._all_spans():
+            if span["id"] in self._spans_before:
+                continue
+            with suppress(storage_errors.NotFoundError):
+                traces_storage.delete_by_id(span["id"])
+
+    def _reset_auth_client(self):
+        from campus.audit.web.auth import AuthClient
+        AuthClient.json_client_class = None
+
+    def _all_spans(self):
+        """Every span in the traces table."""
+        from campus.audit.resources.traces import traces_storage
+
+        return traces_storage.get_matching({}, limit=500)
+
+    def _events(self, event_type):
+        from tests.fixtures.audit_events import get_audit_spans
+
+        return get_audit_spans(event_type)
+
+    def _data(self, event):
+        """The event's tags plus its api_key_id."""
+        from tests.fixtures.audit_events import parse_audit_span_data
+
+        return parse_audit_span_data(event)
+
+    def _newest(self, event_type):
+        events = self._events(event_type)
+        self.assertTrue(events, f"no {event_type} event was emitted")
+        return events[0]
+
+    def _callback(self, **query):
+        """Drive the callback with a pending login state."""
+        with self.client.session_transaction() as sess:
+            sess["audit_login_state"] = SESSION_ID
+        query.setdefault("code", "code_123")
+        query.setdefault("state", SESSION_ID)
+        return self.client.get("/audit/callback", query_string=query)
+
+    def test_successful_sign_in_emits_auth_success_event(self):
+        """A completed OAuth sign-in emits audit.ui.auth.success with
+        the account and whether it is a superadmin."""
+        import json
+
+        response = self._callback()
+
+        self.assertEqual(response.status_code, 302)
+        event = self._newest("audit.ui.auth.success")
+        data = self._data(event)
+        self.assertEqual(data["event_type"], "audit.ui.auth.success")
+        self.assertEqual(data["actor_class"], "superadmin")
+        self.assertEqual(data["surface"], "audit-web-oauth")
+        self.assertEqual(data["user_id"], USER_ID)
+        self.assertTrue(data["superadmin"])
+        # The access token is exchanged server-side and kept in the
+        # session: it must not appear in the event.
+        self.assertNotIn(ACCESS_TOKEN, json.dumps(event, default=str))
+
+    def test_state_mismatch_emits_auth_failed_event(self):
+        """A callback whose state does not match is refused, and the
+        failure is recorded."""
+        response = self._callback(state="forged_state")
+
+        self.assertEqual(response.status_code, 400)
+        event = self._newest("audit.ui.auth.failed")
+        data = self._data(event)
+        self.assertEqual(data["event_type"], "audit.ui.auth.failed")
+        self.assertEqual(data["reason"], "invalid_state")
+
+    def test_missing_code_emits_auth_failed_event(self):
+        """A callback without a code is refused, and recorded."""
+        response = self._callback(code="")
+
+        self.assertEqual(response.status_code, 400)
+        event = self._newest("audit.ui.auth.failed")
+        self.assertEqual(self._data(event)["reason"], "missing_code")
+
+    def test_auth_service_error_emits_auth_failed_event(self):
+        """An error reported by the auth service is refused, and
+        recorded."""
+        response = self._callback(error="access_denied")
+
+        self.assertEqual(response.status_code, 400)
+        event = self._newest("audit.ui.auth.failed")
+        self.assertEqual(self._data(event)["reason"], "auth_service_error")
+
+    def test_auth_service_unavailable_emits_auth_failed_event(self):
+        """A login that cannot even start is recorded too."""
+        from campus.audit.web.auth import AuthClient
+
+        AuthClient.json_client_class = FailingAuthClient
+
+        response = self.client.get("/audit/login/start")
+
+        self.assertEqual(response.status_code, 502)
+        event = self._newest("audit.ui.auth.failed")
+        self.assertEqual(
+            self._data(event)["reason"], "auth_service_unavailable"
+        )
+
+    def test_non_superadmin_sign_in_is_marked_as_such(self):
+        """An account off the superadmin list can complete the flow; the
+        event says so, so the trail answers "who tried to get in"."""
+        with mock.patch.dict(os.environ, {"AUDIT_ADMINS": "other@nyjc.edu.sg"}):
+            response = self._callback()
+
+        self.assertEqual(response.status_code, 302)
+        event = self._newest("audit.ui.auth.success")
+        data = self._data(event)
+        self.assertEqual(data["user_id"], USER_ID)
+        self.assertFalse(data["superadmin"])
+
+    def test_no_event_when_audit_events_disabled(self):
+        """Audit events are opt-in, like every other audit event."""
+        with mock.patch.dict(os.environ, {"AUDIT_EVENTS_ENABLED": "0"}):
+            before = len(self._events("audit.ui.auth.success"))
+            response = self._callback()
+            after = len(self._events("audit.ui.auth.success"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(before, after)
 
 
 if __name__ == "__main__":

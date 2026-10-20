@@ -19,6 +19,8 @@ from campus.common.errors import api_errors
 from campus.common.utils import secret
 from campus.storage import errors as storage_errors
 
+from .. import roles
+
 apikeys_storage = campus.storage.tables.get_db("apikeys")
 
 logger = logging.getLogger(__name__)
@@ -152,7 +154,8 @@ class APIKeysResource:
             self,
             name: str,
             owner_id: str,
-            scopes: str,
+            scopes: str = "",
+            role: str | None = None,
             rate_limit: int | None = None,
             expires_at: schema.DateTime | None = None
     ) -> tuple[model.APIKey, str]:
@@ -162,21 +165,28 @@ class APIKeysResource:
             name: Name for the API key
             owner_id: ID of the account owning the key (for organizational purposes)
             scopes: Comma-separated string of scopes/permissions
+            role: A named role from the catalogue (#918), resolved to its
+                scopes. Mutually exclusive with scopes.
             rate_limit: Optional rate limit for the key
             expires_at: Optional expiration datetime for the key
 
         Returns:
             The created API key (including the plaintext key value)
 
+        Raises:
+            UnknownRoleError: The role name is not in the catalogue
+            ValueError: Both a role and an explicit scope list were given
+
         Note:
             campus.audit is a standalone service with no users/clients.
             owner_id is for organizational purposes only.
         """
+        scope_list = roles.resolve_scopes(scopes, role)
         apikey_value = secret.generate_audit_api_key()
         record = {
             "name": schema.String(name),
             "owner_id": schema.UserID(owner_id),
-            "scopes": [schema.String(scope) for scope in scopes.split(",")],
+            "scopes": [schema.String(scope) for scope in scope_list],
             "key_hash": secret.hash_api_key(apikey_value),
         }
         if rate_limit is not None:

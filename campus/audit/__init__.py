@@ -197,6 +197,11 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # must stay reachable without a session.
     app.register_blueprint(web.auth.create_blueprint())
 
+    # Register the key-management page (#927). It has its own gate:
+    # managing keys is a separate capability from reading traces, so
+    # it must not inherit the trace-view gate.
+    app.register_blueprint(web.keys.create_blueprint())
+
     if isinstance(app, flask.Flask):
         # Service root / (#842): audit has a web UI, so it serves the
         # public landing page at the hostname root (campus-wide
