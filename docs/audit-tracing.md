@@ -147,9 +147,13 @@ table is the only accepted scheme.
 
 Key scopes follow the `#575` model: producers hold `traces:*` scopes
 (`traces:write` to ingest spans, `traces:read`/`traces:search` to
-query); the **operator key** holds `apikeys:read`/`apikeys:write`,
-which gate all `/audit/v1/apikeys` routes (#796). A producer key can
-neither create keys nor elevate itself.
+query); the **operator key** holds `apikeys:read`/`apikeys:write` plus
+`traces:write` — it bootstraps keys and ingests traces, but holds no
+trace-READ scope: reading traces is a human activity, done through the
+web UI / CLI with a person's own credentials (superadmin OAuth or a
+`traces:read` key), never the deployment's service credential
+(2026-10-21 ruling). A producer key can neither create keys nor
+elevate itself.
 
 **Bootstrap (operator key):** set `AUDIT_OPERATOR_API_KEY=<plaintext>`
 on the campus.audit deployment. The service seeds it at startup under
@@ -157,7 +161,12 @@ the fixed id `uid-apikey-operator-0000` (config:
 `AUDIT_OPERATOR_API_KEY_ID`) with `AUDIT_OPERATOR_API_KEY_SCOPES`,
 following the same idempotent startup-seed pattern as campus.auth's
 public client: an existing record is never modified — rotate by
-deleting that record and restarting with a new value. Manual recovery /
+deleting that record and restarting with a new value. Deployments
+seeded before the 2026-10-21 narrowing (whose operator key still holds
+`traces:read`/`traces:search`) rotate the same way to pick up the
+narrowed list: delete the record and restart — the same
+`AUDIT_OPERATOR_API_KEY` value re-seeds with the current scope list,
+no new secret needed. Manual recovery /
 initial setup: `AUDIT_OPERATOR_API_KEY=… python
 scripts/seed_audit_operator_key.py`. Generate the plaintext with
 `secret.generate_audit_api_key()` (`audit_v1_` + 22-char base64url);
