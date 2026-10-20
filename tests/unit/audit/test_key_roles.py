@@ -43,8 +43,9 @@ class TestRoleCatalogue(unittest.TestCase):
             for scopes in roles.CATALOGUE.values()
             for scope in scopes
         }
-        # The operator key's scopes are the superadmin shape; the
-        # catalogue should be able to express each of them.
+        # Every scope the operator seed holds must be expressible as a
+        # role bundle, so a human can hold exactly the operator's
+        # privileges without a bespoke scope list.
         self.assertTrue(
             set(AUDIT_OPERATOR_API_KEY_SCOPES) - covered == set(),
             "the catalogue cannot express the operator key's scopes",

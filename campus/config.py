@@ -120,20 +120,22 @@ PUBLIC_OAUTH_CLIENT_ID = "guest"
 # Audit service operator API key (#796). Stored under this fixed id in
 # the audit DB's apikeys table; seeded at audit service startup from the
 # AUDIT_OPERATOR_API_KEY env var (see campus.audit.resources.apikeys.
-# ensure_operator_key). This is the only key class that holds the
-# apikeys:* scopes, so key management survives the loss of every other
-# key. Rotation: delete this record and restart with a new env value.
+# ensure_operator_key). The seed breaks the key-management
+# chicken-and-egg: the apikeys routes are apikeys:write-gated, so no key
+# could ever be minted if none existed. Rotation: delete this record and
+# restart with a new env value.
 AUDIT_OPERATOR_API_KEY_ID = "uid-apikey-operator-0000"
 
-# Scopes seeded on the operator key: full API-key management plus every
-# traces scope, so one operator key can administer a deployment (and
-# re-seed producer keys) without further bootstrap.
+# Scopes seeded on the operator key: full API-key management plus trace
+# ingest — no trace-READ scopes. The operator bootstraps keys and
+# writes traces; reading traces is a human activity, done through the
+# web UI / CLI with a person's own credentials (superadmin OAuth or a
+# traces:read key), never the deployment's service credential
+# (2026-10-21 ruling).
 AUDIT_OPERATOR_API_KEY_SCOPES = [
     "apikeys:read",
     "apikeys:write",
-    "traces:read",
     "traces:write",
-    "traces:search",
 ]
 
 # Scopes requested by CLI/device apps (RFC 8628). The seeded public
