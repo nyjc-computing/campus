@@ -265,6 +265,18 @@ The gate **fails closed**: if `AUDIT_OAUTH_CLIENT_ID` /
 `AUDIT_OAUTH_CLIENT_SECRET` are not configured, gated UI pages return
 503 and `/audit/api/*` returns 401 — the UI is never silently open.
 
+**The sign-in is audited (#932):** a completed sign-in emits
+`audit.ui.auth.success` carrying the campus.auth account and whether it
+is a superadmin; a refusal emits `audit.ui.auth.failed` with a reason
+(`invalid_state`, `missing_code`, `auth_service_error`,
+`auth_service_unavailable`). These event types are distinct from the
+API-key sign-in's `audit.apikeys.*` (§5.3): a Campus account is not an
+API key, and the trail should say which credential authenticated. The
+account is recorded as a label in the span's tags — campus.audit has
+no user store, and its spans carry `user_id=None` by design — and the
+access token is never part of an event (it is exchanged server-side
+and kept in the session).
+
 **Protected Routes:**
 - All `/audit/*` UI pages require authentication AND the trace-view
   capability (§5.2)

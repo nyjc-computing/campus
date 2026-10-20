@@ -72,6 +72,12 @@ campus.auth.provider) server-side:
    /auth/v1/logout (clearing the campusauth SSO cookie, #791) back to
    the landing page.
 
+Every outcome of this flow is recorded in the audit trail (#932): a
+completed sign-in emits audit.ui.auth.success with the account, a
+refusal emits audit.ui.auth.failed with a reason. The event types are
+distinct from the API-key sign-in's audit.apikeys.*, because a Campus
+account is not an API key.
+
 Configuration (fail-closed: the UI is unusable without it):
 
 - AUDIT_OAUTH_CLIENT_ID: the audit deployment's confidential OAuth client
@@ -409,6 +415,11 @@ def _admin_emails() -> frozenset[str]:
     )
 
 
+def _is_superadmin_user(user_id: str) -> bool:
+    """Whether a campus.auth user id is on the superadmin allowlist."""
+    return user_id.strip().lower() in _admin_emails()
+
+
 def _is_superadmin_oauth() -> bool:
     """Whether the OAuth session belongs to a campus.audit superadmin.
 
@@ -419,10 +430,7 @@ def _is_superadmin_oauth() -> bool:
     if oauth is None:
         return False
     user_id = oauth.get("user_id")
-    return (
-        isinstance(user_id, str)
-        and user_id.strip().lower() in _admin_emails()
-    )
+    return isinstance(user_id, str) and _is_superadmin_user(user_id)
 
 
 def _key_has_scope(key_record: typing.Any, required: str) -> bool:
@@ -638,6 +646,51 @@ def _emit_sign_in_event(
     )
 
 
+def _emit_oauth_event(
+        *,
+        reason: str | None,
+        status_code: int,
+        user_id: str | None = None,
+) -> None:
+    """Record the outcome of a web UI OAuth sign-in (#932).
+
+    Emits audit.ui.auth.success when Campus Auth issued a session, and
+    audit.ui.auth.failed with a reason otherwise. These are deliberately
+    distinct from the audit.apikeys.* events of the API-key sign-in: a
+    Campus account is not an API key, and the trail should say which
+    credential authenticated.
+
+    The campus.auth user id is a label the trail records — campus.audit
+    has no user store, and its spans carry user_id=None by design — so
+    it goes in the span's tags. The access token never appears: it is
+    exchanged server-side and kept in the session, never in a request
+    or response body.
+    """
+    from ..helpers.audit_events import emit_web_event
+
+    data: dict[str, typing.Any] = {
+        "actor_class": ACTOR_SUPERADMIN,
+        "surface": "audit-web-oauth",
+    }
+    if reason is None:
+        event_type = "audit.ui.auth.success"
+    else:
+        event_type = "audit.ui.auth.failed"
+        data["reason"] = reason
+    if user_id is not None:
+        data["user_id"] = user_id
+        # A non-superadmin can complete the flow and be refused by the
+        # pages; recording that distinction makes the trail answer
+        # "who tried to get in", not just "who got in".
+        data["superadmin"] = _is_superadmin_user(user_id)
+    emit_web_event(
+        event_type=event_type,
+        data=data,
+        api_key_id=None,
+        status_code=status_code,
+    )
+
+
 def _key_login_error(message: str, status: int) -> flask.Response:
     """Re-render the paste-key form with an error (#915).
 
@@ -836,6 +889,9 @@ def create_blueprint() -> flask.Blueprint:
             session_id = auth.create_authorization_session(redirect_uri)
         except (OSError, HttpClientError) as e:
             logger.error("Login initiation failed: %s", e)
+            _emit_oauth_event(
+                reason="auth_service_unavailable", status_code=502,
+            )
             return _error_page(
                 "Could not start the login flow. "
                 "The authentication service may be unavailable.",
@@ -864,15 +920,24 @@ def create_blueprint() -> flask.Blueprint:
         state = flask.request.args.get("state")
         error = flask.request.args.get("error")
         if error:
+            _emit_oauth_event(
+                reason="auth_service_error", status_code=400,
+            )
             return _error_page(
                 f"The authentication service reported: {error}", 400
             )
         pending_state = flask.session.pop(LOGIN_STATE_KEY, None)
         if not pending_state or not state or state != pending_state:
+            _emit_oauth_event(
+                reason="invalid_state", status_code=400,
+            )
             return _error_page(
                 "Invalid or expired login state. Please start again.", 400
             )
         if not code:
+            _emit_oauth_event(
+                reason="missing_code", status_code=400,
+            )
             return _error_page(
                 "The authentication service did not return an "
                 "authorization code.",
@@ -883,6 +948,9 @@ def create_blueprint() -> flask.Blueprint:
             token = auth.exchange_code(code, get_redirect_uri())
         except (OSError, HttpClientError) as e:
             logger.error("Authorization code exchange failed: %s", e)
+            _emit_oauth_event(
+                reason="auth_service_unavailable", status_code=502,
+            )
             return _error_page(
                 "Could not complete the login flow. "
                 "The authentication service may be unavailable.",
@@ -904,6 +972,10 @@ def create_blueprint() -> flask.Blueprint:
         # Mutual exclusivity with API-key sessions (#915): the newest
         # login wins, the browser never carries both session shapes.
         flask.session.pop(APIKEY_SESSION_KEY, None)
+        _emit_oauth_event(
+            reason=None, status_code=302,
+            user_id=flask.session[SESSION_KEY]["user_id"],
+        )
         return flask.redirect(flask.url_for("audit_ui.traces"))
 
     @bp.route('/logout')
