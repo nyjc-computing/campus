@@ -116,9 +116,10 @@ import flask
 import werkzeug
 
 import campus.flask_campus as flask_campus
+import campus.model as model
 from campus.common import env
 from campus.common.http import DefaultClient, HttpClientError, JsonClient
-from campus.common.utils import url
+from campus.common.utils import secret, url
 
 from ..decorators import scope_matches
 from ..resources import apikeys as apikeys_resource
@@ -352,27 +353,38 @@ def _api_key_session() -> dict | None:
     return session_data
 
 
-def _api_key():
+# Sentinel for _api_key's per-request memo: distinguishes "not
+# resolved yet" from "resolved to None" on the request context.
+_API_KEY_UNRESOLVED = object()
+
+
+def _api_key() -> model.APIKey | None:
     """Resolve the session's API-key record, or None if it is gone.
 
-    Re-read per request (never cached): a revoked, expired, or deleted
-    key ends the session's access on the very next request. Storage
-    misses raise NotFoundError, translated to None here.
+    Resolved once per request and memoised on the request context
+    (#921): within a request the record is immutable, so the capability
+    checks share one storage read. Each new request starts cold, so a
+    revoked, expired, or deleted key still ends the session's access on
+    the very next request. Storage misses raise NotFoundError,
+    translated to None here.
     """
     from campus.storage import errors as storage_errors
 
+    cached = flask.g.get("_audit_api_key", _API_KEY_UNRESOLVED)
+    if cached is not _API_KEY_UNRESOLVED:
+        return typing.cast(model.APIKey | None, cached)
+    record: model.APIKey | None = None
     session_data = _api_key_session()
-    if session_data is None:
-        return None
-    key_id = session_data.get("api_key_id")
-    if not isinstance(key_id, str) or not key_id:
-        return None
-    try:
-        record = apikeys_resource[key_id].get()
-    except storage_errors.NotFoundError:
-        return None
-    if record is None or not record.is_active():
-        return None
+    if session_data is not None:
+        key_id = session_data.get("api_key_id")
+        if isinstance(key_id, str) and key_id:
+            try:
+                resolved = apikeys_resource[key_id].get()
+            except storage_errors.NotFoundError:
+                resolved = None
+            if resolved is not None and resolved.is_active():
+                record = resolved
+    flask.g._audit_api_key = record
     return record
 
 
@@ -718,7 +730,7 @@ def _key_login_error(message: str, status: int) -> flask.Response:
     )
 
 
-def _key_expiry_epoch(record: typing.Any) -> float:
+def _key_expiry_epoch(record: model.APIKey) -> float:
     """Convert a key record's expires_at to epoch seconds.
 
     Storage records carry plain strings for union-annotated fields
@@ -729,6 +741,8 @@ def _key_expiry_epoch(record: typing.Any) -> float:
     from campus.common import schema
 
     value = record.expires_at
+    if value is None:
+        return float("inf")
     if isinstance(value, str):
         try:
             value = schema.DateTime(value)
@@ -824,13 +838,22 @@ def create_blueprint() -> flask.Blueprint:
                 started_at_ns=started_at_ns,
             )
             return _key_login_error("Enter an API key.", 400)
-        # One generic failure for unknown, revoked, and expired keys
-        # alike, so the form does not leak which keys exist.
-        record = apikeys_resource.verify(api_key)
+        # Malformed keys are rejected before verify() hashes them
+        # (#920); then one generic failure for unknown, revoked, and
+        # expired keys alike, so the form does not leak which keys
+        # exist.
+        if secret.is_valid_audit_api_key_format(api_key):
+            record = apikeys_resource.verify(api_key)
+            failure_reason = "invalid_key"
+        else:
+            record = None
+            failure_reason = "invalid_format"
         if record is None:
-            logger.warning("Audit UI API-key sign-in failed: invalid key")
+            logger.warning(
+                "Audit UI API-key sign-in failed: %s", failure_reason
+            )
             _emit_sign_in_event(
-                reason="invalid_key", status_code=401,
+                reason=failure_reason, status_code=401,
                 started_at_ns=started_at_ns,
             )
             return _key_login_error(
