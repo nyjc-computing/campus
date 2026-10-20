@@ -171,6 +171,38 @@ Set it as `AUDIT_API_KEY` on the producer.
 Verify a key works: `GET /audit/v1/traces/` with
 `Authorization: Bearer <key>` → 200 (401 on failure).
 
+## Browser access (who can open the trace viewer)
+
+Minting a key is only half of granting access — the trace viewer at
+`/audit/` has its own gate, with two capabilities
+(`campus/audit/docs/web-ui-requirements.md` §5.2). A session must
+hold the one the surface needs:
+
+| Capability | Campus account | API key |
+|---|---|---|
+| `can_view_traces()` — trace pages, `/audit/api/*` | on the `AUDIT_ADMINS` list | key holding `traces:read` |
+| `can_manage_keys()` — mint, re-scope, rotate, revoke keys | on the `AUDIT_ADMINS` list | key holding `apikeys:write` |
+
+`AUDIT_ADMINS` is the campus.audit **superadmin** list: a member may
+manage API keys *and* read traces. An API key is granted scope by
+scope, exactly like the versioned API — a `traces:read` key reads
+traces and nothing else. The seeded operator key holds both
+capabilities (its scope set is the superadmin shape).
+
+Two ways to give a person browser access:
+
+- **A Campus account** — add their campus.auth user id to
+  `AUDIT_ADMINS` on the campus.audit deployment. Keep the list tiny
+  (≤ 5): a superadmin can mint keys for anyone.
+- **An API key** — mint one with `traces:read` and hand it over. The
+  holder signs in at `/audit/login/key` (development only, #915) and
+  sees the trace viewer; the key never leaves their hands, and
+  revoking it ends their access on the next request.
+
+An audit API key is a bearer credential: whoever holds it can read
+every trace in the deployment. Mint one per person, with the
+narrowest scope that does the job and an expiry.
+
 ## Enabling on a deployment
 
 1. Set `AUDIT_API_KEY=<key>` on the producer.

@@ -130,6 +130,11 @@ Services that emit trace spans to the audit service (auth, api) need
 `POST /audit/v1/apikeys/` on the audit service. See
 [audit-tracing.md](audit-tracing.md) for the full runbook.
 
+Note that a producer key is not browser access: opening the trace
+viewer at `/audit/` is a separate grant (a superadmin account on
+`AUDIT_ADMINS`, or a key holding `traces:read`). See
+[Browser access](audit-tracing.md#browser-access-who-can-open-the-trace-viewer).
+
 ## 📚 Client Library Usage
 
 The `campus_python` client library is installed separately:

@@ -11,14 +11,20 @@ Page map (docs/web-ui-requirements.md §2):
   convention, #842: / is a landing page, /health is the health check)
 - GET /audit/ - landing page (public: no login required)
 - GET /audit/traces - trace list; ?journey_id=<id> switches it to the
-  group-by-journey view (#803) (login required)
-- GET /audit/traces/<trace_id> - trace detail (login required)
+  group-by-journey view (#803) (trace-view capability)
+- GET /audit/traces/<trace_id> - trace detail (trace-view capability)
 - GET /audit/journeys/<journey_id> - redirect to the journey view
   (keeps earlier journey URLs working)
 
 The trace list moved from /audit/ to /audit/traces when the landing
 page was added; the login gate (campus.audit.web.auth) exempts the
 landing page and this blueprint's static assets.
+
+"Trace-view capability" is the can_view_traces() check of §5.2: a
+campus.auth account on the AUDIT_ADMINS superadmin list, or an
+API-key session whose key holds traces:read. The sign-in paths live
+in campus.audit.web.auth — the OAuth flow, and the paste-key form at
+/audit/login/key (development only, #915).
 """
 
 __all__ = ["create_blueprint", "create_root_blueprint"]
