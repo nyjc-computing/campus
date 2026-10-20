@@ -213,6 +213,38 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
         redirect = self.client.get("/audit/traces")
         self.assertEqual(redirect.status_code, 302)
 
+    def test_session_is_refused_outside_development(self):
+        """An API-key session is a development-environment thing
+        (#919): outside development the browser is unauthenticated, so
+        a session minted in dev cannot keep working if the deployment
+        is promoted."""
+        import os
+
+        record, plaintext = self._mint_key()
+        self._sign_in(plaintext)
+        self.assertEqual(
+            self.client.get("/audit/traces").status_code, 200
+        )
+
+        with mock.patch.dict(os.environ, {"ENV": "staging"}):
+            # The pages treat the browser as unauthenticated...
+            self.assertEqual(
+                self.client.get("/audit/traces").status_code, 302
+            )
+            # ...the data endpoints answer 401...
+            self.assertEqual(
+                self.client.get("/audit/api/traces").status_code, 401
+            )
+            # ...the sign-in route is gone...
+            self.assertEqual(
+                self.client.get("/audit/login/key").status_code, 404
+            )
+            # ...and there is no actor to attribute anything to.
+            caps = self.client.get("/__capabilities").get_json()
+            self.assertFalse(caps["view_traces"])
+            self.assertFalse(caps["manage_keys"])
+            self.assertIsNone(caps["actor"])
+
     def test_malformed_key_rejected_before_verification(self):
         """A malformed key never reaches verify() (#920): the format
         check refuses it with the same generic 401 first."""
