@@ -255,6 +255,54 @@ class TestAuditUIDataEndpoint(unittest.TestCase):
         self.assertEqual(sorted(result["created"]), sorted([root.span_id, child.span_id]))
         return root, child
 
+    def _seed_audit_event(self):
+        """Ingest one audit-event trace (a span carrying event_type)."""
+        from campus.audit.resources.traces import TracesResource
+        from campus.model import audit as audit_model
+
+        span = audit_model.TraceSpan(
+            method="POST",
+            path="/audit/login/key",
+            status_code=302,
+            duration_ms=3.0,
+            client_ip="127.0.0.1",
+            request_headers={},
+            response_body={},
+            tags={"event_type": "audit.apikeys.auth.success"},
+        )
+        TracesResource().ingest([span])
+        return span
+
+    def test_audit_events_are_hidden_by_default(self):
+        """The viewer's list hides audit-event traces (#941): they are
+        noise for someone debugging a real request flow."""
+        self._seed_trace()
+        self._seed_audit_event()
+
+        response = self.client.get("/audit/api/traces?limit=50")
+
+        self.assertEqual(response.status_code, 200)
+        paths = [
+            (t.get("root_span") or {}).get("path")
+            for t in response.get_json()["traces"]
+        ]
+        self.assertNotIn("/audit/login/key", paths)
+        self.assertIn("/audit/v1/traces/", paths)
+
+    def test_audit_events_are_shown_on_request(self):
+        """The toggle (?events=1) brings the event trail back."""
+        self._seed_trace()
+        self._seed_audit_event()
+
+        response = self.client.get("/audit/api/traces?limit=50&events=1")
+
+        self.assertEqual(response.status_code, 200)
+        paths = [
+            (t.get("root_span") or {}).get("path")
+            for t in response.get_json()["traces"]
+        ]
+        self.assertIn("/audit/login/key", paths)
+
     def test_get_trace_returns_tree_shape(self):
         """GET /audit/api/traces/<id> mirrors the versioned trace response."""
         root, child = self._seed_trace()

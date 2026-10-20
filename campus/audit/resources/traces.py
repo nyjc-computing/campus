@@ -45,6 +45,18 @@ def _span_has_journey(span: dict, journey_id: str) -> bool:
     return tags.get("journey_id") == journey_id
 
 
+def _span_is_audit_event(span: dict) -> bool:
+    """Check whether a span record is an audit event (#941).
+
+    Audit events (audit.apikeys.*, audit.ui.auth.*, audit.traces.*,
+    audit.health.check) are ingested as spans in the same table as the
+    request traces, one trace per event. The discriminator is the
+    event_type tag every event carries; request traces do not.
+    """
+    tags = span.get("tags") or {}
+    return bool(tags.get("event_type"))
+
+
 def _build_trace_tree(spans: list[dict]) -> model.TraceTree | None:
     """Build a hierarchical tree from flat span list.
 
@@ -132,6 +144,7 @@ def _query_trace_page(
         limit: int,
         cursor: str | None,
         journey_id: str | None = None,
+        include_events: bool = True,
 ) -> TracePage:
     """Fetch one keyset-paginated page of trace summaries, newest first.
 
@@ -157,6 +170,8 @@ def _query_trace_page(
         limit: Page size (clamped by parse_page_size)
         cursor: Opaque token from a previous page, or None for page 1
         journey_id: Optional login-journey tag filter (#803)
+        include_events: Whether audit-event traces are included (#941).
+            False drops them, so a viewer can show request traces only.
 
     Returns:
         TracePage with up to limit summaries and next-page metadata
@@ -179,6 +194,10 @@ def _query_trace_page(
 
     if journey_id is not None:
         spans = [s for s in spans if _span_has_journey(s, journey_id)]
+    if not include_events:
+        # Audit events are their own traces (one span each), so
+        # dropping the span drops the trace with it (#941).
+        spans = [s for s in spans if not _span_is_audit_event(s)]
 
     summaries = _build_trace_summaries(spans)
     summaries.sort(key=lambda s: (s.started_at, s.trace_id), reverse=True)
@@ -308,6 +327,7 @@ class TracesResource:
         until: str | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
+        include_events: bool = True,
     ) -> TracePage:
         """Search traces by multiple filter criteria.
 
@@ -323,6 +343,10 @@ class TracesResource:
             until: ISO 8601 timestamp (optional)
             limit: Page size (should be clamped via parse_page_size)
             cursor: Opaque token from a previous page (optional)
+            include_events: Whether audit-event traces are included
+                (#941). The versioned API keeps them — the trail is
+                queryable by design; a viewer can ask for request
+                traces only.
 
         Returns:
             TracePage of TraceSummary model instances
@@ -351,6 +375,7 @@ class TracesResource:
             limit=limit,
             cursor=cursor,
             journey_id=journey_id,
+            include_events=include_events,
         )
 
     def journey(self, journey_id: str) -> "list[model.TraceSummary]":

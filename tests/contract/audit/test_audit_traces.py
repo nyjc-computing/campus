@@ -304,6 +304,40 @@ class TestAuditTracesListContract(unittest.TestCase):
         self.assertEqual(data["traces"][0]["trace_id"], "a" * 32)
         self.assertIn("cursor", data)
 
+    def test_list_traces_keeps_audit_event_traces(self):
+        """The versioned API still returns audit-event traces (#941).
+
+        Only the *viewer* hides them by default: the trail is
+        queryable by design, and the API's job is to serve it.
+        """
+        from campus.audit.resources.traces import TracesResource
+        traces_resource = TracesResource()
+        event_span = TraceSpan(
+            trace_id="e" * 32,
+            span_id="f" * 16,
+            method="POST",
+            path="/audit/login/key",
+            status_code=302,
+            started_at=schema.DateTime.utcnow(),
+            duration_ms=3.0,
+            client_ip="127.0.0.1",
+            tags={"event_type": "audit.apikeys.auth.success"},
+        )
+        traces_resource.ingest([event_span])
+
+        from campus.common import env
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        response = self.client.get(
+            "/audit/v1/traces/?limit=100",
+            headers=self.auth_headers
+        )
+        env.set('AUDIT_EVENTS_ENABLED', '1')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        trace_ids = [t["trace_id"] for t in data["traces"]]
+        self.assertIn("e" * 32, trace_ids)
+
     def test_list_traces_with_limit(self):
         """GET /audit/v1/traces/?limit=5 respects limit parameter."""
         response = self.client.get(

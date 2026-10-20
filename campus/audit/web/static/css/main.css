@@ -887,6 +887,22 @@ a.landing-card:hover {
     margin: 0.25rem 0 0;
 }
 
+/* Audit-event toggle in the trace filter bar (#941) */
+.filter-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--audit-muted);
+    font-size: 0.85rem;
+    margin: 0 0 0.25rem;
+    cursor: pointer;
+}
+
+.filter-check input {
+    margin: 0;
+    cursor: pointer;
+}
+
 /* Key-management page (#927) */
 .keys-card {
     max-width: 42rem;
