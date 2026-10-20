@@ -19,7 +19,7 @@ import campus.flask_campus as flask_campus
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
 
-from .. import decorators, resources
+from .. import decorators, resources, roles
 from ..helpers import audit_events
 
 # Create blueprint for API key routes
@@ -70,6 +70,24 @@ def _validate_scopes_field(
             return
 
 
+def _validate_role_field(
+        field_errors: list[FieldError],
+        role: object,
+) -> None:
+    """Record a field error unless role names a known role (#918)."""
+    if role is None:
+        return
+    if not isinstance(role, str) or role not in roles.CATALOGUE:
+        field_errors.append(FieldError(
+            field="role",
+            code="INVALID_ROLE",
+            message=(
+                "Unknown role. Available roles: "
+                f"{', '.join(sorted(roles.CATALOGUE))}."
+            )
+        ))
+
+
 def _validate_rate_limit_field(
         field_errors: list[FieldError],
         rate_limit: object,
@@ -93,7 +111,8 @@ def new(
         *,
         name: str,
         owner_id: schema.UserID,
-        scopes: list[schema.String],
+        scopes: list[schema.String] | None = None,
+        role: schema.String | None = None,
         rate_limit: schema.Integer | None = None,
         expires_at: schema.DateTime | None = None,
 ) -> flask_campus.JsonResponse:
@@ -104,9 +123,14 @@ def new(
       "name": "string",
       "owner_id": "string",
       "scopes": ["scope1", "scope2"],  // optional
+      "role": "traces-viewer",  // optional, a named role (#918)
       "rate_limit": 100,  // optional, requests per minute
       "expires_at": "ISO 8601"  // optional
     }
+
+    Give either a role or a list of scopes, not both: a role is a named
+    bundle of scopes from the catalogue (campus.audit.roles), and
+    naming both leaves it ambiguous which one was meant.
 
     Returns:
         201 Created with the API key (only shown once) and key details
@@ -115,7 +139,16 @@ def new(
     field_errors: list[FieldError] = []
     _validate_non_empty_str(field_errors, "name", name)
     _validate_non_empty_str(field_errors, "owner_id", owner_id)
-    _validate_scopes_field(field_errors, scopes)
+    _validate_role_field(field_errors, role)
+    if role is not None:
+        if scopes:
+            field_errors.append(FieldError(
+                field="scopes",
+                code="CONFLICTS_WITH_ROLE",
+                message="Give either a role or a list of scopes, not both."
+            ))
+    else:
+        _validate_scopes_field(field_errors, scopes)
     _validate_rate_limit_field(field_errors, rate_limit)
     if field_errors:
         raise ValidationError(
@@ -125,7 +158,8 @@ def new(
     api_key, apikey_value = resources.apikeys.new(
         name=name,
         owner_id=owner_id,
-        scopes=",".join(scopes),
+        scopes=",".join(scopes or []),
+        role=role,
         rate_limit=rate_limit,
         expires_at=expires_at,
     )
@@ -197,6 +231,7 @@ def update(
         *,
         name: schema.String | None = None,
         scopes: list[schema.String] | None = None,
+        role: schema.String | None = None,
         rate_limit: schema.Integer | None = None,
 ) -> flask_campus.JsonResponse:
     """Update mutable fields of an API key.
@@ -211,8 +246,13 @@ def update(
     {
       "name": "new name",  // optional
       "scopes": ["scope1", "scope2"],  // optional
+      "role": "traces-viewer",  // optional, a named role (#918)
       "rate_limit": 200  // optional
     }
+
+    Give either a role or a list of scopes, not both: a role is a named
+    bundle of scopes from the catalogue (campus.audit.roles), and
+    naming both leaves it ambiguous which one was meant.
 
     Returns:
         200 OK with updated API key details
@@ -222,7 +262,15 @@ def update(
     field_errors: list[FieldError] = []
     if name is not None:
         _validate_non_empty_str(field_errors, "name", name)
-    if scopes is not None:
+    _validate_role_field(field_errors, role)
+    if role is not None:
+        if scopes:
+            field_errors.append(FieldError(
+                field="scopes",
+                code="CONFLICTS_WITH_ROLE",
+                message="Give either a role or a list of scopes, not both."
+            ))
+    elif scopes is not None:
         _validate_scopes_field(field_errors, scopes)
     if rate_limit is not None:
         _validate_rate_limit_field(field_errors, rate_limit)
@@ -235,7 +283,9 @@ def update(
     updates = {}
     if name is not None:
         updates["name"] = name
-    if scopes is not None:
+    if role is not None:
+        updates["scopes"] = roles.resolve_role(role)
+    elif scopes is not None:
         updates["scopes"] = scopes
     if rate_limit is not None:
         updates["rate_limit"] = rate_limit

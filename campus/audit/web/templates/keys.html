@@ -51,15 +51,27 @@
             A display label for the person the key is for. campus.audit
             does not resolve it against any account.
         </p>
-        <label class="form-label" for="scopes">Scopes</label>
-        <input class="form-input mono" type="text" id="scopes" name="scopes"
-               placeholder="traces:read" required>
+        <label class="form-label" for="role">Role</label>
+        <select class="form-input" id="role" name="role">
+            <option value="">— none, use scopes below —</option>
+            {% for name, what in role_help %}
+            <option value="{{ name }}">{{ name }} — {{ what }}</option>
+            {% endfor %}
+        </select>
         <p class="login-note">
-            Comma-separated. Available:
-            {% for scope, what in scope_help %}
-            <span class="mono">{{ scope }}</span> — {{ what }}{% if not loop.last %};{% endif %}
+            A role is a named bundle of scopes, so the holder gets a
+            reviewed privilege set rather than a hand-assembled one:
+            {% for name, scopes in roles.items() %}
+            <span class="mono">{{ name }}</span>
+            ({{ scopes | join(', ') }}){% if not loop.last %};{% endif %}
             {% endfor %}
         </p>
+        <label class="form-label" for="scopes">Scopes</label>
+        <input class="form-input mono" type="text" id="scopes" name="scopes"
+               placeholder="traces:read">
+        <p class="login-note">
+            Comma-separated, for anything the roles do not cover. Give
+            either a role or scopes, not both.
         <label class="form-label" for="expires_at">Expires at (optional)</label>
         <input class="form-input" type="text" id="expires_at" name="expires_at"
                placeholder="2026-12-31T23:59:59+00:00">

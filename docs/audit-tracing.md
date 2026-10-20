@@ -168,6 +168,26 @@ operator key (name, owner_id, `scopes` such as
 `"traces:write,traces:read"`); the response contains the plaintext.
 Set it as `AUDIT_API_KEY` on the producer.
 
+**Named roles (#918).** Instead of a scope list, a request may name a
+role — a reviewed bundle of scopes, so the issuer grants a privilege
+rather than assembling one by hand:
+
+| Role | Grants |
+|---|---|
+| `traces-viewer` | `traces:read` |
+| `traces-searcher` | `traces:read`, `traces:search` |
+| `traces-producer` | `traces:read`, `traces:search`, `traces:write` |
+| `key-operator` | `apikeys:read`, `apikeys:write` |
+
+`POST /audit/v1/apikeys/` with `{"role": "traces-viewer"}` creates a key
+with that bundle; `PATCH /audit/v1/apikeys/<id>/` with a `role` re-scopes
+one the same way. A role and an explicit scope list are mutually
+exclusive, an unknown role is refused with a message naming the roles
+that exist, and a raw scope list still works everywhere — the
+catalogue is additive. No role resolves to a wildcard: the operator
+key deliberately holds none, and a standing `*` role would be a
+privilege-escalation footgun in the one place keys get minted.
+
 Verify a key works: `GET /audit/v1/traces/` with
 `Authorization: Bearer <key>` → 200 (401 on failure).
 

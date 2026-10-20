@@ -33,6 +33,7 @@ import werkzeug
 from campus.common import schema
 from campus.common.errors import api_errors
 
+from .. import roles
 from ..resources import apikeys as apikeys_resource
 from . import auth
 
@@ -45,14 +46,15 @@ KEYS_CSRF_KEY = "audit_keys_csrf"
 # page shows the most recent keys, and says so when the cap is hit.
 KEY_LIST_LIMIT = 200
 
-# The scope vocabulary the page offers, with what each is for. The
-# names double as the role catalogue's building blocks (#918).
-SCOPE_HELP = (
-    ("traces:read", "read traces in the browser and query them via the API"),
-    ("traces:search", "search traces via the API"),
-    ("traces:write", "ingest spans (a tracing producer's scope)"),
-    ("apikeys:read", "list API keys via the API"),
-    ("apikeys:write", "create, re-scope, rotate and revoke API keys"),
+# The roles the page offers, with what each grants (#918). A role is a
+# named bundle of scopes, so the issuer picks a privilege rather than
+# assembling one — and the raw scope list stays available for anything
+# the catalogue does not cover.
+ROLE_HELP = (
+    ("traces-viewer", "read traces in the browser and query them via the API"),
+    ("traces-searcher", "as above, plus the API's search scope"),
+    ("traces-producer", "as above, plus ingesting spans (a producer's role)"),
+    ("key-operator", "list and manage API keys"),
 )
 
 
@@ -177,7 +179,8 @@ def _render_page(
         minted=minted,
         notice=notice,
         error=error,
-        scope_help=SCOPE_HELP,
+        roles=roles.list_roles(),
+        role_help=ROLE_HELP,
         key_limit=KEY_LIST_LIMIT,
     )
     response = flask.make_response(html, status)
@@ -244,6 +247,7 @@ def create_blueprint() -> flask.Blueprint:
             )
         name = (flask.request.form.get('name') or '').strip()
         owner_id = (flask.request.form.get('owner_id') or '').strip()
+        role = (flask.request.form.get('role') or '').strip()
         scopes = _parse_scopes(flask.request.form.get('scopes') or '')
         if not name:
             return _form_error("Give the key a name.")
@@ -252,8 +256,19 @@ def create_blueprint() -> flask.Blueprint:
                 "Give the key an owner — the email of the person it is "
                 "for. It is a display label only, never resolved."
             )
-        if not scopes:
-            return _form_error("Give the key at least one scope.")
+        if role and scopes:
+            return _form_error(
+                "Give either a role or a list of scopes, not both."
+            )
+        if role:
+            try:
+                roles.resolve_role(role)
+            except roles.UnknownRoleError as e:
+                return _form_error(str(e))
+        elif not scopes:
+            return _form_error(
+                "Give the key a role, or at least one scope."
+            )
         rate_limit_raw = (flask.request.form.get('rate_limit') or '').strip()
         rate_limit: int | None = None
         if rate_limit_raw:
@@ -274,6 +289,7 @@ def create_blueprint() -> flask.Blueprint:
             name=name,
             owner_id=owner_id,
             scopes=",".join(scopes),
+            role=role or None,
             rate_limit=rate_limit,
             expires_at=expires_at,
         )
@@ -283,7 +299,11 @@ def create_blueprint() -> flask.Blueprint:
         _emit_key_event(
             "audit.apikeys.new",
             key_id=record.id,
-            extra={"owner_id": owner_id, "scopes": scopes},
+            extra={
+                "owner_id": owner_id,
+                "scopes": list(record.scopes),
+                "role": role or None,
+            },
         )
         return _render_page(
             minted=plaintext,

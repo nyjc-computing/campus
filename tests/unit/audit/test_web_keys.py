@@ -247,6 +247,57 @@ class TestAuditWebKeyManagement(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn(plaintext, repr(sess))
 
+    def test_mint_with_a_role_grants_that_roles_scopes(self):
+        """A key minted with a role name holds exactly that role's
+        scopes (#918)."""
+        from campus.audit.resources import apikeys
+
+        self._sign_in_with_key()
+        _, csrf = self._page()
+
+        response = self.client.post("/audit/keys/new", data={
+            "csrf_token": csrf,
+            "name": "Alice's key",
+            "owner_id": OWNER,
+            "role": "traces-viewer",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        keys = apikeys.list_keys(owner_id=OWNER, active_only=False)
+        self.assertTrue(keys)
+        self.assertEqual(list(keys[0].scopes), ["traces:read"])
+
+    def test_mint_with_an_unknown_role_is_refused(self):
+        """An unknown role is refused, and the page names the roles
+        that do exist."""
+        self._sign_in_with_key()
+        _, csrf = self._page()
+
+        response = self.client.post("/audit/keys/new", data={
+            "csrf_token": csrf,
+            "name": "Alice's key",
+            "owner_id": OWNER,
+            "role": "no-such-role",
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b"traces-viewer", response.data)
+
+    def test_mint_with_a_role_and_scopes_is_refused(self):
+        """A role and an explicit scope list are mutually exclusive."""
+        self._sign_in_with_key()
+        _, csrf = self._page()
+
+        response = self.client.post("/audit/keys/new", data={
+            "csrf_token": csrf,
+            "name": "Alice's key",
+            "owner_id": OWNER,
+            "role": "traces-viewer",
+            "scopes": "traces:read",
+        })
+
+        self.assertEqual(response.status_code, 400)
+
     def test_mint_requires_a_valid_csrf_token(self):
         """A mint without a CSRF token is refused, and mints nothing."""
         from campus.audit.resources import apikeys

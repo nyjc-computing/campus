@@ -122,6 +122,54 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
         self.assertEqual(data["expires_at"], "2025-12-31T23:59:59Z")
         self.assertEqual(data["scopes"], ["read", "write"])
 
+    def test_create_api_key_with_a_role_returns_201(self):
+        """POST /audit/v1/apikeys/ accepts a named role (#918) and
+        grants exactly that role's scopes."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Role Key",
+                "owner_id": "user123",
+                "role": "traces-viewer",
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 201)
+        data = response.get_json()
+        self.assertEqual(data["scopes"], ["traces:read"])
+
+    def test_create_api_key_with_an_unknown_role_returns_422(self):
+        """An unknown role is refused, and the error names the roles
+        that do exist."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Role Key",
+                "owner_id": "user123",
+                "role": "no-such-role",
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("traces-viewer", response.get_data(as_text=True))
+
+    def test_create_api_key_with_role_and_scopes_returns_422(self):
+        """A role and an explicit scope list are mutually exclusive."""
+        response = self.client.post(
+            "/audit/v1/apikeys/",
+            json={
+                "name": "Role Key",
+                "owner_id": "user123",
+                "role": "traces-viewer",
+                "scopes": ["traces:read"],
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+
     def test_create_api_key_missing_name_returns_422(self):
         """POST /audit/v1/apikeys/ without name returns 422."""
         response = self.client.post(
@@ -474,6 +522,28 @@ class TestAuditAPIKeyUpdateContract(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["scopes"], ["read", "write", "admin"])
+
+    def test_update_api_key_role_success(self):
+        """PATCH accepts a named role (#918) and grants its scopes."""
+        from campus.audit.resources import apikeys
+
+        record, _ = apikeys.new(
+            name="Role Key",
+            owner_id="user123",
+            scopes="traces:read",
+        )
+
+        response = self.client.patch(
+            f"/audit/v1/apikeys/{record.id}/",
+            json={"role": "traces-searcher"},
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            sorted(response.get_json()["scopes"]),
+            ["traces:read", "traces:search"],
+        )
 
     def test_update_api_key_rate_limit_success(self):
         """PATCH /audit/v1/apikeys/<id> can update rate_limit."""

@@ -377,6 +377,13 @@ API/CLI privilege and does not admit a browser session on its own.
 `POST /audit/keys/<id>/rotate` and `POST /audit/keys/<id>/revoke`. The
 POSTs are CSRF-protected with a single-use token, in the session.
 
+**It offers named roles (#918).** The mint form offers the role
+catalogue (`traces-viewer`, `traces-searcher`, `traces-producer`,
+`key-operator`) alongside a free-text scope field, so the operator
+grants a reviewed privilege set by default — and can still hand-assemble
+one for anything the catalogue does not cover. A role and a scope list
+are mutually exclusive.
+
 **It acts as the session, never as the operator key.** The resources
 layer is called in-process, so no key material passes through the
 server, and each mutation is attributed to the session that made it:
