@@ -334,6 +334,17 @@ API/CLI privilege and does not admit a browser session on its own.
 - API-key and OAuth sessions are mutually exclusive; signing in one
   way clears the other. Logout for an API-key session clears the
   local session only (the key itself stays valid for API/CLI use).
+- **Every sign-in is audited (#917):** a success emits
+  `audit.apikeys.auth.success` with the key id and the owner label; a
+  refusal emits `audit.apikeys.auth.failed` with a reason
+  (`invalid_key`, `insufficient_scope`, `csrf_failed`,
+  `missing_key`) and, when the key is known, its id. These are the
+  same event types the versioned API emits, so one query answers
+  "who authenticated with which key" across both surfaces. The
+  plaintext key is never part of an event: it travels in the form
+  body, and the event's request context reads the body as JSON
+  (empty for a form POST). Events are opt-in, like every other audit
+  event (`AUDIT_EVENTS_ENABLED`).
 - **Development-only by construction:** both methods 404 unless
   `ENV=development`; the login page shows the second button only in
   development. Dev databases are per-deployment, so minted keys do

@@ -48,6 +48,11 @@ against any user store.
   expiry, and scope changes take effect mid-session.
 - The routes exist only when ENV=development (404 elsewhere), keeping
   key-based sign-in a development-environment feature by construction.
+- Every sign-in is recorded in the audit trail (#917): a success emits
+  audit.apikeys.auth.success with the key id, a failure emits
+  audit.apikeys.auth.failed with a reason — the same event types the
+  versioned API emits, so one query covers both surfaces. The
+  plaintext key is never part of an event.
 
 The gate drives Campus Auth's authorization-code flow (RFC 6749 §4.1,
 campus.auth.provider) server-side:
@@ -590,6 +595,49 @@ def _error_page(message: str, status: int) -> flask.Response:
     )
 
 
+def _emit_sign_in_event(
+        *,
+        reason: str | None,
+        status_code: int,
+        started_at_ns: int,
+        api_key_id: str | None = None,
+        owner_id: str | None = None,
+) -> None:
+    """Record the outcome of a web UI API-key sign-in (#917).
+
+    Emits audit.apikeys.auth.success when the key was accepted, and
+    audit.apikeys.auth.failed with a reason otherwise — the same event
+    types the versioned API emits for its own authentication
+    (campus/audit/__init__.py), so one query answers "who signed in
+    with which key, and what failed" across both surfaces.
+
+    The plaintext key is never part of the event: it lives in the form
+    body, and the event's request context reads the body as JSON
+    (empty for a form POST). The owner_id label is a display string,
+    never an account campus.audit resolves.
+    """
+    from ..helpers.audit_events import emit_web_event
+
+    data: dict[str, typing.Any] = {
+        "actor_class": ACTOR_API_KEY,
+        "surface": "audit-web-signin",
+    }
+    if reason is None:
+        event_type = "audit.apikeys.auth.success"
+    else:
+        event_type = "audit.apikeys.auth.failed"
+        data["reason"] = reason
+    if owner_id is not None:
+        data["owner_id"] = owner_id
+    emit_web_event(
+        event_type=event_type,
+        data=data,
+        api_key_id=api_key_id,
+        status_code=status_code,
+        duration_ms=(time.perf_counter_ns() - started_at_ns) / 1_000_000,
+    )
+
+
 def _key_login_error(message: str, status: int) -> flask.Response:
     """Re-render the paste-key form with an error (#915).
 
@@ -694,21 +742,34 @@ def create_blueprint() -> flask.Blueprint:
         # must not leave a valid token replayable). The comparison runs
         # on bytes: compare_digest() raises TypeError on non-ASCII str,
         # and the submitted token is raw form data.
+        started_at_ns = time.perf_counter_ns()
         issued = flask.session.pop(KEY_LOGIN_CSRF_KEY, None)
         submitted = flask.request.form.get('csrf_token', '')
         if not isinstance(issued, str) or not hmac.compare_digest(
                 issued.encode('utf-8'), str(submitted).encode('utf-8')):
+            _emit_sign_in_event(
+                reason="csrf_failed", status_code=400,
+                started_at_ns=started_at_ns,
+            )
             return _key_login_error(
                 "Your form session expired. Please try again.", 400
             )
         api_key = (flask.request.form.get('api_key') or '').strip()
         if not api_key:
+            _emit_sign_in_event(
+                reason="missing_key", status_code=400,
+                started_at_ns=started_at_ns,
+            )
             return _key_login_error("Enter an API key.", 400)
         # One generic failure for unknown, revoked, and expired keys
         # alike, so the form does not leak which keys exist.
         record = apikeys_resource.verify(api_key)
         if record is None:
             logger.warning("Audit UI API-key sign-in failed: invalid key")
+            _emit_sign_in_event(
+                reason="invalid_key", status_code=401,
+                started_at_ns=started_at_ns,
+            )
             return _key_login_error(
                 "Invalid API key. Check that you copied the full key "
                 "(audit_v1_…) and that it has not been revoked or expired.",
@@ -723,6 +784,10 @@ def create_blueprint() -> flask.Blueprint:
             logger.warning(
                 "Audit UI API-key sign-in denied: key %s lacks %s",
                 record.id, " or ".join(UI_SIGN_IN_SCOPES),
+            )
+            _emit_sign_in_event(
+                reason="insufficient_scope", status_code=403,
+                api_key_id=record.id, started_at_ns=started_at_ns,
             )
             return _key_login_error(
                 f"This key does not include the {UI_READ_SCOPE} scope "
@@ -748,6 +813,11 @@ def create_blueprint() -> flask.Blueprint:
         logger.info(
             "Audit UI API-key sign-in: key %s (owner %s)",
             record.id, record.owner_id,
+        )
+        _emit_sign_in_event(
+            reason=None, status_code=302,
+            api_key_id=record.id, owner_id=str(record.owner_id),
+            started_at_ns=started_at_ns,
         )
         return flask.redirect(flask.url_for("audit_ui.traces"))
 
