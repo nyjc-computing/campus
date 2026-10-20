@@ -364,6 +364,11 @@ API/CLI privilege and does not admit a browser session on its own.
   `ENV=development`; the login page shows the second button only in
   development. Dev databases are per-deployment, so minted keys do
   not exist in other environments.
+- **The session is development-only too (#919).** Outside development
+  an API-key session is refused outright: the browser is
+  unauthenticated, so a session minted in development cannot keep
+  working if the deployment is ever promoted. There is no trace
+  access, no key management, and no actor to attribute an action to.
 
 ### 5.4 Key-management page (#927)
 

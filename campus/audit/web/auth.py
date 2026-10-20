@@ -48,6 +48,9 @@ against any user store.
   expiry, and scope changes take effect mid-session.
 - The routes exist only when ENV=development (404 elsewhere), keeping
   key-based sign-in a development-environment feature by construction.
+- The *session* is development-only too (#919): outside development an
+  API-key session is refused, so a session minted in dev cannot keep
+  working if the deployment is promoted.
 - Every sign-in is recorded in the audit trail (#917): a success emits
   audit.apikeys.auth.success with the key id, a failure emits
   audit.apikeys.auth.failed with a reason — the same event types the
@@ -340,10 +343,18 @@ def _oauth_session() -> dict | None:
 def _api_key_session() -> dict | None:
     """Return the API-key session dict if present and unexpired.
 
-    Expiry alone is not sufficient for access — can_view_traces() and
-    can_manage_keys() re-resolve the key record so revocation and scope
-    changes apply immediately.
+    An API-key session exists only in the development environment
+    (#919). The sign-in route is dev-only, so a session minted there
+    must not keep working if the deployment is ever promoted: outside
+    development the session is not a session at all, and the browser is
+    unauthenticated — no trace access, no key management, no actor.
+
+    Expiry alone is not sufficient for access either — can_view_traces()
+    and can_manage_keys() re-resolve the key record so revocation and
+    scope changes apply immediately.
     """
+    if not _is_development():
+        return None
     session_data = flask.session.get(APIKEY_SESSION_KEY)
     if not isinstance(session_data, dict):
         return None
