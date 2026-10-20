@@ -75,6 +75,17 @@ Browse recent traces with filtering capabilities. Primary entry point for invest
 | Status | Dropdown | All, 2xx, 3xx, 4xx, 5xx | `status` query param |
 | Client ID | Text input | Filter by OAuth client ID (also filters by deployment) | `client_id` query param |
 | User ID | Text input | Filter by specific user | `user_id` query param |
+| Show audit events | Checkbox | Include audit-event traces in the list (#941) | `events` query param |
+
+**Audit events are hidden by default (#941).** The audit service's own
+events — key mints, sign-ins, health checks — are ingested as spans in
+the same table as the request traces, one trace per event, and they
+carry a `tags.event_type` that request traces do not. They are noise
+for someone debugging a real request flow, so the viewer leaves them
+out unless the "Show audit events" box is ticked (`?events=1`). The
+**versioned API keeps returning them**: the trail is queryable by
+design, and hiding it at the API would make the audit trail harder to
+reach, not easier.
 
 **Extensibility:**
 - Filter UI should be structured to allow adding new filter types without major refactoring

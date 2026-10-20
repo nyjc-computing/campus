@@ -19,6 +19,20 @@ from campus.common.errors import api_errors
 from ..resources import traces as traces_resource
 from . import clientnames
 
+# Query values that mean "yes" for a boolean-ish param.
+_TRUTHY = frozenset({"1", "true", "on", "yes"})
+
+
+def _include_events() -> bool:
+    """Whether the caller asked for audit-event traces (#941).
+
+    Off by default: the viewer's list is for debugging real request
+    flows, and the event trail is noise there. The toggle in the filter
+    bar sets ?events=1.
+    """
+    value = (flask.request.args.get("events") or "").strip().lower()
+    return value in _TRUTHY
+
 
 def create_blueprint() -> flask.Blueprint:
     """Create a Flask blueprint for UI data endpoints.
@@ -45,6 +59,12 @@ def create_blueprint() -> flask.Blueprint:
             limit: page size, clamped to [1, MAX_PAGE_SIZE] (default
                 DEFAULT_PAGE_SIZE)
             cursor: opaque token from a previous page's cursor.next
+            events: include audit-event traces (#941). Off by default:
+                the viewer lists request traces, and the event trail
+                (audit.apikeys.*, audit.ui.auth.*, …) is noise for
+                someone debugging a real flow. The versioned API keeps
+                returning the events — the trail is queryable by
+                design.
 
         Returns:
             JSON: {"traces": [...], "cursor": {"next": ..., "has_more": ...}}
@@ -70,6 +90,7 @@ def create_blueprint() -> flask.Blueprint:
                 flask.request.args.get("limit")
             ),
             cursor=flask.request.args.get("cursor"),
+            include_events=_include_events(),
         )
         return {
             "traces": clientnames.enrich_summaries(

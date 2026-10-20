@@ -52,6 +52,11 @@
                 continue;
             }
             const value = params.get(field.name);
+            if (field.type === 'checkbox') {
+                // Ticked or not, not a value (#941).
+                field.checked = value !== null && value !== '0' && value !== 'false';
+                continue;
+            }
             if (value !== null) {
                 field.value = value;
             } else if (field.tagName !== 'SELECT') {
@@ -127,6 +132,14 @@
         const fields = form.elements;
         for (const field of fields) {
             if (!field.name || !field.value) {
+                continue;
+            }
+            // A checkbox's value is truthy whether or not it is ticked,
+            // so its state has to be read from .checked (#941).
+            if (field.type === 'checkbox') {
+                if (field.checked) {
+                    params.set(field.name, '1');
+                }
                 continue;
             }
             params.set(field.name, field.value);
