@@ -2,6 +2,14 @@
 
 Provides helper function and decorator for emitting audit events to the
 traces table with easy enabling/disabling per route.
+
+Three ways in:
+
+- @audit_event: a decorator for JSON API routes returning
+  (response_dict, status_code).
+- emit_from_flask: the same, from an already-built response.
+- emit_web_event: for browser routes (#917), which return a
+  flask.Response and need their failure branch recorded too.
 """
 
 import functools
@@ -93,6 +101,53 @@ def _extract_response_context(response: flask.Response) -> FlaskResponseContext:
         "body": response.get_json(force=False, silent=True) or {},
     }
     return context
+
+
+def emit_web_event(
+        *,
+        event_type: str,
+        data: JsonObject,
+        api_key_id: str | None = None,
+        status_code: int = 200,
+        duration_ms: float = 0.0,
+) -> None:
+    """Emit an audit event for a browser route (#917).
+
+    The @audit_event decorator does not fit a web route: it assumes
+    the view returns a (response_dict, status_code) tuple, while a
+    browser route returns a flask.Response — and emit_from_flask only
+    emits for 2xx/3xx, so a failure branch would be silent. This helper
+    emits for any status, success and failure alike, from the live
+    request.
+
+    The request context reads the request body as JSON, so a
+    form-encoded POST contributes an empty body and its fields never
+    reach the event. That matters for the paste-key sign-in form
+    (#915): the plaintext key is submitted in the form body, and the
+    event must not carry it.
+
+    Args:
+        event_type: Event type (e.g., "audit.apikeys.auth.success")
+        data: Event metadata stored in the span's tags field
+        api_key_id: API key the action is attributed to, if known
+        status_code: The response status the action produced
+        duration_ms: How long the action took, in milliseconds
+    """
+    if not env.get_flag("AUDIT_EVENTS_ENABLED", False):
+        return
+    emit_audit_event(
+        data={**data, "event_type": event_type},
+        api_key_id=api_key_id,
+        parent_span_id=flask.g.get("span_id"),
+        started_at=schema.DateTime.utcnow(),
+        duration_ms=duration_ms,
+        request_context=_extract_request_context(flask.request),
+        response_context={
+            "status_code": status_code,
+            "headers": {},
+            "body": {},
+        },
+    )
 
 
 def emit_from_flask(

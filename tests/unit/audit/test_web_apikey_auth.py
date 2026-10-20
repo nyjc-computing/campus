@@ -29,6 +29,7 @@ Issue: #915
 
 import re
 import unittest
+from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
@@ -98,6 +99,10 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
             "AUDIT_OAUTH_CLIENT_ID": "auditweb.test",
             "AUDIT_OAUTH_CLIENT_SECRET": "auditweb-secret",
             "AUDIT_ADMINS": "",
+            # These tests do not exercise the audit trail; keep the
+            # events off so their spans stay out of the shared traces
+            # table (the event tests below opt in, and clean up).
+            "AUDIT_EVENTS_ENABLED": "0",
         })
         env_patch.start()
         self.addCleanup(env_patch.stop)
@@ -132,6 +137,18 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
                 "api_key": plaintext,
             },
         )
+
+    def _events(self, event_type):
+        """Audit events of one type, newest first."""
+        from tests.fixtures.audit_events import get_audit_spans
+
+        return get_audit_spans(event_type)
+
+    def _event_count(self):
+        """Total audit events recorded so far."""
+        from tests.fixtures.audit_events import get_audit_spans
+
+        return len(get_audit_spans())
 
     def test_route_404_outside_development(self):
         """GET and POST /audit/login/key only exist in development."""
@@ -464,6 +481,179 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn("audit_apikey", sess)
             self.assertIn("audit_oauth", sess)
+
+
+class TestAuditWebAPIKeySignInEvents(unittest.TestCase):
+    """Verify the audit trail of the web UI API-key sign-in (#917).
+
+    The sign-in authenticates with a real credential, so it belongs in
+    the same trail the versioned API writes to: a success emits
+    audit.apikeys.auth.success, a failure audit.apikeys.auth.failed
+    with a reason. The plaintext key must never appear in an event.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # Lazy import: campus.audit pulls in storage modules at import
+        # time. See AGENTS.md - Storage Initialization Order.
+        from campus.audit.resources.apikeys import APIKeysResource
+        from campus.audit.resources.traces import TracesResource
+
+        APIKeysResource.init_storage()
+        TracesResource.init_storage()
+        cls.app = create_gated_app()
+
+    def setUp(self):
+        import os
+
+        env_patch = mock.patch.dict(os.environ, {
+            "ENV": "development",
+            "PUBLIC_URL": "https://campus.test",
+            "AUDIT_OAUTH_CLIENT_ID": "auditweb.test",
+            "AUDIT_OAUTH_CLIENT_SECRET": "auditweb-secret",
+            "AUDIT_ADMINS": "",
+            "AUDIT_EVENTS_ENABLED": "1",
+        })
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        self.client = self.app.test_client()
+        self._key_seq = 0
+        # The events land in the shared traces table, which other unit
+        # tests expect to be empty — remember what was there so
+        # tearDown can remove only what this test added.
+        self._spans_before = {s["id"] for s in self._all_spans()}
+
+    def tearDown(self):
+        from campus.audit.resources.traces import traces_storage
+        from campus.storage import errors as storage_errors
+
+        for span in self._all_spans():
+            if span["id"] in self._spans_before:
+                continue
+            with suppress(storage_errors.NotFoundError):
+                traces_storage.delete_by_id(span["id"])
+
+    def _all_spans(self):
+        """Every span in the traces table."""
+        from campus.audit.resources.traces import traces_storage
+
+        return traces_storage.get_matching({}, limit=500)
+
+    def _mint_key(self, scopes="traces:read"):
+        from campus.audit.resources import apikeys
+
+        self._key_seq += 1
+        return apikeys.new(
+            name=f"event key {self._key_seq}",
+            owner_id=OWNER,
+            scopes=scopes,
+        )
+
+    def _csrf_from(self, response) -> str:
+        match = CSRF_INPUT_RE.search(response.get_data(as_text=True))
+        assert match, "rendered form carries no csrf_token input"
+        return match.group(1)
+
+    def _sign_in(self, plaintext):
+        form = self.client.get("/audit/login/key")
+        return self.client.post(
+            "/audit/login/key",
+            data={
+                "csrf_token": self._csrf_from(form),
+                "api_key": plaintext,
+            },
+        )
+
+    def _events(self, event_type):
+        from tests.fixtures.audit_events import get_audit_spans
+
+        return get_audit_spans(event_type)
+
+    def _data(self, event):
+        """The event's tags plus its api_key_id."""
+        from tests.fixtures.audit_events import parse_audit_span_data
+
+        return parse_audit_span_data(event)
+
+    def _newest(self, event_type):
+        events = self._events(event_type)
+        self.assertTrue(events, f"no {event_type} event was emitted")
+        return events[0]
+
+    def test_successful_sign_in_emits_auth_success_event(self):
+        """A successful sign-in emits audit.apikeys.auth.success with
+        the key id and the owner label."""
+        import json
+
+        record, plaintext = self._mint_key()
+
+        response = self._sign_in(plaintext)
+        self.assertEqual(response.status_code, 302)
+
+        event = self._newest("audit.apikeys.auth.success")
+        data = self._data(event)
+        self.assertEqual(data["event_type"], "audit.apikeys.auth.success")
+        self.assertEqual(data["api_key_id"], record.id)
+        self.assertEqual(data["actor_class"], "api_key")
+        self.assertEqual(data["owner_id"], OWNER)
+        self.assertEqual(data["surface"], "audit-web-signin")
+        # The plaintext key is submitted in the form body, which the
+        # event's request context reads as JSON (empty for a form
+        # POST) — so it must not be anywhere in the event.
+        self.assertNotIn(plaintext, json.dumps(event, default=str))
+
+    def test_invalid_key_emits_auth_failed_event(self):
+        """A failed sign-in emits audit.apikeys.auth.failed with a
+        reason, and the attempted key never reaches the event."""
+        import json
+
+        attempted = "audit_v1_" + "x" * 22
+        response = self._sign_in(attempted)
+        self.assertEqual(response.status_code, 401)
+
+        event = self._newest("audit.apikeys.auth.failed")
+        data = self._data(event)
+        self.assertEqual(data["event_type"], "audit.apikeys.auth.failed")
+        self.assertEqual(data["reason"], "invalid_key")
+        self.assertNotIn(attempted, json.dumps(event, default=str))
+
+    def test_scope_refusal_emits_auth_failed_event(self):
+        """A key that holds neither capability is refused, and the
+        failure event names the key it belongs to."""
+        record, plaintext = self._mint_key(scopes="apikeys:read")
+
+        response = self._sign_in(plaintext)
+        self.assertEqual(response.status_code, 403)
+
+        event = self._newest("audit.apikeys.auth.failed")
+        data = self._data(event)
+        self.assertEqual(data["reason"], "insufficient_scope")
+        self.assertEqual(data["api_key_id"], record.id)
+
+    def test_missing_csrf_emits_auth_failed_event(self):
+        """A POST without a valid CSRF token is refused, and recorded."""
+        response = self.client.post(
+            "/audit/login/key", data={"api_key": "audit_v1_" + "y" * 22}
+        )
+        self.assertEqual(response.status_code, 400)
+
+        event = self._newest("audit.apikeys.auth.failed")
+        data = self._data(event)
+        self.assertEqual(data["reason"], "csrf_failed")
+
+    def test_no_event_when_audit_events_disabled(self):
+        """Audit events are opt-in: with AUDIT_EVENTS_ENABLED=0 the
+        sign-in leaves no trace, like every other audit event."""
+        import os
+
+        record, plaintext = self._mint_key()
+        with mock.patch.dict(os.environ, {"AUDIT_EVENTS_ENABLED": "0"}):
+            before = len(self._events("audit.apikeys.auth.success"))
+            response = self._sign_in(plaintext)
+            after = len(self._events("audit.apikeys.auth.success"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(before, after)
 
 
 if __name__ == "__main__":
