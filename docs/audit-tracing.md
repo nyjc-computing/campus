@@ -93,8 +93,10 @@ different lifecycle, owned by `campus.audit.middleware.journeys`:
 - **Adopt:** each request picks up the journey from the
   `X-Journey-ID` header (SDK-forwarded child call, or an app minting
   client-side) or the `campus_action_journey` cookie (same-origin
-  XHRs/form posts/redirect GETs carry it automatically). Static
-  requests are skipped (#819).
+  XHRs/form posts/redirect GETs carry it automatically). A name may
+  ride along on a header-adopted journey via `X-Journey-Name` (#952);
+  cookie-adopted and minted journeys are unnamed. Static requests are
+  skipped (#819).
 - **Mint:** a page navigation (`Sec-Fetch-Mode: navigate` or
   `Accept: text/html`) with no active journey starts a new episode —
   the navigation is the user-initiated origin, no client code needed.
@@ -117,8 +119,10 @@ opt-in). Services whose browser surface is the login flow itself
 (campus.auth) or that serve no browser pages (campus.api) register
 with `mint_on_navigation=False`: adopt-only, so SDK-forwarded headers
 still join their spans to the caller's journey. The SDK
-(`campus_python.tracing`) forwards `X-Journey-ID` on outbound calls
-made inside a journeyed request.
+(`campus_python.tracing`) forwards `X-Journey-ID` — and the journey's
+`X-Journey-Name` label, when one is active (#952) — on outbound calls
+made inside a journeyed request. A decorated view's name wins over a
+forwarded header name.
 
 ## Authentication (`AUDIT_API_KEY`)
 

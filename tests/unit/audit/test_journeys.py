@@ -66,6 +66,100 @@ class TestAdoption(JourneyAppTestCase):
         self.assertIsNone(self._cookie_of(resp))
 
 
+class TestHeaderNameAdoption(JourneyAppTestCase):
+    """A human label rides along on header-adopted journeys (#952).
+
+    The name lands in g.journey_name, which the tracing middleware
+    stamps as tags.journey_name (TestSpanTags covers that half).
+    """
+
+    def test_name_adopted_with_header_journey(self):
+        resp = self.client.get(
+            "/probe",
+            headers={
+                "X-Journey-ID": "uid-journey-header01",
+                "X-Journey-Name": "campus.api.boot",
+            },
+        )
+        self.assertEqual(resp.json["journey_id"], "uid-journey-header01")
+        self.assertEqual(resp.json["journey_name"], "campus.api.boot")
+
+    def test_name_ignored_without_header_journey(self):
+        """Cookie-adopted and minted journeys stay unnamed: a name
+        header on a cookie request (or a plain request that would mint)
+        does not attach — the label must travel with its id."""
+        self._with_action_cookie("uid-journey-cookie1")
+        cookie_resp = self.client.get(
+            "/probe",
+            headers={
+                "Accept": "application/json",
+                "X-Journey-Name": "campus.api.boot",
+            },
+        )
+        self.assertEqual(cookie_resp.json["journey_id"], "uid-journey-cookie1")
+        self.assertIsNone(cookie_resp.json["journey_name"])
+
+    def test_name_alone_never_journeys(self):
+        resp = self.client.get(
+            "/probe",
+            headers={
+                "Accept": "application/json",
+                "X-Journey-Name": "campus.api.boot",
+            },
+        )
+        self.assertIsNone(resp.json["journey_id"])
+        self.assertIsNone(resp.json["journey_name"])
+
+    def test_decorated_view_name_wins_over_header(self):
+        """The @journey decorator (view time) overwrites the header
+        name adopted at before_request time."""
+        app = flask.Flask(__name__)
+        init_journeys(app)
+
+        @app.get("/named")
+        @journey("campus.submissions.submit")
+        def named():
+            return {"journey_name": flask.g.journey_name}
+
+        resp = app.test_client().get(
+            "/named",
+            headers={
+                "X-Journey-ID": "uid-journey-header01",
+                "X-Journey-Name": "campus.api.boot",
+            },
+        )
+        self.assertEqual(resp.json["journey_name"], "campus.submissions.submit")
+
+    def test_long_name_capped(self):
+        resp = self.client.get(
+            "/probe",
+            headers={
+                "X-Journey-ID": "uid-journey-header01",
+                "X-Journey-Name": "x" * 500,
+            },
+        )
+        self.assertEqual(len(resp.json["journey_name"]), 120)
+
+    def test_whitespace_and_blank_names_dropped(self):
+        blank = self.client.get(
+            "/probe",
+            headers={
+                "X-Journey-ID": "uid-journey-header01",
+                "X-Journey-Name": "   ",
+            },
+        )
+        self.assertIsNone(blank.json["journey_name"])
+
+        padded = self.client.get(
+            "/probe",
+            headers={
+                "X-Journey-ID": "uid-journey-header01",
+                "X-Journey-Name": "  campus.api.boot  ",
+            },
+        )
+        self.assertEqual(padded.json["journey_name"], "campus.api.boot")
+
+
 class TestMinting(JourneyAppTestCase):
     """Navigations with no active journey mint a fresh episode."""
 
