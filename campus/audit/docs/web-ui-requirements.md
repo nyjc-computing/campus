@@ -1,7 +1,7 @@
 # Audit Web UI Requirements
 
-**Document Version:** 1.4
-**Date:** 2026-04-16 (updated 2026-10-21: header nav gains the Keys link for key-managing sessions with current-page marking, and the waterfall gains span-group collapse affordances — see §4.3 and §5.4)
+**Document Version:** 1.5
+**Date:** 2026-04-16 (updated 2026-10-21: header nav gains the Keys link for key-managing sessions with current-page marking, and the waterfall gains span-group collapse affordances — see §4.3 and §5.4; the header is now docked and dense tables scroll horizontally instead of crushing their columns — see §2.2 and §3.3)
 **Parent Issue:** #429
 **Related:** [campus-trace-api-prd-v3.md](./campus-trace-api-prd-v3.md)
 
@@ -51,6 +51,9 @@ The Audit Web UI is a browser-based dashboard for exploring API traces captured 
   - Logo/title: "Campus Audit"
   - Links: "Traces", "Metrics" (disabled/coming soon)
   - User profile/logout (when authenticated)
+  - Docked: the header sticks to the top of the viewport, so
+    navigation and logout stay reachable while scrolling long trace
+    and key lists (it layers under the span drawer)
 
 ---
 
@@ -110,6 +113,9 @@ reach, not easier.
 - Clicking Trace ID navigates to trace detail page
 - Row hover effect
 - Sortable by timestamp (newest first by default)
+- At narrow widths the table keeps a width floor and the list scrolls
+  horizontally; cells stay on one line instead of re-wrapping into
+  cramped slivers (same rule for the keys table, §5.4)
 
 ### 3.4 Pagination
 
@@ -403,6 +409,11 @@ POSTs are CSRF-protected with a single-use token, in the session.
 The header navigation offers a **Keys** link only to sessions holding
 this capability (marked as the current page while on it); trace-viewer
 sessions and anonymous visitors never see it.
+
+**The keys table scrolls, not crushes:** its columns size to their
+content — the Actions column keeps room for its scopes form and
+buttons — and below its width floor the list scrolls horizontally,
+like the trace table (§3.3).
 
 **It offers named roles (#918).** The mint form offers the role
 catalogue (`traces-viewer`, `traces-searcher`, `traces-producer`,
