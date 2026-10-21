@@ -1,7 +1,7 @@
 # Audit Web UI Requirements
 
-**Document Version:** 1.3
-**Date:** 2026-04-16 (updated 2026-10-20: superadmin class and the two web-UI capabilities — see §5.2; API-key sign-in — see §5.3)
+**Document Version:** 1.4
+**Date:** 2026-04-16 (updated 2026-10-21: header nav gains the Keys link for key-managing sessions with current-page marking, and the waterfall gains span-group collapse affordances — see §4.3 and §5.4)
 **Parent Issue:** #429
 **Related:** [campus-trace-api-prd-v3.md](./campus-trace-api-prd-v3.md)
 
@@ -168,6 +168,8 @@ GET /api/v1/students      [=======================] 200
 - **Timeline ruler** at top with millisecond marks
 - **Span bars** positioned by offset (left) and duration (width)
 - **Indentation** based on depth (nested children)
+- **Striping per top-level request** (alternate shading), so a trace
+  with many requests reads as grouped blocks rather than one flat list
 - **Color coding** by status:
   - 2xx: Green (#10b981)
   - 3xx: Yellow (#f59e0b)
@@ -178,6 +180,10 @@ GET /api/v1/students      [=======================] 200
 **Interactions:**
 - Hover tooltip: shows full span details (offset, duration, all headers summary)
 - Click span bar: opens span details drawer (see §4.4)
+- Caret on a span with children: collapse/expand its subtree — the row
+  shows `+N` nested spans, and the caret's state is exposed to screen
+  readers via aria-expanded
+- Collapse all / Expand all controls beside the section title
 - Zoom controls (optional for future): zoom in/out of timeline
 
 **Responsive Behavior:**
@@ -394,6 +400,9 @@ API/CLI privilege and does not admit a browser session on its own.
 `POST /audit/keys/new`, `POST /audit/keys/<id>/scopes`,
 `POST /audit/keys/<id>/rotate` and `POST /audit/keys/<id>/revoke`. The
 POSTs are CSRF-protected with a single-use token, in the session.
+The header navigation offers a **Keys** link only to sessions holding
+this capability (marked as the current page while on it); trace-viewer
+sessions and anonymous visitors never see it.
 
 **It offers named roles (#918).** The mint form offers the role
 catalogue (`traces-viewer`, `traces-searcher`, `traces-producer`,
