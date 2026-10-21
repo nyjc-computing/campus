@@ -1018,3 +1018,52 @@ a.landing-card:hover {
         grid-template-columns: minmax(140px, 45%) 1fr 3.6rem 3.2rem 2.6rem;
     }
 }
+
+/* Header nav: the current page is marked (UI consistency sweep) */
+.nav-list a.active {
+    color: var(--audit-accent);
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+/* Waterfall grouping affordances: collapse controls, per-request striping */
+.section-title-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.wf-controls button {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.5rem;
+}
+
+.wf-caret {
+    border: none;
+    background: transparent;
+    color: var(--audit-muted);
+    cursor: pointer;
+    padding: 0 0.25rem 0 0;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.wf-caret:hover {
+    color: var(--audit-accent);
+}
+
+.wf-caret-spacer {
+    display: inline-block;
+    width: 1.1em;
+}
+
+.wf-child-count {
+    color: var(--audit-muted);
+    font-size: 0.75rem;
+    margin-left: 0.35rem;
+}
+
+.wf-row.group-alt {
+    background: rgba(127, 127, 127, 0.06);
+}

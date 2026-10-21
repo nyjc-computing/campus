@@ -51,7 +51,13 @@
     </section>
 
     <section aria-label="Span waterfall">
-        <h3 class="section-title">Waterfall</h3>
+        <div class="section-title-row">
+            <h3 class="section-title">Waterfall</h3>
+            <span class="wf-controls">
+                <button type="button" id="wf-collapse-all" title="Collapse every span group to its top request">Collapse all</button>
+                <button type="button" id="wf-expand-all">Expand all</button>
+            </span>
+        </div>
         <div class="waterfall-wrapper">
             <div id="waterfall-ruler" class="waterfall-ruler"></div>
             <div id="waterfall-rows"></div>

@@ -20,6 +20,11 @@
     let traceId = null;
     let spans = [];       // flattened, waterfall-ordered
     const spanCache = new Map();
+    // Waterfall grouping state: collapsed holds span ids whose subtree
+    // is hidden; rowById maps span id to its rendered row.
+    const collapsed = new Set();
+    let rowById = new Map();
+    let groupSeq = 0;
 
     // ---------- rendering helpers ----------
 
@@ -96,12 +101,15 @@
     // ---------- waterfall ----------
 
     /**
-     * Flatten the trace tree depth-first, computing each span's absolute
-     * offset from the root's start. Prefers recorded start timestamps;
-     * falls back to the model's parent-relative offsets when timestamps
-     * are missing or unparseable.
+     * Flatten the trace tree depth-first into `spans`, computing each
+     * span's absolute offset from the root's start. Prefers recorded
+     * start timestamps; falls back to the model's parent-relative
+     * offsets when timestamps are missing or unparseable. Each entry
+     * also carries its ancestor chain, a stripe group (spans under the
+     * same top-level request share one), and its subtree size — the
+     * state the collapse affordances need.
      */
-    function flattenTree(node, parentAbsMs, parentRelOffset) {
+    function buildEntries(node, parentAbsMs, parentRelOffset, ancestors, groupId) {
         const relOffset = parentRelOffset + Number(node.offset || 0);
         const startMs = toEpochMs(node.started_at);
         const absOffsetMs = startMs !== null && parentAbsMs !== null
@@ -116,17 +124,54 @@
             offsetMs: absOffsetMs,
             depth: node.depth || 0,
             error: node.error_message,
+            ancestors: ancestors,
+            groupId: groupId,
+            childCount: 0,
         };
-        const out = [entry];
+        spans.push(entry);
+        const childAncestors = ancestors.concat(node.span_id);
+        let subtree = 0;
         for (const child of node.children || []) {
-            out.push(...flattenTree(child, parentAbsMs, relOffset));
+            // Each direct child of the root starts a new stripe, so the
+            // waterfall reads as grouped requests rather than one flat
+            // list; deeper spans inherit their request's stripe.
+            const childGroup = entry.depth === 0 ? ++groupSeq : groupId;
+            subtree += buildEntries(child, parentAbsMs, relOffset, childAncestors, childGroup);
         }
-        return out;
+        entry.childCount = subtree;
+        return subtree + 1;
+    }
+
+    function applyVisibility() {
+        for (const entry of spans) {
+            const row = rowById.get(entry.spanId);
+            if (!row) {
+                continue;
+            }
+            row.hidden = entry.ancestors.some((id) => collapsed.has(id));
+            const caret = row.querySelector('.wf-caret');
+            if (caret) {
+                const isCollapsed = collapsed.has(entry.spanId);
+                caret.setAttribute('aria-expanded', String(!isCollapsed));
+                caret.textContent = isCollapsed ? '\u25B8' : '\u25BE';
+            }
+        }
+    }
+
+    function toggleSubtree(spanId) {
+        if (collapsed.has(spanId)) {
+            collapsed.delete(spanId);
+        } else {
+            collapsed.add(spanId);
+        }
+        applyVisibility();
     }
 
     function renderWaterfall(root) {
         const rootStartMs = toEpochMs(root.started_at);
-        spans = flattenTree(root, rootStartMs, 0);
+        spans = [];
+        groupSeq = 0;
+        buildEntries(root, rootStartMs, 0, [], 0);
 
         const totalMs = Math.max(
             1,
@@ -141,13 +186,20 @@
             const barStyle = `left: ${left.toFixed(3)}%; width: ${width.toFixed(3)}%;`;
             const status = span.statusCode === null || span.statusCode === undefined
                 ? '—' : String(span.statusCode);
+            const stripe = span.groupId % 2 === 1 ? ' group-alt' : '';
+            // The caret toggles the subtree; leaves get a spacer so the
+            // method labels stay aligned down the rows.
+            const caret = span.childCount > 0
+                ? `<button type="button" class="wf-caret" aria-expanded="true" data-span-id="${escapeHtml(span.spanId)}" title="Toggle ${span.childCount} nested span(s)">&#9662;</button>`
+                : '<span class="wf-caret-spacer"></span>';
+            const count = span.childCount > 0
+                ? `<span class="wf-child-count" title="Nested spans">+${span.childCount}</span>`
+                : '';
             return `
-                <div class="wf-row" role="button" tabindex="0" data-span-id="${escapeHtml(span.spanId)}"
+                <div class="wf-row${stripe}" role="button" tabindex="0" data-span-id="${escapeHtml(span.spanId)}"
                      title="${escapeHtml(formatDuration(span.durationMs))} at +${escapeHtml(formatDuration(span.offsetMs))}">
-                    <div class="wf-label" style="${indent}">
-                        <span class="wf-method">${escapeHtml(span.method)}</span>
-                        <span class="wf-path wrap">${escapeHtml(span.path)}</span>
-                    </div>
+                    <div class="wf-label" style="${indent}">${caret}<span class="wf-method">${escapeHtml(span.method)}</span>
+                        <span class="wf-path wrap">${escapeHtml(span.path)}</span>${count}</div>
                     <div class="wf-track">
                         <div class="wf-bar ${statusBadgeClass(span.statusCode)}" style="${barStyle}"></div>
                     </div>
@@ -157,7 +209,9 @@
                 </div>`;
         }).join('');
 
+        rowById = new Map();
         for (const row of rowsRoot.querySelectorAll('.wf-row')) {
+            rowById.set(row.dataset.spanId, row);
             row.addEventListener('click', () => openDrawer(row.dataset.spanId));
             row.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -166,6 +220,14 @@
                 }
             });
         }
+        for (const caret of rowsRoot.querySelectorAll('.wf-caret')) {
+            caret.addEventListener('click', (event) => {
+                event.stopPropagation();
+                toggleSubtree(caret.dataset.spanId);
+            });
+        }
+        collapsed.clear();
+        applyVisibility();
     }
 
     function renderRuler(totalMs) {
@@ -313,6 +375,20 @@
         if (event.key === 'Escape' && !drawer.hidden) {
             hideDrawer();
         }
+    });
+
+    document.getElementById('wf-collapse-all').addEventListener('click', () => {
+        collapsed.clear();
+        for (const entry of spans) {
+            if (entry.childCount > 0) {
+                collapsed.add(entry.spanId);
+            }
+        }
+        applyVisibility();
+    });
+    document.getElementById('wf-expand-all').addEventListener('click', () => {
+        collapsed.clear();
+        applyVisibility();
     });
 
     loadTrace();

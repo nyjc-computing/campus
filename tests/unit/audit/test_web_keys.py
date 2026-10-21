@@ -202,6 +202,42 @@ class TestAuditWebKeyManagement(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Mint a key", response.data)
 
+    # The header nav ----------------------------------------------------
+
+    def test_header_nav_shows_keys_link_to_key_managers(self):
+        """The shared header offers the Keys link to sessions that may
+        manage keys, and marks it as the current page on /audit/keys."""
+        self._sign_in_with_key()
+
+        response = self.client.get("/audit/keys")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'<a href="/audit/keys" class="active"', response.data)
+        self.assertIn(b'aria-current="page"', response.data)
+
+    def test_header_nav_hides_keys_link_from_trace_viewers(self):
+        """A traces:read session never sees the Keys link — including
+        on the 403 page it gets when it asks for the page directly."""
+        self._sign_in_with_key(scopes="traces:read")
+
+        denied = self.client.get("/audit/keys")
+        self.assertEqual(denied.status_code, 403)
+        self.assertNotIn(b'href="/audit/keys"', denied.data)
+        traces = self.client.get("/audit/traces")
+        self.assertEqual(traces.status_code, 200)
+        self.assertNotIn(b'href="/audit/keys"', traces.data)
+
+    def test_header_nav_shows_keys_link_to_superadmins(self):
+        """A campus.audit superadmin sees the Keys link too."""
+        self._sign_in_as_superadmin()
+        with mock.patch.dict(
+                os.environ, {"AUDIT_ADMINS": "teacher@nyjc.edu.sg"}
+        ):
+            response = self.client.get("/audit/keys")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'href="/audit/keys"', response.data)
+
     def test_superadmin_is_admitted(self):
         """A campus.audit superadmin reaches the page."""
         self._sign_in_as_superadmin()
