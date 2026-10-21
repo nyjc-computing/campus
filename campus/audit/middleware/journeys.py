@@ -14,7 +14,9 @@ Lifecycle:
 - **Adopt** an inbound journey from the X-Journey-ID header (an
   SDK-forwarded child call, or an app that mints client-side) or the
   campus_action_journey cookie (same-origin XHRs/form posts/redirect
-  GETs carry it automatically).
+  GETs carry it automatically). A header-adopted journey may carry a
+  human label in X-Journey-Name (#952), stashed for the span's
+  tags.journey_name; cookie-adopted and minted journeys are unnamed.
 - **Mint** a new journey on page navigations (Sec-Fetch-Mode: navigate
   or Accept: text/html) with no active journey — the navigation IS the
   user-initiated origin. Optional per registration: services with no
@@ -35,7 +37,12 @@ Trust stance matches X-Request-ID: journey ids are observability
 correlation, not a security boundary — clients may forge them.
 """
 
-__all__ = ["init_journeys", "current_journey", "ACTION_JOURNEY_HEADER"]
+__all__ = [
+    "init_journeys",
+    "current_journey",
+    "ACTION_JOURNEY_HEADER",
+    "ACTION_JOURNEY_NAME_HEADER",
+]
 
 import typing
 
@@ -50,6 +57,24 @@ from . import tracing
 # while handling a journeyed request, so child services' spans join the
 # same journey. Keep the two in lockstep.
 ACTION_JOURNEY_HEADER = "X-Journey-ID"
+
+# Mirror: campus_python.tracing forwards the active journey's human
+# label alongside the id (#952), so a child service's spans tag the
+# same journey_name and journey cards show the label end to end.
+# Keep the two in lockstep.
+ACTION_JOURNEY_NAME_HEADER = "X-Journey-Name"
+
+# Cap for header-supplied journey names: they are forgeable
+# observability labels (same trust stance as the id), but an unbounded
+# header would bloat every span tag stored for the journey.
+_JOURNEY_NAME_MAX_LEN = 120
+
+
+def _clean_journey_name(raw: typing.Optional[str]) -> typing.Optional[str]:
+    """Strip and length-cap a header-supplied journey name."""
+    if not raw:
+        return None
+    return raw.strip()[:_JOURNEY_NAME_MAX_LEN] or None
 
 
 def _is_navigation() -> bool:
@@ -70,19 +95,32 @@ def _adopt_or_mint(*, mint: bool) -> None:
     Precedence: explicit header (SDK-forwarded or app-minted) > action
     cookie (same-origin browser continuation) > mint on navigation.
     Static requests are skipped outright (#819): they cannot gain child
-    spans and never begin an episode.
+    spans and never begin an episode. A name rides along only when the
+    journey was header-adopted (#952); it lands in the free
+    g.journey_name slot — the @journey decorator runs later, at view
+    time, and overwrites either way, so a decorated view's name wins.
     """
     if tracing.is_static_request():
         return
 
+    header_journey = flask.request.headers.get(ACTION_JOURNEY_HEADER)
     journey_id = (
-        flask.request.headers.get(ACTION_JOURNEY_HEADER)
+        header_journey
         or flask.request.cookies.get(campus.config.ACTION_JOURNEY_COOKIE)
+    )
+    journey_name = (
+        _clean_journey_name(
+            flask.request.headers.get(ACTION_JOURNEY_NAME_HEADER)
+        )
+        if header_journey
+        else None
     )
     if not journey_id and mint and _is_navigation():
         journey_id = uid.generate_category_uid("journey")
     if journey_id:
         flask.g.journey_id = journey_id
+    if journey_name and not getattr(flask.g, "journey_name", None):
+        flask.g.journey_name = journey_name
 
 
 def _refresh_cookie(response: flask.Response) -> flask.Response:
