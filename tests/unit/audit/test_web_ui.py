@@ -137,6 +137,9 @@ class TestAuditWebUI(unittest.TestCase):
         columns into slivers. The keys table sizes its columns by
         content — fixed layout ignored the Actions column's td
         min-width and squeezed it to an equal seventh of the table.
+        The waterfall's ruler and rows share a width floor for the
+        same reason (§4.3): without it a phone viewport collapses the
+        track column to ~0 and the nowrap ruler marks pile up.
         """
         css = self.client.get("/audit/static/css/main.css").data
         # Docked header, layered under the drawer and its backdrop
@@ -148,6 +151,9 @@ class TestAuditWebUI(unittest.TestCase):
         self.assertIn(b"min-width: 52rem", css)
         # Keys columns size to content so Actions keeps its room
         self.assertIn(b"table-layout: auto", css)
+        # Waterfall ruler and rows share one floor so their percentage
+        # columns resolve to the same width and marks stay over ticks
+        self.assertEqual(css.count(b"min-width: 44rem"), 2)
 
     def test_trace_js_targets_ui_data_endpoint(self):
         """trace.js must fetch the UI data endpoints, not the auth'd API."""
