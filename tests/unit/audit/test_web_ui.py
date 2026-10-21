@@ -127,6 +127,28 @@ class TestAuditWebUI(unittest.TestCase):
         self.assertIn(b"/audit/traces/${encodeURIComponent(summary.trace_id)}", main_js)
         self.assertIn(b"traces.map(renderTraceRow)", traces_js)
 
+    def test_header_docks_and_tables_scroll_not_crush(self):
+        """The header nav is docked; narrow viewports scroll tables.
+
+        docs/web-ui-requirements.md §2.2/§3.3: the header sticks to the
+        top of the viewport so navigation stays reachable while
+        scrolling long lists, and below the tables' width floors the
+        .table-wrapper scrolls horizontally instead of crushing the
+        columns into slivers. The keys table sizes its columns by
+        content — fixed layout ignored the Actions column's td
+        min-width and squeezed it to an equal seventh of the table.
+        """
+        css = self.client.get("/audit/static/css/main.css").data
+        # Docked header, layered under the drawer and its backdrop
+        # (z-index 50/40 in this stylesheet)
+        self.assertIn(b"position: sticky", css)
+        self.assertIn(b"z-index: 30", css)
+        # Width floors make the wrapper's overflow-x an actual scrollbar
+        self.assertIn(b"min-width: 56rem", css)
+        self.assertIn(b"min-width: 52rem", css)
+        # Keys columns size to content so Actions keeps its room
+        self.assertIn(b"table-layout: auto", css)
+
     def test_trace_js_targets_ui_data_endpoint(self):
         """trace.js must fetch the UI data endpoints, not the auth'd API."""
         response = self.client.get("/audit/static/js/trace.js")

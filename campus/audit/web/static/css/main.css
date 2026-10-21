@@ -36,6 +36,12 @@ body {
 .audit-header {
     background: var(--audit-surface);
     border-bottom: 1px solid var(--audit-border);
+    /* Docked: the nav stays reachable while scrolling long trace and
+       key lists. Layered under the span drawer and its backdrop
+       (z-index 50/40) so the drawer still covers the whole page. */
+    position: sticky;
+    top: 0;
+    z-index: 30;
 }
 
 .header-container {
@@ -233,6 +239,10 @@ button[type="reset"] {
     /* Fixed layout + the colgroup shares below keep PATH — the most
        important column — from being starved by long trace/journey ids. */
     table-layout: fixed;
+    /* Width floor for the dense 9-column layout: narrower viewports
+       scroll the wrapper horizontally (§3.3) instead of crushing the
+       fixed shares into unreadable slivers. */
+    min-width: 56rem;
     border-collapse: collapse;
     font-size: 0.82rem;
 }
@@ -268,9 +278,7 @@ button[type="reset"] {
     word-break: break-all;
 }
 
-/* Trace IDs display truncated (#823); keep the label on one line.
-   Higher specificity than the small-screen white-space override at
-   the bottom of this file. */
+/* Trace IDs display truncated (#823); keep the label on one line. */
 .trace-table td.trace-id {
     white-space: nowrap;
 }
@@ -914,6 +922,13 @@ a.landing-card:hover {
 
 .keys-table {
     width: 100%;
+    /* Auto layout: columns size to their content, so the Actions
+       column's min-width below is honored — fixed layout ignores td
+       min-width and crushed Actions to a seventh of the table. Below
+       the floor the wrapper scrolls horizontally like the trace
+       table. */
+    table-layout: auto;
+    min-width: 52rem;
 }
 
 .keys-table td.key-actions {
@@ -1004,10 +1019,8 @@ a.landing-card:hover {
         width: 100%;
     }
 
-    .trace-table th,
-    .trace-table td {
-        white-space: normal;
-    }
+    /* No cell-wrap override here: below the tables' width floors the
+       wrappers scroll horizontally, so rows stay on one line. */
 
     .span-drawer {
         width: 100vw;
