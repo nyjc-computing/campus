@@ -55,6 +55,18 @@ def create_app(mode: str | None = None) -> flask.Flask:
         )
         mode = 'campus.' + mode
 
+    # Name the boot journey (#114): the worker's startup SDK calls
+    # (boot-time vault reads) join one journey per process boot, and
+    # the name is what journey cards render — "campus.auth.boot"
+    # rather than a raw uid. Before the module import: boot-time vault
+    # reads can happen at import time. Fail-open: boot must not depend
+    # on observability.
+    try:
+        from campus_python import tracing
+        tracing.set_process_journey(name=f"{mode}.boot")
+    except Exception:  # noqa: BLE001 - fail-open: boot must not depend on observability
+        logger.debug("boot journey naming unavailable", exc_info=True)
+
     try:
         module = importlib.import_module(mode)
     except ModuleNotFoundError as e:
