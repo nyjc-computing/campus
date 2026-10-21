@@ -483,6 +483,13 @@ button[type="reset"] {
 .waterfall-ruler {
     display: grid;
     grid-template-columns: minmax(180px, 30%) 1fr 4.5rem 4rem 3.5rem;
+    /* Width floor shared with .wf-row (identical template, so their
+       percentage columns resolve to the same width and the marks stay
+       over their ticks): without it a phone viewport collapses the
+       track column to ~0 and the absolutely-positioned nowrap ruler
+       marks pile on top of each other. Below the floor the wrapper
+       scrolls horizontally (§4.3). */
+    min-width: 44rem;
     font-size: 0.72rem;
     color: var(--audit-muted);
     border-bottom: 1px solid var(--audit-border);
@@ -503,6 +510,8 @@ button[type="reset"] {
 .wf-row {
     display: grid;
     grid-template-columns: minmax(180px, 30%) 1fr 4.5rem 4rem 3.5rem;
+    /* Same floor as .waterfall-ruler — see the note there. */
+    min-width: 44rem;
     align-items: center;
     gap: 0.5rem;
     padding: 0.18rem 0;
