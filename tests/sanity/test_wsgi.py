@@ -53,6 +53,27 @@ class TestWSGI(unittest.TestCase):
             if 'wsgi' in sys.modules:
                 del sys.modules['wsgi']
 
+    def test_boot_names_the_process_journey(self):
+        """create_app names the boot journey (#114): the worker's
+        startup SDK calls join one journey per boot, and journey cards
+        render "campus.<service>.boot" instead of a raw id."""
+        from campus_python import tracing
+
+        tracing._reset_process_journey()
+        self.addCleanup(tracing._reset_process_journey)
+
+        env.set('DEPLOY', 'campus.api')
+        from wsgi import app
+        self.assertIsNotNone(app, "App should not be None")
+
+        headers = tracing.propagation_headers()
+        self.assertEqual(
+            headers.get(tracing.JOURNEY_NAME_HEADER), "campus.api.boot"
+        )
+        self.assertTrue(
+            headers.get(tracing.JOURNEY_ID_HEADER, "").startswith("uid-journey-")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
