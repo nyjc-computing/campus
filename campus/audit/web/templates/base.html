@@ -16,7 +16,11 @@
             <h1 class="site-title"><a href="/audit/">Campus Audit</a></h1>
             <nav class="main-nav">
                 <ul class="nav-list">
-                    <li><a href="/audit/traces">Traces</a></li>
+                    {% set ep = request.endpoint or '' %}
+                    <li><a href="/audit/traces"{% if ep in ('audit_ui.traces', 'audit_ui.trace', 'audit_ui.journey') %} class="active" aria-current="page"{% endif %}>Traces</a></li>
+                    {% if can_manage_keys %}
+                    <li><a href="/audit/keys"{% if ep.startswith('audit_keys') %} class="active" aria-current="page"{% endif %}>Keys</a></li>
+                    {% endif %}
                     <li><span class="nav-disabled" title="Coming soon">Metrics</span></li>
                 </ul>
             </nav>

@@ -32,6 +32,8 @@ __all__ = ["create_blueprint", "create_root_blueprint"]
 import flask
 import werkzeug
 
+from . import auth
+
 
 def create_root_blueprint() -> flask.Blueprint:
     """Create a blueprint serving the service root path / (#842).
@@ -69,6 +71,15 @@ def create_blueprint() -> flask.Blueprint:
         template_folder='templates',
         static_folder='static'
     )
+
+    # The shared header (base.html) offers the Keys nav link only to
+    # sessions that may manage keys — the same capability the keys page
+    # gates on (campus.audit.web.keys). Registered app-wide so every
+    # template sees it; anonymous sessions hold nothing, so public
+    # pages simply don't show the link.
+    @bp.app_context_processor
+    def _nav_capabilities() -> dict[str, bool]:
+        return {"can_manage_keys": auth.can_manage_keys()}
 
     @bp.route('/')
     def index() -> str:
