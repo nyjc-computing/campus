@@ -7,12 +7,15 @@ This includes user credentials and tokens.
 Credentials link an issued token to a provider, client, and user.
 """
 
+import contextlib
+
 import campus.config as config
 import campus.model as model
 import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import secret, uid, utc_time
+from campus.storage.errors import NotFoundError as StorageNotFoundError
 
 token_storage = campus.storage.get_collection("tokens")
 cred_storage = campus.storage.get_table("credentials")
@@ -432,8 +435,12 @@ class UserCredentialsResource:
             )
             # The superseded token record must not linger: its refresh
             # token would stay resolvable, making a rotated refresh
-            # token replayable (#678)
-            token_storage.delete_by_id(cred_record['token_id'])
+            # token replayable (#678). The record may legitimately be
+            # absent — restored/migrated stores can carry credential
+            # rows whose token documents were not restored with them
+            # (#960) — in which case the cleanup goal already holds.
+            with contextlib.suppress(StorageNotFoundError):
+                token_storage.delete_by_id(cred_record['token_id'])
         else:  # token_id unchanged, just load existing credentials
             credentials = model.UserCredentials.from_storage(
                 records[0]
