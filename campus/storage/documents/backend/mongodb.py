@@ -2,9 +2,15 @@
 
 This module provides the MongoDB backend for the Documents storage interface.
 
-Vault Integration:
-The MongoDB connection URI is retrieved from the vault secret 'MONGODB_URI' in the 'storage' 
-vault. The database name is retrieved from the vault secret 'MONGODB_NAME' in the same vault.
+Secret Resolution:
+MONGODB_URI and MONGODB_NAME are resolved via campus.common.env.getsecret(),
+which checks the process environment first and falls back to the
+deployment's registered getsecret provider (the service's own vault
+label — for campus.auth, `campus.auth`). Deployments running this backend
+should provide both as environment variables (campus.auth sets
+MONGODB_URI to the MongoDB service URL and MONGODB_NAME to the documents
+database name). Resolution is lazy at first use per process, so
+provisioning changes are only fully verified after a service restart.
 
 Implementation:
 Uses MongoDB's native document storage with transparent primary key mapping
