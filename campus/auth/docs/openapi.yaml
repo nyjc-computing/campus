@@ -266,6 +266,43 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /auth/v1/logins/{session_id}/token:
+    post:
+      tags: [Login Sessions]
+      summary: Re-acquire the login session user's campus bearer (A10, #963)
+      description: |
+        Session-bound token re-acquisition (invariant A10,
+        docs/auth-token-invariants.md): the session-owning confidential
+        client exchanges its client secret (Basic) AND the login-session
+        id for the user's campus bearer — with_user_session()'s lane
+        after #854 closed the credentials reads it previously relied on.
+
+        Issuance mirrors the code exchange: an unexpired grant token is
+        reused (A3), an expired one is rotated server-side with the
+        grant record's scopes (A2/A5 — never widened). A missing
+        credential record is 400 invalid_grant, never minted from
+        nothing (C5/A5 — revocation forces re-login).
+
+        The response omits `refresh_token`: campus refresh material
+        never leaves the auth service in this lane.
+
+        Denials: user bearers 403 (a user principal is never the
+        session's client, #854), the operator 403 (the credentials
+        management routes are its path), a non-owning client 403.
+      operationId: reacquireLoginSessionToken
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: |
+            The user's campus bearer (existing or freshly rotated).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginSessionTokenResponse'
+        default:
+          $ref: '#/components/responses/Error'
+
   /auth/v1/clients/:
     get:
       tags: [Clients]
@@ -2334,6 +2371,31 @@ components:
         scope:
           type: string
       description: Response shape of `POST /auth/v1/oauth/token` (RFC 6749 names), distinct from the campus token resource above.
+
+    LoginSessionTokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in, scope, user_id]
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Remaining lifetime in seconds of the (existing or freshly rotated) token.
+        scope:
+          type: string
+          description: RFC 6749 space-delimited granted scopes (the grant record's scopes, never widened).
+        user_id:
+          type: string
+          format: email
+          description: Echoed from the login session, like both existing token endpoints (#837).
+      description: |
+        Response shape of `POST /auth/v1/logins/{session_id}/token`
+        (#963/A10). Deliberately carries NO `refresh_token` — campus
+        refresh material never leaves the auth service in this lane;
+        expired tokens are rotated server-side on the next call.
 
     AuthorizationCodeGrant:
       type: object
