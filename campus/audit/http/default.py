@@ -1,4 +1,4 @@
-"""campus.common.http.default
+"""campus.audit.http.default
 
 Default implementation for JsonClient and JsonResponse, using `requests`.
 """

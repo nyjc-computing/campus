@@ -525,7 +525,7 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
             self.client.get("/audit/traces").status_code, 200
         )
 
-        from campus.common.http.interface import JsonResponse
+        from campus.audit.http.interface import JsonResponse
 
         class _Resp(JsonResponse):
             # Explicit JsonResponse subclass so FakeAuth satisfies

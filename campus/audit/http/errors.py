@@ -1,4 +1,4 @@
-"""campus.common.http.errors
+"""campus.audit.http.errors
 
 Common error types used across all campus HTTP client modules.
 """

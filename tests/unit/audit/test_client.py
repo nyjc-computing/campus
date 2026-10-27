@@ -44,7 +44,7 @@ class TestCreateHttpClientAuth(unittest.TestCase):
     def test_api_key_sends_explicit_bearer(self):
         """AUDIT_API_KEY produces a Bearer Authorization header."""
         from campus.audit.client import _create_http_client
-        from campus.common.http import DefaultClient
+        from campus.audit.http import DefaultClient
 
         _set_env(self, "AUDIT_API_KEY", "audit_v1_abcdefghijklmnopqrstuvwxyz")
         client = _create_http_client("https://audit.test")
@@ -75,7 +75,7 @@ class TestCreateHttpClientAuth(unittest.TestCase):
     def test_without_api_key_falls_back_to_ambient_basic(self):
         """Without AUDIT_API_KEY, ambient CLIENT_ID/CLIENT_SECRET apply."""
         from campus.audit.client import _create_http_client
-        from campus.common.http import DefaultClient
+        from campus.audit.http import DefaultClient
 
         _del_env(self, "AUDIT_API_KEY")
         _del_env(self, "ACCESS_TOKEN")

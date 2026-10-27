@@ -1,4 +1,4 @@
-"""campus.common.http.interface
+"""campus.audit.http.interface
 
 Interface descriptions for the Campus client interface.
 
@@ -18,7 +18,7 @@ __all__ = [
 from collections.abc import Mapping
 from typing import Any, Iterable, Protocol, Self, runtime_checkable
 
-from campus.common.http.errors import (
+from campus.audit.http.errors import (
     AccessDeniedError,
     AuthenticationError,
     ConflictError,

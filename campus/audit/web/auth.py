@@ -120,8 +120,8 @@ import werkzeug
 
 import campus.flask_campus as flask_campus
 import campus.model as model
+from campus.audit.http import DefaultClient, HttpClientError, JsonClient
 from campus.common import env
-from campus.common.http import DefaultClient, HttpClientError, JsonClient
 from campus.common.utils import secret, url
 
 from ..decorators import scope_matches

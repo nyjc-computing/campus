@@ -39,7 +39,7 @@ from urllib.parse import parse_qs, urlparse
 
 import flask
 
-from campus.common.http.interface import JsonResponse
+from campus.audit.http.interface import JsonResponse
 
 PUBLIC_URL = "https://campus.test"
 CLIENT_ID = "auditweb.test"

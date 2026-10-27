@@ -14,8 +14,8 @@ Example:
 
 __all__ = ("AuditClient",)
 
+from campus.audit.http.interface import JsonClient
 from campus.common import env
-from campus.common.http.interface import JsonClient
 from campus.common.utils import url
 
 from .v1 import AuditRoot
@@ -47,7 +47,7 @@ def _create_http_client(base_url: str) -> JsonClient:
         return client_class(base_url=base_url)
 
     # Priority 2: Default client with explicit audit API key
-    from campus.common.http import DefaultClient
+    from campus.audit.http import DefaultClient
     api_key = env.get("AUDIT_API_KEY")
     if api_key:
         return DefaultClient(base_url=base_url, auth=api_key)  # type: ignore[return-value]
@@ -79,7 +79,7 @@ class AuditClient:
     This client provides access to audit service endpoints for internal
     service-to-server communication (e.g., campus.auth → campus.audit).
 
-    The client uses campus.common.http.DefaultClient which handles:
+    The client uses campus.audit.http.DefaultClient which handles:
     - Bearer auth via the AUDIT_API_KEY environment variable (preferred;
       the audit service only accepts `audit_v1_` API keys) (#699)
     - Basic auth via CLIENT_ID/CLIENT_SECRET environment variables

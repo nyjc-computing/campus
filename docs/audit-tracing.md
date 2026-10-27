@@ -48,7 +48,7 @@ originating request, which is what the audit UI's waterfall draws:
   and calls from outside a request context (e.g. the ingestion executor
   thread) stay unparented. The mirrored copy in
   `campus.audit.middleware.tracing` remains for server-side sessions
-  built on `campus.common.http`; the two are idempotent across each
+  built on `campus.audit.http`; the two are idempotent across each
   other.
 - In tests, `tests.flask_test.TestCampusRequest` merges the same headers
   so the api→auth chain behaves as in production.
