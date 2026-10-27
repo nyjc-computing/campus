@@ -4,12 +4,13 @@ import unittest
 
 
 class TestCommonImportWeight(unittest.TestCase):
-    """Guard the lazy-import contract of the campus.common namespace (#967).
+    """Guard the lean-import contract of the campus.common namespace (#967).
 
-    Importing campus.common must not drag in requests (via the lazy http
-    submodule) or bcrypt (reachable only through http's import of
-    utils.secret). The assertions run in a subprocess because this test
-    process may legitimately have those modules loaded by other imports.
+    Importing campus.common must not drag in requests or bcrypt: after
+    the http client moved to campus.audit.http (#970), nothing in the
+    namespace's eager import chain pulls a third-party module any more.
+    Assertions run in a subprocess because this test process may
+    legitimately have those modules loaded by other imports.
     """
 
     def _modules_loaded_by(self, stmt: str) -> set[str]:
@@ -29,19 +30,25 @@ class TestCommonImportWeight(unittest.TestCase):
         self.assertNotIn("requests", loaded)
         self.assertNotIn("bcrypt", loaded)
 
-    def test_lazy_http_getattr(self):
-        """Test that `from campus.common import http` still resolves the module."""
-        code = (
-            "from campus.common import http;"
-            "import sys;"
-            "print(http.__name__, 'requests' in sys.modules)"
-        )
+    def test_common_http_is_gone(self):
+        """Test that campus.common no longer exposes an http module (#970).
+
+        Asserted via attribute access, not `import campus.common.http`:
+        an import succeeds as an empty namespace package whenever a
+        leftover campus/common/http directory exists on the path (e.g.
+        untracked __pycache__), which says nothing about the package.
+        """
+        code = "import campus.common, sys\n" \
+               "try:\n" \
+               "    campus.common.http\n" \
+               "except AttributeError:\n" \
+               "    print('gone')\n" \
+               "else:\n" \
+               "    print('present')"
         stdout = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
             check=True,
         ).stdout.strip()
-        module_name, requests_loaded = stdout.split()
-        self.assertEqual(module_name, "campus.common.http")
-        self.assertEqual(requests_loaded, "True")
+        self.assertEqual(stdout, "gone")

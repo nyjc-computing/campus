@@ -1,4 +1,4 @@
-"""campus.common.http
+"""campus.audit.http
 
 Abstractions for HTTP requests.
 

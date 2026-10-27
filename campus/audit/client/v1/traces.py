@@ -13,7 +13,7 @@ URL path mapping:
 import contextlib
 from typing import Any, Optional
 
-from campus.common.http.interface import JsonClient, JsonResponse
+from campus.audit.http.interface import JsonClient, JsonResponse
 
 from ..interface import SLASH, Resource, ResourceCollection, ResourceRoot
 

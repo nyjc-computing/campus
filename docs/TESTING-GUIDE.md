@@ -266,7 +266,7 @@ mgr.cleanup()
 ### Testing Service Code That Makes Its Own HTTP Calls (`json_client_class`)
 
 The transport patch above covers calls routed through `campus_python`.
-Service code that builds its own HTTP client on `campus.common.http`
+Service code that builds its own HTTP client on `campus.audit.http`
 (`DefaultClient`) does **not** go through that patch — instead, such
 clients expose a `json_client_class` **class attribute** that tests set
 to a test double. Established instances:

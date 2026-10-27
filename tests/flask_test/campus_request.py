@@ -203,6 +203,15 @@ class TestCampusRequest(JsonClient):
         # Return empty headers for unauthenticated requests
         return HttpHeader()
 
+    @property
+    def authorization(self) -> str | None:
+        """The current Authorization header value, or None when unset.
+
+        Mirrors CampusRequest.authorization (sdk #119): peek the header
+        that would be sent, without changing client state.
+        """
+        return self.headers.get("Authorization")
+
     def reset_authorization(self) -> None:
         """Reset authorization back to client credentials from environment.
 
