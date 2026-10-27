@@ -19,7 +19,7 @@ M = TypeVar("M")
 
 def models_from_payloads(
         model_cls: type[M],
-        payloads: list[dict | M],
+        payloads: list[dict] | list[M],
         field: str,
 ) -> list[M]:
     """Construct model instances from request payload dicts.
@@ -41,7 +41,7 @@ def models_from_payloads(
     """
     models: list[M] = []
     for i, payload in enumerate(payloads):
-        if isinstance(payload, model_cls):
+        if not isinstance(payload, dict):
             models.append(payload)
             continue
         try:
