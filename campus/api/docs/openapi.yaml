@@ -179,13 +179,94 @@ components:
         questions:
           type: array
           items:
-            type: object
-            description: Assignment questions
+            $ref: '#/components/schemas/Question'
         classroom_links:
           type: array
           items:
             type: object
             description: Links to Google Classroom
+
+    Question:
+      type: object
+      description: |
+        A question within an assignment. type selects an entry from the
+        question-type registry (campus.api.questionschemas) and data
+        carries that type's configuration, validated against the
+        registered question schema at write time (#533). Legacy records
+        without type read as free-response.
+      required:
+        - id
+        - prompt
+        - question
+        - type
+      properties:
+        id:
+          type: string
+          description: Hierarchical dot-notation id (q1, q1.a, q1.a.i)
+          example: q1.a
+        prompt:
+          type: string
+          description: Context or passage (may be empty)
+        question:
+          type: string
+          description: The question or task
+        type:
+          type: string
+          enum: [short-answer, free-response, multiple-choice]
+          description: Registered question type id
+          default: free-response
+        data:
+          type: object
+          nullable: true
+          description: |
+            Type-specific configuration. short-answer and free-response
+            take no configuration ({}/null). multiple-choice requires
+            options — an array (min 2) of {id, text} objects with
+            authoring-time stable ids — plus optional randomize (boolean
+            renderer hint; shuffle is render-time-only). Responses
+            reference options by id, so stored order has no answer
+            semantics.
+          example:
+            options:
+              - id: opt_k3xq9m2a
+                text: Binary search
+              - id: opt_p7vw1n4c
+                text: Linear search
+            randomize: false
+
+    Response:
+      type: object
+      description: |
+        A student's response to one question. response_data is the
+        canonical answer payload, shaped by the question's registered
+        type ({"text": ...} for text answers, {"choice": <option id>}
+        for multiple-choice). response_text is a transition mirror of
+        response_data["text"] kept for pre-registry readers (#533).
+      required:
+        - question_id
+        - question_type
+      properties:
+        question_id:
+          type: string
+          description: The answered question's id
+          example: q1.a
+        question_type:
+          type: string
+          enum: [short-answer, free-response, multiple-choice]
+          description: Cached from the answered question
+          default: free-response
+        response_data:
+          type: object
+          nullable: true
+          description: |
+            Canonical answer payload. short-answer: {"text"} with at
+            most 256 characters and no line breaks. free-response:
+            {"text"} plain text with line breaks preserved. multiple-
+            choice: {"choice"} naming one of the question's option ids.
+        response_text:
+          type: string
+          description: Legacy mirror of response_data["text"]; write either
+            shape and both are kept in sync
 
     Circle:
       type: object
@@ -264,8 +345,7 @@ components:
         responses:
           type: array
           items:
-            type: object
-            description: Student responses to questions
+            $ref: '#/components/schemas/Response'
         feedback:
           type: array
           items:
@@ -440,8 +520,10 @@ paths:
                 questions:
                   type: array
                   items:
-                    type: object
-                  description: Assignment questions
+                    $ref: '#/components/schemas/Question'
+                  description: Assignment questions (validated against the
+                    question-type registry; unknown types and invalid data
+                    answer 422)
                 classroom_links:
                   type: array
                   items:
@@ -513,8 +595,9 @@ paths:
                   type: array
                   nullable: true
                   items:
-                    type: object
-                  description: New questions
+                    $ref: '#/components/schemas/Question'
+                  description: New questions (validated against the
+                    question-type registry)
                 classroom_links:
                   type: array
                   nullable: true
@@ -936,7 +1019,10 @@ paths:
                 responses:
                   type: array
                   items:
-                    type: object
+                    $ref: '#/components/schemas/Response'
+                  description: Student responses (validated against the
+                    question-type registry; unknown types and invalid
+                    response data answer 422)
       responses:
         '201':
           description: Submission created successfully
@@ -1047,7 +1133,7 @@ paths:
                   type: array
                   nullable: true
                   items:
-                    type: object
+                    $ref: '#/components/schemas/Response'
                 feedback:
                   type: array
                   nullable: true
@@ -1108,12 +1194,25 @@ paths:
           application/json:
             schema:
               type: object
-              required: [question_id, response_text]
+              required: [question_id]
+              description: At least one of response_text or response_data
+                is required
               properties:
                 question_id:
                   type: string
                 response_text:
                   type: string
+                  description: Legacy text answer; required unless
+                    response_data is given
+                question_type:
+                  type: string
+                  enum: [short-answer, free-response, multiple-choice]
+                  description: Caller's view of the question type; the
+                    assignment's question governs when found
+                response_data:
+                  type: object
+                  description: Canonical answer payload, validated against
+                    the question's registered response schema
       responses:
         '200':
           description: Response added successfully

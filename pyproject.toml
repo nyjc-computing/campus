@@ -23,6 +23,7 @@ campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^5.0.0"
 flask = "^3.0.0"
+jsonschema = "^4.23.0"
 requests = "^2.32.4"
 psycopg2-binary = "^2.9.0"
 pymongo = {extras = ["srv"], version = "^4.13.2"}

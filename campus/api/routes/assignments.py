@@ -13,7 +13,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import payloads, resources
+from .. import payloads, questionschemas, resources
 
 bp = flask.Blueprint('assignments', __name__, url_prefix='/assignments')
 
@@ -74,6 +74,8 @@ def create_assignment(
         title: str (required)
         description: str (optional)
         questions: list[dict] (optional)
+            Each question dict carries type + type-specific data, validated
+            against the registry in campus.api.questionschemas (#533).
         classroom_links: list[dict] (optional)
 
     Responses:
@@ -91,7 +93,9 @@ def create_assignment(
     assignment = resources.assignment.new(
         title=title,
         description=description,
-        questions=questions or [],
+        questions=questionschemas.questions_from_payloads(
+            questions or [], "questions"
+        ),
         created_by=created_by,
         classroom_links=classroom_links or []
     )
@@ -145,9 +149,9 @@ def update_assignment(
     if description is not None:
         updates["description"] = description
     if questions is not None:
-        # Convert dict questions to Question models
-        updates["questions"] = payloads.models_from_payloads(
-            campus.model.Question, questions, "questions"
+        # Convert dict questions to validated Question models (#533)
+        updates["questions"] = questionschemas.questions_from_payloads(
+            questions, "questions"
         )
     if classroom_links is not None:
         # Convert dict links to ClassroomLink models

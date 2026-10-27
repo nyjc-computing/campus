@@ -35,10 +35,18 @@ class Question:
     Level 2: q1.a, q1.b, q1.c, ... (parts)
     Level 3: q1.a.i, q1.a.ii, q1.b.i, ... (subparts)
     Level 4+: q1.a.i.1, q1.a.i.2, ... (further nesting)
+
+    type is a question-type id registered in campus.api.questionschemas
+    and data holds that type's configuration (e.g. multiple-choice
+    options). The model treats both as opaque: validity is enforced at
+    the API payload boundary, not here — reads construct models on every
+    fetch and must stay cheap and dependency-free.
     """
     id: str  # e.g., "q1", "q1.a", "q1.a.i"
     prompt: str  # Context/passage (may be empty)
     question: str  # The actual question/task
+    type: str = "free-response"  # Registered question type id
+    data: dict | None = None  # Type-specific configuration (JSON)
 
     def __post_init__(self) -> None:
         """Validate question ID format."""
@@ -226,9 +234,31 @@ class Response:
     """A student's response to a single question.
 
     References Assignment.question.id via question_id.
+
+    response_data is the canonical answer payload, shaped by the
+    question's registered type ({"text": ...} for the text types,
+    {"choice": <option id>} for multiple-choice); question_type caches
+    the answered question's type so readers need no assignment lookup.
+
+    response_text is a TRANSITION MIRROR (#533), kept so pre-registry
+    payloads and readers keep working until all consumers write
+    response_data natively: __post_init__ projects it from
+    response_data["text"] when response_data is present, and synthesizes
+    response_data from it otherwise. Remove the mirror once campus-
+    classroom writes response_data end to end.
     """
     question_id: str  # References Assignment.question.id
-    response_text: str
+    response_text: str = ""  # Mirror of response_data["text"]; see docstring
+    question_type: str = "free-response"  # Cached from the answered Question
+    response_data: dict | None = None  # Canonical answer payload (JSON)
+
+    def __post_init__(self) -> None:
+        """Keep the transition mirror in sync (see class docstring)."""
+        if self.response_data is not None:
+            text = self.response_data.get("text", "")
+            self.response_text = text if isinstance(text, str) else ""
+        elif self.response_text:
+            self.response_data = {"text": self.response_text}
 
 
 @dataclass(eq=False, kw_only=True)
