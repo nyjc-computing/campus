@@ -20,7 +20,7 @@ campus/
 ├── services/       # Business services (email, etc.)
 ├── storage/        # Data persistence layer
 ├── integrations/   # External service integrations
-└── yapper/         # Logging framework
+└── yapper/         # Event bus (self-contained; docs/yapper.md)
 ```
 
 ## Core Principles
