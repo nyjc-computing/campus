@@ -1,4 +1,4 @@
-"""campus.api.routes.booking
+"""campus.api.routes.bookings
 
 API routes for the Booking resource.
 """

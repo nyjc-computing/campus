@@ -1,3 +1,10 @@
+"""campus.flask_campus.utils
+
+Request helpers for downstream Flask apps: user-agent/header/payload
+extraction, request unpacking into view signatures, and JSON response
+validation.
+"""
+
 import inspect
 import typing
 from functools import wraps

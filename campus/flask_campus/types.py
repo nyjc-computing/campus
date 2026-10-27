@@ -1,4 +1,4 @@
-"""campus.flask_campus
+"""campus.flask_campus.types
 
 Common utility functions for validation of flask requests and responses.
 """

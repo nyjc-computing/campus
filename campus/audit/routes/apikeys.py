@@ -1,4 +1,4 @@
-"""campus.audit.routes.api_keys
+"""campus.audit.routes.apikeys
 
 API key management endpoints for the audit service.
 

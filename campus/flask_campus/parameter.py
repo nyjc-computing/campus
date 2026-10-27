@@ -1,4 +1,4 @@
-"""campus.common.flask.validation
+"""campus.flask_campus.parameter
 
 This module provides utilities for validation of arguments against
 parameters.

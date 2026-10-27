@@ -1,4 +1,4 @@
-"""campus.auth.user
+"""campus.auth.resources.user
 
 Implements Campus API for user access.
 """

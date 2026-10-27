@@ -1,4 +1,4 @@
-"""Logging configuration for Campus application.
+"""campus.logging_config
 
 This module configures logging for the Campus application, with special
 attention to OAuth flow debugging.

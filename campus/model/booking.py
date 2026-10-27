@@ -1,3 +1,8 @@
+"""campus.model.booking
+
+Venue and venue-booking entity models.
+"""
+
 from dataclasses import dataclass, field
 
 from campus.common import schema

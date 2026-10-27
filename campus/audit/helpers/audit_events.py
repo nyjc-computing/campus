@@ -1,4 +1,4 @@
-"""Audit event emission helpers for campus.audit.
+"""campus.audit.helpers.audit_events
 
 Provides helper function and decorator for emitting audit events to the
 traces table with easy enabling/disabling per route.

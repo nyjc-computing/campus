@@ -1,4 +1,4 @@
-"""campus.auth.routes.github
+"""campus.auth.oauth_proxy.github
 
 Proxy and callback routes for GitHub OAuth2 authentication.
 """

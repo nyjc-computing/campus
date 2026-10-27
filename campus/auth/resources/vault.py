@@ -1,4 +1,4 @@
-"""campus.auth.vault
+"""campus.auth.resources.vault
 
 Implements Campus API for vault access.
 """
