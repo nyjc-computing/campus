@@ -8,12 +8,15 @@ service implementations, Flask, or database drivers.
 
 Rules enforced:
 
-1. Shared layers (common, config, model, storage, webauth, services) may
-   only depend on the campus subpackages listed in SHARED_ALLOWED.
-2. Shared layers must not import a service layer (auth, api, audit,
-   yapper, flask_campus, deploy) anywhere — module level or lazy.
-3. Shared layers must not import flask/werkzeug at module level. The
-   one documented exception is the emailotp template, which lazily
+1. Self-contained layers (common, config, model, storage, webauth,
+   services, yapper) may only depend on the campus subpackages listed in
+   SHARED_ALLOWED. yapper's entry is empty: it imports no campus package
+   at all (its credentials/DB URI arrive via arguments or environment —
+   #970 phase 2 removed the lazy campus.auth import).
+2. Self-contained layers must not import a service layer (auth, api,
+   audit, flask_campus, deploy) anywhere — module level or lazy.
+3. Self-contained layers must not import flask/werkzeug at module level.
+   The one documented exception is the emailotp template, which lazily
    imports flask at call time (inside body()/html_body()).
 4. campus.common's only module-level third-party import is bcrypt
    (utils/secret.py). Requests used to ride in via the http client,
@@ -41,10 +44,13 @@ SHARED_ALLOWED = {
     "storage": {"common", "model"},
     "webauth": {"common", "model"},
     "services": {"common"},
+    # Self-contained: imports no campus package at all. Emitters (auth,
+    # api) may import it; it must never grow campus dependencies back.
+    "yapper": set(),
 }
 
-# Layer modules that shared layers must never import, even lazily.
-SERVICE_LAYERS = {"auth", "api", "audit", "yapper", "flask_campus", "deploy"}
+# Layer modules that self-contained layers must never import, even lazily.
+SERVICE_LAYERS = {"auth", "api", "audit", "flask_campus", "deploy"}
 
 # Third-party modules banned at module level in shared layers.
 NO_MODULE_LEVEL = {"flask", "werkzeug"}

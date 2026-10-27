@@ -27,15 +27,24 @@ logger = logging.getLogger(__name__)
 
 def get_yapper() -> "YapperInterface":
     """Get the module-wide yapper instance.
-    
+
     Initializes yapper lazily if not already initialized.
     This should be called at app startup to avoid circular dependencies
     during request handling.
+
+    The event database URI is read from the auth service's own vault
+    in-process (calling its own HTTP API during initialization would be
+    circular), so it is injected as a provider — yapper itself has no
+    campus.auth dependency (#970 phase 2).
     """
     global _yapper_instance
     if _yapper_instance is None:
         import campus.yapper
-        _yapper_instance = campus.yapper.create()
+
+        from .resources import vault
+        _yapper_instance = campus.yapper.create(
+            db_uri_provider=lambda: vault["campus.yapper"]["YAPPERDB_URI"]
+        )
     return _yapper_instance
 
 

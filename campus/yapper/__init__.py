@@ -3,14 +3,13 @@
 A message broker client for Campus, in Python.
 
 This package provides the Yapper class for sending and receiving events.
-"""
-# This file is required to make this directory a package.
-# See https://docs.python.org/3/tutorial/modules.html#packages for more
-# information.
 
-# The __all__ variable is used to define the public API of this module.
-# See https://docs.python.org/3/tutorial/modules.html#importing-from-a-package
-# for more information.
+yapper is self-contained: it imports no other campus package. Callers
+own credential and vault access — configuration arrives through
+arguments or environment variables, never by importing campus.auth
+(#970 phase 2 removes that lazy import cycle).
+"""
+
 __all__ = [
     "Event",
     "EventHandler",
@@ -18,39 +17,52 @@ __all__ = [
     "create",
 ]
 
+from typing import Callable
+
 from .base import Event, EventHandler, YapperInterface
 
 
-def create(**kwargs) -> YapperInterface:
-    """Factory function to get a Yapper client instance.
+def create(
+    *,
+    db_uri: str | None = None,
+    db_uri_provider: Callable[[], str] | None = None,
+    **kwargs,
+) -> YapperInterface:
+    """Factory function returning a backend-specific Yapper client.
 
-    # TODO: Update docstring (https://github.com/nyjc-computing/campus/issues/177)
+    Client identity comes from the environment. The event database URI
+    is resolved in priority order:
+
+    1. ``db_uri`` argument
+    2. ``db_uri_provider()`` — for callers that own local secret
+       access (the auth service reads its own vault in-process;
+       calling its own HTTP API during initialization would be
+       circular)
+    3. ``YAPPERDB_URI`` environment variable
+    4. the remote campus vault "campus.yapper" via campus_python
 
     Environment variables:
         CLIENT_ID: Unique identifier for the client (required)
         CLIENT_SECRET: Client secret for authentication (required)
-        ENV: Environment type that determines backend ("development", "testing", "staging", "production")
-             - "development" or "testing": SQLiteYapper
-             - "staging" or "production": PostgreSQLYapper
-        YAPPERDB_URI: PostgreSQL connection URI (required for staging/production)
-        STORAGE_MODE: If "1", use local resources for testing (no external services)
+        ENV: development | testing | staging | production
+        STORAGE_MODE: "1" selects the SQLite backend for testing. Test
+            mode never contacts external services: the URI must arrive
+            via 1-3 or create() raises.
 
     Args:
-        **kwargs: Backend-specific arguments:
-            - For SQLite (development/testing):
-                - db (optional): Database file path, defaults to ":memory:"
+        db_uri: explicit database URI (highest priority)
+        db_uri_provider: zero-arg callable returning the database URI
+        **kwargs: backend-specific arguments (e.g. SQLite ``db`` path)
 
     Returns:
-        YapperInterface: A backend-specific Yapper instance
+        YapperInterface: SQLiteYapper (STORAGE_MODE=1) or PostgreSQLYapper
 
     Raises:
-        ValueError: If CLIENT_ID or CLIENT_SECRET environment variables are not set,
-                   or if YAPPERDB_URI is not set for PostgreSQL environments
+        ValueError: If CLIENT_ID or CLIENT_SECRET are unset, if no
+            database URI can be resolved, or if ENV is not supported.
     """
     # Lazy-import locally to avoid polluting global namespace
     import os
-
-    import campus_python
 
     from .backends.postgres import PostgreSQLYapper
     from .backends.sqlite import SQLiteYapper
@@ -65,54 +77,50 @@ def create(**kwargs) -> YapperInterface:
     if not client_secret:
         raise ValueError("CLIENT_SECRET environment variable is required")
 
-    # In test mode (STORAGE_MODE=1), use local auth resources directly
-    # to avoid connecting to external services
+    yapperdb_uri = db_uri
+    if yapperdb_uri is None and db_uri_provider is not None:
+        yapperdb_uri = db_uri_provider()
+    if yapperdb_uri is None:
+        yapperdb_uri = os.getenv("YAPPERDB_URI")
+
     if storage_mode == "1":
-        from campus.auth import resources as auth_resources
-        yapper_vault = auth_resources.vault["campus.yapper"]
-        yapperdb_uri = yapper_vault["YAPPERDB_URI"]
+        if not yapperdb_uri:
+            raise ValueError(
+                "STORAGE_MODE=1 (test mode) must not contact external "
+                "services: provide the event database URI via the db_uri "
+                "argument, a db_uri_provider callable, or YAPPERDB_URI."
+            )
         yapper = SQLiteYapper(db=yapperdb_uri, client_id=client_id, **kwargs)
         yapper._init_db()
         return yapper
 
-    # For campus.auth deployment, use local resources to avoid circular dependency
-    # (service trying to call its own HTTP API during initialization)
-    deploy = os.getenv("DEPLOY")
-    if deploy == "campus.auth":
-        from campus.auth import resources as auth_resources
-        yapper_vault = auth_resources.vault["campus.yapper"]
-        yapperdb_uri = yapper_vault["YAPPERDB_URI"]
-        yapper = PostgreSQLYapper(db_uri=yapperdb_uri, client_id=client_id, **kwargs)
-        yapper._init_db()
-        return yapper
+    if yapperdb_uri is None:
+        # Resolve from the remote campus vault via campus_python.
+        import campus_python
 
-    # For other deployments, use campus_python to connect to remote vault
-    # Create Campus client for vault access
-    campus = campus_python.Campus(timeout=60)
+        if env not in ("development", "testing", "staging", "production"):
+            raise ValueError(
+                f"Unsupported ENV value: {env}. "
+                "Use 'development', 'testing', 'staging', or 'production'."
+            )
+        campus = campus_python.Campus(timeout=60)
+        try:
+            yapper_vault = campus.auth.vaults["campus.yapper"]
+            yapperdb_uri = yapper_vault["YAPPERDB_URI"]
+        except Exception as e:
+            raise ValueError(
+                f"Failed to retrieve YAPPERDB_URI from vault 'campus.yapper' for {env} environment. "
+                f"Vault error: {e}. "
+                f"This could indicate vault service connectivity issues or authentication problems."
+            ) from e
 
-    # Determine backend based on environment
-    match env:
-        case  "development" | "testing" | "staging" | "production":
-            try:
-                yapper_vault = campus.auth.vaults["campus.yapper"]
-                yapperdb_uri = yapper_vault["YAPPERDB_URI"]
-            except Exception as e:
-                raise ValueError(
-                    f"Failed to retrieve YAPPERDB_URI from vault 'campus.yapper' for {env} environment. "
-                    f"Vault error: {e}. "
-                    f"This could indicate vault service connectivity issues or authentication problems."
-                ) from e
+    if not yapperdb_uri:
+        raise ValueError(
+            f"YAPPERDB_URI is required for the {env} environment. "
+            "Provide a database URI via the db_uri argument, a "
+            "db_uri_provider callable, or YAPPERDB_URI."
+        )
 
-            if not yapperdb_uri:
-                raise ValueError(
-                    f"YAPPERDB_URI environment variable is required for {env} environment. "
-                    "Please provide a PostgreSQL connection URI via YAPPERDB_URI."
-                )
-            yapper = PostgreSQLYapper(db_uri=yapperdb_uri, client_id=client_id, **kwargs)
-            yapper._init_db()
-            return yapper
-
-    raise ValueError(
-        f"Unsupported ENV value: {env}. "
-        "Use 'development', 'testing', 'staging', or 'production'."
-    )
+    yapper = PostgreSQLYapper(db_uri=yapperdb_uri, client_id=client_id, **kwargs)
+    yapper._init_db()
+    return yapper
