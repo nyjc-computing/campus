@@ -19,14 +19,17 @@ M = TypeVar("M")
 
 def models_from_payloads(
         model_cls: type[M],
-        payloads: list[dict],
+        payloads: list[dict | M],
         field: str,
 ) -> list[M]:
     """Construct model instances from request payload dicts.
 
     Args:
         model_cls: Model dataclass to construct, e.g. campus.model.Question.
-        payloads: Payload dicts from the request body.
+        payloads: Payload dicts from the request body. Already-constructed
+            model_cls instances pass through unchanged, so callers that
+            must validate with extra context (see questionschemas) can
+            pre-construct and still hand the result to resource code.
         field: Request body field name the payloads came from; used to
             identify the offending item in validation errors.
 
@@ -38,6 +41,9 @@ def models_from_payloads(
     """
     models: list[M] = []
     for i, payload in enumerate(payloads):
+        if isinstance(payload, model_cls):
+            models.append(payload)
+            continue
         try:
             models.append(model_cls(**payload))
         except (TypeError, ValueError) as e:

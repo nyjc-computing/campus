@@ -13,7 +13,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import payloads, resources
+from .. import payloads, questionschemas, resources
 
 bp = flask.Blueprint('submissions', __name__, url_prefix='/submissions')
 
@@ -29,6 +29,25 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # Initialize yapper after test fixtures have set up the vault
     yapper = campus.yapper.create()
     app.register_blueprint(bp)
+
+
+def _assignment_questions(
+    assignment_id: str,
+) -> list[campus.model.Question] | None:
+    """Fetch an assignment's questions for response validation (#533).
+
+    Returns None when the assignment does not exist: cross-checks are
+    then skipped rather than failing the write, because submissions may
+    legitimately reference questions a teacher has since removed (stale
+    answers surface at render instead of blocking drafts).
+    """
+    try:
+        assignment = resources.assignment[
+            schema.CampusID(assignment_id)
+        ].get()
+    except api_errors.ConflictError:
+        return None
+    return assignment.questions
 
 
 @bp.get('/')
@@ -87,6 +106,9 @@ def create_submission(
         student_id: str (required)
         course_id: str (required)
         responses: list[dict] (optional)
+            Each response dict carries question_type + response_data,
+            validated against the registry in
+            campus.api.questionschemas (#533).
 
     Responses:
         201 Created: dict
@@ -96,7 +118,15 @@ def create_submission(
         assignment_id=assignment_id,
         student_id=student_id,
         course_id=course_id,
-        responses=responses or []
+        responses=questionschemas.responses_from_payloads(
+            responses or [],
+            "responses",
+            # No questions context for an empty responses list: skip
+            # the assignment read.
+            questions=(
+                _assignment_questions(assignment_id) if responses else None
+            ),
+        ),
     )
     resource = submission.to_resource()
     yapper.emit('campus.submissions.create', {'submission_id': submission.id})
@@ -179,9 +209,15 @@ def update_submission(
     """
     updates = {}
     if responses is not None:
-        # Convert dict responses to Response models
-        updates["responses"] = payloads.models_from_payloads(
-            campus.model.Response, responses, "responses"
+        # Convert dict responses to validated Response models (#533),
+        # cross-checked against the assignment's questions when it exists.
+        submission = resources.submission[
+            schema.CampusID(submission_id)
+        ].get()
+        updates["responses"] = questionschemas.responses_from_payloads(
+            responses,
+            "responses",
+            questions=_assignment_questions(str(submission.assignment_id)),
         )
     if feedback is not None:
         # Convert dict feedback to Feedback models
@@ -222,7 +258,9 @@ def add_response(
     *,
     submission_id: str,
     question_id: str,
-    response_text: str,
+    response_text: str | None = None,
+    question_type: str | None = None,
+    response_data: dict | None = None,
 ) -> flask_campus.JsonResponse:
     """Summary:
         Add or update a response to a question in a submission.
@@ -232,12 +270,30 @@ def add_response(
 
     Request Body:
         question_id: str (required)
-        response_text: str (required)
+        response_text: str (legacy text answers; required unless
+            response_data is given)
+        question_type: str (optional; defaults to free-response when
+            response_data carries no text)
+        response_data: dict (optional; canonical answer payload,
+            validated against the question's registered type (#533))
 
     Responses:
         200 OK: dict
             Empty object on success
     """
+    if response_text is None and response_data is None:
+        raise api_errors.InvalidRequestError(
+            "response_text or response_data is required"
+        )
+
+    payload: dict = {"question_id": question_id}
+    if response_text is not None:
+        payload["response_text"] = response_text
+    if question_type is not None:
+        payload["question_type"] = question_type
+    if response_data is not None:
+        payload["response_data"] = response_data
+
     submission = resources.submission[schema.CampusID(submission_id)].get()
 
     # Check if response to this question already exists
@@ -247,10 +303,11 @@ def add_response(
             existing_index = i
             break
 
-    new_response = campus.model.Response(
-        question_id=question_id,
-        response_text=response_text
-    )
+    new_response = questionschemas.responses_from_payloads(
+        [payload],
+        "responses",
+        questions=_assignment_questions(str(submission.assignment_id)),
+    )[0]
 
     if existing_index is not None:
         submission.responses[existing_index] = new_response

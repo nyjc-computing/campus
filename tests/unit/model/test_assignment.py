@@ -3,7 +3,7 @@
 import unittest
 
 from campus.common import schema
-from campus.model import Assignment, ClassroomLink, Question
+from campus.model import Assignment, ClassroomLink, Question, Response
 
 
 class TestQuestion(unittest.TestCase):
@@ -13,6 +13,25 @@ class TestQuestion(unittest.TestCase):
         """Top-level question should have level 1."""
         q = Question(id="q1", prompt="P", question="Q?")
         self.assertEqual(q.level, 1)
+
+    def test_question_defaults_to_free_response(self):
+        """Questions without type/data read as legacy free-response (#533)."""
+        q = Question(id="q1", prompt="P", question="Q?")
+        self.assertEqual(q.type, "free-response")
+        self.assertIsNone(q.data)
+
+    def test_question_with_type_and_data(self):
+        """type/data round-trip through the dataclass."""
+        q = Question(
+            id="q1", prompt="", question="Pick one",
+            type="multiple-choice",
+            data={"options": [
+                {"id": "opt_a", "text": "A"},
+                {"id": "opt_b", "text": "B"},
+            ]},
+        )
+        self.assertEqual(q.type, "multiple-choice")
+        self.assertEqual(q.data["options"][0]["id"], "opt_a")
 
     def test_question_level_part(self):
         """Part question should have level 2."""
@@ -55,6 +74,40 @@ class TestQuestion(unittest.TestCase):
         self.assertEqual(q1a.root_id, "q1")
         self.assertEqual(q1ai.root_id, "q1")
         self.assertEqual(q2.root_id, "q2")
+
+
+class TestResponse(unittest.TestCase):
+    """Tests for the Response dataclass and its transition mirror (#533)."""
+
+    def test_legacy_shape_derives_response_data(self):
+        """response_text-only payloads synthesize {"text": ...}."""
+        r = Response(question_id="q1", response_text="my answer")
+        self.assertEqual(r.response_data, {"text": "my answer"})
+        self.assertEqual(r.question_type, "free-response")
+
+    def test_response_data_is_canonical(self):
+        """response_data["text"] projects into response_text."""
+        r = Response(question_id="q1", response_text="stale",
+                     response_data={"text": "real answer"})
+        self.assertEqual(r.response_text, "real answer")
+
+    def test_mcq_response_clears_text_mirror(self):
+        """A choice response carries no stale text in response_text."""
+        r = Response(question_id="q1", response_text="B",
+                     question_type="multiple-choice",
+                     response_data={"choice": "opt_b"})
+        self.assertEqual(r.response_text, "")
+        self.assertEqual(r.response_data, {"choice": "opt_b"})
+
+    def test_legacy_storage_record_round_trip(self):
+        """from_resource with a pre-registry record yields the mirror."""
+        record = {
+            "question_id": "q1",
+            "response_text": "stored before #533",
+        }
+        r = Response(**record)
+        self.assertEqual(r.response_data, {"text": "stored before #533"})
+        self.assertEqual(r.question_type, "free-response")
 
 
 class TestClassroomLink(unittest.TestCase):
