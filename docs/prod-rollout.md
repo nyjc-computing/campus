@@ -29,6 +29,16 @@ Workspace (GCP Internal) clients, and mutates production data.
    variables (`railway variables --service campus.auth --json`), with
    `ENV=production` and the prod `PUBLIC_URL`.
 
+   > **Database topology caution (2026-10-27 dev lesson):** create each
+   > database as its own real deployment and point each service's URI var
+   > at *that service's* private endpoint — never attach a database
+   > *reference* to another service's instance. Dev's `campus.auth-mongodb`
+   > had been a reference into `campus.api-mongodb`, silently running auth
+   > and api on one shared mongod until the endpoint regularization
+   > (mongo:8.3.13) surfaced it. When mirroring dev variables, take the
+   > endpoint from the owning service's `RAILWAY_PRIVATE_DOMAIN`, and
+   > rotate each database's root password independently after standup.
+
 2. **Apply migrations**: `railway ssh -s campus.auth -e production` →
    `python migrations/runner.py apply` — runs every pending revision in
    order and records each outcome in the ledger. Expected pending: 003–009;
