@@ -45,8 +45,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @flask_campus.unpack_request
 def request_otp(email: str) -> flask_campus.JsonResponse:
     """Request a new OTP for email authentication."""
-    from campus.api import resources
-    from campus.model.emailotp import template
+    from campus.api import emailotp_templates, resources
 
     _validate_email(email)
     otp_code = resources.emailotp.request(email)
@@ -55,9 +54,9 @@ def request_otp(email: str) -> flask_campus.JsonResponse:
     email_sender = create_email_sender(EMAIL_PROVIDER)
     error = email_sender.send_email(
         recipient=email,
-        subject=template.subject("Campus", otp_code),
-        body=template.body("Campus", otp_code),
-        html_body=template.html_body("Campus", otp_code)
+        subject=emailotp_templates.subject("Campus", otp_code),
+        body=emailotp_templates.body("Campus", otp_code),
+        html_body=emailotp_templates.html_body("Campus", otp_code)
     )
     if error:
         raise api_errors.ServiceUnavailableError(

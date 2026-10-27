@@ -16,8 +16,9 @@ Rules enforced:
 2. Self-contained layers must not import a service layer (auth, api,
    audit, flask_campus, deploy) anywhere — module level or lazy.
 3. Self-contained layers must not import flask/werkzeug at module level.
-   The one documented exception is the emailotp template, which lazily
-   imports flask at call time (inside body()/html_body()).
+   With the emailotp template rendering moved to
+   campus.api.emailotp_templates, no shared-layer module imports flask
+   at all — module level or lazy.
 4. campus.common's only module-level third-party import is bcrypt
    (utils/secret.py). Requests used to ride in via the http client,
    which moved to campus.audit.http; this rule keeps it out.

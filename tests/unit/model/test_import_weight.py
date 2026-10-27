@@ -4,12 +4,13 @@ import unittest
 
 
 class TestModelImportWeight(unittest.TestCase):
-    """Guard the flask-free import contract of campus.model (#968).
+    """Guard the flask-free import contract of campus.model (#968, #970).
 
-    Importing campus.model must not drag in the Flask stack: the only
-    flask usage in the model layer is render_template_string inside the
-    emailotp template, which imports lazily at call time. Assertions run
-    in a subprocess because this test process itself imports flask.
+    Importing campus.model must not drag in the Flask stack. The emailotp
+    template rendering (the last flask usage in the model layer, lazy
+    since #968) moved to campus.api.emailotp_templates, so the model
+    layer is flask-free even at call time. Assertions run in a
+    subprocess because this test process itself imports flask.
     """
 
     def _modules_loaded_by(self, stmt: str) -> set[str]:
@@ -29,19 +30,27 @@ class TestModelImportWeight(unittest.TestCase):
         self.assertNotIn("flask", loaded)
         self.assertNotIn("jinja2", loaded)
 
-    def test_otp_template_renders_under_app_context(self):
-        """Test that the lazy flask import still renders OTP templates."""
+    def test_emailotp_template_module_is_gone(self):
+        """Test that campus.model.emailotp no longer exposes a template module.
+
+        Asserted via attribute access, not import: an import succeeds as
+        an empty namespace package whenever a leftover directory exists
+        on the path (untracked __pycache__), which says nothing about
+        the package.
+        """
         code = (
-            "import flask\n"
-            "from campus.model.emailotp import template\n"
-            "with flask.Flask(__name__).app_context():\n"
-            "    print(template.body('svc', '123456'))\n"
+            "import campus.model.emailotp, sys\n"
+            "try:\n"
+            "    campus.model.emailotp.template\n"
+            "except AttributeError:\n"
+            "    print('gone')\n"
+            "else:\n"
+            "    print('present')"
         )
-        rendered = subprocess.run(
+        stdout = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
             check=True,
-        ).stdout
-        self.assertIn("123456", rendered)
-        self.assertIn("svc", rendered)
+        ).stdout.strip()
+        self.assertEqual(stdout, "gone")
