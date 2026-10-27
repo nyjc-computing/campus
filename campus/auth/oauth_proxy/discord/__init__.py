@@ -1,4 +1,4 @@
-"""campus.auth.routes.discord
+"""campus.auth.oauth_proxy.discord
 
 Routes for Discord OAuth2 Client Credentials flow.
 

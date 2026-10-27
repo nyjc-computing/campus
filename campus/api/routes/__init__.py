@@ -1,4 +1,4 @@
-"""campus.apps.api.routes
+"""campus.api.routes
 
 This is a namespace module for the Campus API routes.
 """

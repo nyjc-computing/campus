@@ -34,6 +34,7 @@ weekly → staging → main
 auth, api → services, storage, model, common
 storage → common
 model → common
+yapper → (nothing — self-contained)
 ```
 
 **Key Constraints:**
@@ -41,6 +42,9 @@ model → common
 - `model` contains only entity definitions (minimal dependencies)
 - `storage` provides backend-agnostic persistence
 - `common` is self-contained
+- `yapper` is self-contained: it imports no campus package; its event
+  database URI arrives via argument, provider callable, or environment
+  ([yapper.md](yapper.md))
 
 ## Installation
 

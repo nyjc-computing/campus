@@ -3,6 +3,8 @@
 Functions for initialising campus.yapper for testing use
 """
 
+import os
+
 from . import postgres, require, setup
 
 # Module-level variable to track if yapper was initialized
@@ -49,7 +51,6 @@ def init():
     elif campus.storage.testing.is_test_mode():
         # Use a temp file for the database
         # Note: :memory: doesn't work because each connection creates a new empty DB
-        import os
         import tempfile
         fd, db_path = tempfile.mkstemp(suffix='.sqlite', prefix='yapperdb_')
         os.close(fd)
@@ -60,3 +61,8 @@ def init():
     else:
         db_uri = setup.get_db_uri("yapperdb")
     yapper_vault["YAPPERDB_URI"] = db_uri
+    # yapper no longer reads the local vault itself (#970 phase 2): bare
+    # create() calls in tests (api routes) pick the URI up from the env.
+    # The vault secret stays for the vault-delivery contract (see
+    # tests/integration/yapper).
+    os.environ["YAPPERDB_URI"] = db_uri

@@ -1,4 +1,4 @@
-"""flask_campus.login_manager
+"""campus.flask_campus.login_manager
 
 OAuth Login Manager for Flask integration.
 """

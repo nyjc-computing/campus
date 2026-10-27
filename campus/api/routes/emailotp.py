@@ -1,4 +1,4 @@
-"""campus.apps.api.routes.emailotp
+"""campus.api.routes.emailotp
 
 API routes for the emailotp resource.
 """

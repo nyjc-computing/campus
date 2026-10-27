@@ -1,4 +1,4 @@
-"""campus.oauth.routes
+"""campus.auth.oauth_proxy
 
 This module contains the route definitions for Campus and third-party
 OAuth2 authentication.

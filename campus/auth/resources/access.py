@@ -1,4 +1,4 @@
-"""campus.auth.access
+"""campus.auth.resources.access
 
 Defines access control utilities for Campus authentication and vault access.
 """

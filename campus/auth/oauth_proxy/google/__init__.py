@@ -1,4 +1,4 @@
-"""campus.auth.routes.google
+"""campus.auth.oauth_proxy.google
 
 Routes for Google OAuth2.
 

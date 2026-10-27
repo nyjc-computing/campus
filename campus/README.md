@@ -22,7 +22,7 @@ campus/
 ├── services/       # Email, etc.
 ├── storage/        # Data persistence
 ├── integrations/   # External service configurations
-└── yapper/         # Logging framework
+└── yapper/         # Event bus (self-contained)
 ```
 
 ### Design Principles
@@ -41,6 +41,7 @@ campus/
 - **campus.storage**: Backend-agnostic data persistence
 - **campus.model**: Entity dataclasses (no business logic)
 - **campus.services**: Email, notifications
+- **campus.yapper**: Event bus — self-contained, imports no campus package ([docs/yapper.md](../docs/yapper.md))
 
 ## Key Components
 
@@ -76,6 +77,13 @@ Business logic in `.resources` submodules (e.g., `campus.auth.resources`).
 
 - Email notifications
 - External integrations
+
+### 📨 Yapper (`campus.yapper`)
+
+- Event bus for domain emissions (`campus.<subject>[.<sub>].<action>` labels)
+- Self-contained: imports no campus package; configuration via arguments/environment
+- Database URI resolution: argument → provider callable → `YAPPERDB_URI` env → remote vault
+- See [docs/yapper.md](../docs/yapper.md)
 
 ### 🔌 Client Access
 
