@@ -1,11 +1,12 @@
 """campus.model.emailotp.template
 
 Email templates for OTP authentication.
+
+flask (for render_template_string) is imported lazily at call time so
+that importing campus.model does not pull in the Flask stack (#968).
 """
 
 import os
-
-import flask
 
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), 'templates')
 
@@ -32,6 +33,7 @@ def subject(service: str, otp: str) -> str:
 
 def body(service: str, otp: str) -> str:
     """Plaintext email body for OTP authentication."""
+    import flask
     if not plaintext_template:
         load_plaintext_template()
     return flask.render_template_string(
@@ -42,6 +44,7 @@ def body(service: str, otp: str) -> str:
 
 def html_body(service: str, otp: str) -> str:
     """HTML email body for OTP authentication."""
+    import flask
     if not html_template:
         load_html_template()
     return flask.render_template_string(
