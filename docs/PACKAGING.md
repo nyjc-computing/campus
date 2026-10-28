@@ -46,6 +46,38 @@ yapper → (nothing — self-contained)
   database URI arrives via argument, provider callable, or environment
   ([yapper.md](yapper.md))
 
+## Namespace Package Rules (PEP 420)
+
+The `campus` import namespace is a **native namespace package**: no
+distribution ships a `campus/__init__.py`. Python merges every `campus/`
+directory found on `sys.path` into one virtual package, so each
+distribution owns its own subtree and consumers import one flat namespace:
+
+- `campus-suite` ships `campus/auth/`, `campus/api/`, `campus/model/`, ...
+- `campus-common` (planned, #970 phase 3) will ship `campus/common/`
+
+Rules:
+
+- Never add `campus/__init__.py` to any distribution. One stale regular
+  package shadows every other dist's portions **silently** — imports
+  resolve from the wrong place with no error at install time.
+- Each distribution's own subpackages (`campus/common/`, `campus/auth/`,
+  ...) remain regular packages with their own `__init__.py`; only the
+  shared ancestor level is init-less.
+- After `poetry build`, audit the wheels:
+
+  ```bash
+  python scripts/audit_wheel_namespace.py
+  ```
+
+- When upgrading environments across this conversion, rebuild venvs
+  instead of layering installs: leftover `campus/` directories or
+  `__pycache__`-only portion dirs from older installs keep serving stale
+  imports under the merged namespace.
+
+The `campus_python` client library uses a separate top-level namespace and
+is unaffected by these rules.
+
 ## Installation
 
 ### For Production Use
