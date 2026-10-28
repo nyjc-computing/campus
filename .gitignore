@@ -185,3 +185,7 @@ replit.nix
 .worktrees/
 
 # 2026-10-27: retrigger dev deploy after postgres/mongo endpoint regularization
+
+# Worktree-local venv bootstrap artifact (scripts/worktree.py pip freeze
+# intermediate) — disposable, never commit (accidentally tracked once, e7b025e)
+requirements-freeze.txt
