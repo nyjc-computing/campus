@@ -59,6 +59,11 @@ locally-built `campus_python` packages (not on any index) are copied
 across from the main site-packages. It also registers the worktree's
 `safe.directory` config.
 
+The freeze intermediate is written to `requirements-freeze.txt` inside
+each worktree and is disposable — it is gitignored, so `git add -A`
+won't pick it up (it was accidentally committed once; e7b025e is why
+the ignore rule exists).
+
 ### Finishing a task
 
 ```bash
