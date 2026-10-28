@@ -21,7 +21,7 @@ import flask
 
 from campus.common.errors import FieldError, ValidationError, api_errors
 from campus.common.validation import record
-from campus.webauth.models import HttpHeader
+from campus.model import HttpHeader
 
 from . import parameter, types
 

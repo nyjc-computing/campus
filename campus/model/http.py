@@ -1,6 +1,10 @@
-"""campus.webauth.models.header
+"""campus.model.http
 
-Campus webauth representation of HTTP headers.
+Campus model representation of HTTP headers.
+
+Historically campus.webauth.models (and before that, campus.model
+itself); remigrated into campus.model in #982 so the consumer layer
+and the SDK can share these classes without campus-core.
 """
 
 __all__ = [

@@ -12,6 +12,9 @@ matter.
 Models are expected to be used across the codebase; they should have
 minimal dependencies, ideally none. Data processing logic should be
 kept out of models.
+
+Exception: the HTTP header representations (campus.model.http) are
+dict/str-based value classes rather than dataclasses.
 """
 
 __all__ = [
@@ -27,6 +30,9 @@ __all__ = [
     "DeviceCode",
     "EmailOTP",
     "Feedback",
+    "HttpAuthProperty",
+    "HttpHeader",
+    "HttpHeaderWithAuth",
     "Integration",
     "InternalModel",
     "LessonGroup",
@@ -69,6 +75,7 @@ from .credentials import AppCredentials, OAuthToken, UserCredentials
 from .device_code import DeviceCode
 from .emailotp import EmailOTP
 from .grant import AccessGrant
+from .http import HttpAuthProperty, HttpHeader, HttpHeaderWithAuth
 from .integration import Integration
 from .login import LoginSession
 from .session import AuthSession

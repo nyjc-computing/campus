@@ -99,13 +99,13 @@ Flask app orchestration for deployments (moved out of the former
 Entity representation (no business logic):
 - Dataclass definitions (User, Circle, Client, Session, Token, etc.)
 - Credentials (OAuth tokens, user and app credentials)
+- HTTP header models (`HttpHeader`, `HttpHeaderWithAuth`, `HttpAuthProperty`)
 - Pure data structures with keyword-only init
 
 ### `campus.webauth`
 Web authentication shared by services (imports model and common):
 - OAuth2 client flows (authorization code, client credentials, device authorization)
 - HTTP Basic/Bearer authentication scheme
-- HTTP header models (`HttpHeader`, `HttpHeaderWithAuth`)
 
 ### `campus.storage`
 Data persistence interfaces:

@@ -1,6 +1,6 @@
 """campus.webauth
 
-Web authentication models for Campus Auth.
+Web authentication for Campus Auth.
 
 This module contains classes and functions for handling web-based
 authentication schemes, including HTTP Basic and Bearer authentication,
