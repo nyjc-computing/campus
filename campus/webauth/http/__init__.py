@@ -15,9 +15,9 @@ __all__ = [
 from typing import Literal
 
 from campus.common.errors import api_errors, token_errors
+from campus.model import HttpHeader, HttpHeaderWithAuth
 
 from .. import base
-from ..models import HttpHeader, HttpHeaderWithAuth
 
 HttpScheme = Literal["basic", "bearer"]
 

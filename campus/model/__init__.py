@@ -27,6 +27,9 @@ __all__ = [
     "DeviceCode",
     "EmailOTP",
     "Feedback",
+    "HttpAuthProperty",
+    "HttpHeader",
+    "HttpHeaderWithAuth",
     "Integration",
     "InternalModel",
     "LessonGroup",
@@ -69,6 +72,7 @@ from .credentials import AppCredentials, OAuthToken, UserCredentials
 from .device_code import DeviceCode
 from .emailotp import EmailOTP
 from .grant import AccessGrant
+from .http import HttpAuthProperty, HttpHeader, HttpHeaderWithAuth
 from .integration import Integration
 from .login import LoginSession
 from .session import AuthSession

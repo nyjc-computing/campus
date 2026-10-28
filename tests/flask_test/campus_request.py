@@ -19,7 +19,7 @@ from urllib.parse import urljoin
 import flask
 from campus_python.json_client.interface import JsonClient
 
-from campus.webauth.models import HttpHeader
+from campus.model import HttpHeader
 
 from .response import FlaskTestResponse
 
