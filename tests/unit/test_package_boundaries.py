@@ -185,7 +185,7 @@ class TestSharedLayerImports(unittest.TestCase):
 
     def test_shared_layers_module_level_third_party(self):
         """Test that shared layers stay lean at module level."""
-        for sub, path in _iter_shared_files():
+        for _sub, path in _iter_shared_files():
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in tree.body:
                 names = []
