@@ -224,3 +224,5 @@ def _seed_public_client() -> None:
             "python scripts/seed_public_oauth_client.py",
             campus.config.PUBLIC_OAUTH_CLIENT_ID
         )
+
+# v0.2.1 campus-common wheel switch deployed from this commit (#988).

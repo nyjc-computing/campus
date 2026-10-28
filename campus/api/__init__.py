@@ -188,3 +188,5 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     if isinstance(app, flask.Flask):
         from campus.common import env
         app.secret_key = env.getsecret("SECRET_KEY")
+
+# v0.2.1 campus-common wheel switch deployed from this commit (#988).
