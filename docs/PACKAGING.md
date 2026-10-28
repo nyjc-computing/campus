@@ -2,7 +2,7 @@
 
 ## Overview
 
-Campus uses a **monorepo with centralized dependencies** approach. The suite is versioned and distributed as a single package through Git-based dependencies; the stable kernel (`campus.common`) lives in its own distribution, [campus-common](https://github.com/nyjc-computing/campus-common), consumed as version-pinned release wheels.
+Campus uses a **monorepo with centralized dependencies** approach. The suite is versioned and distributed as a single package through Git-based dependencies; two shared layers live in their own distributions consumed as version-pinned release wheels: the stable kernel (`campus.common`) in [campus-common](https://github.com/nyjc-computing/campus-common) and the domain models (`campus.model`) in [campus-model](https://github.com/nyjc-computing/campus-model).
 
 **Key Benefits:**
 - Consistent versioning across all services
@@ -39,9 +39,9 @@ yapper → (nothing — self-contained)
 
 **Key Constraints:**
 - `auth` and `api` contain business logic in `.resources` submodules
-- `model` contains only entity definitions (minimal dependencies)
+- `model` contains only entity definitions (minimal dependencies) — external distribution ([campus-model](https://github.com/nyjc-computing/campus-model)), enforced by its own repo's boundary guard
 - `storage` provides backend-agnostic persistence
-- `common` is self-contained
+- `common` is self-contained — external distribution ([campus-common](https://github.com/nyjc-computing/campus-common)), enforced by its own repo's boundary guard
 - `yapper` is self-contained: it imports no campus package; its event
   database URI arrives via argument, provider callable, or environment
   ([yapper.md](yapper.md))
@@ -53,8 +53,9 @@ distribution ships a `campus/__init__.py`. Python merges every `campus/`
 directory found on `sys.path` into one virtual package, so each
 distribution owns its own subtree and consumers import one flat namespace:
 
-- `campus-suite` ships `campus/auth/`, `campus/api/`, `campus/model/`, ...
+- `campus-suite` ships `campus/auth/`, `campus/api/`, ... (its own repository)
 - `campus-common` ships `campus/common/` (its own repository, consumed as version-pinned release wheels)
+- `campus-model` ships `campus/model/` (its own repository, consumed as version-pinned release wheels)
 
 Rules:
 
@@ -112,6 +113,22 @@ CHANGELOG first (see campus-common's versioning policy — pre-1.0
 minors may break). Note that campus-suite declares the same wheel
 transitively; the direct declaration is required only for repos that
 import `campus.common` themselves.
+
+### campus-model
+
+The domain models (`campus.model`) follow the same pattern — a
+version-pinned release wheel from their own repository:
+
+```toml
+[tool.poetry.dependencies]
+campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.0/campus_model-0.1.0-py3-none-any.whl"}
+```
+
+Same bump protocol: edit the URL, `poetry lock`, read the release
+CHANGELOG first (strict-0.x versioning — pre-1.0 minors may break).
+campus-suite declares the wheel transitively; declare it directly only
+if you import `campus.model` yourself (as campus-api-python and
+campus-profile do).
 
 ### CLI Installation
 

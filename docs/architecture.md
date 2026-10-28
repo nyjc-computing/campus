@@ -96,7 +96,9 @@ Flask app orchestration for deployments (moved out of the former
 - `register_health` / `register_generic_landing`: the /health and / conventions (#842)
 
 ### `campus.model`
-Entity representation (no business logic):
+Entity representation (no business logic) — shipped by the
+[campus-model](https://github.com/nyjc-computing/campus-model)
+distribution:
 - Dataclass definitions (User, Circle, Client, Session, Token, etc.)
 - Credentials (OAuth tokens, user and app credentials)
 - HTTP header models (`HttpHeader`, `HttpHeaderWithAuth`, `HttpAuthProperty`)
