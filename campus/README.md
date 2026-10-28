@@ -17,13 +17,19 @@ campus/
 ├── api/            # RESTful API resources
 │   ├── resources/  # Business logic
 │   └── routes/     # HTTP endpoints
-├── common/         # Shared utilities and schemas
+├── audit/          # Audit/tracing service + web UI
+├── flask_campus/   # Flask integration glue
+├── integrations/   # External service configurations
 ├── model/          # Entity representation (dataclasses)
 ├── services/       # Email, etc.
 ├── storage/        # Data persistence
-├── integrations/   # External service configurations
+├── webauth/        # WebAuth request primitives (headers, OAuth tokens)
 └── yapper/         # Event bus (self-contained)
 ```
+
+The shared kernel lives in its own distribution:
+[campus-common](https://github.com/nyjc-computing/campus-common) ships
+`campus.common` and is consumed as a version-pinned release wheel.
 
 ### Design Principles
 
@@ -96,12 +102,15 @@ secret = campus.auth.vaults["deployment"]["key"]
 
 See [campus-api-python](https://github.com/nyjc-computing/campus-api-python).
 
-### 🛠️ Common (`campus.common`)
+### 🧩 Common (`campus.common`)
 
-- Configuration and feature flags
-- Validation utilities
-- Schema definitions
-- Time and UID utilities
+Provided by the [campus-common](https://github.com/nyjc-computing/campus-common) distribution (release wheel; interface locked by CI):
+
+- Configuration and feature flags (`env`)
+- API/OAuth error taxonomy and Flask error handlers (`errors`)
+- Schema definitions (`schema`)
+- Time and UID utilities (`utils`)
+- Record validation (`validation`)
 
 ## Usage Patterns
 
