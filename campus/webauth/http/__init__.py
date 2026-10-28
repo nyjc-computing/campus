@@ -1,10 +1,13 @@
 """campus.webauth.http
 
-HTTP Authentication configs and models.
+HTTP authentication configuration and schemes.
 
 The HTTP authentication scheme comprises two types of authentication:
 1. Basic Authentication: Uses a client_id and client_secret encoded in Base64.
 2. Bearer Authentication: Uses a token (e.g., JWT) in the Authorization header
+
+The header representations used here (HttpHeader, HttpHeaderWithAuth)
+live in campus.model (campus.model.http).
 """
 
 __all__ = [

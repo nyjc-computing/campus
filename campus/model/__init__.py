@@ -12,6 +12,9 @@ matter.
 Models are expected to be used across the codebase; they should have
 minimal dependencies, ideally none. Data processing logic should be
 kept out of models.
+
+Exception: the HTTP header representations (campus.model.http) are
+dict/str-based value classes rather than dataclasses.
 """
 
 __all__ = [
