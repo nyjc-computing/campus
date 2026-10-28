@@ -635,6 +635,25 @@ reference = "main"
 resolved_reference = "695992d8afbc1fa9bf8c1b084f39bc3d680fed3e"
 
 [[package]]
+name = "campus-common"
+version = "0.1.0"
+description = "Campus shared kernel: env, errors, introspect, schema, utils, validation - PEP 420 namespace portion under campus/common"
+optional = false
+python-versions = ">=3.11.0,<3.15"
+groups = ["main"]
+files = []
+develop = false
+
+[package.dependencies]
+bcrypt = "^5.0.0"
+
+[package.source]
+type = "git"
+url = "https://github.com/nyjc-computing/campus-common.git"
+reference = "main"
+resolved_reference = "995bc2c220ff2483ebe4b6bad582a30e0b1e661a"
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -1886,4 +1905,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "cb47898015f123af20e7fd5be89d22f93d9ae9e0f49f9fd75b000925286846ac"
+content-hash = "54edb14d8bec2ac90d579c3587476ae849d32a314d0fd3ee1c06d88e84de7704"
