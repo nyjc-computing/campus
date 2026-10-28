@@ -636,22 +636,21 @@ resolved_reference = "695992d8afbc1fa9bf8c1b084f39bc3d680fed3e"
 
 [[package]]
 name = "campus-common"
-version = "0.1.0"
+version = "0.2.1"
 description = "Campus shared kernel: env, errors, introspect, schema, utils, validation - PEP 420 namespace portion under campus/common"
 optional = false
 python-versions = ">=3.11.0,<3.15"
 groups = ["main"]
-files = []
-develop = false
+files = [
+    {file = "campus_common-0.2.1-py3-none-any.whl", hash = "sha256:91b1435f247d9b0aba789af19c35603114387d721b49ac7be0a75670dd61485d"},
+]
 
 [package.dependencies]
-bcrypt = "^5.0.0"
+bcrypt = ">=5.0.0,<6.0.0"
 
 [package.source]
-type = "git"
-url = "https://github.com/nyjc-computing/campus-common.git"
-reference = "main"
-resolved_reference = "995bc2c220ff2483ebe4b6bad582a30e0b1e661a"
+type = "url"
+url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"
 
 [[package]]
 name = "certifi"
@@ -1905,4 +1904,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "54edb14d8bec2ac90d579c3587476ae849d32a314d0fd3ee1c06d88e84de7704"
+content-hash = "783ef6b77ce09c97a4d63b32c2afdd0e493d4125cc5ee255adee71516c81eddf"
