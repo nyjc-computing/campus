@@ -19,8 +19,8 @@ python = ">=3.11.0,<3.15"
 
 # Campus internal dependencies
 campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
-# Stable kernel (campus.common) - consumed as the campus-common v0.2.0 release wheel (#970 phase 3)
-campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.0/campus_common-0.2.0-py3-none-any.whl"}
+# Stable kernel (campus.common) - consumed as the campus-common v0.2.1 release wheel (#970 phase 3)
+campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"}
 
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^5.0.0"
