@@ -19,9 +19,12 @@ Rules enforced:
    With the emailotp template rendering moved to
    campus.api.emailotp_templates, no shared-layer module imports flask
    at all — module level or lazy.
-4. campus.common's only module-level third-party import is bcrypt
-   (utils/secret.py). Requests used to ride in via the http client,
-   which moved to campus.audit.http; this rule keeps it out.
+4. campus.common is now the external campus-common distribution (#970
+   phase 3): the rules below still constrain what the in-repo shared
+   layers may import FROM campus.common, but common's own constraints
+   (stdlib + bcrypt only, no sibling campus imports, lazy flask) are
+   enforced by the boundary guard in the campus-common repo
+   (tests/unit/test_boundaries.py).
 5. Storage database drivers stay lazily imported: importing
    campus.storage must not load psycopg2/pymongo/boto3.
 
@@ -38,8 +41,9 @@ from pathlib import Path
 CAMPUS_DIR = Path(__file__).resolve().parents[2] / "campus"
 
 # campus subpackage -> set of campus subpackages it may depend on
+# (campus.common itself is the external campus-common dist; importing
+# it is governed by these same allowed sets, checked via AST here)
 SHARED_ALLOWED = {
-    "common": set(),
     "config": {"common"},
     "model": {"common"},
     "storage": {"common", "model"},
@@ -55,9 +59,6 @@ SERVICE_LAYERS = {"auth", "api", "audit", "flask_campus", "deploy"}
 
 # Third-party modules banned at module level in shared layers.
 NO_MODULE_LEVEL = {"flask", "werkzeug"}
-
-# Third-party modules campus.common may import at module level.
-COMMON_THIRD_PARTY_ALLOWED = {"bcrypt"}
 
 
 def _iter_shared_files():
@@ -184,7 +185,7 @@ class TestSharedLayerImports(unittest.TestCase):
 
     def test_shared_layers_module_level_third_party(self):
         """Test that shared layers stay lean at module level."""
-        for sub, path in _iter_shared_files():
+        for _sub, path in _iter_shared_files():
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in tree.body:
                 names = []
@@ -200,12 +201,6 @@ class TestSharedLayerImports(unittest.TestCase):
                         self.fail(
                             f"{path.relative_to(CAMPUS_DIR.parent)}:{node.lineno} "
                             f"module-level {top} import in shared layer"
-                        )
-                    if sub == "common" and top not in COMMON_THIRD_PARTY_ALLOWED:
-                        self.fail(
-                            f"{path.relative_to(CAMPUS_DIR.parent)}:{node.lineno} "
-                            f"campus.common module-level third-party import "
-                            f"outside {sorted(COMMON_THIRD_PARTY_ALLOWED)}: {top}"
                         )
 
 

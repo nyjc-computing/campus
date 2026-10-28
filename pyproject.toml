@@ -19,6 +19,8 @@ python = ">=3.11.0,<3.15"
 
 # Campus internal dependencies
 campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
+# Stable kernel (campus.common) - carved to its own distribution (#970 phase 3)
+campus-common = {git = "https://github.com/nyjc-computing/campus-common.git", branch = "main"}
 
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^5.0.0"
@@ -84,3 +86,11 @@ ignore = [
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff.lint.isort]
+# campus is a PEP 420 namespace spanning multiple distributions: after the
+# campus-common carve, campus.common is no longer in this repo's tree, so
+# ruff's src-based first-party detection would classify it third-party and
+# flag mixed import blocks as unsorted (I001). Pin the whole campus
+# namespace first-party.
+known-first-party = ["campus"]
