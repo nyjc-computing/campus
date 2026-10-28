@@ -11,8 +11,7 @@ Session state is not handled.
 
 __all__ = [
     "http",
-    "models",
     "oauth2",
 ]
 
-from . import http, models, oauth2
+from . import http, oauth2
