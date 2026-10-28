@@ -2,7 +2,7 @@
 
 ## Overview
 
-Campus uses a **monorepo with centralized dependencies** approach. All components are versioned together and distributed as a single package through Git-based dependencies.
+Campus uses a **monorepo with centralized dependencies** approach. The suite is versioned and distributed as a single package through Git-based dependencies; the stable kernel (`campus.common`) lives in its own distribution, [campus-common](https://github.com/nyjc-computing/campus-common), consumed as version-pinned release wheels.
 
 **Key Benefits:**
 - Consistent versioning across all services
@@ -54,7 +54,7 @@ directory found on `sys.path` into one virtual package, so each
 distribution owns its own subtree and consumers import one flat namespace:
 
 - `campus-suite` ships `campus/auth/`, `campus/api/`, `campus/model/`, ...
-- `campus-common` (planned, #970 phase 3) will ship `campus/common/`
+- `campus-common` ships `campus/common/` (its own repository, consumed as version-pinned release wheels)
 
 Rules:
 
@@ -95,6 +95,23 @@ campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "
 [tool.poetry.group.dev-dependencies]
 campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
 ```
+
+### campus-common
+
+The stable kernel is consumed as a version-pinned release wheel, not a
+git dependency:
+
+```toml
+[tool.poetry.dependencies]
+campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"}
+```
+
+Bumping to a newer campus-common release is an explicit per-repo
+change: edit the URL, run `poetry lock`, and read that release's
+CHANGELOG first (see campus-common's versioning policy — pre-1.0
+minors may break). Note that campus-suite declares the same wheel
+transitively; the direct declaration is required only for repos that
+import `campus.common` themselves.
 
 ### CLI Installation
 
