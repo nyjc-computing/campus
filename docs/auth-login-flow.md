@@ -476,7 +476,7 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
 | `campus/auth/resources/device_code.py` | device code resource |
 | `campus/auth/oauth_proxy/` | Google / GitHub / Discord proxy blueprints |
 | `campus/auth/oauth_proxy/google/proxy.py` | Google consent callback, userinfo |
-| `campus/model/credentials.py` | `OAuthToken` + `Credential` models |
+| `campus.model.credentials` (`campus-model` dist) | `OAuthToken` + `Credential` models |
 | `campus/auth/routes/logins.py` | login audit records |
 | `campus/webauth/` | OAuth2 client-side plumbing (used by clients of this API) |
 | `campus/flask_campus/login_manager.py` | reusable login/logout/`login_required` helper for Flask apps |

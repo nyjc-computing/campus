@@ -653,6 +653,24 @@ type = "url"
 url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"
 
 [[package]]
+name = "campus-model"
+version = "0.1.0"
+description = "Campus domain models: dataclass entities under campus/model - PEP 420 namespace portion"
+optional = false
+python-versions = ">=3.11.0,<3.15"
+groups = ["main"]
+files = [
+    {file = "campus_model-0.1.0-py3-none-any.whl", hash = "sha256:f16190fd16d35197eb3d22ac2ff4f7eb16663900e7fa82c8029150a38055e229"},
+]
+
+[package.dependencies]
+campus_common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"}
+
+[package.source]
+type = "url"
+url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.0/campus_model-0.1.0-py3-none-any.whl"
+
+[[package]]
 name = "certifi"
 version = "2026.7.22"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -1904,4 +1922,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "783ef6b77ce09c97a4d63b32c2afdd0e493d4125cc5ee255adee71516c81eddf"
+content-hash = "403f5003e8e38f971e45a75d4e6212e9bed0c91c107be00e941ea93b52a616e4"

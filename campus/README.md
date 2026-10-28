@@ -20,16 +20,18 @@ campus/
 ├── audit/          # Audit/tracing service + web UI
 ├── flask_campus/   # Flask integration glue
 ├── integrations/   # External service configurations
-├── model/          # Entity representation (dataclasses)
 ├── services/       # Email, etc.
 ├── storage/        # Data persistence
 ├── webauth/        # WebAuth request primitives (headers, OAuth tokens)
 └── yapper/         # Event bus (self-contained)
 ```
 
-The shared kernel lives in its own distribution:
+Two layers live in their own distributions, consumed as version-pinned
+release wheels:
 [campus-common](https://github.com/nyjc-computing/campus-common) ships
-`campus.common` and is consumed as a version-pinned release wheel.
+the `campus.common` shared kernel, and
+[campus-model](https://github.com/nyjc-computing/campus-model) ships
+the `campus.model` entity dataclasses.
 
 ### Design Principles
 
@@ -45,7 +47,7 @@ The shared kernel lives in its own distribution:
 - **campus.auth**: Authentication, OAuth, credentials (`.resources` for business logic)
 - **campus.api**: Circles, email OTP (`.resources` for business logic)
 - **campus.storage**: Backend-agnostic data persistence
-- **campus.model**: Entity dataclasses (no business logic)
+- **campus.model**: Entity dataclasses (no business logic) — [campus-model](https://github.com/nyjc-computing/campus-model) distribution
 - **campus.services**: Email, notifications
 - **campus.yapper**: Event bus — self-contained, imports no campus package ([docs/yapper.md](../docs/yapper.md))
 
@@ -72,7 +74,7 @@ The shared kernel lives in its own distribution:
 
 ### 🏛️ Model (`campus.model`)
 
-Entity dataclasses:
+Entity dataclasses (shipped by the [campus-model](https://github.com/nyjc-computing/campus-model) distribution):
 - User, Circle, Client, Session, Token
 - EmailOTP, HTTP headers, credentials
 - No business logic

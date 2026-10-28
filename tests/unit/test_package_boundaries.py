@@ -1,30 +1,31 @@
 """Package boundary contract tests (#970).
 
 Static (AST) and runtime checks that the shared/service layering agreed
-for the campus-core carve-out holds. These make the future distribution
-split mechanical: if the contract stays green, campus.common/config and
-campus.model/storage/webauth/services can be packaged without pulling
+for the campus-core carve-out holds. These make the distribution split
+mechanical: if the contract stays green, the remaining shared layers
+(storage/webauth/services/config) can be packaged without pulling
 service implementations, Flask, or database drivers.
 
 Rules enforced:
 
-1. Self-contained layers (common, config, model, storage, webauth,
-   services, yapper) may only depend on the campus subpackages listed in
-   SHARED_ALLOWED. yapper's entry is empty: it imports no campus package
-   at all (its credentials/DB URI arrive via arguments or environment —
-   #970 phase 2 removed the lazy campus.auth import).
+1. Self-contained layers (config, storage, webauth, services, yapper)
+   may only depend on the campus subpackages listed in SHARED_ALLOWED.
+   yapper's entry is empty: it imports no campus package at all (its
+   credentials/DB URI arrive via arguments or environment — #970
+   phase 2 removed the lazy campus.auth import).
 2. Self-contained layers must not import a service layer (auth, api,
    audit, flask_campus, deploy) anywhere — module level or lazy.
 3. Self-contained layers must not import flask/werkzeug at module level.
    With the emailotp template rendering moved to
    campus.api.emailotp_templates, no shared-layer module imports flask
    at all — module level or lazy.
-4. campus.common is now the external campus-common distribution (#970
-   phase 3): the rules below still constrain what the in-repo shared
-   layers may import FROM campus.common, but common's own constraints
-   (stdlib + bcrypt only, no sibling campus imports, lazy flask) are
-   enforced by the boundary guard in the campus-common repo
-   (tests/unit/test_boundaries.py).
+4. campus.common and campus.model are now external distributions
+   (campus-common and campus-model; #970 phase 3): the rules below
+   still constrain what the in-repo shared layers may import FROM
+   them, but their own constraints (common: stdlib + bcrypt only, no
+   sibling campus imports, lazy flask; model: stdlib + common only, no
+   third party at all) are enforced by the boundary guards in their
+   own repos (tests/unit/test_boundaries.py in each).
 5. Storage database drivers stay lazily imported: importing
    campus.storage must not load psycopg2/pymongo/boto3.
 
@@ -41,11 +42,11 @@ from pathlib import Path
 CAMPUS_DIR = Path(__file__).resolve().parents[2] / "campus"
 
 # campus subpackage -> set of campus subpackages it may depend on
-# (campus.common itself is the external campus-common dist; importing
-# it is governed by these same allowed sets, checked via AST here)
+# (campus.common and campus.model themselves are the external
+# campus-common/campus-model dists; importing them is governed by these
+# same allowed sets, checked via AST here)
 SHARED_ALLOWED = {
     "config": {"common"},
-    "model": {"common"},
     "storage": {"common", "model"},
     "webauth": {"common", "model"},
     "services": {"common"},
