@@ -53,7 +53,20 @@ user = users.create({"name": "John", "email": "john@example.com"})
 # Table storage (SQL-style)
 sessions = campus.storage.get_table("sessions")
 session = sessions.find_by_id("session_123")
+
+# Object storage (S3-compatible blobs; Railway Bucket in deployment,
+# local filesystem in dev/test — selected automatically per environment)
+reports = campus.storage.get_bucket("reports")
+reports.put("2026/q3.pdf", data, content_type="application/pdf")
+data = reports.get("2026/q3.pdf")
 ```
+
+Bucket backend selection is environment-based: test mode uses the local
+filesystem; staging/production use the Railway Bucket; development uses
+Railway when credentials resolve from environment variables or the
+deployment vault (`env.getsecret`), otherwise local. Record-style
+storage stores structured records; buckets store bytes addressed by
+keys.
 
 **Storage interface requirements:**
 - `id` field - unique identifier (string)
