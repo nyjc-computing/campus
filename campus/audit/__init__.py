@@ -206,8 +206,13 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         # Service root / (#842): audit has a web UI, so it serves the
         # public landing page at the hostname root (campus-wide
         # convention: / is a landing page, /health is the health check;
-        # deploy.configure_* adds /health). Standalone deployments only.
-        app.register_blueprint(web.ui.create_root_blueprint())
+        # deploy.configure_* adds /health). Standalone deployments only:
+        # behind a shared hostname (PUBLIC_PREFIX set) the gateway owns
+        # the root, and audit's landing lives at /audit instead.
+        from campus.deploy import get_public_prefix
+
+        if not get_public_prefix():
+            app.register_blueprint(web.ui.create_root_blueprint())
         # Register error handlers for proper error responses
         handlers.init_app(app)
         # Lazy import to allow env setup

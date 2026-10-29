@@ -111,6 +111,21 @@ DEVICE_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
 # campus_python.tracing.DEVICE_ID_HEADER (mirrors the X-Journey-ID pair).
 DEVICE_ID_HEADER = "X-Campus-Device"
 
+# Distinct Flask session cookie names per deployment. campus.auth and
+# campus.audit both keep browser state in flask.session, each signed with
+# its own vault SECRET_KEY. On separate hostnames the cookies never meet;
+# behind one hostname (path-dispatched reverse proxy) they share the
+# browser's cookie jar, so same-named cookies clobber each other and each
+# service rejects the other's signature. Unlisted deployments (campus.api
+# keeps no browser session) keep Flask's default 'session' cookie.
+# Correlation cookies (campus_journey, campus_device,
+# campus_action_journey) are already uniquely named and stay host-wide
+# on purpose. Applied in deploy.create_app.
+SESSION_COOKIE_NAMES = {
+    "campus.auth": "campus_auth_session",
+    "campus.audit": "campus_audit_session",
+}
+
 # Public OAuth client ID for CLI/device apps (RFC 6749 Section 2.1)
 # Stored in the database as a client with is_public=True and no secret;
 # seeded at auth service startup (see campus.auth.resources.client.
