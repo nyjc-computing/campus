@@ -108,6 +108,30 @@ class TestLocalBucket(unittest.TestCase):
         self.assertTrue(meta.etag)
         self.assertIn("_uploaded_at", meta.custom)
 
+    def test_put_content_type_roundtrips_without_metadata(self):
+        self.bucket.put("ct/plain.txt", b"12345", content_type="text/plain")
+        meta = self.bucket.get_metadata("ct/plain.txt")
+        self.assertEqual(meta.content_type, "text/plain")
+        self.assertIn("_uploaded_at", meta.custom)
+
+    def test_put_content_type_overrides_metadata_key(self):
+        self.bucket.put(
+            "ct/mixed.txt", b"x", {"content-type": "image/png"},
+            content_type="application/pdf",
+        )
+        self.assertEqual(
+            self.bucket.get_metadata("ct/mixed.txt").content_type,
+            "application/pdf",
+        )
+
+    def test_put_does_not_mutate_caller_metadata(self):
+        caller_metadata = {"kind": "note"}
+        self.bucket.put("ct/mutate.txt", b"x", caller_metadata)
+        self.assertEqual(caller_metadata, {"kind": "note"})
+        meta = self.bucket.get_metadata("ct/mutate.txt")
+        self.assertEqual(meta.custom["kind"], "note")
+        self.assertIn("_uploaded_at", meta.custom)
+
     def test_copy_preserves_data_and_metadata(self):
         self.bucket.put("cp/src.txt", b"data", {"kind": "orig"})
         self.bucket.copy("cp/src.txt", "cp/dst.txt")
@@ -170,7 +194,15 @@ class TestRailwayBucket(unittest.TestCase):
 
     def test_put_without_metadata_omits_metadata_kwarg(self):
         self.bucket.put("file.txt", b"data")
-        self.assertNotIn("Metadata", self.s3.put_object.call_args.kwargs)
+        kwargs = self.s3.put_object.call_args.kwargs
+        self.assertNotIn("Metadata", kwargs)
+        self.assertNotIn("ContentType", kwargs)
+
+    def test_put_sets_content_type(self):
+        self.bucket.put("file.pdf", b"data", content_type="application/pdf")
+        kwargs = self.s3.put_object.call_args.kwargs
+        self.assertEqual(kwargs["ContentType"], "application/pdf")
+        self.assertNotIn("Metadata", kwargs)
 
     def test_get_returns_body_bytes(self):
         self.s3.get_object.return_value = {"Body": io.BytesIO(b"bytes")}

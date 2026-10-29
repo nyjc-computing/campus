@@ -204,7 +204,13 @@ class RailwayBucket(BucketInterface):
                 details={"key": key, "error": str(error)}
             )
 
-    def put(self, key: str, data: bytes, metadata: dict | None = None) -> None:
+    def put(
+        self,
+        key: str,
+        data: bytes,
+        metadata: dict | None = None,
+        content_type: str | None = None,
+    ) -> None:
         """Upload data to Railway bucket."""
         client = self._get_client()
         full_key = self._full_key(key)
@@ -215,6 +221,9 @@ class RailwayBucket(BucketInterface):
                 "Key": full_key,
                 "Body": data,
             }
+
+            if content_type:
+                put_args["ContentType"] = content_type
 
             # Add metadata if provided (convert to S3 format)
             if metadata:
