@@ -16,12 +16,12 @@
 # /audit/health once the services set PUBLIC_PREFIX (PR #996). Railway
 # healthchecks for the gateway can point at /health.
 
-# Exported by the stock 15-local-resolvers.envsh (active when the
-# service sets NGINX_ENTRYPOINT_LOCAL_RESOLVERS): nameservers from
-# /etc/resolv.conf, IPv6 addresses bracketed — required form for the
-# resolver directive (Railway's private DNS is IPv6, e.g. fd12::10,
-# which a bare literal misparses as host:port).
-resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+    # Exported by the stock 15-local-resolvers.envsh (active when the
+    # service sets NGINX_ENTRYPOINT_LOCAL_RESOLVERS): nameservers from
+    # /etc/resolv.conf, IPv6 addresses bracketed — required form for the
+    # resolver directive (Railway's DNS is an IPv6 literal, e.g.
+    # fd12::10, which a bare literal misparses as host:port).
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
 
 server {
     listen ${PORT};
@@ -39,6 +39,29 @@ server {
     # Trace-ingestion batches and login form posts are small, but don't
     # let nginx's 1m default surprise anyone.
     client_max_body_size 10m;
+
+    # Emit relative Location on redirects (/ -> /audit/): otherwise
+    # nginx makes it absolute from the listen port and leaks :8080.
+    absolute_redirect off;
+
+    # Upstreams: hairpin through the services' PUBLIC domains over
+    # HTTPS. Railway private networking (*.railway.internal, IPv6) was
+    # investigated on 2026-10-29 and refused connects from the gateway
+    # for all three services despite ACTIVE private endpoints and
+    # gunicorn bound to 0.0.0.0:8080 (see deploy/gateway/README.md) —
+    # the public hairpin is the working fallback. To switch back to
+    # private networking once resolved:
+    #   set $auth_upstream  "http://campus-auth.railway.internal:${AUTH_PORT}";
+    #   set $api_upstream   "http://campus-api.railway.internal:${API_PORT}";
+    #   set $audit_upstream "http://campusaudit.railway.internal:${AUDIT_PORT}";
+    # Variables force per-request DNS resolution (valid=10s below), so
+    # backend redeploys never leave the gateway with a stale address.
+    set $auth_upstream  "https://campusauth-development.up.railway.app";
+    set $api_upstream   "https://campusapi-development.up.railway.app";
+    set $audit_upstream "https://campusaudit-development.up.railway.app";
+
+    # SNI for the HTTPS upstreams (*.up.railway.app requires it).
+    proxy_ssl_server_name on;
 
     # Variables force per-request DNS resolution: Railway re-issues
     # service private IPs (IPv6) on every backend redeploy, and a
