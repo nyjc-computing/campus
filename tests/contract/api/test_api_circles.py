@@ -75,6 +75,17 @@ class TestApiCirclesContract(unittest.TestCase):
         circle = resources.circle.new(**data)
         return str(circle.id)
 
+    def _create_test_user_circle(self, email: str) -> str:
+        """Helper to create a user circle (named after the email account).
+
+        Returns the circle ID.
+        """
+        return self._create_test_circle(
+            name=email,
+            description=f"Personal circle for {email}",
+            tag="user",
+        )
+
     # List Circles Tests
 
     def test_list_circles_requires_auth(self):
@@ -559,7 +570,8 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertIn(child_id, members_data)
 
     def test_add_user_member(self):
-        """POST /circles/{circle_id}/members/add accepts a user ID (email)."""
+        """POST /members/add adds a user via their email-named user circle."""
+        self._create_test_user_circle("teacher@campus.test")
         circle_id = self._create_test_circle(name="User Member Circle")
 
         response = self.client.post(
@@ -581,8 +593,24 @@ class TestApiCirclesContract(unittest.TestCase):
             members_response.get_json().get("teacher@campus.test"), 15
         )
 
+    def test_add_user_member_without_user_circle_returns_error(self):
+        """POST /members/add with no user circle for the email returns 409."""
+        circle_id = self._create_test_circle(name="No User Circle Member")
+
+        response = self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "ghost@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 409)
+
     def test_add_user_member_with_dotted_email(self):
-        """Dots in a user member ID survive storage (no nested-path splitting)."""
+        """Dots in a user-circle member key survive storage (no splitting)."""
+        self._create_test_user_circle("t.user@campus.test")
         circle_id = self._create_test_circle(name="Dotted Email Member Circle")
 
         response = self.client.post(
@@ -602,7 +630,8 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertIn("t.user@campus.test", members_response.get_json())
 
     def test_remove_user_member(self):
-        """DELETE /circles/{circle_id}/members/remove removes a user member."""
+        """DELETE /members/remove removes a user-circle member."""
+        self._create_test_user_circle("teacher.remove@campus.test")
         circle_id = self._create_test_circle(name="User Member Remove Circle")
         self.client.post(
             f"/api/v1/circles/{circle_id}/members/add",

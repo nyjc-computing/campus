@@ -41,13 +41,22 @@ class BucketInterface(ABC):
         self.name = name
 
     @abstractmethod
-    def put(self, key: str, data: bytes, metadata: dict | None = None) -> None:
+    def put(
+        self,
+        key: str,
+        data: bytes,
+        metadata: dict | None = None,
+        content_type: str | None = None,
+    ) -> None:
         """Upload data to the bucket.
 
         Args:
             key: The object key (path-like string, e.g., "uploads/file.jpg")
             data: The binary data to store
             metadata: Optional custom metadata to attach to the object
+            content_type: Optional MIME type stored with the object and
+                surfaced by get_metadata(); backends without native content
+                types keep it in custom metadata under "content-type"
 
         Raises:
             StorageError: If the upload fails

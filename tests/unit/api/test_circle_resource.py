@@ -156,7 +156,7 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
         )
 
     def test_bootstrap_seeds_admin_user(self):
-        """The temporary bootstrap admin user is a member of every role circle."""
+        """The temporary bootstrap admin is a member of every role circle."""
         from campus.api.resources.circle import (
             BOOTSTRAP_ACCESS_VALUE,
             BOOTSTRAP_ADMIN_USER,
@@ -176,6 +176,23 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
                 BOOTSTRAP_ACCESS_VALUE,
             )
 
+    def test_bootstrap_seeds_user_circle(self):
+        """The bootstrap admin's user circle exists, tagged "user"."""
+        from campus.api.resources.circle import (
+            BOOTSTRAP_ADMIN_USER,
+            USER_TAG,
+            CirclesResource,
+            circle_storage,
+        )
+
+        CirclesResource.init_storage()
+
+        user_circles = circle_storage.get_matching(
+            {"name": str(BOOTSTRAP_ADMIN_USER)}
+        )
+        self.assertEqual(len(user_circles), 1)
+        self.assertEqual(user_circles[0]["tag"], USER_TAG)
+
     def test_bootstrap_is_idempotent(self):
         """Re-running init_storage adds no circles and raises no conflict."""
         from campus.api.resources.circle import CirclesResource
@@ -188,7 +205,7 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
 
 
 class TestCircleUserMembers(unittest.TestCase):
-    """Circle membership accepts user IDs (emails) alongside circle IDs."""
+    """Users join circles through their email-named user circles."""
 
     def setUp(self):
         from campus.api.resources.circle import circle_storage
@@ -198,14 +215,19 @@ class TestCircleUserMembers(unittest.TestCase):
         from campus.api.resources.circle import circle_storage
         circle_storage.delete_matching({})
 
-    def _new_circle(self, name: str):
+    def _new_circle(self, name: str, tag: str = "test"):
         from campus.api import resources
-        return resources.circle.new(name=name, tag="test")
+        return resources.circle.new(name=name, tag=tag)
+
+    def _new_user_circle(self, email: str):
+        """A user circle, named after the email account."""
+        return self._new_circle(email, tag="user")
 
     def test_add_and_remove_user_member(self):
-        """A user ID can be added as a member and removed again."""
+        """A user is added via their user circle and removed again."""
         from campus.api import resources
 
+        self._new_user_circle("teacher@campus.test")
         circle = self._new_circle("User Member Circle")
         members = resources.circle.members
         members.add(str(circle.id), "teacher@campus.test", 15)
@@ -219,10 +241,22 @@ class TestCircleUserMembers(unittest.TestCase):
             "teacher@campus.test", members.list(str(circle.id))
         )
 
+    def test_user_member_requires_user_circle(self):
+        """An email-shaped member without a user circle is rejected."""
+        from campus.api import resources
+        from campus.common.errors import api_errors
+
+        circle = self._new_circle("No User Circle")
+        with self.assertRaises(api_errors.ConflictError):
+            resources.circle.members.add(
+                str(circle.id), "ghost@campus.test", 15
+            )
+
     def test_user_member_with_dotted_email(self):
-        """Dots in user member IDs are preserved, not split as field paths."""
+        """Dots in user-circle member keys are preserved, not split."""
         from campus.api import resources
 
+        self._new_user_circle("t.user@campus.test")
         circle = self._new_circle("Dotted Email Circle")
         resources.circle.members.add(str(circle.id), "t.user@campus.test", 15)
 
@@ -232,7 +266,7 @@ class TestCircleUserMembers(unittest.TestCase):
         self.assertNotIn("t", stored)
 
     def test_add_member_with_unknown_id_shape_raises_conflict(self):
-        """Member IDs that are neither circle IDs nor emails are rejected."""
+        """Member IDs that address no circle are rejected."""
         from campus.api import resources
         from campus.common.errors import api_errors
 
@@ -256,6 +290,7 @@ class TestCircleUserMembers(unittest.TestCase):
         from campus.api import resources
         from campus.common.errors import api_errors
 
+        self._new_user_circle("teacher@campus.test")
         with self.assertRaises(api_errors.ConflictError):
             resources.circle.members.add(
                 "circle_nosuch00", "teacher@campus.test", 15
