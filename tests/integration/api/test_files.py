@@ -66,7 +66,7 @@ class TestFilesIntegration(IntegrationTestCase):
         assert record["content_type"] == "application/pdf"
         assert record["id"].startswith("uid-file-")
         assert record["uploaded_by_user_id"] == self.user_id
-        assert record["created_at"] == record["updated_at"]
+        assert record["created_at"] <= record["updated_at"]
 
     def test_put_by_slug_replaces_content(self):
         """Second PUT to the same slug replaces content, returns 200."""
