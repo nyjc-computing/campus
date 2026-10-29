@@ -5,6 +5,11 @@ application: app creation (create_app), environment-specific configuration
 (Codespaces, development, deployment) and the /health and / route
 conventions (#842).
 
+Deployments reached through a path-dispatching reverse proxy on a shared
+hostname set PUBLIC_PREFIX (e.g. "/auth"): the health check registers
+under the prefix and the service does not claim the shared root. Standalone
+deployments keep /health and / at the hostname root.
+
 It lives at the top level (moved out of campus.common.devops) because it
 orchestrates whole services: it pulls in Flask and campus.audit middleware,
 which environment-agnostic code in campus.common must not depend on.
@@ -17,6 +22,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.routing import BuildError
 
 import campus.common.errors
+import campus.config
 from campus.common import env, introspect
 from campus.common.utils import url
 
@@ -62,17 +68,35 @@ def has_rule(app: flask.Flask, rule: str) -> bool:
     return any(mapped.rule == rule for mapped in app.url_map.iter_rules())
 
 
-def register_health(app: flask.Flask) -> None:
-    """Register the health check endpoint at /health (#842).
+def get_public_prefix() -> str:
+    """Return this deployment's public path prefix, or "" if standalone.
+
+    Set PUBLIC_PREFIX (e.g. "/auth") when requests reach the service
+    through a path-dispatching reverse proxy under a shared hostname.
+    Values are normalized to "/x" form (leading slash added, trailing
+    slash stripped); unset, empty, or "/" means standalone.
+    """
+    prefix = (env.get("PUBLIC_PREFIX") or "").strip()
+    if prefix and not prefix.startswith("/"):
+        prefix = "/" + prefix
+    return prefix.rstrip("/")
+
+
+def register_health(app: flask.Flask, prefix: str = "") -> None:
+    """Register the health check endpoint (#842).
 
     Campus convention: /health is the endpoint deployment platforms and
-    monitors should ping. Idempotent, so development and deployment
-    configuration can be applied to the same app in tests.
+    monitors should ping. Deployments behind a shared hostname set
+    PUBLIC_PREFIX and expose it at PUBLIC_PREFIX + /health instead, so
+    each service's health stays distinguishable on the shared host.
+    Idempotent, so development and deployment configuration can be
+    applied to the same app in tests.
     """
-    if has_rule(app, '/health'):
+    rule = f"{prefix}/health"
+    if has_rule(app, rule):
         return
 
-    @app.get('/health')
+    @app.get(rule)
     def health_check():
         return {
             'status': 'healthy',
@@ -121,6 +145,7 @@ def configure_for_development(app: flask.Flask) -> None:
     - enables debug mode
     - sets host and port from environment variables or defaults
     - configures for Codespaces if detected
+    - honors PUBLIC_PREFIX for the health/route-index placement
     """
 
     app.debug = True
@@ -128,12 +153,14 @@ def configure_for_development(app: flask.Flask) -> None:
     if is_codespace():
         configure_for_codespace(app)
 
-    register_health(app)
+    register_health(app, get_public_prefix())
 
     # Services that own / (campus.audit, #842) keep their landing page
     # in development too; the route index below is for the API-only
-    # services, where it doubles as the dev landing page.
-    if has_rule(app, '/'):
+    # services, where it doubles as the dev landing page. Behind a
+    # shared hostname (PUBLIC_PREFIX set) the root belongs to the
+    # gateway, so no index is registered.
+    if get_public_prefix() or has_rule(app, '/'):
         return
 
     @app.get('/')
@@ -172,17 +199,22 @@ def configure_for_deployment(app: flask.Flask) -> None:
     """Configure the Flask app for deployment.
 
     - adds health check and landing page routes (#842)
+    - honors PUBLIC_PREFIX: health moves under the prefix and the
+      landing page is skipped, since the gateway owns the shared root
     """
-    # HOSTNAME environment variable should be set in deployment platform
+    prefix = get_public_prefix()
 
     # Health check endpoint (#842): deployment platforms and monitors
-    # ping /health to verify the service is running.
-    register_health(app)
+    # ping /health (standalone) or PUBLIC_PREFIX + /health (shared
+    # hostname) to verify the service is running.
+    register_health(app, prefix)
 
-    # Landing page (#842): every deployment serves HTML at /; services
-    # with a web UI provide their own (registered during init_app,
-    # before this runs).
-    register_generic_landing(app)
+    # Landing page (#842): every standalone deployment serves HTML at /;
+    # services with a web UI provide their own (registered during
+    # init_app, before this runs). Behind a shared hostname the root is
+    # the gateway's, so no landing page is registered.
+    if not prefix:
+        register_generic_landing(app)
 
 
 def _is_tracing_enabled() -> bool:
@@ -214,6 +246,14 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
     for module in appmodules:
         module.init_app(app)
     campus.common.errors.init_app(app)
+
+    # Distinct session cookie per deployment (see SESSION_COOKIE_NAMES):
+    # auth and audit both keep browser state in flask.session and would
+    # clobber each other's cookies behind a shared hostname. Unlisted
+    # deployments keep Flask's default.
+    session_name = campus.config.SESSION_COOKIE_NAMES.get(env.DEPLOY or "")
+    if session_name:
+        app.config["SESSION_COOKIE_NAME"] = session_name
 
     # Fix scheme/redirect issues when behind reverse proxy (Railway, Nginx, etc.)
     # Railway sends X-Forwarded-Proto, X-Forwarded-Host, X-Forwarded-For headers
