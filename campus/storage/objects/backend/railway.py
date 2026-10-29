@@ -5,17 +5,24 @@ This module provides the Railway Bucket backend for the Objects storage interfac
 Railway Buckets are S3-compatible object storage. This backend uses boto3
 to interact with Railway's S3-compatible API.
 
-Environment Variables Required:
+Credentials Required:
     BUCKET: The globally unique bucket name (e.g., "my-bucket-jdhhd8oe18xi")
     SECRET_ACCESS_KEY: The S3 secret key
     ACCESS_KEY_ID: The S3 key ID
-    REGION: The S3 region (typically "auto")
-    ENDPOINT: The S3 endpoint URL (e.g., "https://storage.railway.app")
+    REGION: The S3 region (typically "auto"; optional, defaults to "auto")
+    ENDPOINT: The S3 endpoint URL (e.g., the bucket's private Railway URL)
+
+Credentials are resolved from environment variables first, then from the
+deployment vault via env.getsecret (same source as SECRET_KEY). Storing
+them in the vault keeps them out of the service variable list; the private
+ENDPOINT URL is only reachable from within the Railway environment.
 
 Railway Documentation: https://docs.railway.com/storage-buckets.md
 """
 
+import logging
 import os
+from collections.abc import Mapping
 from typing import Any
 
 import boto3
@@ -23,6 +30,59 @@ from botocore.config import Config
 
 from campus.storage import errors
 from campus.storage.objects.interface import BucketInterface, ObjectMetadata
+
+logger = logging.getLogger(__name__)
+
+# Required credential keys; resolution failure is a configuration error
+CREDENTIAL_VARS = ("BUCKET", "ENDPOINT", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY")
+# Optional credential keys with fallbacks
+OPTIONAL_VARS = ("REGION",)
+
+
+def resolve_credential(name: str) -> str | None:
+    """Resolve a bucket credential from environment or deployment vault.
+
+    Environment variables take precedence (deployment-level overrides);
+    missing names fall back to the deployment vault via env.getsecret,
+    the same source that serves SECRET_KEY. Lookup failures (secret not
+    configured, vault unreachable) resolve to None so bucket factory
+    selection can fall back to another backend.
+
+    Args:
+        name: Credential key (e.g., "BUCKET", "SECRET_ACCESS_KEY")
+
+    Returns:
+        The credential value, or None if unavailable from both sources
+    """
+    if name in os.environ:
+        return os.environ[name]
+    from campus.common import env
+    try:
+        return env.getsecret(name)
+    except Exception:
+        logger.debug("No %s credential from environment or vault", name)
+        return None
+
+
+def resolve_credentials() -> dict[str, str | None] | None:
+    """Resolve all Railway bucket credentials, or None if unconfigured.
+
+    Returns None when BUCKET or ENDPOINT is unavailable, meaning the
+    bucket is not configured for this deployment. A partial configuration
+    (BUCKET and ENDPOINT present but keys missing) returns what resolved
+    so that RailwayBucket construction raises the loud missing-variable
+    error instead of silently falling back to another backend.
+
+    Returns:
+        Dict of resolved credentials, or None if the bucket is unconfigured
+    """
+    creds: dict[str, str | None] = {
+        var: resolve_credential(var)
+        for var in CREDENTIAL_VARS + OPTIONAL_VARS
+    }
+    if not creds["BUCKET"] or not creds["ENDPOINT"]:
+        return None
+    return creds
 
 
 class RailwayBucket(BucketInterface):
@@ -37,33 +97,35 @@ class RailwayBucket(BucketInterface):
         url = bucket.get_url("avatar.jpg", expires_in=3600)
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, credentials: Mapping[str, str | None] | None = None):
         """Initialize the Railway bucket backend.
 
         Args:
             name: The bucket name prefix (used as a namespace within the bucket)
+            credentials: Explicit credential overrides (e.g., for testing).
+                When omitted, credentials are resolved from environment
+                variables first, then the deployment vault via env.getsecret.
 
         Raises:
-            OSError: If required environment variables are not set
+            OSError: If required credentials cannot be resolved
         """
         super().__init__(name)
 
-        # Railway provides these variables via Variable References
-        self._bucket_name = os.environ.get("BUCKET")
-        self._endpoint = os.environ.get("ENDPOINT")
-        self._access_key = os.environ.get("ACCESS_KEY_ID")
-        self._secret_key = os.environ.get("SECRET_ACCESS_KEY")
-        self._region = os.environ.get("REGION", "auto")
+        creds = credentials if credentials is not None else {
+            var_name: resolve_credential(var_name)
+            for var_name in CREDENTIAL_VARS + OPTIONAL_VARS
+        }
+
+        self._bucket_name = creds.get("BUCKET")
+        self._endpoint = creds.get("ENDPOINT")
+        self._access_key = creds.get("ACCESS_KEY_ID")
+        self._secret_key = creds.get("SECRET_ACCESS_KEY")
+        self._region = creds.get("REGION") or "auto"
 
         # Validate required credentials
         missing = [
-            var_name for var_name, value in [
-                ("BUCKET", self._bucket_name),
-                ("ENDPOINT", self._endpoint),
-                ("ACCESS_KEY_ID", self._access_key),
-                ("SECRET_ACCESS_KEY", self._secret_key),
-            ]
-            if not value
+            var_name for var_name in CREDENTIAL_VARS
+            if not creds.get(var_name)
         ]
 
         if missing:

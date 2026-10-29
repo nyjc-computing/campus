@@ -122,12 +122,15 @@ def bootstrap_venv(wt_root: Path, main_root_path: Path) -> None:
     run([str(wt_py), "-m", "pip", "install", "-r", str(freeze_file)],
         check=True)
 
-    # campus_suite / campus_api_python are built locally, not on any
-    # index: copy their site-packages content across.
+    # The campus distributions are built locally, not on any index
+    # (campus_python / campus_api_python; campus_common / campus_model /
+    # campus_suite wheels and the campus namespace portions they install):
+    # copy their site-packages content across.
     src = site_packages(main_py)
     dst = site_packages(wt_py)
     copied = []
-    for pattern in ("campus_python*", "campus_api_python*"):
+    for pattern in ("campus_python*", "campus_api_python*", "campus_common*",
+                    "campus_model*", "campus_suite*", "campus"):
         for item in src.glob(pattern):
             target = dst / item.name
             if item.is_dir():

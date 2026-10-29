@@ -10,7 +10,7 @@ Usage Example:
     ```python
     from campus.storage.objects import get_bucket
 
-    # Get a bucket (uses Railway in prod/staging, local in dev/test)
+    # Get a bucket (Railway in prod/staging and configured dev, local otherwise)
     uploads = get_bucket("uploads")
 
     # Upload a file
@@ -30,8 +30,6 @@ Usage Example:
     ```
 """
 
-import os
-
 __all__ = [
     "BucketInterface",
     "ObjectMetadata",
@@ -49,7 +47,8 @@ def get_bucket(name: str) -> BucketInterface:
     Backend Selection:
         - Test mode (STORAGE_MODE != "0"): Local filesystem backend
         - Production/Staging: Railway Bucket backend
-        - Development: Railway if BUCKET env var is set, otherwise Local
+        - Development: Railway if bucket credentials resolve from the
+          environment or the deployment vault, otherwise Local
 
     Args:
         name: The bucket name (used as namespace/prefix)
@@ -58,8 +57,8 @@ def get_bucket(name: str) -> BucketInterface:
         BucketInterface instance configured for the current environment
 
     Raises:
-        OSError: If Railway backend is selected but required environment
-            variables are not set
+        OSError: If the Railway backend is selected but required
+            credentials cannot be resolved
 
     Example:
         uploads = get_bucket("uploads")
@@ -75,10 +74,11 @@ def get_bucket(name: str) -> BucketInterface:
         from .backend.railway import RailwayBucket
         return RailwayBucket(name)
     else:
-        # Development: check for Railway environment variables
-        # If present, use Railway; otherwise fall back to local
-        if "BUCKET" in os.environ and "ENDPOINT" in os.environ:
-            from .backend.railway import RailwayBucket
-            return RailwayBucket(name)
+        # Development: use Railway when bucket credentials are configured
+        # (environment variables or deployment vault); otherwise local
+        from .backend.railway import RailwayBucket, resolve_credentials
+        creds = resolve_credentials()
+        if creds is not None:
+            return RailwayBucket(name, credentials=creds)
         from .backend.local import LocalBucket
         return LocalBucket(name)
