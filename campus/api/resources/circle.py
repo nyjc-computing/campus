@@ -19,10 +19,9 @@ DOMAIN = "nyjc.edu.sg"
 # Access-control bootstrap (docs/circles-access-control.md): each guarded
 # API resource family gets a resource circle (tag RESOURCE_TAG), and each
 # resource circle gets an admin role circle (tag ROLE_TAG) named
-# "<resource>.admin" — role circles carry the principals (users, circles)
-# granted the role and never contain resources of their own. Resource
-# circles hang under the root circle; role circles hang under their
-# resource circle.
+# "<resource>.admin" — role circles carry the principals granted the
+# role and never contain resources of their own. Resource circles hang
+# under the root circle; role circles hang under their resource circle.
 RESOURCE_TAG = "resource"
 ROLE_TAG = "role"
 BOOTSTRAP_RESOURCES = (
@@ -33,8 +32,16 @@ BOOTSTRAP_RESOURCES = (
     "submissions",
 )
 
-# Bootstrap seeding, temporary: added to every <resource>.admin role
-# circle at init until role administration has a management flow.
+# Circles contain only circles: a user participates through their user
+# circle (tag USER_TAG), named after their email account, which also
+# holds their private resources. Adding a user to a circle means adding
+# their user circle, so email-shaped member IDs must address an
+# existing user circle.
+USER_TAG = "user"
+
+# Bootstrap seeding, temporary: the user circle is created and added to
+# every <resource>.admin role circle at init until role administration
+# and user-circle provisioning have a management flow.
 BOOTSTRAP_ADMIN_USER: schema.CampusID = schema.CampusID(
     "ng_jun_siang@nyjc.edu.sg"
 )
@@ -47,11 +54,11 @@ BOOTSTRAP_ACCESS_VALUE = 15
 def _member_kind(member_id: str) -> str:
     """Classify a member ID: "user" (email-shaped) or "circle".
 
-    User IDs are emails (campus.common.schema.UserID is an Email);
-    every other ID addresses a circle record and must exist. Circle
-    UIDs have used both the legacy ("circle_...") and current
-    ("uid-circle-...") schemes, so membership keys are not
-    prefix-matched.
+    Email-shaped IDs name a user circle (user circles are named after
+    the email account; campus.common.schema.UserID is an Email). Every
+    other ID addresses a circle by UID. Circle UIDs have used both the
+    legacy ("circle_...") and current ("uid-circle-...") schemes, so
+    membership keys are not prefix-matched.
     """
     return "user" if "@" in member_id else "circle"
 
@@ -213,6 +220,21 @@ class CirclesResource:
                 parents={root_circle.id: 15}
             )
 
+        # User circle for the bootstrap admin (docs/circles-access-control.md):
+        # users participate through their user circle, named after the
+        # email account; it also holds the user's private resources.
+        # Created standalone (no parents) — role memberships are the
+        # access grants, not the user circle's position in the tree.
+        # Temporary until user-circle provisioning has a flow.
+        _ensure_circle(
+            str(BOOTSTRAP_ADMIN_USER),
+            tag=USER_TAG,
+            description=(
+                f"Personal circle for {BOOTSTRAP_ADMIN_USER} "
+                "(private resources)"
+            ),
+        )
+
         # Resource authorization circles (docs/circles-access-control.md):
         # a resource circle per guarded API resource family, each with an
         # admin role circle for role assignment. Idempotent: name-keyed
@@ -232,7 +254,8 @@ class CirclesResource:
                 description=f"Admin role for the {resource_name} resource",
                 parents={resource_circle.id: BOOTSTRAP_ACCESS_VALUE},
             )
-            # Temporary bootstrap admin (BOOTSTRAP_ADMIN_USER).
+            # Temporary bootstrap admin: membership is held by the
+            # user circle (named after the email), not the account.
             _ensure_member(
                 role_circle.id,
                 BOOTSTRAP_ADMIN_USER,
@@ -455,27 +478,40 @@ class CircleMembersResource:
     ) -> None:
         """Add a member to a circle.
 
+        Circles contain only circles. A member ID is either a circle
+        UID or the email name of the user's circle (user circles are
+        named after the email account); both must address an existing
+        circle. Members are keyed by the identifier they were added
+        with (the user-circle email is itself stable, so no UID
+        resolution is needed).
+
         Args:
             circle_id: The parent circle ID
-            member_id: The member ID to add — a circle ID (`circle_...`)
-                or a user ID (email). User membership is accepted
-                without an existence check (the resource layer cannot
-                validate user IDs against campus.auth); an unknown user
-                ID is inert because enforcement matches caller IDs.
+            member_id: The member circle's ID, or the email name of an
+                existing user circle
             access_value: The access level for the member
 
         Raises:
-            ConflictError: If a circle member ID does not exist, the
-                parent circle does not exist, or the member is already
-                present with the same access
+            ConflictError: If the member circle or user circle does not
+                exist, the parent circle does not exist, or the member
+                is already present with the same access
             InternalError: For storage errors
         """
-        if _member_kind(str(member_id)) == "circle":
-            # Circle members must exist. User members (emails) are
-            # accepted without an existence check: the resource layer
-            # cannot validate user IDs against campus.auth, and an
-            # unknown user ID is inert because enforcement matches
-            # caller IDs.
+        if _member_kind(str(member_id)) == "user":
+            # Email-shaped IDs name the user's circle; the user circle
+            # must exist for the membership to be valid.
+            try:
+                user_circles = circle_storage.get_matching(
+                    {"name": str(member_id)}
+                )
+                if not user_circles:
+                    raise api_errors.ConflictError(
+                        "User circle not found",
+                        id=member_id
+                    )
+            except campus.storage.errors.StorageError as e:
+                raise api_errors.InternalError.from_exception(e) from e
+        else:
             try:
                 member_circle = circle_storage.get_by_id(member_id)
                 if member_circle is None:
@@ -491,9 +527,10 @@ class CircleMembersResource:
             except campus.storage.errors.StorageError as e:
                 raise api_errors.InternalError.from_exception(e) from e
 
-        # Read-modify-write the whole members dict: member IDs may be
-        # user emails, whose dots a `members.{member_id}` update key
-        # would parse as nested-field paths (both document backends).
+        # Read-modify-write the whole members dict: member identifiers
+        # may be email names, whose dots a `members.{member_id}` update
+        # key would parse as nested-field paths (both document
+        # backends).
         try:
             record = circle_storage.get_by_id(circle_id)
             if record is None:
@@ -521,7 +558,8 @@ class CircleMembersResource:
 
         Args:
             circle_id: The parent circle ID
-            member_id: The member ID to remove (circle ID or user email)
+            member_id: The member identifier to remove (circle UID or
+                user-circle email name, as added)
 
         Raises:
             ConflictError: If circle not found or member not in circle

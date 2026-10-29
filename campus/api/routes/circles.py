@@ -331,10 +331,10 @@ def add_circle_member(
 
     Request Body (application/json):
         member_id: str (required)
-            The ID of the member being added: either a circle ID
-            (`circle_...`) or a user ID (email). User membership is
-            accepted without an existence check; an unknown user ID is
-            inert until a matching user authenticates.
+            The member being added — circles contain only circles, so
+            this is either a circle ID or the email name of the user's
+            circle (each user has a circle named after their email
+            account). The addressed circle must exist.
         access_value: AccessValue (required)
             The level of access the member will have in the parent circle.
 
@@ -346,8 +346,9 @@ def add_circle_member(
 
         409 Conflict: None
             - Returned if the target circle does not exist.
-            - Returned if a non-email member ID does not address an
-              existing circle.
+            - Returned if the member ID does not address an existing
+              circle (including a missing user circle for an
+              email-shaped ID).
             - Returned if no changes were applied (e.g., member already exists with same access).
 
         500 Internal Server Error: None
@@ -356,8 +357,9 @@ def add_circle_member(
     Notes:
         - Emits the event: `campus.circles.members.add`.
         - Members are stored as a single `members` dict on the circle
-          record, written by read-modify-write: member IDs may be user
-          emails, whose dots a nested-field update path would misparse.
+          record, written by read-modify-write: member identifiers may
+          be email names, whose dots a nested-field update path would
+          misparse.
     """
     resources.circle.members.add(
         schema.CampusID(circle_id),
@@ -387,8 +389,8 @@ def remove_circle_member(
 
     Request Body (application/json):
         member_id: str (required)
-            The ID of the member to remove: a circle ID or a user ID
-            (email).
+            The member identifier to remove, as added: a circle ID or
+            the email name of a user circle.
 
     Responses:
         200 OK: dict
