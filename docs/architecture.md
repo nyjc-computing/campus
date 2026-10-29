@@ -76,6 +76,7 @@ login, code exchange) is documented in
 ### `campus.api`
 RESTful API resources:
 - Circle (group) management
+- Files: slug-addressable blobs in object storage (`/api/v1/files/...`)
 - Email OTP verification
 - Resource handlers and routing
 - Business logic in `.resources` submodule
@@ -112,7 +113,8 @@ Web authentication shared by services (imports model and common):
 ### `campus.storage`
 Data persistence interfaces:
 - Backend-agnostic storage abstractions
-- Multi-backend support (PostgreSQL, MongoDB)
+- Multi-backend support (PostgreSQL, MongoDB; SQLite in tests)
+- Object (blob) storage in S3-compatible buckets (Railway Bucket in deployment, local filesystem in dev/test)
 - Consistent CRUD operations
 
 ## Design Patterns

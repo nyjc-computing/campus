@@ -69,9 +69,10 @@ the `campus.model` entity dataclasses.
 
 ### 💾 Storage (`campus.storage`)
 
-- Multiple backends (PostgreSQL, MongoDB)
-- Table/collection abstraction
-- Query builder interface
+- Three interfaces: tables (SQL), documents (MongoDB-style), objects (S3-compatible blobs)
+- Backends: PostgreSQL, MongoDB, SQLite (tests); Railway Bucket (deployment) and local filesystem (dev/test) for objects
+- Table/collection abstraction and query builder interface
+- Bucket credentials resolve from environment variables or the deployment vault (`env.getsecret`)
 
 ### 🏛️ Model (`campus.model`)
 

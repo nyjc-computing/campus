@@ -24,6 +24,11 @@ poetry run python tests/run_tests.py all
 - **All tests must be run using the Poetry environment.** Do not create or activate new virtual environments manually.
 - **Cross-platform compatible**: Tests run on Windows, Linux, and macOS via the test runner.
 - **Tests should ideally be invoked through `tests/run_tests.py`** for consistent environment and cross-platform executable detection.
+- **Document and table backends disagree on missing records**: document
+  collections (`get_collection`) return `None` from `get_by_id()` for a
+  missing id, while table backends (`get_table`) raise
+  `campus.storage.errors.NotFoundError`. Resource code must handle both
+  contracts (see `campus/api/resources/files.py` for an example).
 
 ### Which Suites Run Where
 
