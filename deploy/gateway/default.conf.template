@@ -16,7 +16,12 @@
 # /audit/health once the services set PUBLIC_PREFIX (PR #996). Railway
 # healthchecks for the gateway can point at /health.
 
-resolver ${RESOLVER_IP} valid=10s;
+# Exported by the stock 15-local-resolvers.envsh (active when the
+# service sets NGINX_ENTRYPOINT_LOCAL_RESOLVERS): nameservers from
+# /etc/resolv.conf, IPv6 addresses bracketed — required form for the
+# resolver directive (Railway's private DNS is IPv6, e.g. fd12::10,
+# which a bare literal misparses as host:port).
+resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
 
 server {
     listen ${PORT};
