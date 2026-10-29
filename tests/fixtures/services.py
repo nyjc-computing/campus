@@ -495,6 +495,12 @@ class ServiceManager:
         auth.init()
         yapper.init()
 
+        # Restore the circle access-control bootstrap: gated api
+        # mutation routes resolve <resource>.admin role circles, which
+        # clear_all_data() wiped (docs/circles-access-control.md).
+        from campus.api.resources.circle import CirclesResource
+        CirclesResource.init_storage()
+
         # Recreate audit API key after clearing data
         # Since clear_all_data() deletes all rows, the API key created during
         # _do_initialize() is gone and needs to be recreated for each test

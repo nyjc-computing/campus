@@ -24,6 +24,7 @@ import unittest
 
 from campus.common import schema
 from tests.fixtures import services
+from tests.fixtures.circles import grant_circle_admin
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 
 
@@ -57,6 +58,10 @@ class TestApiCirclesContract(unittest.TestCase):
         self.token = create_test_token(self.user_id)
         self.auth_headers = get_bearer_auth_headers(self.token)
 
+        # Mutation routes are gated behind circles.admin; grant the
+        # test user the role (clear_test_data wipes the circles).
+        grant_circle_admin(str(self.user_id), "circles")
+
     def _create_test_circle(self, **overrides):
         """Helper to create a test circle via resource layer.
 
@@ -85,6 +90,75 @@ class TestApiCirclesContract(unittest.TestCase):
             description=f"Personal circle for {email}",
             tag="user",
         )
+
+    # Gate Tests (circle access control)
+
+    def test_mutation_without_role_membership_returns_403(self):
+        """POST /circles/ without circles.admin membership returns 403."""
+        outsider = schema.UserID("outsider@campus.test")
+        token = create_test_token(outsider)
+
+        response = self.client.post(
+            "/api/v1/circles/",
+            json={
+                "name": "Outsider Circle",
+                "tag": "test",
+            },
+            headers=get_bearer_auth_headers(token)
+        )
+
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "FORBIDDEN")
+
+    def test_mutation_member_passes_and_reads_stay_open(self):
+        """A circles.admin member can create; reads need no membership."""
+        # The setUp grant makes the test user a circles.admin member.
+        response = self.client.post(
+            "/api/v1/circles/",
+            json={
+                "name": "Member Created Circle",
+                "tag": "test",
+            },
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 201)
+        circle_id = response.get_json()["id"]
+
+        # Reads stay open: an outsider may list and read.
+        outsider = schema.UserID("outsider@campus.test")
+        outsider_headers = get_bearer_auth_headers(
+            create_test_token(outsider)
+        )
+        listed = self.client.get(
+            "/api/v1/circles/", headers=outsider_headers
+        )
+        self.assertEqual(listed.status_code, 200)
+        detail = self.client.get(
+            f"/api/v1/circles/{circle_id}/", headers=outsider_headers
+        )
+        self.assertEqual(detail.status_code, 200)
+
+    def test_member_add_requires_role_membership(self):
+        """POST /circles/{id}/members/add is member-only (escalation guard)."""
+        self._create_test_user_circle("teacher@campus.test")
+        circle_id = self._create_test_circle(name="Escalation Guard Circle")
+        outsider = schema.UserID("outsider@campus.test")
+        outsider_headers = get_bearer_auth_headers(
+            create_test_token(outsider)
+        )
+
+        response = self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher@campus.test",
+                "access_value": 15,
+            },
+            headers=outsider_headers
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     # List Circles Tests
 

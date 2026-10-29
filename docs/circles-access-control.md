@@ -5,13 +5,13 @@ determines what a principal can and cannot access. Circles contain
 only other circles — users participate through their own **user
 circle**, named after their email account, which also holds their
 private resources. This document describes how circles are modelled,
-how the bootstrap seeds them, and how requests will be authorized
+how the bootstrap seeds them, and how requests are authorized
 against them.
 
-Status: the circle data model, membership API, and bootstrap are
-shipped and live in `campus.api`. Request enforcement against circles
-is designed but not yet implemented (see
-[Enforcement](#enforcement-planned)).
+Status: the circle data model, membership API, the bootstrap, and
+route enforcement are shipped and live in `campus.api` (enforcement:
+[campus/api/authz.py](../campus/api/authz.py)). See
+[Enforcement](#enforcement) for the mechanism, accepted 2026-10-30.
 
 ## Placement: circles live in campus.api
 
@@ -132,35 +132,49 @@ All circle administration is via the `/api/v1/circles/` endpoints
 [campus-api-schema.md](campus-api-schema.md)). Mutations emit
 `campus.circles.*` events via yapper.
 
-Note that administration itself is **not yet gated**: any
-authenticated principal can currently create circles or edit
-membership. Gating circle administration behind `circles.admin` is
-part of the enforcement work — and is urgent, since membership
-editing is privilege escalation once enforcement lands.
+Administration is gated: every mutating circles endpoint requires
+membership in the `circles.admin` role circle (see below). Membership
+editing is privilege escalation once circles gate access, which is
+why the circles family gates first.
 
-## Enforcement (planned)
+## Enforcement
 
-The intended model, at the campus.api route layer:
+Implemented 2026-10-30 (mechanism accepted by the maintainer; labels
+optional). `campus/api/authz.py` provides the fail-closed gate:
 
-- A fail-closed gate helper takes the caller's user ID — the email
-  set by the authentication middleware on `flask.g` — and checks
-  membership in the `<resource>.admin` role circle for the resource
-  family the route serves. Since user circles are named after the
-  email, this is a direct members-dict lookup on the role circle's
-  record: no resolution hop. No membership → 403.
-- Reads start ungated; mutations gate first. Circle administration
-  routes gate behind `circles.admin`.
-- Client principals (app tokens, no user) are denied domain-admin
-  actions.
-- Private resources attach to the user's circle (its contents/
-  sources); access to another user's private resources will resolve
-  through circle membership the same way.
-- Later: access-value tiers, transitive resolution through nested
-  circles, and caching invalidated by the existing
-  `campus.circles.*` yapper events.
+```python
+authz.require_resource_admin(resource, action_label=None)
+```
 
-The detailed design (gate placement, helper shape, principal rules)
-is under discussion; this section is updated once decided.
+- **Decision**: the caller must be a user principal (bearer token)
+  whose user ID — the email, which is also their user circle's name —
+  appears in the `<resource>.admin` role circle's members dict. The
+  role circle is resolved by name; a missing role circle denies
+  (fail-closed, no 500). User circles are named after the email, so
+  this is a direct members-dict lookup: no resolution hop.
+- **Denials (403)**: client principals (HTTP Basic or app-scoped
+  tokens — domain administration must be attributable to a user, the
+  #854 rule), authenticated users without the role, and any caller
+  when the role circle does not exist. `action_label` is an optional
+  verb phrase shaping the denial message only; labels never gate.
+- **Placement**: gate calls live in the route modules, before any
+  resource work; the resources stay ungated for in-process callers
+  (the same discipline as campus.auth's authz).
+- **Coverage**: mutation routes of all five guarded families
+  (circles, timetable, assignments, bookings, submissions) gate;
+  circle administration gates behind `circles.admin` first, since
+  membership editing is privilege escalation. Reads are open for now.
+  emailotp is user-facing OTP with no circle and stays ungated.
+- **Tests**: unit coverage in `tests/unit/api/test_authz.py`; the
+  contract suites grant their test user role membership via
+  `tests.fixtures.circles.grant_circle_admin`, and negative 403 cases
+  live in `tests/contract/api/test_api_circles.py`.
+
+Later refinements, in rough order: access-value tiers (the gate takes
+a level checked against the member's access value), transitive
+resolution through nested circles, caching invalidated by the
+existing `campus.circles.*` yapper events, and private-resource
+access resolving through the owning user's circle contents.
 
 ## Open design questions
 

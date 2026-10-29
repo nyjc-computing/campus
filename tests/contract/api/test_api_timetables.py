@@ -20,6 +20,7 @@ import unittest
 
 from campus.common import schema
 from tests.fixtures import services
+from tests.fixtures.circles import grant_circle_admin
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 
 
@@ -42,6 +43,10 @@ class TestApiTimetablesContract(unittest.TestCase):
         self.client = self.app.test_client()
         self.token = create_test_token(self.user_id)
         self.auth_headers = get_bearer_auth_headers(self.token)
+
+        # Mutation routes are gated behind timetable.admin; grant the
+        # test user the role (clear_test_data wipes the circles).
+        grant_circle_admin(str(self.user_id), "timetable")
 
     def test_create_timetable_requires_auth(self):
         """POST /timetable/ without auth returns 401."""
