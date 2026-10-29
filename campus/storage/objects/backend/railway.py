@@ -22,6 +22,7 @@ Railway Documentation: https://docs.railway.com/storage-buckets.md
 
 import logging
 import os
+from collections.abc import Mapping
 from typing import Any
 
 import boto3
@@ -75,7 +76,7 @@ def resolve_credentials() -> dict[str, str] | None:
     Returns:
         Dict of resolved credentials, or None if the bucket is unconfigured
     """
-    creds = {
+    creds: dict[str, str | None] = {
         var: resolve_credential(var)
         for var in CREDENTIAL_VARS + OPTIONAL_VARS
     }
@@ -96,7 +97,7 @@ class RailwayBucket(BucketInterface):
         url = bucket.get_url("avatar.jpg", expires_in=3600)
     """
 
-    def __init__(self, name: str, credentials: dict[str, str] | None = None):
+    def __init__(self, name: str, credentials: Mapping[str, str | None] | None = None):
         """Initialize the Railway bucket backend.
 
         Args:
