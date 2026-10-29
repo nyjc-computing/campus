@@ -129,8 +129,11 @@ test.db
 .vscode/settings.json
 .idea/
 
-# Deployment flag (keep deploy.* templates)
-deploy
+# Root-level deployment flag (keep deploy.* templates); /deploy still
+# ignores the flag FILE, and the negated directory form lets tracked
+# deploy/gateway/ edge-gateway config (#995) exist
+/deploy
+!deploy/
 .venv
 env/
 venv/
