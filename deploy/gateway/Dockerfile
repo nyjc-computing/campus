@@ -10,6 +10,8 @@ FROM nginx:1.29-alpine
 
 # Runs before 20-envsubst-on-templates.sh (entrypoint scripts execute in
 # sort order): exports RESOLVER_IP (from /etc/resolv.conf) and a PORT
-# fallback so the template renders.
+# fallback so the template renders. Must be executable — the entrypoint
+# ignores non-executable .sh files (learned the hard way, see #995).
 COPY 15-gateway-env.sh /docker-entrypoint.d/15-gateway-env.sh
+RUN chmod +x /docker-entrypoint.d/15-gateway-env.sh
 COPY default.conf.template /etc/nginx/templates/default.conf.template
