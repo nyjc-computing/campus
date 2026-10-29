@@ -11,12 +11,14 @@ __all__ = [
     "assignment",
     "circle",
     "emailotp",
+    "file",
     "submission",
 ]
 
 from .assignment import AssignmentsResource
 from .circle import CirclesResource
 from .emailotp import EmailOTPResource
+from .files import FilesResource
 from .submission import SubmissionsResource
 from .timetable import TimetablesResource
 
@@ -24,5 +26,6 @@ from .timetable import TimetablesResource
 assignment = AssignmentsResource()
 circle = CirclesResource()
 emailotp = EmailOTPResource()
+file = FilesResource()
 submission = SubmissionsResource()
 timetable = TimetablesResource()

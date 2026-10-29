@@ -357,6 +357,57 @@ components:
           format: date-time
           description: When submission was finalized
 
+    File:
+      type: object
+      description: |
+        A file: binary content stored in object storage, addressed by a
+        stable slug (consumer-facing) or by id (management). Replacing
+        content keeps the slug's URL stable.
+      required:
+        - id
+        - slug
+        - name
+        - size
+        - content_type
+        - created_at
+        - updated_at
+        - uploaded_by_client_id
+      properties:
+        id:
+          type: string
+          example: uid-file-1a2b3c4d
+        slug:
+          type: string
+          description: Stable path-like label (slash-separated segments).
+          example: timetable/specials/breaks
+        name:
+          type: string
+          description: Display name; defaults to the slug's last segment.
+          example: breaks.pdf
+        size:
+          type: integer
+          description: Content size in bytes.
+          example: 48213
+        content_type:
+          type: string
+          description: MIME type stored with the content and served back.
+          example: application/pdf
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        uploaded_by_client_id:
+          type: string
+          description: Client that performed the last upload.
+          example: uid-client-1a2b3c
+        uploaded_by_user_id:
+          type: string
+          nullable: true
+          description: User on whose behalf the last upload was made.
+          example: test.user@campus.test
+
   responses:
     # ============================================================
     # Common HTTP Error Responses
@@ -1368,3 +1419,269 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/ValidationErrorResponse'
+
+  /files:
+    get:
+      summary: List files
+      description: List file records, optionally under a slug prefix
+      tags:
+        - Files
+      parameters:
+        - name: prefix
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only include files whose slug starts with this prefix
+      responses:
+        '200':
+          description: List of file records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/File'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenResponse'
+
+  /files/by-slug/{slug}:
+    get:
+      summary: Get a file's content (or metadata) by slug
+      description: |
+        Serve the file's bytes with its stored Content-Type, an ETag and
+        short-lived caching headers. The whole path tail after
+        `/files/by-slug/` is the slug — slash-separated slugs work and no
+        suffix is used, so any slug that validates cannot collide with a
+        route. Add `meta=1` to receive the metadata resource instead.
+      tags:
+        - Files
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The file's stable slug
+          example: timetable/specials/breaks
+        - name: meta
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["1", "true"]
+          description: Return the file metadata resource instead of content
+      responses:
+        '200':
+          description: File content (or metadata with meta=1)
+          content:
+            application/octet-stream:
+              description: >
+                The file bytes, served with the stored Content-Type
+                (whatever was uploaded), an ETag of `{size}-{updated_at}`
+                and `Cache-Control: max-age=60`.
+            application/json:
+              description: File metadata resource (meta=1)
+              schema:
+                $ref: '#/components/schemas/File'
+        '304':
+          description: Client's If-None-Match matched the ETag
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+    put:
+      summary: Create or replace a file by slug (upsert)
+      description: |
+        The request body is the raw file content; the Content-Type header
+        is stored and served back. Replacing an existing slug keeps its
+        URL stable. Slugs are validated: slash-separated segments of
+        alphanumerics, `-`, `_` and `.`, no empty/dot segments, no
+        leading/trailing slash, and `content` is reserved.
+      tags:
+        - Files
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The stable slug to create or replace
+          example: timetable/specials/breaks
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Display name for new files
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            description: >
+              Raw file bytes. Any Content-Type is accepted and stored;
+              requests without one default to application/octet-stream.
+      responses:
+        '200':
+          description: File replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '201':
+          description: File created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+
+    delete:
+      summary: Delete a file by slug
+      description: Delete the file record and its content
+      tags:
+        - Files
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The slug to delete
+      responses:
+        '200':
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+  /files/{file_id}:
+    get:
+      summary: Get a file's metadata by ID
+      description: Get a single file record by ID
+      tags:
+        - Files
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: File ID
+          example: uid-file-1a2b3c4d
+      responses:
+        '200':
+          description: The file resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+    delete:
+      summary: Delete a file by ID
+      description: Delete the file record and its content
+      tags:
+        - Files
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: File ID
+      responses:
+        '200':
+          description: File deleted
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+  /files/{file_id}/content:
+    get:
+      summary: Get a file's content by ID
+      description: Serve the file's bytes with its stored Content-Type
+      tags:
+        - Files
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: File ID
+      responses:
+        '200':
+          description: The file bytes with the stored Content-Type
+          content:
+            application/octet-stream:
+              description: >
+                The file bytes, served with the stored Content-Type, an
+                ETag of `{size}-{updated_at}` and Cache-Control max-age=60.
+        '304':
+          description: Client's If-None-Match matched the ETag
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
+
+    put:
+      summary: Replace a file's content by ID
+      description: >
+        Replace the content of an existing file. Unlike the by-slug route,
+        this never creates a file.
+      tags:
+        - Files
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: File ID
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+          description: New display name
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            description: Raw file bytes; the Content-Type header is stored.
+      responses:
+        '200':
+          description: File content replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '400':
+          $ref: '#/components/responses/BadRequestResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundResponse'
