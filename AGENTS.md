@@ -114,6 +114,9 @@ For detailed file locations and architecture, see:
 ### Auth
 - [docs/auth-login-flow.md](docs/auth-login-flow.md) - End-to-end browser login flow: session init, Google federated login, code exchange (read before touching campus.auth or adding a login client)
 
+### Access Control
+- [docs/circles-access-control.md](docs/circles-access-control.md) - How circles implement access control: resource + role circles, membership rules, bootstrap seeding (read before touching circles or adding authorization to API routes)
+
 ### Getting Started
 - [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) - Installation and setup
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) - Branching strategy and workflow

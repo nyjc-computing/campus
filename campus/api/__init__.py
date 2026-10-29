@@ -114,12 +114,15 @@ campus_authenticator = Authenticator(
 
 
 def _init_api_tables() -> None:
-    """Initialize the SQL-backed api storage tables, logging loudly on failure.
+    """Initialize api storage tables and the circle bootstrap, logging loudly on failure.
 
     CREATE TABLE IF NOT EXISTS per table (idempotent), so a fresh or
     reset deployment self-heals on the next deploy. Document-backed
     resources (assignments, circles, submissions, ...) auto-create
-    their collections and need no such call. In production, schema
+    their collections and need no such call; the circles collection is
+    additionally seeded with the access-control bootstrap (root/admin
+    sentinels and the per-resource role circles,
+    docs/circles-access-control.md). In production, schema
     management is handled by migrations/scripts, so initialization is
     skipped there. Same self-heal policy as campus.auth's
     _init_auth_tables.
@@ -135,6 +138,17 @@ def _init_api_tables() -> None:
             "Failed to initialize api storage tables: email OTP "
             "request/verify will fail until the tables exist. Recover "
             "by running the resource init against the database."
+        )
+
+    try:
+        if env.ENV != env.PRODUCTION:
+            from .resources.circle import CirclesResource
+            CirclesResource.init_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize the circle access-control bootstrap: "
+            "resource/role circles will be missing until init_storage "
+            "runs against the database."
         )
 
 
