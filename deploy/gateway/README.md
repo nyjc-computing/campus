@@ -8,14 +8,14 @@ application-side prerequisites (per-service session cookie names,
 
 ## Dispatch
 
-| Public path            | Backend                       | Notes |
-|------------------------|-------------------------------|-------|
-| `/auth/*`              | `campus-auth.railway.internal`| `/auth/v1/*` OAuth/users/sessions |
-| `/integrations/*`      | `campus-auth.railway.internal`| public integrations catalog — mounted *outside* `/auth/v1`, easy to forget |
-| `/api/*`               | `campus-api.railway.internal` | `/api/v1/*` |
-| `/audit/*`             | `campusaudit.railway.internal`| API + web UI + static (all audit surface already lives under `/audit/*`) |
-| `/`                    | gateway-owned                 | 302 → `/audit/` until the cutover decides otherwise |
-| `/health`              | gateway-owned                 | **gateway liveness only** (also the Railway healthcheck candidate) |
+| Public path            | Upstream (HTTPS hairpin)                              | Notes |
+|------------------------|--------------------------------------------------------|-------|
+| `/auth/*`              | `campusauth-development.up.railway.app`                | `/auth/v1/*` OAuth/users/sessions |
+| `/integrations/*`      | `campusauth-development.up.railway.app`                | public integrations catalog — mounted *outside* `/auth/v1`, easy to forget |
+| `/api/*`               | `campusapi-development.up.railway.app`                 | `/api/v1/*` |
+| `/audit/*`             | `campusaudit-development.up.railway.app`               | API + web UI + static (all audit surface already lives under `/audit/*`) |
+| `/`                    | gateway-owned                                          | 302 → `/audit/` (relative Location) |
+| `/health`              | gateway-owned                                          | **gateway liveness only** (also the Railway healthcheck candidate) |
 
 Paths pass through **unchanged** (`proxy_pass` with no URI part): each
 service's internal routes already carry its public prefix, and the test
@@ -26,23 +26,40 @@ topology, so no app-side routing change is involved.
 
 | Variable    | Value                                    | Purpose |
 |-------------|------------------------------------------|---------|
-| `AUTH_PORT` | `8080`                                   | campus.auth private upstream port |
-| `API_PORT`  | `8080`                                   | campus.api private upstream port |
-| `AUDIT_PORT`| `8080`                                   | campus.audit private upstream port |
 | `PORT`      | `8080`                                   | gateway's own listen port — the service domain's target port must match |
 | `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1`               | activates the stock `15-local-resolvers.envsh`, which exports `NGINX_LOCAL_RESOLVERS` |
 
-The upstream *hostnames* are baked into the template on purpose: they
-are Railway's private-network endpoint names, which are per-service and
-stable (note they are **not** mechanical derivations of service names —
-`campus.audit` resolves as `campusaudit.railway.internal`, no hyphen).
+(`AUTH_PORT` / `API_PORT` / `AUDIT_PORT` are not currently used — they
+belong to the private-upstream form documented below.)
 
-Railway private networking is IPv6-only, and its DNS nameserver is an
-IPv6 literal (`fd12::x`). nginx's `resolver` directive misparses a bare
-IPv6 literal ("invalid port in resolver"), so the resolver must come
-from the stock `15-local-resolvers.envsh` mechanism, which brackets
-IPv6 nameservers (`[fd12::x]`) into `NGINX_LOCAL_RESOLVERS`. Do not
-add `ipv6=off`.
+## Upstream choice: public hairpin, not private networking (for now)
+
+The template proxies to the services' **public** domains over HTTPS
+(SNI on, `proxy_ssl_server_name`). Private networking
+(`*.railway.internal`) was investigated on 2026-10-29 and **does not
+currently work** from the gateway to the three services:
+
+- The private endpoints report `ACTIVE` with stable IPv6 addresses
+  (`campus-auth` / `campus-api` / `campusaudit.railway.internal`), and
+  each backend listens on `0.0.0.0:8080` (verified in gunicorn boot
+  logs).
+- Yet DNS inside the gateway consistently returned **different**
+  addresses than the live endpoints (same subnet, other interface IDs),
+  and every connect was `ECONNREFUSED` — 0/10 requests ever reached an
+  upstream. Not round-robin luck: dead addresses every time.
+- Caveat discovered along the way: Railway's private DNS serves IPv6
+  nameservers and nginx's `resolver` misparses bare IPv6 literals — the
+  stock `15-local-resolvers.envsh` brackets them; that part is solved
+  here and stays useful.
+
+The public hairpin is functionally identical for dispatch (Railway
+routes by SNI, not Host, so the backends still see
+`Host: campus-development.up.railway.app` and generate correct
+absolute URLs) at the cost of edge latency and a public round-trip.
+When private networking is resolved (Railway support / config),
+flip the three `set $*_upstream` lines in the template to the
+`http://…railway.internal:${*_PORT}` form kept in the comment there —
+no other change needed.
 
 ## Why per-request DNS resolution
 
