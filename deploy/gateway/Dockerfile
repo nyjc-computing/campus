@@ -16,4 +16,9 @@
 FROM nginx:1.29-alpine
 
 COPY default.conf.template /etc/nginx/templates/default.conf.template
-COPY default.conf.template /etc/nginx/templates/default.conf.template
+
+# Build-time provenance: prints which upstream config got baked into the
+# image, so a stale build is visible in the build log (Railway's
+# incremental snapshot builds once shipped a stale template — only
+# README.md showed as modified in its snapshot diff, 2026-10-29 #995).
+RUN grep -nE "set \\\$.*_upstream" /etc/nginx/templates/default.conf.template || true
