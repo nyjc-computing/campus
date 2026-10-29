@@ -36,7 +36,7 @@ are Railway's private-network endpoint names, which are per-service and
 stable (note they are **not** mechanical derivations of service names —
 `campus.audit` resolves as `campusaudit.railway.internal`, no hyphen).
 `RESOLVER_IP` is derived at container start from `/etc/resolv.conf`
-(`15-gateway-env.sh`) and is not set by hand.
+(`15-gateway-env.envsh`) and is not set by hand.
 
 Railway private networking is IPv6-only; the nginx `resolver` handles
 AAAA fine — do not add `ipv6=off`.
