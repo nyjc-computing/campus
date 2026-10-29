@@ -120,7 +120,13 @@ class LocalBucket(BucketInterface):
         if metadata_path.exists():
             metadata_path.unlink()
 
-    def put(self, key: str, data: bytes, metadata: dict | None = None) -> None:
+    def put(
+        self,
+        key: str,
+        data: bytes,
+        metadata: dict | None = None,
+        content_type: str | None = None,
+    ) -> None:
         """Upload data to the local filesystem."""
         path = self._get_path(key)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -129,11 +135,16 @@ class LocalBucket(BucketInterface):
             with open(path, "wb") as f:
                 f.write(data)
 
-            # Save metadata if provided
-            if metadata:
-                # Add timestamp to metadata
-                metadata["_uploaded_at"] = datetime.now().isoformat()
-                self._save_metadata(key, metadata)
+            # The local backend has no native content type; keep it in the
+            # metadata sidecar under "content-type", where get_metadata
+            # looks it up. Copy the dict so the caller's metadata is not
+            # mutated with the upload timestamp.
+            stored = dict(metadata) if metadata else {}
+            if content_type:
+                stored["content-type"] = content_type
+            if stored:
+                stored["_uploaded_at"] = datetime.now().isoformat()
+                self._save_metadata(key, stored)
         except OSError as e:
             raise errors.StorageError(
                 message=f"Failed to write object: {e}",
