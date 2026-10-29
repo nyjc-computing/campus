@@ -1478,15 +1478,16 @@ paths:
           description: Return the file metadata resource instead of content
       responses:
         '200':
-          description: File content (or metadata with meta=1)
+          description: >
+            File content (served with the stored Content-Type, an ETag of
+            `{size}-{updated_at}` and Cache-Control max-age=60), or the
+            metadata resource when meta=1 is set.
           content:
             application/octet-stream:
-              description: >
-                The file bytes, served with the stored Content-Type
-                (whatever was uploaded), an ETag of `{size}-{updated_at}`
-                and `Cache-Control: max-age=60`.
+              schema:
+                type: string
+                format: binary
             application/json:
-              description: File metadata resource (meta=1)
               schema:
                 $ref: '#/components/schemas/File'
         '304':
@@ -1522,11 +1523,14 @@ paths:
           description: Display name for new files
       requestBody:
         required: true
+        description: >
+          The raw file bytes. Any Content-Type header is accepted and
+          stored; requests without one default to application/octet-stream.
         content:
           application/octet-stream:
-            description: >
-              Raw file bytes. Any Content-Type is accepted and stored;
-              requests without one default to application/octet-stream.
+            schema:
+              type: string
+              format: binary
       responses:
         '200':
           description: File replaced
@@ -1634,12 +1638,14 @@ paths:
           description: File ID
       responses:
         '200':
-          description: The file bytes with the stored Content-Type
+          description: >
+            The file bytes, served with the stored Content-Type, an ETag
+            of `{size}-{updated_at}` and Cache-Control max-age=60.
           content:
             application/octet-stream:
-              description: >
-                The file bytes, served with the stored Content-Type, an
-                ETag of `{size}-{updated_at}` and Cache-Control max-age=60.
+              schema:
+                type: string
+                format: binary
         '304':
           description: Client's If-None-Match matched the ETag
         '401':
@@ -1669,9 +1675,12 @@ paths:
           description: New display name
       requestBody:
         required: true
+        description: The raw file bytes; the Content-Type header is stored.
         content:
           application/octet-stream:
-            description: Raw file bytes; the Content-Type header is stored.
+            schema:
+              type: string
+              format: binary
       responses:
         '200':
           description: File content replaced
