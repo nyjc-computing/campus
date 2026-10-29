@@ -63,13 +63,11 @@ server {
     # SNI for the HTTPS upstreams (*.up.railway.app requires it).
     proxy_ssl_server_name on;
 
-    # Variables force per-request DNS resolution: Railway re-issues
-    # service private IPs (IPv6) on every backend redeploy, and a
-    # literal proxy_pass hostname would be resolved once at config
-    # load and go stale (502s) until the gateway restarts.
-    set $auth_upstream  "http://campus-auth.railway.internal:${AUTH_PORT}";
-    set $api_upstream   "http://campus-api.railway.internal:${API_PORT}";
-    set $audit_upstream "http://campusaudit.railway.internal:${AUDIT_PORT}";
+    # nginx set directives re-assign in order, so exactly ONE active set
+    # of upstream lines may exist here. The private-upstream variant
+    # lives in the flip-back comment above — do NOT add active copies
+    # of it (duplicated lines silently override the hairpin; this exact
+    # leftover caused the 2026-10-29 502 chase, #995).
 
     location /integrations/ { proxy_pass $auth_upstream; }
     location /auth/         { proxy_pass $auth_upstream; }
