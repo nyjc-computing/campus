@@ -17,6 +17,12 @@ FROM nginx:1.29-alpine
 
 COPY default.conf.template /etc/nginx/templates/default.conf.template
 
+# Runtime ground truth: after the entrypoint envsubsts the template,
+# print the rendered upstream lines to the deploy log (chasing the
+# stale-config 502s, #995 — remove once verified end-to-end).
+COPY 25-render-debug.sh /docker-entrypoint.d/25-render-debug.sh
+RUN chmod +x /docker-entrypoint.d/25-render-debug.sh
+
 # Build-time provenance: prints which upstream config got baked into the
 # image, so a stale build is visible in the build log (Railway's
 # incremental snapshot builds once shipped a stale template — only
