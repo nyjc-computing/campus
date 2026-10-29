@@ -20,7 +20,18 @@ FROM nginx:1.29-alpine
 # snapshot builder once patch-merged a changed default.conf.template
 # into a garbled hybrid of old and new versions (2026-10-29, #995) —
 # a fresh filename forces a wholesale copy instead of a diff-apply.
-COPY campus-gateway.conf.template /etc/nginx/templates/default.conf.template
+#
+# Snapshot-proofing: the incremental snapshot may still carry stale
+# config/templates under ANY of these paths (it once resurrected the old
+# default.conf.template by content-hash collision, and the stock envsubst
+# runner renders EVERY *.template — two rendered server blocks on the
+# same port, first-wins on requests). Remove them all before copying
+# exactly one template.
+RUN rm -f /etc/nginx/templates/default.conf.template \
+          /etc/nginx/templates/campus-gateway.conf.template \
+          /etc/nginx/conf.d/default.conf \
+          /etc/nginx/conf.d/campus-gateway.conf
+COPY campus-gateway.conf.template /etc/nginx/templates/campus-gateway.conf.template
 
 # Runtime ground truth: after the entrypoint envsubsts the template,
 # print the rendered upstream lines to the deploy log (chasing the
