@@ -8,11 +8,11 @@
 # so this container serves exactly the campus dispatch config.
 FROM nginx:1.29-alpine
 
-# Sourced by the entrypoint before 20-envsubst-on-templates.sh (sort
-# order): exports RESOLVER_IP (from /etc/resolv.conf) and a PORT
-# fallback so the template renders. MUST be a .envsh file — the
-# entrypoint only SOURCES .envsh files, so their exports reach the
-# envsubst runner; executable .sh files run as child processes whose
-# exports are lost (two deploy findings, see #995).
+# Must be EXECUTABLE and named .envsh. The entrypoint checks the exec
+# bit first, then dispatches by extension: executable *.sh runs as a
+# child process (exports lost), executable *.envsh is SOURCED (exports
+# propagate to the envsubst runner), non-executable files are ignored.
+# Deploy findings #2 and #3, see #995.
 COPY 15-gateway-env.envsh /docker-entrypoint.d/15-gateway-env.envsh
+RUN chmod +x /docker-entrypoint.d/15-gateway-env.envsh
 COPY default.conf.template /etc/nginx/templates/default.conf.template
