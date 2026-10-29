@@ -558,6 +558,78 @@ class TestApiCirclesContract(unittest.TestCase):
         members_data = members_response.get_json()
         self.assertIn(child_id, members_data)
 
+    def test_add_user_member(self):
+        """POST /circles/{circle_id}/members/add accepts a user ID (email)."""
+        circle_id = self._create_test_circle(name="User Member Circle")
+
+        response = self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        members_response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(
+            members_response.get_json().get("teacher@campus.test"), 15
+        )
+
+    def test_add_user_member_with_dotted_email(self):
+        """Dots in a user member ID survive storage (no nested-path splitting)."""
+        circle_id = self._create_test_circle(name="Dotted Email Member Circle")
+
+        response = self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "t.user@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        members_response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/",
+            headers=self.auth_headers
+        )
+        self.assertIn("t.user@campus.test", members_response.get_json())
+
+    def test_remove_user_member(self):
+        """DELETE /circles/{circle_id}/members/remove removes a user member."""
+        circle_id = self._create_test_circle(name="User Member Remove Circle")
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher.remove@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        response = self.client.delete(
+            f"/api/v1/circles/{circle_id}/members/remove",
+            json={
+                "member_id": "teacher.remove@campus.test",
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        members_response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/",
+            headers=self.auth_headers
+        )
+        self.assertNotIn(
+            "teacher.remove@campus.test", members_response.get_json()
+        )
+
     def test_add_circle_member_requires_auth(self):
         """POST /circles/{circle_id}/members/add without auth returns 401."""
         circle_id = self._create_test_circle()

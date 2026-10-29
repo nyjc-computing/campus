@@ -331,7 +331,10 @@ def add_circle_member(
 
     Request Body (application/json):
         member_id: str (required)
-            The ID of the circle being added as a member.
+            The ID of the member being added: either a circle ID
+            (`circle_...`) or a user ID (email). User membership is
+            accepted without an existence check; an unknown user ID is
+            inert until a matching user authenticates.
         access_value: AccessValue (required)
             The level of access the member will have in the parent circle.
 
@@ -342,7 +345,9 @@ def add_circle_member(
                 {}
 
         409 Conflict: None
-            - Returned if the member circle does not exist.
+            - Returned if the target circle does not exist.
+            - Returned if a non-email member ID does not address an
+              existing circle.
             - Returned if no changes were applied (e.g., member already exists with same access).
 
         500 Internal Server Error: None
@@ -350,8 +355,9 @@ def add_circle_member(
 
     Notes:
         - Emits the event: `campus.circles.members.add`.
-        - This operation directly updates a nested field (`members.{member_id}`) in storage.
-        - Only circle IDs can be added as members — not users or arbitrary entities.
+        - Members are stored as a single `members` dict on the circle
+          record, written by read-modify-write: member IDs may be user
+          emails, whose dots a nested-field update path would misparse.
     """
     resources.circle.members.add(
         schema.CampusID(circle_id),
@@ -381,7 +387,8 @@ def remove_circle_member(
 
     Request Body (application/json):
         member_id: str (required)
-            The ID of the member circle to remove.
+            The ID of the member to remove: a circle ID or a user ID
+            (email).
 
     Responses:
         200 OK: dict
@@ -392,15 +399,15 @@ def remove_circle_member(
         409 Conflict: None
             - Returned if the target circle does not exist.
             - Returned if the specified member is not part of the circle.
-            - Returned if no changes were applied during the removal.
 
         500 Internal Server Error: None
             Returned if a storage-level error occurs while removing the member.
 
     Notes:
         - Emits the event: `campus.circles.members.remove`.
-        - Removal uses a MongoDB `$unset` on the path `members.{member_id}`.
-        - Only direct member circles can be removed this way.
+        - Removal rewrites the circle's `members` dict without the
+          member (read-modify-write; see POST /members/add).
+        - Only direct members can be removed this way.
         - The response is not currently validated.
     """
     resources.circle.members.remove(
