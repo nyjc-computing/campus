@@ -29,17 +29,20 @@ topology, so no app-side routing change is involved.
 | `AUTH_PORT` | `8080`                                   | campus.auth private upstream port |
 | `API_PORT`  | `8080`                                   | campus.api private upstream port |
 | `AUDIT_PORT`| `8080`                                   | campus.audit private upstream port |
-| `PORT`      | *(injected by Railway; fallback 8080)*   | gateway's own listen port — set the service domain's target port to match |
+| `PORT`      | `8080`                                   | gateway's own listen port — the service domain's target port must match |
+| `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1`               | activates the stock `15-local-resolvers.envsh`, which exports `NGINX_LOCAL_RESOLVERS` |
 
 The upstream *hostnames* are baked into the template on purpose: they
 are Railway's private-network endpoint names, which are per-service and
 stable (note they are **not** mechanical derivations of service names —
 `campus.audit` resolves as `campusaudit.railway.internal`, no hyphen).
-`RESOLVER_IP` is derived at container start from `/etc/resolv.conf`
-(`15-gateway-env.envsh`) and is not set by hand.
 
-Railway private networking is IPv6-only; the nginx `resolver` handles
-AAAA fine — do not add `ipv6=off`.
+Railway private networking is IPv6-only, and its DNS nameserver is an
+IPv6 literal (`fd12::x`). nginx's `resolver` directive misparses a bare
+IPv6 literal ("invalid port in resolver"), so the resolver must come
+from the stock `15-local-resolvers.envsh` mechanism, which brackets
+IPv6 nameservers (`[fd12::x]`) into `NGINX_LOCAL_RESOLVERS`. Do not
+add `ipv6=off`.
 
 ## Why per-request DNS resolution
 
@@ -47,7 +50,7 @@ Railway re-issues service private IPs on every backend redeploy. nginx
 resolves literal `proxy_pass` hostnames once at config load, so a
 static upstream would 502 after the next backend deploy until the
 gateway restarted. The template therefore proxies to `$`-variables and
-re-resolves through `RESOLVER_IP` with a 10s TTL.
+re-resolves through `NGINX_LOCAL_RESOLVERS` with a 10s TTL.
 
 ## Railway service wiring
 
