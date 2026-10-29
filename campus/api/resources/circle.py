@@ -16,6 +16,45 @@ circle_storage = campus.storage.get_collection("circles")
 # TODO: Make domain configurable
 DOMAIN = "nyjc.edu.sg"
 
+# Access-control bootstrap (docs/circles-access-control.md): each guarded
+# API resource family gets a resource circle (tag RESOURCE_TAG), and each
+# resource circle gets an admin role circle (tag ROLE_TAG) named
+# "<resource>.admin" — role circles carry the principals (users, circles)
+# granted the role and never contain resources of their own. Resource
+# circles hang under the root circle; role circles hang under their
+# resource circle.
+RESOURCE_TAG = "resource"
+ROLE_TAG = "role"
+BOOTSTRAP_RESOURCES = (
+    "circles",
+    "timetable",
+    "assignments",
+    "bookings",
+    "submissions",
+)
+
+# Bootstrap seeding, temporary: added to every <resource>.admin role
+# circle at init until role administration has a management flow.
+BOOTSTRAP_ADMIN_USER: schema.CampusID = schema.CampusID(
+    "ng_jun_siang@nyjc.edu.sg"
+)
+
+# Access-value convention: 15 denotes full access, mirroring the seeded
+# campus-admin -> root edge. Exact semantics are still to be decided.
+BOOTSTRAP_ACCESS_VALUE = 15
+
+
+def _member_kind(member_id: str) -> str:
+    """Classify a member ID: "user" (email-shaped) or "circle".
+
+    User IDs are emails (campus.common.schema.UserID is an Email);
+    every other ID addresses a circle record and must exist. Circle
+    UIDs have used both the legacy ("circle_...") and current
+    ("uid-circle-...") schemes, so membership keys are not
+    prefix-matched.
+    """
+    return "user" if "@" in member_id else "circle"
+
 
 
 def get_circle_meta() -> dict:
@@ -69,12 +108,60 @@ def ensure_name_available(
             )
 
 
+def _ensure_circle(
+        name: str,
+        *,
+        tag: str,
+        description: str = "",
+        parents: dict[schema.CampusID, int] | None = None,
+) -> model.Circle:
+    """Return the circle named `name`, creating it if absent (bootstrap).
+
+    Bootstrap-only counterpart to ensure_name_available: asserts the
+    single-record invariant before reusing an existing circle. Heals
+    missing circles only — missing membership edges are manual repairs.
+    """
+    matches = circle_storage.get_matching({"name": name})
+    assert len(matches) <= 1, (
+        matches, f"More than one circle named {name}"
+    )
+    if matches:
+        return model.Circle.from_storage(matches[0])
+    return CirclesResource().new(
+        name=name,
+        tag=tag,
+        description=description,
+        **{"parents": parents} if parents else {},
+    )
+
+
+def _ensure_member(
+        circle_id: schema.CampusID,
+        member_id: schema.CampusID,
+        access_value: int,
+) -> None:
+    """Add `member_id` to the circle unless already present (bootstrap)."""
+    record = circle_storage.get_by_id(circle_id)
+    if str(member_id) not in (record or {}).get("members", {}):
+        CirclesResource().members.add(
+            circle_id,
+            member_id=member_id,
+            access_value=access_value,
+        )
+
+
 class CirclesResource:
     """Represents the circles resource in Campus API Schema."""
 
     @staticmethod
     def init_storage() -> None:
-        """Initialize storage for circle management."""
+        """Initialize storage for circle management.
+
+        Seeds the access-control bootstrap on top of the collection:
+        the @meta record, the root and campus-admin sentinels, and the
+        per-resource authorization circles with their admin role
+        circles (docs/circles-access-control.md). Idempotent.
+        """
         # Initialize the collection (creates it if needed)
         circle_storage.init_collection()
 
@@ -124,6 +211,32 @@ class CirclesResource:
                 description="Campus admin circle",
                 tag="admin",
                 parents={root_circle.id: 15}
+            )
+
+        # Resource authorization circles (docs/circles-access-control.md):
+        # a resource circle per guarded API resource family, each with an
+        # admin role circle for role assignment. Idempotent: name-keyed
+        # lookups make re-runs no-ops.
+        for resource_name in BOOTSTRAP_RESOURCES:
+            resource_circle = _ensure_circle(
+                resource_name,
+                tag=RESOURCE_TAG,
+                description=(
+                    f"Authorization circle for the {resource_name} resource"
+                ),
+                parents={root_circle.id: BOOTSTRAP_ACCESS_VALUE},
+            )
+            role_circle = _ensure_circle(
+                f"{resource_name}.admin",
+                tag=ROLE_TAG,
+                description=f"Admin role for the {resource_name} resource",
+                parents={resource_circle.id: BOOTSTRAP_ACCESS_VALUE},
+            )
+            # Temporary bootstrap admin (BOOTSTRAP_ADMIN_USER).
+            _ensure_member(
+                role_circle.id,
+                BOOTSTRAP_ADMIN_USER,
+                BOOTSTRAP_ACCESS_VALUE,
             )
 
     def __getitem__(self, circle_id: schema.CampusID) -> "CircleResource":
@@ -344,38 +457,56 @@ class CircleMembersResource:
 
         Args:
             circle_id: The parent circle ID
-            member_id: The member circle ID to add
+            member_id: The member ID to add — a circle ID (`circle_...`)
+                or a user ID (email). User membership is accepted
+                without an existence check (the resource layer cannot
+                validate user IDs against campus.auth); an unknown user
+                ID is inert because enforcement matches caller IDs.
             access_value: The access level for the member
 
         Raises:
-            ConflictError: If member circle not found or no changes applied
+            ConflictError: If a circle member ID does not exist, the
+                parent circle does not exist, or the member is already
+                present with the same access
             InternalError: For storage errors
         """
-        # Check if member circle exists
-        try:
-            member_circle = circle_storage.get_by_id(member_id)
-            if member_circle is None:
+        if _member_kind(str(member_id)) == "circle":
+            # Circle members must exist. User members (emails) are
+            # accepted without an existence check: the resource layer
+            # cannot validate user IDs against campus.auth, and an
+            # unknown user ID is inert because enforcement matches
+            # caller IDs.
+            try:
+                member_circle = circle_storage.get_by_id(member_id)
+                if member_circle is None:
+                    raise api_errors.ConflictError(
+                        "Member circle not found",
+                        id=member_id
+                    )
+            except campus.storage.errors.NotFoundError:
                 raise api_errors.ConflictError(
                     "Member circle not found",
                     id=member_id
+                ) from None
+            except campus.storage.errors.StorageError as e:
+                raise api_errors.InternalError.from_exception(e) from e
+
+        # Read-modify-write the whole members dict: member IDs may be
+        # user emails, whose dots a `members.{member_id}` update key
+        # would parse as nested-field paths (both document backends).
+        try:
+            record = circle_storage.get_by_id(circle_id)
+            if record is None:
+                raise api_errors.ConflictError(
+                    "Circle not found",
+                    id=circle_id
                 )
+            members = dict(record.get("members", {}))
+            members[str(member_id)] = access_value
+            circle_storage.update_by_id(circle_id, {"members": members})
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
-                "Member circle not found",
-                id=member_id
-            ) from None
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-
-        # Use direct MongoDB access for nested field updates
-        try:
-            circle_storage.update_by_id(
-                circle_id,
-                {f"members.{member_id}": access_value},
-            )
-        except campus.storage.errors.NoChangesAppliedError:
-            raise api_errors.ConflictError(
-                "No changes applied when adding member",
+                "Circle not found",
                 id=circle_id
             ) from None
         except campus.storage.errors.StorageError as e:
@@ -390,42 +521,31 @@ class CircleMembersResource:
 
         Args:
             circle_id: The parent circle ID
-            member_id: The member circle ID to remove
+            member_id: The member ID to remove (circle ID or user email)
 
         Raises:
             ConflictError: If circle not found or member not in circle
             InternalError: For storage errors
         """
-        # Check if member circle is a member of circle
+        # Read-modify-write the whole members dict (see add for why).
         try:
-            circle = circle_storage.get_by_id(circle_id)
-            if circle is None:
+            record = circle_storage.get_by_id(circle_id)
+            if record is None:
                 raise api_errors.ConflictError(
                     "Circle not found",
                     id=circle_id
                 )
-            if member_id not in circle.get("members", {}):
+            members = dict(record.get("members", {}))
+            if str(member_id) not in members:
                 raise api_errors.ConflictError(
                     "Member not found in circle",
                     id=member_id
                 )
+            del members[str(member_id)]
+            circle_storage.update_by_id(circle_id, {"members": members})
         except campus.storage.errors.NotFoundError:
             raise api_errors.ConflictError(
                 "Circle not found",
-                id=circle_id
-            ) from None
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-
-        # Use direct MongoDB access for nested field updates
-        try:
-            circle_storage.update_by_id(
-                circle_id,
-                {f"members.{member_id}": None},
-            )
-        except campus.storage.errors.NoChangesAppliedError:
-            raise api_errors.ConflictError(
-                "No changes applied when removing member",
                 id=circle_id
             ) from None
         except campus.storage.errors.StorageError as e:
