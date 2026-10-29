@@ -7,6 +7,7 @@ functionality works end-to-end.
 import unittest
 
 from campus.common import schema
+from tests.fixtures.circles import grant_circle_admin
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 from tests.integration.base import IntegrationTestCase
 
@@ -36,6 +37,10 @@ class TestAssignmentsIntegration(IntegrationTestCase):
         # Re-create before each test since setUp() resets storage
         self.token = create_test_token(self.user_id)
         self.auth_headers = get_bearer_auth_headers(self.token)
+
+        # Mutation routes are gated behind assignments.admin; grant the
+        # test user the role (storage resets wipe the circles).
+        grant_circle_admin(str(self.user_id), "assignments")
 
     def test_list_assignments_empty(self):
         """GET /assignments should return empty list initially."""

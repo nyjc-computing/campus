@@ -13,7 +13,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import payloads, questionschemas, resources
+from .. import authz, payloads, questionschemas, resources
 
 bp = flask.Blueprint('submissions', __name__, url_prefix='/submissions')
 
@@ -113,7 +113,12 @@ def create_submission(
     Responses:
         201 Created: dict
             Submission resource
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `submissions.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("submissions", "create submissions")
     submission = resources.submission.new(
         assignment_id=assignment_id,
         student_id=student_id,
@@ -206,7 +211,12 @@ def update_submission(
     Responses:
         200 OK: dict
             Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `submissions.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("submissions", "edit submissions")
     updates = {}
     if responses is not None:
         # Convert dict responses to validated Response models (#533),
@@ -246,7 +256,12 @@ def delete_submission(submission_id: str) -> flask_campus.JsonResponse:
     Responses:
         200 OK: dict
             Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `submissions.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("submissions", "delete submissions")
     resources.submission[schema.CampusID(submission_id)].delete()
     yapper.emit('campus.submissions.delete', {"submission_id": submission_id})
     return {}, 200
@@ -280,7 +295,14 @@ def add_response(
     Responses:
         200 OK: dict
             Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `submissions.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin(
+        "submissions", "edit submission responses"
+    )
     if response_text is None and response_data is None:
         raise api_errors.InvalidRequestError(
             "response_text or response_data is required"
@@ -346,7 +368,12 @@ def add_feedback(
     Responses:
         200 OK: dict
             Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `submissions.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("submissions", "add submission feedback")
     # Get teacher_id from authenticated user
     current_user = flask.g.get('current_user')
     if not current_user or not getattr(current_user, 'id', None):
@@ -398,7 +425,12 @@ def submit_submission(submission_id: str) -> flask_campus.JsonResponse:
     Responses:
         200 OK: dict
             Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `submissions.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("submissions", "submit submissions")
     submission = resources.submission[schema.CampusID(submission_id)].get()
 
     if submission.submitted_at is not None:

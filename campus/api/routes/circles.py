@@ -13,7 +13,7 @@ import campus.yapper
 from campus import flask_campus
 from campus.common import schema
 
-from .. import resources
+from .. import authz, resources
 
 bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
@@ -97,9 +97,14 @@ def new_circle(
               (best-effort, exact-match check).
             - Returned if tag is "root" and parents were provided.
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `circles.admin` circle (only user tokens are eligible).
+
         422 Unprocessable Entity: None
             Returned if validation fails (e.g., a required field is missing).
     """
+    authz.require_resource_admin("circles", "create circles")
     circle = resources.circle.new(
         name=name,
         description=description,
@@ -138,14 +143,19 @@ def delete_circle(circle_id: str) -> flask_campus.JsonResponse:
         409 Conflict: None
             Returned if the circle does not exist.
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `circles.admin` circle (only user tokens are eligible).
+
         500 Internal Server Error: None
             Returned if an unexpected storage error occurs.
 
     Notes:
         - This action is **destructive** and cannot be undone.
-        - Only admins or owners should perform this operation.
+        - Requires membership in the `circles.admin` circle.
         - Emits the event: `campus.circles.delete`
     """
+    authz.require_resource_admin("circles", "delete circles")
     resources.circle[schema.CampusID(circle_id)].delete()
     yapper.emit('campus.circles.delete', {"circle_id": circle_id})
     return {}, 200
@@ -240,6 +250,10 @@ def edit_circle(
             - Returned if another circle already uses the requested name
               (best-effort, exact-match check).
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `circles.admin` circle (only user tokens are eligible).
+
         422 Unprocessable Entity: None
             Returned if validation fails (e.g., name is missing).
 
@@ -249,8 +263,10 @@ def edit_circle(
     Notes:
         - `name` is required; `description` is unchanged when omitted.
         - If no changes are detected, the request is treated as a no-op (200 OK, no error).
+        - Requires membership in the `circles.admin` circle.
         - Emits the event: `campus.circles.update`.
     """
+    authz.require_resource_admin("circles", "edit circles")
     updates = {"name": name}
     if description is not None:
         updates["description"] = description
@@ -262,6 +278,7 @@ def edit_circle(
 @bp.post('/<string:circle_id>/move')
 def move_circle(circle_id: str) -> flask_campus.JsonResponse:
     """Move a circle to a new parent."""
+    authz.require_resource_admin("circles", "move circles")
     return {"message": "Not implemented"}, 501
 
 
@@ -351,16 +368,23 @@ def add_circle_member(
               email-shaped ID).
             - Returned if no changes were applied (e.g., member already exists with same access).
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `circles.admin` circle (only user tokens are eligible).
+
         500 Internal Server Error: None
             Returned if a storage-level error occurs during the operation.
 
     Notes:
         - Emits the event: `campus.circles.members.add`.
+        - Requires membership in the `circles.admin` circle: membership
+          editing is privilege escalation once circles gate access.
         - Members are stored as a single `members` dict on the circle
           record, written by read-modify-write: member identifiers may
           be email names, whose dots a nested-field update path would
           misparse.
     """
+    authz.require_resource_admin("circles", "edit circle membership")
     resources.circle.members.add(
         schema.CampusID(circle_id),
         member_id=schema.CampusID(member_id),
@@ -402,16 +426,22 @@ def remove_circle_member(
             - Returned if the target circle does not exist.
             - Returned if the specified member is not part of the circle.
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `circles.admin` circle (only user tokens are eligible).
+
         500 Internal Server Error: None
             Returned if a storage-level error occurs while removing the member.
 
     Notes:
         - Emits the event: `campus.circles.members.remove`.
+        - Requires membership in the `circles.admin` circle.
         - Removal rewrites the circle's `members` dict without the
           member (read-modify-write; see POST /members/add).
         - Only direct members can be removed this way.
         - The response is not currently validated.
     """
+    authz.require_resource_admin("circles", "edit circle membership")
     resources.circle.members.remove(
         schema.CampusID(circle_id),
         member_id=schema.CampusID(member_id)
@@ -461,14 +491,20 @@ def patch_circle_member(
             - Returned if the member circle does not exist.
             - Returned if no changes were applied.
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `circles.admin` circle (only user tokens are eligible).
+
         500 Internal Server Error: None
             Returned if a storage-level error occurs.
 
     Notes:
         - This operation will create or update the member's access.
+        - Requires membership in the `circles.admin` circle.
         - Emits the event: `campus.circles.members.set`.
         - No validation is currently performed to compare existing access.
     """
+    authz.require_resource_admin("circles", "edit circle membership")
     resources.circle.members.set(
         schema.CampusID(circle_id),
         member_id=schema.CampusID(member_id),

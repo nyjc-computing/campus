@@ -9,6 +9,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
+from .. import authz
 from ..resources import timetable as timetable_resource
 
 bp = flask.Blueprint('timetable', __name__, url_prefix='/timetable')
@@ -74,7 +75,12 @@ def set_current(value: schema.CampusID) -> flask_campus.JsonResponse:
     Responses:
         200 OK: dict
             {}
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `timetable.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("timetable", "set the current timetable")
     timetable_resource.set_current(value)
     return {}, 200
 
@@ -112,7 +118,12 @@ def set_next(value: schema.CampusID) -> flask_campus.JsonResponse:
     Responses:
         200 OK: dict
             {}
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `timetable.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("timetable", "set the next timetable")
     timetable_resource.set_next(value)
     return {}, 200
 
@@ -141,7 +152,12 @@ def new(
 
         400 Bad Request: dict
             {"error": error message}
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `timetable.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("timetable", "create timetables")
     if "lessongroups" not in data:
         details = {}
         if "lesson_groups" in data:
@@ -244,7 +260,12 @@ def set_metadata(
     Responses:
         200 OK: dict
             {}
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `timetable.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("timetable", "edit timetable metadata")
     timetable_resource[timetable_id].metadata.update(
         start_date=start_date,
         end_date=end_date

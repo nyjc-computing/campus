@@ -13,7 +13,7 @@ from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import payloads, questionschemas, resources
+from .. import authz, payloads, questionschemas, resources
 
 bp = flask.Blueprint('assignments', __name__, url_prefix='/assignments')
 
@@ -81,7 +81,12 @@ def create_assignment(
     Responses:
         201 Created: dict
             Assignment resource
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `assignments.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("assignments", "create assignments")
     # Get created_by from authenticated user
     current_user = flask.g.get('current_user')
     if not current_user or not getattr(current_user, 'id', None):
@@ -142,7 +147,12 @@ def update_assignment(
     Responses:
         200 OK: dict
             Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `assignments.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("assignments", "edit assignments")
     updates = {}
     if title is not None:
         updates["title"] = title
@@ -178,7 +188,12 @@ def delete_assignment(assignment_id: str) -> flask_campus.JsonResponse:
     Responses:
         200 OK: dict
         Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `assignments.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("assignments", "delete assignments")
     resources.assignment[schema.CampusID(assignment_id)].delete()
     yapper.emit('campus.assignments.delete', {"assignment_id": assignment_id})
     return {}, 200
@@ -207,7 +222,14 @@ def add_classroom_link(
     Responses:
         200 OK: dict
         Empty object on success
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `assignments.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin(
+        "assignments", "link assignments to Classroom"
+    )
     assignment = resources.assignment[schema.CampusID(assignment_id)].get()
     new_link = campus.model.ClassroomLink(
         course_id=course_id,
