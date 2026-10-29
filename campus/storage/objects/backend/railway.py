@@ -64,7 +64,7 @@ def resolve_credential(name: str) -> str | None:
         return None
 
 
-def resolve_credentials() -> dict[str, str] | None:
+def resolve_credentials() -> dict[str, str | None] | None:
     """Resolve all Railway bucket credentials, or None if unconfigured.
 
     Returns None when BUCKET or ENDPOINT is unavailable, meaning the
