@@ -15,7 +15,12 @@
 # networking), and a bare literal misparses ("invalid port in resolver").
 FROM nginx:1.29-alpine
 
-COPY default.conf.template /etc/nginx/templates/default.conf.template
+# NOTE: this file is named campus-gateway.conf.template, NOT the
+# conventional default.conf.template, on purpose. Railway's incremental
+# snapshot builder once patch-merged a changed default.conf.template
+# into a garbled hybrid of old and new versions (2026-10-29, #995) —
+# a fresh filename forces a wholesale copy instead of a diff-apply.
+COPY campus-gateway.conf.template /etc/nginx/templates/default.conf.template
 
 # Runtime ground truth: after the entrypoint envsubsts the template,
 # print the rendered upstream lines to the deploy log (chasing the
