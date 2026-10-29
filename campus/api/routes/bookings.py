@@ -8,6 +8,8 @@ import flask
 from campus import flask_campus
 from campus.common import schema
 
+from .. import authz
+
 bp = flask.Blueprint('bookings', __name__, url_prefix='/bookings')
 
 
@@ -77,7 +79,12 @@ def create_booking(
 
         400 Bad Request: dict
             {"error": error message}
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `bookings.admin` circle (only user tokens are eligible).
     """
+    authz.require_resource_admin("bookings", "create bookings")
     return {"error": "Not implemented"}, 501
 
 
@@ -134,9 +141,14 @@ def update_booking(
         400 Bad Request: dict
             {"error": error message}
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `bookings.admin` circle (only user tokens are eligible).
+
         404 Not Found: dict
             {"error": "Booking not found"}
     """
+    authz.require_resource_admin("bookings", "edit bookings")
     return {"error": "Not implemented"}, 501
 
 
@@ -156,7 +168,12 @@ def delete_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
         200 OK: dict
             Empty object on success.
 
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `bookings.admin` circle (only user tokens are eligible).
+
         404 Not Found: dict
             {"error": "Booking not found"}
     """
+    authz.require_resource_admin("bookings", "delete bookings")
     return {"error": "Not implemented"}, 501

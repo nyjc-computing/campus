@@ -184,6 +184,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     routes.bookings.init_app(bp)
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
+    routes.files.init_app(bp)
     routes.submissions.init_app(bp)
     routes.timetable.init_app(bp)
 

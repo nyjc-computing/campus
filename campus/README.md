@@ -45,7 +45,7 @@ the `campus.model` entity dataclasses.
 ### Services
 
 - **campus.auth**: Authentication, OAuth, credentials (`.resources` for business logic)
-- **campus.api**: Circles, email OTP (`.resources` for business logic)
+- **campus.api**: Circles, files, email OTP (`.resources` for business logic)
 - **campus.storage**: Backend-agnostic data persistence
 - **campus.model**: Entity dataclasses (no business logic) — [campus-model](https://github.com/nyjc-computing/campus-model) distribution
 - **campus.services**: Email, notifications
@@ -63,14 +63,16 @@ the `campus.model` entity dataclasses.
 ### 🌐 API (`campus.api`)
 
 - Circle (group) management
+- Files: slug-addressable blobs in object storage (`/api/v1/files/by-slug/...`)
 - Email OTP verification
 - Resource-based routing
 
 ### 💾 Storage (`campus.storage`)
 
-- Multiple backends (PostgreSQL, MongoDB)
-- Table/collection abstraction
-- Query builder interface
+- Three interfaces: tables (SQL), documents (MongoDB-style), objects (S3-compatible blobs)
+- Backends: PostgreSQL, MongoDB, SQLite (tests); Railway Bucket (deployment) and local filesystem (dev/test) for objects
+- Table/collection abstraction and query builder interface
+- Bucket credentials resolve from environment variables or the deployment vault (`env.getsecret`)
 
 ### 🏛️ Model (`campus.model`)
 

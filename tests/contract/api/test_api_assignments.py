@@ -19,6 +19,7 @@ import unittest
 
 from campus.common import schema
 from tests.fixtures import services
+from tests.fixtures.circles import grant_circle_admin
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 
 
@@ -51,6 +52,10 @@ class TestApiAssignmentsContract(unittest.TestCase):
         # credentials storage, which clear_test_data() wipes.
         self.token = create_test_token(self.user_id)
         self.auth_headers = get_bearer_auth_headers(self.token)
+
+        # Mutation routes are gated behind assignments.admin; grant the
+        # test user the role (clear_test_data wipes the circles).
+        grant_circle_admin(str(self.user_id), "assignments")
 
     def _create_test_assignment(self, **overrides):
         """Helper to create a test assignment via resource layer.
