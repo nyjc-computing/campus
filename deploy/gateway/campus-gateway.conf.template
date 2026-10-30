@@ -70,23 +70,6 @@ server {
     location /api/          { proxy_pass $api_upstream; }
     location /audit/        { proxy_pass $audit_upstream; }
 
-    # TEMPORARY mesh-egress probe (2026-10-30, remove after diagnosis):
-    # auth-mongodb is a known-good mesh receiver (campus.auth talks to it
-    # over the mesh in production traffic). A FAST 502 here means the
-    # gateway's mesh egress works (mongod rejects the HTTP probe but the
-    # TCP exchange completed); a 10s 504 hang means the gateway's mesh
-    # attachment is the broken leg. The variable form forces per-request
-    # DNS via the resolver directive — a static proxy_pass hostname makes
-    # nginx resolve at STARTUP, which killed the first probe deploy
-    # ("host not found in upstream" before the mesh is reachable).
-    set $mongo_probe "http://auth-mongodb.railway.internal:27017";
-    location = /_probe/mongo {
-        access_log off;
-        proxy_connect_timeout 10s;
-        proxy_read_timeout 10s;
-        proxy_pass $mongo_probe;
-    }
-
     # Gateway-owned shared root until the cutover decides otherwise
     # (#995): audit has the only real web UI, so it gets the redirect.
     location = /health {
