@@ -117,6 +117,10 @@ For detailed file locations and architecture, see:
 ### Access Control
 - [docs/circles-access-control.md](docs/circles-access-control.md) - How circles implement access control: resource + role circles, membership rules, bootstrap seeding (read before touching circles or adding authorization to API routes)
 
+### Railway & Deployment
+- [docs/railway-architecture.md](docs/railway-architecture.md) - Environments, services, gateway request flow, and the IPv6-only private-networking rules (read before touching Railway service config or adding a deployment)
+- `.zcode/skills/railway-ops` skill - Railway CLI/GraphQL API recipes and traps (mutating service config, triggering deploys, polling deployments)
+
 ### Getting Started
 - [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) - Installation and setup
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) - Branching strategy and workflow
