@@ -58,6 +58,7 @@ Bootstrap hierarchy after `CirclesResource.init_storage()`:
 nyjc.edu.sg (root)
 ├── campus-admin (admin)
 ├── ng_jun_siang@nyjc.edu.sg (user, standalone — private resources)
+├── campus-test-admin@nyjc.edu.sg (user, standalone — shared automation admin)
 ├── circles (resource)
 │   └── circles.admin (role)      ← user circles granted admin over /circles
 ├── timetable (resource)
@@ -107,10 +108,10 @@ uniqueness.
 
 `CirclesResource.init_storage()` is idempotent and seeds, in order:
 the `@meta` bookkeeping record, the root circle, the `campus-admin`
-sentinel, the bootstrap admin's user circle, then a resource circle +
+sentinel, the bootstrap admins' user circles, then a resource circle +
 `<resource>.admin` role circle for each guarded resource (`circles`,
 `timetable`, `assignments`, `bookings`, `submissions`), and finally
-adds the bootstrap admin's user circle to every role circle.
+adds the bootstrap admins' user circles to every role circle.
 
 It runs at campus.api app start in every non-production environment
 (same self-heal policy as the other api storage init). Production runs
@@ -118,11 +119,14 @@ schema management via migrations/scripts per
 [prod-rollout.md](prod-rollout.md); the bootstrap must be run once
 against production before enforcement ships.
 
-**Temporary:** `ng_jun_siang@nyjc.edu.sg`
-(`BOOTSTRAP_ADMIN_USER` in `campus/api/resources/circle.py`) gets a
-user circle seeded and added to every role circle until role
-administration and user-circle provisioning have management flows.
-Removing it is a deliberate follow-up, not an oversight.
+**Temporary:** the accounts in `BOOTSTRAP_ADMIN_USERS`
+(`campus/api/resources/circle.py`) get user circles seeded and added
+to every role circle until role administration and user-circle
+provisioning have management flows. Currently `ng_jun_siang@nyjc.edu.sg`
+(the maintainer) and `campus-test-admin@nyjc.edu.sg` (a shared
+automation admin, so live testing never runs as a personal account).
+Removing or extending the list is a deliberate follow-up, not an
+oversight.
 
 ## Managing circles
 

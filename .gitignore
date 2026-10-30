@@ -192,3 +192,6 @@ replit.nix
 # Worktree-local venv bootstrap artifact (scripts/worktree.py pip freeze
 # intermediate) — disposable, never commit (accidentally tracked once, e7b025e)
 requirements-freeze.txt
+
+# Local object-storage bucket written by integration tests
+.storage/

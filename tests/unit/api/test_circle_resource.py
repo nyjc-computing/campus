@@ -156,10 +156,10 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
         )
 
     def test_bootstrap_seeds_admin_user(self):
-        """The temporary bootstrap admin is a member of every role circle."""
+        """Every temporary bootstrap admin is a member of every role circle."""
         from campus.api.resources.circle import (
             BOOTSTRAP_ACCESS_VALUE,
-            BOOTSTRAP_ADMIN_USER,
+            BOOTSTRAP_ADMIN_USERS,
             BOOTSTRAP_RESOURCES,
             CirclesResource,
             circle_storage,
@@ -171,15 +171,16 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
             role_record = circle_storage.get_matching(
                 {"name": f"{resource_name}.admin"}
             )[0]
-            self.assertEqual(
-                role_record["members"].get(BOOTSTRAP_ADMIN_USER),
-                BOOTSTRAP_ACCESS_VALUE,
-            )
+            for admin_user in BOOTSTRAP_ADMIN_USERS:
+                self.assertEqual(
+                    role_record["members"].get(admin_user),
+                    BOOTSTRAP_ACCESS_VALUE,
+                )
 
     def test_bootstrap_seeds_user_circle(self):
-        """The bootstrap admin's user circle exists, tagged "user"."""
+        """Every bootstrap admin's user circle exists, tagged "user"."""
         from campus.api.resources.circle import (
-            BOOTSTRAP_ADMIN_USER,
+            BOOTSTRAP_ADMIN_USERS,
             USER_TAG,
             CirclesResource,
             circle_storage,
@@ -187,11 +188,12 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
 
         CirclesResource.init_storage()
 
-        user_circles = circle_storage.get_matching(
-            {"name": str(BOOTSTRAP_ADMIN_USER)}
-        )
-        self.assertEqual(len(user_circles), 1)
-        self.assertEqual(user_circles[0]["tag"], USER_TAG)
+        for admin_user in BOOTSTRAP_ADMIN_USERS:
+            user_circles = circle_storage.get_matching(
+                {"name": str(admin_user)}
+            )
+            self.assertEqual(len(user_circles), 1)
+            self.assertEqual(user_circles[0]["tag"], USER_TAG)
 
     def test_bootstrap_is_idempotent(self):
         """Re-running init_storage adds no circles and raises no conflict."""
