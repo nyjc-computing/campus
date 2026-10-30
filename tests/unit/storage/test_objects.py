@@ -34,10 +34,10 @@ class _BotoError(Exception):
 
 
 _CREDENTIALS = {
-    "BUCKET": "real-bucket-id",
-    "ENDPOINT": "https://s3.example",
-    "ACCESS_KEY_ID": "key-id",
-    "SECRET_ACCESS_KEY": "secret-key",
+    "BUCKET_NAME": "real-bucket-id",
+    "BUCKET_ENDPOINT": "https://s3.example",
+    "BUCKET_ACCESS_KEY_ID": "key-id",
+    "BUCKET_SECRET_ACCESS_KEY": "secret-key",
 }
 
 
@@ -177,7 +177,7 @@ class TestRailwayBucket(unittest.TestCase):
         self.assertEqual(kwargs["config"].region_name, "auto")
 
     def test_explicit_credentials_override_environment(self):
-        with mock.patch.dict(os.environ, {"BUCKET": "env-bucket"}):
+        with mock.patch.dict(os.environ, {"BUCKET_NAME": "env-bucket"}):
             bucket = RailwayBucket("ns", credentials=dict(_CREDENTIALS))
         bucket.put("k", b"v")
         self.assertEqual(
@@ -296,7 +296,7 @@ class TestRailwayBucket(unittest.TestCase):
             self.assertIn(var, str(cm.exception))
 
     def test_partial_credentials_raise_for_missing_keys(self):
-        partial = {"BUCKET": "b", "ENDPOINT": "https://s3"}
+        partial = {"BUCKET_NAME": "b", "BUCKET_ENDPOINT": "https://s3"}
         with (mock.patch.object(
                   railway_backend,
                   "resolve_credential",
@@ -304,8 +304,8 @@ class TestRailwayBucket(unittest.TestCase):
               ),
               self.assertRaises(OSError) as cm):
             RailwayBucket("ns")
-        self.assertIn("ACCESS_KEY_ID", str(cm.exception))
-        self.assertIn("SECRET_ACCESS_KEY", str(cm.exception))
+        self.assertIn("BUCKET_ACCESS_KEY_ID", str(cm.exception))
+        self.assertIn("BUCKET_SECRET_ACCESS_KEY", str(cm.exception))
 
 
 class TestCredentialResolution(unittest.TestCase):
@@ -313,10 +313,10 @@ class TestCredentialResolution(unittest.TestCase):
 
     def test_environment_takes_precedence_over_vault(self):
         fake_getsecret = mock.MagicMock(return_value="vault-value")
-        with (mock.patch.dict(os.environ, {"BUCKET": "env-value"}),
+        with (mock.patch.dict(os.environ, {"BUCKET_NAME": "env-value"}),
               mock.patch.object(env, "_getsecret_func", fake_getsecret)):
             self.assertEqual(
-                railway_backend.resolve_credential("BUCKET"), "env-value"
+                railway_backend.resolve_credential("BUCKET_NAME"), "env-value"
             )
         fake_getsecret.assert_not_called()
 
@@ -326,15 +326,17 @@ class TestCredentialResolution(unittest.TestCase):
               mock.patch.object(env, "_getsecret_func", fake_getsecret)):
             _pop_credential_vars()
             self.assertEqual(
-                railway_backend.resolve_credential("BUCKET"), "vault-value"
+                railway_backend.resolve_credential("BUCKET_NAME"), "vault-value"
             )
-        fake_getsecret.assert_called_once_with("BUCKET")
+        fake_getsecret.assert_called_once_with("BUCKET_NAME")
 
     def test_unconfigured_returns_none(self):
         with (mock.patch.dict(os.environ),
               mock.patch.object(env, "_getsecret_func", None)):
             _pop_credential_vars()
-            self.assertIsNone(railway_backend.resolve_credential("ENDPOINT"))
+            self.assertIsNone(
+                railway_backend.resolve_credential("BUCKET_ENDPOINT")
+            )
 
     def test_resolve_credentials_none_when_unconfigured(self):
         with (mock.patch.dict(os.environ),

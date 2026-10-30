@@ -52,13 +52,19 @@ Workspace (GCP Internal) clients, and mutates production data.
    `campus-classroom` GCP client). `google.calendar` stays a registry
    stub — no vault label until a consumer exists.
 
-   Also seed the **files object-storage credentials** into the
-   `campus.api` vault label (keys `BUCKET`, `ENDPOINT`,
-   `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION`): create a prod
-   Railway storage bucket, then seed its S3 credentials the way dev was
-   seeded (2026-10-29). Production `ENV` forces the Railway bucket
-   backend for `campus.storage.get_bucket`, so every file operation
-   fails with a missing-credential `OSError` until these keys exist.
+   Also configure the **files object-storage credentials** as
+   `campus.api` environment variables (keys `BUCKET_NAME`,
+   `BUCKET_ENDPOINT`, `BUCKET_ACCESS_KEY_ID`, `BUCKET_SECRET_ACCESS_KEY`,
+   `BUCKET_REGION`): create a prod Railway storage bucket, then set each
+   variable as an internal reference to the bucket's own variables
+   (dev pattern, 2026-10-30 — e.g.
+   `BUCKET_NAME=${{"campus.api-bucket".BUCKET}}`; note the bucket's
+   S3-name variable is `BUCKET`, and service names with dots need
+   quoting in references). Environment variables are resolved before
+   the deployment vault, so no vault seeding is needed. Production
+   `ENV` forces the Railway bucket backend for
+   `campus.storage.get_bucket`, so every file operation fails with a
+   missing-credential `OSError` until these variables exist.
 
 4. **GCP trio (Workspace console; Internal classification)**: `campus`
    (identity login), `campus-classroom`, and `campus-calendar` (only when
