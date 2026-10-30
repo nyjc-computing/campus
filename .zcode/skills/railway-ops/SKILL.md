@@ -83,10 +83,37 @@ Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments: `development`
 - Do NOT curl a service's own public domain from inside Railway: internal
   DNS answers public names with mesh addresses where only the targetPort
   answers — connects on 443 hang (split-horizon hairpin trap).
-- `privateIps` on a service's railway.internal endpoint can be empty for
-  recently API-created services; empty addresses correlate with broken mesh
-  attachment (hanging outbound connects). Compare against a known-good
-  service before trusting DNS results.
+- `privateIps` on a service's railway.internal endpoint can be empty while
+  mesh egress works fine (observed 2026-10-30: ACTIVE + empty + fast
+  responses) — it is NOT a reliable health signal. A genuinely broken mesh
+  attachment shows up as behavior: fast `ECONNREFUSED` (nothing listening
+  on the target) vs silent hangs (dead attachment/instance). The 2026-10-30
+  gateway blackhole was fixed by INSTANCE REPLACEMENT (a plain redeploy) —
+  not by any config change. Try a redeploy before filing tickets.
+- nginx `proxy_pass` with a STATIC hostname resolves at config-load time
+  (startup), before the mesh may be reachable — "host not found in
+  upstream" crashes the container. For `*.railway.internal` targets use
+  the variable form (`set $up "http://name:port"; proxy_pass $up;`) so the
+  `resolver` directive handles per-request DNS.
+
+## Build and deploy-log gotchas
+
+- A Dockerfile `COPY` of a file deleted from git keeps building ONLY while
+  Railway's incremental snapshot still carries the old file; the first
+  clean checkout fails deterministically (observed 2026-10-30: three
+  gateway deploy failures). After deleting any file, grep the Dockerfile(s)
+  for references to it.
+- `railway logs -s <svc>` defaults to the latest SUCCESSFUL deployment's
+  runtime logs — misleading when a deploy just failed. Get the failed
+  deployment id (GraphQL `latestDeployment`) and run
+  `railway logs <DEPLOYMENT_ID> -b` for build logs.
+- Retry a failed build with
+  `deploymentRedeploy(id:…, usePreviousImageTag:false){ id status }` —
+  note it returns `Deployment!`, so it needs a selection set (unlike
+  `serviceInstanceUpdate`, which returns bare Boolean).
+- `gh pr update-branch N` puts a merge commit on the REMOTE branch only —
+  `git push` from a stale local branch then needs
+  `git pull --rebase origin <branch>` first.
 
 ## nginx gateway specifics (deploy/gateway/)
 
