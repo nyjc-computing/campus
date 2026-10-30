@@ -39,11 +39,15 @@ BOOTSTRAP_RESOURCES = (
 # existing user circle.
 USER_TAG = "user"
 
-# Bootstrap seeding, temporary: the user circle is created and added to
-# every <resource>.admin role circle at init until role administration
-# and user-circle provisioning have a management flow.
-BOOTSTRAP_ADMIN_USER: schema.CampusID = schema.CampusID(
-    "ng_jun_siang@nyjc.edu.sg"
+# Bootstrap seeding, temporary: these accounts' user circles are
+# created and added to every <resource>.admin role circle at init
+# until role administration and user-circle provisioning have
+# management flows. The second account is a shared automation admin
+# (campus-test-admin) so live testing never runs as a personal
+# account.
+BOOTSTRAP_ADMIN_USERS: tuple[schema.CampusID, ...] = (
+    schema.CampusID("ng_jun_siang@nyjc.edu.sg"),
+    schema.CampusID("campus-test-admin@nyjc.edu.sg"),
 )
 
 # Access-value convention: 15 denotes full access, mirroring the seeded
@@ -220,20 +224,21 @@ class CirclesResource:
                 parents={root_circle.id: 15}
             )
 
-        # User circle for the bootstrap admin (docs/circles-access-control.md):
-        # users participate through their user circle, named after the
-        # email account; it also holds the user's private resources.
-        # Created standalone (no parents) — role memberships are the
-        # access grants, not the user circle's position in the tree.
-        # Temporary until user-circle provisioning has a flow.
-        _ensure_circle(
-            str(BOOTSTRAP_ADMIN_USER),
-            tag=USER_TAG,
-            description=(
-                f"Personal circle for {BOOTSTRAP_ADMIN_USER} "
-                "(private resources)"
-            ),
-        )
+        # User circles for the bootstrap admins
+        # (docs/circles-access-control.md): users participate through
+        # their user circle, named after the email account; it also
+        # holds the user's private resources. Created standalone (no
+        # parents) — role memberships are the access grants, not the
+        # user circle's position in the tree. Temporary until
+        # user-circle provisioning has a flow.
+        for admin_user in BOOTSTRAP_ADMIN_USERS:
+            _ensure_circle(
+                str(admin_user),
+                tag=USER_TAG,
+                description=(
+                    f"Personal circle for {admin_user} (private resources)"
+                ),
+            )
 
         # Resource authorization circles (docs/circles-access-control.md):
         # a resource circle per guarded API resource family, each with an
@@ -254,13 +259,14 @@ class CirclesResource:
                 description=f"Admin role for the {resource_name} resource",
                 parents={resource_circle.id: BOOTSTRAP_ACCESS_VALUE},
             )
-            # Temporary bootstrap admin: membership is held by the
+            # Temporary bootstrap admins: membership is held by the
             # user circle (named after the email), not the account.
-            _ensure_member(
-                role_circle.id,
-                BOOTSTRAP_ADMIN_USER,
-                BOOTSTRAP_ACCESS_VALUE,
-            )
+            for admin_user in BOOTSTRAP_ADMIN_USERS:
+                _ensure_member(
+                    role_circle.id,
+                    admin_user,
+                    BOOTSTRAP_ACCESS_VALUE,
+                )
 
     def __getitem__(self, circle_id: schema.CampusID) -> "CircleResource":
         """Get a circle resource by circle ID.
