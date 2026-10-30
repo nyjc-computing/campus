@@ -56,8 +56,9 @@ and dispatches by path prefix:
 Upstreams resolve via the Railway mesh DNS on every request (nginx
 `resolver … valid=10s`), so redeploys of backends need no gateway change.
 The gateway is deployed from `deploy/gateway/` in this repo (rootDirectory +
-watch patterns scope its builds). Today the per-service domains above remain
-the primary entrypoints; the gateway becomes the canonical host during the
+watch patterns scope its builds). The gateway is LIVE and dispatching to
+all three services on dev (end-to-end smoke green 2026-10-30); the
+per-service domains above remain the primary entrypoints until the
 single-hostname cutover tracked on issue #995 (`PUBLIC_PREFIX`,
 `SESSION_COOKIE_NAMES` prerequisites shipped in PR #996).
 
