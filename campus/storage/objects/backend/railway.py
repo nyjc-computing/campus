@@ -5,17 +5,20 @@ This module provides the Railway Bucket backend for the Objects storage interfac
 Railway Buckets are S3-compatible object storage. This backend uses boto3
 to interact with Railway's S3-compatible API.
 
-Credentials Required:
-    BUCKET: The globally unique bucket name (e.g., "my-bucket-jdhhd8oe18xi")
-    SECRET_ACCESS_KEY: The S3 secret key
-    ACCESS_KEY_ID: The S3 key ID
-    REGION: The S3 region (typically "auto"; optional, defaults to "auto")
-    ENDPOINT: The S3 endpoint URL (e.g., the bucket's private Railway URL)
+Credentials Required (backend-prefixed, matching MONGODB_URI/POSTGRESDB_URI
+so each storage backend's configuration is recognisable at a glance):
+    BUCKET_NAME: The globally unique bucket name (e.g., "my-bucket-jdhhd8oe18xi")
+    BUCKET_SECRET_ACCESS_KEY: The S3 secret key
+    BUCKET_ACCESS_KEY_ID: The S3 key ID
+    BUCKET_REGION: The S3 region (Railway buckets use "sin" etc.; optional,
+        defaults to "auto")
+    BUCKET_ENDPOINT: The S3 endpoint URL (e.g., "https://t3.storageapi.dev")
 
 Credentials are resolved from environment variables first, then from the
-deployment vault via env.getsecret (same source as SECRET_KEY). Storing
-them in the vault keeps them out of the service variable list; the private
-ENDPOINT URL is only reachable from within the Railway environment.
+deployment vault via env.getsecret (same source as SECRET_KEY). On Railway
+the environment variables are internal references to the bucket's own
+variables (e.g. BUCKET_NAME=${{"campus.api-bucket".BUCKET}}), so credential
+rotation propagates without manual updates.
 
 Railway Documentation: https://docs.railway.com/storage-buckets.md
 """
@@ -34,9 +37,14 @@ from campus.storage.objects.interface import BucketInterface, ObjectMetadata
 logger = logging.getLogger(__name__)
 
 # Required credential keys; resolution failure is a configuration error
-CREDENTIAL_VARS = ("BUCKET", "ENDPOINT", "ACCESS_KEY_ID", "SECRET_ACCESS_KEY")
+CREDENTIAL_VARS = (
+    "BUCKET_NAME",
+    "BUCKET_ENDPOINT",
+    "BUCKET_ACCESS_KEY_ID",
+    "BUCKET_SECRET_ACCESS_KEY",
+)
 # Optional credential keys with fallbacks
-OPTIONAL_VARS = ("REGION",)
+OPTIONAL_VARS = ("BUCKET_REGION",)
 
 
 def resolve_credential(name: str) -> str | None:
@@ -49,7 +57,7 @@ def resolve_credential(name: str) -> str | None:
     selection can fall back to another backend.
 
     Args:
-        name: Credential key (e.g., "BUCKET", "SECRET_ACCESS_KEY")
+        name: Credential key (e.g., "BUCKET_NAME", "BUCKET_SECRET_ACCESS_KEY")
 
     Returns:
         The credential value, or None if unavailable from both sources
@@ -67,11 +75,12 @@ def resolve_credential(name: str) -> str | None:
 def resolve_credentials() -> dict[str, str | None] | None:
     """Resolve all Railway bucket credentials, or None if unconfigured.
 
-    Returns None when BUCKET or ENDPOINT is unavailable, meaning the
-    bucket is not configured for this deployment. A partial configuration
-    (BUCKET and ENDPOINT present but keys missing) returns what resolved
-    so that RailwayBucket construction raises the loud missing-variable
-    error instead of silently falling back to another backend.
+    Returns None when BUCKET_NAME or BUCKET_ENDPOINT is unavailable, meaning
+    the bucket is not configured for this deployment. A partial configuration
+    (BUCKET_NAME and BUCKET_ENDPOINT present but keys missing) returns what
+    resolved so that RailwayBucket construction raises the loud
+    missing-variable error instead of silently falling back to another
+    backend.
 
     Returns:
         Dict of resolved credentials, or None if the bucket is unconfigured
@@ -80,7 +89,7 @@ def resolve_credentials() -> dict[str, str | None] | None:
         var: resolve_credential(var)
         for var in CREDENTIAL_VARS + OPTIONAL_VARS
     }
-    if not creds["BUCKET"] or not creds["ENDPOINT"]:
+    if not creds["BUCKET_NAME"] or not creds["BUCKET_ENDPOINT"]:
         return None
     return creds
 
@@ -116,11 +125,11 @@ class RailwayBucket(BucketInterface):
             for var_name in CREDENTIAL_VARS + OPTIONAL_VARS
         }
 
-        self._bucket_name = creds.get("BUCKET")
-        self._endpoint = creds.get("ENDPOINT")
-        self._access_key = creds.get("ACCESS_KEY_ID")
-        self._secret_key = creds.get("SECRET_ACCESS_KEY")
-        self._region = creds.get("REGION") or "auto"
+        self._bucket_name = creds.get("BUCKET_NAME")
+        self._endpoint = creds.get("BUCKET_ENDPOINT")
+        self._access_key = creds.get("BUCKET_ACCESS_KEY_ID")
+        self._secret_key = creds.get("BUCKET_SECRET_ACCESS_KEY")
+        self._region = creds.get("BUCKET_REGION") or "auto"
 
         # Validate required credentials
         missing = [
