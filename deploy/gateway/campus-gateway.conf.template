@@ -44,21 +44,17 @@ server {
     # nginx makes it absolute from the listen port and leaks :8080.
     absolute_redirect off;
 
-    # Upstreams: hairpin through the services' PUBLIC domains over
-    # HTTPS. Railway private networking (*.railway.internal, IPv6) was
-    # investigated on 2026-10-29 and refused connects from the gateway
-    # for all three services despite ACTIVE private endpoints and
-    # gunicorn bound to 0.0.0.0:8080 (see deploy/gateway/README.md) —
-    # the public hairpin is the working fallback. To switch back to
-    # private networking once resolved:
-    #   set $auth_upstream  "http://campus-auth.railway.internal:${AUTH_PORT}";
-    #   set $api_upstream   "http://campus-api.railway.internal:${API_PORT}";
-    #   set $audit_upstream "http://campusaudit.railway.internal:${AUDIT_PORT}";
+    # Upstreams: Railway PRIVATE networking (*.railway.internal, IPv6).
+    # To flip to the public hairpin instead (worked around split-horizon
+    # DNS once — see deploy/gateway/README.md), set the three lines to:
+    #   "https://campusauth-development.up.railway.app" (+ proxy_ssl_server_name on)
+    #   "https://campusapi-development.up.railway.app"
+    #   "https://campusaudit-development.up.railway.app"
     # Variables force per-request DNS resolution (valid=10s below), so
     # backend redeploys never leave the gateway with a stale address.
-    set $auth_upstream  "https://campusauth-development.up.railway.app";
-    set $api_upstream   "https://campusapi-development.up.railway.app";
-    set $audit_upstream "https://campusaudit-development.up.railway.app";
+    set $auth_upstream  "http://campus-auth.railway.internal:${AUTH_PORT}";
+    set $api_upstream   "http://campus-api.railway.internal:${API_PORT}";
+    set $audit_upstream "http://campusaudit.railway.internal:${AUDIT_PORT}";
 
     # SNI for the HTTPS upstreams (*.up.railway.app requires it).
     proxy_ssl_server_name on;
