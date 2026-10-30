@@ -32,15 +32,3 @@ RUN rm -f /etc/nginx/templates/default.conf.template \
           /etc/nginx/conf.d/default.conf \
           /etc/nginx/conf.d/campus-gateway.conf
 COPY campus-gateway.conf.template /etc/nginx/templates/campus-gateway.conf.template
-
-# Runtime ground truth: after the entrypoint envsubsts the template,
-# print the rendered upstream lines to the deploy log (chasing the
-# stale-config 502s, #995 — remove once verified end-to-end).
-COPY 25-render-debug.sh /docker-entrypoint.d/25-render-debug.sh
-RUN chmod +x /docker-entrypoint.d/25-render-debug.sh
-
-# Build-time provenance: prints which upstream config got baked into the
-# image, so a stale build is visible in the build log (Railway's
-# incremental snapshot builds once shipped a stale template — only
-# README.md showed as modified in its snapshot diff, 2026-10-29 #995).
-RUN grep -nE "set \\\$.*_upstream" /etc/nginx/templates/default.conf.template || true
