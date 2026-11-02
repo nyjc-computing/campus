@@ -16,7 +16,6 @@ __all__ = ("AuditClient",)
 
 from campus.audit.http.interface import JsonClient
 from campus.common import env
-from campus.common.utils import url
 
 from .v1 import AuditRoot
 
@@ -59,15 +58,12 @@ def _create_http_client(base_url: str) -> JsonClient:
 def _get_base_url() -> str:
     """Get the audit service base URL from environment.
 
-    Delegates to campus.config.get_base_url("campus.audit"), with one
-    special case: when running inside the audit deployment itself,
-    trace ingestion targets the canonical origin rather than the
-    environment's public URL.
+    Delegates to campus.config.get_base_url("campus.audit"): the
+    registry (campus.common.services) routes a deployment resolving its
+    own name (DEPLOY=campus.audit) to the canonical origin, so trace
+    ingestion inside the audit deployment never transits the public
+    URL — formerly this function's special case.
     """
-    # If running in the audit deployment itself, use canonical origin
-    if env.get("DEPLOY") == "campus.audit":
-        return url.canonical_origin()
-
     import campus.config
 
     return campus.config.get_base_url("campus.audit")
