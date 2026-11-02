@@ -2,24 +2,19 @@
 
 Configuration for Campus service URLs and service-policy constants.
 
-Service URL resolution is owned by campus.common.services (the shared
-registry in campus-common): one resolver serves the suite, the
-campus_python SDK, and downstream apps, layering per-service overrides
-(CAMPUS_AUTH_URL / AUTH_URL / ...) and a gateway base-URL fallback
-(CAMPUS_BASE_URL / BASE_URL) over the per-environment table. This
-module re-exports the registry's table and resolver so the
-campus.config import path keeps working; the remaining constants are
-service policy shared by the auth and audit services (expiries, journey
-cookie names, CLI scopes, operator key seeding).
+Service URL resolution is owned by campus.common.services (campus-common):
+one resolver serves the suite, the campus_python SDK, and downstream
+apps. The environment is the source of truth — per-service overrides
+(CAMPUS_AUTH_URL / AUTH_URL / ...) over a gateway base-URL fallback
+(CAMPUS_BASE_URL / BASE_URL); Campus ships no baked-in deployment
+topology. The remaining constants are service policy shared by the auth
+and audit services (expiries, journey cookie names, CLI scopes,
+operator key seeding).
 """
 
 from campus.common import services
 
 Url = str
-
-# Re-exported from the shared registry (campus.common.services) — the
-# single source of truth for service URLs.
-BASE_URLS = services.BASE_URLS
 
 
 def get_base_url(app_name: str) -> Url:
@@ -42,9 +37,9 @@ def get_base_url(app_name: str) -> Url:
         str: Base URL (bare origin) for the service deployment
 
     Raises:
-        ValueError: If no base URL is resolvable for the service or
-            environment, or a configured override/base URL is not a
-            bare origin (see campus.common.services for the chain)
+        ValueError: If no base URL is configured for the service, or a
+            configured override/base URL is not a bare origin (see
+            campus.common.services for the chain)
     """
     return services.get_base_url(app_name)
 

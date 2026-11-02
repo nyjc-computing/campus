@@ -50,11 +50,6 @@ class ServiceURLTestCase(unittest.TestCase):
 class TestBaseUrlDelegation(ServiceURLTestCase):
     """campus.config.get_base_url delegates to campus.common.services."""
 
-    def test_base_urls_is_the_registry_table(self):
-        import campus.common.services
-
-        self.assertIs(config.BASE_URLS, campus.common.services.BASE_URLS)
-
     def test_per_service_override(self):
         os.environ["CAMPUS_AUTH_URL"] = "https://auth-override.example"
         self.assertEqual(
@@ -66,12 +61,6 @@ class TestBaseUrlDelegation(ServiceURLTestCase):
         os.environ["BASE_URL"] = "https://base.example"
         for app_name in ("campus.auth", "campus.api", "campus.audit"):
             self.assertEqual(config.get_base_url(app_name), "https://base.example")
-
-    def test_table_fallback_without_overrides(self):
-        self.assertEqual(
-            config.get_base_url("campus.auth"),
-            "https://campusauth-development.up.railway.app",
-        )
 
     def test_testing_resolves_canonical_origin(self):
         os.environ["ENV"] = "testing"
@@ -88,7 +77,7 @@ class TestBaseUrlDelegation(ServiceURLTestCase):
             "https://gateway.example",
         )
 
-    def test_unknown_service_error(self):
+    def test_unconfigured_service_error(self):
         with self.assertRaisesRegex(ValueError, "campus.profile"):
             config.get_base_url("campus.profile")
 

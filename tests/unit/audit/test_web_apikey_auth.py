@@ -96,6 +96,10 @@ class TestAuditWebAPIKeyAuth(unittest.TestCase):
         env_patch = mock.patch.dict(os.environ, {
             "ENV": "development",
             "PUBLIC_URL": "https://campus.test",
+            # Env-only URL resolution (campus-common 0.3.0): the OAuth
+            # login start resolves the auth base URL from the env —
+            # the stub client below never dials it.
+            "CAMPUS_AUTH_URL": "https://campus.test",
             "AUDIT_OAUTH_CLIENT_ID": "auditweb.test",
             "AUDIT_OAUTH_CLIENT_SECRET": "auditweb-secret",
             "AUDIT_ADMINS": "",
@@ -626,6 +630,10 @@ class TestAuditWebAPIKeySignInEvents(unittest.TestCase):
         env_patch = mock.patch.dict(os.environ, {
             "ENV": "development",
             "PUBLIC_URL": "https://campus.test",
+            # Env-only URL resolution (campus-common 0.3.0): the OAuth
+            # login start resolves the auth base URL from the env —
+            # the stub client below never dials it.
+            "CAMPUS_AUTH_URL": "https://campus.test",
             "AUDIT_OAUTH_CLIENT_ID": "auditweb.test",
             "AUDIT_OAUTH_CLIENT_SECRET": "auditweb-secret",
             "AUDIT_ADMINS": "",
