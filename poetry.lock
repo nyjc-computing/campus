@@ -636,13 +636,13 @@ resolved_reference = "695992d8afbc1fa9bf8c1b084f39bc3d680fed3e"
 
 [[package]]
 name = "campus-common"
-version = "0.2.1"
+version = "0.2.2"
 description = "Campus shared kernel: env, errors, introspect, schema, utils, validation - PEP 420 namespace portion under campus/common"
 optional = false
 python-versions = ">=3.11.0,<3.15"
 groups = ["main"]
 files = [
-    {file = "campus_common-0.2.1-py3-none-any.whl", hash = "sha256:91b1435f247d9b0aba789af19c35603114387d721b49ac7be0a75670dd61485d"},
+    {file = "campus_common-0.2.2-py3-none-any.whl", hash = "sha256:25d9b2fb05ddc6b1e711baba5e03bac20b3a00ba3eb3ae57d3ba93e7d50e502f"},
 ]
 
 [package.dependencies]
@@ -650,25 +650,25 @@ bcrypt = ">=5.0.0,<6.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.2/campus_common-0.2.2-py3-none-any.whl"
 
 [[package]]
 name = "campus-model"
-version = "0.1.0"
+version = "0.1.1"
 description = "Campus domain models: dataclass entities under campus/model - PEP 420 namespace portion"
 optional = false
 python-versions = ">=3.11.0,<3.15"
 groups = ["main"]
 files = [
-    {file = "campus_model-0.1.0-py3-none-any.whl", hash = "sha256:f16190fd16d35197eb3d22ac2ff4f7eb16663900e7fa82c8029150a38055e229"},
+    {file = "campus_model-0.1.1-py3-none-any.whl", hash = "sha256:881d38ec7261b31f6f658fcc4aa8164d4b45684abd6a6b87b8de2b1146a7ad4b"},
 ]
 
 [package.dependencies]
-campus_common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"}
+campus_common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.2/campus_common-0.2.2-py3-none-any.whl"}
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.0/campus_model-0.1.0-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.1/campus_model-0.1.1-py3-none-any.whl"
 
 [[package]]
 name = "certifi"
@@ -1922,4 +1922,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "403f5003e8e38f971e45a75d4e6212e9bed0c91c107be00e941ea93b52a616e4"
+content-hash = "1aaf590601da2617eb6db502badb366bde858deafa05b4d685c2757d234d0fcf"

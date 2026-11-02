@@ -1,45 +1,38 @@
 """campus.config
 
-Configuration for Campus base URLs and service mappings.
+Configuration for Campus service URLs and service-policy constants.
 
-This module provides environment-aware configuration for service base URLs
-using the campus.common.env environment enums for consistency.
-
-Base URLs are bare service origins (no API path suffix); clients append
-the service's own route prefix (e.g. /auth/v1, /audit/v1) themselves.
+Service URL resolution is owned by campus.common.services (the shared
+registry in campus-common): one resolver serves the suite, the
+campus_python SDK, and downstream apps, layering per-service overrides
+(CAMPUS_AUTH_URL / AUTH_URL / ...) and a gateway base-URL fallback
+(CAMPUS_BASE_URL / BASE_URL) over the per-environment table. This
+module re-exports the registry's table and resolver so the
+campus.config import path keeps working; the remaining constants are
+service policy shared by the auth and audit services (expiries, journey
+cookie names, CLI scopes, operator key seeding).
 """
 
-from campus.common import env
+from campus.common import services
 
 Url = str
 
-BASE_URLS = {
-    "campus.auth": {
-        env.PRODUCTION: "https://auth.campus.nyjc.app",
-        env.STAGING: "https://auth.campus.nyjc.dev",
-        env.DEVELOPMENT: "https://campusauth-development.up.railway.app",
-    },
-    "campus.api": {
-        env.PRODUCTION: "https://api.campus.nyjc.app",
-        env.STAGING: "https://api.campus.nyjc.dev",
-        env.DEVELOPMENT: "https://campusapi-development.up.railway.app",
-    },
-    "campus.audit": {
-        env.PRODUCTION: "https://audit.campus.nyjc.app",
-        env.STAGING: "https://audit.campus.nyjc.dev",
-        env.DEVELOPMENT: "https://campusaudit-development.up.railway.app",
-    },
-}
+# Re-exported from the shared registry (campus.common.services) — the
+# single source of truth for service URLs.
+BASE_URLS = services.BASE_URLS
 
 
 def get_base_url(app_name: str) -> Url:
     """Get the base URL for a service based on environment.
 
-    ENV is read at call time so processes that set it after import
-    (e.g. the test harness) resolve correctly. In the testing
-    environment every service resolves to the canonical origin
-    (PUBLIC_URL) — the test harness routes /auth, /api and /audit path
-    prefixes to the respective in-process Flask apps.
+    Delegates to campus.common.services.get_base_url. ENV is read at
+    call time so processes that set it after import (e.g. the test
+    harness) resolve correctly. In the testing environment every
+    service resolves to the canonical origin (PUBLIC_URL) — the test
+    harness routes /auth, /api and /audit path prefixes to the
+    respective in-process Flask apps — and a deployment resolving its
+    own name (DEPLOY) does the same, so a service never routes to
+    itself through its public URL.
 
     Args:
         app_name: Service name (e.g., "campus.auth", "campus.api",
@@ -49,23 +42,11 @@ def get_base_url(app_name: str) -> Url:
         str: Base URL (bare origin) for the service deployment
 
     Raises:
-        ValueError: If no base URL is registered for the service or
-            environment
+        ValueError: If no base URL is resolvable for the service or
+            environment, or a configured override/base URL is not a
+            bare origin (see campus.common.services for the chain)
     """
-    if app_name not in BASE_URLS:
-        raise ValueError(f"No base URL registered for service: {app_name}")
-    # Lazy import: url pulls in flask; keep campus.config importable
-    # without a web framework.
-    from campus.common.utils import url
-
-    app_env = env.get("ENV", env.DEVELOPMENT)
-    if app_env == env.TESTING:
-        return url.canonical_origin()
-    url_by_env = BASE_URLS[app_name]
-    if app_env not in url_by_env:
-        raise ValueError(
-            f"No base URL registered for service: {app_name} in environment: {app_env}")
-    return url_by_env[app_env]
+    return services.get_base_url(app_name)
 
 
 DEFAULT_LOGIN_EXPIRY_DAYS = 30
