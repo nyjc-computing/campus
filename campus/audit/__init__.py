@@ -1,7 +1,18 @@
 """campus.audit
 
 Audit service for tracing and monitoring Campus services.
+
+This package splits across two distributions (#993): this suite portion
+owns the audit SERVICE (init_app, routes, resources, web UI); the
+flask-campus wheel owns the app-facing halves (middleware, client,
+http). pkgutil extend_path merges the portions so every import path
+keeps resolving unchanged — the two portions ship disjoint subpackages,
+so sys.path order between them is irrelevant.
 """
+
+import pkgutil
+
+__path__ = pkgutil.extend_path(__path__, __name__)
 
 # Note: do not expose .resources directly here. It is meant for internal
 # use within campus.audit only.

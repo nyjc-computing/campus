@@ -155,8 +155,8 @@ The SDK is framework-free transport: it holds no session state and no
 web-framework dependency. Flask apps layer the `campus.flask_campus`
 middleware on top — it owns the browser login flow, client-side
 session storage, and trace propagation, and drives the SDK's pure API
-calls through two injectable providers (see
-`campus/flask_campus/README.md`).
+calls through two injectable providers — see the flask-campus dist
+(nyjc-computing/flask-campus, #993).
 
 See the [campus-api-python repository](https://github.com/nyjc-computing/campus-api-python) for client documentation.
 
