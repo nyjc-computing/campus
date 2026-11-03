@@ -1,6 +1,15 @@
 # campus.flask_campus
 
-Common utility functions for Flask request/response validation and OAuth login management.
+**The middleware layer for Flask-based Campus apps.** flask_campus owns
+everything request-scoped: the OAuth login flow, client-side session
+storage, the auth context push, trace/journey propagation, and request
+parsing/validation utilities. It orchestrates the `campus_python`
+client's pure API calls — the SDK itself is framework-free and holds no
+session state (see [Session management and the campus_python
+boundary](#session-management-and-the-campus_python-boundary)).
+
+Apps install `campus-suite` (this package) plus `campus-api-python`;
+the CLI and other non-Flask clients use `campus_api_python` alone.
 
 ## Installation
 
@@ -72,6 +81,10 @@ def dashboard():
 
 ### Authentication Endpoints
 
+`init_app` registers the `/login`, `/finalize_login`, and `/logout`
+blueprint, the app-wide context push, and the SDK session-id provider
+(see [Session management](#session-management-and-the-campus_python-boundary)).
+
 Once initialized, the following endpoints are automatically available:
 
 | Endpoint | Method | Description |
@@ -88,6 +101,64 @@ Once initialized, the following endpoints are automatically available:
 4. After successful authorization, redirected to `/finalize_login`
 5. Access token is stored and login session is created (30-day expiry)
 6. Redirected to the original destination
+
+### Session management and the `campus_python` boundary
+
+flask_campus owns the client-side session state; `campus_python` owns
+transport. Concretely:
+
+- **Storage.** The auth-session and login-session ids live in
+  `flask.session` under `campus_session_id` / `logins_login_id`
+  (`campus_python.auth.v1.sessions.SESSION_STORAGE_KEY` /
+  `logins.LOGIN_STORAGE_KEY`). `OAuthLoginManager.init_app` installs
+  these keys as the SDK's session-id provider
+  (`campus_python.auth.v1.set_session_id_provider`), so SDK resource
+  methods resolve ids without ever touching a web-framework session
+  store themselves.
+- **Context push.** `context.push_context` (an app-wide
+  `before_request` hook) resolves `flask.g.user` / `flask.g.device`,
+  with a 60-second per-session user cache (#57). Static endpoints skip
+  it (#689).
+- **Login flow.** `context.start_login` / `finalize_login` /
+  `logout` build the authorize redirect, exchange the code, create the
+  login session (device id rides the auth session, #825), and revoke
+  on sign-out — all via the SDK's pure API calls
+  (`sessions.new`, `exchange_code_for_token`, `logins.new`, …).
+- **The user-session token lane stays in the SDK.**
+  `campus.with_user_session()` turns the current login session into an
+  authenticated API client (bearer setup + 401 auto-refresh). That is
+  transport orchestration, not middleware: the session id reaches it
+  through the provider above, and the SDK holds no state. Classroom is
+  currently the only consumer (it is the only app making
+  user-principal campus API calls; admin/profile/nyxchange operate
+  app-scope).
+
+Hosts that need the ids outside a Flask request context read the same
+keys themselves — the SDK's resource methods also accept explicit
+`session_id` arguments.
+
+### Trace propagation
+
+`campus.audit.middleware.init_app` / `init_journeys` install
+`campus.flask_campus.propagation` as the SDK's request-context
+provider (`campus_python.tracing.set_request_context_provider`):
+outbound SDK calls made while your app handles a request then carry
+the span/journey/device headers the audit middleware stashed on
+`flask.g` (`X-Request-ID`, `X-Parent-Span-ID`, `X-Journey-ID`,
+`X-Journey-Name`, `X-Campus-Device`), so the receiving campus service
+records them as child spans of the caller (the audit waterfall). The
+header names mirror `campus_python.tracing` — keep the two in
+lockstep. Without a provider the SDK sends only the process boot
+journey; audit.middleware installs one, so traced apps get full
+waterfalls by default.
+
+### Action journeys
+
+`@flask_campus.journey("campus.submissions.submit")` names a
+user-action episode for the audit UI (campus#828/#840); the journeys
+middleware keeps the `campus_action_journey` cookie alive across the
+episode's requests and XHRs. See `journeys.py` and
+`docs/audit-tracing.md`.
 
 ### Configuring the OAuth Callback URL
 

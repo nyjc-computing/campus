@@ -15,8 +15,17 @@ source of truth for the diagrams. GitHub renders them automatically;
 agents and other tools should parse the block text directly (it is
 plain, structured ASCII) instead of scraping rendered output.
 
-Verified against `weekly` at `f5ae142` (2026-10-01). If this document
+Verified against `weekly` at `9dad428d` (2026-11-03). If this document
 disagrees with the code, the code wins — please fix the doc.
+
+> **Client-side ownership:** the browser login flow's client half is
+> owned by the `campus.flask_campus` middleware (`login_manager.py` +
+> `context.py`) — session-id storage, the authorize redirect, the code
+> exchange, login-session creation, and logout. The `campus_python`
+> SDK is framework-free transport underneath it: it holds no session
+> state and resolves ids through the provider flask_campus installs.
+> The raw steps below are the wire protocol; Flask apps get them from
+> `OAuthLoginManager` (see `campus/flask_campus/README.md`).
 
 ## Who does what
 
@@ -147,9 +156,10 @@ redirected to `/auth/v1/google/authorize` with `target` pointing at
 (#825): a long-lived (400 days), HttpOnly cookie on the auth origin
 whose value is a `uid-device-*` id stable per browser profile across
 re-logins and client apps. The id is recorded on the auth session, and
-the SDK copies it onto the login session it creates — login sessions
-(and their audit spans) therefore attribute to the browser that made
-them, not just to the user. It is deliberately *not* a `flask.session`
+the client library's login flow (flask_campus context, via the SDK's
+`logins.new`) copies it onto the login session it creates — login
+sessions (and their audit spans) therefore attribute to the browser
+that made them, not just to the user. It is deliberately *not* a `flask.session`
 key: device identity survives `/auth/v1/logout`'s `session.clear()`.
 Programmatic clients (CLIs) mint their own device id and pass it when
 creating their login session instead — in device flow the device is
@@ -479,7 +489,9 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
 | `campus.model.credentials` (`campus-model` dist) | `OAuthToken` + `Credential` models |
 | `campus/auth/routes/logins.py` | login audit records |
 | `campus/webauth/` | OAuth2 client-side plumbing (used by clients of this API) |
-| `campus/flask_campus/login_manager.py` | reusable login/logout/`login_required` helper for Flask apps |
+| `campus/flask_campus/login_manager.py` | reusable login/logout/`login_required` helper for Flask apps (blueprint + hooks) |
+| `campus/flask_campus/context.py` | client-side session-id storage + login-flow mechanics + context push (owns the `campus_session_id`/`logins_login_id` keys) |
+| `campus/flask_campus/propagation.py` | request-context trace/journey/device headers for outbound SDK calls (installed by the audit middleware) |
 
 ## Gotchas for implementers
 
@@ -540,6 +552,13 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
 ## Client-side checklist
 
 For a new client app (e.g. classroom) wiring up login:
+
+**Flask apps: use `campus.flask_campus.OAuthLoginManager`** — with a
+registered client and `CLIENT_ID`/`CLIENT_SECRET` in the environment,
+it implements steps 2–6 of this checklist (and logout) for you; see
+`campus/flask_campus/README.md`. The raw steps below are the wire
+protocol the middleware drives, for non-Flask clients and for
+understanding the flow:
 
 1. Register the client with its exact `redirect_uri(s)`
    (campus-cli or campus-admin).

@@ -18,7 +18,7 @@ campus/
 │   ├── resources/  # Business logic
 │   └── routes/     # HTTP endpoints
 ├── audit/          # Audit/tracing service + web UI
-├── flask_campus/   # Flask integration glue
+├── flask_campus/   # Flask middleware: login flow + session context, trace propagation, journeys, request utilities
 ├── integrations/   # External service configurations
 ├── services/       # Email, etc.
 ├── storage/        # Data persistence
