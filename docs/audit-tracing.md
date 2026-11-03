@@ -75,6 +75,12 @@ replay `X-Request-ID`), so campus.auth correlates them out-of-band:
 - `GET /audit/v1/traces/search?journey_id=...` filters traces by the
   tag; the audit web UI groups a journey at `/audit/journeys/<id>` and
   chips journey traces in the traces list.
+- The journey view (`/audit/traces?journey_id=<id>`) also renders a
+  **journey waterfall**: one bar per member trace on the journey's
+  shared timeline (positioned by `started_at`, sized by duration,
+  colored by status), so the flow's pacing reads at a glance. Bars
+  link to the trace detail pages, whose span waterfalls drill into
+  each hop.
 
 Journey membership lives in the free-form `tags` dict (zero
 migrations) and is matched in Python over a capped recent-span scan —

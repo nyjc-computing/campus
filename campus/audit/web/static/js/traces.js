@@ -19,6 +19,9 @@
     const journeyHeader = document.getElementById('journey-header');
     const journeyCardId = document.getElementById('journey-card-id');
     const journeyCardMeta = document.getElementById('journey-card-meta');
+    const journeyWaterfall = document.getElementById('journey-waterfall');
+    const journeyWaterfallRuler = document.getElementById('journey-waterfall-ruler');
+    const journeyWaterfallRows = document.getElementById('journey-waterfall-rows');
 
     // UI data endpoints (served in-process). The versioned API requires
     // an API key the browser cannot hold, so it must not be called here.
@@ -125,6 +128,80 @@
             (traces.length ? ` · total ${formatDuration(totalMs)}` : '');
     }
 
+    // ---------- journey waterfall ----------
+
+    /**
+     * One bar per member trace on the journey's shared timeline:
+     * positioned by each trace's started_at, sized by its duration.
+     * Rows link to the trace detail page. Mirrors the trace-detail
+     * waterfall's grid (same CSS classes); the journey timescale is
+     * first-trace-start → last-trace-end with a 1 ms floor.
+     */
+    function toEpochMs(iso) {
+        const parsed = new Date(iso);
+        return isNaN(parsed.getTime()) ? null : parsed.getTime();
+    }
+
+    function renderJourneyRuler(totalMs) {
+        const ticks = 5;
+        const marks = [];
+        for (let i = 0; i < ticks; i++) {
+            const frac = i / (ticks - 1);
+            const label = i === ticks - 1 ? formatDuration(totalMs) : formatDuration(totalMs * frac);
+            marks.push(`<span class="ruler-mark" style="left: ${(frac * 100).toFixed(3)}%">${escapeHtml(label)}</span>`);
+        }
+        journeyWaterfallRuler.innerHTML =
+            `<div class="ruler-spacer"></div><div class="ruler-track">${marks.join('')}</div>` +
+            '<div class="ruler-start"></div><div class="ruler-time"></div><div class="ruler-status"></div>';
+    }
+
+    function renderJourneyWaterfall(traces) {
+        const starts = traces.map((t) => toEpochMs(t.started_at));
+        const known = starts.filter((ms) => ms !== null);
+        if (known.length === 0) {
+            journeyWaterfall.hidden = true;
+            return;
+        }
+        const startMs = Math.min(...known);
+        const endMs = Math.max(
+            ...traces.map((t, i) => {
+                const start = starts[i];
+                return start === null ? startMs : start + (Number(t.duration_ms) || 0);
+            })
+        );
+        const totalMs = Math.max(1, endMs - startMs);
+        renderJourneyRuler(totalMs);
+
+        journeyWaterfallRows.innerHTML = traces.map((trace, i) => {
+            const start = starts[i];
+            const offsetMs = start === null ? 0 : Math.max(0, start - startMs);
+            const durationMs = Number(trace.duration_ms) || 0;
+            const root = trace.root_span || {};
+            const left = (offsetMs / totalMs) * 100;
+            const width = Math.max((durationMs / totalMs) * 100, 0.5);
+            const barStyle = `left: ${left.toFixed(3)}%; width: ${width.toFixed(3)}%;`;
+            const status = root.status_code === null || root.status_code === undefined
+                ? '—' : String(root.status_code);
+            const detailHref = `/audit/traces/${encodeURIComponent(trace.trace_id)}`;
+            const spans = trace.span_count
+                ? `<span class="wf-child-count" title="Spans in this trace">${escapeHtml(trace.span_count)}</span>`
+                : '';
+            return `
+                <a class="wf-row" href="${detailHref}"
+                   title="${escapeHtml(formatDuration(durationMs))} at +${escapeHtml(formatDuration(offsetMs))} — open trace">
+                    <div class="wf-label"><span class="wf-method">${escapeHtml(root.method || '—')}</span>
+                        <span class="wf-path wrap">${escapeHtml(root.path || '—')}</span>${spans}</div>
+                    <div class="wf-track">
+                        <div class="wf-bar ${statusBadgeClass(root.status_code)}" style="${barStyle}"></div>
+                    </div>
+                    <div class="wf-start" title="Start offset from the journey's first trace">+${escapeHtml(formatDuration(offsetMs))}</div>
+                    <div class="wf-time" title="Duration">${escapeHtml(formatDuration(durationMs))}</div>
+                    <div class="wf-status">${escapeHtml(status)}</div>
+                </a>`;
+        }).join('');
+        journeyWaterfall.hidden = false;
+    }
+
     // ---------- data ----------
 
     function readFilters() {
@@ -178,6 +255,7 @@
             const data = await fetchJson(`${JOURNEY_URL}/${encodeURIComponent(journeyId)}`);
             const traces = data.traces || [];
             renderJourneyHeader(journeyId, traces);
+            renderJourneyWaterfall(traces);
             tableBody.innerHTML = traces
                 .map((trace) => renderTraceRow(trace, {journeyView: true}))
                 .join('');
@@ -194,6 +272,7 @@
         } catch (err) {
             tableBody.innerHTML = '';
             journeyHeader.hidden = true;
+            journeyWaterfall.hidden = true;
             state.cursor = null;
             state.hasMore = false;
             setStatus(`Failed to load journey: ${err.message}`, true);
@@ -205,6 +284,7 @@
         form.classList.toggle('journey-mode', active);
         if (!active) {
             journeyHeader.hidden = true;
+            journeyWaterfall.hidden = true;
         }
     }
 

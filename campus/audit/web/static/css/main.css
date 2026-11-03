@@ -471,6 +471,18 @@ button[type="reset"] {
     margin: 0 0 0.6rem;
 }
 
+/* Journey waterfall (traces page, journey mode): reuses the trace
+   waterfall's grid classes; rows are anchors to the trace detail
+   page, so they need link styling reset on top of .wf-row. */
+.journey-waterfall {
+    margin: 0 0 0.9rem;
+}
+
+.journey-waterfall .wf-row {
+    text-decoration: none;
+    color: inherit;
+}
+
 /* Waterfall */
 .waterfall-wrapper {
     background: var(--audit-surface);
