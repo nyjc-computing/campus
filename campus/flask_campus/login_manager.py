@@ -156,7 +156,7 @@ class OAuthLoginManager:
                 new instance will be created.
             default_endpoint: Default endpoint to redirect to after login/logout
         """
-        self.campus = campus_client or campus_python.Campus(timeout=60)
+        self.campus = campus_client or campus_python.Campus()
         self.default_endpoint = default_endpoint
         self._cache = context.UserCache()
 

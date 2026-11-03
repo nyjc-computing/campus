@@ -54,7 +54,7 @@ def _api_getsecret(name: str) -> str:
         raise OSError("Environment variable 'DEPLOY' required")
 
     import campus_python
-    campus_auth = campus_python.Campus(timeout=60).auth
+    campus_auth = campus_python.Campus().auth
     try:
         return campus_auth.vaults[deployment][name]
     except KeyError:
@@ -165,7 +165,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     # Initialize campus client after test fixtures have set up the vault
     global campus
-    campus = campus_python.Campus(timeout=60)
+    campus = campus_python.Campus()
 
     # Propagate trace context on authenticate calls to campus.auth so the
     # auth span ingests as a child of the api request's span (#794).

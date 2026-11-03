@@ -88,7 +88,7 @@ def _auth_getsecret(name: str) -> str:
 
     # For other deployments, use HTTP client to call auth service
     import campus_python
-    campus_auth = campus_python.Campus(timeout=60).auth
+    campus_auth = campus_python.Campus().auth
     try:
         return campus_auth.vaults[deployment][name]
     except KeyError:

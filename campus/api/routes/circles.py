@@ -30,7 +30,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # Initialize yapper after test fixtures have set up the vault
     yapper = campus.yapper.create()
     # Initialize auth_root after test fixtures have set up the auth service
-    auth_root = campus_python.Campus(timeout=60).auth.root  # type: ignore
+    auth_root = campus_python.Campus().auth.root  # type: ignore
     app.register_blueprint(bp)
 
 

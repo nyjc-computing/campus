@@ -103,7 +103,7 @@ def create(
                 f"Unsupported ENV value: {env}. "
                 "Use 'development', 'testing', 'staging', or 'production'."
             )
-        campus = campus_python.Campus(timeout=60)
+        campus = campus_python.Campus()
         try:
             yapper_vault = campus.auth.vaults["campus.yapper"]
             yapperdb_uri = yapper_vault["YAPPERDB_URI"]
