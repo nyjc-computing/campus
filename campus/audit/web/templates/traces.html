@@ -14,6 +14,17 @@
     <div class="journey-card-meta" id="journey-card-meta"></div>
 </section>
 
+{# Journey waterfall: one bar per member trace on the journey's shared
+   timeline (positioned by started_at, sized by duration), filled in by
+   traces.js in journey mode. Bars link to the trace detail page. #}
+<section id="journey-waterfall" class="journey-waterfall" aria-label="Journey waterfall" hidden>
+    <h3 class="section-title">Waterfall</h3>
+    <div class="waterfall-wrapper">
+        <div id="journey-waterfall-ruler" class="waterfall-ruler"></div>
+        <div id="journey-waterfall-rows"></div>
+    </div>
+</section>
+
 <form id="trace-filters" class="filter-form" autocomplete="off">
     <div class="filter-field flat-only">
         <label for="filter-path">Path</label>
