@@ -14,12 +14,11 @@ from typing import Any
 
 import campus.model as model
 import campus.storage
+from campus.audit.roles import resolve_scopes
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import secret
 from campus.storage import errors as storage_errors
-
-from .. import roles
 
 apikeys_storage = campus.storage.tables.get_db("apikeys")
 
@@ -181,7 +180,7 @@ class APIKeysResource:
             campus.audit is a standalone service with no users/clients.
             owner_id is for organizational purposes only.
         """
-        scope_list = roles.resolve_scopes(scopes, role)
+        scope_list = resolve_scopes(scopes, role)
         apikey_value = secret.generate_audit_api_key()
         record = {
             "name": schema.String(name),
