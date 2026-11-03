@@ -11,7 +11,7 @@ import unittest
 
 import flask
 
-import campus.config
+import campus.common.protocol as protocol
 from campus.audit.middleware import init_journeys, tracing
 from campus.flask_campus import journey
 
@@ -38,7 +38,7 @@ class JourneyAppTestCase(unittest.TestCase):
     def _with_action_cookie(self, value):
         """Set the action cookie the way werkzeug's test client accepts."""
         self.client.set_cookie(
-            campus.config.ACTION_JOURNEY_COOKIE, value
+            protocol.ACTION_JOURNEY_COOKIE, value
         )
 
 
@@ -168,7 +168,7 @@ class TestMinting(JourneyAppTestCase):
             "/probe", headers={"Sec-Fetch-Mode": "navigate"}
         )
         self.assertTrue(resp.json["journey_id"].startswith("uid-journey-"))
-        self.assertIn(campus.config.ACTION_JOURNEY_COOKIE, self._cookie_of(resp))
+        self.assertIn(protocol.ACTION_JOURNEY_COOKIE, self._cookie_of(resp))
 
     def test_mints_on_accept_html_fallback(self):
         resp = self.client.get("/probe", headers={"Accept": "text/html"})
@@ -222,7 +222,7 @@ class TestMinting(JourneyAppTestCase):
         )
         self.assertEqual(resp.status_code, 404)
         self.assertNotIn(
-            campus.config.ACTION_JOURNEY_COOKIE, resp.headers.get("Set-Cookie") or ""
+            protocol.ACTION_JOURNEY_COOKIE, resp.headers.get("Set-Cookie") or ""
         )
 
 
@@ -235,13 +235,13 @@ class TestCookieContinuation(JourneyAppTestCase):
         )
         cookie = self._cookie_of(resp)
         self.assertIn(
-            f"{campus.config.ACTION_JOURNEY_COOKIE}={resp.json['journey_id']}",
+            f"{protocol.ACTION_JOURNEY_COOKIE}={resp.json['journey_id']}",
             cookie,
         )
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Lax", cookie)
         self.assertIn(
-            f"Max-Age={campus.config.ACTION_JOURNEY_COOKIE_MAX_AGE}", cookie
+            f"Max-Age={protocol.ACTION_JOURNEY_COOKIE_MAX_AGE}", cookie
         )
 
     def test_cookie_refreshed_with_adopted_journey(self):
@@ -251,7 +251,7 @@ class TestCookieContinuation(JourneyAppTestCase):
             "/probe", headers={"Accept": "application/json"}
         )
         self.assertIn(
-            f"{campus.config.ACTION_JOURNEY_COOKIE}=uid-journey-cookie1",
+            f"{protocol.ACTION_JOURNEY_COOKIE}=uid-journey-cookie1",
             self._cookie_of(resp),
         )
 
@@ -322,7 +322,7 @@ class TestJourneyDecorator(unittest.TestCase):
         self.assertEqual(resp.json["journey_name"], "campus.submissions.submit")
         # Standalone continuation: the cookie is set even mid-episode.
         self.assertIn(
-            f"{campus.config.ACTION_JOURNEY_COOKIE}={resp.json['journey_id']}",
+            f"{protocol.ACTION_JOURNEY_COOKIE}={resp.json['journey_id']}",
             resp.headers.get("Set-Cookie"),
         )
 

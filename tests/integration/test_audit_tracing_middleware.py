@@ -770,10 +770,10 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         werkzeug does not parse a raw Cookie header kwarg into
         request.cookies.
         """
-        import campus.config
+        import campus.common.protocol as protocol
 
         self.auth_client.set_cookie(
-            campus.config.JOURNEY_COOKIE, "journey_itest_1"
+            protocol.JOURNEY_COOKIE, "journey_itest_1"
         )
         response = self.auth_client.get("/test/health")
         self.assertEqual(response.status_code, 200)

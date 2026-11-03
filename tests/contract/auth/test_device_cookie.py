@@ -20,7 +20,7 @@ import unittest
 from http import cookies as http_cookies
 
 from campus.common import env
-from campus.config import DEVICE_COOKIE
+from campus.common.protocol import DEVICE_COOKIE
 from tests.fixtures import services
 from tests.fixtures.tokens import get_basic_auth_headers
 

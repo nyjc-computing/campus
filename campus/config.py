@@ -50,42 +50,11 @@ DEFAULT_TOKEN_EXPIRY_DAYS = 7
 DEFAULT_DEVICE_CODE_EXPIRY_SECONDS = 600  # 10 minutes
 DEFAULT_DEVICE_CODE_POLL_INTERVAL = 5  # seconds
 
-# Browser login-journey correlation (#803). campus.auth sets this opaque
-# cookie at the first browser touch of the login flow (GET /authorize);
-# the tracing middleware stamps it into span tags so a login journey can
-# be viewed as one group. The final /token hop is server-to-server and
-# never carries the cookie, so its handler copies the journey id from the
-# auth session into flask.g for the middleware to pick up instead.
-JOURNEY_COOKIE = "campus_journey"
-JOURNEY_COOKIE_MAX_AGE = 1800  # seconds; ~30 min inactivity TTL
-
-# Action-journey correlation (#828). Set by the journeys middleware
-# (campus.audit.middleware.journeys) on page navigations and refreshed
-# on every request with an active journey, so one user-initiated action
-# episode — page load, its XHRs and form posts, and the server-to-server
-# calls they spawn (joined via forwarded X-Journey-ID headers) — groups
-# as one journey. Deliberately short and sliding: episodes end on idle
-# expiry (or an app's fresh=True journey boundary), never spanning a
-# whole session. Distinct from JOURNEY_COOKIE (login flows).
-ACTION_JOURNEY_COOKIE = "campus_action_journey"
-ACTION_JOURNEY_COOKIE_MAX_AGE = 600  # seconds; ~10 min idle window
-
-# Stable device identity (#825). campus.auth sets this opaque cookie at
-# GET /authorize and reuses it on every later login from the same browser
-# profile, so login sessions (and their spans) can be attributed to a
-# device across re-logins and across client apps. Deliberately a standalone
-# cookie, NOT a flask.session key: it is device identity, not session
-# state, so /auth/v1/logout's session.clear() must not clear it.
-DEVICE_COOKIE = "campus_device"
-# 400 days is Chrome's maximum cookie lifetime cap.
-DEVICE_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
-
-# Device header (#837): non-browser clients (CLIs, scripts) cannot carry
-# the campus_device cookie — they present it on API calls as this header
-# instead. The tracing middleware falls back to it after flask.g.device
-# and before the cookie. Keep in lockstep with the SDK's
-# campus_python.tracing.DEVICE_ID_HEADER (mirrors the X-Journey-ID pair).
-DEVICE_ID_HEADER = "X-Campus-Device"
+# Wire-protocol constants (journey/device cookie names + TTLs, the
+# X-Campus-Device / X-Journey-* / X-Request-* header names) moved to
+# campus.common.protocol (campus#1041) — they are shared vocabulary
+# with the flask-campus consumer layer and the SDK, not suite-internal
+# configuration. This module keeps only suite-internal settings.
 
 # Distinct Flask session cookie names per deployment. campus.auth and
 # campus.audit both keep browser state in flask.session, each signed with

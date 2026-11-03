@@ -48,21 +48,21 @@ import typing
 
 import flask
 
-import campus.config
+from campus.common.protocol import (
+    ACTION_JOURNEY_COOKIE,
+    ACTION_JOURNEY_COOKIE_MAX_AGE,
+)
+from campus.common.protocol import JOURNEY_ID_HEADER as ACTION_JOURNEY_HEADER
+from campus.common.protocol import JOURNEY_NAME_HEADER as ACTION_JOURNEY_NAME_HEADER
 from campus.common.utils import uid
 
 from . import tracing
 
-# Mirror: campus_python.tracing forwards this header on SDK calls made
-# while handling a journeyed request, so child services' spans join the
-# same journey. Keep the two in lockstep.
-ACTION_JOURNEY_HEADER = "X-Journey-ID"
-
-# Mirror: campus_python.tracing forwards the active journey's human
-# label alongside the id (#952), so a child service's spans tag the
-# same journey_name and journey cards show the label end to end.
-# Keep the two in lockstep.
-ACTION_JOURNEY_NAME_HEADER = "X-Journey-Name"
+# Journey/action-journey cookie and header names are re-sourced from
+# campus.common.protocol (campus#1041) — the single source of truth
+# since the former per-side definitions and their lockstep comments.
+# The X-Journey-* headers keep this module's ACTION_JOURNEY_* names
+# for its public surface.
 
 # Cap for header-supplied journey names: they are forgeable
 # observability labels (same trust stance as the id), but an unbounded
@@ -106,7 +106,7 @@ def _adopt_or_mint(*, mint: bool) -> None:
     header_journey = flask.request.headers.get(ACTION_JOURNEY_HEADER)
     journey_id = (
         header_journey
-        or flask.request.cookies.get(campus.config.ACTION_JOURNEY_COOKIE)
+        or flask.request.cookies.get(ACTION_JOURNEY_COOKIE)
     )
     journey_name = (
         _clean_journey_name(
@@ -133,9 +133,9 @@ def _refresh_cookie(response: flask.Response) -> flask.Response:
     journey_id = getattr(flask.g, "journey_id", None)
     if journey_id:
         response.set_cookie(
-            campus.config.ACTION_JOURNEY_COOKIE,
+            ACTION_JOURNEY_COOKIE,
             journey_id,
-            max_age=campus.config.ACTION_JOURNEY_COOKIE_MAX_AGE,
+            max_age=ACTION_JOURNEY_COOKIE_MAX_AGE,
             httponly=True,
             samesite="Lax",
             path="/",

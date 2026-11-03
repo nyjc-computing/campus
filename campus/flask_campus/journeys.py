@@ -34,7 +34,10 @@ from functools import wraps
 
 import flask
 
-import campus.config
+from campus.common.protocol import (
+    ACTION_JOURNEY_COOKIE,
+    ACTION_JOURNEY_COOKIE_MAX_AGE,
+)
 from campus.common.utils import uid
 
 
@@ -43,9 +46,9 @@ def _set_journey_cookie(response: flask.Response) -> flask.Response:
     journey_id = getattr(flask.g, "journey_id", None)
     if journey_id:
         response.set_cookie(
-            campus.config.ACTION_JOURNEY_COOKIE,
+            ACTION_JOURNEY_COOKIE,
             journey_id,
-            max_age=campus.config.ACTION_JOURNEY_COOKIE_MAX_AGE,
+            max_age=ACTION_JOURNEY_COOKIE_MAX_AGE,
             httponly=True,
             samesite="Lax",
             path="/",
@@ -81,7 +84,7 @@ def journey(
                 # action cookie, else mint.
                 journey_id = (
                     flask.request.cookies.get(
-                        campus.config.ACTION_JOURNEY_COOKIE
+                        ACTION_JOURNEY_COOKIE
                     )
                     or uid.generate_category_uid("journey")
                 )

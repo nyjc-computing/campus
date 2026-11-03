@@ -58,15 +58,15 @@ def _create_http_client(base_url: str) -> JsonClient:
 def _get_base_url() -> str:
     """Get the audit service base URL from environment.
 
-    Delegates to campus.config.get_base_url("campus.audit"): the
-    registry (campus.common.services) routes a deployment resolving its
-    own name (DEPLOY=campus.audit) to the canonical origin, so trace
-    ingestion inside the audit deployment never transits the public
-    URL — formerly this function's special case.
+    Delegates to campus.common.services.get_base_url("campus.audit"):
+    the registry routes a deployment resolving its own name
+    (DEPLOY=campus.audit) to the canonical origin, so trace ingestion
+    inside the audit deployment never transits the public URL —
+    formerly this function's special case.
     """
-    import campus.config
+    from campus.common.services import get_base_url
 
-    return campus.config.get_base_url("campus.audit")
+    return get_base_url("campus.audit")
 
 
 class AuditClient:

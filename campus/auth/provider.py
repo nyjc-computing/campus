@@ -42,7 +42,7 @@ import werkzeug
 import campus.config
 import campus.model as model
 from campus import flask_campus
-from campus.common import env, schema
+from campus.common import env, protocol, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import secret, uid, url, utc_time
 
@@ -271,7 +271,7 @@ def authorize(
     # handler, but it reads cookies from the request, which predates the
     # Set-Cookie on this response.
     journey_id = (
-        flask.request.cookies.get(campus.config.JOURNEY_COOKIE)
+        flask.request.cookies.get(protocol.JOURNEY_COOKIE)
         or uid.generate_category_uid("journey")
     )
     flask.g.journey_id = journey_id
@@ -286,7 +286,7 @@ def authorize(
     # reasoning as the journey id: the middleware reads cookies from
     # the request, which predates the Set-Cookie on this response.
     device_id = (
-        flask.request.cookies.get(campus.config.DEVICE_COOKIE)
+        flask.request.cookies.get(protocol.DEVICE_COOKIE)
         or uid.generate_category_uid("device")
     )
     flask.g.device = device_id
@@ -294,18 +294,18 @@ def authorize(
 
     response = flask.redirect(oauth_authorize_url)
     response.set_cookie(
-        campus.config.JOURNEY_COOKIE,
+        protocol.JOURNEY_COOKIE,
         journey_id,
-        max_age=campus.config.JOURNEY_COOKIE_MAX_AGE,
+        max_age=protocol.JOURNEY_COOKIE_MAX_AGE,
         httponly=True,
         samesite="Lax",
     )
     # Not a flask.session key on purpose (#825): /logout's
     # session.clear() clears session state, never device identity.
     response.set_cookie(
-        campus.config.DEVICE_COOKIE,
+        protocol.DEVICE_COOKIE,
         device_id,
-        max_age=campus.config.DEVICE_COOKIE_MAX_AGE,
+        max_age=protocol.DEVICE_COOKIE_MAX_AGE,
         httponly=True,
         samesite="Lax",
     )

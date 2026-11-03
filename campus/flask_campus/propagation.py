@@ -34,24 +34,20 @@ __all__ = [
 import flask
 from campus_python import tracing
 
-# Same headers as campus.audit.middleware.tracing and
-# campus_python.tracing: X-Request-ID carries the host request's trace
-# id; X-Parent-Span-ID carries its span id so the receiving campus
-# service records the call as a child span.
-TRACE_ID_HEADER = "X-Request-ID"
-PARENT_SPAN_ID_HEADER = "X-Parent-Span-ID"
+from campus.common.protocol import (
+    DEVICE_ID_HEADER,
+    JOURNEY_ID_HEADER,
+    JOURNEY_NAME_HEADER,
+    PARENT_SPAN_ID_HEADER,
+    TRACE_ID_HEADER,
+)
 
-# Mirror of the journeys middlewares' action-journey headers
-# (campus#828/#952): forwarded so a child service's span joins the
-# caller's action journey and tags the same human label.
-JOURNEY_ID_HEADER = "X-Journey-ID"
-JOURNEY_NAME_HEADER = "X-Journey-Name"
-
-# Mirror of campus.config.DEVICE_ID_HEADER (campus#837): forwarded so
-# a child service's span carries the caller's device identity when the
-# host stashed one. The receiving middleware reads it only when it
-# knows nothing better.
-DEVICE_ID_HEADER = "X-Campus-Device"
+# The five wire-protocol header names are re-exported from
+# campus.common.protocol (campus#1041) — the single source of truth
+# since the former per-side definitions and their lockstep comments.
+# They are forwarded on outbound SDK calls so a child service's span
+# joins the caller's trace (#794), action journey (#828/#952), and
+# device identity (#837).
 
 
 def request_context_headers() -> dict[str, str] | None:
