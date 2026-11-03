@@ -35,7 +35,18 @@ bp = flask.Blueprint('integrations', __name__, url_prefix='/integrations')
 
 @bp.get("/v1/")
 def list_integrations() -> flask_campus.JsonResponse:
-    """List the first-party integrations Campus offers (#688).
+    """List the first-party integrations Campus offers
+
+    Read-only view of the in-code integrations registry (#688,
+    #733): public metadata, the integration's configured scope
+    cap, and whether the connect flow is open. Computed from the
+    vault at call time: `connectable` is false for an unconfigured
+    registry stub or when `CONNECT_TARGETS` is empty — mirroring
+    the guards the connect route enforces. Public: everything here
+    is already observable by starting a connect flow; no vault
+    secrets are ever returned. Consumers build connect links from
+    `authorize_path`; `scopes` is the cap, not the ask (the
+    connect flow asks for exactly this set).
 
     GET /integrations/v1/
     Auth: public.

@@ -704,10 +704,10 @@ def write_spec(spec: dict[str, Any], path: Path | str) -> None:
     """Write the spec as deterministic JSON (sorted keys, 2-space indent).
 
     Deterministic output keeps committed artifacts diff-stable across
-    regeneration runs.
+    regeneration runs; LF line endings keep them stable across OSes.
     """
     text = json.dumps(spec, indent=2, sort_keys=True) + "\n"
-    Path(path).write_text(text, encoding="utf-8")
+    Path(path).write_text(text, encoding="utf-8", newline="\n")
 
 
 def main(argv: list[str] | None = None) -> None:

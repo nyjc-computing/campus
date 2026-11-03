@@ -41,7 +41,14 @@ def authenticate(
         client_id: schema.CampusID | None = None,
         client_secret: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Authenticate a service client using token or client credentials.
+    """Authenticate a client or token (service-to-service)
+
+    Used by Campus backend services to validate credentials they
+    were given. Send either `{token}` or
+    `{client_id, client_secret}`. Errors use the standard envelope
+    (400 `AUTH_INVALID_REQUEST` for missing credentials, 401
+    `AUTH_INVALID_CLIENT` for invalid ones). The `user` key is
+    present only for token auth.
 
     GET /root/authenticate
     Query Params: {

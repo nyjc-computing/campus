@@ -11,6 +11,7 @@ integrations.
 # use within campus.auth only.
 __all__ = ["init_app", "get_yapper"]
 
+
 import logging
 from typing import TYPE_CHECKING
 
@@ -226,3 +227,47 @@ def _seed_public_client() -> None:
         )
 
 # v0.2.1 campus-common wheel switch deployed from this commit (#988).
+
+
+# Service-level OpenAPI info (campus#1029): consumed by
+# campus.flask_campus.openapi; migrated from the former
+# hand-maintained docs/openapi.yaml.
+OPENAPI_INFO = {
+    "title": "Campus Auth API",
+    "description": """Campus OAuth 2.0 authorization server and authentication API.
+
+The API has two provider families with deliberately different
+mechanics (docs/auth-token-invariants.md):
+
+- `campus` (first-party): Campus's own OAuth 2.0 authorization
+  server — authorization-code, device-code (RFC 8628) and refresh
+  grants issuing Campus bearer tokens.
+- `google`, `github`, `discord` (third-party): OAuth proxies that
+  carry out browser login/consent with the upstream provider and
+  keep custody of the upstream credentials. Upstream access tokens
+  are released to apps only through the token bridge
+  (docs/token-broker.md); refresh tokens never leave Campus.
+
+## Trails
+
+- docs/auth-login-flow.md — the browser login chain
+- docs/token-broker.md — the token bridge contract
+- docs/auth-token-invariants.md — security invariants
+- campus/auth/docs/auth-error-spec.md — error codes
+
+## Error responses
+
+Errors use the Campus error envelope (see `ErrorEnvelope`), with
+`AUTH_*` error codes; RFC 6749 protocol errors surface in
+`error.details` with the OAuth error string. Malformed request
+bodies return the validation-error shape (`ValidationError`).
+There are no endpoint-specific exceptions (#714 normalized the
+last flat-shape holdouts on `/root/` and the vault lookup).
+
+## Trailing slashes
+
+Paths are listed exactly as routed (Flask): a path shown with a
+trailing slash must be requested with it — the no-slash variant
+answers with a 308 redirect.
+""",
+}

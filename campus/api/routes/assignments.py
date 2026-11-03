@@ -34,8 +34,11 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @bp.get('/')
 @flask_campus.unpack_request
 def list_assignments(created_by: str | None = None) -> flask_campus.JsonResponse:
-    """Summary:
-        List all assignments matching filter requirements.
+    """List all assignments
+
+    List all assignments matching filter requirements
+
+    matching filter requirements.
 
     Method:
         GET /assignments
@@ -64,8 +67,11 @@ def create_assignment(
     questions: list[dict] | None = None,
     classroom_links: list[dict] | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Create a new assignment.
+    """Create a new assignment
+
+    Create a new assignment
+
+    .
 
     Method:
         POST /assignments
@@ -111,8 +117,11 @@ def create_assignment(
 
 @bp.get('/<string:assignment_id>/')
 def get_assignment(assignment_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Get a single assignment by ID.
+    """Get a single assignment
+
+    Get a single assignment by ID
+
+    by ID.
 
     Method:
         GET /assignments/{assignment_id}
@@ -135,8 +144,11 @@ def update_assignment(
     questions: list[dict] | None = None,
     classroom_links: list[dict] | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Update an assignment.
+    """Update an assignment
+
+    Update an assignment
+
+    .
 
     Method:
         PATCH /assignments/{assignment_id}
@@ -179,8 +191,11 @@ def update_assignment(
 
 @bp.delete('/<string:assignment_id>/')
 def delete_assignment(assignment_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Delete an assignment.
+    """Delete an assignment
+
+    Delete an assignment
+
+    .
 
     Method:
         DELETE /assignments/{assignment_id}
@@ -208,8 +223,11 @@ def add_classroom_link(
     coursework_id: str,
     attachment_id: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Add a Google Classroom link to an assignment.
+    """Add classroom link
+
+    Add a Google Classroom link to an assignment
+
+    Add a Google Classroom link to an assignment.
 
     Method:
         POST /assignments/{assignment_id}/links

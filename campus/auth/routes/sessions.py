@@ -71,7 +71,7 @@ def _validated_campus_scopes(
 @bp.post("/sweep")
 @flask_campus.unpack_request
 def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
-    """Sweep expired sessions.
+    """Sweep expired sessions
 
     POST /sessions/sweep
     Body: {
@@ -93,7 +93,8 @@ def get_by_authorization_code(
         provider: str,
         code: str,
 ) -> flask_campus.JsonResponse:
-    """Get a session for a specific authentication provider by
+    """Look up a session by authorization code
+
     authorization code.
 
     POST /sessions/{provider}/
@@ -124,7 +125,14 @@ def new_provider_session(
         state: str | None = None,
         target: schema.Url | None = None,
 ) -> flask_campus.JsonResponse:
-    """Create a new session for a specific authentication provider.
+    """Create an auth session
+
+    Server-to-server: the app backend creates the session, then
+    sends the browser to `GET /authorize` with `state` = the
+    session id. For `provider=campus`, requested scopes are
+    validated fail-closed against the client's `allowed_scopes`
+    (invariant A1/A6); proxy providers carry the upstream
+    provider's scope strings instead.
 
     For provider="campus", requested scopes are validated fail-closed
     against the client's allowed_scopes allowlist (invariant A1/A6,
@@ -170,7 +178,7 @@ def delete_provider_session(
         provider: str,
         session_id: schema.CampusID,
 ) -> flask_campus.JsonResponse:
-    """Finalize a session for a specific authentication provider.
+    """Finalize an auth session
 
     This marks the session as finalized after successful authentication.
 
@@ -198,7 +206,7 @@ def get_provider_session(
         provider: str,
         session_id: schema.CampusID,
 ) -> flask_campus.JsonResponse:
-    """Get a session for a specific authentication provider.
+    """Get an auth session
 
     GET /sessions/{provider}/{session_id}
     Returns: {
@@ -227,7 +235,9 @@ def update_provider_session(
         user_id: schema.UserID | None = None,
         authorization_code: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Update a session for a specific authentication provider.
+    """Update an auth session
+
+    Only `user_id` and `authorization_code` can be updated (this is how the login flow binds them).
 
     Only user_id and authorization_code can be updated.
 

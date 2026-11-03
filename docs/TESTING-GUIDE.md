@@ -856,22 +856,27 @@ These are not automated because they require network access and external service
 
 ## OpenAPI Specification Validation
 
-Campus maintains OpenAPI 3.0.3 specifications for API documentation:
+Each service serves a public OpenAPI 3 spec at `/{service-prefix}/openapi.json`,
+generated from the Flask app object by `campus.flask_campus.openapi`
+(campus#1029). The committed artifacts are the source:
 
-- **Auth Service:** `campus/auth/docs/openapi.yaml`
-- **API Service:** `campus/api/docs/openapi.yaml`
+- **Auth Service:** `campus/auth/docs/openapi.json`
+- **API Service:** `campus/api/docs/openapi.json`
+- **Audit Service:** `campus/audit/docs/openapi.json`
 
-### Running Validation
+### Regenerating and Validation
 
 ```bash
-# Validate auth service spec
-poetry run python -m openapi_spec_validator campus/auth/docs/openapi.yaml
+# Regenerate a service artifact after changing routes or docstrings
+# (then bump the campus-suite version in pyproject.toml: minor for
+# spec changes, patch for API-preserving changes). Generation builds
+# the service app, so it needs the env that service needs — the
+# fixture bootstrap in tests/unit/openapi/test_artifacts.py shows a
+# working recipe.
+python -m flask_campus.openapi campus.auth
 
-# Validate API service spec
-poetry run python -m openapi_spec_validator campus/api/docs/openapi.yaml
-
-# Run unit tests (includes OpenAPI validation)
-poetry run python tests/run_tests.py unit --module common
+# Drift + version-pin enforcement (fails CI on stale artifacts)
+poetry run python tests/run_tests.py unit
 ```
 
 ### OpenAPI Validation Tests

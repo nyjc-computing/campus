@@ -138,7 +138,14 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             prompt: PROMPT_OPTION | None = "select_account",
             scope: str | None = None,
     ) -> werkzeug.Response:
-        """Prepares the Google OAuth authorization URL and redirects to it.
+        """Start the Google login/consent flow
+
+        Browser endpoint: 302 to Google. `scope` (space-delimited)
+        requests upstream Google scopes beyond the base `email profile`
+        set; they are merged with `include_granted_scopes=true` so
+        re-consent accumulates (invariant B3). The app path reaches
+        this endpoint through `/authorize`, which caps `scope` against
+        the client's `upstream_scopes` allowlist first.
 
         prompt defaults to select_account (#844): every identity login
         must stop at Google's account chooser, so a browser that still
@@ -169,7 +176,11 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     @bp.get('/callback')
     def callback() -> werkzeug.Response:
-        """Handles the Google OAuth callback request.
+        """Google redirect target
+
+        Browser endpoint (called by Google). Verifies the grant, enforces the workspace domain, stores the user's
+            Google credential (access and refresh tokens, server-side only), sets the campus login cookie and 302s
+            to the flow's `target`.
 
         Dispatches to success or error handlers based on payload type.
         """
@@ -186,7 +197,16 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             integration: str,
             target: schema.Url,
     ) -> werkzeug.Response:
-        """Start the connect consent flow for an integration (#733).
+        """Start an integration's connect consent flow
+
+        Browser endpoint: 302 to Google under the integration's own
+        OAuth client (#733). Requires the browser to already hold a
+        campus session (401 otherwise) — connect binds the credential
+        to the session user, never an anonymous browser. `target` must
+        be an HTTPS origin in the integration's vault
+        `CONNECT_TARGETS`. Consent is forced (`prompt=consent`) so the
+        stored credential always carries a refresh token, and the
+        asked scopes are exactly the integration's vault `SCOPES` cap.
 
         Guards (design §2.3), all enforced here, not just in the
         calling app:
@@ -223,7 +243,16 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     @bp.get('/<integration>/callback')
     def integration_callback(integration: str) -> werkzeug.Response:
-        """Handles the Google OAuth callback for a connect flow.
+        """Google redirect target for a connect flow
+
+        Browser endpoint (called by Google). Verifies the grant,
+        enforces the workspace domain, binds the consenting Google
+        identity to the campus session user (403 on mismatch — nothing
+        is stored), stores the credential under the integration's
+        namespaced provider (e.g. `google.classroom`), emits
+        `campus.integrations.connect` and 302s to the flow's `target`
+        with its query params preserved. Unlike the identity callback
+        it never sets the campus login cookie.
 
         Dispatches to the integration proxy's consent handler, which
         binds the credential to the campus session user (403 on

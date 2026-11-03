@@ -52,7 +52,12 @@ def get_by_token(
         provider: str,
         token_id: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Get credentials for a specific token, or list all credentials for
+    """Get campus credentials by token, or list for a provider
+
+    Campus-provider credentials only — third-party providers are
+    refused with 403 (invariant B1: upstream tokens are custodied
+    by Campus and released only via the token bridge).
+
     a provider.
 
     GET /credentials/{provider}
@@ -86,7 +91,7 @@ def delete_by_user(
         provider: str,
         user_id: schema.UserID,
 ) -> flask_campus.JsonResponse:
-    """Delete credentials for a specific provider and user ID.
+    """Delete a user's credentials for the calling client
 
     DELETE /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).
@@ -109,7 +114,7 @@ def get_by_user(
         user_id: schema.UserID,
         client_id: schema.CampusID | None = None,
 ) -> flask_campus.JsonResponse:
-    """Get credentials for a specific provider and user ID.
+    """Get a user's campus credentials for the calling client
 
     GET /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).
@@ -134,7 +139,7 @@ def update_credentials(
         user_id: schema.UserID,
         token: dict,
 ) -> flask_campus.JsonResponse:
-    """Update credentials for a specific provider and user ID.
+    """Replace a user's campus token
 
     PATCH /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).
@@ -180,7 +185,9 @@ def new_credentials(
         scopes: list[str],
         expires_in: int,
 ) -> flask_campus.JsonResponse:
-    """Issue new credentials for a specific provider and user ID.
+    """Issue campus credentials for a user
+
+    Issues a new campus token bound to the calling client (provider must be `campus`).
 
     POST /credentials/{provider}/{user_id}/
     Authorization: operator only (#854).

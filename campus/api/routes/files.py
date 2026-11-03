@@ -118,8 +118,11 @@ def _normalise_slug(slug: str) -> str:
 @bp.get('/')
 @flask_campus.unpack_request
 def list_files(prefix: str | None = None) -> flask_campus.JsonResponse:
-    """Summary:
-        List file records, optionally under a slug prefix.
+    """List files
+
+    List file records, optionally under a slug prefix
+
+    List file records, optionally under a slug prefix.
 
     Method:
         GET /files
@@ -138,8 +141,15 @@ def list_files(prefix: str | None = None) -> flask_campus.JsonResponse:
 
 @bp.get('/by-slug/<path:slug>', strict_slashes=False)
 def get_file_by_slug(slug: str) -> flask.Response:
-    """Summary:
-        Get a file's content (or metadata with ?meta=1) by slug.
+    """Get a file's content (or metadata) by slug
+
+    Serve the file's bytes with its stored Content-Type, an ETag and
+    short-lived caching headers. The whole path tail after
+    `/files/by-slug/` is the slug — slash-separated slugs work and no
+    suffix is used, so any slug that validates cannot collide with a
+    route. Add `meta=1` to receive the metadata resource instead.
+
+    Get a file's content (or metadata with ?meta=1) by slug.
 
     Method:
         GET /files/by-slug/{slug}
@@ -176,8 +186,15 @@ def get_file_by_slug(slug: str) -> flask.Response:
 
 @bp.put('/by-slug/<path:slug>', strict_slashes=False)
 def put_file_by_slug(slug: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Create or replace a file by slug (upsert).
+    """Create or replace a file by slug (upsert)
+
+    The request body is the raw file content; the Content-Type header
+    is stored and served back. Replacing an existing slug keeps its
+    URL stable. Slugs are validated: slash-separated segments of
+    alphanumerics, `-`, `_` and `.`, no empty/dot segments, no
+    leading/trailing slash, and `content` is reserved.
+
+    .
 
     Method:
         PUT /files/by-slug/{slug}
@@ -229,8 +246,11 @@ def put_file_by_slug(slug: str) -> flask_campus.JsonResponse:
 
 @bp.delete('/by-slug/<path:slug>', strict_slashes=False)
 def delete_file_by_slug(slug: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Delete a file by slug.
+    """Delete a file by slug
+
+    Delete the file record and its content
+
+    .
 
     Method:
         DELETE /files/by-slug/{slug}
@@ -257,8 +277,11 @@ def delete_file_by_slug(slug: str) -> flask_campus.JsonResponse:
 
 @bp.get('/<file_id>/')
 def get_file(file_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Get a file's metadata by ID.
+    """Get a file's metadata by ID
+
+    Get a single file record by ID
+
+    .
 
     Method:
         GET /files/{file_id}
@@ -280,8 +303,11 @@ def get_file(file_id: schema.CampusID) -> flask_campus.JsonResponse:
 
 @bp.get('/<file_id>/content/')
 def get_file_content(file_id: schema.CampusID) -> flask.Response:
-    """Summary:
-        Get a file's content by ID.
+    """Get a file's content by ID
+
+    Serve the file's bytes with its stored Content-Type
+
+    .
 
     Method:
         GET /files/{file_id}/content
@@ -306,8 +332,11 @@ def get_file_content(file_id: schema.CampusID) -> flask.Response:
 
 @bp.put('/<file_id>/content/')
 def put_file_content(file_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Replace the content of an existing file by ID.
+    """Replace a file's content by ID
+
+    Replace the content of an existing file. Unlike the by-slug route, this never creates a file.
+
+    Replace the content of an existing file by ID.
 
     Method:
         PUT /files/{file_id}/content
@@ -354,8 +383,11 @@ def put_file_content(file_id: schema.CampusID) -> flask_campus.JsonResponse:
 
 @bp.delete('/<file_id>/')
 def delete_file(file_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Delete a file by ID.
+    """Delete a file by ID
+
+    Delete the file record and its content
+
+    .
 
     Method:
         DELETE /files/{file_id}

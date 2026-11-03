@@ -150,7 +150,12 @@ def list_grants(
         resource_type: str | None = None,
         resource_id: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """List access-grant rows.
+    """List access-grant rows (the admin matrix)
+
+    The "who can administer what" matrix query (#872, #883). The operator and the super-admin root (#897,
+        AUTH_SUPER_ADMIN) list every row; a same-vocabulary admin (a user holding <vocabulary>:admin via a grant
+        row AND a token scope) may list scoped to resource_type=<their vocabulary>. Unfiltered listing requires
+        the operator or the root.
 
     GET /grants
     Authorization: operator for the full matrix; otherwise a
@@ -194,7 +199,7 @@ def check_grant(
         bits: int | None = None,
         level: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Check whether a grantee's row covers a permission.
+    """Check whether a grantee's row covers a permission
 
     GET /grants/check
     Authorization: operator, or a same-vocabulary admin.
@@ -222,7 +227,12 @@ def grant(
         bits: int | None = None,
         level: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Grant access (create a row, or raise an existing one).
+    """Grant access (create a row, or raise an existing one)
+
+    The operator, the super-admin root (#897), or a same-vocabulary admin. Vault bits OR into the existing mask;
+        management levels never downgrade. Guards (#883): no self-grants by user principals; vocabulary-level
+        clients:admin rows are rejected (operator-equivalent); the credentials vocabulary and user-principal
+        vault grants stay reserved until #889.
 
     POST /grants
     Authorization: operator, or same-vocabulary admin. Vault bits
@@ -267,7 +277,10 @@ def revoke(
         bits: int | None = None,
         level: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Revoke access (clear vault bits, delete covered levels).
+    """Revoke access (clear vault bits, delete covered levels)
+
+    Vault rows delete at zero bits; a revoked level's row is deleted when the held level covers it. Operator, or
+        a same-vocabulary admin; user principals may not revoke their own grants.
 
     POST /grants/revoke
     Authorization: operator, or same-vocabulary admin. Vault rows
@@ -297,7 +310,7 @@ def revoke(
 @bp.delete("/<grant_id>")
 @flask_campus.unpack_request
 def delete_grant(grant_id: str) -> flask_campus.JsonResponse:
-    """Delete a grant row outright.
+    """Delete a grant row outright
 
     DELETE /grants/{grant_id}
     Authorization: operator, or a same-vocabulary admin for the

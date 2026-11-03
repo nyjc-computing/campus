@@ -1,0 +1,1973 @@
+{
+  "components": {
+    "responses": {
+      "Error": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        },
+        "description": "Campus error envelope (see ErrorEnvelope); malformed or invalid fields use the ValidationError shape (422, with error.errors). Possible statuses: 400, 401, 403, 404, 409, 415, 422, 429, 500, 503."
+      }
+    },
+    "schemas": {
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "description": "Campus error code (UPPER_SNAKE_CASE; AUTH_* for OAuth protocol errors, RFC 6749 \u00a75.2)",
+            "enum": [
+              "AUTH_ACCESS_DENIED",
+              "AUTH_INSUFFICIENT_SCOPE",
+              "AUTH_INVALID_CLIENT",
+              "AUTH_INVALID_GRANT",
+              "AUTH_INVALID_REQUEST",
+              "AUTH_INVALID_SCOPE",
+              "AUTH_SERVER_ERROR",
+              "AUTH_TEMPORARILY_UNAVAILABLE",
+              "AUTH_TOKEN_INVALID",
+              "AUTH_UNAUTHORIZED_CLIENT",
+              "AUTH_UNSUPPORTED_GRANT",
+              "AUTH_UNSUPPORTED_RESPONSE_TYPE",
+              "CONFLICT",
+              "FORBIDDEN",
+              "INTERNAL_ERROR",
+              "INVALID_REQUEST",
+              "NOT_FOUND",
+              "RATE_LIMITED",
+              "SERVICE_UNAVAILABLE",
+              "UNAUTHORIZED",
+              "VALIDATION_FAILED"
+            ],
+            "type": "string"
+          },
+          "details": {
+            "description": "Additional error details, including OAuth protocol fields (error, error_description)",
+            "type": "object"
+          },
+          "errors": {
+            "description": "Field-level validation errors; present on the 422 ValidationError shape only",
+            "items": {
+              "$ref": "#/components/schemas/FieldError"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "FieldError": {
+        "properties": {
+          "code": {
+            "description": "Machine-readable field error code, e.g. MISSING, INVALID_TYPE, UNRECOGNIZED_FIELD",
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "message"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Campus API for managing educational resources.\n\n## Error Responses\n\nAll error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.\n\n## Error Codes\n\nCommon error codes:\n- `INVALID_REQUEST` (400): Malformed or invalid request\n- `UNAUTHORIZED` (401): Missing or invalid authentication\n- `FORBIDDEN` (403): Insufficient permissions\n- `NOT_FOUND` (404): Resource not found\n- `VALIDATION_FAILED` (422): Request validation failed with field-level errors\n- `CONFLICT` (409): Resource state conflict\n- `INTERNAL_ERROR` (500): Unexpected server error\n- `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later\n\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
+    "title": "Campus API",
+    "version": "0.2.0"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/v1/assignments/": {
+      "get": {
+        "description": "List all assignments matching filter requirements\n\nmatching filter requirements.\n\nMethod:\n    GET /assignments\n\nQuery Parameters:\n    created_by: str (optional)\n        Filter by teacher who created the assignment\n\nResponses:\n    200 OK: dict\n        {\"data\": [assignment resources]}",
+        "operationId": "api_v1_assignments_list_assignments",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "created_by",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List all assignments",
+        "tags": [
+          "assignments"
+        ]
+      },
+      "post": {
+        "description": "Create a new assignment\n\n.\n\nMethod:\n    POST /assignments\n\nRequest Body:\n    title: str (required)\n    description: str (optional)\n    questions: list[dict] (optional)\n        Each question dict carries type + type-specific data, validated\n        against the registry in campus.api.questionschemas (#533).\n    classroom_links: list[dict] (optional)\n\nResponses:\n    201 Created: dict\n        Assignment resource\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `assignments.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_assignments_create_assignment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "classroom_links": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "description": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "questions": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "title": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Create a new assignment",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
+    "/api/v1/assignments/{assignment_id}/": {
+      "delete": {
+        "description": "Delete an assignment\n\n.\n\nMethod:\n    DELETE /assignments/{assignment_id}\n\nResponses:\n    200 OK: dict\n    Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `assignments.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_assignments_delete_assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete an assignment",
+        "tags": [
+          "assignments"
+        ]
+      },
+      "get": {
+        "description": "Get a single assignment by ID\n\nby ID.\n\nMethod:\n    GET /assignments/{assignment_id}\n\nResponses:\n    200 OK: dict\n        Assignment resource",
+        "operationId": "api_v1_assignments_get_assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a single assignment",
+        "tags": [
+          "assignments"
+        ]
+      },
+      "patch": {
+        "description": "Update an assignment\n\n.\n\nMethod:\n    PATCH /assignments/{assignment_id}\n\nRequest Body:\n    title, description, questions, or classroom_links (all optional)\n\nResponses:\n    200 OK: dict\n        Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `assignments.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_assignments_update_assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "classroom_links": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "description": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "questions": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "title": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Update an assignment",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
+    "/api/v1/assignments/{assignment_id}/links": {
+      "post": {
+        "description": "Add a Google Classroom link to an assignment\n\nAdd a Google Classroom link to an assignment.\n\nMethod:\n    POST /assignments/{assignment_id}/links\n\nRequest Body:\n    course_id: str (required)\n    coursework_id: str (required)\n    attachment_id: str (optional)\n\nResponses:\n    200 OK: dict\n    Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `assignments.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_assignments_add_classroom_link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "attachment_id": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "course_id": {
+                    "type": "string"
+                  },
+                  "coursework_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "course_id",
+                  "coursework_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Add classroom link",
+        "tags": [
+          "assignments"
+        ]
+      }
+    },
+    "/api/v1/bookings/": {
+      "get": {
+        "description": "Method:\n    GET /bookings\n\nQuery Parameters:\n    user_id: schema.UserID | None (optional)\n        Filter bookings by user ID.\n    venue_id: schema.CampusID | None (optional)\n        Filter bookings by venue ID.\n    date: schema.Date | None (optional)\n        Filter bookings by date (YYYY-MM-DD format).\n\nResponses:\n    200 OK: dict\n        {\"data\": [booking resources]}",
+        "operationId": "api_v1_bookings_list_bookings",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "format": "email",
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "venue_id",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "format": "date",
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List all bookings matching filter requirements.",
+        "tags": [
+          "bookings"
+        ]
+      },
+      "post": {
+        "description": "Method:\n    POST /bookings\n\nBody Parameters (application/json):\n    venue_id: schema.CampusID (required)\n        The ID of the venue to book.\n    description: str (required)\n        A description of the booking purpose.\n    start_time: schema.Time (required)\n        Start time in HH:MM format.\n    end_time: schema.Time (required)\n        End time in HH:MM format.\n    date: schema.Date (required)\n        Booking date in YYYY-MM-DD format.\n\nResponses:\n    201 Created: dict\n        Booking resource\n\n    400 Bad Request: dict\n        {\"error\": error message}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `bookings.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_bookings_create_booking",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "date": {
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "end_time": {
+                    "format": "hhmm",
+                    "type": "string"
+                  },
+                  "start_time": {
+                    "format": "hhmm",
+                    "type": "string"
+                  },
+                  "venue_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "venue_id",
+                  "description",
+                  "start_time",
+                  "end_time",
+                  "date"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Create a new venue booking.",
+        "tags": [
+          "bookings"
+        ]
+      }
+    },
+    "/api/v1/bookings/{booking_id}/": {
+      "delete": {
+        "description": "Method:\n    DELETE /bookings/{booking_id}\n\nPath Parameters:\n    booking_id: schema.CampusID (required)\n        The unique identifier of the booking.\n\nResponses:\n    200 OK: dict\n        Empty object on success.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `bookings.admin` circle (only user tokens are eligible).\n\n    404 Not Found: dict\n        {\"error\": \"Booking not found\"}",
+        "operationId": "api_v1_bookings_delete_booking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete a booking.",
+        "tags": [
+          "bookings"
+        ]
+      },
+      "get": {
+        "description": "Method:\n    GET /bookings/{booking_id}\n\nPath Parameters:\n    booking_id: schema.CampusID (required)\n        The unique identifier of the booking.\n\nResponses:\n    200 OK: dict\n        Booking resource\n\n    404 Not Found: dict\n        {\"error\": \"Booking not found\"}",
+        "operationId": "api_v1_bookings_get_booking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a single booking by ID.",
+        "tags": [
+          "bookings"
+        ]
+      },
+      "patch": {
+        "description": "Note: Only the description can be modified. Changes to venue, date,\n    or time require creating a new booking.\n\nMethod:\n    PATCH /bookings/{booking_id}\n\nPath Parameters:\n    booking_id: schema.CampusID (required)\n        The unique identifier of the booking.\n\nBody Parameters (application/json):\n    description: str (optional)\n        New description for the booking.\n\nResponses:\n    200 OK: dict\n        Empty object on success.\n\n    400 Bad Request: dict\n        {\"error\": error message}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `bookings.admin` circle (only user tokens are eligible).\n\n    404 Not Found: dict\n        {\"error\": \"Booking not found\"}",
+        "operationId": "api_v1_bookings_update_booking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "description": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Update an existing booking.",
+        "tags": [
+          "bookings"
+        ]
+      }
+    },
+    "/api/v1/circles/": {
+      "get": {
+        "description": "List all circles matching filter requirements",
+        "operationId": "api_v1_circles_list_circles",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List all circles",
+        "tags": [
+          "circles"
+        ]
+      },
+      "post": {
+        "description": "Create a new circle\n\n.\n\nMethod:\n    POST /circles\n\nPath Parameters:\n    None\n\nQuery Parameters:\n    None\n\nRequest Body (application/json):\n    name: str (required)\n        The name of the new circle.\n        Must not already be used by another circle.\n    description: str (optional)\n        An optional description of the circle.\n    tag: CircleTag (required)\n        The tag that categorizes the circle.\n    parents: dict[CircleID, AccessValue] (optional)\n        A mapping of parent circle IDs to integer access values.\n        Omit to create a circle with no parents.\n        The root circle (tag \"root\") must not have parents.\n\nResponses:\n    201 Created: dict\n        JSON object representing the newly created circle.\n        Example:\n            {\n                \"id\": \"circle_ab12cd34\",\n                \"name\": \"Design Team\",\n                \"description\": \"Handles UI/UX\",\n                \"tag\": \"project\",\n                \"parents\": {\n                    \"circle_1a2b3c4d\": 15\n                }\n            }\n\n    400 Bad Request: None\n        Returned if the request body is invalid or missing required fields.\n\n    409 Conflict: None\n        - Returned if another circle already uses the requested name\n          (best-effort, exact-match check).\n        - Returned if tag is \"root\" and parents were provided.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `circles.admin` circle (only user tokens are eligible).\n\n    422 Unprocessable Entity: None\n        Returned if validation fails (e.g., a required field is missing).",
+        "operationId": "api_v1_circles_new_circle",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "description": {
+                    "default": "",
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "parents": {
+                    "additionalProperties": {
+                      "type": "integer"
+                    },
+                    "nullable": true,
+                    "type": "object"
+                  },
+                  "tag": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "tag"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Create a new circle",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
+    "/api/v1/circles/{circle_id}/": {
+      "delete": {
+        "description": "Delete a circle by its unique ID\n\nby its unique ID.\n\nMethod:\n    DELETE /circles/{circle_id}\n\nPath Parameters:\n    circle_id: str (required)\n        The unique identifier of the circle to delete.\n\nQuery Parameters:\n    None\n\nRequest Body:\n    None\n\nResponses:\n    200 OK: dict\n        Empty JSON object indicating successful deletion.\n        Example:\n            {}\n\n    409 Conflict: None\n        Returned if the circle does not exist.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `circles.admin` circle (only user tokens are eligible).\n\n    500 Internal Server Error: None\n        Returned if an unexpected storage error occurs.\n\nNotes:\n    - This action is **destructive** and cannot be undone.\n    - Requires membership in the `circles.admin` circle.\n    - Emits the event: `campus.circles.delete`",
+        "operationId": "api_v1_circles_delete_circle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete a circle",
+        "tags": [
+          "circles"
+        ]
+      },
+      "get": {
+        "description": "Retrieve detailed information about a specific circle\n\nRetrieve detailed information about a specific circle.\n\nMethod:\n    GET /circles/{circle_id}\n\nPath Parameters:\n    circle_id: str (required)\n        The unique identifier of the circle to retrieve.\n\nQuery Parameters:\n    None\n\nRequest Body:\n    None\n\nResponses:\n    200 OK: dict\n        JSON object representing the circle details.\n        Example:\n            {\n                \"id\": \"circle_ab12cd34\",\n                \"name\": \"Design Team\",\n                \"description\": \"Handles UI/UX\",\n                \"tag\": \"project\",\n                \"parents\": {\n                    \"circle_1a2b3c4d\": 15\n                },\n                \"sources\": {}\n            }\n\n    409 Conflict: None\n        Returned if the circle does not exist.\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs while retrieving the circle.\n\nNotes:\n    - If the circle is not found, a `ConflictError` is raised with message `\"Circle not found\"`.\n    - Response is validated against `CircleResource`.\n    - Currently, `sources` is always an empty object (may change in future with enrichment).",
+        "operationId": "api_v1_circles_get_circle_details",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get circle details",
+        "tags": [
+          "circles"
+        ]
+      },
+      "patch": {
+        "description": "Update the name and/or description of an existing circle\n\nUpdate the name, and optionally the description, of an existing circle.\n\nMethod:\n    PATCH /circles/{circle_id}\n\nPath Parameters:\n    circle_id: str (required)\n        The unique identifier of the circle to update.\n\nQuery Parameters:\n    None\n\nRequest Body (application/json):\n    name: str (required)\n        The new name for the circle.\n        Must not already be used by another circle.\n    description: str (optional)\n        The new description for the circle.\n        Unchanged if omitted.\n\nResponses:\n    200 OK: dict\n        Empty object indicating that the update was successful.\n        Example:\n            {}\n\n    409 Conflict: None\n        - Returned if the circle does not exist.\n        - Returned if another circle already uses the requested name\n          (best-effort, exact-match check).\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `circles.admin` circle (only user tokens are eligible).\n\n    422 Unprocessable Entity: None\n        Returned if validation fails (e.g., name is missing).\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs during the update.\n\nNotes:\n    - `name` is required; `description` is unchanged when omitted.\n    - If no changes are detected, the request is treated as a no-op (200 OK, no error).\n    - Requires membership in the `circles.admin` circle.\n    - Emits the event: `campus.circles.update`.",
+        "operationId": "api_v1_circles_edit_circle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "description": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Update circle name/description",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
+    "/api/v1/circles/{circle_id}/members/": {
+      "get": {
+        "description": "Retrieve the member IDs of a circle along with their access values\n\nRetrieve the member IDs of a circle along with their access values.\n\nMethod:\n    GET /circles/{circle_id}/members\n\nPath Parameters:\n    circle_id: str (required)\n        The unique identifier of the circle whose members are to be listed.\n\nQuery Parameters:\n    None\n\nRequest Body:\n    None\n\nResponses:\n    200 OK: dict\n        A mapping of member IDs to their access values within the circle.\n        Example:\n            {\n                \"user:alice\": \"admin\",\n                \"user:bob\": \"read\"\n            }\n\n    409 Conflict: None\n        Returned if the circle does not exist.\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs while retrieving members.\n\nNotes:\n    - The result includes only direct members of the circle.\n    - If the circle has no members, an empty object is returned.\n    - Emits no events and does not currently validate the response structure.",
+        "operationId": "api_v1_circles_get_circle_members",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List circle members",
+        "tags": [
+          "circles"
+        ]
+      },
+      "patch": {
+        "description": "Update the access level of a member within a circle\n\nUpdate the access level of a member within a circle.\n\nMethod:\n    PATCH /circles/{circle_id}/members/{member_circle_id}\n\nPath Parameters:\n    circle_id: str (required)\n        The ID of the circle where the member's access is being updated.\n    member_circle_id: str (required)\n        The ID of the member circle whose access is being modified.\n\nQuery Parameters:\n    None\n\nRequest Body (application/json):\n    member_id: str (required)\n        Must match the path parameter `member_circle_id`.\n    access_value: AccessValue (required)\n        The new access level to assign to the member.\n\nResponses:\n    200 OK: dict\n        Empty object indicating the access level was successfully updated.\n        Example:\n            {}\n\n    409 Conflict: None\n        - Returned if the member circle does not exist.\n        - Returned if no changes were applied.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `circles.admin` circle (only user tokens are eligible).\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs.\n\nNotes:\n    - This operation will create or update the member's access.\n    - Requires membership in the `circles.admin` circle.\n    - Emits the event: `campus.circles.members.set`.\n    - No validation is currently performed to compare existing access.",
+        "operationId": "api_v1_circles_patch_circle_member",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "access_value": {
+                    "type": "integer"
+                  },
+                  "member_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "member_id",
+                  "access_value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Update member access level",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
+    "/api/v1/circles/{circle_id}/members/add": {
+      "post": {
+        "description": "Add a member to a circle with a specified access level\n\nAdd a member to a circle with a specified access level.\n\nMethod:\n    POST /circles/{circle_id}/members/add\n\nPath Parameters:\n    circle_id: str (required)\n        The unique identifier of the circle to which the member will be added.\n\nQuery Parameters:\n    None\n\nRequest Body (application/json):\n    member_id: str (required)\n        The member being added \u2014 circles contain only circles, so\n        this is either a circle ID or the email name of the user's\n        circle (each user has a circle named after their email\n        account). The addressed circle must exist.\n    access_value: AccessValue (required)\n        The level of access the member will have in the parent circle.\n\nResponses:\n    200 OK: dict\n        Empty object indicating the member was successfully added.\n        Example:\n            {}\n\n    409 Conflict: None\n        - Returned if the target circle does not exist.\n        - Returned if the member ID does not address an existing\n          circle (including a missing user circle for an\n          email-shaped ID).\n        - Returned if no changes were applied (e.g., member already exists with same access).\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `circles.admin` circle (only user tokens are eligible).\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs during the operation.\n\nNotes:\n    - Emits the event: `campus.circles.members.add`.\n    - Requires membership in the `circles.admin` circle: membership\n      editing is privilege escalation once circles gate access.\n    - Members are stored as a single `members` dict on the circle\n      record, written by read-modify-write: member identifiers may\n      be email names, whose dots a nested-field update path would\n      misparse.",
+        "operationId": "api_v1_circles_add_circle_member",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "access_value": {
+                    "type": "integer"
+                  },
+                  "member_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "member_id",
+                  "access_value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Add circle member",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
+    "/api/v1/circles/{circle_id}/members/remove": {
+      "delete": {
+        "description": "Remove a member from a circle\n\nRemove a member from a circle.\n\nMethod:\n    DELETE /circles/{circle_id}/members/remove\n\nPath Parameters:\n    circle_id: str (required)\n        The ID of the circle from which the member will be removed.\n\nRequest Body (application/json):\n    member_id: str (required)\n        The member identifier to remove, as added: a circle ID or\n        the email name of a user circle.\n\nResponses:\n    200 OK: dict\n        Empty object indicating the member was successfully removed.\n        Example:\n            {}\n\n    409 Conflict: None\n        - Returned if the target circle does not exist.\n        - Returned if the specified member is not part of the circle.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `circles.admin` circle (only user tokens are eligible).\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs while removing the member.\n\nNotes:\n    - Emits the event: `campus.circles.members.remove`.\n    - Requires membership in the `circles.admin` circle.\n    - Removal rewrites the circle's `members` dict without the\n      member (read-modify-write; see POST /members/add).\n    - Only direct members can be removed this way.\n    - The response is not currently validated.",
+        "operationId": "api_v1_circles_remove_circle_member",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "member_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "member_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Remove circle member",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
+    "/api/v1/circles/{circle_id}/move": {
+      "post": {
+        "operationId": "api_v1_circles_move_circle",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Move a circle to a new parent.",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
+    "/api/v1/circles/{circle_id}/users": {
+      "get": {
+        "operationId": "api_v1_circles_get_circle_users",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get users in a circle.",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
+    "/api/v1/emailotp/request": {
+      "post": {
+        "description": "Request a new OTP for email authentication",
+        "operationId": "api_v1_emailotp_request_otp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Request OTP",
+        "tags": [
+          "emailotp"
+        ]
+      }
+    },
+    "/api/v1/emailotp/verify": {
+      "post": {
+        "description": "Verify an OTP for email authentication",
+        "operationId": "api_v1_emailotp_verify_otp",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "type": "string"
+                  },
+                  "otp": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "otp"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Verify OTP",
+        "tags": [
+          "emailotp"
+        ]
+      }
+    },
+    "/api/v1/files/": {
+      "get": {
+        "description": "List file records, optionally under a slug prefix\n\nList file records, optionally under a slug prefix.\n\nMethod:\n    GET /files\n\nQuery Parameters:\n    prefix: str | None (optional)\n        Only include files whose slug starts with this prefix.\n\nResponses:\n    200 OK: dict\n        {\"data\": [file resources]}",
+        "operationId": "api_v1_files_list_files",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "prefix",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List files",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/by-slug/{slug}": {
+      "delete": {
+        "description": "Delete the file record and its content\n\n.\n\nMethod:\n    DELETE /files/by-slug/{slug}\n\nPath Parameters:\n    slug: str (required)\n        The slug to delete.\n\nResponses:\n    200 OK: dict\n        Empty object on success.\n\n    404 Not Found: dict\n        {\"error\": \"File not found\"}",
+        "operationId": "api_v1_files_delete_file_by_slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete a file by slug",
+        "tags": [
+          "files"
+        ]
+      },
+      "get": {
+        "description": "Serve the file's bytes with its stored Content-Type, an ETag and\nshort-lived caching headers. The whole path tail after\n`/files/by-slug/` is the slug \u2014 slash-separated slugs work and no\nsuffix is used, so any slug that validates cannot collide with a\nroute. Add `meta=1` to receive the metadata resource instead.\n\nGet a file's content (or metadata with ?meta=1) by slug.\n\nMethod:\n    GET /files/by-slug/{slug}\n\nThe whole path tail after /by-slug/ is the slug; the response is the\nfile's bytes with its stored Content-Type, an ETag, and short-lived\ncaching headers.\n\nPath Parameters:\n    slug: str (required)\n        The file's stable slug, e.g. timetable/specials/breaks.\n\nQuery Parameters:\n    meta: str | None (optional)\n        Return the file metadata resource instead of the content.\n\nResponses:\n    200 OK: bytes\n        The file content (application/json metadata with meta=1).\n\n    304 Not Modified\n        When the client's If-None-Match matches the ETag.\n\n    404 Not Found: dict\n        {\"error\": \"File not found\"}",
+        "operationId": "api_v1_files_get_file_by_slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a file's content (or metadata) by slug",
+        "tags": [
+          "files"
+        ]
+      },
+      "put": {
+        "description": "The request body is the raw file content; the Content-Type header\nis stored and served back. Replacing an existing slug keeps its\nURL stable. Slugs are validated: slash-separated segments of\nalphanumerics, `-`, `_` and `.`, no empty/dot segments, no\nleading/trailing slash, and `content` is reserved.\n\n.\n\nMethod:\n    PUT /files/by-slug/{slug}\n\nThe request body is the raw file content; the Content-Type header is\nstored and served back. Replacing keeps the slug's URL stable.\n\nPath Parameters:\n    slug: str (required)\n        The stable slug to create or replace.\n\nQuery Parameters:\n    name: str | None (optional)\n        Display name for new files.\n\nBody:\n    Raw bytes (any Content-Type; defaults to application/octet-stream).\n\nResponses:\n    201 Created: dict\n        The created file resource.\n\n    200 OK: dict\n        The updated file resource (slug existed).\n\n    400 Bad Request: dict\n        Invalid slug or empty body.",
+        "operationId": "api_v1_files_put_file_by_slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Create or replace a file by slug (upsert)",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{file_id}/": {
+      "delete": {
+        "description": "Delete the file record and its content\n\n.\n\nMethod:\n    DELETE /files/{file_id}\n\nPath Parameters:\n    file_id: schema.CampusID (required)\n        The unique identifier of the file.\n\nResponses:\n    200 OK: dict\n        Empty object on success.\n\n    404 Not Found: dict\n        {\"error\": \"File not found\"}",
+        "operationId": "api_v1_files_delete_file",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete a file by ID",
+        "tags": [
+          "files"
+        ]
+      },
+      "get": {
+        "description": "Get a single file record by ID\n\n.\n\nMethod:\n    GET /files/{file_id}\n\nPath Parameters:\n    file_id: schema.CampusID (required)\n        The unique identifier of the file.\n\nResponses:\n    200 OK: dict\n        The file resource.\n\n    404 Not Found: dict\n        {\"error\": \"File not found\"}",
+        "operationId": "api_v1_files_get_file",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a file's metadata by ID",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/files/{file_id}/content/": {
+      "get": {
+        "description": "Serve the file's bytes with its stored Content-Type\n\n.\n\nMethod:\n    GET /files/{file_id}/content\n\nPath Parameters:\n    file_id: schema.CampusID (required)\n        The unique identifier of the file.\n\nResponses:\n    200 OK: bytes\n        The file content with its stored Content-Type.\n\n    304 Not Modified\n        When the client's If-None-Match matches the ETag.\n\n    404 Not Found: dict\n        {\"error\": \"File not found\"}",
+        "operationId": "api_v1_files_get_file_content",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a file's content by ID",
+        "tags": [
+          "files"
+        ]
+      },
+      "put": {
+        "description": "Replace the content of an existing file. Unlike the by-slug route, this never creates a file.\n\nReplace the content of an existing file by ID.\n\nMethod:\n    PUT /files/{file_id}/content\n\nThe request body is the raw file content; the Content-Type header is\nstored and served back. Unlike the by-slug route, this never creates\na file.\n\nPath Parameters:\n    file_id: schema.CampusID (required)\n        The unique identifier of the file.\n\nQuery Parameters:\n    name: str | None (optional)\n        New display name.\n\nBody:\n    Raw bytes (any Content-Type; defaults to application/octet-stream).\n\nResponses:\n    200 OK: dict\n        The updated file resource.\n\n    400 Bad Request: dict\n        Empty body.\n\n    404 Not Found: dict\n        {\"error\": \"File not found\"}",
+        "operationId": "api_v1_files_put_file_content",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Replace a file's content by ID",
+        "tags": [
+          "files"
+        ]
+      }
+    },
+    "/api/v1/submissions/": {
+      "get": {
+        "description": "List all submissions matching filter requirements\n\nmatching filter requirements.\n\nMethod:\n    GET /submissions\n\nQuery Parameters:\n    assignment_id: str (optional)\n        Filter by assignment\n    student_id: str (optional)\n        Filter by student\n    course_id: str (optional)\n        Filter by Google Classroom course\n\nResponses:\n    200 OK: dict\n        {\"data\": [submission resources]}",
+        "operationId": "api_v1_submissions_list_submissions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "assignment_id",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "student_id",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "course_id",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List all submissions",
+        "tags": [
+          "submissions"
+        ]
+      },
+      "post": {
+        "description": "Create a new submission\n\n.\n\nMethod:\n    POST /submissions\n\nRequest Body:\n    assignment_id: str (required)\n    student_id: str (required)\n    course_id: str (required)\n    responses: list[dict] (optional)\n        Each response dict carries question_type + response_data,\n        validated against the registry in\n        campus.api.questionschemas (#533).\n\nResponses:\n    201 Created: dict\n        Submission resource\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `submissions.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_submissions_create_submission",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "assignment_id": {
+                    "type": "string"
+                  },
+                  "course_id": {
+                    "type": "string"
+                  },
+                  "responses": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "student_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "assignment_id",
+                  "student_id",
+                  "course_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Create a new submission",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/by-assignment/{assignment_id}/": {
+      "get": {
+        "description": "List submissions for a specific assignment\n\nList submissions for a specific assignment.\n\nMethod:\n    GET /submissions/by-assignment/{assignment_id}/\n\nResponses:\n    200 OK: dict\n        {\"data\": [submission resources]}",
+        "operationId": "api_v1_submissions_list_submissions_by_assignment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List submissions by assignment",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/by-student/{student_id}/": {
+      "get": {
+        "description": "List submissions from a specific student\n\nList submissions from a specific student.\n\nMethod:\n    GET /submissions/by-student/{student_id}/\n\nResponses:\n    200 OK: dict\n        {\"data\": [submission resources]}",
+        "operationId": "api_v1_submissions_list_submissions_by_student",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "student_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List submissions by student",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/": {
+      "delete": {
+        "description": "Delete a submission\n\n.\n\nMethod:\n    DELETE /submissions/{submission_id}\n\nResponses:\n    200 OK: dict\n        Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `submissions.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_submissions_delete_submission",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete a submission",
+        "tags": [
+          "submissions"
+        ]
+      },
+      "get": {
+        "description": "Get a single submission by ID\n\nGet a single submission by ID.\n\nMethod:\n    GET /submissions/{submission_id}\n\nResponses:\n    200 OK: dict\n        Submission resource",
+        "operationId": "api_v1_submissions_get_submission",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a submission",
+        "tags": [
+          "submissions"
+        ]
+      },
+      "patch": {
+        "description": "Update a submission\n\n.\n\nMethod:\n    PATCH /submissions/{submission_id}\n\nRequest Body:\n    responses, feedback, or submitted_at (all optional)\n\nResponses:\n    200 OK: dict\n        Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `submissions.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_submissions_update_submission",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "feedback": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "responses": {
+                    "items": {
+                      "type": "object"
+                    },
+                    "nullable": true,
+                    "type": "array"
+                  },
+                  "submitted_at": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Update a submission",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/feedback": {
+      "post": {
+        "description": "Add feedback on a response to a question\n\nAdd feedback on a response to a question.\n\nMethod:\n    POST /submissions/{submission_id}/feedback\n\nRequest Body:\n    question_id: str (required)\n    feedback_text: str (required)\n\nResponses:\n    200 OK: dict\n        Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `submissions.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_submissions_add_feedback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "feedback_text": {
+                    "type": "string"
+                  },
+                  "question_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "question_id",
+                  "feedback_text"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Add feedback to response",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/responses": {
+      "post": {
+        "description": "Add or update a response to a question in a submission\n\nAdd or update a response to a question in a submission.\n\nMethod:\n    POST /submissions/{submission_id}/responses\n\nRequest Body:\n    question_id: str (required)\n    response_text: str (legacy text answers; required unless\n        response_data is given)\n    question_type: str (optional; defaults to free-response when\n        response_data carries no text)\n    response_data: dict (optional; canonical answer payload,\n        validated against the question's registered type (#533))\n\nResponses:\n    200 OK: dict\n        Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `submissions.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_submissions_add_response",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "question_id": {
+                    "type": "string"
+                  },
+                  "question_type": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "response_data": {
+                    "nullable": true,
+                    "type": "object"
+                  },
+                  "response_text": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "question_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Add response to question",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/submit": {
+      "post": {
+        "description": "Finalize/submit a submission (mark submitted_at timestamp)\n\nFinalize/submit a submission (mark submitted_at timestamp).\n\nMethod:\n    POST /submissions/{submission_id}/submit\n\nResponses:\n    200 OK: dict\n        Empty object on success\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `submissions.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_submissions_submit_submission",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Submit a submission",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/timetable/": {
+      "get": {
+        "description": "Method:\n    GET /timetable/\n\nQuery Parameters:\n    None\n\nResponses:\n    200 OK: dict\n        {\"data\": [timetable metadata resources]}",
+        "operationId": "api_v1_timetable_list_timetables",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List all timetable metadata records.",
+        "tags": [
+          "timetable"
+        ]
+      },
+      "post": {
+        "description": "Method:\n    POST /timetable/\n\nBody Parameters:\n    metadata: dict\n        Metadata for the timetable, e.g. start and end date.\n\n    data: dict\n        The actual timetable data, e.g. lesson groups and entries.\n\nResponses:\n    200 OK: dict\n       {\"data\": timetable resource with labeled entries}\n\n    400 Bad Request: dict\n        {\"error\": error message}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_timetable_new",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "data": {
+                    "type": "object"
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "metadata",
+                  "data"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Create a new timetable.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/current": {
+      "get": {
+        "description": "Method:\n    GET /timetable/current\n\nQuery Parameters:\n    None\n\nResponses:\n    200 OK: dict\n        {\"value\": timetable_id}",
+        "operationId": "api_v1_timetable_get_current",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get the currently active timetable ID.",
+        "tags": [
+          "timetable"
+        ]
+      },
+      "put": {
+        "description": "Method:\n    PUT /timetable/current\n\nBody Parameters:\n    value: CampusID\n        The timetable ID to set as the current timetable.\n\nResponses:\n    200 OK: dict\n        {}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_timetable_set_current",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Set the currently active timetable.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/next": {
+      "get": {
+        "description": "Method:\n    GET /timetable/next\n\nQuery Parameters:\n    None\n\nResponses:\n    200 OK: dict\n        {\"value\": timetable_id}",
+        "operationId": "api_v1_timetable_get_next",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get the next scheduled timetable ID.",
+        "tags": [
+          "timetable"
+        ]
+      },
+      "put": {
+        "description": "Method:\n    PUT /timetable/next\n\nBody Parameters:\n    value: CampusID\n        The timetable ID to set as the next timetable.\n\nResponses:\n    200 OK: dict\n        {}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_timetable_set_next",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "value"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Set the next scheduled timetable.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/{timetable_id}/": {
+      "get": {
+        "description": "Method:\n    GET /timetable/<timetable_id>/\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable to retrieve.\nResponses:\n    200 OK: dict\n        {\"timetable\": timetable resource}",
+        "operationId": "api_v1_timetable_get_timetable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Returns timetable metadata and labeled entries in a single JSON object.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/{timetable_id}/entries": {
+      "get": {
+        "description": "Method:\n    GET /timetable/<timetable_id>/entries\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable to retrieve.\n\nResponses:\n    200 OK: dict\n        {\"entries\": [timetable entry resources with labels]}",
+        "operationId": "api_v1_timetable_get_timetable_entries",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List all timetable entries for a specific timetable and user.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/{timetable_id}/metadata": {
+      "get": {
+        "description": "Method:\n    GET /timetable/<timetable_id>/metadata\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n\nResponses:\n    200 OK: dict\n        timetable metadata resource",
+        "operationId": "api_v1_timetable_get_timetable_metadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get metadata for a specific timetable.",
+        "tags": [
+          "timetable"
+        ]
+      },
+      "patch": {
+        "description": "Method:\n    PATCH /timetable/<timetable_id>/metadata\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n\nBody Parameters:\n    start_date: DateTime\n        The new start date of the timetable.\n    end_date: DateTime\n        The new end date of the timetable.\n\nResponses:\n    200 OK: dict\n        {}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_timetable_set_metadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "end_date": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "format": "date-time",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "start_date",
+                  "end_date"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Update metadata for a specific timetable.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "assignments"
+    },
+    {
+      "name": "bookings"
+    },
+    {
+      "name": "circles"
+    },
+    {
+      "name": "emailotp"
+    },
+    {
+      "name": "files"
+    },
+    {
+      "name": "submissions"
+    },
+    {
+      "name": "timetable"
+    }
+  ]
+}

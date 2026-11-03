@@ -260,3 +260,21 @@ def _seed_operator_key() -> None:
             "python scripts/seed_audit_operator_key.py",
             campus.config.AUDIT_OPERATOR_API_KEY_ID,
         )
+
+
+# Service-level OpenAPI info (campus#1029): consumed by
+# campus.flask_campus.openapi.
+OPENAPI_INFO = {
+    "title": "Campus Audit API",
+    "description": (
+        "Observability backend for Campus: trace/span ingestion, "
+        "querying, and audit API-key management, plus the audit web UI "
+        "(browser pages under /audit/, UI data endpoints under "
+        "/audit/api/).\n"
+        "\n"
+        "The /audit/v1 endpoints require Bearer authentication with an "
+        "audit API key (audit_v1_<22-char-base64url>); the web UI is "
+        "gated by the campus login flow, and /audit/api/* data "
+        "endpoints serve the UI's JavaScript under the same session."
+    ),
+}

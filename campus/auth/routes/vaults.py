@@ -34,7 +34,7 @@ bp = flask.Blueprint('vaults', __name__, url_prefix='/vaults')
 @bp.get("/<label>/")
 @flask_campus.unpack_request
 def keys(label: str) -> flask_campus.JsonResponse:
-    """Get the keys for a specific vault.
+    """List a vault's keys
 
     GET /vaults/{label}/
     Authorization: READ vault access on {label}, or operator.
@@ -53,7 +53,7 @@ def keys(label: str) -> flask_campus.JsonResponse:
 @bp.delete("/<label>/<key>/")
 @flask_campus.unpack_request
 def delete(label: str, key: str) -> flask_campus.JsonResponse:
-    """Delete a key from a vault.
+    """Delete a vault key
 
     DELETE /vaults/{label}/{key}/
     Authorization: DELETE vault access on {label}, or operator.
@@ -69,7 +69,7 @@ def delete(label: str, key: str) -> flask_campus.JsonResponse:
 @bp.get("/<label>/<key>/")
 @flask_campus.unpack_request
 def get(label: str, key: str) -> flask_campus.JsonResponse:
-    """Get a specific key from a vault.
+    """Get a vault value
 
     GET /vaults/{label}/{key}/
     Authorization: READ vault access on {label}, or operator.
@@ -89,7 +89,7 @@ def get(label: str, key: str) -> flask_campus.JsonResponse:
 @bp.post("/<label>/<key>/")
 @flask_campus.unpack_request
 def set(label: str, key: str, value: str) -> flask_campus.JsonResponse:
-    """Set a specific key in a vault.
+    """Set a vault value
 
     POST /vaults/{label}/{key}/
     Authorization: CREATE or UPDATE vault access on {label}, or
