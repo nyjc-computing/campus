@@ -60,6 +60,7 @@ import inspect
 import json
 import re
 import sys
+import tomllib
 import typing
 from collections.abc import Iterable
 from pathlib import Path
@@ -383,11 +384,21 @@ _TRAILING_SLASH_NOTE = (
 
 
 def suite_version() -> str:
-    """The installed campus-suite version; the spec's info.version default."""
+    """The campus-suite version; the spec's info.version default.
+
+    Reads installed package metadata first (a wheel install); falls back
+    to the repo's pyproject.toml for checkouts installed with
+    ``--no-root`` (CI), where no campus-suite metadata exists.
+    """
     try:
         return importlib.metadata.version("campus-suite")
     except importlib.metadata.PackageNotFoundError:
-        return "0.0.0"
+        pass
+    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    if pyproject.is_file():
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        return data["tool"]["poetry"]["version"]
+    return "0.0.0"
 
 
 def _converter_schema(converter: routing.BaseConverter | None) -> dict[str, Any]:

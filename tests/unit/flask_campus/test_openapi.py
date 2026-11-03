@@ -330,12 +330,19 @@ class TestSpecConventions(unittest.TestCase):
     """Version pinning, trailing-slash note, determinism, CLI."""
 
     def test_version_defaults_to_suite_version(self) -> None:
-        self.assertEqual(
-            openapi.suite_version(),
-            importlib.metadata.version("campus-suite"),
-        )
+        suite = openapi.suite_version()
+        try:
+            metadata_version = importlib.metadata.version("campus-suite")
+        except importlib.metadata.PackageNotFoundError:
+            # --no-root installs (CI) have no campus-suite metadata;
+            # suite_version() falls back to pyproject.toml.
+            metadata_version = None
+        if metadata_version is not None:
+            self.assertEqual(suite, metadata_version)
+        else:
+            self.assertNotEqual(suite, "0.0.0")
         spec = openapi.generate_spec(_make_app(), title="Dummy API")
-        self.assertEqual(spec["info"]["version"], openapi.suite_version())
+        self.assertEqual(spec["info"]["version"], suite)
 
     def test_explicit_version_wins(self) -> None:
         self.assertEqual(_generate(version="1.2.3")["info"]["version"], "1.2.3")
