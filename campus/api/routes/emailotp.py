@@ -7,7 +7,7 @@ import re
 
 import flask
 
-from campus import flask_campus
+import campus.flask_campus as flask_campus
 from campus.common.errors import api_errors
 from campus.common.errors.validation import FieldError, ValidationError
 from campus.services.email import create_email_sender

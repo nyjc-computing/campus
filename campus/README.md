@@ -17,8 +17,8 @@ campus/
 ├── api/            # RESTful API resources
 │   ├── resources/  # Business logic
 │   └── routes/     # HTTP endpoints
-├── audit/          # Audit/tracing service + web UI
-├── flask_campus/   # Flask middleware: login flow + session context, trace propagation, journeys, request utilities
+├── audit/          # Audit/tracing service + web UI (service half; middleware/client/http ship in the flask-campus dist, #993)
+├── flask_campus/   # (moved to the flask-campus dist, #993 — import paths resolve via the portion merge)
 ├── integrations/   # External service configurations
 ├── services/       # Email, etc.
 ├── storage/        # Data persistence

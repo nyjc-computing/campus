@@ -18,8 +18,8 @@ __all__ = [
 
 import flask
 
+import campus.flask_campus as flask_campus
 import campus.model
-from campus import flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 

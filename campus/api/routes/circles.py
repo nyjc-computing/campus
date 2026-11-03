@@ -8,9 +8,9 @@ from typing import Any
 import campus_python
 import flask
 
+import campus.flask_campus as flask_campus
 import campus.model
 import campus.yapper
-from campus import flask_campus
 from campus.common import schema
 
 from .. import authz, resources

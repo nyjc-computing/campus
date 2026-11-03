@@ -14,7 +14,7 @@ Invariants: docs/auth-token-invariants.md B1-B5, C1-C5.
 
 import flask
 
-from campus import flask_campus
+import campus.flask_campus as flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors, auth_errors
 
