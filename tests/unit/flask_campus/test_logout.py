@@ -12,9 +12,11 @@ the browser on its own "/".
 
 import os
 import unittest
+from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import flask
+from campus_python.auth.v1 import set_session_id_provider
 
 from campus.flask_campus.login_manager import OAuthLoginManager
 
@@ -22,18 +24,51 @@ _AUTH_BASE = "https://campus.test"
 _POST_LOGOUT_TARGET = "https://campus.test/"
 
 
+class _FakeLogins:
+    """logins resource stand-in: revocation via the resource surface."""
+
+    def __init__(self, auth: "_FakeAuth"):
+        self._auth = auth
+
+    def has_session(self):
+        return True
+
+    def from_session(self):
+        # Coherent with the context push, which resolves this session
+        # for the /logout request's own hooks.
+        return SimpleNamespace(
+            id="login-1",
+            user_id="user-1",
+            user=None,
+            device_id="device-1",
+        )
+
+    def __getitem__(self, login_id):
+        return SimpleNamespace(revoke=self._revoke)
+
+    def _revoke(self):
+        self._auth.logged_out = True
+
+
 class _FakeAuth:
-    """Minimal stand-in for campus_python's auth namespace."""
+    """Minimal stand-in for the campus_python auth resource surface
+    that flask_campus.context orchestrates."""
 
     def __init__(self):
         self.logged_out = False
         self.pushed = False
 
-    def logout(self):
-        self.logged_out = True
+        def _has_session():
+            self.pushed = True
+            return False
 
-    def push_context(self):
-        self.pushed = True
+        self.sessions = SimpleNamespace(has_session=_has_session)
+        self.logins = _FakeLogins(self)
+        self.users = {
+            "user-1": SimpleNamespace(
+                get=lambda: SimpleNamespace(id="user-1")
+            )
+        }
 
 
 class _FakeCampus:
@@ -67,6 +102,7 @@ class TestLogoutRoutesThroughAuthService(unittest.TestCase):
         self.client = self.app.test_client()
 
     def tearDown(self):
+        set_session_id_provider(None)
         for name, value in self.saved.items():
             if value is None:
                 os.environ.pop(name, None)

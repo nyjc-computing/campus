@@ -1,6 +1,11 @@
 """campus.flask_campus.login_manager
 
 OAuth Login Manager for Flask integration.
+
+The policy half of the login flow (routes, redirects, session-next
+handling); the mechanics — session storage, context push, token
+exchange — live in flask_campus.context, which orchestrates the
+campus_python client's pure API calls.
 """
 
 from functools import wraps
@@ -13,6 +18,7 @@ import werkzeug
 from campus import config, flask_campus
 from campus.common import env
 from campus.common.utils import url
+from campus.flask_campus import context
 
 
 def _is_safe_redirect(redirect_url: str) -> bool:
@@ -25,19 +31,22 @@ def _is_safe_redirect(redirect_url: str) -> bool:
         ('//', '/\\')
     )
 
-
 def _create_bp(
+        push_hook: Callable[[], None],
         campus: campus_python.Campus,
+        cache: context.UserCache,
         default_endpoint: str
 ) -> flask.Blueprint:
     """Create authentication blueprint for Flask app.
-    
+
     Args:
+        push_hook: App before_request hook that pushes the auth context.
         campus: Campus client instance
+        cache: User cache backing the context push
         default_endpoint: Default endpoint to redirect to after login/logout
     """
     bp = flask.Blueprint("auth", __name__, url_prefix="/")
-    bp.before_request(campus.auth.push_context)
+    bp.before_request(push_hook)
 
     @bp.get("/login")
     @flask_campus.unpack_request
@@ -58,7 +67,7 @@ def _create_bp(
         # Use /finalize_login as the OAuth callback
         # Use url.full_url_for to get proper public URL (not localhost/internal host)
         callback_url = url.full_url_for('auth.finalize_login')
-        return campus.auth.authorize(target=callback_url)
+        return context.start_login(campus, target=callback_url)
 
 
     @bp.get("/finalize_login")
@@ -70,8 +79,6 @@ def _create_bp(
     ) -> werkzeug.Response:
         """OAuth callback endpoint - completes authentication.
 
-        This is the registered callback URL for Campus OAuth flows.
-
         Steps:
         1. Validates the auth session
         2. Exchanges authorization code for access token
@@ -80,7 +87,7 @@ def _create_bp(
         5. Redirects to the user's intended destination
 
         Args:
-            code: Authorization code from OAuth provider
+            code: The authorization code from OAuth callback
             state: Session state for CSRF protection
             scope: Granted OAuth scopes
 
@@ -92,7 +99,9 @@ def _create_bp(
         # browser flow — send the user back to sign-in instead of an
         # unhandled 500 (#690).
         try:
-            campus.auth.finalize(state=state, code=code, scope=scope)
+            context.finalize_login(
+                campus, state=state, code=code, scope=scope
+            )
         except campus_python.errors.BadRequestError as err:
             flask.current_app.logger.warning(
                 "finalize_login rejected: %s", err
@@ -103,7 +112,7 @@ def _create_bp(
                 "warning"
             )
             return flask.redirect(flask.url_for('auth.login'))
-        campus.auth.push_context()
+        context.push_context(campus, cache)
 
         # Redirect to the original destination
         next_url = flask.session.pop('login_next', '/')
@@ -121,7 +130,7 @@ def _create_bp(
         client redirect_uri (#788), otherwise falls back to its own
         landing ("/").
         """
-        campus.auth.logout()
+        context.logout(campus, cache)
         post_logout_target = url.full_url_for(default_endpoint)
         auth_logout_url = url.add_query(
             f"{config.get_base_url('campus.auth')}/auth/v1/logout",
@@ -149,6 +158,7 @@ class OAuthLoginManager:
         """
         self.campus = campus_client or campus_python.Campus(timeout=60)
         self.default_endpoint = default_endpoint
+        self._cache = context.UserCache()
 
     def _push_context_hook(self) -> None:
         """App-wide before_request hook that pushes the auth context.
@@ -161,7 +171,7 @@ class OAuthLoginManager:
         endpoint = flask.request.endpoint or ""
         if endpoint == "static" or endpoint.endswith(".static"):
             return
-        self.campus.auth.push_context()
+        context.push_context(self.campus, self._cache)
 
         # Span identity (#820): the audit tracing middleware reads
         # g.user_id / g.client_id when building this request's span.
@@ -177,7 +187,13 @@ class OAuthLoginManager:
 
     def init_app(self, app: flask.Flask | flask.Blueprint):
         """Initialize the login manager with the Flask app."""
-        bp = _create_bp(self.campus, self.default_endpoint)
+        # The SDK resources resolve their session ids through this
+        # module's flask.session storage from here on (idempotent).
+        context.install_session_provider()
+        bp = _create_bp(
+            self._push_context_hook, self.campus, self._cache,
+            self.default_endpoint,
+        )
         app.register_blueprint(bp)
         if isinstance(app, flask.Flask):
             app.before_request(self._push_context_hook)
