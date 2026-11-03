@@ -8,10 +8,13 @@ app's client and the signed-in user.
 import os
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import flask
 
 from campus.flask_campus.login_manager import OAuthLoginManager
+
+_PUSH_TARGET = "campus.flask_campus.login_manager.context.push_context"
 
 
 class TestPushContextIdentity(unittest.TestCase):
@@ -23,9 +26,6 @@ class TestPushContextIdentity(unittest.TestCase):
         self.app = flask.Flask(__name__)
         self.pushed = []
 
-    def tearDown(self):
-        pass
-
     def _restore_env(self):
         if self.saved_client_id is None:
             os.environ.pop("CLIENT_ID", None)
@@ -33,16 +33,18 @@ class TestPushContextIdentity(unittest.TestCase):
             os.environ["CLIENT_ID"] = self.saved_client_id
 
     def _manager(self, user=None):
-        """Login manager whose push_context stashes the given user."""
-        def push_context():
+        """Login manager whose context push stashes the given user."""
+        def push_context(_campus, _cache):
             self.pushed.append(True)
             if user is not None:
                 flask.g.user = user
 
-        campus_stub = SimpleNamespace(
-            auth=SimpleNamespace(push_context=push_context)
+        patcher = patch(_PUSH_TARGET, side_effect=push_context)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return OAuthLoginManager(
+            campus_client=SimpleNamespace()  # type: ignore[arg-type]
         )
-        return OAuthLoginManager(campus_client=campus_stub)
 
     def test_stamps_user_and_client(self):
         os.environ["CLIENT_ID"] = "uid-client-test"

@@ -615,7 +615,7 @@ botocore = ["botocore"]
 
 [[package]]
 name = "campus-api-python"
-version = "0.3.0"
+version = "0.3.1"
 description = "Campus API for Python projects"
 optional = false
 python-versions = ">=3.11,<3.15"
@@ -633,7 +633,7 @@ requests = "^2.32.4"
 type = "git"
 url = "https://github.com/nyjc-computing/campus-api-python.git"
 reference = "main"
-resolved_reference = "1ed1a7953c72c0788807e598c169eaee01a0d8ea"
+resolved_reference = "112d4c61d8f22a5e4140f33b3647fa92b587dae8"
 
 [[package]]
 name = "campus-common"

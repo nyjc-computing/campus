@@ -27,6 +27,8 @@ def init_app(app: flask.Flask) -> None:
     """
     from . import tracing
 
+    _install_propagation()
+
     @app.before_request
     def audit_rate_gate():
         """Fail-closed gate for audit ingest rate limiting (#831).
@@ -84,4 +86,21 @@ def init_journeys(
     """
     from . import journeys
 
+    _install_propagation()
+
     journeys.init_journeys(app, mint_on_navigation=mint_on_navigation)
+
+
+def _install_propagation() -> None:
+    """Point campus_python's propagation seam at this process's flask.g
+    (idempotent).
+
+    Outbound SDK calls made while a request is being handled then carry
+    the span/journey/device headers stashed by this middleware, keeping
+    the audit waterfall intact regardless of which implementation
+    computes the headers. Safe with or without tracing enabled — the
+    provider simply finds no g state when nothing was stashed.
+    """
+    from campus.flask_campus import propagation
+
+    propagation.install()
