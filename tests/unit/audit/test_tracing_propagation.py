@@ -323,9 +323,9 @@ class TestJourneyTagStamping(unittest.TestCase):
 
     def test_cookie_stamps_journey_tag(self):
         """A campus_journey cookie lands in the span's tags."""
-        import campus.config
+        import campus.common.protocol as protocol
 
-        cookie = f"{campus.config.JOURNEY_COOKIE}=journey_abc123"
+        cookie = f"{protocol.JOURNEY_COOKIE}=journey_abc123"
         with self.app.test_request_context("/", headers={"Cookie": cookie}):
             tracing.start_span()
             span = tracing.build_span_from_context(
@@ -353,9 +353,9 @@ class TestJourneyTagStamping(unittest.TestCase):
 
     def test_flask_g_takes_precedence_over_cookie(self):
         """An explicit route stash wins over a stale cookie value."""
-        import campus.config
+        import campus.common.protocol as protocol
 
-        cookie = f"{campus.config.JOURNEY_COOKIE}=journey_cookie_val"
+        cookie = f"{protocol.JOURNEY_COOKIE}=journey_cookie_val"
         with self.app.test_request_context("/", headers={"Cookie": cookie}):
             tracing.start_span()
             flask.g.journey_id = "journey_g_val"
@@ -400,9 +400,9 @@ class TestDeviceTagStamping(unittest.TestCase):
 
     def test_cookie_stamps_device_tag(self):
         """A campus_device cookie lands in the span's tags."""
-        import campus.config
+        import campus.common.protocol as protocol
 
-        cookie = f"{campus.config.DEVICE_COOKIE}=uid-device-abc123"
+        cookie = f"{protocol.DEVICE_COOKIE}=uid-device-abc123"
         span = self._build_span(headers={"Cookie": cookie})
 
         self.assertEqual(span["tags"], {"device_id": "uid-device-abc123"})
@@ -423,9 +423,9 @@ class TestDeviceTagStamping(unittest.TestCase):
 
     def test_flask_g_takes_precedence_over_cookie(self):
         """An explicit route stash wins over the cookie value."""
-        import campus.config
+        import campus.common.protocol as protocol
 
-        cookie = f"{campus.config.DEVICE_COOKIE}=uid-device-cookie"
+        cookie = f"{protocol.DEVICE_COOKIE}=uid-device-cookie"
         with self.app.test_request_context(
                 "/", headers={"Cookie": cookie}):
             tracing.start_span()
@@ -441,21 +441,21 @@ class TestDeviceTagStamping(unittest.TestCase):
 
     def test_device_header_stamps_tag(self):
         """An X-Campus-Device header (CLI API calls) lands in tags (#837)."""
-        import campus.config
+        import campus.common.protocol as protocol
 
         span = self._build_span(
-            headers={campus.config.DEVICE_ID_HEADER: "uid-device-cli42"}
+            headers={protocol.DEVICE_ID_HEADER: "uid-device-cli42"}
         )
 
         self.assertEqual(span["tags"], {"device_id": "uid-device-cli42"})
 
     def test_flask_g_takes_precedence_over_device_header(self):
         """A route stash wins over a client-asserted device header."""
-        import campus.config
+        import campus.common.protocol as protocol
 
         with self.app.test_request_context(
                 "/",
-                headers={campus.config.DEVICE_ID_HEADER: "uid-device-claim"},
+                headers={protocol.DEVICE_ID_HEADER: "uid-device-claim"},
         ):
             tracing.start_span()
             flask.g.device = "uid-device-session"
@@ -470,11 +470,11 @@ class TestDeviceTagStamping(unittest.TestCase):
 
     def test_journey_and_device_tag_together(self):
         """Journey and device tags coexist when both are present."""
-        import campus.config
+        import campus.common.protocol as protocol
 
         cookie = (
-            f"{campus.config.JOURNEY_COOKIE}=journey_abc123; "
-            f"{campus.config.DEVICE_COOKIE}=uid-device-abc123"
+            f"{protocol.JOURNEY_COOKIE}=journey_abc123; "
+            f"{protocol.DEVICE_COOKIE}=uid-device-abc123"
         )
         span = self._build_span(headers={"Cookie": cookie})
 

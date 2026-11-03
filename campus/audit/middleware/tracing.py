@@ -12,18 +12,12 @@ import typing
 import flask
 import requests
 
-import campus.config
 from campus.audit.client import AuditClient
-from campus.common import schema
+from campus.common import protocol, schema
+from campus.common.protocol import PARENT_SPAN_ID_HEADER, TRACE_ID_HEADER
 from campus.common.utils import uid
 
 logger = logging.getLogger(__name__)
-
-# Trace context headers. X-Request-ID carries the trace_id on both the
-# inbound and outbound legs; X-Parent-Span-ID carries the caller's span_id
-# so the receiving service records its span as a child of the caller (#794).
-TRACE_ID_HEADER = "X-Request-ID"
-PARENT_SPAN_ID_HEADER = "X-Parent-Span-ID"
 
 class ExecutorManager:
     """Manages executor lifecycle with clear ownership and state tracking.
@@ -413,7 +407,7 @@ def build_span_from_context(
     # campus.auth at the first login-flow touch.
     journey_id = (
         getattr(flask.g, "journey_id", None)
-        or request.cookies.get(campus.config.JOURNEY_COOKIE)
+        or request.cookies.get(protocol.JOURNEY_COOKIE)
     )
 
     # Action-journey name (#828): an optional human label stashed by
@@ -432,8 +426,8 @@ def build_span_from_context(
     # (#837), which wins only when nothing better is known.
     device_id = (
         getattr(flask.g, "device", None)
-        or request.headers.get(campus.config.DEVICE_ID_HEADER)
-        or request.cookies.get(campus.config.DEVICE_COOKIE)
+        or request.headers.get(protocol.DEVICE_ID_HEADER)
+        or request.cookies.get(protocol.DEVICE_COOKIE)
     )
 
     # Build span dict matching TraceSpan schema
