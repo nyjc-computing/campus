@@ -59,7 +59,9 @@ def index():
 ```python
 import campus_python
 
-campus = campus_python.Campus(timeout=60)
+# No timeout needed: the client defaults to 60s (override per-call or
+# via CAMPUS_CLIENT_TIMEOUT).
+campus = campus_python.Campus()
 login_manager = OAuthLoginManager(
     campus_client=campus,
     default_endpoint="dashboard"
