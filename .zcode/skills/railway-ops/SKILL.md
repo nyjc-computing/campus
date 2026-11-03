@@ -95,6 +95,21 @@ Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments: `development`
   upstream" crashes the container. For `*.railway.internal` targets use
   the variable form (`set $up "http://name:port"; proxy_pass $up;`) so the
   `resolver` directive handles per-request DNS.
+- **`*.up.railway.app` resolves at Railway's edge even for names that were
+  never created** (wildcard zone — a garbage subdomain returns an edge IP).
+  DNS resolution is NOT proof a domain exists. Enumerate
+  `domains.serviceDomains` / `domains.customDomains` via
+  `railway status --json` (or GraphQL `serviceDomains`) to confirm what is
+  actually attached. (This wildcard produced a false "public DB domain
+  still exposed" finding on issue #958, 2026-11-03.)
+- Deleting a service domain **cascade-deletes the derived
+  `RAILWAY_SERVICE_*` reference variables** on other services and redeploys
+  them. Those vars are string copies, nothing reads them from code — safe,
+  but expect the redeploy wave.
+- `railway variables -s <svc> -e <env> --kv` shows the MERGED view; a var
+  visible there may not be deletable through that same scope if it lives in
+  a shared/reference layer ("Variable not found"). Deleting the underlying
+  domain is often the real removal path.
 
 ## Build and deploy-log gotchas
 
