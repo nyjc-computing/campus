@@ -141,7 +141,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
     from campus.common.errors import handlers
 
-    from . import routes, web
+    from . import routes, ui_redirect
 
     # Ensure audit tables exist (idempotent CREATE TABLE IF NOT EXISTS),
     # mirroring auth's startup init for ClientsResource.
@@ -183,40 +183,15 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     app.register_blueprint(bp)
 
-    # Register web UI blueprint, gated by the browser OAuth flow
-    # (docs/web-ui-requirements.md §5; issue #696): unauthenticated
-    # page requests redirect to /audit/login.
-    ui_blueprint = web.ui.create_blueprint()
-    ui_blueprint.before_request(web.auth.require_login_page)
-    app.register_blueprint(ui_blueprint)
-
-    # Register UI data endpoints (in-process data for the UI's
-    # JavaScript), gated by the same login session; fetch() callers get
-    # a 401 JSON response instead of a redirect.
-    data_blueprint = web.data.create_blueprint()
-    data_blueprint.before_request(web.auth.require_login_api)
-    app.register_blueprint(data_blueprint)
-
-    # Register the OAuth gate routes (login/callback/logout) last: they
-    # must stay reachable without a session.
-    app.register_blueprint(web.auth.create_blueprint())
-
-    # Register the key-management page (#927). It has its own gate:
-    # managing keys is a separate capability from reading traces, so
-    # it must not inherit the trace-view gate.
-    app.register_blueprint(web.keys.create_blueprint())
+    # The web UI moved to the campus-admin portal; redirect its old
+    # URLs there (AUDIT_UI_URL) or explain the move. The versioned API
+    # above is the service's real surface now.
+    app.register_blueprint(ui_redirect.create_blueprint())
 
     if isinstance(app, flask.Flask):
-        # Service root / (#842): audit has a web UI, so it serves the
-        # public landing page at the hostname root (campus-wide
-        # convention: / is a landing page, /health is the health check;
-        # deploy.configure_* adds /health). Standalone deployments only:
-        # behind a shared hostname (PUBLIC_PREFIX set) the gateway owns
-        # the root, and audit's landing lives at /audit instead.
-        from campus.deploy import get_public_prefix
-
-        if not get_public_prefix():
-            app.register_blueprint(web.ui.create_root_blueprint())
+        # Service root / (#842): campus.deploy's generic landing page
+        # registers when the service has no root route of its own —
+        # audit no longer has one (the web UI moved to campus-admin).
         # Register error handlers for proper error responses
         handlers.init_app(app)
         # Lazy import to allow env setup
@@ -272,13 +247,12 @@ OPENAPI_INFO = {
     "title": "Campus Audit API",
     "description": (
         "Observability backend for Campus: trace/span ingestion, "
-        "querying, and audit API-key management, plus the audit web UI "
-        "(browser pages under /audit/, UI data endpoints under "
-        "/audit/api/).\n"
+        "querying, journey grouping, and audit API-key management.\n"
         "\n"
         "The /audit/v1 endpoints require Bearer authentication with an "
-        "audit API key (audit_v1_<22-char-base64url>); the web UI is "
-        "gated by the campus login flow, and /audit/api/* data "
-        "endpoints serve the UI's JavaScript under the same session."
+        "audit API key (audit_v1_<22-char-base64url>). The audit web "
+        "UI lives in the campus-admin portal, which consumes this API "
+        "with its own key; this service redirects the UI's old page "
+        "URLs there (AUDIT_UI_URL)."
     ),
 }
