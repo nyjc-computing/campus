@@ -62,7 +62,7 @@ def make_app(service: str):
 
 
 def build_spec(service: str, version: str) -> dict:
-    """Generate the service's spec via the generator (no artifact read)."""
-    from campus.flask_campus import openapi
+    """Generate the service's spec via deploy glue (no artifact read)."""
+    from campus.deploy import build_spec_from_module
 
-    return openapi.build_spec_from_module(service, version=version)
+    return build_spec_from_module(service, version=version)

@@ -4,10 +4,11 @@ Usage:
     poetry run python scripts/generate_openapi.py            # all services
     poetry run python scripts/generate_openapi.py campus.auth
 
-Generates each service's spec from its Flask app object via
-campus.flask_campus.openapi and writes the deterministic JSON artifact
-to campus/{service}/docs/openapi.json, pinned to the campus-suite
-version from pyproject.toml.
+Generates each service's spec from its Flask app object —
+campus.deploy.build_spec_from_module constructs the app and
+campus.flask_campus.openapi generates the pure spec — and writes the
+deterministic JSON artifact to campus/{service}/docs/openapi.json,
+pinned to the campus-suite version from pyproject.toml.
 
 After regenerating (any PR that changes routes or handler docstrings):
 bump the campus-suite version in pyproject.toml — minor for spec

@@ -32,35 +32,38 @@ a parameter without a default is required. Parameters read from
 ``flask.request`` directly (outside ``unpack_request``) are invisible
 to the generator.
 
+This module is the pure generator core: it imports nothing from the
+services repo, so it moves with the flask-campus carve (#993) untouched.
+The AppModule-to-app convenience (``build_spec_from_module``) lives in
+``campus.deploy`` beside ``create_app`` — the legal import direction is
+service-repo glue importing the consumer layer, never the reverse. The
+regen entrypoint is ``scripts/generate_openapi.py`` in the services
+repo (generation builds the service app, so it needs that repo's
+environment).
+
 Usage::
 
-    # CLI: regenerate a service artifact
-    python -m flask_campus.openapi campus.auth --out campus/auth/docs/openapi.json
-
-    # API
     from campus.flask_campus import openapi
-    spec = openapi.generate_spec(app, title="Campus Auth API")
+    spec = openapi.generate_spec(
+        app, title="Campus Auth API", version="0.2.0",
+    )
     openapi.write_spec(spec, "campus/auth/docs/openapi.json")
 
-Version pinning: ``info.version`` defaults to the installed
-campus-suite version; a PR that changes the spec must regenerate the
-artifact and bump the suite version (minor for spec changes, patch for
-API-preserving changes).
+Version pinning: ``version`` is explicit and required — the generator
+never guesses whose release it is pinning. The services repo pins the
+campus-suite version from its pyproject.toml; a PR that changes the
+spec must regenerate the artifact and bump that version (minor for
+spec changes, patch for API-preserving changes).
 
 Security schemes (bearer/apikey gates) are a phase-2 item and are not
 emitted yet; response bodies are documented generically (``200`` +
 ``default`` error envelope).
 """
 
-import argparse
 import functools
-import importlib
-import importlib.metadata
 import inspect
 import json
 import re
-import sys
-import tomllib
 import typing
 from collections.abc import Iterable
 from pathlib import Path
@@ -79,10 +82,8 @@ from . import parameter
 __all__ = [
     "DEFAULT_EXCLUDED_ENDPOINTS",
     "annotation_to_schema",
-    "build_spec_from_module",
     "emit_schema",
     "generate_spec",
-    "suite_version",
     "write_spec",
 ]
 
@@ -386,24 +387,6 @@ _TRAILING_SLASH_NOTE = (
 )
 
 
-def suite_version() -> str:
-    """The campus-suite version; the spec's info.version default.
-
-    Reads installed package metadata first (a wheel install); falls back
-    to the repo's pyproject.toml for checkouts installed with
-    ``--no-root`` (CI), where no campus-suite metadata exists.
-    """
-    try:
-        return importlib.metadata.version("campus-suite")
-    except importlib.metadata.PackageNotFoundError:
-        pass
-    pyproject = Path(__file__).resolve().parents[2] / "pyproject.toml"
-    if pyproject.is_file():
-        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        return data["tool"]["poetry"]["version"]
-    return "0.0.0"
-
-
 def _converter_schema(converter: routing.BaseConverter | None) -> dict[str, Any]:
     """Map a werkzeug URL converter to an OpenAPI schema."""
     if isinstance(converter, routing.IntegerConverter):
@@ -596,15 +579,16 @@ def generate_spec(
         *,
         title: str,
         description: str = "",
-        version: str | None = None,
+        version: str,
         exclude_endpoints: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Generate an OpenAPI 3 spec dict from a Flask app object.
 
     Walks ``app.url_map``; every non-excluded rule becomes a path item,
-    every method an operation. ``info.version`` defaults to the installed
-    campus-suite version. The 308 trailing-slash convention is appended
-    to the description unless the description already mentions it.
+    every method an operation. ``version`` is required and lands in
+    ``info.version`` verbatim — callers pass the release they are
+    pinning. The 308 trailing-slash convention is appended to the
+    description unless the description already mentions it.
     """
     excluded = (
         DEFAULT_EXCLUDED_ENDPOINTS if exclude_endpoints is None
@@ -644,7 +628,7 @@ def generate_spec(
         "info": {
             "title": title,
             "description": description,
-            "version": version or suite_version(),
+            "version": version,
         },
         "tags": [{"name": tag} for tag in sorted(tags)],
         "paths": paths,
@@ -655,54 +639,6 @@ def generate_spec(
     }
 
 
-# ---------------------------------------------------------------------------
-# Service-info resolution + CLI.
-# ---------------------------------------------------------------------------
-
-
-def _service_info(module: Any) -> tuple[str, str]:
-    """Resolve (title, description) from an app module.
-
-    A module may declare ``OPENAPI_INFO`` (dict with optional
-    ``title``/``description`` keys) or ``OPENAPI_DESCRIPTION`` (str);
-    otherwise the module docstring is used (first line → title).
-    """
-    doc = inspect.cleandoc(module.__doc__ or "")
-    doc_title = doc.splitlines()[0].strip() if doc else module.__name__
-    openapi_info = getattr(module, "OPENAPI_INFO", None)
-    if isinstance(openapi_info, dict):
-        return (
-            openapi_info.get("title") or doc_title,
-            openapi_info.get("description", ""),
-        )
-    openapi_description = getattr(module, "OPENAPI_DESCRIPTION", None)
-    if isinstance(openapi_description, str):
-        return doc_title, openapi_description
-    if doc:
-        return doc_title, doc
-    return module.__name__, ""
-
-
-def build_spec_from_module(appmodule: str, *, version: str | None = None) -> dict[str, Any]:
-    """Import an app module, build its Flask app, and generate the spec.
-
-    The module must fulfill the AppModule protocol (``init_app``), so
-    generation runs with the same environment the service itself needs.
-    Service-level ``info`` comes from the module (see ``_service_info``).
-    """
-    module = importlib.import_module(appmodule)
-    from campus.deploy import AppModule, create_app
-
-    if not isinstance(module, AppModule):
-        raise TypeError(
-            f"Module '{appmodule}' does not fulfill the AppModule protocol "
-            "(init_app missing)"
-        )
-    app = create_app(module)
-    title, description = _service_info(module)
-    return generate_spec(app, title=title, description=description, version=version)
-
-
 def write_spec(spec: dict[str, Any], path: Path | str) -> None:
     """Write the spec as deterministic JSON (sorted keys, 2-space indent).
 
@@ -711,43 +647,3 @@ def write_spec(spec: dict[str, Any], path: Path | str) -> None:
     """
     text = json.dumps(spec, indent=2, sort_keys=True) + "\n"
     Path(path).write_text(text, encoding="utf-8", newline="\n")
-
-
-def main(argv: list[str] | None = None) -> None:
-    """CLI entrypoint: ``python -m flask_campus.openapi <appmodule>``."""
-    parser = argparse.ArgumentParser(
-        prog="python -m flask_campus.openapi",
-        description=(
-            "Generate an OpenAPI 3 JSON spec from a Campus Flask app "
-            "module (campus#1029)."
-        ),
-    )
-    parser.add_argument(
-        "appmodule",
-        help="App module fulfilling AppModule (init_app), e.g. campus.auth",
-    )
-    parser.add_argument(
-        "--out", "-o",
-        type=Path,
-        default=None,
-        help="Output path for the JSON artifact (default: stdout)",
-    )
-    parser.add_argument(
-        "--version",
-        default=None,
-        help=(
-            "info.version override (default: the installed campus-suite "
-            "version)"
-        ),
-    )
-    args = parser.parse_args(argv)
-    spec = build_spec_from_module(args.appmodule, version=args.version)
-    if args.out is not None:
-        write_spec(spec, args.out)
-        print(f"Wrote {args.out}")
-    else:
-        sys.stdout.write(json.dumps(spec, indent=2, sort_keys=True) + "\n")
-
-
-if __name__ == "__main__":
-    main()
