@@ -40,7 +40,7 @@ from urllib.parse import urlparse
 import flask
 import werkzeug
 
-from campus import flask_campus
+import campus.flask_campus as flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
 

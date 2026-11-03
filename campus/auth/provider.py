@@ -40,8 +40,8 @@ import flask
 import werkzeug
 
 import campus.config
+import campus.flask_campus as flask_campus
 import campus.model as model
-from campus import flask_campus
 from campus.common import env, protocol, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import secret, uid, url, utc_time

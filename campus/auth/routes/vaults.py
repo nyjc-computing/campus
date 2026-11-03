@@ -20,7 +20,7 @@ Authentication is handled in a global routes.before_request hook.
 
 import flask
 
-from campus import flask_campus
+import campus.flask_campus as flask_campus
 from campus.common.errors import api_errors
 from campus.model.client import ClientAccess
 
