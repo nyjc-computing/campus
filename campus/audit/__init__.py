@@ -164,6 +164,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     apikeys_blueprint.before_request(_authenticate_audit_api_key)
     bp.register_blueprint(apikeys_blueprint)
 
+    journeys_blueprint = routes.journeys.create_blueprint()
+    journeys_blueprint.before_request(_authenticate_audit_api_key)
+    bp.register_blueprint(journeys_blueprint)
+
     # Register public health routes WITHOUT authentication
     import campus.flask_campus as flask_campus
     @bp.get("/health")
