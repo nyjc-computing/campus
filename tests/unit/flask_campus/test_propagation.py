@@ -73,7 +73,11 @@ class TestPropagationProvider(unittest.TestCase):
         self.assertNotIn("X-Request-ID", headers)
         self.assertNotIn("X-Parent-Span-ID", headers)
 
-    def test_uninstall_reverts_to_sdk_builtin(self):
+    def test_uninstall_falls_back_to_boot_journey_only(self):
+        """Without a provider the SDK has no request-context half
+        (the built-in flask reader was removed in campus-api-python
+        0.5.0) — even stashed flask.g state yields no trace headers,
+        which is why audit.middleware keeps the provider installed."""
         propagation.install()
         tracing.set_request_context_provider(None)
         app = flask.Flask(__name__)
@@ -81,8 +85,8 @@ class TestPropagationProvider(unittest.TestCase):
             flask.g.trace_id = TRACE_ID
             flask.g.span_id = SPAN_ID
             headers = tracing.propagation_headers()
-        self.assertEqual(headers.get("X-Request-ID"), TRACE_ID)
-        self.assertEqual(headers.get("X-Parent-Span-ID"), SPAN_ID)
+        self.assertNotIn("X-Request-ID", headers)
+        self.assertNotIn("X-Parent-Span-ID", headers)
 
     def test_header_names_match_sdk_mirrors(self):
         """Lockstep contract: same names as campus_python.tracing."""
