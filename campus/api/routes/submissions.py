@@ -57,8 +57,11 @@ def list_submissions(
     student_id: str | None = None,
     course_id: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        List all submissions matching filter requirements.
+    """List all submissions
+
+    List all submissions matching filter requirements
+
+    matching filter requirements.
 
     Method:
         GET /submissions
@@ -95,8 +98,11 @@ def create_submission(
     course_id: str,
     responses: list[dict] | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Create a new submission.
+    """Create a new submission
+
+    Create a new submission
+
+    .
 
     Method:
         POST /submissions
@@ -142,8 +148,11 @@ def create_submission(
 def list_submissions_by_assignment(
     assignment_id: str,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        List submissions for a specific assignment.
+    """List submissions by assignment
+
+    List submissions for a specific assignment
+
+    List submissions for a specific assignment.
 
     Method:
         GET /submissions/by-assignment/{assignment_id}/
@@ -160,8 +169,11 @@ def list_submissions_by_assignment(
 def list_submissions_by_student(
     student_id: str,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        List submissions from a specific student.
+    """List submissions by student
+
+    List submissions from a specific student
+
+    List submissions from a specific student.
 
     Method:
         GET /submissions/by-student/{student_id}/
@@ -176,8 +188,11 @@ def list_submissions_by_student(
 
 @bp.get('/<string:submission_id>/')
 def get_submission(submission_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Get a single submission by ID.
+    """Get a submission
+
+    Get a single submission by ID
+
+    Get a single submission by ID.
 
     Method:
         GET /submissions/{submission_id}
@@ -199,8 +214,11 @@ def update_submission(
     feedback: list[dict] | None = None,
     submitted_at: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Update a submission.
+    """Update a submission
+
+    Update a submission
+
+    .
 
     Method:
         PATCH /submissions/{submission_id}
@@ -247,8 +265,11 @@ def update_submission(
 
 @bp.delete('/<string:submission_id>/')
 def delete_submission(submission_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Delete a submission.
+    """Delete a submission
+
+    Delete a submission
+
+    .
 
     Method:
         DELETE /submissions/{submission_id}
@@ -277,8 +298,11 @@ def add_response(
     question_type: str | None = None,
     response_data: dict | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Add or update a response to a question in a submission.
+    """Add response to question
+
+    Add or update a response to a question in a submission
+
+    Add or update a response to a question in a submission.
 
     Method:
         POST /submissions/{submission_id}/responses
@@ -355,8 +379,11 @@ def add_feedback(
     question_id: str,
     feedback_text: str,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Add feedback on a response to a question.
+    """Add feedback to response
+
+    Add feedback on a response to a question
+
+    Add feedback on a response to a question.
 
     Method:
         POST /submissions/{submission_id}/feedback
@@ -416,8 +443,11 @@ def add_feedback(
 @bp.post('/<string:submission_id>/submit')
 @flask_campus.unpack_request
 def submit_submission(submission_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Finalize/submit a submission (mark submitted_at timestamp).
+    """Submit a submission
+
+    Finalize/submit a submission (mark submitted_at timestamp)
+
+    Finalize/submit a submission (mark submitted_at timestamp).
 
     Method:
         POST /submissions/{submission_id}/submit

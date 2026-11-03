@@ -32,7 +32,11 @@ bp = flask.Blueprint('users', __name__, url_prefix='/users')
 @bp.get("/")
 @flask_campus.unpack_request
 def get_all() -> flask_campus.JsonResponse:
-    """Get all users.
+    """List all users
+
+    Authorization (#887): the operator principal, or a designated admin user holding a users:read grant row
+        (access-grant store, /auth/v1/grants) whose token carries the scope — both legs required.
+        AUTH_USERS_ADMIN_USER_IDS is no longer consulted.
 
     GET /users
     Authorization: operator, or a users:read grant row + scope (#887).
@@ -47,7 +51,7 @@ def get_all() -> flask_campus.JsonResponse:
 @bp.post("/")
 @flask_campus.unpack_request
 def new(email: schema.Email, name: str) -> flask_campus.JsonResponse:
-    """Create a new Campus user.
+    """Create a user
 
     POST /users
     Authorization: operator, or a users:write grant row + scope (#887).
@@ -102,7 +106,7 @@ def delete_user(user_id: schema.UserID) -> flask_campus.JsonResponse:
 @bp.get("/<user_id>/")
 @flask_campus.unpack_request
 def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
-    """Get details of a specific user
+    """Get a user
 
     GET /users/{user_id}
     Authorization: operator, or a users:read grant row + scope (#887).
@@ -121,7 +125,9 @@ def get(user_id: schema.UserID) -> flask_campus.JsonResponse:
 @bp.patch("/<user_id>/")
 @flask_campus.unpack_request
 def update(user_id: schema.UserID, name: str | None = None) -> flask_campus.JsonResponse:
-    """Update a user's display name.
+    """Update a user (not implemented)
+
+    Returns 501; user updates are not implemented yet.
 
     PATCH /users/{user_id}
     Authorization: operator, or a users:write grant row + scope (#887).

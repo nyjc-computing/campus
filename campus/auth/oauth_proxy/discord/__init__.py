@@ -57,7 +57,8 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             target: schema.Url,
             prompt: Literal["consent", "none"] | None = None
     ) -> werkzeug.Response:
-        """Prepares the Discord OAuth authorization URL and redirects to it."""
+        """Start the Discord login flow
+"""
         return flask.g.proxy.redirect_for_authorization(
             target,
             prompt=prompt
@@ -65,7 +66,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     @bp.get("/callback")
     def callback() -> werkzeug.Response:
-        """Handles the Discord OAuth callback request.
+        """Discord redirect target
 
         Dispatches to success or error handlers based on payload type.
         """

@@ -37,7 +37,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @bp.get('/')
 @flask_campus.unpack_request
 def list_circles(tag: str | None = None) -> flask_campus.JsonResponse:
-    """List all circles matching filter requirements."""
+    """List all circles
+
+    List all circles matching filter requirements
+    """
     result = resources.circle.list(**{"tag": tag} if tag else {})
     return {"data": [circle.to_resource() for circle in result]}, 200
 
@@ -50,8 +53,11 @@ def new_circle(
         description: str = "",
         parents: dict[str, int] | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Create a new circle.
+    """Create a new circle
+
+    Create a new circle
+
+    .
 
     Method:
         POST /circles
@@ -118,8 +124,11 @@ def new_circle(
 
 @bp.delete('/<string:circle_id>/')
 def delete_circle(circle_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Delete a circle by its unique ID.
+    """Delete a circle
+
+    Delete a circle by its unique ID
+
+    by its unique ID.
 
     Method:
         DELETE /circles/{circle_id}
@@ -163,8 +172,11 @@ def delete_circle(circle_id: str) -> flask_campus.JsonResponse:
 
 @bp.get('/<string:circle_id>/')
 def get_circle_details(circle_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Retrieve detailed information about a specific circle.
+    """Get circle details
+
+    Retrieve detailed information about a specific circle
+
+    Retrieve detailed information about a specific circle.
 
     Method:
         GET /circles/{circle_id}
@@ -218,8 +230,11 @@ def edit_circle(
         name: str,
         description: str | None = None
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Update the name, and optionally the description, of an existing circle.
+    """Update circle name/description
+
+    Update the name and/or description of an existing circle
+
+    Update the name, and optionally the description, of an existing circle.
 
     Method:
         PATCH /circles/{circle_id}
@@ -284,8 +299,11 @@ def move_circle(circle_id: str) -> flask_campus.JsonResponse:
 
 @bp.get('/<string:circle_id>/members/')
 def get_circle_members(circle_id: str) -> flask_campus.JsonResponse:
-    """Summary:
-        Retrieve the member IDs of a circle along with their access values.
+    """List circle members
+
+    Retrieve the member IDs of a circle along with their access values
+
+    Retrieve the member IDs of a circle along with their access values.
 
     Method:
         GET /circles/{circle_id}/members
@@ -333,8 +351,11 @@ def add_circle_member(
         member_id: str,
         access_value: int,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Add a member to a circle with a specified access level.
+    """Add circle member
+
+    Add a member to a circle with a specified access level
+
+    Add a member to a circle with a specified access level.
 
     Method:
         POST /circles/{circle_id}/members/add
@@ -401,8 +422,11 @@ def remove_circle_member(
         circle_id: str,
         member_id: str,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Remove a member from a circle.
+    """Remove circle member
+
+    Remove a member from a circle
+
+    Remove a member from a circle.
 
     Method:
         DELETE /circles/{circle_id}/members/remove
@@ -460,8 +484,11 @@ def patch_circle_member(
         member_id: str,
         access_value: int
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Update the access level of a member within a circle.
+    """Update member access level
+
+    Update the access level of a member within a circle
+
+    Update the access level of a member within a circle.
 
     Method:
         PATCH /circles/{circle_id}/members/{member_circle_id}

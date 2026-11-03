@@ -44,7 +44,10 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @bp.post('/request')
 @flask_campus.unpack_request
 def request_otp(email: str) -> flask_campus.JsonResponse:
-    """Request a new OTP for email authentication."""
+    """Request OTP
+
+    Request a new OTP for email authentication
+    """
     from campus.api import emailotp_templates, resources
 
     _validate_email(email)
@@ -69,7 +72,10 @@ def request_otp(email: str) -> flask_campus.JsonResponse:
 @bp.post('/verify')
 @flask_campus.unpack_request
 def verify_otp(email: str, otp: str) -> flask_campus.JsonResponse:
-    """Verify an OTP for email authentication."""
+    """Verify OTP
+
+    Verify an OTP for email authentication
+    """
     from campus.api import resources
 
     _validate_email(email)

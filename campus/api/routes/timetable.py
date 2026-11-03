@@ -23,8 +23,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 @bp.get('/')
 @flask_campus.unpack_request
 def list_timetables() -> flask_campus.JsonResponse:
-    """Summary:
-        List all timetable metadata records.
+    """List all timetable metadata records.
 
     Method:
         GET /timetable/
@@ -43,8 +42,7 @@ def list_timetables() -> flask_campus.JsonResponse:
 @bp.get('/current')
 @flask_campus.unpack_request
 def get_current() -> flask_campus.JsonResponse:
-    """Summary:
-        Get the currently active timetable ID.
+    """Get the currently active timetable ID.
 
     Method:
         GET /timetable/current
@@ -62,8 +60,7 @@ def get_current() -> flask_campus.JsonResponse:
 @bp.put('/current')
 @flask_campus.unpack_request
 def set_current(value: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Set the currently active timetable.
+    """Set the currently active timetable.
 
     Method:
         PUT /timetable/current
@@ -86,8 +83,7 @@ def set_current(value: schema.CampusID) -> flask_campus.JsonResponse:
 
 @bp.get('/next')
 def get_next() -> flask_campus.JsonResponse:
-    """Summary:
-        Get the next scheduled timetable ID.
+    """Get the next scheduled timetable ID.
 
     Method:
         GET /timetable/next
@@ -105,8 +101,7 @@ def get_next() -> flask_campus.JsonResponse:
 @bp.put('/next')
 @flask_campus.unpack_request
 def set_next(value: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Set the next scheduled timetable.
+    """Set the next scheduled timetable.
 
     Method:
         PUT /timetable/next
@@ -133,8 +128,7 @@ def new(
     metadata: dict,
     data: dict
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Create a new timetable.
+    """Create a new timetable.
 
     Method:
         POST /timetable/
@@ -178,8 +172,8 @@ def new(
 @bp.get('/<timetable_id>/')
 @flask_campus.unpack_request
 def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Returns timetable metadata and labeled entries in a single JSON object.
+    """Returns timetable metadata and labeled entries in a single JSON object.
+
     Method:
         GET /timetable/<timetable_id>/
     Path Parameters:
@@ -196,8 +190,7 @@ def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
 @bp.get('/<timetable_id>/entries')
 @flask_campus.unpack_request
 def get_timetable_entries(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        List all timetable entries for a specific timetable and user.
+    """List all timetable entries for a specific timetable and user.
 
     Method:
         GET /timetable/<timetable_id>/entries
@@ -217,8 +210,7 @@ def get_timetable_entries(timetable_id: schema.CampusID) -> flask_campus.JsonRes
 @bp.get('/<timetable_id>/metadata')
 @flask_campus.unpack_request
 def get_timetable_metadata(timetable_id: schema.CampusID):
-    """Summary:
-        Get metadata for a specific timetable.
+    """Get metadata for a specific timetable.
 
     Method:
         GET /timetable/<timetable_id>/metadata
@@ -241,8 +233,7 @@ def set_metadata(
         start_date: schema.DateTime,
         end_date: schema.DateTime,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Update metadata for a specific timetable.
+    """Update metadata for a specific timetable.
 
     Method:
         PATCH /timetable/<timetable_id>/metadata

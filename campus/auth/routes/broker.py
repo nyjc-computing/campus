@@ -123,7 +123,17 @@ def release_upstream_token(
         provider: str,
         min_scopes: list[str] | None = None,
 ) -> flask_campus.JsonResponse:
-    """Release the user's upstream access token for a provider.
+    """Release the user's upstream access token
+
+    The only sanctioned path to upstream (e.g. Google) access
+    tokens — docs/token-broker.md. Requires a campus Bearer token
+    for the user, presented by a confidential client flagged
+    `token_bridge` (invariant C1; anything else is 403). The
+    response carries the access token, its expiry and its scope —
+    never a refresh token (C2). `min_scopes` must be within the
+    client's `upstream_scopes[provider]` allowlist (400) and
+    covered by the user's stored grant (403 with `missing_scopes`
+    and a re-consent hint, C3).
 
     POST /broker/{provider}
     Auth: campus Bearer token (the user), issued to a confidential
@@ -320,7 +330,21 @@ def release_integration_token(
         integration: str,
         min_scopes: list[str] | None = None,
 ) -> flask_campus.JsonResponse:
-    """Release the user's upstream access token for an integration.
+    """Release the user's stored integration access token
+
+    Per-integration variant of the token bridge (#733): releases
+    the user's credential for the integration's namespaced provider
+    (e.g. `google.classroom`) via the integration's own OAuth
+    client, refreshing silently server-side. Same C1 guards as the
+    identity route. Amended C3a rule: the client's
+    `upstream_scopes` must carry a NON-EMPTY entry for the
+    namespaced provider even when `min_scopes` is omitted (absent
+    key ⇒ 400 — an integration token inherently carries
+    integration scopes). `min_scopes` are additionally capped by
+    the integration's vault `SCOPES` set (400). Unknown slug,
+    base-provider mismatch, or unconfigured integration ⇒ 404; no
+    stored credential ⇒ 404 with a hint pointing at the connect
+    flow; grant misses `min_scopes` ⇒ 403 with `missing_scopes`.
 
     POST /broker/{provider}/{integration}
     e.g. POST /broker/google/classroom/

@@ -57,7 +57,11 @@ def new(
         upstream_scopes: dict[str, list[str]] | None = None,
         token_bridge: bool = False
 ) -> flask_campus.JsonResponse:
-    """Register a new client.
+    """Register a client
+
+    The response never contains a secret; the first secret is
+    obtained (and later rotated) via `POST /clients/{client_id}/revoke`.
+    Scope fields are fail-closed (docs/auth-token-invariants.md A1/B3/C1).
 
     POST /clients/
     Authorization: operator only, plus designated admin users holding
@@ -174,7 +178,7 @@ def delete_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
 @bp.get("/<client_id>/")
 @flask_campus.unpack_request
 def get_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Get details of a specific client
+    """Get a client
 
     GET /clients/{client_id}
     Authorization: the client itself, or operator (#854), or a
@@ -199,7 +203,10 @@ def get_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
 @bp.post("/<client_id>/revoke")
 @flask_campus.unpack_request
 def revoke_client(client_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Revoke a client's secret and generate a new one.
+    """Rotate the client secret
+
+    Generates a new secret (returned once, in plaintext) and invalidates the old one. Public clients have no
+        secret and are rejected.
 
     POST /clients/{client_id}/revoke
     Authorization: the client itself (rotating its own credential is
@@ -229,7 +236,14 @@ def update_client(
         upstream_scopes: dict[str, list[str]] | None = None,
         token_bridge: bool | None = None
 ) -> flask_campus.JsonResponse:
-    """Update a client's details.
+    """Update a client
+
+    `is_public` cannot be changed after creation. Public clients cannot be granted `token_bridge`. Authorization
+        (#881, #888): the operator principal, or a designated admin user holding a `clients` grant row
+        (access-grant store, `/auth/v1/grants`) whose token carries the scope — `clients:write` for benign
+        fields (name, description, redirect_uris). The scope caps and `token_bridge` are operator-only for
+        users: grant rows cap at `clients:write` (#883 decision 4). Client principals are read-only on their own
+        records — their PATCH is rejected with 403 pointing at the user-principal path.
 
     PATCH /clients/{client_id}
     Authorization: the operator may update everything (#854);
@@ -315,7 +329,9 @@ def get_client_access(
         client_id: schema.CampusID,
         vault: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Check a client's access.
+    """List a client's vault access
+
+    With `vault`, returns that label's access bitflag; without, the full label-to-access map.
 
     GET /clients/{client_id}/access
     Authorization: the client itself, or operator (#854), or a
@@ -346,7 +362,7 @@ def check_client_access(
         vault: str,
         permission: int
 ) -> flask_campus.JsonResponse:
-    """Check a client's access.
+    """Check a client's vault access
 
     GET /clients/{client_id}/access/check
     Authorization: the client itself, or operator (#854), or a
@@ -400,7 +416,7 @@ def grant_client_access(
         vault: str,
         permission: int
 ) -> flask_campus.JsonResponse:
-    """Grant a client access to a vault.
+    """Grant a client access to a vault
 
     POST /clients/{client_id}/access/grant
     Authorization: operator only (#854), or a designated admin user
@@ -436,7 +452,9 @@ def revoke_client_access(
         vault: str,
         permission: int
 ) -> flask_campus.JsonResponse:
-    """Revoke a client's access to a vault.
+    """Revoke a client's vault access
+
+    Revokes only the permission bits in the request.
 
     POST /clients/{client_id}/access/revoke
     Authorization: operator only (#854), or a designated admin user
@@ -471,7 +489,9 @@ def update_client_access(
         vault: str,
         permission: int
 ) -> flask_campus.JsonResponse:
-    """Update (replace) a client's access permissions for a vault.
+    """Replace a client's access for a vault
+
+    Replaces (not merges) the client's permission bitflag for the label.
 
     PATCH /clients/{client_id}/access/
     Authorization: operator only (#854), or a designated admin user

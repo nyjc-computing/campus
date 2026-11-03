@@ -53,7 +53,8 @@ def new(
         device_id: str | None = None,
         agent_string: str,
 ) -> flask_campus.JsonResponse:
-    """Get a session for a specific authentication provider by
+    """Create a login session
+
     authorization code.
 
     POST /sessions/{provider}/
@@ -78,7 +79,7 @@ def new(
 
 @bp.delete("/<session_id>/")
 def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Delete a login session.
+    """Delete a login session
 
     DELETE /logins/<session_id>/
 
@@ -129,7 +130,7 @@ def delete(session_id: schema.CampusID) -> flask_campus.JsonResponse:
 
 @bp.get("/<session_id>/")
 def get(session_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Get a login session.
+    """Get a login session
 
     GET /logins/<session_id>/
     """
@@ -144,7 +145,7 @@ def update(
         session_id: schema.CampusID,
         expiry_seconds: int
 ) -> flask_campus.JsonResponse:
-    """Update a login session.
+    """Extend a login session
 
     PATCH /logins/<session_id>/
     Body: {
@@ -160,7 +161,26 @@ def update(
 
 @bp.post("/<session_id>/token")
 def token(session_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Re-acquire the login session user's campus bearer (#963).
+    """Re-acquire the login session user's campus bearer (A10,
+
+    Session-bound token re-acquisition (invariant A10,
+    docs/auth-token-invariants.md): the session-owning confidential
+    client exchanges its client secret (Basic) AND the login-session
+    id for the user's campus bearer — with_user_session()'s lane
+    after #854 closed the credentials reads it previously relied on.
+
+    Issuance mirrors the code exchange: an unexpired grant token is
+    reused (A3), an expired one is rotated server-side with the
+    grant record's scopes (A2/A5 — never widened). A missing
+    credential record is 400 invalid_grant, never minted from
+    nothing (C5/A5 — revocation forces re-login).
+
+    The response omits `refresh_token`: campus refresh material
+    never leaves the auth service in this lane.
+
+    Denials: user bearers 403 (a user principal is never the
+    session's client, #854), the operator 403 (the credentials
+    management routes are its path), a non-owning client 403.
 
     POST /logins/<session_id>/token
     Authorization: Basic (the session-owning confidential client only).

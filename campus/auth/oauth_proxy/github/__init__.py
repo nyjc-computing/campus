@@ -33,12 +33,14 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
             target: schema.Url,
             prompt: Literal["select_account"] | None = None
     ) -> werkzeug.Response:
-        """Redirect to GitHub OAuth authorization endpoint."""
+        """Start the GitHub login flow
+"""
         return flask.g.proxy.redirect_for_authorization(target, prompt)
 
     @bp.get('/callback')
     def callback() -> werkzeug.Response:
-        """Handle a GitHub OAuth callback request."""
+        """GitHub redirect target
+"""
         callback_payload = flask_campus.get_request_payload()
         if "error" in callback_payload:
             # TODO: For testing - display error instead of redirecting

@@ -7,6 +7,7 @@ Web API for Campus services.
 # use within campus.api only.
 __all__ = ["init_app"]
 
+
 import logging
 from typing import Any
 
@@ -205,3 +206,29 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         app.secret_key = env.getsecret("SECRET_KEY")
 
 # v0.2.1 campus-common wheel switch deployed from this commit (#988).
+
+
+# Service-level OpenAPI info (campus#1029): consumed by
+# campus.flask_campus.openapi; migrated from the former
+# hand-maintained docs/openapi.yaml.
+OPENAPI_INFO = {
+    "title": "Campus API",
+    "description": """Campus API for managing educational resources.
+
+## Error Responses
+
+All error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.
+
+## Error Codes
+
+Common error codes:
+- `INVALID_REQUEST` (400): Malformed or invalid request
+- `UNAUTHORIZED` (401): Missing or invalid authentication
+- `FORBIDDEN` (403): Insufficient permissions
+- `NOT_FOUND` (404): Resource not found
+- `VALIDATION_FAILED` (422): Request validation failed with field-level errors
+- `CONFLICT` (409): Resource state conflict
+- `INTERNAL_ERROR` (500): Unexpected server error
+- `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later
+""",
+}

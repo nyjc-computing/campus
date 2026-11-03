@@ -142,7 +142,17 @@ def device_authorize(
         client_id: schema.CampusID,
         scope: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Request a device code for OAuth 2.0 Device Authorization Flow.
+    """Start a device authorization (RFC 8628 section 3.1)
+
+    Public. An absent `scope` defaults to the standard CLI scope
+    set (`read write`); an explicit `scope` (campus-cli --scope
+    pass-through, #865) is validated fail-closed against the
+    client's `allowed_scopes` like any other, and the default set
+    is validated too — either way the request fails with
+    `invalid_scope` outside the allowlist (invariant A7). The
+    returned `verification_uri_complete` pre-fills the device
+    consent page, which discloses the requested scopes before the
+    user authorizes (#867). Accepts JSON or form-encoded.
 
     POST /oauth/device_authorize
     Body: {
@@ -244,7 +254,15 @@ def token(
         refresh_token: str | None = None,
         scope: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Exchange an authorization grant for an access token.
+    """Token endpoint for device-code and refresh grants
+
+    RFC 6749/8628 token endpoint. The `authorization_code` grant is
+    NOT handled here — use `POST /auth/v1/token`. The refresh grant
+    reissues exactly the granted scopes (never widens, invariant
+    A2) and rotates the token pair; the presented refresh token is
+    single-use. Accepts JSON or form-encoded bodies. Device-code
+    polling returns 400 with `authorization_pending`/`slow_down`
+    until the user approves.
 
     Supports multiple grant types:
     - urn:ietf:params:oauth:grant-type:device_code (RFC 8628)
@@ -625,7 +643,10 @@ def revoke(
         client_id: schema.CampusID = None,  # pyright: ignore[reportArgumentType]
         token_type_hint: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Revoke an access or refresh token (RFC 7009).
+    """Revoke a token (RFC 7009)
+
+    Returns 200 regardless of token state (RFC 7009 section 2.2); revoking either token of a pair kills both.
+        Accepts JSON or form-encoded.
 
     POST /oauth/revoke
     Body: {
@@ -676,7 +697,12 @@ def revoke(
 @bp.get("/device/<user_code>")
 @bp.post("/device")
 def device_verification(user_code: str | None = None):
-    """Device code verification page for users to enter their user code.
+    """Device-code verification page
+
+    Browser page (HTML). `GET /device/{user_code}` pre-fills the
+    code; the page redirects through the Google leg if the user has
+    no campus login cookie. `POST` is the no-JS form fallback;
+    `status=success|error` query params drive the fallback states.
 
     This is a web page that users visit to complete the device authorization
     flow. They enter the user code displayed by their CLI application.
@@ -1429,7 +1455,11 @@ def device_authorize_submit(
         user_code: str,
         user_id: schema.UserID,
 ) -> flask_campus.JsonResponse:
-    """Process the device authorization from the verification page.
+    """Approve a device code
+
+    Called by the verification page; binds the user to the pending
+    device code. Error responses carry an `invalid_code`,
+    `expired`, `already_used` or `denied` code.
 
     This endpoint is called when a user submits the user code form on the
     verification page. It links the user's account to the pending device code.
@@ -1510,7 +1540,10 @@ def device_authorize_submit(
 
 @bp.get("/users/me")
 def users_me() -> flask_campus.JsonResponse:
-    """Get the current authenticated user from session.
+    """Current logged-in user (browser session)
+
+    Returns the user from the campus login cookie (set by the Google leg); used by the device verification page.
+        401 if not logged in.
 
     GET /oauth/users/me
     Returns: User

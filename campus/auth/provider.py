@@ -110,7 +110,17 @@ def authorize(
         *,
         hd: str | None = None,  # hosted domain (for Google)
 ) -> werkzeug.Response:
-    """Follows RFC 6749 Section 4.1.1
+    """Authorization endpoint (RFC 6749 section 4.1.1)
+
+    Browser endpoint. Validates the request (fail-closed
+    redirect_uri matching, RFC 6749 section 3.1.2.2), then
+    redirects to the Google leg for authentication. `scope` must
+    be within the session's scopes — violations are rejected with
+    400 `invalid_scope` without redirecting. Login never carries
+    upstream scopes (#733): the retired `upstream_scope` parameter
+    has been removed; requests carrying it fail validation with
+    422. On success: 302 to `/auth/v1/google/authorize?...`.
+
     https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
 
     Summary: 
@@ -310,8 +320,17 @@ def token(
         client_id: str,  # required
         client_secret: str,  # required
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        OAuth2 token endpoint for exchanging authorization code for
+    """Exchange an authorization code for a Campus token
+
+    Token endpoint for the authorization-code grant (the only grant
+    handled here). Accepts JSON or form-encoded bodies. The code
+    binds to the issuing client (RFC 6749 section 4.1.3); the
+    issued token covers the session's scopes — an existing covering
+    grant is reused, otherwise a new token carries the union of
+    grant and request (incremental scope authorization, invariant
+    A3/A4).
+
+    OAuth2 token endpoint for exchanging authorization code for
         access token.
 
     Method:
@@ -470,7 +489,14 @@ def token(
 def verify_login_and_redirect(
         state: schema.CampusID,  # session id
 ) -> werkzeug.Response:
-    """Verify if the user is logged in. Default callback handler after
+    """Post-login callback (browser)
+
+    Internal step of the login chain: called as the Google leg's
+    target after a successful login. Requires the campus login
+    cookie; provisions the user record, binds the authorization
+    code to the session, and 302s the browser to the session's
+    `redirect_uri` with `code`, `state` and `scope`.
+
     Google auth
 
     Method:

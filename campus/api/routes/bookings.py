@@ -25,8 +25,7 @@ def list_bookings(
     venue_id: schema.CampusID | None = None,
     date: schema.Date | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        List all bookings matching filter requirements.
+    """List all bookings matching filter requirements.
 
     Method:
         GET /bookings
@@ -55,8 +54,7 @@ def create_booking(
     end_time: schema.Time,
     date: schema.Date,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Create a new venue booking.
+    """Create a new venue booking.
 
     Method:
         POST /bookings
@@ -90,8 +88,7 @@ def create_booking(
 
 @bp.get('/<booking_id>/')
 def get_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Get a single booking by ID.
+    """Get a single booking by ID.
 
     Method:
         GET /bookings/{booking_id}
@@ -117,8 +114,7 @@ def update_booking(
     booking_id: schema.CampusID,
     description: str | None = None,
 ) -> flask_campus.JsonResponse:
-    """Summary:
-        Update an existing booking.
+    """Update an existing booking.
 
     Note: Only the description can be modified. Changes to venue, date,
         or time require creating a new booking.
@@ -154,8 +150,7 @@ def update_booking(
 
 @bp.delete('/<booking_id>/')
 def delete_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
-    """Summary:
-        Delete a booking.
+    """Delete a booking.
 
     Method:
         DELETE /bookings/{booking_id}

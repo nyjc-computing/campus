@@ -109,7 +109,14 @@ def _emit_disconnect(
 
 @bp.get("/")
 def list_connections() -> flask_campus.JsonResponse:
-    """List the user's upstream connections.
+    """List the user's upstream connections
+
+    Metadata-only inventory of the upstream credentials Campus
+    custodies for a user (#733 design §2.7) — the sanctioned
+    status surface for integrations pages. Campus bearer token:
+    self only. Basic auth: delegated access, requires `user_id`.
+    Campus login tokens are not connections (C5) and are not
+    listed; no token value is ever returned (C2).
 
     GET /connections/
     Auth: campus bearer token (self) or basic auth + user_id
@@ -140,7 +147,17 @@ def list_connections() -> flask_campus.JsonResponse:
 
 @bp.delete("/<provider>/")
 def disconnect_provider(provider: str) -> flask_campus.JsonResponse:
-    """Disconnect the user's credentials for a base provider.
+    """Disconnect the user's credentials for a base provider
+
+    Deletes every stored credential row for (provider, user)
+    together with its token records, and emits
+    `campus.integrations.disconnect` (no token values). Bearer
+    auth acts for its own user; basic auth requires `user_id`.
+    The next login or connect re-establishes the grant; 404 means
+    there was nothing to disconnect. `campus` is refused (403 —
+    campus tokens are revoked via /oauth/revoke, C5), and
+    namespaced providers (e.g. `google.classroom` in the provider
+    segment) are refused with a pointer to the integration route.
 
     DELETE /connections/{provider}/   e.g. /connections/google/
     Auth: campus bearer token (self) or basic auth + user_id
@@ -181,7 +198,14 @@ def disconnect_integration(
         provider: str,
         integration: str,
 ) -> flask_campus.JsonResponse:
-    """Disconnect the user's credentials for an integration.
+    """Disconnect the user's credentials for an integration
+
+    Per-integration variant of the disconnect route (#733): deletes
+    the user's stored credential rows for the namespaced provider
+    (e.g. `google.classroom`) together with their token records,
+    and emits `campus.integrations.disconnect` (no token values).
+    Unknown slug or base-provider mismatch ⇒ 404; no stored
+    connection ⇒ 404.
 
     DELETE /connections/{provider}/{integration}/
     e.g. /connections/google/classroom/

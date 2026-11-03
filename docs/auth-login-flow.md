@@ -8,7 +8,7 @@ exchanged for a Campus token.
 Audience: implementers writing client apps (campus-classroom, audit web
 UI, CLIs) and agents working on the auth service. For service
 boundaries see [architecture.md](architecture.md); for endpoint-level
-request/response schemas see `campus/auth/docs/openapi.yaml`.
+request/response schemas see `campus/auth/docs/openapi.json`.
 
 **Diagram convention:** the fenced ` ```mermaid ` blocks below are the
 source of truth for the diagrams. GitHub renders them automatically;

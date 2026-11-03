@@ -82,7 +82,17 @@ def _is_safe_redirect(
 
 @bp.get("/logout")
 def logout() -> werkzeug.Response:
-    """Clear the campusauth browser session and redirect.
+    """Browser-session logout (SSO sign-out)
+
+    Clears the auth service's Flask session (the campusauth SSO
+    session established by identity login) and expires its cookie,
+    then 302s the browser to the validated target (#785). The
+    login_sessions record revocation is the API half
+    (DELETE /auth/v1/logins/{session_id}/). Google's browser
+    session is deliberately unaffected. Requests with
+    `Sec-Fetch-Site: cross-site` are signed out but land on "/"
+    (#797) — first-party apps share the registrable domain and
+    arrive as `same-site`, keeping their landing.
 
     GET /logout?post_logout_redirect_uri=/some/path
 
