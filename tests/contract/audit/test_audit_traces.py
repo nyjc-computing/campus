@@ -1349,5 +1349,250 @@ class TestAuditTracesRateLimitContract(unittest.TestCase):
         self.assertEqual(first_c.status_code, 201)
 
 
+class TestAuditJourneysContract(unittest.TestCase):
+    """HTTP contract tests for GET /audit/v1/journeys/<journey_id>/.
+
+    The journey endpoint serves the member traces of one journey,
+    oldest first — the envelope the audit web UI's journey view
+    renders, now reachable with an API key.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.initialize()
+        cls.app = cls.manager.audit_app
+
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        # Clear test data - no manual resource initialization needed
+        self.manager.clear_test_data()
+        assert self.app
+        self.client = self.app.test_client()
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="traces:*",
+        )
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
+
+        # Clear traces that were emitted during API key creation
+        traces_storage = campus.storage.tables.get_db("spans")
+        traces_storage.delete_matching({})
+
+    def _ingest_journey_span(
+            self,
+            trace_id: str,
+            journey_id: str,
+            *,
+            path: str = "/auth/v1/authorize",
+    ) -> None:
+        """Ingest one request span tagged with the journey."""
+        from campus.audit.resources.traces import TracesResource
+        from campus.model import TraceSpan
+        TracesResource().ingest([TraceSpan(
+            trace_id=trace_id,
+            span_id="b" * 16,
+            method="GET",
+            path=path,
+            status_code=302,
+            started_at=schema.DateTime.utcnow(),
+            duration_ms=5.0,
+            client_ip="127.0.0.1",
+            tags={"journey_id": journey_id},
+        )])
+
+    def test_journey_requires_authentication(self):
+        """GET /audit/v1/journeys/<id>/ requires authentication."""
+        response = self.client.get("/audit/v1/journeys/some-journey/")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_unknown_journey_returns_empty(self):
+        """An unknown journey id is 200 with trace_count 0.
+
+        A journey id is a tag, not a stored resource: absence is an
+        empty result, not a 404.
+        """
+        from campus.common import env
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        response = self.client.get(
+            "/audit/v1/journeys/no-such-journey/",
+            headers=self.auth_headers,
+        )
+        env.set('AUDIT_EVENTS_ENABLED', '1')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["journey_id"], "no-such-journey")
+        self.assertEqual(data["trace_count"], 0)
+        self.assertEqual(data["traces"], [])
+
+    def test_journey_returns_member_traces_oldest_first(self):
+        """The journey endpoint returns only tagged traces, in order."""
+        from campus.common import env
+        from campus.model import TraceSpan
+        # started_at at second resolution: distinct seconds make the
+        # ordering assertion deterministic.
+        first = schema.DateTime.utcnow()
+        self._ingest_journey_span("a" * 32, "j-1")
+        second_span = TraceSpan(
+            trace_id="c" * 32,
+            span_id="d" * 16,
+            method="POST",
+            path="/auth/v1/token",
+            status_code=200,
+            started_at=first,
+            duration_ms=7.0,
+            client_ip="127.0.0.1",
+            tags={"journey_id": "j-1"},
+        )
+        from campus.audit.resources.traces import TracesResource
+        TracesResource().ingest([second_span])
+        self._ingest_journey_span("e" * 32, "other-journey")
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        response = self.client.get(
+            "/audit/v1/journeys/j-1/",
+            headers=self.auth_headers,
+        )
+        env.set('AUDIT_EVENTS_ENABLED', '1')
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["journey_id"], "j-1")
+        self.assertEqual(data["trace_count"], 2)
+        trace_ids = [t["trace_id"] for t in data["traces"]]
+        self.assertIn("a" * 32, trace_ids)
+        self.assertIn("c" * 32, trace_ids)
+        self.assertNotIn("e" * 32, trace_ids)
+
+
+class TestAuditTracesSearchEventsContract(unittest.TestCase):
+    """HTTP contract tests for the search endpoint's events toggle.
+
+    The versioned API keeps including audit-event traces by default
+    (#941); events=false asks for the viewer's request-only list.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager(shared=False)
+        cls.manager.initialize()
+        cls.app = cls.manager.audit_app
+
+        # Initialize API keys storage
+        from campus.audit.resources.apikeys import APIKeysResource
+        APIKeysResource.init_storage()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        # Clear test data - no manual resource initialization needed
+        self.manager.clear_test_data()
+        assert self.app
+        self.client = self.app.test_client()
+
+        # Create a test audit API key for authentication
+        from campus.audit.resources.apikeys import APIKeysResource
+        _, api_key_value = APIKeysResource().new(
+            name="Test Auth Key",
+            owner_id="test-user",
+            scopes="traces:*",
+        )
+        self.auth_headers = {"Authorization": f"Bearer {api_key_value}"}
+
+        # Clear traces that were emitted during API key creation
+        traces_storage = campus.storage.tables.get_db("spans")
+        traces_storage.delete_matching({})
+
+        # One request trace and one audit-event trace.
+        from campus.audit.resources.traces import TracesResource
+        from campus.model import TraceSpan
+        traces_resource = TracesResource()
+        traces_resource.ingest([TraceSpan(
+            trace_id="a" * 32,
+            span_id="b" * 16,
+            method="GET",
+            path="/auth/v1/authorize",
+            status_code=302,
+            started_at=schema.DateTime.utcnow(),
+            duration_ms=5.0,
+            client_ip="127.0.0.1",
+        )])
+        traces_resource.ingest([TraceSpan(
+            trace_id="e" * 32,
+            span_id="f" * 16,
+            method="POST",
+            path="/audit/login/key",
+            status_code=302,
+            started_at=schema.DateTime.utcnow(),
+            duration_ms=3.0,
+            client_ip="127.0.0.1",
+            tags={"event_type": "audit.apikeys.auth.success"},
+        )])
+
+    def _search(self, query: str) -> object:
+        from campus.common import env
+        env.set('AUDIT_EVENTS_ENABLED', '0')
+        response = self.client.get(
+            f"/audit/v1/traces/search{query}",
+            headers=self.auth_headers,
+        )
+        env.set('AUDIT_EVENTS_ENABLED', '1')
+        return response
+
+    def test_search_includes_events_by_default(self):
+        """Without events=, search keeps returning event traces."""
+        response = self._search("?limit=100")
+
+        self.assertEqual(response.status_code, 200)
+        trace_ids = {
+            t["trace_id"] for t in response.get_json()["traces"]
+        }
+        self.assertIn("a" * 32, trace_ids)
+        self.assertIn("e" * 32, trace_ids)
+
+    def test_search_events_false_excludes_event_traces(self):
+        """events=false returns the request-only list (#941)."""
+        response = self._search("?limit=100&events=false")
+
+        self.assertEqual(response.status_code, 200)
+        trace_ids = {
+            t["trace_id"] for t in response.get_json()["traces"]
+        }
+        self.assertIn("a" * 32, trace_ids)
+        self.assertNotIn("e" * 32, trace_ids)
+
+    def test_search_events_zero_excludes_event_traces(self):
+        """events=0 is the same toggle as events=false."""
+        response = self._search("?limit=100&events=0")
+
+        self.assertEqual(response.status_code, 200)
+        trace_ids = {
+            t["trace_id"] for t in response.get_json()["traces"]
+        }
+        self.assertNotIn("e" * 32, trace_ids)
+
+    def test_search_events_invalid_literal_is_field_error(self):
+        """events=yes is rejected with a structured field error."""
+        response = self._search("?limit=100&events=yes")
+
+        self.assertEqual(response.status_code, 422)
+        body = response.get_json()
+        self.assertEqual(body["error"]["code"], "VALIDATION_FAILED")
+
+
 if __name__ == "__main__":
     unittest.main()

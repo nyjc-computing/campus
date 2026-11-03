@@ -235,6 +235,7 @@ def search_traces(
         until: str | None = None,
         limit: str | int | None = None,
         cursor: str | None = None,
+        events: bool = True,
 ) -> flask_campus.JsonResponse:
     """Filter and search traces.
 
@@ -250,6 +251,12 @@ def search_traces(
         limit: page size, clamped to [1, MAX_PAGE_SIZE] (default
             DEFAULT_PAGE_SIZE)
         cursor: opaque token from a previous page's cursor.next
+        events: include audit-event traces (spans tagged with an
+            event_type, #941). Default is to include them, as this
+            endpoint always has; callers that want the viewer's
+            request-only list (event trails are noise when debugging a
+            real flow) pass events=false. true/1 and false/0 are the
+            accepted literals; anything else is a field error.
 
     Supports content negotiation via Accept header.
 
@@ -278,6 +285,7 @@ def search_traces(
         until=until,
         limit=traces_resource.parse_page_size(limit),
         cursor=cursor,
+        include_events=events,
     )
     return {
         "traces": [s.to_resource() for s in page.summaries],
