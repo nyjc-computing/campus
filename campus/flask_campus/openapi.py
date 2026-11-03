@@ -360,15 +360,18 @@ def _error_components() -> tuple[dict[str, Any], dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 # Endpoint names that are deployment conventions (#842) rather than API
-# surface: Flask's static handler, the health checks, and the generic
-# dev index / landing pages registered by campus.deploy. Matched against
-# the last segment of the endpoint name so nested blueprints
-# (e.g. ``audit_ui.static``) are excluded too.
+# surface: Flask's static handler, the health checks, the generic dev
+# index / landing pages registered by campus.deploy, and the OpenAPI
+# spec endpoint itself (meta-documentation, not API; see
+# campus.deploy.register_openapi). Matched against the last segment of
+# the endpoint name so nested blueprints (e.g. ``audit_ui.static``)
+# are excluded too.
 DEFAULT_EXCLUDED_ENDPOINTS = frozenset({
     "static",
     "health_check",
     "landing",
     "index",
+    "openapi_spec",
 })
 
 _BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})

@@ -15,6 +15,9 @@ orchestrates whole services: it pulls in Flask and campus.audit middleware,
 which environment-agnostic code in campus.common must not depend on.
 """
 
+import importlib.resources
+import json
+import logging
 from typing import Protocol, runtime_checkable
 
 import flask
@@ -25,6 +28,8 @@ import campus.common.errors
 import campus.config
 from campus.common import env, introspect
 from campus.common.utils import url
+
+logger = logging.getLogger(__name__)
 
 # pylint disable=unnecessary-ellipsis
 
@@ -103,6 +108,79 @@ def register_health(app: flask.Flask, prefix: str = "") -> None:
             'deployment': env.DEPLOY,
             'environment': env.ENV,
         }, 200
+
+
+def get_service_prefix() -> str:
+    """Return this deployment's route prefix (e.g. "auth" for campus.auth).
+
+    Derived from DEPLOY ("campus.auth" -> "auth"); empty when DEPLOY is
+    unset or not a campus.* service name.
+    """
+    deploy = env.DEPLOY or ""
+    if not deploy.startswith("campus."):
+        return ""
+    return deploy[len("campus."):].strip("/")
+
+
+def register_openapi(app: flask.Flask) -> None:
+    """Serve the committed OpenAPI 3 spec publicly (#1029).
+
+    Each service serves the committed artifact
+    ``campus/{service}/docs/openapi.json`` (no runtime generation) at
+    ``/{service-prefix}/openapi.json`` — the path the gateway routes
+    (``/auth/openapi.json``, ``/api/openapi.json``, ``/audit/openapi.json``).
+    When PUBLIC_PREFIX is set and differs from the DEPLOY-derived prefix,
+    a second route is registered under it (shared-hostname deployments).
+
+    The endpoint is public and unauthenticated: registration happens on
+    the app directly, before/alongside blueprints that gate their own
+    routes. No route is registered when DEPLOY is unset or the artifact
+    is missing, so non-service apps and partial checkouts stay clean.
+    """
+    prefixes = []
+    service = get_service_prefix()
+    if service:
+        prefixes.append(f"/{service}")
+    public = get_public_prefix()
+    if public and public not in prefixes:
+        prefixes.append(public)
+    if not prefixes:
+        return
+
+    # PUBLIC_PREFIX-only deployments have no DEPLOY short name: strip
+    # the leading slash to get the campus package segment ("/auth" -> "auth").
+    artifact_pkg = f"campus.{service or public.strip('/')}"
+    try:
+        spec_text = (
+            importlib.resources.files(artifact_pkg)
+            .joinpath("docs", "openapi.json")
+            .read_text(encoding="utf-8")
+        )
+    except (ModuleNotFoundError, FileNotFoundError):
+        spec_text = None
+    if spec_text is None:
+        logger.warning(
+            "No committed OpenAPI artifact at %s/docs/openapi.json; "
+            "/{prefix}/openapi.json will not be served (#1029)",
+            artifact_pkg,
+        )
+        return
+    # The artifact is committed and static at runtime: read it once at
+    # registration, not per request.
+    spec: dict = json.loads(spec_text)
+
+    for prefix in prefixes:
+        rule = f"{prefix}/openapi.json"
+        if has_rule(app, rule):
+            continue
+
+        def serve_spec(spec: dict = spec) -> flask.Response:
+            return flask.jsonify(spec)
+
+        # The endpoint name doubles as the generator's exclusion key
+        # (#1029): the spec endpoint is meta-documentation and must not
+        # appear inside the spec itself.
+        app.add_url_rule(rule, view_func=serve_spec, endpoint="openapi_spec")
 
 
 def register_generic_landing(app: flask.Flask) -> None:
@@ -246,6 +324,10 @@ def create_app(*appmodules: AppModule) -> flask.Flask:
     for module in appmodules:
         module.init_app(app)
     campus.common.errors.init_app(app)
+
+    # Public, unauthenticated OpenAPI 3 spec (#1029), served from the
+    # committed campus/{service}/docs/openapi.json artifact.
+    register_openapi(app)
 
     # Distinct session cookie per deployment (see SESSION_COOKIE_NAMES):
     # auth and audit both keep browser state in flask.session and would
