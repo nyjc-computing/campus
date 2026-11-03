@@ -871,9 +871,10 @@ generated from the Flask app object by `campus.flask_campus.openapi`
 # (then bump the campus-suite version in pyproject.toml: minor for
 # spec changes, patch for API-preserving changes). Generation builds
 # the service app, so it needs the env that service needs — the
-# fixture bootstrap in tests/unit/openapi/test_artifacts.py shows a
-# working recipe.
-python -m flask_campus.openapi campus.auth
+# fixture bootstrap in tests/unit/openapi/_service_env.py shows a
+# working recipe, and this script uses it.
+poetry run python scripts/generate_openapi.py            # all services
+poetry run python scripts/generate_openapi.py campus.auth  # one
 
 # Drift + version-pin enforcement (fails CI on stale artifacts)
 poetry run python tests/run_tests.py unit

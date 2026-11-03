@@ -7,7 +7,10 @@ services. Deployments behind a shared hostname set PUBLIC_PREFIX: health
 moves under the prefix and the shared root is left to the gateway.
 deploy.create_app also names each sessionful service's session cookie
 distinctly (SESSION_COOKIE_NAMES) so auth and audit sessions can coexist
-in one browser jar.
+in one browser jar, and serves the committed OpenAPI artifact at
+/{prefix}/openapi.json (#1029). build_spec_from_module is the
+AppModule-to-spec glue that keeps campus.flask_campus.openapi a pure
+generator core (#993 carve boundary).
 
 File: tests/unit/common/test_deploy.py
 Issue: #842
@@ -187,6 +190,70 @@ class TestSessionCookieName(DeployConfigTestCase):
     def test_unlisted_deployment_keeps_default_cookie(self):
         app = deploy.create_app(_StubAppModule)  # DEPLOY=campus.test
         self.assertEqual(app.config['SESSION_COOKIE_NAME'], 'session')
+
+
+class TestBuildSpecFromModule(DeployConfigTestCase):
+    """build_spec_from_module: the AppModule-to-spec glue (#1029).
+
+    The glue lives in campus.deploy — beside create_app — so
+    campus.flask_campus.openapi stays a pure generator core with no
+    service-repo imports (#993 carve boundary). The version is required:
+    the generator never guesses whose release it is pinning.
+    """
+
+    def test_builds_spec_from_dummy_appmodule(self):
+        import os
+        import sys
+        import types
+
+        from openapi_spec_validator import validate
+
+        module = types.ModuleType("campus_deploy_spec_test_dummy")
+        # Multi-line docstring exercises _service_info's docstring
+        # fallback only when OPENAPI_INFO lacks title/description.
+        module.__doc__ = "Dummy service. Module docstring description."
+        module.OPENAPI_INFO = {
+            "title": "Dummy API",
+            "description": "Info description.",
+        }
+        module.init_app = _StubAppModule.init_app
+        sys.modules["campus_deploy_spec_test_dummy"] = module
+        saved = dict(os.environ)
+        try:
+            env.set("DEPLOY", "campus.deploy-spec-test")
+            spec = deploy.build_spec_from_module(
+                "campus_deploy_spec_test_dummy", version="9.9.9"
+            )
+        finally:
+            sys.modules.pop("campus_deploy_spec_test_dummy", None)
+            os.environ.clear()
+            os.environ.update(saved)
+        validate(spec)
+        self.assertEqual(spec["info"]["title"], "Dummy API")
+        self.assertTrue(
+            spec["info"]["description"].startswith("Info description.")
+        )
+        self.assertIn("308 redirect", spec["info"]["description"])
+        self.assertEqual(spec["info"]["version"], "9.9.9")
+
+    def test_rejects_module_without_init_app(self):
+        import sys
+        import types
+
+        module = types.ModuleType("campus_deploy_spec_test_broken")
+        self.assertNotIn("campus_deploy_spec_test_broken", sys.modules)
+        sys.modules["campus_deploy_spec_test_broken"] = module
+        try:
+            with self.assertRaises(TypeError):
+                deploy.build_spec_from_module(
+                    "campus_deploy_spec_test_broken", version="9.9.9"
+                )
+        finally:
+            sys.modules.pop("campus_deploy_spec_test_broken", None)
+
+    def test_rejects_missing_version(self):
+        with self.assertRaises(TypeError):
+            deploy.build_spec_from_module("campus.auth")  # type: ignore
 
 
 if __name__ == "__main__":

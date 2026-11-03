@@ -16,9 +16,10 @@ which environment-agnostic code in campus.common must not depend on.
 """
 
 import importlib.resources
+import inspect
 import json
 import logging
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import flask
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -181,6 +182,63 @@ def register_openapi(app: flask.Flask) -> None:
         # (#1029): the spec endpoint is meta-documentation and must not
         # appear inside the spec itself.
         app.add_url_rule(rule, view_func=serve_spec, endpoint="openapi_spec")
+
+
+def _service_info(module: Any) -> tuple[str, str]:
+    """Resolve (title, description) for the OpenAPI info from an app module.
+
+    A module may declare ``OPENAPI_INFO`` (dict with optional
+    ``title``/``description`` keys) or ``OPENAPI_DESCRIPTION`` (str);
+    otherwise the module docstring is used (first line → title).
+    """
+    doc = inspect.cleandoc(module.__doc__ or "")
+    doc_title = doc.splitlines()[0].strip() if doc else module.__name__
+    openapi_info = getattr(module, "OPENAPI_INFO", None)
+    if isinstance(openapi_info, dict):
+        return (
+            openapi_info.get("title") or doc_title,
+            openapi_info.get("description", ""),
+        )
+    openapi_description = getattr(module, "OPENAPI_DESCRIPTION", None)
+    if isinstance(openapi_description, str):
+        return doc_title, openapi_description
+    if doc:
+        return doc_title, doc
+    return module.__name__, ""
+
+
+def build_spec_from_module(appmodule: str, *, version: str) -> dict[str, Any]:
+    """Import an app module, build its Flask app, and generate its
+    OpenAPI 3 spec (#1029).
+
+    This AppModule-to-spec convenience lives beside ``create_app`` — the
+    glue that knows how deployments construct apps is deployment glue,
+    not middleware. It keeps ``campus.flask_campus.openapi`` free of
+    service-repo imports so the consumer layer carves out cleanly
+    (#993): the legal import direction is repo glue importing the
+    consumer layer, never the reverse.
+
+    Service-level ``info`` comes from the module (see ``_service_info``);
+    ``version`` is required — callers pass the release they are pinning
+    (scripts/generate_openapi.py reads the campus-suite version from
+    pyproject.toml). Generation builds the service app, so it needs the
+    same environment the service itself needs.
+    """
+    import importlib
+
+    from campus.flask_campus import openapi
+
+    module = importlib.import_module(appmodule)
+    if not isinstance(module, AppModule):
+        raise TypeError(
+            f"Module '{appmodule}' does not fulfill the AppModule protocol "
+            "(init_app missing)"
+        )
+    app = create_app(module)
+    title, description = _service_info(module)
+    return openapi.generate_spec(
+        app, title=title, description=description, version=version
+    )
 
 
 def register_generic_landing(app: flask.Flask) -> None:

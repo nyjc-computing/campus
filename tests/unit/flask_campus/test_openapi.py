@@ -6,15 +6,8 @@ signature params, docstring documentation), the error-envelope
 components, the CLI, and the deterministic artifact output.
 """
 
-import importlib.metadata
 import json
-import os
-import sys
-import tempfile
-import types
 import unittest
-import unittest.mock
-from pathlib import Path
 from typing import Literal
 
 import flask
@@ -327,22 +320,13 @@ class TestErrorComponents(unittest.TestCase):
 
 
 class TestSpecConventions(unittest.TestCase):
-    """Version pinning, trailing-slash note, determinism, CLI."""
+    """Version pinning, trailing-slash note, determinism."""
 
-    def test_version_defaults_to_suite_version(self) -> None:
-        suite = openapi.suite_version()
-        try:
-            metadata_version = importlib.metadata.version("campus-suite")
-        except importlib.metadata.PackageNotFoundError:
-            # --no-root installs (CI) have no campus-suite metadata;
-            # suite_version() falls back to pyproject.toml.
-            metadata_version = None
-        if metadata_version is not None:
-            self.assertEqual(suite, metadata_version)
-        else:
-            self.assertNotEqual(suite, "0.0.0")
-        spec = openapi.generate_spec(_make_app(), title="Dummy API")
-        self.assertEqual(spec["info"]["version"], suite)
+    def test_version_is_required(self) -> None:
+        # The generator never guesses whose release it is pinning
+        # (#993 carve boundary): callers pass the version explicitly.
+        with self.assertRaises(TypeError):
+            openapi.generate_spec(_make_app(), title="Dummy API")
 
     def test_explicit_version_wins(self) -> None:
         self.assertEqual(_generate(version="1.2.3")["info"]["version"], "1.2.3")
@@ -360,39 +344,3 @@ class TestSpecConventions(unittest.TestCase):
         first = json.dumps(_generate(), sort_keys=True)
         second = json.dumps(_generate(), sort_keys=True)
         self.assertEqual(first, second)
-
-    def test_cli_writes_artifact(self) -> None:
-        module = types.ModuleType("campus_openapi_test_dummy")
-        module.__doc__ = "Dummy service.\n\nModule docstring description."
-        module.OPENAPI_INFO = {
-            "title": "Dummy API",
-            "description": "Info description.",
-        }
-        module.init_app = lambda app: app.register_blueprint(
-            _build_widgets_blueprint()
-        )
-        sys.modules["campus_openapi_test_dummy"] = module
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir, unittest.mock.patch.dict(
-                    os.environ, {"DEPLOY": "campus.openapi-test"}):
-                out = Path(tmpdir) / "openapi.json"
-                openapi.main([
-                    "campus_openapi_test_dummy",
-                    "--out", str(out),
-                    "--version", "9.9.9",
-                ])
-                spec = json.loads(out.read_text(encoding="utf-8"))
-        finally:
-            sys.modules.pop("campus_openapi_test_dummy", None)
-        validate(spec)
-        self.assertEqual(spec["info"]["title"], "Dummy API")
-        self.assertTrue(
-            spec["info"]["description"].startswith("Info description.")
-        )
-        self.assertIn("308 redirect", spec["info"]["description"])
-        self.assertEqual(spec["info"]["version"], "9.9.9")
-        self.assertIn("/api/v1/widgets/", spec["paths"])
-
-
-if __name__ == "__main__":
-    unittest.main()
