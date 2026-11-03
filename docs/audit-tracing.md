@@ -7,7 +7,7 @@ Parent epic: #424; enablement issue: #699.
 
 ## How it works
 
-- `campus/deploy.py` registers tracing middleware for
+- `campus.deploy` (shipped in the campus-deploy distribution, campus#1042) registers tracing middleware for
   `DEPLOY in ('campus.auth', 'campus.api')` when
   `AUDIT_TRACING_ENABLED=1` (read once at app creation — flipping the
   flag is a redeploy, not a runtime change). `campus.audit` does not
