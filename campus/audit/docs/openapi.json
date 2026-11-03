@@ -104,7 +104,7 @@
   "info": {
     "description": "Observability backend for Campus: trace/span ingestion, querying, and audit API-key management, plus the audit web UI (browser pages under /audit/, UI data endpoints under /audit/api/).\n\nThe /audit/v1 endpoints require Bearer authentication with an audit API key (audit_v1_<22-char-base64url>); the web UI is gated by the campus login flow, and /audit/api/* data endpoints serve the UI's JavaScript under the same session.\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
     "title": "Campus Audit API",
-    "version": "0.3.1"
+    "version": "0.3.2"
   },
   "openapi": "3.0.3",
   "paths": {

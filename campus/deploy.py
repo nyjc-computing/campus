@@ -19,6 +19,7 @@ import importlib.resources
 import inspect
 import json
 import logging
+import warnings
 from typing import Any, Protocol, runtime_checkable
 
 import flask
@@ -31,6 +32,22 @@ from campus.common import env, introspect
 from campus.common.utils import url
 
 logger = logging.getLogger(__name__)
+
+# DEPRECATED (campus#1042): campus.deploy now ships as its own
+# distribution — https://github.com/nyjc-computing/campus-deploy — and
+# campus-suite stops shipping this module in its next minor release.
+# Declare the campus-deploy wheel in your pyproject; import paths are
+# unchanged (`from campus import deploy` keeps working via the PEP 420
+# portion merge). The wheel is a drop-in carve: the only behavioral
+# adaptation is that create_app reads campus.config lazily.
+warnings.warn(
+    "campus.deploy has moved to the campus-deploy distribution "
+    "(nyjc-computing/campus-deploy, campus#1042). Declare the "
+    "campus-deploy wheel in your pyproject; campus-suite stops shipping "
+    "this module in its next minor release.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # pylint disable=unnecessary-ellipsis
 
