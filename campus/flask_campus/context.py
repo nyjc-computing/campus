@@ -33,6 +33,7 @@ __all__ = [
 
 import logging
 import time
+import typing
 
 import campus_python
 import flask
@@ -75,6 +76,14 @@ def install_session_provider() -> None:
     consult the identical keys.
     """
     sdk_sessionstore.set_session_id_provider(_resolve_session_id)
+
+
+@typing.runtime_checkable
+class _Snapshottable(typing.Protocol):
+    """Anything model-shaped that can snapshot itself for caching."""
+
+    def to_resource(self) -> dict:
+        ...
 
 
 class UserCache:
@@ -125,8 +134,10 @@ class UserCache:
         """Cache a session's resolved user for ttl_seconds."""
         if session_id is None:
             return
-        snapshot = (
-            user.to_resource() if hasattr(user, "to_resource") else user
+        snapshot: object = (
+            user.to_resource()
+            if isinstance(user, _Snapshottable)
+            else user
         )
         self._entries[(kind, session_id)] = (
             time.monotonic() + self.ttl_seconds,
