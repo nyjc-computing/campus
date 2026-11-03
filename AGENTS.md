@@ -198,12 +198,24 @@ poetry run python tests/run_tests.py contract      # HTTP contracts (also a bloc
 
 ## Before You Open a PR
 
-- [ ] Check that documentation (including `campus/auth/docs/openapi.yaml`
-      and other specs) is up to date with the implementation: new or
-      changed endpoints, parameters, error shapes, and behavior belong
-      in the specs alongside the code — the OpenAPI file drifted behind
-      `device_authorize`'s `scope` parameter (#866), which is the
-      failure mode this check exists to prevent.
+- [ ] Check that documentation (error shapes and behavior notes in
+      docstrings, `docs/*.md`, and the OpenAPI `OPENAPI_INFO` /
+      error-spec files) is up to date with the implementation.
+
+- [ ] If a PR adds or changes routes, or edits the handler docstrings
+      that document them: regenerate the committed OpenAPI artifacts
+      and bump the suite version (campus#1029).
+
+      ```bash
+      poetry run python scripts/generate_openapi.py   # or one service: … campus.auth
+      poetry version minor   # spec changed: minor bump; API-preserving: patch
+      ```
+
+      The drift and version-pin tests (`tests/unit/openapi/`) fail CI
+      when a committed `campus/{service}/docs/openapi.json` no longer
+      matches the freshly generated spec or its `info.version` lags
+      `pyproject.toml` — that drift is how `device_authorize` grew a
+      `scope` parameter the hand-maintained spec never learned (#866).
 
 ---
 
