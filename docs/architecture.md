@@ -106,11 +106,15 @@ distribution:
 - Pure data structures with keyword-only init
 
 ### `campus.webauth`
+
+*(Ships in the campus-core distribution, #992.)*
 Web authentication shared by services (imports model and common):
 - OAuth2 client flows (authorization code, client credentials, device authorization)
 - HTTP Basic/Bearer authentication scheme
 
 ### `campus.storage`
+
+*(Ships in the campus-core distribution, #992.)*
 Data persistence interfaces:
 - Backend-agnostic storage abstractions
 - Multi-backend support (PostgreSQL, MongoDB; SQLite in tests)
