@@ -96,6 +96,25 @@ Test files use the standard library `unittest.TestCase` framework. No pytest dep
 
 ## Project Structure
 
+Campus is a **fleet of six distributions** under one flat `campus`
+namespace (the #970 split, closed 2026-11-04). This repo (campus-suite)
+holds only the auth/api/audit services + yapper + the deploy/gateway
+tooling. The shared layers live in their own repos, consumed as
+version-pinned release wheels:
+
+| Dist | Owns |
+|---|---|
+| [campus-common](https://github.com/nyjc-computing/campus-common) | `campus.common` (env/errors/schema/protocol/services/utils/validation) |
+| [campus-model](https://github.com/nyjc-computing/campus-model) | `campus.model` |
+| [flask-campus](https://github.com/nyjc-computing/flask-campus) | `campus.flask_campus` + `campus.audit/{middleware,client,http,roles}` |
+| [campus-deploy](https://github.com/nyjc-computing/campus-deploy) | `campus.deploy` |
+| [campus-core](https://github.com/nyjc-computing/campus-core) | `campus.storage` + `campus.webauth` + `campus.services` (drivers as extras) |
+
+Import paths are unchanged from the monorepo era (PEP 420 portion
+merge). Version bumps are per-dist strict-0.x (patch = additive, minor =
+breaking); consumers pin release wheels by URL — see
+[docs/PACKAGING.md](docs/PACKAGING.md).
+
 For detailed file locations and architecture, see:
 - [docs/architecture.md](docs/architecture.md) - System design and service boundaries
 - [campus/README.md](campus/README.md) - Package-level documentation

@@ -25,7 +25,7 @@ disagrees with the code, the code wins — please fix the doc.
 > SDK is framework-free transport underneath it: it holds no session
 > state and resolves ids through the provider flask_campus installs.
 > The raw steps below are the wire protocol; Flask apps get them from
-> `OAuthLoginManager` (see `campus/flask_campus/README.md`).
+> `OAuthLoginManager` (see `src/campus/flask_campus/README.md` in the [flask-campus](https://github.com/nyjc-computing/flask-campus) dist).
 
 ## Who does what
 
@@ -556,7 +556,7 @@ For a new client app (e.g. classroom) wiring up login:
 **Flask apps: use `campus.flask_campus.OAuthLoginManager`** — with a
 registered client and `CLIENT_ID`/`CLIENT_SECRET` in the environment,
 it implements steps 2–6 of this checklist (and logout) for you; see
-`campus/flask_campus/README.md`. The raw steps below are the wire
+the flask-campus dist's `src/campus/flask_campus/README.md`. The raw steps below are the wire
 protocol the middleware drives, for non-Flask clients and for
 understanding the flow:
 

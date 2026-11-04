@@ -7,6 +7,7 @@ This guide helps you navigate the documentation based on your role and experienc
 ### 👨‍💻 New Developers
 Start here if you're new to the codebase:
 1. [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow and branch strategy
+2. [PACKAGING.md](PACKAGING.md) - the six-distribution layout (what lives where)
 2. [development-guidelines.md](development-guidelines.md) - Coding patterns and best practices
 3. [STYLE-GUIDE.md](STYLE-GUIDE.md) - Code standards and import patterns
 4. [TESTING-GUIDE.md](TESTING-GUIDE.md) - How to run and write tests
@@ -15,7 +16,7 @@ Start here if you're new to the codebase:
 For those familiar with Python/Flask projects:
 1. [architecture.md](architecture.md) - System design and service boundaries
 2. [development-guidelines.md](development-guidelines.md) - Architecture patterns and abstractions
-3. [PACKAGING.md](PACKAGING.md) - Monorepo structure and distribution
+3. [PACKAGING.md](PACKAGING.md) - The distribution split: six dists, one namespace
 
 ### 🎓 Student App Authors
 Building an app that signs in through Campus (not working on the Campus codebase itself):
@@ -105,7 +106,8 @@ STORAGE_MODE=1 DEPLOY=campus.auth poetry run python main.py
 
 This is the same mode the test suites use, so data is not durable across
 runs; it is meant for local development and smoke testing. Backend selection
-lives in `campus/storage/testing.py`.
+lives in `campus.storage.testing` (shipped in the
+[campus-core](https://github.com/nyjc-computing/campus-core) distribution).
 
 ## Documentation Index
 
@@ -118,7 +120,7 @@ lives in `campus/storage/testing.py`.
 | [development-guidelines.md](development-guidelines.md) | Coding patterns and best practices |
 | [STYLE-GUIDE.md](STYLE-GUIDE.md) | Code standards and documentation |
 | [TESTING-GUIDE.md](TESTING-GUIDE.md) | Testing approaches and strategies |
-| [PACKAGING.md](PACKAGING.md) | Monorepo structure and distribution |
+| [PACKAGING.md](PACKAGING.md) | The distribution split: six dists, one namespace |
 
 ## Getting Help
 
