@@ -117,8 +117,13 @@ def main() -> int:
         check(resp.status_code == 201, f"POST credentials -> {resp.status_code}")
         created = resp.status_code == 201
 
-        resp = session.get(base, params={"client_id": args.client_id},
-                           timeout=TIMEOUT)
+        # #1055: reads are redacted by default; the raw token needs
+        # the explicit per-record opt-in.
+        resp = session.get(
+            base,
+            params={"client_id": args.client_id, "include": "token"},
+            timeout=TIMEOUT,
+        )
         check(resp.status_code == 200, f"GET credentials -> {resp.status_code}")
         if resp.status_code != 200:
             return finish(failures)

@@ -115,8 +115,11 @@ def _forbid_forbidden_shapes(
     """Reject grant shapes the epic keeps closed (#883 decisions 4, 5).
 
     - vocabulary-level clients:admin rows are operator-equivalent;
-    - the credentials vocabulary is reserved until #889;
-    - user-principal vault grants are reserved until #889.
+    - user-principal vault grants are reserved until #889;
+    - sessions:admin and credentials:admin rows are inert (#1055):
+      nothing sits above revoke/write, so both vocabularies are
+      grantable up to write and their grant administration stays
+      operator-only.
     """
     if resource_type == "clients" and level == "admin":
         raise api_errors.ForbiddenError(
@@ -124,11 +127,19 @@ def _forbid_forbidden_shapes(
             "operator-equivalent (#883): operator authority comes "
             f"only from {authz.OPERATOR_CLIENT_IDS_ENVVAR}"
         )
-    if resource_type == "credentials":
+    if resource_type == "sessions" and level == "admin":
         raise api_errors.ForbiddenError(
-            "The credentials vocabulary stays closed (#889): its "
-            "routes are operator-only and grant rows for it would "
-            "be inert"
+            "A 'sessions:admin' grant has nothing to govern (#1055): "
+            "the sessions vocabulary is grantable up to write "
+            "(read lists/reads, write revokes); administering its "
+            "grants stays operator-only"
+        )
+    if resource_type == "credentials" and level == "admin":
+        raise api_errors.ForbiddenError(
+            "A 'credentials:admin' grant has nothing to govern "
+            "(#1055): the credentials vocabulary is grantable up to "
+            "write (read reads metadata, write disconnects/updates); "
+            "administering its grants stays operator-only"
         )
     if resource_type == "vault" and not resource_id:
         raise api_errors.InvalidRequestError(

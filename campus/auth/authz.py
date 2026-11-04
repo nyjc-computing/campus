@@ -71,8 +71,9 @@ Principals:
   (device flow, browser sessions). They carry end-user authority only
   and are denied on every management route regardless of scope,
   except per-label vault access via grant rows and vaults:* scopes
-  (#889); the credentials vocabulary denies them outright (still
-  operator-only).
+  (#889), label enumeration for holders of any vault grant
+  (#1055), and the sessions/credentials vocabularies (#1055,
+  store-backed: a grant row AND the scope, like every vocabulary).
 
 Enforcement lives in the route modules (the resources must stay
 ungated for in-process callers such as the OAuth proxies and the
@@ -89,6 +90,10 @@ __all__ = [
     "CLIENTS_ADMIN",
     "CLIENTS_READ",
     "CLIENTS_WRITE",
+    "CREDENTIALS_READ",
+    "CREDENTIALS_WRITE",
+    "SESSIONS_READ",
+    "SESSIONS_WRITE",
     "forbid_user_principal",
     "has_admin_scope",
     "is_operator",
@@ -100,6 +105,8 @@ __all__ = [
     "require_operator_only_client_fields",
     "require_resource_permission",
     "require_self_or_operator",
+    "require_session_access",
+    "require_vault_enumeration",
     "require_vault_permission",
     "session_user_visible",
     "super_admin_email",
@@ -138,11 +145,43 @@ SUPER_ADMIN_ENVVAR = "AUTH_SUPER_ADMIN"
 # vault-access grants. users:read lists/gets any user record;
 # users:mod activates a user; users:write creates and updates users
 # (implies mod); users:admin deletes users (implies write). The
-# vaults/credentials vocabularies stay reserved (operator-only) until
-# a need exists.
+# sessions vocabulary (#1055, store-backed, grantable up to write —
+# no admin-level session actions exist) opens the session admin
+# surface: sessions:read enumerates and reads session metadata,
+# sessions:write revokes. The credentials vocabulary opens with the
+# same shape in #1055: credentials:read reads credential records,
+# credentials:write disconnects/updates them. Vault rows grant
+# per-label user access at read/write/admin (#889), but
+# administering vault GRANTS stays operator-only. The ceiling stays
+# operator-controlled end to end: a user token can carry a
+# management scope only if the minting client's allowed_scopes cap
+# includes it (docs/auth-token-invariants.md A1/A8). Users never
+# inherit the operator role of the client they were minted through,
+# and management mutations by user principals land in campus.audit
+# stamped with the acting user id (#802).
 CLIENTS_READ = "clients:read"
 CLIENTS_WRITE = "clients:write"
 CLIENTS_ADMIN = "clients:admin"
+
+# Sessions vocabulary (#1055): the campus-admin sessions view. read
+# enumerates sessions (GET /sessions/) and reads per-id metadata;
+# write revokes (the DELETE route, distinct from the owning client's
+# flow-finalize by the audit event). Grantable up to write; admin
+# rows are rejected as inert (nothing sits above revoke), so grant
+# administration for the vocabulary stays operator-only.
+SESSIONS_READ = "sessions:read"
+SESSIONS_WRITE = "sessions:write"
+
+# Credentials vocabulary (#1055): the campus-admin credentials view.
+# read lists/reads credential records — metadata only by default,
+# the raw token requires the operator principal and an explicit
+# ?include=token opt-in on per-record reads. write disconnects
+# (DELETE, optionally against an arbitrary client's record) and
+# updates. Grantable up to write; credentials:admin rows are
+# rejected as inert (nothing sits above write), so grant
+# administration for the vocabulary stays operator-only.
+CREDENTIALS_READ = "credentials:read"
+CREDENTIALS_WRITE = "credentials:write"
 
 # Client record fields reserved for the clients:admin scope: the scope
 # caps and the token-bridge flag are operator-controlled registration
@@ -283,6 +322,43 @@ def session_user_visible(session_client_id: str | None) -> bool:
     if client is not None and str(client.id) == str(session_client_id):
         return True
     return is_operator()
+
+
+def require_session_access(
+        session_client_id: str | None,
+        action: str,
+        admin_scope: str | None = None,
+) -> None:
+    """Require authority over a single auth session (#1055).
+
+    The per-id session routes are flow surface, not open reads: the
+    session-owning client drives its own login flow (create, read,
+    bind, finalize), the deployment operator administers every
+    session, and — when `admin_scope` names a management vocabulary —
+    a designated admin user whose grant row and token cover it
+    (#865). Every other principal is denied: session records carry the
+    embedded user (#879) and flow material such as the authorization
+    code, and before #1055 any authenticated bearer could read and
+    finalize a session it had merely learned the id of (the same gap
+    class #854 closed on the other management blueprints).
+
+    Args:
+        session_client_id: The session record's client_id (the client
+            that created it); ownership is decided against the
+            authenticated client principal. User principals are never
+            a session's owning client (#854).
+        action: Verb phrase for error messages.
+        admin_scope: Optional management scope opening the route to
+            designated admin users (e.g. a sessions vocabulary level).
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks authority.
+    """
+    if not is_user_principal():
+        client = getattr(flask.g, "current_client", None)
+        if client is not None and str(client.id) == str(session_client_id):
+            return
+    require_operator(action, admin_scope=admin_scope)
 
 
 def forbid_user_principal(action: str) -> None:
@@ -662,4 +738,49 @@ def require_vault_permission(label: str, permission: int) -> None:
         level=_bits_to_level(permission),
         instance=label,
         bits=permission,
+    )
+
+
+def require_vault_enumeration() -> None:
+    """Require authority to enumerate vault labels (#1055).
+
+    Labels themselves are not secret — per-label keys() has been
+    grantable since #854 — but enumerating the deployment's label
+    list is an administrative view. Allowed: the operator client,
+    the super-admin root, and a user principal holding ANY per-label
+    vault grant row (#889) whose token carries vaults:read. Client
+    principals stay per-label (#881 minimal read): bitflag holders
+    keep keys()/get/set/delete on their labels but cannot enumerate
+    the label list.
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks authority.
+    """
+    if is_user_principal():
+        if is_super_admin():
+            return
+        # Lazy import: keeps the authz module importable ahead of the
+        # storage backend's test-mode initialization.
+        from .resources.grant import grants
+
+        user = flask.g.current_user
+        rows = grants.list(
+            grantee_type="user",
+            grantee_id=str(user.get("id")),
+            resource_type=_VAULT_RESOURCE,
+        )
+        if rows and scopes.grants(_user_token_scopes(), "vaults:read"):
+            return
+        raise api_errors.ForbiddenError(
+            "Listing vault labels requires a vault grant row AND the "
+            "'vaults:read' scope (#1055): designation and capability "
+            "are both required, like every management vocabulary"
+        )
+    if is_operator():
+        return
+    raise api_errors.ForbiddenError(
+        "Enumerating vault labels requires the operator principal "
+        f"({OPERATOR_CLIENT_IDS_ENVVAR}) or a designated user with a "
+        "vault grant and the 'vaults:read' scope (#1055); client "
+        "principals hold per-label access only (#881)"
     )

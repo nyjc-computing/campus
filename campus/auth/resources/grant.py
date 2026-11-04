@@ -37,7 +37,7 @@ grant_storage = campus.storage.get_table("access_grants")
 VAULT = "vault"
 
 _GRANTEE_TYPES = ("client", "user")
-_RESOURCE_TYPES = (VAULT, "clients", "users", "credentials")
+_RESOURCE_TYPES = (VAULT, "clients", "users", "credentials", "sessions")
 _LEVELS = ("read", "mod", "write", "admin")
 
 

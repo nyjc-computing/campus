@@ -12,8 +12,11 @@ authorization-gated, not just authenticated (#854):
 - any other authenticated client may only touch a label where it holds
   the matching vault_access bitflags: READ to list or read keys,
   CREATE or UPDATE to set, DELETE to delete (granted via
-  /clients/{id}/access/ by the operator);
-- user bearer tokens are denied on every route regardless of scope.
+  /clients/{id}/access/ by the operator) — per-label only, never the
+  label enumeration (#881, #1055);
+- user bearers hold per-label access via grant rows and vaults:*
+  scopes (#889), and may enumerate labels when they hold any vault
+  grant plus the vaults:read scope (#1055).
 
 Authentication is handled in a global routes.before_request hook.
 """
@@ -29,6 +32,25 @@ from ..resources import vault as vault_resource
 
 # Create blueprint for vault management routes
 bp = flask.Blueprint('vaults', __name__, url_prefix='/vaults')
+
+
+@bp.get("/")
+def list_labels() -> flask_campus.JsonResponse:
+    """List vault labels
+
+    GET /vaults/
+    Authorization: the operator, the super-admin root, or a
+    designated user holding any vault grant row with the vaults:read
+    scope (#1055). Labels are groupings, not secrets — but the
+    enumeration is an administrative view, so client principals stay
+    per-label (#881).
+
+    Returns: {
+        "labels": ["apps", "storage", ...]
+    }
+    """
+    authz.require_vault_enumeration()
+    return {"labels": vault_resource.labels()}, 200
 
 
 @bp.get("/<label>/")
@@ -119,6 +141,7 @@ def create_blueprint() -> flask.Blueprint:
     new_bp = flask.Blueprint('vaults', __name__, url_prefix='/vaults')
 
     # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "list_labels", list_labels, methods=["GET"])
     new_bp.add_url_rule("/<label>/", "keys", keys, methods=["GET"])
     new_bp.add_url_rule("/<label>/<key>/", "delete", delete, methods=["DELETE"])
     new_bp.add_url_rule("/<label>/<key>/", "get", get, methods=["GET"])
