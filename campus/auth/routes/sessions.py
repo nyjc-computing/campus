@@ -5,6 +5,12 @@ Flask routes for session management.
 These routes handle sessions.
 
 Authentication is handled in a global routes.before_request hook.
+Since #1055, the per-id routes (GET/PATCH/DELETE) are additionally
+authorization-gated: the session-owning client and the deployment
+operator drive and administer sessions; other principals are denied
+(require_session_access). The creation and code-exchange routes stay
+open to any authenticated client — they are the server-to-server flow
+boundary every flask_campus app calls with its own credentials.
 """
 
 import contextlib
@@ -183,12 +189,20 @@ def delete_provider_session(
     This marks the session as finalized after successful authentication.
 
     DELETE /sessions/{provider}/{session_id}
+    Authorization: the session-owning client or the operator
+    (#1055); other principals are denied — finalizing deletes the
+    session, so an unowned DELETE is a revoke of another app's login
+    flow.
+
     Returns: {
         "target": <url>
     }
     """
     session = session_resource[provider][session_id]
     authsession = session.get()
+    authz.require_session_access(
+        authsession.client_id, "finalize an auth session"
+    )
     _embed_session_user(authsession)
     target = session.finalize()
     get_yapper().emit(
@@ -209,6 +223,10 @@ def get_provider_session(
     """Get an auth session
 
     GET /sessions/{provider}/{session_id}
+    Authorization: the session-owning client or the operator
+    (#1055); other principals are denied — the record embeds the
+    session user (#879) and carries the flow's authorization code.
+
     Returns: {
         "session_token": "session_token",
         "expires_at": "2024-01-01T00:00:00Z",
@@ -216,6 +234,9 @@ def get_provider_session(
     }
     """
     authsession = session_resource[provider][session_id].get()
+    authz.require_session_access(
+        authsession.client_id, "read an auth session"
+    )
     _embed_session_user(authsession)
     get_yapper().emit(
         'campus.sessions.get',
@@ -242,10 +263,18 @@ def update_provider_session(
     Only user_id and authorization_code can be updated.
 
     PATCH /sessions/{provider}/{session_id}
+    Authorization: the session-owning client or the operator
+    (#1055); binding user_id/authorization_code onto another app's
+    session is a login-flow takeover.
+
     Returns: {
         "success": true
     }
     """
+    authsession = session_resource[provider][session_id].get()
+    authz.require_session_access(
+        authsession.client_id, "update an auth session"
+    )
     updates = {}
     if user_id is not None:
         updates["user_id"] = user_id

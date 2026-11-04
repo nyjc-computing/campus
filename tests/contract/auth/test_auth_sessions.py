@@ -6,13 +6,17 @@ They test status codes, response formats, and authentication behavior.
 NOTE: ALL /sessions/ endpoints require authentication (Basic or Bearer).
 This is enforced via before_request hook in the auth blueprint.
 
+Since #1055 the per-id routes (GET/PATCH/DELETE) additionally require
+authorization: the session-owning client or the operator; other
+principals are denied.
+
 Sessions Endpoints Reference:
 - POST   /sessions/sweep                           - Sweep expired sessions (requires auth)
 - POST   /sessions/{provider}/authorization_code   - Get session by auth code (requires auth)
 - POST   /sessions/{provider}/                     - Create new provider session (requires auth)
-- GET    /sessions/{provider}/{session_id}/        - Get session (requires auth)
-- PATCH  /sessions/{provider}/{session_id}/        - Update session (requires auth)
-- DELETE /sessions/{provider}/{session_id}/        - Finalize/delete session (requires auth)
+- GET    /sessions/{provider}/{session_id}/        - Get session (owner or operator, #1055)
+- PATCH  /sessions/{provider}/{session_id}/        - Update session (owner or operator, #1055)
+- DELETE /sessions/{provider}/{session_id}/        - Finalize/delete session (owner or operator, #1055)
 """
 
 import unittest
@@ -416,8 +420,14 @@ class TestSessionUserEmbedding(unittest.TestCase):
         self.assertEqual(data["user"]["email"], user_id)
         self.assertEqual(data["user"]["name"], "Session User")
 
-    def test_get_omits_user_for_other_client(self):
-        """GET /sessions/{p}/{id}/ omits the user for a non-owner client."""
+    def test_get_denied_for_other_client(self):
+        """GET /sessions/{p}/{id}/ denies a non-owner client (#1055).
+
+        Before #1055 any authenticated client could read any session
+        it learned the id of (embedded user withheld by #879 only);
+        the per-id routes are now gated to the owning client and the
+        operator (require_session_access).
+        """
         user_id = "session.user2@example.com"
         self._create_user(user_id)
         session_id = self._create_session(user_id)
@@ -428,8 +438,9 @@ class TestSessionUserEmbedding(unittest.TestCase):
             headers=self._other_client_headers(other_id, other_secret),
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.get_json().get("user"))
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertIn("error", data)
 
     def test_get_embeds_user_for_operator_of_foreign_session(self):
         """The operator sees the embedded user on another client's session."""
@@ -491,8 +502,13 @@ class TestSessionUserEmbedding(unittest.TestCase):
         self.assertIn("target", data)
         self.assertEqual(data["user"]["id"], user_id)
 
-    def test_finalize_omits_user_for_other_client(self):
-        """DELETE /sessions/{p}/{id}/ omits the user for a non-owner."""
+    def test_finalize_denied_for_other_client(self):
+        """DELETE /sessions/{p}/{id}/ denies a non-owner client (#1055).
+
+        Finalizing deletes the session, so a non-owner DELETE would be
+        a silent revoke of another app's login flow; gated to the
+        owning client and the operator since #1055.
+        """
         user_id = "session.finalize2@example.com"
         self._create_user(user_id)
         session_id = self._create_session(user_id)
@@ -503,8 +519,47 @@ class TestSessionUserEmbedding(unittest.TestCase):
             headers=self._other_client_headers(other_id, other_secret),
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.get_json().get("user"))
+        self.assertEqual(response.status_code, 403)
+        data = response.get_json()
+        self.assertIn("error", data)
+
+        # The denial must not have consumed the session: the owner can
+        # still finalize it.
+        owner_response = self.client.delete(
+            f"/auth/v1/sessions/{self.provider}/{session_id}/",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(owner_response.status_code, 200)
+
+    def test_user_bearer_denied_on_per_id_routes(self):
+        """User bearers are denied on the per-id session routes (#1055).
+
+        A user principal is never a session's owning client (#854);
+        the super-admin root passes, and designated admin users join
+        via the management-scope vocabulary.
+        """
+        from campus.common import schema
+        from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
+
+        user_id = "session.userbearer@example.com"
+        self._create_user(user_id)
+        session_id = self._create_session(user_id)
+        token = create_test_token(
+            schema.UserID(user_id), grant_vault_access=False
+        )
+        headers = get_bearer_auth_headers(token)
+        base = f"/auth/v1/sessions/{self.provider}/{session_id}/"
+
+        get_response = self.client.get(base, headers=headers)
+        self.assertEqual(get_response.status_code, 403)
+
+        patch_response = self.client.patch(
+            base, json={"user_id": user_id}, headers=headers
+        )
+        self.assertEqual(patch_response.status_code, 403)
+
+        delete_response = self.client.delete(base, headers=headers)
+        self.assertEqual(delete_response.status_code, 403)
 
 
 if __name__ == '__main__':

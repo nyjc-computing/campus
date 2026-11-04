@@ -100,6 +100,7 @@ __all__ = [
     "require_operator_only_client_fields",
     "require_resource_permission",
     "require_self_or_operator",
+    "require_session_access",
     "require_vault_permission",
     "session_user_visible",
     "super_admin_email",
@@ -283,6 +284,43 @@ def session_user_visible(session_client_id: str | None) -> bool:
     if client is not None and str(client.id) == str(session_client_id):
         return True
     return is_operator()
+
+
+def require_session_access(
+        session_client_id: str | None,
+        action: str,
+        admin_scope: str | None = None,
+) -> None:
+    """Require authority over a single auth session (#1055).
+
+    The per-id session routes are flow surface, not open reads: the
+    session-owning client drives its own login flow (create, read,
+    bind, finalize), the deployment operator administers every
+    session, and — when `admin_scope` names a management vocabulary —
+    a designated admin user whose grant row and token cover it
+    (#865). Every other principal is denied: session records carry the
+    embedded user (#879) and flow material such as the authorization
+    code, and before #1055 any authenticated bearer could read and
+    finalize a session it had merely learned the id of (the same gap
+    class #854 closed on the other management blueprints).
+
+    Args:
+        session_client_id: The session record's client_id (the client
+            that created it); ownership is decided against the
+            authenticated client principal. User principals are never
+            a session's owning client (#854).
+        action: Verb phrase for error messages.
+        admin_scope: Optional management scope opening the route to
+            designated admin users (e.g. a sessions vocabulary level).
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks authority.
+    """
+    if not is_user_principal():
+        client = getattr(flask.g, "current_client", None)
+        if client is not None and str(client.id) == str(session_client_id):
+            return
+    require_operator(action, admin_scope=admin_scope)
 
 
 def forbid_user_principal(action: str) -> None:
