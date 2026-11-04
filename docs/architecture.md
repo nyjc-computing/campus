@@ -2,7 +2,7 @@
 
 ## Overview
 
-Campus is structured as a **modular monolith** with clear service boundaries that can be deployed together or separately. Each service follows the same architectural patterns while maintaining clean boundaries and avoiding circular dependencies.
+Campus is a **fleet of six distributions** under one flat `campus` import namespace: this repository (campus-suite) holds the services; the shared layers ship from their own dists ([campus-common](https://github.com/nyjc-computing/campus-common), [campus-model](https://github.com/nyjc-computing/campus-model), [flask-campus](https://github.com/nyjc-computing/flask-campus), [campus-deploy](https://github.com/nyjc-computing/campus-deploy), [campus-core](https://github.com/nyjc-computing/campus-core) — see [PACKAGING.md](PACKAGING.md)). Each service follows the same architectural patterns while maintaining clean boundaries and avoiding circular dependencies.
 
 ## Package Structure
 
@@ -15,12 +15,14 @@ campus/
 ├── api/            # RESTful API resources  
 │   ├── resources/  # Business logic
 │   └── routes/     # HTTP endpoints
-├── common/         # Shared utilities and schemas
-├── model/          # Entity representation (dataclasses)
-├── services/       # Business services (email, etc.)
-├── storage/        # Data persistence layer
 ├── integrations/   # External service integrations
 └── yapper/         # Event bus (self-contained; docs/yapper.md)
+
+Shared layers ship from their own dists (import paths unchanged via the
+PEP 420 portion merge): campus.common + model + storage + webauth +
+services (campus-common/model/core), campus.flask_campus +
+campus.audit/{middleware,client,http,roles} (flask-campus), and
+campus.deploy (campus-deploy) — see [PACKAGING.md](PACKAGING.md).
 ```
 
 ## Core Principles

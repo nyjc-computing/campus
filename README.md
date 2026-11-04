@@ -78,11 +78,19 @@ Secrets managed via `campus.auth.vaults`, accessed through `campus_python` clien
 - **[🏗️ Architecture](docs/architecture.md)** - Detailed architecture overview and design principles  
 - **[🤝 Contributing](docs/CONTRIBUTING.md)** - Development workflow and guidelines
 - **[🧪 Testing](docs/TESTING-GUIDE.md)** - Testing approaches and strategies
-- **[📦 Packaging](docs/PACKAGING.md)** - Monorepo structure and distribution
+- **[📦 Packaging](docs/PACKAGING.md)** - The distribution split: six dists, one namespace
 
-**Service Documentation:**
-- **[💾 Storage](campus/storage/README.md)** - Data persistence
-- **[🛠️ Common](campus/common/README.md)** - Shared utilities
+**Distributions** — Campus ships as a fleet of six distributions under one
+flat `campus` namespace ([packaging guide](docs/PACKAGING.md)):
+
+| Dist | Contents |
+|---|---|
+| [campus-common](https://github.com/nyjc-computing/campus-common) | Shared kernel (`campus.common`) |
+| [campus-model](https://github.com/nyjc-computing/campus-model) | Domain models (`campus.model`) |
+| [flask-campus](https://github.com/nyjc-computing/flask-campus) | Flask consumer layer + audit middleware/client |
+| [campus-deploy](https://github.com/nyjc-computing/campus-deploy) | Deployment glue (`campus.deploy`) |
+| [campus-core](https://github.com/nyjc-computing/campus-core) | Storage, webauth, email services (drivers as extras) |
+| campus-suite (this repo) | The auth/api/audit services + yapper |
 
 **Client**: See [campus-api-python](https://github.com/nyjc-computing/campus-api-python) for `campus_python` client docs.
 

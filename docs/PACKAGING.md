@@ -2,22 +2,32 @@
 
 ## Overview
 
-Campus uses a **monorepo with centralized dependencies** approach. The suite is versioned and distributed as a single package through Git-based dependencies; two shared layers live in their own distributions consumed as version-pinned release wheels: the stable kernel (`campus.common`) in [campus-common](https://github.com/nyjc-computing/campus-common) and the domain models (`campus.model`) in [campus-model](https://github.com/nyjc-computing/campus-model).
+Campus ships as a **fleet of six distributions** under one flat `campus` import namespace (PEP 420). Each shared layer lives in its own repository, is released as a version-pinned wheel, and is consumed only by whoever actually imports it — downstream apps never install a campus *service* or a database driver.
+
+| Distribution | Contents | Consumed by |
+|---|---|---|
+| [campus-common](https://github.com/nyjc-computing/campus-common) | `campus.common` — env, errors, schema, protocol constants, service URL registry, utils, validation | everything |
+| [campus-model](https://github.com/nyjc-computing/campus-model) | `campus.model` — entity dataclasses + header value classes | suite, SDK, profile, classroom |
+| [flask-campus](https://github.com/nyjc-computing/flask-campus) | `campus.flask_campus` glue + `campus.audit.{middleware,client,http,roles}` | the four Flask apps + suite |
+| [campus-deploy](https://github.com/nyjc-computing/campus-deploy) | `campus.deploy` — create_app, health/landing/OpenAPI conventions | suite, nyxchange |
+| [campus-core](https://github.com/nyjc-computing/campus-core) | `campus.storage` + `campus.webauth` + `campus.services` (DB drivers as extras) | campus-suite **only** |
+| [campus-suite](https://github.com/nyjc-computing/campus) (this repo) | `campus.auth`, `campus.api`, `campus.audit` services + `campus.yapper` | deploy targets only — **no app installs it** |
 
 **Key Benefits:**
-- Consistent versioning across all services
-- Simplified dependency management
-- Clean modular structure
-- No PyPI publishing delays
+- Independent release cadence per layer (strict-0.x: patch = additive, minor = breaking)
+- "Apps must not touch storage/webauth" is physically true — they cannot install it
+- No app drags a database driver; drivers are campus-core extras
+- Each dist's boundary guard + interface manifest keep the seams enforced
 
 ## Architecture
 
-### Monorepo Structure
+### Repository Layout
 
-Campus consolidates all services in a single repository with unified dependency management in the root `pyproject.toml`:
-- Eliminates complex inter-service dependency management
-- Ensures compatibility between components
-- Simplifies distribution and testing
+This repository (campus-suite) holds the three services, the yapper event
+bus, the migrations, the gateway, and the contract/sanity harness. Every
+shared layer was carved into its own repository (the #970 arc, closed
+2026-11-04); the suite declares them as version-pinned wheel URLs in the
+root `pyproject.toml` and relocks deliberately.
 
 ### Branch Strategy
 
@@ -31,20 +41,25 @@ weekly → staging → main
 ## Dependency Rules
 
 ```
-auth, api → services, storage, model, common
-storage → common
-model → common
+auth, api, audit → services, storage, webauth, model, common,
+                   flask_campus (consumer layer), deploy
+storage → model, common               (campus-core)
+webauth → model, common               (campus-core)
+services → common                     (campus-core)
+flask_campus, audit.middleware/client/http/roles → common, model
+                                      (flask-campus; never imports services)
 yapper → (nothing — self-contained)
+deploy → flask-campus, common         (campus-deploy)
 ```
 
 **Key Constraints:**
 - `auth` and `api` contain business logic in `.resources` submodules
-- `model` contains only entity definitions (minimal dependencies) — external distribution ([campus-model](https://github.com/nyjc-computing/campus-model)), enforced by its own repo's boundary guard
-- `storage` provides backend-agnostic persistence
-- `common` is self-contained — external distribution ([campus-common](https://github.com/nyjc-computing/campus-common)), enforced by its own repo's boundary guard
-- `yapper` is self-contained: it imports no campus package; its event
-  database URI arrives via argument, provider callable, or environment
-  ([yapper.md](yapper.md))
+- The shared layers are external distributions, each enforced by its own
+  repo's boundary guard: campus-common (stdlib + bcrypt only),
+  campus-model (stdlib + common), campus-core (no service imports,
+  drivers lazy), flask-campus (never imports services)
+- The direction is one-way: services import the layers above them,
+  never the reverse
 
 ## Namespace Package Rules (PEP 420)
 
@@ -53,9 +68,17 @@ distribution ships a `campus/__init__.py`. Python merges every `campus/`
 directory found on `sys.path` into one virtual package, so each
 distribution owns its own subtree and consumers import one flat namespace:
 
-- `campus-suite` ships `campus/auth/`, `campus/api/`, ... (its own repository)
-- `campus-common` ships `campus/common/` (its own repository, consumed as version-pinned release wheels)
-- `campus-model` ships `campus/model/` (its own repository, consumed as version-pinned release wheels)
+- `campus-suite` (this repo) ships `campus/auth/`, `campus/api/`, `campus/audit/` (service half), `campus/yapper/`
+- `campus-common` ships `campus/common/`
+- `campus-model` ships `campus/model/`
+- `flask-campus` ships `campus/flask_campus/` + the app-facing `campus/audit/{middleware,client,http,roles}/`
+- `campus-deploy` ships `campus/deploy.py`
+- `campus-core` ships `campus/storage/`, `campus/webauth/`, `campus/services/`
+
+`campus.audit` is a **shared subnamespace**: the suite owns its
+`__init__.py` (the audit service's `init_app`) via `pkgutil.extend_path`,
+while flask-campus contributes the app-facing halves — disjoint
+subpackages, so the merge is safe.
 
 Rules:
 
@@ -81,86 +104,45 @@ is unaffected by these rules.
 
 ## Installation
 
-### For Production Use
+### For app authors (classroom/admin/profile/nyxchange-style apps)
 
-Add to your `pyproject.toml`:
-
-```toml
-[tool.poetry.dependencies]
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "main"}
-```
-
-### For Development Integration
-
-```toml
-[tool.poetry.group.dev-dependencies]
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
-```
-
-### campus-common
-
-The stable kernel is consumed as a version-pinned release wheel, not a
-git dependency:
+Apps install the consumer dists and **never** campus-suite:
 
 ```toml
 [tool.poetry.dependencies]
-campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.2.1/campus_common-0.2.1-py3-none-any.whl"}
+flask = "^3.0.0"
+campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.3.1/campus_common-0.3.1-py3-none-any.whl"}
+flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.2/flask_campus-0.1.2-py3-none-any.whl"}
+campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
 ```
 
-Bumping to a newer campus-common release is an explicit per-repo
-change: edit the URL, run `poetry lock`, and read that release's
-CHANGELOG first (see campus-common's versioning policy — pre-1.0
-minors may break). Note that campus-suite declares the same wheel
-transitively; the direct declaration is required only for repos that
-import `campus.common` themselves.
+Import paths are unchanged from the monorepo era — the portions merge
+(`from campus.flask_campus import OAuthLoginManager`,
+`from campus.audit.middleware import init_app`).
 
-### campus-model
+### For the suite (this repo's deploy targets)
 
-The domain models (`campus.model`) follow the same pattern — a
-version-pinned release wheel from their own repository:
+The suite declares every dist it consumes as a version-pinned wheel URL
+(see the root `pyproject.toml`) plus its direct driver pins
+(psycopg2/pymongo/boto3 — campus-core's drivers are extras, and the
+suite needs all three).
 
-```toml
-[tool.poetry.dependencies]
-campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.0/campus_model-0.1.0-py3-none-any.whl"}
-```
+### Bumping a dist
 
-Same bump protocol: edit the URL, `poetry lock`, read the release
-CHANGELOG first (strict-0.x versioning — pre-1.0 minors may break).
-campus-suite declares the wheel transitively; declare it directly only
-if you import `campus.model` yourself (as campus-api-python and
-campus-profile do).
-
-### CLI Installation
-
-```bash
-# Production (stable)
-poetry add git+https://github.com/nyjc-computing/campus.git@main
-
-# Development (bleeding edge)
-poetry add git+https://github.com/nyjc-computing/campus.git@weekly --group dev
-
-# Specific commit (reproducible builds)
-poetry add git+https://github.com/nyjc-computing/campus.git@abc123def456
-```
+Edit the wheel URL to the new release tag, run `poetry lock`, and read
+that release's CHANGELOG first (strict-0.x: pre-1.0 minors may break).
+Direct-URL pins bake the exact wheel into your lockfile — never re-cut a
+release someone pins (it invalidates every consumer lock). Direct
+declaration is required only for repos that import the package
+themselves; otherwise the transitive pin from campus-suite (or
+flask-campus) suffices — but a direct pin at a DIFFERENT version than
+the baked one is a version-solving conflict, so bump direct pins in the
+same relock that takes a new transitive version.
 
 ### Client Library Installation
 
 ```bash
-# Add campus_python client library
 poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
-```
-
-## Using Campus in External Projects
-
-```bash
-# Add Campus as dependency
-poetry add git+https://github.com/nyjc-computing/campus.git@main
-
-# Add campus_python client library
-poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
-
-# Import and use
-python -c "import campus_python; campus = campus_python.Campus()"
 ```
 
 ## Building and Validation
@@ -208,10 +190,11 @@ Ensure you're using `poetry run python` instead of system Python.
 
 ### Dependency Conflicts
 
-Update to latest main branch:
-```bash
-poetry add campus-suite@git+https://github.com/nyjc-computing/campus.git@main
-```
+Direct-URL deps bake their wheel hash and source URL into metadata: two
+dists must never ship the same module (shared-namespace RECORD overlap),
+and a consumer's direct pin at an older version than a transitive pin is
+a version-solving conflict — bump the direct pin to match, then
+`poetry lock`.
 
 ### Authentication Issues
 
@@ -233,6 +216,10 @@ poetry run python -c "import campus"
 poetry run python -c "import campus.auth; import campus.api; import campus.storage"
 ```
 
-## Why Git Dependencies?
+## Why Version-Pinned Wheels?
 
-Campus currently uses Git-based dependencies for active development. This approach provides immediate availability of changes and branch-based stability levels. When Campus stabilizes, we plan to publish to PyPI for stable releases while maintaining Git dependencies for bleeding-edge access.
+Shared layers are consumed as release wheels pinned by URL: reproducible
+builds, explicit per-repo bump decisions, and no PyPI publishing delays.
+The SDK (campus_python) remains a git-branch pin. When the ecosystem
+stabilizes at 1.0.0, dists can move to PyPI with real range constraints
+while keeping git pins for bleeding-edge access.
