@@ -171,7 +171,10 @@ deny):
 
 Everyone else's management authority lives in the **access-grant
 store**, administered via `POST /auth/v1/grants` (the operator, or a
-same-vocabulary admin) and queried with `GET /auth/v1/grants` — that
+same-vocabulary admin where the vocabulary has admin-level rows —
+`users` and `vaults`; the `clients`, `sessions` and `credentials`
+vocabularies are operator-administered) and queried with
+`GET /auth/v1/grants` — that
 query **is** the "who can administer what" matrix (campus#872): one
 API call, no env audit. A designated user needs BOTH legs, ANDed and
 fail-closed: a grant row whose level covers the action, and a token
@@ -188,8 +191,22 @@ carrying the scope (which requires widening the minting client's
   (READ→read, CREATE|UPDATE→write, DELETE/ALL→admin) plus
   `vaults:<level>` token scopes; administering vault grants is
   operator-only. Clients keep vault bitflags via
-  `/clients/{id}/access/`.
-- `credentials` vocabulary: closed — routes stay operator-only.
+  `/clients/{id}/access/`. Label enumeration (`GET /auth/v1/vaults/`)
+  needs any vault grant row plus the `vaults:read` scope (#1055).
+- `sessions` vocabulary (#1055): grantable up to `sessions:write` —
+  `sessions:read` enumerates live sessions (`GET /auth/v1/sessions/`,
+  metadata-only records) and reads per-id metadata, `sessions:write`
+  revokes (a foreign-session DELETE, audited as
+  `campus.sessions.revoke`). Admin-level rows are rejected as inert
+  (nothing sits above revoke), so administering these grants is
+  operator-only.
+- `credentials` vocabulary (#1055): grantable up to
+  `credentials:write` — `credentials:read` reads credential records
+  (metadata only; the raw token is an operator-only `?include=token`
+  opt-in on per-record reads, never on the list),
+  `credentials:write` disconnects (the DELETE body `client_id`
+  targets an arbitrary integration's record) and updates. Admin rows
+  are rejected as inert; grant administration is operator-only.
 
 The designated-admin env vars (`AUTH_ADMIN_USER_IDS`,
 `AUTH_USERS_ADMIN_USER_IDS`) were **retired** by the DB-only ruling

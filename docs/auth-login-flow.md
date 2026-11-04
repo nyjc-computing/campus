@@ -268,6 +268,13 @@ token pair and calls Campus APIs with `Authorization: Bearer
 looking up the credential whose token `id` matches
 (`routes/__init__.py::bearer_authenticate`).
 
+The per-id session routes (GET/PATCH/DELETE) are gated to the
+session-owning client and the deployment operator (#1056): the
+owning app drives its own flow; any other principal — including
+user bearers — is denied. An operator or designated-admin delete of
+a foreign session is a revoke, audited as `campus.sessions.revoke`
+(#1055).
+
 ## Session and token lifecycle
 
 ```mermaid
@@ -448,7 +455,8 @@ CLIs and other input-constrained clients use RFC 8628 instead
 | GET | `/auth/v1/connections/` | user (Bearer) or client (Basic) + `user_id` | user's upstream connections — metadata only (#733) |
 | DELETE | `/auth/v1/connections/:provider[/:integration]/` | user (Bearer) or client (Basic) + `user_id` | disconnect an upstream connection (#733) |
 | POST | `/auth/v1/broker/:provider[/:integration]/` | user (Bearer, bridge-flagged confidential client) | release the user's upstream access token ([token-broker.md](token-broker.md)) |
-| GET/PATCH/DELETE | `/auth/v1/sessions/campus/:id/` | client (Basic/Bearer) | inspect / update / finalize session |
+| GET | `/auth/v1/sessions/` | operator or designated admin (`sessions:read`, #1055) | enumerate live sessions (admin view, metadata only) |
+| GET/PATCH/DELETE | `/auth/v1/sessions/campus/:id/` | session's client or operator, + `sessions:read`/`sessions:write` designated admins (#1056) | inspect / update / finalize (revoke when foreign, #1055) |
 | POST | `/auth/v1/sessions/:provider/authorization_code` | client (Basic/Bearer) | look up a session by code |
 | POST | `/auth/v1/sessions/sweep` | client (Basic/Bearer) | delete expired sessions |
 | POST | `/auth/v1/oauth/token` | public (grant in body) | `device_code` and `refresh_token` grants |
