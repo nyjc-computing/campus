@@ -2,32 +2,34 @@
 
 Static (AST) and runtime checks that the shared/service layering agreed
 for the campus-core carve-out holds. These make the distribution split
-mechanical: if the contract stays green, the remaining shared layers
-(storage/webauth/services/config) can be packaged without pulling
-service implementations, Flask, or database drivers.
+mechanical: the whole #970 distribution split is now shipped — every
+shared layer lives in its own dist, and these rules keep the in-repo
+remainder honest.
 
 Rules enforced:
 
-1. Self-contained layers (config, storage, webauth, services, yapper)
-   may only depend on the campus subpackages listed in SHARED_ALLOWED.
-   yapper's entry is empty: it imports no campus package at all (its
-   credentials/DB URI arrive via arguments or environment — #970
-   phase 2 removed the lazy campus.auth import).
+1. Self-contained layers (config, yapper) may only depend on the campus
+   subpackages listed in SHARED_ALLOWED. yapper's entry is empty: it
+   imports no campus package at all (its credentials/DB URI arrive via
+   arguments or environment — #970 phase 2 removed the lazy campus.auth
+   import). storage/webauth/services left the repo in #992 (campus-core).
 2. Self-contained layers must not import a service layer (auth, api,
    audit, flask_campus, deploy) anywhere — module level or lazy.
 3. Self-contained layers must not import flask/werkzeug at module level.
    With the emailotp template rendering moved to
    campus.api.emailotp_templates, no shared-layer module imports flask
    at all — module level or lazy.
-4. campus.common and campus.model are now external distributions
-   (campus-common and campus-model; #970 phase 3): the rules below
-   still constrain what the in-repo shared layers may import FROM
-   them, but their own constraints (common: stdlib + bcrypt only, no
-   sibling campus imports, lazy flask; model: stdlib + common only, no
-   third party at all) are enforced by the boundary guards in their
-   own repos (tests/unit/test_boundaries.py in each).
+4. common, model, storage, webauth, and services are external
+   distributions (campus-common, campus-model, campus-core, flask-campus;
+   #970 phase 3 + #992 + #993): the rules below still constrain what the
+   in-repo shared layers may import FROM them, but their own constraints
+   (common: stdlib + bcrypt only; model: stdlib + common; core: no
+   service imports, lazy drivers; flask-campus: never imports services)
+   are enforced by the boundary guards in their own repos.
 5. Storage database drivers stay lazily imported: importing
-   campus.storage must not load psycopg2/pymongo/boto3.
+   campus.storage (now from the campus-core wheel) must not load
+   psycopg2/pymongo/boto3 — the runtime check below stays suite-side as
+   the consumer-side guard; the dist enforces the same rule itself.
 
 Runtime assertions run in subprocesses, because this test process may
 legitimately have those modules loaded already.
@@ -47,9 +49,6 @@ CAMPUS_DIR = Path(__file__).resolve().parents[2] / "campus"
 # same allowed sets, checked via AST here)
 SHARED_ALLOWED = {
     "config": {"common"},
-    "storage": {"common", "model"},
-    "webauth": {"common", "model"},
-    "services": {"common"},
     # Self-contained: imports no campus package at all. Emitters (auth,
     # api) may import it; it must never grow campus dependencies back.
     "yapper": set(),

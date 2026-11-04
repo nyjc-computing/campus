@@ -20,18 +20,24 @@ campus/
 ├── audit/          # Audit/tracing service + web UI (service half; middleware/client/http ship in the flask-campus dist, #993)
 ├── flask_campus/   # (moved to the flask-campus dist, #993 — import paths resolve via the portion merge)
 ├── integrations/   # External service configurations
-├── services/       # Email, etc.
-├── storage/        # Data persistence
-├── webauth/        # WebAuth request primitives (headers, OAuth tokens)
+├── services/       # (moved to the campus-core dist, #992)
+├── storage/        # (moved to the campus-core dist, #992)
+├── webauth/        # (moved to the campus-core dist, #992)
 └── yapper/         # Event bus (self-contained)
 ```
 
-Two layers live in their own distributions, consumed as version-pinned
-release wheels:
-[campus-common](https://github.com/nyjc-computing/campus-common) ships
-the `campus.common` shared kernel, and
+The shared layers live in their own distributions, consumed as
+version-pinned release wheels: [campus-common](https://github.com/nyjc-computing/campus-common)
+ships the `campus.common` shared kernel (+ protocol constants),
 [campus-model](https://github.com/nyjc-computing/campus-model) ships
-the `campus.model` entity dataclasses.
+the `campus.model` entity dataclasses,
+[flask-campus](https://github.com/nyjc-computing/flask-campus) ships
+the Flask consumer layer (`campus.flask_campus` + the app-facing audit
+modules), [campus-deploy](https://github.com/nyjc-computing/campus-deploy)
+ships `campus.deploy`, and
+[campus-core](https://github.com/nyjc-computing/campus-core) ships
+`campus.storage` / `campus.webauth` / `campus.services` (#992 — suite-only;
+DB drivers are extras).
 
 ### Design Principles
 
