@@ -23,6 +23,7 @@ branch itself is kept — branch cleanup is the post-merge SOP.
 """
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -34,10 +35,11 @@ IS_WINDOWS = sys.platform == "win32"
 VENV_REL = Path(".venv")
 
 
-def run(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
+def run(args: list[str], check: bool = True, env: dict | None = None,
+        cwd: Path | None = None) -> subprocess.CompletedProcess:
     """Run a git/python command, echoing it for the operator."""
     print(f"  $ {' '.join(args)}")
-    result = subprocess.run(args, capture_output=True, text=True)
+    result = subprocess.run(args, capture_output=True, text=True, env=env, cwd=cwd)
     if check and result.returncode != 0:
         detail = (result.stderr or result.stdout).strip()
         sys.exit(f"error: command failed ({result.returncode}):\n  {detail}")
@@ -100,15 +102,18 @@ def bootstrap_venv(wt_root: Path, main_root_path: Path) -> None:
     Copy-based shortcuts do not work on this machine (D: is exFAT — no
     junctions/symlinks; PATH prepends lose to CreateProcess search
     order), so: create a real venv using the main venv's interpreter,
-    install the main venv's freeze, and hand-copy the locally-built
-    campus packages that no index serves.
+    install the main venv's third-party freeze, then sync the campus
+    distributions from the branch's poetry.lock (they all resolve
+    through poetry since the wheel migration — nothing is local-only).
+    Falls back to hand-copying the main venv's site-packages when
+    poetry is unavailable, with a staleness warning (#971).
     """
     main_py = venv_python(main_root_path)
     if not main_py.exists():
         sys.exit(f"error: main checkout venv not found at {main_py} — "
                  "bootstrap it first or pass --no-venv")
     started = time.perf_counter()
-    print("bootstrapping worktree venv (about 2 minutes)...")
+    print("bootstrapping worktree venv (about 3 minutes)...")
 
     wt_py = venv_python(wt_root)
     run([str(main_py), "-m", "venv", str(wt_root / VENV_REL)])
@@ -122,24 +127,39 @@ def bootstrap_venv(wt_root: Path, main_root_path: Path) -> None:
     run([str(wt_py), "-m", "pip", "install", "-r", str(freeze_file)],
         check=True)
 
-    # The campus distributions are built locally, not on any index
-    # (campus_python / campus_api_python; campus_common / campus_model /
-    # campus_suite wheels and the campus namespace portions they install):
-    # copy their site-packages content across.
-    src = site_packages(main_py)
-    dst = site_packages(wt_py)
-    copied = []
-    for pattern in ("campus_python*", "campus_api_python*", "campus_common*",
-                    "campus_model*", "campus_suite*", "campus"):
-        for item in src.glob(pattern):
-            target = dst / item.name
-            if item.is_dir():
-                shutil.copytree(item, target, dirs_exist_ok=True)
-            else:
-                shutil.copy2(item, target)
-            copied.append(item.name)
-    if copied:
-        print(f"  copied locally-built packages: {', '.join(copied)}")
+    # The campus distributions all resolve through poetry now — release
+    # wheels for the carved dists (campus-common/model/deploy/flask-campus)
+    # and a git dep for campus_python — so the branch's poetry.lock is the
+    # source of truth. Syncing from the lock replaces the old hand-copy of
+    # the main venv's site-packages, which propagated stale locally-built
+    # builds into every fresh worktree (#971).
+    poetry = shutil.which("poetry")
+    if poetry:
+        venv_bin = wt_py.parent
+        env = dict(os.environ)
+        env["VIRTUAL_ENV"] = str(wt_root / VENV_REL)
+        env["PATH"] = f"{venv_bin}{os.pathsep}{env.get('PATH', '')}"
+        run([poetry, "install"], cwd=wt_root, check=True, env=env)
+        print("  campus deps synced from poetry.lock")
+    else:
+        # Fallback for environments without poetry: keep the legacy copy,
+        # but flag loudly that the versions may be stale.
+        src = site_packages(main_py)
+        dst = site_packages(wt_py)
+        copied = []
+        for pattern in ("campus_python*", "campus_api_python*", "campus_common*",
+                        "campus_model*", "campus_suite*", "campus"):
+            for item in src.glob(pattern):
+                target = dst / item.name
+                if item.is_dir():
+                    shutil.copytree(item, target, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, target)
+                copied.append(item.name)
+        if copied:
+            print(f"  WARNING: poetry not found — copied the main venv's campus "
+                  f"packages verbatim ({', '.join(copied)}); they may be STALE. "
+                  f"Run `poetry install` in the worktree to sync to the lock (#971).")
     print(f"  freeze kept at {freeze_file.name} (leave it untracked)")
     print(f"venv ready in {time.perf_counter() - started:.0f}s")
 

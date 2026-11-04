@@ -36,7 +36,7 @@ The rule is therefore:
 ### Starting a task
 
 ```bash
-python scripts/worktree.py new feat/your-feature        # code work: worktree + .venv (~2 min)
+python scripts/worktree.py new feat/your-feature        # code work: worktree + .venv (~3 min)
 python scripts/worktree.py new docs/your-doc --no-venv  # docs-only: no venv
 python scripts/worktree.py list                         # who is working where
 ```
@@ -54,10 +54,13 @@ cd ../campus-your-feature
 The script encodes the platform recipe: `D:\` is exFAT (no
 junctions/symlinks; PATH tricks lose to CreateProcess search order), so
 the worktree venv must be **real** — it is created from the main venv's
-interpreter, filled from the main venv's `pip freeze`, and the
-locally-built `campus_python` packages (not on any index) are copied
-across from the main site-packages. It also registers the worktree's
-`safe.directory` config.
+interpreter, filled from the main venv's third-party `pip freeze`, and
+then synced to the branch's `poetry.lock` (the campus distributions all
+resolve through poetry — release wheels for the carved dists and a git
+dep for the SDK — so the lock, not the main site-packages, is the source
+of truth; hand-copying propagated stale builds, #971). Without poetry on
+PATH the script falls back to the legacy copy with a staleness warning.
+It also registers the worktree's `safe.directory` config.
 
 The freeze intermediate is written to `requirements-freeze.txt` inside
 each worktree and is disposable — it is gitignored, so `git add -A`
