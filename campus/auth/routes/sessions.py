@@ -5,12 +5,15 @@ Flask routes for session management.
 These routes handle sessions.
 
 Authentication is handled in a global routes.before_request hook.
-Since #1055, the per-id routes (GET/PATCH/DELETE) are additionally
+Since #1055 the per-id routes (GET/PATCH/DELETE) are additionally
 authorization-gated: the session-owning client and the deployment
-operator drive and administer sessions; other principals are denied
-(require_session_access). The creation and code-exchange routes stay
-open to any authenticated client — they are the server-to-server flow
-boundary every flask_campus app calls with its own credentials.
+operator drive and administer sessions (designated admin users join
+via the sessions vocabulary); other principals are denied
+(require_session_access). GET /sessions/ is the admin enumeration,
+operator/designated-admin only. The creation and code-exchange
+routes stay open to any authenticated client — they are the
+server-to-server flow boundary every flask_campus app calls with its
+own credentials.
 """
 
 import contextlib
@@ -20,7 +23,7 @@ import flask
 import campus.config
 import campus.flask_campus as flask_campus
 from campus.common import schema
-from campus.common.errors import api_errors
+from campus.common.errors import FieldError, ValidationError, api_errors
 
 from .. import authz, get_yapper, scopes
 from ..resources import client as client_resource
@@ -29,6 +32,77 @@ from ..resources import user as user_resource
 
 # Create blueprint for session management routes
 bp = flask.Blueprint('sessions', __name__, url_prefix='/sessions')
+
+# The admin metadata view (#1055): what GET /sessions/ and every
+# non-owning principal's per-id read may carry. The authorization
+# code is a flow secret and journey_id is an internal audit
+# correlation id (#803); device_id rides along because it is the
+# stable device identity (#825) that audit attribution correlates
+# on — observational, not secret.
+_SESSION_METADATA_FIELDS = (
+    "id",
+    "provider",
+    "client_id",
+    "user_id",
+    "created_at",
+    "expires_at",
+    "redirect_uri",
+    "scopes",
+    "state",
+    "target",
+    "device_id",
+)
+
+
+def _is_owning_client(authsession) -> bool:
+    """True if the authenticated client principal owns the session.
+
+    User principals are never a session's owning client (#854); the
+    super-admin root acts as a user and is metadata-viewed like the
+    other non-owning principals.
+    """
+    if authz.is_user_principal():
+        return False
+    client = getattr(flask.g, "current_client", None)
+    return (
+        client is not None
+        and str(client.id) == str(authsession.client_id)
+    )
+
+
+def _session_metadata(authsession) -> dict:
+    """The admin metadata view of a session record (#1055).
+
+    The field allowlist behind GET /sessions/ and every non-owning
+    principal's per-id read: no authorization_code, no journey/device
+    correlation ids, no user embed.
+    """
+    resource = authsession.to_resource()
+    return {
+        field: resource[field]
+        for field in _SESSION_METADATA_FIELDS
+        if field in resource
+    }
+
+
+def _session_view(authsession) -> dict:
+    """Serialize a session for the current principal (#1055).
+
+    The owning client gets the full flow record — it created the
+    session and drives the code exchange, so it sees the
+    authorization_code it was minted. Every other authorized
+    principal (operator, designated admin) gets metadata only. The
+    embedded user (#879) rides the existing visibility decision and
+    is attached only when the principal may see it.
+    """
+    resource = (
+        authsession.to_resource()
+        if _is_owning_client(authsession)
+        else _session_metadata(authsession)
+    )
+    if authsession.user is not None:
+        resource["user"] = authsession.user.to_resource()
+    return resource
 
 
 def _embed_session_user(authsession) -> None:
@@ -90,6 +164,72 @@ def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
     swept_count = session_resource.sweep(at_time=at_time)
     get_yapper().emit('campus.sessions.sweep')
     return {"swept_count": swept_count}, 200
+
+
+@bp.get("/")
+@flask_campus.unpack_request
+def list_sessions(
+        provider: str | None = None,
+        client_id: schema.CampusID | None = None,
+        user_id: schema.UserID | None = None,
+        limit: str | None = None,
+        offset: str | None = None,
+) -> flask_campus.JsonResponse:
+    """List auth sessions (admin view)
+
+    GET /sessions/
+    Authorization: the operator, or a designated admin user whose
+    grant row and token cover sessions:read (#1055). Client
+    principals may not enumerate sessions: the per-id routes stay
+    the owning client's flow surface, and #881 keeps client
+    principals off administrative enumeration.
+
+    Query Params: {
+        "provider": "campus",       # optional filter
+        "client_id": "client_...",  # optional filter
+        "user_id": "user@...",      # optional filter
+        "limit": 100,               # optional page size, 1-500 (default 100)
+        "offset": 0                 # optional, default 0
+    }
+    Returns: {
+        "sessions": [ ...session metadata records... ],
+        "total": <matching sessions before pagination>
+    }
+
+    Records carry metadata only (#1055): no authorization_code and no
+    journey correlation id, no user embeds — hydrate users via the
+    users routes. Finalized sessions are deleted by the
+    DELETE route, so the listing shows live sessions only, newest
+    first; expired-but-unswept sessions appear until swept.
+    """
+    authz.require_operator(
+        "list auth sessions", admin_scope=authz.SESSIONS_READ
+    )
+    try:
+        page_size = 100 if limit is None else int(limit)
+        page_offset = 0 if offset is None else int(offset)
+    except (TypeError, ValueError) as e:
+        raise ValidationError(
+            "limit and offset must be integers",
+            errors=[FieldError(
+                field="limit",
+                code="INVALID_FORMAT",
+                message=str(e)
+            )]
+        ) from e
+    page_size = max(1, min(page_size, 500))
+    page_offset = max(0, page_offset)
+    sessions = session_resource.list(
+        provider=provider,
+        client_id=client_id,
+        user_id=user_id,
+    )
+    return {
+        "sessions": [
+            _session_metadata(authsession) for authsession in sessions
+        ][page_offset:page_offset + page_size],
+        "total": len(sessions),
+    }, 200
 
 
 @bp.post("/<provider>/authorization_code")
@@ -189,10 +329,13 @@ def delete_provider_session(
     This marks the session as finalized after successful authentication.
 
     DELETE /sessions/{provider}/{session_id}
-    Authorization: the session-owning client or the operator
-    (#1055); other principals are denied — finalizing deletes the
-    session, so an unowned DELETE is a revoke of another app's login
-    flow.
+    Authorization: the session-owning client, the operator, or a
+    designated admin user covering sessions:write (#1055); other
+    principals are denied — finalizing deletes the session, so an
+    unowned DELETE is a revoke of another app's login flow. The
+    owning client's delete emits campus.sessions.finalize (flow
+    semantics); any other authorized caller emits
+    campus.sessions.revoke (admin semantics).
 
     Returns: {
         "target": <url>
@@ -201,18 +344,24 @@ def delete_provider_session(
     session = session_resource[provider][session_id]
     authsession = session.get()
     authz.require_session_access(
-        authsession.client_id, "finalize an auth session"
+        authsession.client_id,
+        "finalize an auth session",
+        admin_scope=authz.SESSIONS_WRITE,
     )
     _embed_session_user(authsession)
     target = session.finalize()
+    revoked_by_admin = not _is_owning_client(authsession)
     get_yapper().emit(
-        'campus.sessions.finalize',
+        'campus.sessions.revoke' if revoked_by_admin
+        else 'campus.sessions.finalize',
         {
             "provider": provider,
-            "session_id": str(session_id)
+            "session_id": str(session_id),
+            **({"client_id": str(authsession.client_id)}
+               if revoked_by_admin else {}),
         }
     )
-    return authsession.to_resource() | {"target": target}, 200
+    return _session_view(authsession) | {"target": target}, 200
 
 
 @bp.get("/<provider>/<session_id>/")
@@ -223,9 +372,12 @@ def get_provider_session(
     """Get an auth session
 
     GET /sessions/{provider}/{session_id}
-    Authorization: the session-owning client or the operator
-    (#1055); other principals are denied — the record embeds the
-    session user (#879) and carries the flow's authorization code.
+    Authorization: the session-owning client, the operator, or a
+    designated admin user covering sessions:read (#1055); other
+    principals are denied — the record embeds the session user
+    (#879) and carries the flow's authorization code. The owning
+    client gets the full flow record; every other authorized
+    principal gets metadata only.
 
     Returns: {
         "session_token": "session_token",
@@ -235,7 +387,9 @@ def get_provider_session(
     """
     authsession = session_resource[provider][session_id].get()
     authz.require_session_access(
-        authsession.client_id, "read an auth session"
+        authsession.client_id,
+        "read an auth session",
+        admin_scope=authz.SESSIONS_READ,
     )
     _embed_session_user(authsession)
     get_yapper().emit(
@@ -245,7 +399,7 @@ def get_provider_session(
             "session_id": str(session_id)
         }
     )
-    return authsession.to_resource(), 200
+    return _session_view(authsession), 200
 
 
 @bp.patch("/<provider>/<session_id>/")
@@ -301,6 +455,7 @@ def create_blueprint() -> flask.Blueprint:
     new_bp = flask.Blueprint('sessions', __name__, url_prefix='/sessions')
 
     # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "list_sessions", list_sessions, methods=["GET"])
     new_bp.add_url_rule("/sweep", "sweep", sweep, methods=["POST"])
     new_bp.add_url_rule(
         "/<provider>/authorization_code", "get_by_authorization_code",

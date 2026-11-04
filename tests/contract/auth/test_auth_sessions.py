@@ -562,5 +562,315 @@ class TestSessionUserEmbedding(unittest.TestCase):
         self.assertEqual(delete_response.status_code, 403)
 
 
+class TestSessionsAdminSurface(unittest.TestCase):
+    """GET /sessions/ and the designated-admin legs of the per-id
+    routes (#1055).
+
+    The list is operator/designated-admin only and carries session
+    metadata only — no authorization_code, no user embeds. The
+    owning client keeps its full flow record on per-id reads; every
+    other authorized principal (operator, designated admin) sees
+    metadata. A designated user needs BOTH legs: a sessions:* grant
+    row (#883) AND a token carrying the scope (#865).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.auth_app
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+
+        assert self.app
+        self.client = self.app.test_client()
+        self.auth_headers = get_basic_auth_headers(env.CLIENT_ID, env.CLIENT_SECRET)
+        self.provider = "campus"
+
+    def _create_session(self, client_id: str | None = None) -> str:
+        """Create a session for the operator (default) or another client.
+
+        Foreign clients carry no requested scopes: fresh clients have
+        an empty allowed_scopes allowlist, and invariant A1/A6 rejects
+        any scope outside it.
+        """
+        body = {
+            "client_id": client_id or env.CLIENT_ID,
+            "redirect_uri": "https://example.com/callback",
+        }
+        if client_id is None:
+            body["scopes"] = ["read"]
+        resp = self.client.post(
+            f"/auth/v1/sessions/{self.provider}/",
+            json=body,
+            headers=self.auth_headers,
+        )
+        assert resp.status_code == 200, resp.get_json()
+        return resp.get_json()["id"]
+
+    def _grant_and_mint(self, user_id: str, level: str) -> dict:
+        """Grant a sessions vocabulary row and mint a scoped token.
+
+        Returns Bearer headers for the designated user.
+        """
+        from campus.auth.resources.grant import grants as grants_store
+        from campus.common import schema
+        from tests.fixtures.tokens import (
+            create_test_token,
+            get_bearer_auth_headers,
+        )
+
+        grants_store.grant("user", user_id, "sessions", level=level)
+        token = create_test_token(
+            schema.UserID(user_id),
+            scopes=[f"sessions:{level}"],
+            grant_vault_access=False,
+        )
+        return get_bearer_auth_headers(token)
+
+    def test_list_sessions_for_operator(self):
+        """GET /sessions/ lists sessions for the operator, metadata only."""
+        session_id = self._create_session()
+
+        response = self.client.get(
+            "/auth/v1/sessions/", headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertGreaterEqual(data["total"], 1)
+        record = next(
+            s for s in data["sessions"] if s["id"] == session_id
+        )
+        self.assertEqual(record["provider"], self.provider)
+        self.assertEqual(record["client_id"], env.CLIENT_ID)
+        self.assertIn("created_at", record)
+        self.assertIn("expires_at", record)
+        self.assertNotIn("authorization_code", record)
+        self.assertNotIn("user", record)
+
+    def test_list_sessions_filters(self):
+        """GET /sessions/?client_id=... scopes the listing."""
+        from tests.fixtures.tokens import create_test_client_credentials
+
+        other_id, _other_secret = create_test_client_credentials(
+            name="1055-filter-client",
+            description="Filter target for #1055",
+        )
+        self._create_session()
+        other_session_id = self._create_session(client_id=other_id)
+
+        response = self.client.get(
+            "/auth/v1/sessions/",
+            query_string={"client_id": other_id},
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["total"], 1)
+        self.assertEqual(data["sessions"][0]["id"], other_session_id)
+
+        by_provider = self.client.get(
+            "/auth/v1/sessions/",
+            query_string={"provider": self.provider},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(by_provider.status_code, 200)
+        self.assertGreaterEqual(by_provider.get_json()["total"], 2)
+
+    def test_list_sessions_pagination(self):
+        """GET /sessions/?limit=&offset= pages the listing."""
+        self._create_session()
+        self._create_session()
+
+        page = self.client.get(
+            "/auth/v1/sessions/",
+            query_string={"limit": 1, "offset": 0},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(len(page.get_json()["sessions"]), 1)
+        self.assertEqual(page.get_json()["total"], 2)
+
+        second = self.client.get(
+            "/auth/v1/sessions/",
+            query_string={"limit": 1, "offset": 1},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(len(second.get_json()["sessions"]), 1)
+        self.assertNotEqual(
+            page.get_json()["sessions"][0]["id"],
+            second.get_json()["sessions"][0]["id"],
+        )
+
+    def test_list_sessions_denied_for_client_principal(self):
+        """A non-operator client may not enumerate sessions (#1055)."""
+        from tests.fixtures.tokens import create_test_client_credentials
+
+        other_id, other_secret = create_test_client_credentials(
+            name="1055-list-denied",
+            description="Non-operator client for #1055",
+        )
+        headers = get_basic_auth_headers(other_id, other_secret)
+
+        response = self.client.get("/auth/v1/sessions/", headers=headers)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.get_json()["error"]["code"], "FORBIDDEN"
+        )
+
+    def test_list_sessions_denied_for_undesignated_user(self):
+        """Scope without a grant row confers nothing (#854 regression)."""
+        from campus.common import schema
+        from tests.fixtures.tokens import (
+            create_test_token,
+            get_bearer_auth_headers,
+        )
+
+        token = create_test_token(
+            schema.UserID("authz.1055.scopeless@campus.test"),
+            scopes=["sessions:read"],
+            grant_vault_access=False,
+        )
+        headers = get_bearer_auth_headers(token)
+
+        response = self.client.get("/auth/v1/sessions/", headers=headers)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(
+            "No access grant designates",
+            response.get_json()["error"]["message"],
+        )
+
+    def test_list_sessions_for_designated_user(self):
+        """A designated user with sessions:read grant AND scope lists."""
+        headers = self._grant_and_mint(
+            "authz.1055.reader@campus.test", "read"
+        )
+
+        response = self.client.get("/auth/v1/sessions/", headers=headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("sessions", response.get_json())
+
+    def test_get_metadata_view_for_designated_user(self):
+        """Per-id GET for a designated user: metadata, no flow secrets."""
+        session_id = self._create_session()
+        headers = self._grant_and_mint(
+            "authz.1055.reader2@campus.test", "read"
+        )
+
+        response = self.client.get(
+            f"/auth/v1/sessions/{self.provider}/{session_id}/",
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["id"], session_id)
+        self.assertNotIn("authorization_code", data)
+        self.assertIsNone(data.get("user"))
+
+    def test_get_full_record_for_owning_client(self):
+        """The owning client keeps its full flow record on GET."""
+        session_id = self._create_session()
+
+        response = self.client.get(
+            f"/auth/v1/sessions/{self.provider}/{session_id}/",
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "authorization_code", response.get_json()
+        )
+
+    def test_finalize_by_operator_is_metadata_revocation(self):
+        """Operator DELETE of a foreign session: metadata + target."""
+        from tests.fixtures.tokens import create_test_client_credentials
+
+        other_id, _other_secret = create_test_client_credentials(
+            name="1055-revoke-target",
+            description="Session owner for #1055 revoke test",
+        )
+        session_id = self._create_session(client_id=other_id)
+
+        response = self.client.delete(
+            f"/auth/v1/sessions/{self.provider}/{session_id}/",
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertIn("target", data)
+        self.assertNotIn("authorization_code", data)
+
+        # The session is gone (revoke deletes, same as finalize).
+        follow_up = self.client.get(
+            f"/auth/v1/sessions/{self.provider}/{session_id}/",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(follow_up.status_code, 404)
+
+    def test_sessions_admin_grant_row_rejected(self):
+        """sessions:admin rows are rejected as inert (#1055).
+
+        Nothing sits above revoke, so the vocabulary is grantable up
+        to write; grant administration for it stays operator-only.
+        """
+        response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": "authz.1055.admin@campus.test",
+                "resource_type": "sessions",
+                "level": "admin",
+            },
+            headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(
+            "nothing to govern",
+            response.get_json()["error"]["message"],
+        )
+
+    def test_sessions_grant_rows_administered_via_grants_api(self):
+        """The operator grants sessions levels over HTTP (#1055)."""
+        user_id = "authz.1055.http.grant@campus.test"
+        grant_response = self.client.post(
+            "/auth/v1/grants/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": user_id,
+                "resource_type": "sessions",
+                "level": "read",
+            },
+            headers=self.auth_headers,
+        )
+        self.assertEqual(grant_response.status_code, 201)
+
+        list_response = self.client.get(
+            "/auth/v1/grants/",
+            query_string={
+                "resource_type": "sessions",
+                "grantee_id": user_id,
+            },
+            headers=self.auth_headers,
+        )
+        self.assertEqual(list_response.status_code, 200)
+        rows = list_response.get_json()["grants"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["level"], "read")
+
+
 if __name__ == '__main__':
     unittest.main()

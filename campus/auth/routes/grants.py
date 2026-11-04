@@ -116,13 +116,23 @@ def _forbid_forbidden_shapes(
 
     - vocabulary-level clients:admin rows are operator-equivalent;
     - the credentials vocabulary is reserved until #889;
-    - user-principal vault grants are reserved until #889.
+    - user-principal vault grants are reserved until #889;
+    - sessions:admin rows are inert (#1055): nothing sits above
+      revoke, so the vocabulary is grantable up to write and its
+      grant administration stays operator-only.
     """
     if resource_type == "clients" and level == "admin":
         raise api_errors.ForbiddenError(
             "A vocabulary-level 'clients:admin' grant is "
             "operator-equivalent (#883): operator authority comes "
             f"only from {authz.OPERATOR_CLIENT_IDS_ENVVAR}"
+        )
+    if resource_type == "sessions" and level == "admin":
+        raise api_errors.ForbiddenError(
+            "A 'sessions:admin' grant has nothing to govern (#1055): "
+            "the sessions vocabulary is grantable up to write "
+            "(read lists/reads, write revokes); administering its "
+            "grants stays operator-only"
         )
     if resource_type == "credentials":
         raise api_errors.ForbiddenError(

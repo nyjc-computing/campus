@@ -45,6 +45,42 @@ class AuthSessionsResource:
         """
         return ProviderAuthSessionResource(provider)
 
+    def list(
+            self,
+            *,
+            provider: str | None = None,
+            client_id: schema.CampusID | str | None = None,
+            user_id: schema.UserID | str | None = None,
+    ) -> list[model.AuthSession]:
+        """List auth sessions matching the filters, newest first (#1055).
+
+        The admin enumeration behind GET /sessions/: an empty filter
+        returns every live session. Finalized sessions are absent —
+        finalize deletes the record — and expired-but-unswept sessions
+        still appear until swept.
+
+        Returns:
+            AuthSession records ordered by created_at, descending.
+        """
+        query = {
+            key: str(value)
+            for key, value in (
+                ("provider", provider),
+                ("client_id", client_id),
+                ("user_id", user_id),
+            )
+            if value is not None
+        }
+        records = session_storage.get_matching(query)
+        sessions = [
+            model.AuthSession.from_storage(record) for record in records
+        ]
+        sessions.sort(
+            key=lambda authsession: authsession.created_at.to_datetime(),
+            reverse=True,
+        )
+        return sessions
+
     def sweep(
             self,
             *,

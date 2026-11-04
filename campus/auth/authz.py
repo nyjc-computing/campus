@@ -89,6 +89,8 @@ __all__ = [
     "CLIENTS_ADMIN",
     "CLIENTS_READ",
     "CLIENTS_WRITE",
+    "SESSIONS_READ",
+    "SESSIONS_WRITE",
     "forbid_user_principal",
     "has_admin_scope",
     "is_operator",
@@ -139,11 +141,32 @@ SUPER_ADMIN_ENVVAR = "AUTH_SUPER_ADMIN"
 # vault-access grants. users:read lists/gets any user record;
 # users:mod activates a user; users:write creates and updates users
 # (implies mod); users:admin deletes users (implies write). The
-# vaults/credentials vocabularies stay reserved (operator-only) until
-# a need exists.
+# sessions vocabulary (#1055, store-backed, grantable up to write —
+# no admin-level session actions exist) opens the session admin
+# surface: sessions:read enumerates and reads session metadata,
+# sessions:write revokes. The credentials vocabulary opens with the
+# same shape in #1055: credentials:read reads credential records,
+# credentials:write disconnects/updates them. Vault rows grant
+# per-label user access at read/write/admin (#889), but
+# administering vault GRANTS stays operator-only. The ceiling stays
+# operator-controlled end to end: a user token can carry a
+# management scope only if the minting client's allowed_scopes cap
+# includes it (docs/auth-token-invariants.md A1/A8). Users never
+# inherit the operator role of the client they were minted through,
+# and management mutations by user principals land in campus.audit
+# stamped with the acting user id (#802).
 CLIENTS_READ = "clients:read"
 CLIENTS_WRITE = "clients:write"
 CLIENTS_ADMIN = "clients:admin"
+
+# Sessions vocabulary (#1055): the campus-admin sessions view. read
+# enumerates sessions (GET /sessions/) and reads per-id metadata;
+# write revokes (the DELETE route, distinct from the owning client's
+# flow-finalize by the audit event). Grantable up to write; admin
+# rows are rejected as inert (nothing sits above revoke), so grant
+# administration for the vocabulary stays operator-only.
+SESSIONS_READ = "sessions:read"
+SESSIONS_WRITE = "sessions:write"
 
 # Client record fields reserved for the clients:admin scope: the scope
 # caps and the token-bridge flag are operator-controlled registration
