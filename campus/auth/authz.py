@@ -6,8 +6,8 @@ Fail-closed authorization for campus.auth management blueprints (#854,
 Authentication (campus.auth.middleware) establishes who is calling and
 pushes the principal into flask.g; this module decides what the
 principal may do on the management blueprints (vaults, clients, users,
-credentials). Every helper fails closed: a principal that matches no
-rule is denied.
+credentials, sessions). Every helper fails closed: a principal that
+matches no rule is denied.
 
 Design intent (#881): client principals hold the bare minimum access
 their role needs — the vault role — which in most cases means
@@ -30,9 +30,10 @@ Principals:
 - Operator clients: confidential clients whose ids are listed in the
   AUTH_OPERATOR_CLIENT_IDS env var (comma-separated, read at request
   time so deployments can rotate the list without a code change). The
-  operator manages every deployment resource: all vault labels, other
-  clients' records and vault access, users, credentials. Fail-closed:
-  an unset or empty var means the deployment has no operator at all.
+  operator manages every deployment resource: all vault labels and
+  their enumeration, other clients' records and vault access, users,
+  credentials, sessions. Fail-closed: an unset or empty var means
+  the deployment has no operator at all.
 - Client principals: authenticated confidential clients (HTTP Basic,
   or an app-scoped client_credentials bearer, which resolves to the
   client itself). A client is read-only on registration data (#881):
@@ -369,8 +370,11 @@ def forbid_user_principal(action: str) -> None:
     designated admin users (#865), and the read/rotate self-service
     client principals keep (#881).
 
-    Retained for the blueprints whose management-scope vocabulary is
-    reserved (#865): vaults, users, credentials.
+    Retained where no vocabulary leg exists — the logins blueprint —
+    and as fail-closed defense in depth on the routes that do open a
+    leg. The vaults (#889) and sessions/credentials (#1055)
+    vocabularies have since opened their own user-principal legs;
+    this helper no longer speaks for them.
     """
     if is_user_principal():
         raise api_errors.ForbiddenError(
