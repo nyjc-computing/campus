@@ -16,10 +16,11 @@ __all__ = [
 import flask
 
 import campus.flask_campus as flask_campus
+from campus.audit.roles import CATALOGUE, resolve_role
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
 
-from .. import decorators, resources, roles
+from .. import decorators, resources
 from ..helpers import audit_events
 
 # Create blueprint for API key routes
@@ -77,13 +78,13 @@ def _validate_role_field(
     """Record a field error unless role names a known role (#918)."""
     if role is None:
         return
-    if not isinstance(role, str) or role not in roles.CATALOGUE:
+    if not isinstance(role, str) or role not in CATALOGUE:
         field_errors.append(FieldError(
             field="role",
             code="INVALID_ROLE",
             message=(
                 "Unknown role. Available roles: "
-                f"{', '.join(sorted(roles.CATALOGUE))}."
+                f"{', '.join(sorted(CATALOGUE))}."
             )
         ))
 
@@ -284,7 +285,7 @@ def update(
     if name is not None:
         updates["name"] = name
     if role is not None:
-        updates["scopes"] = roles.resolve_role(role)
+        updates["scopes"] = resolve_role(role)
     elif scopes is not None:
         updates["scopes"] = scopes
     if rate_limit is not None:

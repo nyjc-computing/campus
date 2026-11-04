@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "campus-suite"
-version = "0.7.0"
+version = "0.8.0"
 description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
@@ -26,7 +26,7 @@ campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/d
 # Deployment glue (campus.deploy) - consumed as the campus-deploy v0.1.0 release wheel (#970 phase 3, campus#1042); the in-repo module is removed
 campus-deploy = {url = "https://github.com/nyjc-computing/campus-deploy/releases/download/v0.1.0/campus_deploy-0.1.0-py3-none-any.whl"}
 # Flask consumer layer (campus.flask_campus + audit middleware/client/http) - consumed as the flask-campus v0.1.0 release wheel (#970 phase 3, campus#993); the in-repo modules are removed
-flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.0/flask_campus-0.1.0-py3-none-any.whl"}
+flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.2/flask_campus-0.1.2-py3-none-any.whl"}
 
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^5.0.0"
