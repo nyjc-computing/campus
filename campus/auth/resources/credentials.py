@@ -279,7 +279,11 @@ class ProviderCredentialsResource:
             self,
             user_id: str | None = None
     ) -> list[model.UserCredentials]:
-        """List all credentials for this provider.
+        """List all credentials for this provider, tokens joined.
+
+        The tokens are loaded so the admin list route can redact them
+        down to metadata (#1055); HTTP responses never emit the raw
+        material regardless.
 
         Returns:
             List of UserCredentials instances
@@ -288,10 +292,20 @@ class ProviderCredentialsResource:
             provider=self.provider,
             **{"user_id": user_id} if user_id else {}
         ))
-        return [
-            model.UserCredentials.from_storage(record)
-            for record in records
-        ]
+        credentials_list = []
+        for record in records:
+            credentials = model.UserCredentials.from_storage(record)
+            # Hydrate the joined token so the admin list route can
+            # redact it down to metadata (#1055); HTTP responses
+            # never emit the raw material regardless.
+            if credentials.token_id:
+                token_record = token_storage.get_by_id(credentials.token_id)
+                if token_record:
+                    credentials.token = model.OAuthToken.from_storage(
+                        token_record
+                    )
+            credentials_list.append(credentials)
+        return credentials_list
 
 
 class UserCredentialsResource:

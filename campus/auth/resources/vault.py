@@ -25,6 +25,16 @@ class VaultsResource:
         """
         return VaultResource(label)
 
+    def labels(self) -> list[str]:
+        """List the distinct vault labels (#1055).
+
+        Labels are deployment-secret groupings, not secrets themselves
+        (per-label keys() has been grantable since #854); this is the
+        enumeration behind GET /vaults/.
+        """
+        records = vault_storage.get_matching({})
+        return sorted({str(record["label"]) for record in records})
+
     @staticmethod
     def init_storage() -> None:
         """Initialize storage for vault resource."""

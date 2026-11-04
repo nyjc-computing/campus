@@ -258,7 +258,25 @@ class TestGrantsRoutes(unittest.TestCase):
         message = self.assert_forbidden(response)
         self.assertIn("operator-equivalent", message)
 
-    def test_reserved_credentials_vocabulary_rejected(self):
+    def test_credentials_admin_rows_rejected(self):
+        """credentials:admin rows are inert (#1055): the vocabulary is
+        grantable up to write — read reads metadata, write
+        disconnects/updates — and nothing sits above write."""
+        response = self.client.post(
+            f"{GRANTS_BASE}/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": TARGET_ID,
+                "resource_type": "credentials",
+                "level": "admin",
+            },
+            headers=self.operator_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("nothing to govern", message)
+
+    def test_credentials_read_rows_grantable(self):
+        """credentials:read rows are grantable (#1055)."""
         response = self.client.post(
             f"{GRANTS_BASE}/",
             json={
@@ -269,7 +287,7 @@ class TestGrantsRoutes(unittest.TestCase):
             },
             headers=self.operator_headers,
         )
-        self.assert_forbidden(response)
+        self.assertEqual(response.status_code, 201)
 
     def test_user_vault_rows_carry_levels_not_bits(self):
         # #889: user vault grants are per-label level rows; bitflags

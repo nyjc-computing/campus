@@ -16,7 +16,12 @@ import unittest
 import campus.model
 from campus.common import env, schema
 from tests.fixtures import services
-from tests.fixtures.tokens import create_test_token, get_basic_auth_headers, get_bearer_auth_headers
+from tests.fixtures.tokens import (
+    create_test_client_credentials,
+    create_test_token,
+    get_basic_auth_headers,
+    get_bearer_auth_headers,
+)
 
 
 class TestAuthCredentialsContract(unittest.TestCase):
@@ -276,6 +281,192 @@ class TestAuthCredentialsContract(unittest.TestCase):
             headers=temp_headers
         )
         self.assertEqual(get_response.status_code, 401)
+
+
+class TestCredentialsRedaction(unittest.TestCase):
+    """Redacted credential reads and the ?include=token opt-in (#1055).
+
+    Reads return token metadata only — never the raw token material:
+    a campus-provider record's token id IS the access token, so an
+    unredacted list was a bulk-download of every live token. The
+    opt-in exists for the rare legitimate full read of ONE record:
+    operator principal or super-admin root, never on the list, never
+    to designated admin users.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.auth_app
+
+        cls.test_user_id = schema.UserID("redaction.test@campus.test")
+        cls.bearer_token = create_test_token(cls.test_user_id)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.client = self.app.test_client()
+        self.basic_auth_headers = get_basic_auth_headers(
+            env.CLIENT_ID, env.CLIENT_SECRET
+        )
+
+    def _grant_and_mint(self, user_id: str, level: str) -> dict:
+        """Grant a credentials vocabulary row and mint a scoped token."""
+        from campus.auth.resources.grant import grants as grants_store
+
+        grants_store.grant("user", user_id, "credentials", level=level)
+        token = create_test_token(
+            schema.UserID(user_id),
+            scopes=[f"credentials:{level}"],
+            grant_vault_access=False,
+        )
+        return get_bearer_auth_headers(token)
+
+    def test_list_credentials_are_redacted(self):
+        """GET /credentials/campus/ returns metadata, no token material."""
+        response = self.client.get(
+            "/auth/v1/credentials/campus/",
+            headers=self.basic_auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        records = response.get_json()["credentials"]
+        self.assertGreaterEqual(len(records), 1)
+        record = next(
+            r for r in records if r["user_id"] == str(self.test_user_id)
+        )
+        token = record["token"]
+        # Metadata identifies the credential...
+        self.assertIn("expires_at", token)
+        self.assertIn("scope", token)
+        self.assertEqual(token["token_type"], "Bearer")
+        # ...without releasing material: id IS the access token.
+        self.assertNotIn("id", token)
+        self.assertNotIn("access_token", token)
+        self.assertNotIn("refresh_token", record["token"])
+
+    def test_get_by_user_redacted_by_default(self):
+        """GET /credentials/campus/{user}/ is redacted by default."""
+        response = self.client.get(
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
+            headers=self.basic_auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(
+            "id", response.get_json()["token"],
+            "raw access token leaked on a default read",
+        )
+
+    def test_get_by_user_include_token_opt_in(self):
+        """?include=token on a per-record read returns the full token."""
+        response = self.client.get(
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
+            query_string={"include": "token"},
+            headers=self.basic_auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.get_json()["token"]["id"], self.bearer_token
+        )
+
+    def test_list_ignores_include_token(self):
+        """The list never releases raw tokens, opt-in or not (#1055)."""
+        response = self.client.get(
+            "/auth/v1/credentials/campus/",
+            query_string={"include": "token"},
+            headers=self.basic_auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        for record in response.get_json()["credentials"]:
+            self.assertNotIn("id", record["token"])
+
+    def test_include_token_denied_for_designated_user(self):
+        """A designated credentials:read user gets metadata only."""
+        headers = self._grant_and_mint(
+            "authz.1055.creds.reader@campus.test", "read"
+        )
+
+        response = self.client.get(
+            f"/auth/v1/credentials/campus/{self.test_user_id}/",
+            query_string={"include": "token"},
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(
+            "operator-principal power",
+            response.get_json()["error"]["message"],
+        )
+
+    def test_designated_user_reads_redacted_metadata(self):
+        """A designated credentials:read user lists redacted records."""
+        headers = self._grant_and_mint(
+            "authz.1055.creds.reader2@campus.test", "read"
+        )
+
+        response = self.client.get(
+            "/auth/v1/credentials/campus/",
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        for record in response.get_json()["credentials"]:
+            self.assertNotIn("id", record["token"])
+
+    def test_disconnect_arbitrary_client_record(self):
+        """DELETE with a body client_id removes another record (#1055)."""
+        from campus.auth.resources import credentials as creds_resource
+
+        other_user_id = schema.UserID("disconnect.test@campus.test")
+        other_id, _other_secret = create_test_client_credentials(
+            name="1055-disconnect-target",
+            description="Credential owner for #1055",
+        )
+        creds_resource["campus"][other_user_id].new(
+            client_id=other_id,
+            scopes=["read"],
+            expires_in=3600,
+        )
+
+        # unpack_request sources DELETE parameters from the JSON
+        # body — the same shape the SDK's User.delete already sends.
+        response = self.client.delete(
+            f"/auth/v1/credentials/campus/{other_user_id}/",
+            json={"client_id": other_id},
+            headers=self.basic_auth_headers,
+        )
+        self.assertEqual(response.status_code, 200)
+
+        from campus.common.errors import api_errors
+        with self.assertRaises(api_errors.NotFoundError):
+            creds_resource["campus"][other_user_id].get(other_id)
+
+    def test_designated_read_user_cannot_disconnect(self):
+        """credentials:read does not authorize disconnects."""
+        from campus.auth.resources import credentials as creds_resource
+
+        other_user_id = schema.UserID("ro.disconnect.test@campus.test")
+        creds_resource["campus"][other_user_id].new(
+            client_id=env.CLIENT_ID,
+            scopes=["read"],
+            expires_in=3600,
+        )
+        headers = self._grant_and_mint(
+            "authz.1055.creds.reader3@campus.test", "read"
+        )
+
+        response = self.client.delete(
+            f"/auth/v1/credentials/campus/{other_user_id}/",
+            headers=headers,
+        )
+
+        self.assertEqual(response.status_code, 403)
 
 
 if __name__ == '__main__':

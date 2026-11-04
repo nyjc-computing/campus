@@ -9,6 +9,17 @@ so the whole blueprint requires the operator principal
 principal could list every live campus token. Third-party provider
 records are refused outright (invariant B1).
 
+Since #1055 the reads are redacted by default: list and per-record
+GETs return token metadata (expiry, type, scopes) but never the raw
+token material, and the raw token comes back only on a per-record
+?include=token opt-in (operator principal or super-admin root —
+never on the list, so no principal can bulk-download live tokens).
+Designated admin users join via the credentials vocabulary
+(credentials:read reads, credentials:write disconnects/updates);
+DELETE takes an optional ?client_id= so the operator can disconnect
+an arbitrary integration's stored record, not just its own
+(the client_id rides the JSON body, like the SDK's delete).
+
 Authentication is handled in a global routes.before_request hook.
 """
 
@@ -19,7 +30,7 @@ import campus.model
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
 
-from .. import authz
+from .. import authz, get_yapper
 from ..resources import credentials as creds_resource
 
 # Create blueprint for session management routes
@@ -45,12 +56,70 @@ def _reject_non_campus_provider(provider: str) -> None:
         )
 
 
+# Token metadata surfaced on redacted reads (#1055): expiry, type,
+# and scopes identify the credential for admin views without
+# releasing material. id (the access-token string itself) and
+# refresh_token never appear outside a ?include=token read.
+_TOKEN_METADATA_FIELDS = (
+    "expires_at",
+    "expires_in",
+    "token_type",
+    "scope",
+    "refresh_token_expires_at",
+)
+
+
+def _credentials_view(cred, include_token: bool = False) -> dict:
+    """Serialize a credential record for the current principal (#1055).
+
+    Redacted by default: the joined token is reduced to its metadata.
+    include_token=True (per-record reads only, operator/super-admin
+    only — enforced by the caller) emits the full token resource for
+    the rare legitimate full read.
+    """
+    resource = cred.to_resource()
+    token = resource.get("token")
+    if token is not None and not include_token:
+        resource["token"] = {
+            field: token[field]
+            for field in _TOKEN_METADATA_FIELDS
+            if field in token
+        }
+    return resource
+
+
+def _require_token_disclosure(include: str | None) -> bool:
+    """The ?include=token opt-in gate (#1055).
+
+    Returns True when the caller explicitly asked for the raw token
+    and is allowed to see it. The opt-in exists for the rare
+    legitimate full read of ONE record: it is refused on the list
+    route (no principal may bulk-download live tokens — the #1055
+    exposure class), and to user principals however designated: raw
+    token disclosure is an operator-principal power.
+    """
+    if include != "token":
+        return False
+    if authz.is_user_principal() and not authz.is_super_admin():
+        raise api_errors.ForbiddenError(
+            "?include=token is an operator-principal power (#1055): "
+            "designated admin users read credential metadata only"
+        )
+    if not (authz.is_operator() or authz.is_super_admin()):
+        raise api_errors.ForbiddenError(
+            "?include=token requires the operator principal "
+            f"({authz.OPERATOR_CLIENT_IDS_ENVVAR}) (#1055)"
+        )
+    return True
+
+
 @bp.get("/<provider>/")
 @flask_campus.unpack_request
 def get_by_token(
         *,
         provider: str,
         token_id: str | None = None,
+        include: str | None = None,
 ) -> flask_campus.JsonResponse:
     """Get campus credentials by token, or list for a provider
 
@@ -58,29 +127,37 @@ def get_by_token(
     refused with 403 (invariant B1: upstream tokens are custodied
     by Campus and released only via the token bridge).
 
-    a provider.
-
     GET /credentials/{provider}
-    Authorization: operator only (#854).
+    Authorization: the operator, or a designated admin user whose
+    grant row and token cover credentials:read (#1055). Reads are
+    redacted (#1055): token metadata only.
 
     Query Params: {
-        "token_id": token_id (optional)
+        "token_id": token_id (optional),
+        "include": "token"  # per-record opt-in for the raw token;
+                            # operator/super-admin only, NEVER honored
+                            # on the list
     }
     Returns: {
-        "credentials": { ... }
+        "credentials": [ ...redacted records... ]
     }
     """
-    authz.require_operator("read credential records")
+    authz.require_operator(
+        "read credential records",
+        admin_scope=authz.CREDENTIALS_READ,
+    )
     _reject_non_campus_provider(provider)
+    include_token = _require_token_disclosure(include)
     if token_id:
         credentials = creds_resource[provider].get(token_id)
-        return credentials.to_resource(), 200
+        return _credentials_view(credentials, include_token), 200
     else:
-        # list all
+        # list all — always redacted: no principal may bulk-download
+        # live tokens (#1055)
         credentials_list = creds_resource[provider].list_all()
         return {
             "credentials": [
-                cred.to_resource() for cred in credentials_list
+                _credentials_view(cred) for cred in credentials_list
             ]
         }, 200
 
@@ -90,20 +167,37 @@ def get_by_token(
 def delete_by_user(
         provider: str,
         user_id: schema.UserID,
+        client_id: schema.CampusID | None = None,
 ) -> flask_campus.JsonResponse:
-    """Delete a user's credentials for the calling client
+    """Disconnect a user's campus credentials
 
     DELETE /credentials/{provider}/{user_id}/
-    Authorization: operator only (#854).
+    Authorization: the operator, or a designated admin user whose
+    grant row and token cover credentials:write (#1055).
 
-    Returns: {
-        "success": true
+    Body (optional): {
+        "client_id": <optional_client_id>  # disconnect an arbitrary
+        # integration's record for (provider, user_id); the calling
+        # client's record is the default (#1055)
     }
+    Returns: {}
     """
-    authz.require_operator("delete credential records")
-    client_id = flask.g.current_client.id
+    authz.require_operator(
+        "delete credential records",
+        admin_scope=authz.CREDENTIALS_WRITE,
+    )
     _reject_non_campus_provider(provider)
+    client_id = client_id or flask.g.current_client.id
+    assert client_id  # Authorization already done by this point
     creds_resource[provider][user_id].delete(client_id)
+    get_yapper().emit(
+        'campus.credentials.disconnect',
+        {
+            "provider": provider,
+            "user_id": str(user_id),
+            "client_id": str(client_id),
+        }
+    )
     return {}, 200
 
 
@@ -113,23 +207,32 @@ def get_by_user(
         provider: str,
         user_id: schema.UserID,
         client_id: schema.CampusID | None = None,
+        include: str | None = None,
 ) -> flask_campus.JsonResponse:
     """Get a user's campus credentials for the calling client
 
     GET /credentials/{provider}/{user_id}/
-    Authorization: operator only (#854).
+    Authorization: the operator, or a designated admin user whose
+    grant row and token cover credentials:read (#1055). Redacted by
+    default (#1055): token metadata only.
 
     Query Params: {
-        "client_id": <optional_client_id>
+        "client_id": <optional_client_id>,
+        "include": "token"  # opt-in for the raw token;
+                            # operator/super-admin only
     }
     Returns: { ... }
     """
-    authz.require_operator("read credential records")
+    authz.require_operator(
+        "read credential records",
+        admin_scope=authz.CREDENTIALS_READ,
+    )
     _reject_non_campus_provider(provider)
+    include_token = _require_token_disclosure(include)
     client_id = client_id or flask.g.current_client.id
     assert client_id  # Authorization already done by this point
     credentials = creds_resource[provider][user_id].get(client_id)
-    return credentials.to_resource(), 200
+    return _credentials_view(credentials, include_token), 200
 
 
 @bp.patch("/<provider>/<user_id>/")
@@ -150,7 +253,10 @@ def update_credentials(
     }
     Returns: {}
     """
-    authz.require_operator("update credential records")
+    authz.require_operator(
+        "update credential records",
+        admin_scope=authz.CREDENTIALS_WRITE,
+    )
     _reject_non_campus_provider(provider)
     client_id = flask.g.current_client.id
     try:
@@ -173,6 +279,14 @@ def update_credentials(
     creds_resource[provider][user_id].update(
         client_id,
         oauth_token
+    )
+    get_yapper().emit(
+        'campus.credentials.update',
+        {
+            "provider": provider,
+            "user_id": str(user_id),
+            "client_id": str(client_id),
+        }
     )
     return {}, 200
 
@@ -201,7 +315,10 @@ def new_credentials(
         "credentials": { ... }
     }
     """
-    authz.require_operator("issue credential records")
+    authz.require_operator(
+        "issue credential records",
+        admin_scope=authz.CREDENTIALS_WRITE,
+    )
     _reject_non_campus_provider(provider)
     client_id = flask.g.current_client.id
     credentials = creds_resource[provider][user_id].new(
