@@ -33,13 +33,13 @@ identity; your app owns its features. Three building blocks:
 
 | Piece | Where it lives | What it gives you |
 |---|---|---|
-| `campus-suite` (the `campus` package) | [campus](https://github.com/nyjc-computing/campus) | `flask_campus` login manager, shared models |
+| `flask-campus` (the `campus.flask_campus` middleware) | [flask-campus](https://github.com/nyjc-computing/flask-campus) | `flask_campus` login manager, shared models |
 | `campus-api-python` (the `campus_python` package) | [campus-api-python](https://github.com/nyjc-computing/campus-api-python) | the typed API client (`Campus(...)`) |
 | your OAuth client record | campus.auth | `CLIENT_ID` / `CLIENT_SECRET` for your app |
 
 ## 1. Scaffold the repository
 
-Poetry project with Flask and the two Campus packages — copy the dependency
+Poetry project with Flask and the three Campus wheels — copy the dependency
 block from campus-classroom's `pyproject.toml`:
 
 ```toml
@@ -48,9 +48,14 @@ python = ">=3.11,<3.14"
 flask = "^3.0.0"
 python-dotenv = "^1.2.1"
 
-campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
-campus-suite = {git = "https://github.com/nyjc-computing/campus.git", branch = "weekly"}
+campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.3.1/campus_common-0.3.1-py3-none-any.whl"}
+flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.3/flask_campus-0.1.3-py3-none-any.whl"}
+campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.6.0/campus_api_python-0.6.0-py3-none-any.whl"}
 ```
+
+Apps never install campus-suite — `flask_campus` and the audit
+middleware ship in the flask-campus wheel, and every Campus dist is a
+version-pinned release wheel (see [PACKAGING.md](PACKAGING.md)).
 
 For the dev container, copy the shared template rather than inventing one
 ([devcontainer-flask](https://github.com/nyjc-computing/campus-devcontainer-flask)):

@@ -129,10 +129,10 @@ def bootstrap_venv(wt_root: Path, main_root_path: Path) -> None:
 
     # The campus distributions all resolve through poetry now — release
     # wheels for the carved dists (campus-common/model/deploy/flask-campus)
-    # and a git dep for campus_python — so the branch's poetry.lock is the
-    # source of truth. Syncing from the lock replaces the old hand-copy of
-    # the main venv's site-packages, which propagated stale locally-built
-    # builds into every fresh worktree (#971).
+    # and the campus_api_python release wheel — so the branch's poetry.lock
+    # is the source of truth. Syncing from the lock replaces the old
+    # hand-copy of the main venv's site-packages, which propagated stale
+    # locally-built builds into every fresh worktree (#971).
     poetry = shutil.which("poetry")
     if poetry:
         venv_bin = wt_py.parent
