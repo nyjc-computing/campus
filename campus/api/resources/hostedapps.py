@@ -160,17 +160,18 @@ class HostedAppsResource:
                 "Hosted app slug already taken",
                 slug=slug,
             )
+        content_hash = _content_hash(data)
         app = HostedApp(
             slug=slug,
             name=name,
-            content_hash=_content_hash(data),
+            content_hash=content_hash,
             size=len(data),
             content_type=content_type,
             uploaded_by_client_id=client_id,
             uploaded_by_user_id=user_id,
         )
         get_hostedapps_bucket().put(
-            app.content_hash, data, metadata={"content_type": content_type}
+            content_hash, data, metadata={"content_type": content_type}
         )
         hostedapps_storage.insert_one(app.to_storage())
         return app.to_resource()
