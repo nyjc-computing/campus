@@ -337,6 +337,41 @@ class TestCampusRequest(JsonClient):
         )
         return FlaskTestResponse(response)
 
+    def put_data(
+        self: Self,
+        path: str,
+        data: bytes | str,
+        content_type: str | None = None
+    ) -> FlaskTestResponse:
+        """Sends a PUT request with a raw body.
+
+        Mirrors CampusRequest.put_data (sdk 0.6.0): the body is sent
+        verbatim with caller-controlled Content-Type, e.g. files
+        by-slug uploads.
+
+        Args:
+            path: Request path
+            data: Raw request body
+            content_type: Content-Type header for the body, or None to
+                leave it to Flask's default handling
+
+        Returns:
+            FlaskTestResponse wrapping the test client response
+        """
+        app = self._get_app_for_request(path)
+        test_client = app.test_client()
+        full_path = self._make_path(path)
+
+        headers = self._get_auth_headers_dict()
+        if content_type:
+            headers["Content-Type"] = content_type
+        response = test_client.put(
+            full_path,
+            data=data,
+            headers=headers
+        )
+        return FlaskTestResponse(response)
+
     def delete(
         self: Self,
         path: str,

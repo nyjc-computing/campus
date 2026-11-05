@@ -41,6 +41,15 @@ class FlaskTestResponse:
         """Returns the response body as a string."""
         return self._response.get_data(as_text=True)
 
+    @property
+    def content(self) -> bytes:
+        """Returns the response body as bytes, undecoded.
+
+        Mirrors CampusResponse.content (sdk 0.6.0): file content is
+        binary, callers decode.
+        """
+        return self._response.get_data()
+
     def ok(self) -> bool:
         """Returns True if the response status code is 2xx, False otherwise."""
         return 200 <= self.status_code < 300
