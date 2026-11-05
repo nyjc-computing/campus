@@ -125,6 +125,44 @@ _MULTIPLE_CHOICE_RESPONSE_SCHEMA = {
     },
 }
 
+_DOCUMENT_QUESTION_SCHEMA = {
+    "$schema": _SCHEMA_DRAFT,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["html"],
+    "properties": {
+        "html": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2_000_000,
+            "description": "Complete single-file HTML5 document: the "
+                           "interactive app's source. Served from a "
+                           "dedicated embed origin in a sandboxed iframe "
+                           "and never with platform privileges "
+                           "(campus-classroom#78).",
+        },
+    },
+}
+
+_DOCUMENT_RESPONSE_SCHEMA = {
+    "$schema": _SCHEMA_DRAFT,
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["html"],
+    "properties": {
+        "html": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5_000_000,
+            "description": "Exported DOM snapshot of the student's "
+                           "document at submit time: script-free markup "
+                           "that renders inert in a script-disabled "
+                           "iframe. A client attestation, not verified "
+                           "evidence.",
+        },
+    },
+}
+
 
 def _check_multiple_choice(question_data: dict, response_data: dict) -> None:
     """Cross-check an MCQ response against its question's options.
@@ -192,6 +230,12 @@ REGISTRY: dict[str, QuestionType] = {
             question_schema=_MULTIPLE_CHOICE_QUESTION_SCHEMA,
             response_schema=_MULTIPLE_CHOICE_RESPONSE_SCHEMA,
             validate_against_question=_check_multiple_choice,
+        ),
+        QuestionType(
+            type_id="document",
+            label="Interactive document",
+            question_schema=_DOCUMENT_QUESTION_SCHEMA,
+            response_schema=_DOCUMENT_RESPONSE_SCHEMA,
         ),
     ]
 }

@@ -30,6 +30,20 @@ def _mcq_question(**overrides):
     return Question(**fields)
 
 
+def _document_question(**overrides):
+    """A valid document Question for snapshot response checks."""
+    from campus.model import Question
+    fields = {
+        "id": "q1",
+        "prompt": "",
+        "question": "Explore the page and submit your work.",
+        "type": "document",
+        "data": {"html": "<!DOCTYPE html><html><body><p>App</p></body></html>"},
+    }
+    fields.update(overrides)
+    return Question(**fields)
+
+
 class TestQuestionsFromPayloads(unittest.TestCase):
     """questions_from_payloads: construction + registry validation."""
 
@@ -102,6 +116,49 @@ class TestQuestionsFromPayloads(unittest.TestCase):
             )
         self.assertEqual(ctx.exception.field_errors[0]["field"],
                          "questions[0]")
+
+    def test_document_question_accepted(self):
+        """A well-formed single-file document question passes."""
+        from campus.api import questionschemas
+
+        questions = questionschemas.questions_from_payloads(
+            [{"id": "q1", "prompt": "", "question": "Explore.",
+              "type": "document",
+              "data": {"html": "<!DOCTYPE html><html><body></body></html>"}}],
+            "questions",
+        )
+        self.assertEqual(questions[0].type, "document")
+
+    def test_document_question_requires_html(self):
+        """A document question without data.html is rejected."""
+        from campus.api import questionschemas
+        from campus.common.errors import ValidationError
+
+        with self.assertRaises(ValidationError) as ctx:
+            questionschemas.questions_from_payloads(
+                [{"id": "q1", "prompt": "", "question": "Explore.",
+                  "type": "document", "data": {}}],
+                "questions",
+            )
+        self.assertEqual(
+            ctx.exception.field_errors[0]["field"], "questions[0].data"
+        )
+
+    def test_document_question_oversize_rejected(self):
+        """A document over the 2MB question cap is rejected."""
+        from campus.api import questionschemas
+        from campus.common.errors import ValidationError
+
+        with self.assertRaises(ValidationError) as ctx:
+            questionschemas.questions_from_payloads(
+                [{"id": "q1", "prompt": "", "question": "Explore.",
+                  "type": "document",
+                  "data": {"html": "<p>" + "x" * 2_000_000}}],
+                "questions",
+            )
+        self.assertEqual(
+            ctx.exception.field_errors[0]["field"], "questions[0].data"
+        )
 
 
 class TestResponsesFromPayloads(unittest.TestCase):
@@ -209,6 +266,52 @@ class TestResponsesFromPayloads(unittest.TestCase):
                 questions=[question],
             )
         self.assertIn("duplicate ids", ctx.exception.field_errors[0]["message"])
+
+    def test_document_snapshot_response_accepted(self):
+        """An exported snapshot satisfies the document response schema."""
+        from campus.api import questionschemas
+
+        responses = questionschemas.responses_from_payloads(
+            [{"question_id": "q1", "question_type": "document",
+              "response_data": {"html": "<html><body><p>Work</p></body></html>"}}],
+            "responses",
+            questions=[_document_question()],
+        )
+        self.assertEqual(responses[0].response_data,
+                         {"html": "<html><body><p>Work</p></body></html>"})
+
+    def test_document_legacy_text_rejected(self):
+        """A legacy response_text answer fails the document schema."""
+        from campus.api import questionschemas
+        from campus.common.errors import ValidationError
+
+        with self.assertRaises(ValidationError) as ctx:
+            questionschemas.responses_from_payloads(
+                [{"question_id": "q1", "response_text": "typed, not exported"}],
+                "responses",
+                questions=[_document_question()],
+            )
+        self.assertEqual(
+            ctx.exception.field_errors[0]["field"],
+            "responses[0].response_data",
+        )
+
+    def test_document_snapshot_oversize_rejected(self):
+        """A snapshot over the 5MB response cap is rejected."""
+        from campus.api import questionschemas
+        from campus.common.errors import ValidationError
+
+        with self.assertRaises(ValidationError) as ctx:
+            questionschemas.responses_from_payloads(
+                [{"question_id": "q1", "question_type": "document",
+                  "response_data": {"html": "<p>" + "x" * 5_000_000}}],
+                "responses",
+                questions=[_document_question()],
+            )
+        self.assertEqual(
+            ctx.exception.field_errors[0]["field"],
+            "responses[0].response_data",
+        )
 
     def test_unknown_question_falls_back_to_payload_type(self):
         """Unknown question_ids validate against the payload's type only.
