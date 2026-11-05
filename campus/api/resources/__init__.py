@@ -20,7 +20,7 @@ from .assignment import AssignmentsResource
 from .circle import CirclesResource
 from .emailotp import EmailOTPResource
 from .files import FilesResource
-from .hostedapps import HostedAppsResource, HostedAppResource
+from .hostedapps import HostedAppsResource
 from .submission import SubmissionsResource
 from .timetable import TimetablesResource
 

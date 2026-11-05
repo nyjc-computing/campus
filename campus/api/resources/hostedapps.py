@@ -20,7 +20,6 @@ import typing
 import campus.storage
 from campus.common import schema
 from campus.common.errors import api_errors
-from campus.common.utils import uid
 from campus.model import HostedApp
 
 hostedapps_storage = campus.storage.get_collection("hostedapps")
