@@ -125,23 +125,51 @@ _MULTIPLE_CHOICE_RESPONSE_SCHEMA = {
     },
 }
 
+# A document question carries exactly one source of the interactive
+# app: inline html (legacy) or a campus.api files slug whose current
+# bytes are the app (reference semantics — replacing the file's
+# content updates served assignments in place, #1062). Each anyOf
+# branch carries its own additionalProperties: false, so a payload
+# with both keys matches neither branch and is rejected as ambiguous.
+# The schema cannot see the files collection, so a slug naming a
+# missing file is accepted here and surfaces at serve time.
+_HTML_PROPERTY = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 2_000_000,
+    "description": "Complete single-file HTML5 document: the "
+                   "interactive app's source. Served from a "
+                   "dedicated embed origin in a sandboxed iframe "
+                   "and never with platform privileges "
+                   "(campus-classroom#78).",
+}
+_SLUG_PROPERTY = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 512,
+    "pattern": "^[A-Za-z0-9._/-]+$",
+    "description": "Stable campus.api files slug (e.g. "
+                   "apps/quest-dom) whose current bytes are the "
+                   "interactive app; the app is referenced, so "
+                   "replacing the file's content updates served "
+                   "assignments in place. Bounds mirror the files "
+                   "service's slug validation.",
+}
 _DOCUMENT_QUESTION_SCHEMA = {
     "$schema": _SCHEMA_DRAFT,
     "type": "object",
-    "additionalProperties": False,
-    "required": ["html"],
-    "properties": {
-        "html": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2_000_000,
-            "description": "Complete single-file HTML5 document: the "
-                           "interactive app's source. Served from a "
-                           "dedicated embed origin in a sandboxed iframe "
-                           "and never with platform privileges "
-                           "(campus-classroom#78).",
+    "anyOf": [
+        {
+            "required": ["html"],
+            "additionalProperties": False,
+            "properties": {"html": _HTML_PROPERTY},
         },
-    },
+        {
+            "required": ["slug"],
+            "additionalProperties": False,
+            "properties": {"slug": _SLUG_PROPERTY},
+        },
+    ],
 }
 
 _DOCUMENT_RESPONSE_SCHEMA = {

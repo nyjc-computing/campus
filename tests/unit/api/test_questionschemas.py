@@ -129,6 +129,36 @@ class TestQuestionsFromPayloads(unittest.TestCase):
         )
         self.assertEqual(questions[0].type, "document")
 
+    def test_document_question_slug_accepted(self):
+        """A slug-referencing document question passes (#1062)."""
+        from campus.api import questionschemas
+
+        questions = questionschemas.questions_from_payloads(
+            [{"id": "q1", "prompt": "", "question": "Explore.",
+              "type": "document",
+              "data": {"slug": "apps/quest-dom"}}],
+            "questions",
+        )
+        self.assertEqual(questions[0].type, "document")
+        self.assertEqual(questions[0].data, {"slug": "apps/quest-dom"})
+
+    def test_document_question_html_and_slug_rejected(self):
+        """A question carrying both html and slug is ambiguous, hence
+        rejected: neither anyOf branch tolerates the other key."""
+        from campus.api import questionschemas
+        from campus.common.errors import ValidationError
+
+        with self.assertRaises(ValidationError) as ctx:
+            questionschemas.questions_from_payloads(
+                [{"id": "q1", "prompt": "", "question": "Explore.",
+                  "type": "document",
+                  "data": {"slug": "apps/quest-dom", "html": "<p>x</p>"}}],
+                "questions",
+            )
+        self.assertEqual(
+            ctx.exception.field_errors[0]["field"], "questions[0].data"
+        )
+
     def test_document_question_requires_html(self):
         """A document question without data.html is rejected."""
         from campus.api import questionschemas
@@ -138,6 +168,39 @@ class TestQuestionsFromPayloads(unittest.TestCase):
             questionschemas.questions_from_payloads(
                 [{"id": "q1", "prompt": "", "question": "Explore.",
                   "type": "document", "data": {}}],
+                "questions",
+            )
+        self.assertEqual(
+            ctx.exception.field_errors[0]["field"], "questions[0].data"
+        )
+
+    def test_document_question_slug_oversize_rejected(self):
+        """A slug over the files service's 512-character cap is rejected."""
+        from campus.api import questionschemas
+        from campus.common.errors import ValidationError
+
+        with self.assertRaises(ValidationError) as ctx:
+            questionschemas.questions_from_payloads(
+                [{"id": "q1", "prompt": "", "question": "Explore.",
+                  "type": "document",
+                  "data": {"slug": "apps/" + "x" * 508}}],
+                "questions",
+            )
+        self.assertEqual(
+            ctx.exception.field_errors[0]["field"], "questions[0].data"
+        )
+
+    def test_document_question_slug_invalid_chars_rejected(self):
+        """A slug with characters outside the files service's allowed
+        set is rejected (spaces are not slug characters)."""
+        from campus.api import questionschemas
+        from campus.common.errors import ValidationError
+
+        with self.assertRaises(ValidationError) as ctx:
+            questionschemas.questions_from_payloads(
+                [{"id": "q1", "prompt": "", "question": "Explore.",
+                  "type": "document",
+                  "data": {"slug": "apps/quest dom"}}],
                 "questions",
             )
         self.assertEqual(
