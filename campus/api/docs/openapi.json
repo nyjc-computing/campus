@@ -104,7 +104,7 @@
   "info": {
     "description": "Campus API for managing educational resources.\n\n## Error Responses\n\nAll error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.\n\n## Error Codes\n\nCommon error codes:\n- `INVALID_REQUEST` (400): Malformed or invalid request\n- `UNAUTHORIZED` (401): Missing or invalid authentication\n- `FORBIDDEN` (403): Insufficient permissions\n- `NOT_FOUND` (404): Resource not found\n- `VALIDATION_FAILED` (422): Request validation failed with field-level errors\n- `CONFLICT` (409): Resource state conflict\n- `INTERNAL_ERROR` (500): Unexpected server error\n- `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later\n\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
     "title": "Campus API",
-    "version": "0.12.0"
+    "version": "0.13.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -1254,6 +1254,171 @@
         ]
       }
     },
+    "/api/v1/hostedapps/": {
+      "get": {
+        "description": "Method:\n    GET /hostedapps\n\nQuery Parameters:\n    prefix: str | None (optional)\n        Only include apps whose slug starts with this prefix.\n\nResponses:\n    200 OK: dict\n        {\"data\": [hosted app resources]}",
+        "operationId": "api_v1_hostedapps_list_apps",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "prefix",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List hosted apps, optionally under a slug prefix.",
+        "tags": [
+          "hostedapps"
+        ]
+      }
+    },
+    "/api/v1/hostedapps/by-slug/{slug}": {
+      "delete": {
+        "description": "Responses:\n    200 OK: {}\n    404 Not Found: {\"error\": \"Hosted app not found\"}",
+        "operationId": "api_v1_hostedapps_delete_app_by_slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete a hosted app (record and content) by slug",
+        "tags": [
+          "hostedapps"
+        ]
+      },
+      "get": {
+        "description": "Serve the app's bytes with its stored Content-Type, an ETag and\nshort-lived caching headers. Add `meta=1` to receive the metadata\nresource instead.\n\nResponses:\n    200 OK: bytes (application/json metadata with meta=1)\n    404 Not Found: {\"error\": \"Hosted app not found\"}",
+        "operationId": "api_v1_hostedapps_get_app_by_slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a hosted app's content (or metadata) by slug",
+        "tags": [
+          "hostedapps"
+        ]
+      },
+      "put": {
+        "description": "The request body is the raw app content; the Content-Type header is\nstored and served back. Content is stored content-addressed (sha256\nkey), so replacing re-points the slug at the new bytes \u2014 consumers\nreferencing the slug serve the new version. Replacing keeps the\nslug's URL stable; an optional ?name= sets the display name for new\napps (replaces keep their stored name unless ?name= is given).\n\nResponses:\n    201 Created: dict (created)\n    200 OK: dict (replaced)\n    400 Bad Request: invalid slug or empty body",
+        "operationId": "api_v1_hostedapps_put_app_by_slug",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Create or replace a hosted app by slug (upsert)",
+        "tags": [
+          "hostedapps"
+        ]
+      }
+    },
+    "/api/v1/hostedapps/{hostedapp_id}/": {
+      "get": {
+        "description": "Responses:\n    200 OK: dict\n    404 Not Found",
+        "operationId": "api_v1_hostedapps_get_app",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hostedapp_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a hosted app record by id.",
+        "tags": [
+          "hostedapps"
+        ]
+      }
+    },
+    "/api/v1/hostedapps/{hostedapp_id}/content/": {
+      "get": {
+        "description": "Responses:\n    200 OK: bytes\n    404 Not Found",
+        "operationId": "api_v1_hostedapps_get_app_content",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "hostedapp_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get a hosted app's content bytes by id.",
+        "tags": [
+          "hostedapps"
+        ]
+      }
+    },
     "/api/v1/submissions/": {
       "get": {
         "description": "List all submissions matching filter requirements\n\nmatching filter requirements.\n\nMethod:\n    GET /submissions\n\nQuery Parameters:\n    assignment_id: str (optional)\n        Filter by assignment\n    student_id: str (optional)\n        Filter by student\n    course_id: str (optional)\n        Filter by Google Classroom course\n\nResponses:\n    200 OK: dict\n        {\"data\": [submission resources]}",
@@ -1962,6 +2127,9 @@
     },
     {
       "name": "files"
+    },
+    {
+      "name": "hostedapps"
     },
     {
       "name": "submissions"

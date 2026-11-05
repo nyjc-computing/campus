@@ -9,6 +9,7 @@ __all__ = [
     "emailotp",
     "assignments",
     "files",
+    "hostedapps",
     "submissions",
     "timetable",
 ]
@@ -19,6 +20,7 @@ from . import (
     circles,
     emailotp,
     files,
+    hostedapps,
     submissions,
     timetable,
 )
