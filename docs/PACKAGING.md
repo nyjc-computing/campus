@@ -112,8 +112,8 @@ Apps install the consumer dists and **never** campus-suite:
 [tool.poetry.dependencies]
 flask = "^3.0.0"
 campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.3.1/campus_common-0.3.1-py3-none-any.whl"}
-flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.2/flask_campus-0.1.2-py3-none-any.whl"}
-campus-api-python = {git = "https://github.com/nyjc-computing/campus-api-python.git", branch = "main"}
+flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.3/flask_campus-0.1.3-py3-none-any.whl"}
+campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.6.0/campus_api_python-0.6.0-py3-none-any.whl"}
 ```
 
 Import paths are unchanged from the monorepo era — the portions merge
@@ -141,9 +141,19 @@ same relock that takes a new transitive version.
 
 ### Client Library Installation
 
-```bash
-poetry add git+https://github.com/nyjc-computing/campus-api-python.git@main
+The SDK ships versioned wheels like every other dist (sdk#137). Pin the
+release wheel by URL (the import package is `campus_python`):
+
+```toml
+campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.6.0/campus_api_python-0.6.0-py3-none-any.whl"}
 ```
+
+Cut an SDK release by pushing an annotated `v*` tag on campus-api-python:
+CI builds the wheel and attaches it to the GitHub release (the tag
+annotation is the release body). Read that release's notes before
+bumping — strict-0.x minors are breaking. Note flask-campus's wheel
+metadata pins a specific SDK wheel URL, so an SDK bump requires a
+flask-campus rebuild (relock both together).
 
 ## Building and Validation
 
@@ -220,6 +230,7 @@ poetry run python -c "import campus.auth; import campus.api; import campus.stora
 
 Shared layers are consumed as release wheels pinned by URL: reproducible
 builds, explicit per-repo bump decisions, and no PyPI publishing delays.
-The SDK (campus_python) remains a git-branch pin. When the ecosystem
-stabilizes at 1.0.0, dists can move to PyPI with real range constraints
-while keeping git pins for bleeding-edge access.
+The client SDK (campus_python — outside the `campus` namespace) is
+published the same way: versioned wheels pinned by URL (sdk#137). When
+the ecosystem stabilizes at 1.0.0, dists can move to PyPI with real
+range constraints.
