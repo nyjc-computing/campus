@@ -119,7 +119,10 @@ def _forbid_forbidden_shapes(
     - sessions:admin and credentials:admin rows are inert (#1055):
       nothing sits above revoke/write, so both vocabularies are
       grantable up to write and their grant administration stays
-      operator-only.
+      operator-only;
+    - timetable:mod rows are inert: no moderation action exists on
+      timetables, so the vocabulary is grantable at read/write/admin
+      only.
     """
     if resource_type == "clients" and level == "admin":
         raise api_errors.ForbiddenError(
@@ -140,6 +143,13 @@ def _forbid_forbidden_shapes(
             "(#1055): the credentials vocabulary is grantable up to "
             "write (read reads metadata, write disconnects/updates); "
             "administering its grants stays operator-only"
+        )
+    if resource_type == "timetable" and level == "mod":
+        raise api_errors.ForbiddenError(
+            "A 'timetable:mod' grant has nothing to govern: the "
+            "timetable vocabulary is grantable at read, write, and "
+            "admin (read views timetable data, write creates/updates "
+            "timetable versions, admin governs its grants)"
         )
     if resource_type == "vault" and not resource_id:
         raise api_errors.InvalidRequestError(

@@ -37,7 +37,13 @@ grant_storage = campus.storage.get_table("access_grants")
 VAULT = "vault"
 
 _GRANTEE_TYPES = ("client", "user")
-_RESOURCE_TYPES = (VAULT, "clients", "users", "credentials", "sessions")
+# timetable: the NYXchange timetable resource — read views timetable
+# data, write creates/updates timetable versions, admin governs the
+# vocabulary's grants (the timetable upload endpoint gates on it).
+# mod rows are rejected at the grant routes as inert.
+_RESOURCE_TYPES = (
+    VAULT, "clients", "users", "credentials", "sessions", "timetable",
+)
 _LEVELS = ("read", "mod", "write", "admin")
 
 

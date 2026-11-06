@@ -131,6 +131,35 @@ class TestGrantsStore(GrantsTestCase):
             grants.check("user", "u1", "users", level="read")
         )
 
+    def test_timetable_vocabulary_uses_monotonic_algebra(self):
+        """timetable rows store levels and check through the same
+        covering algebra: admin governs the vocabulary's grants, write
+        creates/updates timetable versions, read views timetable data.
+        """
+        from campus.auth.resources.grant import grants
+        grants.grant("user", "u2", "timetable", level="admin")
+        self.assertTrue(
+            grants.check("user", "u2", "timetable", level="admin")
+        )
+        self.assertTrue(
+            grants.check("user", "u2", "timetable", level="write")
+        )
+        self.assertTrue(
+            grants.check("user", "u2", "timetable", level="read")
+        )
+        # A read-level row does not cover admin
+        grants.grant("user", "u3", "timetable", level="read")
+        self.assertTrue(
+            grants.check("user", "u3", "timetable", level="read")
+        )
+        self.assertFalse(
+            grants.check("user", "u3", "timetable", level="admin")
+        )
+        # A different vocabulary's grant never matches
+        self.assertFalse(
+            grants.check("user", "u3", "users", level="read")
+        )
+
     def test_validation_rejects_mixed_permission_legs(self):
         from campus.auth.resources.grant import grants
         with self.assertRaises(api_errors.InvalidRequestError):
