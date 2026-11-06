@@ -325,10 +325,11 @@ class TimetablesResource:
                 if effective_at is not None:
                     dated.append((effective_at, row))
         if pending:
-            if dated:
-                row = min(dated, key=lambda pair: pair[0])[1]
-            else:
-                row = max(pending, key=lambda r: r["created_at"])
+            row = (
+                min(dated, key=lambda pair: pair[0])[1]
+                if dated
+                else max(pending, key=lambda r: r["created_at"])
+            )
             return {
                 "timetable_id": schema.CampusID(row["timetable_id"]),
                 "effective_from": row.get("effective_from"),
