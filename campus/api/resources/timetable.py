@@ -296,12 +296,13 @@ class TimetablesResource:
             schema.CampusID | None: The current timetable ID, or None if not set.
         """
         at_dt = at or utc_time.now()
-        past = [
-            r for r in _pointer_rows()
-            if (ef := _row_effective_at(r)) is not None and ef <= at_dt
-        ]
+        past: list[tuple[datetime.datetime, dict]] = []
+        for row in _pointer_rows():
+            effective_at = _row_effective_at(row)
+            if effective_at is not None and effective_at <= at_dt:
+                past.append((effective_at, row))
         if past:
-            latest = max(past, key=lambda r: _row_effective_at(r))
+            _, latest = max(past, key=lambda pair: pair[0])
             return schema.CampusID(latest["timetable_id"])
         return self._legacy_pointer("current")
 
@@ -315,18 +316,19 @@ class TimetablesResource:
             scheduled (legacy @metadata `next` resolves as undated).
         """
         now_dt = utc_time.now()
-        pending = []
-        for r in _pointer_rows():
-            ef = _row_effective_at(r)
-            if ef is None or ef > now_dt:
-                pending.append(r)
+        pending: list[dict] = []
+        dated: list[tuple[datetime.datetime, dict]] = []
+        for row in _pointer_rows():
+            effective_at = _row_effective_at(row)
+            if effective_at is None or effective_at > now_dt:
+                pending.append(row)
+                if effective_at is not None:
+                    dated.append((effective_at, row))
         if pending:
-            dated = [r for r in pending if _row_effective_at(r) is not None]
-            row = (
-                min(dated, key=_row_effective_at)
-                if dated
-                else max(pending, key=lambda r: r["created_at"])
-            )
+            if dated:
+                row = min(dated, key=lambda pair: pair[0])[1]
+            else:
+                row = max(pending, key=lambda r: r["created_at"])
             return {
                 "timetable_id": schema.CampusID(row["timetable_id"]),
                 "effective_from": row.get("effective_from"),
@@ -416,10 +418,11 @@ class TimetablesResource:
             dict: The appended trail row.
         """
         now_dt = utc_time.now()
-        pending = [
-            r for r in _pointer_rows()
-            if _row_effective_at(r) is None or _row_effective_at(r) > now_dt
-        ]
+        pending: list[dict] = []
+        for stale_row in _pointer_rows():
+            effective_at = _row_effective_at(stale_row)
+            if effective_at is None or effective_at > now_dt:
+                pending.append(stale_row)
         try:
             row = self._append_pointer_row(
                 timetable_id, effective_from, actor_id
