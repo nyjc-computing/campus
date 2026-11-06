@@ -43,13 +43,9 @@ from .timetable import (
     timetable_lessongroup_collection,
     timetable_lessongroupmembers_table,
 )
+from .timetable import parse_effective_from as parse_effective_from
 
 subjcombi_collection = campus.storage.get_collection("subjcombi")
-
-# School time is Singapore time (UTC+8, no DST). A date-only
-# effective_from means 07:00 school time — the committee's default
-# switch-over hour, before the first period.
-SGT = datetime.timezone(datetime.timedelta(hours=8), name="SGT")
 
 
 def to_resource(record: dict) -> dict:
@@ -63,32 +59,6 @@ def to_resource(record: dict) -> dict:
 
 def _now() -> datetime.datetime:
     return utc_time.now()
-
-
-def parse_effective_from(raw: str | None) -> datetime.datetime:
-    """Parse an effective_from request value into an aware UTC datetime.
-
-    - absent/None: now (immediate change);
-    - date-only (`YYYY-MM-DD`): 07:00 school time (SGT) on that date;
-    - ISO datetime: as given, naive values interpreted as school time.
-    """
-    if raw is None:
-        return _now()
-    text = raw.strip()
-    try:
-        if len(text) == 10:
-            day = datetime.date.fromisoformat(text)
-            dt = datetime.datetime(day.year, day.month, day.day, 7, 0, tzinfo=SGT)
-        else:
-            dt = datetime.datetime.fromisoformat(text.replace("Z", "+00:00"))
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=SGT)
-    except ValueError as e:
-        raise api_errors.InvalidRequestError(
-            f"Invalid effective_from {raw!r}: use ISO datetime or "
-            "YYYY-MM-DD (applies 07:00 school time)",
-        ) from e
-    return dt.astimezone(datetime.timezone.utc)
 
 
 def _active(records: list[dict]) -> list[dict]:
