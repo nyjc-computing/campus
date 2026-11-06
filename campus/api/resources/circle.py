@@ -30,6 +30,7 @@ BOOTSTRAP_RESOURCES = (
     "assignments",
     "bookings",
     "submissions",
+    "subjcombi",
 )
 
 # Circles contain only circles: a user participates through their user

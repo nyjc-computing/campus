@@ -1419,6 +1419,172 @@
         ]
       }
     },
+    "/api/v1/subjcombi/pending": {
+      "get": {
+        "description": "At most one pending record per user; soonest switch first.\n\nMethod:\n    GET /subjcombi/pending\n\nResponses:\n    200 OK: dict\n        {\"data\": [subjcombi records]}",
+        "operationId": "api_v1_subjcombi_get_pending",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List scheduled mappings not yet effective.",
+        "tags": [
+          "subjcombi"
+        ]
+      }
+    },
+    "/api/v1/subjcombi/pending/{record_id}": {
+      "delete": {
+        "description": "The record stays on the trail, tombstoned with `cancelled_at` and\n`cancelled_by`. Already-effective records are immutable history\nand cannot be cancelled (409).\n\nMethod:\n    DELETE /subjcombi/pending/{record_id}\n\nPath Parameters:\n    record_id: CampusID\n        The subjcombi record to cancel.\n\nResponses:\n    200 OK: dict\n        The cancelled record.\n\n    404 Not Found: dict\n        Unknown record.\n\n    409 Conflict: dict\n        The record is already effective, cancelled, or superseded.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `subjcombi.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_subjcombi_cancel_pending",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Cancel a pending scheduled mapping.",
+        "tags": [
+          "subjcombi"
+        ]
+      }
+    },
+    "/api/v1/subjcombi/{user_id}": {
+      "get": {
+        "description": "Resolves through the maintained mapping, then the current\ntimetable's file-derived roster, then unmapped.\n\nMethod:\n    GET /subjcombi/{user_id}\n\nQuery Parameters:\n    at: str | None (optional)\n        ISO datetime to resolve the mapping as of (default: now).\n\nResponses:\n    200 OK: dict\n        {\"user_id\": ..., \"lessongroup_id\": ... | null,\n         \"source\": \"mapping\" | \"roster\" | \"unmapped\"}",
+        "operationId": "api_v1_subjcombi_get_subjcombi",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "at",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get the user's effective subject-combination mapping.",
+        "tags": [
+          "subjcombi"
+        ]
+      },
+      "put": {
+        "description": "Appends an effective-dated record; the previous pending record\n(if any) is superseded. Scheduled records take effect at their\n`effective_from` without any scheduler process.\n\nMethod:\n    PUT /subjcombi/{user_id}\n\nPath Parameters:\n    user_id: UserID\n        The user whose mapping is set (their campus account email).\n\nBody Parameters:\n    lessongroup_id: CampusID\n        The lessongroup to map the user to. Must reference a\n        lessongroup of an existing timetable.\n    reason: str | None (optional)\n        Free-text change note, preserved on the trail record.\n    effective_from: str | None (optional)\n        When the mapping takes effect: ISO datetime, or\n        `YYYY-MM-DD` for 07:00 school time on that date. Absent =\n        immediate.\n\nResponses:\n    201 Created: dict\n        The created trail record (includes\n        `previous_lessongroup_id` and `actor_id`).\n\n    400 Bad Request: dict\n        Unknown lessongroup or malformed `effective_from`.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `subjcombi.admin` circle (only user tokens are eligible).",
+        "operationId": "api_v1_subjcombi_set_subjcombi",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "effective_from": {
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "lessongroup_id": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "lessongroup_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Set the user's subject-combination mapping.",
+        "tags": [
+          "subjcombi"
+        ]
+      }
+    },
+    "/api/v1/subjcombi/{user_id}/history": {
+      "get": {
+        "description": "Every record ever appended for the user, newest `effective_from`\nfirst \u2014 including superseded and cancelled records.\n\nMethod:\n    GET /subjcombi/{user_id}/history\n\nResponses:\n    200 OK: dict\n        {\"data\": [subjcombi records]}",
+        "operationId": "api_v1_subjcombi_get_subjcombi_history",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get the user's full mapping mutation trail.",
+        "tags": [
+          "subjcombi"
+        ]
+      }
+    },
     "/api/v1/submissions/": {
       "get": {
         "description": "List all submissions matching filter requirements\n\nmatching filter requirements.\n\nMethod:\n    GET /submissions\n\nQuery Parameters:\n    assignment_id: str (optional)\n        Filter by assignment\n    student_id: str (optional)\n        Filter by student\n    course_id: str (optional)\n        Filter by Google Classroom course\n\nResponses:\n    200 OK: dict\n        {\"data\": [submission resources]}",
@@ -2130,6 +2296,9 @@
     },
     {
       "name": "hostedapps"
+    },
+    {
+      "name": "subjcombi"
     },
     {
       "name": "submissions"
