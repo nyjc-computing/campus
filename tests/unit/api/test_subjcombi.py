@@ -176,7 +176,7 @@ class TestSubjcombiResolve(unittest.TestCase):
                 ],
             }],
         )
-        self.timetables.set_current(timetable.id)
+        self.timetables.flip_current(timetable.id, actor_id="admin@campus.test")
 
         # No maintained mapping: the roster answers for its member.
         lessongroup_id = timetable.entries[0].lessongroup_id

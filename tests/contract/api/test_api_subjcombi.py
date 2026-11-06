@@ -54,9 +54,9 @@ class TestApiSubjcombiContract(unittest.TestCase):
         self.timetable_id = self._create_timetable()
         # Activate the timetable so the roster fallback has a current
         # version to resolve against.
-        activated = self.client.put(
-            "/api/v1/timetable/current",
-            json={"value": self.timetable_id},
+        activated = self.client.patch(
+            "/api/v1/timetable/",
+            json={"current": self.timetable_id},
             headers=self.auth_headers,
         )
         assert activated.status_code == 200, activated.get_json()
