@@ -3,13 +3,17 @@
 API routes for the Timetable resource.
 """
 
+import datetime
+
 import flask
 
 import campus.flask_campus as flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
+from campus.common.utils import utc_time
 
 from .. import authz
+from ..resources import subjcombi as subjcombi_resource
 from ..resources import timetable as timetable_resource
 from ..resources.timetable import parse_effective_from
 
@@ -176,6 +180,96 @@ def get_next() -> flask_campus.JsonResponse:
         'value': nxt["timetable_id"],
         'effective_from': nxt["effective_from"],
     }, 200
+
+
+@bp.get('/me')
+@flask_campus.unpack_request
+def get_my_timetable(at: str | None = None) -> flask_campus.JsonResponse:
+    """Resolve the signed-in user's effective timetable view (#592).
+
+    The subject is the bearer token's user — no user_id parameter.
+    The current leg resolves the active timetable version and the
+    user's effective subject combination (maintained mapping, else the
+    version's file-derived roster) at `at` (default now). The next leg
+    shows the state at the earliest pending change — a scheduled
+    version switch or the user's scheduled subjcombi record, whichever
+    comes first — with `change_type` telling the two planning cases
+    apart (whole-school vs affected-students-only). Entries are fetched
+    separately via /timetable/{id}/entries and filtered by
+    lessongroup_id.
+
+    Method:
+        GET /timetable/me
+
+    Query Parameters:
+        at: str | None (optional)
+            ISO datetime to resolve the view as of (default now).
+
+    Responses:
+        200 OK: dict
+            {"current": {timetable_id, lessongroup_id, source},
+             "next": null | {timetable_id, lessongroup_id, source,
+             effective_from, change_type: "timetable" | "subjcombi" |
+             "both"}}
+
+        401 Unauthorized: None
+            No authenticated user.
+    """
+    user = flask.g.get("current_user")
+    if not user or not getattr(user, "id", None):
+        raise api_errors.UnauthorizedError(
+            "Sign in to resolve your timetable"
+        )
+    user_id = schema.UserID(user.id)
+    now_dt = parse_effective_from(at) if at else utc_time.now()
+
+    def _leg(at_dt: datetime.datetime) -> dict:
+        timetable_id = timetable_resource.get_current(at_dt)
+        lessongroup_id, source = subjcombi_resource.resolve(user_id, at_dt)
+        return {
+            "timetable_id": timetable_id,
+            "lessongroup_id": lessongroup_id,
+            "source": source,
+        }
+
+    current_leg = _leg(now_dt)
+
+    # Earliest pending change after now: a dated version switch or the
+    # user's earliest scheduled subjcombi record. An undated staged
+    # switch has no known flip time and is not renderable as "next".
+    switch_candidates: list[datetime.datetime] = []
+    pending_pointer = timetable_resource.get_next()
+    if pending_pointer and pending_pointer["effective_from"]:
+        switch_candidates.append(
+            utc_time.from_rfc3339(pending_pointer["effective_from"])
+        )
+    pending_records = subjcombi_resource.pending(user_id)
+    if pending_records:
+        switch_candidates.append(
+            utc_time.from_rfc3339(pending_records[0]["effective_from"])
+        )
+    if not switch_candidates:
+        return {"current": current_leg, "next": None}, 200
+
+    switch_dt = min(switch_candidates)
+    next_leg = _leg(switch_dt)
+    version_changed = (
+        next_leg["timetable_id"] != current_leg["timetable_id"]
+    )
+    group_changed = (
+        next_leg["lessongroup_id"] != current_leg["lessongroup_id"]
+    )
+    if version_changed and group_changed:
+        change_type = "both"
+    elif version_changed:
+        change_type = "timetable"
+    else:
+        change_type = "subjcombi"
+    next_leg.update({
+        "effective_from": utc_time.to_rfc3339(switch_dt),
+        "change_type": change_type,
+    })
+    return {"current": current_leg, "next": next_leg}, 200
 
 
 def _require_user_id() -> schema.UserID:

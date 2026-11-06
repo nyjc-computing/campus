@@ -255,5 +255,194 @@ class TestTimetablePointersContract(unittest.TestCase):
         self.assertIn(self.timetable_id, ids)
 
 
+class TestTimetableMeContract(unittest.TestCase):
+    """HTTP contract tests for GET /timetable/me (#592, #1076).
+
+    The signed-in user's resolved view: active version + effective
+    subject combination (mapping overrides roster), plus the state at
+    the earliest pending change with its planning case.
+    """
+
+    USER_ID = schema.UserID("me.student@campus.test")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.apps_app
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        import contextlib
+
+        import campus.storage
+        from campus.api.resources.timetable import (
+            timetable_collection,
+            timetable_effective_collection,
+        )
+
+        self.manager.clear_test_data()
+        timetable_effective_collection.delete_matching({})
+        with contextlib.suppress(campus.storage.errors.NotFoundError):
+            timetable_collection.delete_by_id("@metadata")
+        self.client = self.app.test_client()
+        grant_circle_admin(str(self.USER_ID), "timetable", "subjcombi")
+
+    def _headers(self):
+        # Fresh token per request: minting a token invalidates the
+        # previous credential record.
+        return get_bearer_auth_headers(create_test_token(self.USER_ID))
+
+    def _lg_id(self, timetable_id: str) -> str:
+        from campus.api.resources.timetable import timetable_lessongroup_collection
+        rows = timetable_lessongroup_collection.get_matching({
+            "timetable_id": timetable_id,
+        })
+        assert rows, "expected the timetable to carry a lessongroup"
+        return rows[0]["id"]
+
+    def _create_timetable(self, filename: str, member: str | None) -> str:
+        lessongroups = [{
+            "label": "25A1",
+            "members": [member] if member else [],
+            "entries": [{"weekday": "MON", "timeslot": "0800",
+                         "venue": "B1-01"}],
+        }]
+        response = self.client.post(
+            "/api/v1/timetable/",
+            json={
+                "metadata": {
+                    "filename": filename,
+                    "start_date": "2026-01-01T00:00:00Z",
+                    "end_date": "2026-12-31T00:00:00Z",
+                },
+                "data": {"lessongroups": lessongroups},
+            },
+            headers=self._headers(),
+        )
+        assert response.status_code == 200, response.get_json()
+        return response.get_json()["data"]["id"]
+
+    def test_me_requires_auth(self):
+        response = self.client.get("/api/v1/timetable/me")
+        self.assertEqual(response.status_code, 401)
+
+    def test_roster_current_and_no_next(self):
+        tt_v1 = self._create_timetable("me-v1.xml", str(self.USER_ID))
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"current": tt_v1},
+            headers=self._headers(),
+        )
+        view = self.client.get(
+            "/api/v1/timetable/me", headers=self._headers()
+        )
+        self.assertEqual(view.status_code, 200)
+        data = view.get_json()
+        self.assertEqual(data["current"]["timetable_id"], tt_v1)
+        self.assertEqual(data["current"]["source"], "roster")
+        self.assertEqual(data["current"]["lessongroup_id"], self._lg_id(tt_v1))
+        self.assertIsNone(data["next"])
+
+    def test_scheduled_subjcombi_is_next(self):
+        tt_v1 = self._create_timetable("me-s1.xml", str(self.USER_ID))
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"current": tt_v1},
+            headers=self._headers(),
+        )
+        put = self.client.put(
+            f"/api/v1/subjcombi/{self.USER_ID}",
+            json={"lessongroup_id": self._lg_id(tt_v1),
+                  "effective_from": "2027-06-01"},
+            headers=self._headers(),
+        )
+        self.assertEqual(put.status_code, 201)
+        view = self.client.get(
+            "/api/v1/timetable/me", headers=self._headers()
+        )
+        data = view.get_json()
+        self.assertEqual(data["current"]["source"], "roster")
+        self.assertEqual(data["next"]["lessongroup_id"], self._lg_id(tt_v1))
+        self.assertEqual(data["next"]["source"], "mapping")
+        self.assertEqual(
+            data["next"]["effective_from"], "2027-05-31T23:00:00+00:00"
+        )
+        self.assertEqual(data["next"]["change_type"], "subjcombi")
+
+    def test_scheduled_version_switch_is_next(self):
+        tt_v1 = self._create_timetable("me-vv1.xml", str(self.USER_ID))
+        tt_v2 = self._create_timetable("me-vv2.xml", str(self.USER_ID))
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"current": tt_v1},
+            headers=self._headers(),
+        )
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"next": tt_v2, "effective_from": "2027-07-01"},
+            headers=self._headers(),
+        )
+        view = self.client.get(
+            "/api/v1/timetable/me", headers=self._headers()
+        )
+        data = view.get_json()
+        self.assertEqual(data["current"]["timetable_id"], tt_v1)
+        self.assertEqual(data["next"]["timetable_id"], tt_v2)
+        self.assertEqual(data["next"]["change_type"], "timetable")
+
+    def test_simultaneous_switch_and_subjcombi_is_both(self):
+        tt_v1 = self._create_timetable("me-b1.xml", str(self.USER_ID))
+        tt_v2 = self._create_timetable("me-b2.xml", str(self.USER_ID))
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"current": tt_v1},
+            headers=self._headers(),
+        )
+        # Both changes take effect at the same instant (date-only ->
+        # 07:00 SGT on the same day).
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"next": tt_v2, "effective_from": "2027-07-01"},
+            headers=self._headers(),
+        )
+        self.client.put(
+            f"/api/v1/subjcombi/{self.USER_ID}",
+            json={"lessongroup_id": self._lg_id(tt_v2),
+                  "effective_from": "2027-07-01"},
+            headers=self._headers(),
+        )
+        view = self.client.get(
+            "/api/v1/timetable/me", headers=self._headers()
+        )
+        data = view.get_json()
+        self.assertEqual(data["next"]["change_type"], "both")
+        self.assertEqual(data["next"]["timetable_id"], tt_v2)
+
+    def test_as_of_resolves_future_state(self):
+        tt_v1 = self._create_timetable("me-a1.xml", str(self.USER_ID))
+        tt_v2 = self._create_timetable("me-a2.xml", str(self.USER_ID))
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"current": tt_v1},
+            headers=self._headers(),
+        )
+        self.client.patch(
+            "/api/v1/timetable/",
+            json={"next": tt_v2, "effective_from": "2027-07-01"},
+            headers=self._headers(),
+        )
+        view = self.client.get(
+            "/api/v1/timetable/me",
+            query_string={"at": "2027-08-01T00:00:00Z"},
+            headers=self._headers(),
+        )
+        data = view.get_json()
+        self.assertEqual(data["current"]["timetable_id"], tt_v2)
+
+
 if __name__ == '__main__':
     unittest.main()
