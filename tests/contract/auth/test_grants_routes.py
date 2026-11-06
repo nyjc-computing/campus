@@ -289,6 +289,52 @@ class TestGrantsRoutes(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 201)
 
+    def test_timetable_mod_rows_rejected(self):
+        """timetable:mod rows are inert: no moderation action exists on
+        timetables — the vocabulary is grantable at read/write/admin."""
+        response = self.client.post(
+            f"{GRANTS_BASE}/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": TARGET_ID,
+                "resource_type": "timetable",
+                "level": "mod",
+            },
+            headers=self.operator_headers,
+        )
+        message = self.assert_forbidden(response)
+        self.assertIn("nothing to govern", message)
+
+    def test_timetable_read_rows_grantable(self):
+        """timetable:read rows are grantable."""
+        response = self.client.post(
+            f"{GRANTS_BASE}/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": TARGET_ID,
+                "resource_type": "timetable",
+                "level": "read",
+            },
+            headers=self.operator_headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_timetable_admin_rows_grantable(self):
+        """timetable:admin rows are grantable: admin governs the
+        vocabulary's grants and is the level the timetable upload
+        endpoint gates on."""
+        response = self.client.post(
+            f"{GRANTS_BASE}/",
+            json={
+                "grantee_type": "user",
+                "grantee_id": TARGET_ID,
+                "resource_type": "timetable",
+                "level": "admin",
+            },
+            headers=self.operator_headers,
+        )
+        self.assertEqual(response.status_code, 201)
+
     def test_user_vault_rows_carry_levels_not_bits(self):
         # #889: user vault grants are per-label level rows; bitflags
         # are the client-grantee grammar.

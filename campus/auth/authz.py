@@ -184,6 +184,16 @@ SESSIONS_WRITE = "sessions:write"
 CREDENTIALS_READ = "credentials:read"
 CREDENTIALS_WRITE = "credentials:write"
 
+# Timetable vocabulary: the NYXchange timetable resource (v2 upload
+# gate and the #124 processing flow). read views timetable data;
+# write creates/updates timetable versions and replaces the special
+# timetable files; admin governs the vocabulary's grants — the level
+# the timetable upload endpoint gates on. mod rows are rejected as
+# inert (no moderation action exists on timetables).
+TIMETABLE_READ = "timetable:read"
+TIMETABLE_WRITE = "timetable:write"
+TIMETABLE_ADMIN = "timetable:admin"
+
 # Client record fields reserved for the clients:admin scope: the scope
 # caps and the token-bridge flag are operator-controlled registration
 # data (docs/auth-token-invariants.md A1/B3/C1); a client-principal
