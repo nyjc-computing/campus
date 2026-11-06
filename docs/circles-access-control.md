@@ -35,6 +35,13 @@ The trade-off, accepted: campus has two permission systems
 (campus.auth grants for auth management, circles for domain access),
 and campus.api owns its own fail-closed gate discipline.
 
+The boundary is ratified (operator, 2026-11-06): campus.api resource
+routes never consult the access-grant store, and grant vocabularies
+opened for domain resources (e.g. `timetable:read/write/admin`,
+campus#1068) confer no campus.api authority. Consumers that minted
+such vocabulary are migrating back to circle membership
+(nyxchange-timetable-v2#126 sequences the retirement).
+
 ## Circle taxonomy
 
 | Tag | Meaning | Seeded |
@@ -189,8 +196,17 @@ authz.require_resource_admin(resource, action_label=None)
 - **Coverage**: mutation routes of all five guarded families
   (circles, timetable, assignments, bookings, submissions) gate;
   circle administration gates behind `circles.admin` first, since
-  membership editing is privilege escalation. Reads are open for now.
-  emailotp is user-facing OTP with no circle and stays ungated.
+  membership editing is privilege escalation. Reads require
+  authentication only — any authenticated principal, including bare
+  app clients (the api authenticator hook covers every `/api/v1`
+  route); no role requirement. Two slug-addressable families
+  deliberately defer resource-level gating with that same posture:
+  `files` and `hostedapps` accept writes from any authenticated
+  client (attribution recorded per write) until files associate with
+  circles — ratified 2026-11-06: files tied to a circle inherit that
+  circle's access control, so association lands before per-namespace
+  gates are built. emailotp is user-facing OTP with no circle and
+  stays ungated.
 - **Tests**: unit coverage in `tests/unit/api/test_authz.py`; the
   contract suites grant their test user role membership via
   `tests.fixtures.circles.grant_circle_admin`, and negative 403 cases
@@ -210,7 +226,10 @@ access resolving through the owning user's circle contents.
   (created lazily on first campus.api request? via an admin flow?
   synced from campus.auth accounts?)
 - How resources attach to circles (`sources` schema, #60) — user
-  circles' private resources and role circles' no-resources rule.
+  circles' private resources and role circles' no-resources rule. This
+  is the mechanism behind the files/hostedapps gating deferral
+  (ratified 2026-11-06): once files attach to a circle, they follow
+  its access control naturally.
 - Role administration flow (who may edit role-circle membership, and
   via what UI/CLI) — replaces the hardcoded bootstrap admin.
 - Transitive membership resolution (circle → circle → role circle)

@@ -9,6 +9,11 @@ principal may do on the management blueprints (vaults, clients, users,
 credentials, sessions). Every helper fails closed: a principal that
 matches no rule is denied.
 
+Scope boundary (ratified 2026-11-06): the grant store authorizes these
+management blueprints only. Domain-resource authorization lives in
+campus.api (circle-backed, `campus/api/authz.py`) and never consults
+this store.
+
 Design intent (#881): client principals hold the bare minimum access
 their role needs — the vault role — which in most cases means
 read-only; where a client genuinely needs write access it is granted

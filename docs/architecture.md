@@ -231,7 +231,12 @@ env.register_getsecret(custom_getsecret)
 ## Security Architecture
 
 - **Authentication**: OAuth2 with Google integration
-- **Authorization**: Role-based access control (RBAC)
+- **Authorization**: two-scope model (ratified 2026-11-06) —
+  campus.auth's access-grant store gates its management blueprints
+  (vaults, clients, users, credentials, sessions); circle membership
+  gates campus.api domain resources (mutations user-only via
+  `<resource>.admin` role circles; reads authentication-only).
+  See [circles-access-control.md](circles-access-control.md)
 - **Secrets Management**: Centralized vault with encrypted storage
 - **Data Protection**: Field-level encryption for sensitive data
 - **Network Security**: HTTPS-only communication between services
