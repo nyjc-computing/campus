@@ -128,6 +128,28 @@ automation admin, so live testing never runs as a personal account).
 Removing or extending the list is a deliberate follow-up, not an
 oversight.
 
+### Classroom live-testing grants
+
+The classroom app's live testing needs more than the bootstrap admins:
+the test staff account creates assignments and the test student submits
+— and campus.api gates every submission mutation (create, submit,
+edit, feedback) on `submissions.admin`, with classroom proxying student
+submits through the student's own session. The classroom test accounts
+therefore carry, granted 2026-11-06 (verified by the #81 live E2E):
+
+- `campus-test-staff@nyjc.edu.sg` → `assignments.admin` +
+  `submissions.admin`
+- `campus-test-student@nyjc.edu.sg` → `submissions.admin`
+
+Grant recipe: a user circle (tag `user`, named after the email) must
+exist before `members/add` accepts an email-shaped member; a
+`circles.admin` member then adds it to the role circles at access
+level 15 (`POST /api/v1/circles/{id}/members/add`). The designated
+grantor is `campus-test-admin` (its credentials are not shared — grants
+run through its own device-flow login). Extending
+`BOOTSTRAP_ADMIN_USERS` would remove the manual step but is a
+deliberate change (see above).
+
 ## Managing circles
 
 All circle administration is via the `/api/v1/circles/` endpoints
