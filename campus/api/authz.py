@@ -31,6 +31,11 @@ Principals:
 Enforcement lives in the route modules (the resources must stay
 ungated for in-process callers, such as test fixtures and the other
 services sharing this deployment shape).
+
+Boundary (ratified 2026-11-06): the access-grant store is campus.auth's
+management authority and is never consulted here — resource-scoped
+grant vocabularies (e.g. `timetable:*`) confer no campus.api authority.
+See docs/circles-access-control.md.
 """
 
 __all__ = [
