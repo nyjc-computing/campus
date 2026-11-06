@@ -46,6 +46,19 @@ def _upsert(table, key: str, data: dict) -> None:
     except campus.storage.errors.NotFoundError:
         table.insert_one({PK: key, **data})
 
+
+def _pointer_id(value: typing.Any) -> str | None:
+    """Normalise a stored pointer value to a bare timetable id.
+
+    Pointer values have been stored both as bare ids and as
+    `{"timetable_id": ...}` objects; accept either so existing
+    @metadata documents keep resolving. (The pointer mechanism is
+    replaced wholesale by #1075's effective-dated trail.)
+    """
+    if isinstance(value, dict):
+        value = value.get("timetable_id")
+    return str(value) if value else None
+
 class TimetablesResource:
     """Represents the timetables resource."""
     
@@ -217,7 +230,7 @@ class TimetablesResource:
                 return None
 
             record = metadata.get("current")
-            timetable_id = record.get("timetable_id") if record else None
+            timetable_id = _pointer_id(record)
             return schema.CampusID(timetable_id) if timetable_id else None
         except campus.storage.errors.NotFoundError:
             return None
@@ -250,7 +263,7 @@ class TimetablesResource:
                 return None
 
             record = metadata.get("next")
-            timetable_id = record.get("timetable_id") if record else None
+            timetable_id = _pointer_id(record)
             return schema.CampusID(timetable_id) if timetable_id else None
 
         except campus.storage.errors.NotFoundError:

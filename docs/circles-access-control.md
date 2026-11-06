@@ -74,6 +74,8 @@ nyjc.edu.sg (root)
 │   └── assignments.admin (role)
 ├── bookings (resource)
 │   └── bookings.admin (role)
+├── subjcombi (resource)
+│   └── subjcombi.admin (role)    ← the #592 user→lessongroup mapping
 └── submissions (resource)
     └── submissions.admin (role)
 ```
@@ -193,8 +195,9 @@ authz.require_resource_admin(resource, action_label=None)
 - **Placement**: gate calls live in the route modules, before any
   resource work; the resources stay ungated for in-process callers
   (the same discipline as campus.auth's authz).
-- **Coverage**: mutation routes of all five guarded families
-  (circles, timetable, assignments, bookings, submissions) gate;
+- **Coverage**: mutation routes of all six guarded families
+  (circles, timetable, assignments, bookings, submissions, subjcombi)
+  gate;
   circle administration gates behind `circles.admin` first, since
   membership editing is privilege escalation. Reads require
   authentication only — any authenticated principal, including bare

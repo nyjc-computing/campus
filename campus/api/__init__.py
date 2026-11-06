@@ -143,6 +143,20 @@ def _init_api_tables() -> None:
 
     try:
         if env.ENV != env.PRODUCTION:
+            # The timetable members table is a storage table (not a
+            # self-creating collection); without it, creating a
+            # timetable with lessongroup members fails.
+            from .resources.timetable import TimetablesResource
+            TimetablesResource.init_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize timetable storage: timetable creation "
+            "will fail until the tables exist. Recover by running the "
+            "resource init against the database."
+        )
+
+    try:
+        if env.ENV != env.PRODUCTION:
             from .resources.circle import CirclesResource
             CirclesResource.init_storage()
     except Exception:
@@ -187,6 +201,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     routes.emailotp.init_app(bp)
     routes.files.init_app(bp)
     routes.hostedapps.init_app(bp)
+    routes.subjcombi.init_app(bp)
     routes.submissions.init_app(bp)
     routes.timetable.init_app(bp)
 

@@ -10,6 +10,7 @@ __all__ = [
     "assignments",
     "files",
     "hostedapps",
+    "subjcombi",
     "submissions",
     "timetable",
 ]
@@ -21,6 +22,7 @@ from . import (
     emailotp,
     files,
     hostedapps,
+    subjcombi,
     submissions,
     timetable,
 )
