@@ -615,13 +615,13 @@ botocore = ["botocore"]
 
 [[package]]
 name = "campus-api-python"
-version = "0.8.1"
+version = "0.8.2"
 description = "Campus API for Python projects"
 optional = false
 python-versions = ">=3.11,<3.15"
 groups = ["main"]
 files = [
-    {file = "campus_api_python-0.8.1-py3-none-any.whl", hash = "sha256:c1950f4d0fa51d2d222811934b416da33348d1b6ba94260584d3c80fca306a7d"},
+    {file = "campus_api_python-0.8.2-py3-none-any.whl", hash = "sha256:8e6e541440e987c42230527776acdf7501543f847abdb48341cea8c3912e0235"},
 ]
 
 [package.dependencies]
@@ -631,7 +631,7 @@ requests = ">=2.32.4,<3.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.8.1/campus_api_python-0.8.1-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.8.2/campus_api_python-0.8.2-py3-none-any.whl"
 
 [[package]]
 name = "campus-common"
@@ -967,17 +967,17 @@ dotenv = ["python-dotenv"]
 
 [[package]]
 name = "flask-campus"
-version = "0.1.6"
+version = "0.1.8"
 description = "Flask consumer layer for Campus apps: flask_campus glue + audit middleware/client/http - PEP 420 namespace portions under campus/flask_campus and campus/audit"
 optional = false
 python-versions = ">=3.11.0,<3.15"
 groups = ["main"]
 files = [
-    {file = "flask_campus-0.1.6-py3-none-any.whl", hash = "sha256:e9a4c258d743044a84b3e0ba6fc2bdf1254e8b65d73fc5fdd03b3d7efc27ebad"},
+    {file = "flask_campus-0.1.8-py3-none-any.whl", hash = "sha256:b4aeabfdc6939ab5fab674d419d61f4a50994e46cc8b4371d54cd6b3303b0afc"},
 ]
 
 [package.dependencies]
-campus_api_python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.8.1/campus_api_python-0.8.1-py3-none-any.whl"}
+campus_api_python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.8.2/campus_api_python-0.8.2-py3-none-any.whl"}
 campus_common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.3.1/campus_common-0.3.1-py3-none-any.whl"}
 campus_model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.5/campus_model-0.1.5-py3-none-any.whl"}
 flask = ">=3.0.0,<4.0.0"
@@ -986,7 +986,7 @@ werkzeug = ">=3.0.0,<4.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.6/flask_campus-0.1.6-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.8/flask_campus-0.1.8-py3-none-any.whl"
 
 [[package]]
 name = "gunicorn"
@@ -2022,4 +2022,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "fd16c517602951a4ab6b9322427089fc93664fd123b846ea6299465aabd97d71"
+content-hash = "486eb05e090e29602874b7b7ef0fcaaadfd94546c63a13ef12d02a4a0fbb9208"
