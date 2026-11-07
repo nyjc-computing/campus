@@ -2,6 +2,16 @@
 
 Timetable resource for Campus API.
 
+Lessongroup identity is label-anchored across allocations (#592,
+campus#1080): when a new timetable is created, a group whose label
+already has a row — from any earlier allocation — reuses that row's id
+and the row's `timetable_id` moves to the new allocation
+(update-in-place; the collection is PK'd on id). References keyed by
+group id, i.e. subjcombi mappings, therefore survive version switches.
+A label claimed by two or more rows is historical drift and fails the
+create with a 409; labels absent from the new allocation are left
+untouched.
+
 The active (current/next) timetable pointers are an effective-dated
 trail (#1075): every change appends a row — {timetable_id,
 effective_from, actor} — and "current at T" is the latest row whose
@@ -12,6 +22,7 @@ are immutable. Legacy deployments' bare @metadata pointer documents
 keep resolving as a fallback until first written through the trail.
 """
 
+import contextlib
 import datetime
 import typing
 
@@ -73,6 +84,45 @@ def _get_lessongroup_labels(
         schema.CampusID(record["id"]): schema.String(record["label"])
         for record in records
     }
+
+def _lessongroup_for_label(
+        label: schema.String,
+        timetable_id: schema.CampusID,
+) -> tuple[model.LessonGroup, bool]:
+    """The lessongroup row owning `label`, or a freshly minted one.
+
+    Label-anchored reuse (#592, campus#1080): the label is the group's
+    identity anchor within a cohort year, so an allocation carrying a
+    known label is the same group — its id is reused and the caller
+    moves the row's timetable_id to the new allocation. Two or more
+    rows sharing a label is historical drift; refuse with a 409 naming
+    the rows rather than silently picking one. Returns (group, reused).
+    """
+    try:
+        matches = timetable_lessongroup_collection.get_matching(
+            {"label": label}
+        )
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+    if len(matches) > 1:
+        raise api_errors.ConflictError(
+            f"Multiple lessongroups share the label {label!r} "
+            f"({sorted(m['id'] for m in matches)}); clean up the "
+            "duplicate-label rows and retry the timetable create"
+        )
+    if matches:
+        return (
+            model.LessonGroup(
+                id=schema.CampusID(matches[0]["id"]),
+                timetable_id=timetable_id,
+                label=label,
+            ),
+            True,
+        )
+    return (
+        model.LessonGroup(timetable_id=timetable_id, label=label),
+        False,
+    )
 
 def _upsert(table, key: str, data: dict) -> None:
     """Insert or update a record in a table.
@@ -193,6 +243,15 @@ class TimetablesResource:
     ) -> model.Timetable:
         """Create a new timetable with metadata and labeled entries.
 
+        Groups are reused by label across allocations (#592): a label
+        that already has a lessongroup row keeps its id, and the row's
+        timetable_id moves to the new allocation — subjcombi mappings
+        keyed by lessongroup_id survive the version switch. Labels
+        absent from the new allocation are untouched. A label repeated
+        within the payload is rejected with a 400 (one label anchors
+        one group); a label already claimed by two rows is historical
+        drift and fails with a 409.
+
         `lessongroups` is a list of dicts following the schema:
         - label [str]
         - members list[str]
@@ -205,6 +264,7 @@ class TimetablesResource:
         """
         timetable_meta = model.TimetableMetadata(**metadata)
         groups: list[model.LessonGroup] = []
+        reused_group_ids: list[schema.CampusID] = []
         members = []
         entries = []
 
@@ -220,11 +280,26 @@ class TimetablesResource:
                     "'lessongroup' object requires missing properties: "
                     f"{', '.join(missing_keys)}"
                 )
-            lg = model.LessonGroup(
-                timetable_id=timetable_meta.id,
-                label = lessongroup["label"]
+        labels = [lessongroup["label"] for lessongroup in lessongroups]
+        duplicate_labels = sorted({
+            label for label in labels if labels.count(label) > 1
+        })
+        if duplicate_labels:
+            raise api_errors.InvalidRequestError(
+                "Duplicate lessongroup labels in the create payload "
+                "(a label anchors one group): "
+                f"{', '.join(repr(label) for label in duplicate_labels)}"
             )
-            groups.append(lg)
+
+        for lessongroup in lessongroups:
+            lg, reused = _lessongroup_for_label(
+                label=lessongroup["label"],
+                timetable_id=timetable_meta.id,
+            )
+            if reused:
+                reused_group_ids.append(lg.id)
+            else:
+                groups.append(lg)
             for ade_participant in lessongroup["members"]:
                 member = model.LessonGroupMember(
                     timetable_id=timetable_meta.id,
@@ -254,6 +329,17 @@ class TimetablesResource:
         try:
             # TODO: Atomic transactions across multiple storage objects
             timetable_collection.insert_one(timetable_meta.to_storage())
+            # Label-anchored reuse: move each reused row to the new
+            # allocation in place — the collection is PK'd on id, so
+            # never insert a second row for the same group.
+            for lg_id in reused_group_ids:
+                with contextlib.suppress(
+                    campus.storage.errors.NoChangesAppliedError
+                ):
+                    timetable_lessongroup_collection.update_by_id(
+                        str(lg_id),
+                        {"timetable_id": str(timetable_meta.id)},
+                    )  # no-op when the row is already owned here
             # Bulk inserts (#576): a full timetable has too many entries,
             # groups and members for per-row inserts, which time out on
             # the development deployment.
@@ -275,7 +361,7 @@ class TimetablesResource:
         except campus.storage.errors.StorageError as e:
             # TODO: transaction rollback
             raise api_errors.InternalError.from_exception(e) from e
-    
+
         return timetable
 
     def get(self, timetable_id: schema.CampusID) -> model.Timetable:
@@ -503,7 +589,14 @@ class TimetableResource:
         entries = []
         for entry_record in entry_records:
             entry = model.TimetableEntry.from_storage(entry_record)
-            entry.label = lessongroup_labels.get(entry.lessongroup_id)
+            # Persisted label first (#592); the group-row join stays as
+            # the fallback for legacy records created before labels
+            # were persisted. The join goes dark for an old allocation
+            # once its lessongroup row is reused by a newer one —
+            # exactly why entries carry their own label now.
+            entry.label = (
+                entry.label or lessongroup_labels.get(entry.lessongroup_id)
+            )
             entries.append(entry)
 
         return model.Timetable(
@@ -537,6 +630,13 @@ class TimetableResource:
 
     def delete(self) -> None:
         """Delete the timetable and all associated entries.
+
+        Also deletes the lessongroup rows currently owned by this
+        allocation. With label-anchored reuse (#592) those rows may be
+        referenced by entries of an older allocation too; the older
+        allocation's entries keep rendering (each entry persists its
+        label), but the group documents themselves go away with the
+        owning allocation.
 
         Raises:
             ConflictError: If the timetable does not exist.
@@ -595,7 +695,11 @@ class TimetableEntriesResource:
         entries = []
         for record in records:
             entry = model.TimetableEntry.from_storage(record)
-            entry.label = lessongroup_labels.get(entry.lessongroup_id)
+            # Persisted label first (#592); group-row join as the
+            # legacy-record fallback (see TimetableResource.get).
+            entry.label = (
+                entry.label or lessongroup_labels.get(entry.lessongroup_id)
+            )
             entries.append(entry)
         return entries
 

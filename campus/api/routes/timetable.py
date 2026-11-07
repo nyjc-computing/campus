@@ -292,6 +292,12 @@ def new(
 ) -> flask_campus.JsonResponse:
     """Create a new timetable.
 
+    Lessongroup ids are reused by label across allocations (#592):
+    a label that already has a group row — from any earlier allocation
+    — keeps its id, and the row moves to the new allocation, so
+    subjcombi mappings keyed by lessongroup_id survive version
+    switches. The payload shape is unchanged (label/members/entries).
+
     Method:
         POST /timetable/
 
@@ -307,11 +313,18 @@ def new(
            {"data": timetable resource with labeled entries}
 
         400 Bad Request: dict
-            {"error": error message}
+            {"error": error message} — missing 'lessongroups',
+            missing group keys, or a label repeated within the
+            payload (one label anchors one group).
 
         403 Forbidden: None
             Returned if the caller is not a member of the
             `timetable.admin` circle (only user tokens are eligible).
+
+        409 Conflict: dict
+            A payload label is already claimed by two or more group
+            rows — historical drift; clean up the duplicate-label
+            rows and retry.
     """
     authz.require_resource_admin("timetable", "create timetables")
     if "lessongroups" not in data:
