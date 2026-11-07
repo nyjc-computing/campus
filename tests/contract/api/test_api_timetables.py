@@ -296,21 +296,27 @@ class TestTimetableMeContract(unittest.TestCase):
         # previous credential record.
         return get_bearer_auth_headers(create_test_token(self.USER_ID))
 
-    def _lg_id(self, timetable_id: str) -> str:
+    def _lg_id(self, timetable_id: str, label: str = "25A1") -> str:
         from campus.api.resources.timetable import timetable_lessongroup_collection
         rows = timetable_lessongroup_collection.get_matching({
             "timetable_id": timetable_id,
+            "label": label,
         })
-        assert rows, "expected the timetable to carry a lessongroup"
+        assert rows, f"expected a {label!r} lessongroup in {timetable_id}"
         return rows[0]["id"]
 
-    def _create_timetable(self, filename: str, member: str | None) -> str:
+    def _create_timetable(
+            self,
+            filename: str,
+            member: str | None,
+            labels: tuple[str, ...] = ("25A1",),
+    ) -> str:
         lessongroups = [{
-            "label": "25A1",
-            "members": [member] if member else [],
+            "label": label,
+            "members": [member] if (member and label == "25A1") else [],
             "entries": [{"weekday": "MON", "timeslot": "0800",
                          "venue": "B1-01"}],
-        }]
+        } for label in labels]
         response = self.client.post(
             "/api/v1/timetable/",
             json={
@@ -395,8 +401,17 @@ class TestTimetableMeContract(unittest.TestCase):
         self.assertEqual(data["next"]["change_type"], "timetable")
 
     def test_simultaneous_switch_and_subjcombi_is_both(self):
+        """Both planning changes land at one instant → change_type both.
+
+        With label-anchored reuse (#592) a version switch alone keeps
+        the group id stable, so the "both" case needs the mapping to
+        actually move: the student's new combination is a group whose
+        label is new to the v2 allocation.
+        """
         tt_v1 = self._create_timetable("me-b1.xml", str(self.USER_ID))
-        tt_v2 = self._create_timetable("me-b2.xml", str(self.USER_ID))
+        tt_v2 = self._create_timetable(
+            "me-b2.xml", str(self.USER_ID), labels=("25A1", "25B2")
+        )
         self.client.patch(
             "/api/v1/timetable/",
             json={"current": tt_v1},
@@ -411,7 +426,7 @@ class TestTimetableMeContract(unittest.TestCase):
         )
         self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": self._lg_id(tt_v2),
+            json={"lessongroup_id": self._lg_id(tt_v2, "25B2"),
                   "effective_from": "2027-07-01"},
             headers=self._headers(),
         )
@@ -442,6 +457,148 @@ class TestTimetableMeContract(unittest.TestCase):
         )
         data = view.get_json()
         self.assertEqual(data["current"]["timetable_id"], tt_v2)
+
+
+class TestTimetableLessongroupReuseContract(unittest.TestCase):
+    """POST /timetable/ reuses lessongroup ids by label across
+    allocations (#592) and refuses duplicate-label drift with 409.
+
+    The identity ruling: a group's label anchors its identity within a
+    cohort year, so subjcombi mappings keyed by lessongroup_id survive
+    version switches; entries persist their own label (campus-model#5)
+    so an old allocation keeps rendering after its group row moves to
+    the new one.
+    """
+
+    USER_ID = schema.UserID("test.user@campus.test")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.apps_app
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+        self.client = self.app.test_client()
+        self.token = create_test_token(self.USER_ID)
+        self.auth_headers = get_bearer_auth_headers(self.token)
+        grant_circle_admin(str(self.USER_ID), "timetable")
+
+    def _create_timetable(self, filename: str, labels: list[str]) -> dict:
+        """POST a timetable with one group per label; return its resource."""
+        response = self.client.post(
+            "/api/v1/timetable/",
+            json={
+                "metadata": {
+                    "filename": filename,
+                    "start_date": "2026-01-01T00:00:00Z",
+                    "end_date": "2026-12-31T00:00:00Z"
+                },
+                "data": {
+                    "lessongroups": [
+                        {
+                            "label": label,
+                            "members": [f"2510-{label}"],
+                            "entries": [
+                                {"weekday": "Mon A", "timeslot": "0800",
+                                 "venue": "5-64"}
+                            ],
+                        }
+                        for label in labels
+                    ],
+                },
+            },
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        return response.get_json()["data"]
+
+    def _entries(self, timetable_id: str) -> list[dict]:
+        response = self.client.get(
+            f"/api/v1/timetable/{timetable_id}/entries",
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.get_json()["entries"]
+
+    def test_reuse_keeps_lessongroup_ids_across_versions(self):
+        """v2 with the same labels keeps v1's ids; v1 still renders."""
+        v1 = self._create_timetable(
+            "reuse-v1.xml", ["25A-Math", "25A-Phy"]
+        )
+        v2 = self._create_timetable("reuse-v2.xml", ["25A-Math"])
+
+        v1_by_label = {e["label"]: e for e in self._entries(v1["id"])}
+        v2_by_label = {e["label"]: e for e in self._entries(v2["id"])}
+        self.assertEqual(
+            v2_by_label["25A-Math"]["lessongroup_id"],
+            v1_by_label["25A-Math"]["lessongroup_id"]
+        )
+        # v1's labels survive the switch: entries carry their own.
+        self.assertEqual(
+            {e["label"] for e in self._entries(v1["id"])},
+            {"25A-Math", "25A-Phy"}
+        )
+
+    def test_duplicate_label_drift_returns_409(self):
+        """A label claimed by two rows conflicts the create."""
+        from campus.api.resources.timetable import timetable_lessongroup_collection
+
+        v1 = self._create_timetable("drift-v1.xml", ["25A-Math"])
+        self._entries(v1["id"])
+        # Simulate legacy drift: a second row claiming the same label.
+        timetable_lessongroup_collection.insert_one({
+            "id": "uid-lesson-group-drift",
+            "timetable_id": "uid-timetable-drift",
+            "label": "25A-Math",
+        })
+        response = self.client.post(
+            "/api/v1/timetable/",
+            json={
+                "metadata": {
+                    "filename": "drift-v2.xml",
+                    "start_date": "2026-01-01T00:00:00Z",
+                    "end_date": "2026-12-31T00:00:00Z"
+                },
+                "data": {
+                    "lessongroups": [{
+                        "label": "25A-Math",
+                        "members": [],
+                        "entries": [],
+                    }],
+                },
+            },
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 409)
+        error = response.get_json()["error"]
+        self.assertEqual(error["code"], "CONFLICT")
+
+    def test_duplicate_label_in_payload_returns_400(self):
+        """The same label twice in one payload is a 400."""
+        response = self.client.post(
+            "/api/v1/timetable/",
+            json={
+                "metadata": {
+                    "filename": "dupe.xml",
+                    "start_date": "2026-01-01T00:00:00Z",
+                    "end_date": "2026-12-31T00:00:00Z"
+                },
+                "data": {
+                    "lessongroups": [
+                        {"label": "25A-Math", "members": [], "entries": []},
+                        {"label": "25A-Math", "members": [], "entries": []},
+                    ],
+                },
+            },
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 400)
 
 
 if __name__ == '__main__':
