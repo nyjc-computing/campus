@@ -226,6 +226,11 @@ def update_submission(
     Request Body:
         responses, feedback, or submitted_at (all optional)
 
+        An explicit "submitted_at": null clears the submitted timestamp
+        (the unsubmit contract served by campus-api-python's
+        submissions.unsubmit(), #1083); omitting the field leaves it
+        unchanged.
+
     Responses:
         200 OK: dict
             Empty object on success
@@ -235,6 +240,11 @@ def update_submission(
             `submissions.admin` circle (only user tokens are eligible).
     """
     authz.require_resource_admin("submissions", "edit submissions")
+    # unpack_request collapses an explicit JSON null into the same None
+    # default as an omitted field, so the raw body is checked for the
+    # unsubmit contract: {"submitted_at": null} must reach storage as a
+    # clear (campus-api-python#78, #1083).
+    payload = flask.request.get_json(silent=True) or {}
     updates = {}
     if responses is not None:
         # Convert dict responses to validated Response models (#533),
@@ -252,7 +262,9 @@ def update_submission(
         updates["feedback"] = payloads.models_from_payloads(
             campus.model.Feedback, feedback, "feedback"
         )
-    if submitted_at is not None:
+    if "submitted_at" in payload and payload["submitted_at"] is None:
+        updates["submitted_at"] = None
+    elif submitted_at is not None:
         updates["submitted_at"] = schema.DateTime(submitted_at)
 
     if not updates:
