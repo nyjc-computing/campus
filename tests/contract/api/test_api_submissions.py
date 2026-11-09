@@ -321,6 +321,40 @@ class TestApiSubmissionsContract(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data, {})
 
+    def test_update_submission_null_submitted_at_clears_timestamp(self):
+        """PATCH with explicit submitted_at=null clears the timestamp (#1083).
+
+        The unsubmit contract (campus-api-python#78): only an explicit
+        null in the JSON body clears submitted_at — unpack_request makes
+        it indistinguishable from an omitted field at the signature
+        level, so the route must consult the raw body. The storage layer
+        unsets the key, and a read back reports no submitted_at.
+        """
+        submission_id = self._create_test_submission()
+
+        from datetime import datetime, timezone
+        submitted_at = datetime.now(timezone.utc).isoformat()
+        response = self.client.patch(
+            f"/api/v1/submissions/{submission_id}/",
+            json={"submitted_at": submitted_at},
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.patch(
+            f"/api/v1/submissions/{submission_id}/",
+            json={"submitted_at": None},
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 200)
+
+        get_response = self.client.get(
+            f"/api/v1/submissions/{submission_id}/",
+            headers=self.auth_headers
+        )
+        submission_data = get_response.get_json()
+        self.assertIsNone(submission_data.get("submitted_at"))
+
     def test_update_submission_empty_body(self):
         """PATCH /submissions/{submission_id} without updates returns error."""
         submission_id = self._create_test_submission()
