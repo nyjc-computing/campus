@@ -423,6 +423,17 @@ class UserCredentialsResource:
             client_id: The client identifier
             **token: Token fields to update
         """
+        # Upsert the token document BEFORE the credential row is
+        # re-pointed at it (#1085): a failed token write then leaves the
+        # old grant fully intact — the caller's retry re-runs the whole
+        # update — instead of dangling the row at a document that does
+        # not exist, which answers "No campus grant" on every future
+        # mint until a full re-login.
+        if token_storage.get_by_id(token.id):
+            token_storage.update_by_id(token.id, token.to_storage())
+        else:
+            token_storage.insert_one(token.to_storage())
+
         records = cred_storage.get_matching({
             "provider": self.parent.provider,
             "user_id": str(self.user_id),
@@ -449,10 +460,12 @@ class UserCredentialsResource:
             )
             # The superseded token record must not linger: its refresh
             # token would stay resolvable, making a rotated refresh
-            # token replayable (#678). The record may legitimately be
-            # absent — restored/migrated stores can carry credential
-            # rows whose token documents were not restored with them
-            # (#960) — in which case the cleanup goal already holds.
+            # token replayable (#678). Deleted only after the row has
+            # safely moved to the new document (#1085). The record may
+            # legitimately be absent — restored/migrated stores can
+            # carry credential rows whose token documents were not
+            # restored with them (#960) — in which case the cleanup
+            # goal already holds.
             with contextlib.suppress(StorageNotFoundError):
                 token_storage.delete_by_id(cred_record['token_id'])
         else:  # token_id unchanged, just load existing credentials
@@ -460,12 +473,6 @@ class UserCredentialsResource:
                 records[0]
             )
         credentials.token = token
-
-        # Store/update token
-        if token_storage.get_by_id(token.id):
-            token_storage.update_by_id(token.id, token.to_storage())
-        else:
-            token_storage.insert_one(token.to_storage())
         return credentials
 
 
