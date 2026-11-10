@@ -230,9 +230,16 @@ capabilities (its scope set is the superadmin shape).
 
 Two ways to give a person browser access:
 
-- **A Campus account** — add their campus.auth user id to
-  `AUDIT_ADMINS` on the campus.audit deployment. Keep the list tiny
-  (≤ 5): a superadmin can mint keys for anyone.
+- **A Campus account** — add their campus.auth email to `AUDIT_ADMINS`
+  **on the campus-admin portal deployment** (dev:
+  `campus-admin.up.railway.app`). The audit UI runs inside the portal
+  (the UI moved out of campus.audit; the portal proxies the versioned
+  API), so the gate reads the **portal's** env — setting the variable
+  on the campus.audit service has no effect on the UI (observed live
+  2026-11-10: the var must be present when the portal deployment
+  starts; Railway env changes need a redeploy to apply). Gate
+  membership is matched on the signed-in user's campus email.
+  Keep the list tiny (≤ 5): a superadmin can mint keys for anyone.
 - **An API key** — mint one with `traces:read` and hand it over. The
   holder signs in at `/audit/login/key` (development only, #915) and
   sees the trace viewer; the key never leaves their hands, and
