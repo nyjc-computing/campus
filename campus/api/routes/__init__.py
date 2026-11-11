@@ -5,6 +5,7 @@ This is a namespace module for the Campus API routes.
 
 __all__ = [
     "bookings",
+    "calendar",
     "circles",
     "emailotp",
     "assignments",
@@ -18,6 +19,7 @@ __all__ = [
 from . import (
     assignments,
     bookings,
+    calendar,
     circles,
     emailotp,
     files,
