@@ -180,3 +180,41 @@ class TestTimetableDelete(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTimetableDeleteEdgeFamilies(unittest.TestCase):
+    """A version whose row families are empty deletes cleanly.
+
+    Regression guard for the dev cleanup: the postgres backend raises
+    NoChangesAppliedError on a zero-match delete_matching, which aborted
+    the cascade for versions with no entries (14 of dev's 57 versions).
+    """
+
+    def setUp(self):
+        from campus.api.resources.timetable import TimetablesResource
+
+        self.resource = TimetablesResource()
+        self.resource.init_storage()
+        self.marker = uuid.uuid4().hex[:6]
+
+    def test_delete_version_with_no_entries_or_groups(self):
+        from campus.api.resources.timetable import (
+            timetable_collection,
+            timetable_entry_storage,
+        )
+
+        v1 = self.resource.new(
+            metadata=_metadata(f"{self.marker}-empty.xml"),
+            lessongroups=[],  # legal create: no groups, no entries, no members
+        )
+        self.resource.delete(v1.id)
+
+        self.assertEqual(
+            timetable_entry_storage.get_matching({"timetable_id": str(v1.id)}),
+            [],
+        )
+        self.assertIsNone(timetable_collection.get_by_id(str(v1.id)))
+
+
+if __name__ == "__main__":
+    unittest.main()
