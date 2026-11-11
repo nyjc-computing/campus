@@ -9,6 +9,7 @@ External clients should access resources via API endpoints.
 
 __all__ = [
     "assignment",
+    "calendar",
     "circle",
     "emailotp",
     "file",
@@ -17,6 +18,7 @@ __all__ = [
 ]
 
 from .assignment import AssignmentsResource
+from .calendar import CalendarResource
 from .circle import CirclesResource
 from .emailotp import EmailOTPResource
 from .files import FilesResource
@@ -26,6 +28,7 @@ from .timetable import TimetablesResource
 
 # Initialize resource instances for internal use
 assignment = AssignmentsResource()
+calendar = CalendarResource()
 circle = CirclesResource()
 emailotp = EmailOTPResource()
 file = FilesResource()

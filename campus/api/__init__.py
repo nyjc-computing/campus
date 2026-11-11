@@ -157,6 +157,21 @@ def _init_api_tables() -> None:
 
     try:
         if env.ENV != env.PRODUCTION:
+            # The school calendar is a storage table (not a
+            # self-creating collection); without it, the calendar
+            # routes and the timetable editor cannot read or write
+            # day-codes.
+            from .resources.calendar import CalendarResource
+            CalendarResource.init_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize calendar storage: the school calendar "
+            "will be unreadable until the table exists. Recover by "
+            "running the resource init against the database."
+        )
+
+    try:
+        if env.ENV != env.PRODUCTION:
             from .resources.circle import CirclesResource
             CirclesResource.init_storage()
     except Exception:
@@ -197,6 +212,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     bp = flask.Blueprint('api_v1', __name__, url_prefix='/api/v1')
     routes.assignments.init_app(bp)
     routes.bookings.init_app(bp)
+    routes.calendar.init_app(bp)
     routes.circles.init_app(bp)
     routes.emailotp.init_app(bp)
     routes.files.init_app(bp)
