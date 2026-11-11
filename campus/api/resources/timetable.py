@@ -107,8 +107,9 @@ def _lessongroup_for_label(
     if len(matches) > 1:
         raise api_errors.ConflictError(
             f"Multiple lessongroups share the label {label!r} "
-            f"({sorted(m['id'] for m in matches)}); clean up the "
-            "duplicate-label rows and retry the timetable create"
+            f"({sorted(m['id'] for m in matches)}); delete the superseded "
+            "versions that own the duplicate-label rows "
+            "(DELETE /timetable/<id>/) and retry the timetable create"
         )
     if matches:
         return (
@@ -363,6 +364,72 @@ class TimetablesResource:
             raise api_errors.InternalError.from_exception(e) from e
 
         return timetable
+
+    def delete(self, timetable_id: schema.CampusID) -> None:
+        """Delete a timetable version and all of its rows (#1088).
+
+        Cascades the version's entries, group members and lessongroup
+        rows (all keyed on timetable_id), then the version row itself.
+        This is the cleanup surface the label-drift 409 points at: a
+        stale duplicate-label row is owned by the superseded version
+        that minted it, so deleting that version removes the row and
+        unblocks the create. A label-anchored row that a later create
+        reused is owned by the *later* version (update-in-place), so
+        deleting the older version never strips a live group.
+
+        Refuses to delete the version the current or next pointer
+        names — move/cancel the pointer first. Historical versions
+        are fair game.
+
+        Raises:
+            NotFoundError: unknown timetable_id.
+            ConflictError: the version is the current or next target.
+        """
+        try:
+            record = timetable_collection.get_by_id(str(timetable_id))
+        except campus.storage.errors.NotFoundError:
+            record = None
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        if record is None:
+            raise api_errors.NotFoundError(
+                "Timetable not found",
+                timetable_id=str(timetable_id),
+            )
+
+        current = self.get_current()
+        if current is not None and str(current) == str(timetable_id):
+            raise api_errors.ConflictError(
+                "Refusing to delete the timetable the current pointer "
+                f"names ({timetable_id}); move the pointer first"
+            )
+        scheduled_next = self.get_next()
+        if (
+            scheduled_next is not None
+            and str(scheduled_next["timetable_id"]) == str(timetable_id)
+        ):
+            raise api_errors.ConflictError(
+                "Refusing to delete the timetable scheduled as next "
+                f"({timetable_id}); cancel the pending switch first"
+            )
+
+        # TODO: Atomic transactions across multiple storage objects —
+        # same caveat as new(): a mid-cascade failure leaves a partial
+        # delete, which is safe for a cleanup path (the version row is
+        # deleted last, so a retry is expressible).
+        try:
+            timetable_entry_storage.delete_matching(
+                {"timetable_id": str(timetable_id)}
+            )
+            timetable_lessongroupmembers_table.delete_matching(
+                {"timetable_id": str(timetable_id)}
+            )
+            timetable_lessongroup_collection.delete_matching(
+                {"timetable_id": str(timetable_id)}
+            )
+            timetable_collection.delete_by_id(str(timetable_id))
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
 
     def get(self, timetable_id: schema.CampusID) -> model.Timetable:
         """Get a full timetable by ID."""
