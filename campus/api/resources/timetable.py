@@ -418,15 +418,19 @@ class TimetablesResource:
         # delete, which is safe for a cleanup path (the version row is
         # deleted last, so a retry is expressible).
         try:
-            timetable_entry_storage.delete_matching(
-                {"timetable_id": str(timetable_id)}
-            )
-            timetable_lessongroupmembers_table.delete_matching(
-                {"timetable_id": str(timetable_id)}
-            )
-            timetable_lessongroup_collection.delete_matching(
-                {"timetable_id": str(timetable_id)}
-            )
+            # Empty row families are normal (a version with no entries, no
+            # members, or no groups of its own); the postgres backend raises
+            # NoChangesAppliedError on a zero-match delete, so suppress it
+            # per family (same convention as new()'s update-in-place).
+            for storage in (
+                timetable_entry_storage,
+                timetable_lessongroupmembers_table,
+                timetable_lessongroup_collection,
+            ):
+                with contextlib.suppress(
+                    campus.storage.errors.NoChangesAppliedError
+                ):
+                    storage.delete_matching({"timetable_id": str(timetable_id)})
             timetable_collection.delete_by_id(str(timetable_id))
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
