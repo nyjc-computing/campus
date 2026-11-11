@@ -2139,6 +2139,32 @@
       }
     },
     "/api/v1/timetable/{timetable_id}/": {
+      "delete": {
+        "description": "Cascades the version's entries, group members and lessongroup rows,\nthen the version itself. This is the cleanup surface for the\nlabel-drift create 409: stale duplicate-label rows are owned by the\nsuperseded versions that minted them, so deleting those versions\nclears the drift. A group row that a later create reused is owned\nby that later version and survives.\n\nRefuses to delete the version the current or next pointer names \u2014\nmove/cancel the pointer first. This action is destructive and\ncannot be undone.\n\nMethod:\n    DELETE /timetable/<timetable_id>/\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable version to delete.\n\nResponses:\n    200 OK: dict\n        Empty JSON object indicating successful deletion.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).\n\n    404 Not Found: dict\n        {\"error\": error message} \u2014 unknown timetable_id.\n\n    409 Conflict: dict\n        {\"error\": error message} \u2014 the version is the current or\n        next pointer target.",
+        "operationId": "api_v1_timetable_delete_timetable",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Delete a timetable version and all of its rows (#1088).",
+        "tags": [
+          "timetable"
+        ]
+      },
       "get": {
         "description": "Method:\n    GET /timetable/<timetable_id>/\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable to retrieve.\nResponses:\n    200 OK: dict\n        {\"timetable\": timetable resource}",
         "operationId": "api_v1_timetable_get_timetable",

@@ -360,7 +360,49 @@ def get_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
     """
     timetable = timetable_resource[timetable_id].get()
     return {"timetable": timetable.to_resource()}, 200
-    
+
+
+@bp.delete('/<timetable_id>/')
+def delete_timetable(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
+    """Delete a timetable version and all of its rows (#1088).
+
+    Cascades the version's entries, group members and lessongroup rows,
+    then the version itself. This is the cleanup surface for the
+    label-drift create 409: stale duplicate-label rows are owned by the
+    superseded versions that minted them, so deleting those versions
+    clears the drift. A group row that a later create reused is owned
+    by that later version and survives.
+
+    Refuses to delete the version the current or next pointer names —
+    move/cancel the pointer first. This action is destructive and
+    cannot be undone.
+
+    Method:
+        DELETE /timetable/<timetable_id>/
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable version to delete.
+
+    Responses:
+        200 OK: dict
+            Empty JSON object indicating successful deletion.
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `timetable.admin` circle (only user tokens are eligible).
+
+        404 Not Found: dict
+            {"error": error message} — unknown timetable_id.
+
+        409 Conflict: dict
+            {"error": error message} — the version is the current or
+            next pointer target.
+    """
+    authz.require_resource_admin("timetable", "delete timetables")
+    timetable_resource.delete(timetable_id)
+    return {}, 200
+
 
 @bp.get('/<timetable_id>/entries')
 @flask_campus.unpack_request
