@@ -21,8 +21,9 @@ import campus.yapper
 from campus.common import schema
 from campus.common.errors import api_errors
 
-from .. import resources
+from .. import authz, resources
 from ..resources.files import FileResource
+from ..resources.timetable import ATTACHMENT_SLUG_NAMESPACE
 
 bp = flask.Blueprint('files', __name__, url_prefix='/files')
 
@@ -113,6 +114,21 @@ def _normalise_slug(slug: str) -> str:
     means the URL addressed no slug at all.
     """
     return slug.rstrip("/")
+
+
+def _require_timetable_namespace_admin(slug: str) -> None:
+    """Gate writes under the timetable attachments slug namespace.
+
+    Slugs under ``timetables/`` are timetable resource data (per-version
+    attachments): the timetable admin circle gates them exactly like the
+    timetable mutation routes, so a plain-authenticated caller cannot
+    forge or deface an attachment by writing the namespace through the
+    generic files surface. Reads stay authentication-only.
+    """
+    if slug.startswith(ATTACHMENT_SLUG_NAMESPACE):
+        authz.require_resource_admin(
+            "timetable", "write timetable attachments"
+        )
 
 
 @bp.get('/')
@@ -224,6 +240,7 @@ def put_file_by_slug(slug: str) -> flask_campus.JsonResponse:
             Invalid slug or empty body.
     """
     slug = _normalise_slug(slug)
+    _require_timetable_namespace_admin(slug)
     data = _read_body()
     client_id, user_id = _principal_ids()
     record, created = FileResource.update_content_by_slug(
@@ -267,6 +284,7 @@ def delete_file_by_slug(slug: str) -> flask_campus.JsonResponse:
             {"error": "File not found"}
     """
     slug = _normalise_slug(slug)
+    _require_timetable_namespace_admin(slug)
     record = FileResource.get_by_slug(slug)
     FileResource.delete_by_slug(slug)
     yapper.emit(
@@ -368,6 +386,11 @@ def put_file_content(file_id: schema.CampusID) -> flask_campus.JsonResponse:
     """
     data = _read_body()
     client_id, user_id = _principal_ids()
+    # The record's slug decides the namespace: an id-addressed write to
+    # an attachment file is gated like its by-slug twin.
+    _require_timetable_namespace_admin(
+        resources.file[file_id].get()["slug"]
+    )
     record = resources.file[file_id].update_content(
         data,
         content_type=_upload_content_type(),
@@ -404,6 +427,9 @@ def delete_file(file_id: schema.CampusID) -> flask_campus.JsonResponse:
             {"error": "File not found"}
     """
     record = resources.file[file_id].get()
+    # Id-addressed deletes are gated on the record's slug namespace,
+    # like its by-slug twin.
+    _require_timetable_namespace_admin(record["slug"])
     resources.file[file_id].delete()
     yapper.emit(
         'campus.files.delete', {"file_id": file_id, "slug": record["slug"]}

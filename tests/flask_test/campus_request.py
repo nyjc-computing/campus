@@ -372,6 +372,35 @@ class TestCampusRequest(JsonClient):
         )
         return FlaskTestResponse(response)
 
+    def post_data(
+        self: Self,
+        path: str,
+        data: bytes | str,
+        content_type: str | None = None,
+        query: dict[str, Any] | None = None
+    ) -> FlaskTestResponse:
+        """Sends a POST request with a raw body.
+
+        Mirrors CampusRequest.post_data (sdk 0.10.0): the body is sent
+        verbatim with caller-controlled Content-Type — timetable
+        attachment uploads carry the bytes with ?filename= in the
+        query string.
+        """
+        app = self._get_app_for_request(path)
+        test_client = app.test_client()
+        full_path = self._make_path(path)
+
+        headers = self._get_auth_headers_dict()
+        if content_type:
+            headers["Content-Type"] = content_type
+        response = test_client.post(
+            full_path,
+            data=data,
+            query=query,
+            headers=headers
+        )
+        return FlaskTestResponse(response)
+
     def delete(
         self: Self,
         path: str,
