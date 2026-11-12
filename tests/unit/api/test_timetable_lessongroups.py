@@ -207,7 +207,8 @@ class TestLessongroupDrift(unittest.TestCase):
 
 
 class TestSubjcombiMappingSurvivesVersionSwitch(unittest.TestCase):
-    """The two-version lifecycle: a mapping set on v1 resolves on v2."""
+    """The two-version lifecycle: a label-keyed mapping set on v1
+    resolves on v2 through the current version's groups."""
 
     def setUp(self):
         from campus.api.resources import subjcombi
@@ -220,19 +221,24 @@ class TestSubjcombiMappingSurvivesVersionSwitch(unittest.TestCase):
         self.user = f"student-{self.marker}@campus.test"
 
     def _create(self, filename: str, labels: list[str]):
-        return self.resource.new(
+        timetable = self.resource.new(
             metadata=_metadata(f"{self.marker}-{filename}"),
             lessongroups=_groups(labels),
         )
+        self.resource.flip_current(
+            timetable.id, actor_id="admin@campus.test"
+        )
+        return timetable
 
     def test_mapping_survives_switch(self):
-        """set_mapping on v1 → v2 reuses the id → mapping still resolves."""
+        """set_mapping by label on v1 → v2 reuses the id → mapping still
+        resolves, translated through whichever version is current."""
         v1 = self._create("v1.xml", ["25A-Math"])
         group_id = v1.entries[0].lessongroup_id
 
         self.subjcombi.set_mapping(
             user_id=self.user,
-            lessongroup_id=group_id,
+            lessongroup_id="25A-Math",
             actor_id="admin@campus.test",
         )
         resolved, source = self.subjcombi.resolve(self.user)
@@ -245,21 +251,27 @@ class TestSubjcombiMappingSurvivesVersionSwitch(unittest.TestCase):
         self.assertEqual(source, "mapping")
         self.assertEqual(resolved, group_id)
 
-    def test_mapping_to_dropped_group_still_resolves(self):
-        """A mapping to a group absent from v2 keeps resolving to it."""
+    def test_mapping_to_dropped_group_resolves_unmapped(self):
+        """A mapping to a group absent from v2 is an orphan: it resolves
+        unmapped rather than to a nonexistent group, and the
+        version-switch check surfaces it for re-mapping."""
         v1 = self._create("v1.xml", ["25A-Math", "25A-Phy"])
         phy_id = next(
             e.lessongroup_id for e in v1.entries if e.label == "25A-Phy"
         )
         self.subjcombi.set_mapping(
             user_id=self.user,
-            lessongroup_id=phy_id,
+            lessongroup_id="25A-Phy",
             actor_id="admin@campus.test",
         )
-        self._create("v2.xml", ["25A-Math"])
         resolved, source = self.subjcombi.resolve(self.user)
         self.assertEqual(source, "mapping")
         self.assertEqual(resolved, phy_id)
+
+        self._create("v2.xml", ["25A-Math"])
+        resolved, source = self.subjcombi.resolve(self.user)
+        self.assertIsNone(resolved)
+        self.assertEqual(source, "unmapped")
 
 
 if __name__ == '__main__':

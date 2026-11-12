@@ -1,7 +1,12 @@
 """campus.api.resources.subjcombi
 
 Subject-combination (subjcombi) resource: the maintained mapping of a
-user to a timetable lessongroup (#592).
+user to a timetable lessongroup (#592), stored as the group's label —
+the v1 ttcode lookup's `T_Name` grain ("2601-H1/P", or a bare class
+code like "2607"). The label is stored verbatim and no timetable need
+exist when it is set: mappings populate ahead of the year's first
+upload, and the version-switch check (consumer side) highlights
+mappings whose label no uploaded timetable carries.
 
 One active mapping per user at any instant: every change appends an
 effective-dated record, and the current mapping is the latest record
@@ -18,8 +23,11 @@ supersedes any still-pending record (the supersede is recorded on the
 old row via `superseded_by`).
 
 Resolution chain for "the user's group" (`resolve`): maintained
-mapping → the file-derived `timetable_lessongroupmembers` roster →
-unmapped. The roster is written from `lessongroups[].members` when a
+mapping (its label translated to a group id through the current
+timetable) → the file-derived `timetable_lessongroupmembers` roster →
+unmapped. A mapping whose label no current-timetable group carries is
+an orphan: it resolves as unmapped rather than to a group that does
+not exist. The roster is written from `lessongroups[].members` when a
 timetable version is created and identifies members by their XML id
 (`ade_participant`), so the fallback only fires when rosters carry the
 campus user id; otherwise the maintained mapping is the authority.
@@ -136,6 +144,33 @@ def pending(user_id: schema.UserID | None = None) -> list[dict]:
     return sorted(soonest, key=_effective_at)
 
 
+def list_all() -> list[dict]:
+    """Every user's current effective mapping record, one per user.
+
+    The bulk read for version-switch checking: only each user's
+    effective-at-now record is included — trails stay on
+    `get_history`, scheduled switches on `pending()`, and users with
+    no effective record yet are absent. Sorted by user_id for stable
+    reports.
+    """
+    try:
+        records = subjcombi_collection.get_matching({})
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+    by_user: dict[str, list[dict]] = {}
+    for record in records:
+        by_user.setdefault(record["user_id"], []).append(record)
+    now_dt = _now()
+    current = []
+    for user_records in by_user.values():
+        effective = [
+            r for r in _active(user_records) if _effective_at(r) <= now_dt
+        ]
+        if effective:
+            current.append(max(effective, key=_effective_at))
+    return sorted(current, key=lambda r: r["user_id"])
+
+
 def set_mapping(
         user_id: schema.UserID,
         lessongroup_id: schema.CampusID,
@@ -145,21 +180,17 @@ def set_mapping(
 ) -> dict:
     """Append a mapping record for the user, superseding pending ones.
 
+    `lessongroup_id` is the lessongroup's label, stored verbatim; it
+    need not exist in any timetable yet (mappings populate ahead of
+    the upload, and the version-switch check highlights orphans).
     `effective_from` None means immediate (now). `previous_
     lessongroup_id` records the value being replaced at creation time;
     the user's other still-pending records are marked superseded so at
     most one pending switch per user survives.
     """
-    try:
-        matches = timetable_lessongroup_collection.get_matching(
-            {"id": str(lessongroup_id)}
-        )
-    except campus.storage.errors.StorageError as e:
-        raise api_errors.InternalError.from_exception(e) from e
-    if not matches:
+    if not str(lessongroup_id).strip():
         raise api_errors.InvalidRequestError(
-            f"Unknown lessongroup {lessongroup_id!r}: the mapping must "
-            "reference a lessongroup of an existing timetable"
+            "lessongroup_id must be a non-empty lessongroup label"
         )
 
     effective_dt = effective_from or _now()
@@ -238,15 +269,25 @@ def resolve(
 ) -> tuple[schema.CampusID | None, str]:
     """The user's lessongroup at `at`, with its source.
 
-    "mapping" — a maintained subjcombi record; "roster" — the
-    file-derived timetable_lessongroupmembers roster of the current
-    timetable (exact match on the roster's member id); "unmapped" —
-    neither source knows the user.
+    "mapping" — a maintained subjcombi record whose stored label names
+    a group of the current timetable (translated to that group's id);
+    "roster" — the file-derived timetable_lessongroupmembers roster of
+    the current timetable (exact match on the roster's member id);
+    "unmapped" — neither source knows the user, including an orphan
+    mapping whose label no current-timetable group carries.
     """
     record = get_current(user_id, at)
-    if record is not None:
-        return schema.CampusID(record["lessongroup_id"]), "mapping"
-    current_timetable = TimetablesResource().get_current()
+    current_timetable = TimetablesResource().get_current(at)
+    if record is not None and current_timetable is not None:
+        try:
+            matches = timetable_lessongroup_collection.get_matching({
+                "timetable_id": current_timetable,
+                "label": record["lessongroup_id"],
+            })
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        if matches:
+            return schema.CampusID(matches[0]["id"]), "mapping"
     if current_timetable is not None:
         try:
             rows = timetable_lessongroupmembers_table.get_matching({

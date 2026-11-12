@@ -502,7 +502,7 @@ class TestTimetableMeContract(unittest.TestCase):
         )
         put = self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": self._lg_id(tt_v1),
+            json={"lessongroup_id": "25A1",
                   "effective_from": "2027-06-01"},
             headers=self._headers(),
         )
@@ -566,7 +566,7 @@ class TestTimetableMeContract(unittest.TestCase):
         )
         self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": self._lg_id(tt_v2, "25B2"),
+            json={"lessongroup_id": "25B2",
                   "effective_from": "2027-07-01"},
             headers=self._headers(),
         )

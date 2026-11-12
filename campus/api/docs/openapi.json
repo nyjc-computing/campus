@@ -104,7 +104,7 @@
   "info": {
     "description": "Campus API for managing educational resources.\n\n## Error Responses\n\nAll error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.\n\n## Error Codes\n\nCommon error codes:\n- `INVALID_REQUEST` (400): Malformed or invalid request\n- `UNAUTHORIZED` (401): Missing or invalid authentication\n- `FORBIDDEN` (403): Insufficient permissions\n- `NOT_FOUND` (404): Resource not found\n- `VALIDATION_FAILED` (422): Request validation failed with field-level errors\n- `CONFLICT` (409): Resource state conflict\n- `INTERNAL_ERROR` (500): Unexpected server error\n- `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later\n\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
     "title": "Campus API",
-    "version": "0.21.1"
+    "version": "0.21.2"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -1578,6 +1578,24 @@
         ]
       }
     },
+    "/api/v1/subjcombi/": {
+      "get": {
+        "description": "The bulk read the version-switch check uses to compare stored\nlabels against an uploaded timetable's groups. Scheduled (pending)\nswitches are not included (GET /pending); mutation trails stay on\nGET /<user_id>/history.\n\nMethod:\n    GET /subjcombi/\n\nResponses:\n    200 OK: dict\n        {\"data\": [subjcombi records]}",
+        "operationId": "api_v1_subjcombi_list_subjcombi",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List every user's current effective mapping, one record per user.",
+        "tags": [
+          "subjcombi"
+        ]
+      }
+    },
     "/api/v1/subjcombi/pending": {
       "get": {
         "description": "At most one pending record per user; soonest switch first.\n\nMethod:\n    GET /subjcombi/pending\n\nResponses:\n    200 OK: dict\n        {\"data\": [subjcombi records]}",
@@ -1626,7 +1644,7 @@
     },
     "/api/v1/subjcombi/{user_id}": {
       "get": {
-        "description": "Resolves through the maintained mapping, then the current\ntimetable's file-derived roster, then unmapped.\n\nMethod:\n    GET /subjcombi/{user_id}\n\nQuery Parameters:\n    at: str | None (optional)\n        ISO datetime to resolve the mapping as of (default: now).\n\nResponses:\n    200 OK: dict\n        {\"user_id\": ..., \"lessongroup_id\": ... | null,\n         \"source\": \"mapping\" | \"roster\" | \"unmapped\"}",
+        "description": "Resolves through the maintained mapping (its stored label\ntranslated to a group id through the current timetable), then the\ncurrent timetable's file-derived roster, then unmapped. A mapping\nwhose label no current-timetable group carries is an orphan and\nresolves as unmapped.\n\nMethod:\n    GET /subjcombi/{user_id}\n\nQuery Parameters:\n    at: str | None (optional)\n        ISO datetime to resolve the mapping as of (default: now).\n\nResponses:\n    200 OK: dict\n        {\"user_id\": ..., \"lessongroup_id\": ... | null,\n         \"source\": \"mapping\" | \"roster\" | \"unmapped\"}",
         "operationId": "api_v1_subjcombi_get_subjcombi",
         "parameters": [
           {
@@ -1662,7 +1680,7 @@
         ]
       },
       "put": {
-        "description": "Appends an effective-dated record; the previous pending record\n(if any) is superseded. Scheduled records take effect at their\n`effective_from` without any scheduler process.\n\nMethod:\n    PUT /subjcombi/{user_id}\n\nPath Parameters:\n    user_id: UserID\n        The user whose mapping is set (their campus account email).\n\nBody Parameters:\n    lessongroup_id: CampusID\n        The lessongroup to map the user to. Must reference a\n        lessongroup of an existing timetable.\n    reason: str | None (optional)\n        Free-text change note, preserved on the trail record.\n    effective_from: str | None (optional)\n        When the mapping takes effect: ISO datetime, or\n        `YYYY-MM-DD` for 07:00 school time on that date. Absent =\n        immediate.\n\nResponses:\n    201 Created: dict\n        The created trail record (includes\n        `previous_lessongroup_id` and `actor_id`).\n\n    400 Bad Request: dict\n        Unknown lessongroup or malformed `effective_from`.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `subjcombi.admin` circle (only user tokens are eligible).",
+        "description": "Appends an effective-dated record; the previous pending record\n(if any) is superseded. Scheduled records take effect at their\n`effective_from` without any scheduler process.\n\nMethod:\n    PUT /subjcombi/{user_id}\n\nPath Parameters:\n    user_id: UserID\n        The user whose mapping is set (their campus account email).\n\nBody Parameters:\n    lessongroup_id: CampusID\n        The lessongroup to map the user to, by label (the v1\n        ttcode, e.g. \"2601-H1/P\" or a bare class code \"2607\").\n        Stored verbatim; it need not exist in any timetable yet \u2014\n        mappings populate ahead of the year's first upload, and\n        the version-switch check highlights mappings whose label\n        no uploaded timetable carries.\n    reason: str | None (optional)\n        Free-text change note, preserved on the trail record.\n    effective_from: str | None (optional)\n        When the mapping takes effect: ISO datetime, or\n        `YYYY-MM-DD` for 07:00 school time on that date. Absent =\n        immediate.\n\nResponses:\n    201 Created: dict\n        The created trail record (includes\n        `previous_lessongroup_id` and `actor_id`).\n\n    400 Bad Request: dict\n        Empty `lessongroup_id` or malformed `effective_from`.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `subjcombi.admin` circle (only user tokens are eligible).",
         "operationId": "api_v1_subjcombi_set_subjcombi",
         "parameters": [
           {

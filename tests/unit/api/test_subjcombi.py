@@ -32,15 +32,15 @@ class TestSubjcombiTrail(unittest.TestCase):
         self.admin = "admin@campus.test"
         self.lg_a = "uid-lessongroup-testa"
         self.lg_b = "uid-lessongroup-testb"
-        self._seed_lessongroup(self.lg_a)
-        self._seed_lessongroup(self.lg_b)
+        self._seed_lessongroup(self.lg_a, "25A1")
+        self._seed_lessongroup(self.lg_b, "25A2")
 
-    def _seed_lessongroup(self, lessongroup_id):
+    def _seed_lessongroup(self, lessongroup_id, label):
         from campus.api.resources.timetable import timetable_lessongroup_collection
         timetable_lessongroup_collection.insert_one({
             "id": lessongroup_id,
             "timetable_id": "uid-timetable-test",
-            "label": "25A1",
+            "label": label,
         })
 
     def test_immediate_set_is_current_with_trail_fields(self):
@@ -111,13 +111,54 @@ class TestSubjcombiTrail(unittest.TestCase):
         with self.assertRaises(api_errors.ConflictError):
             self.subjcombi.cancel(effective["id"], actor_id=self.admin)
 
-    def test_unknown_lessongroup_rejected(self):
+    def test_any_nonempty_label_is_stored_verbatim(self):
+        """Mappings store the lessongroup label verbatim; no timetable
+        need exist when it is set (mappings populate ahead of the
+        upload, and the version-switch check highlights orphans)."""
+        orphan_label = "2607"
+        record = self.subjcombi.set_mapping(
+            self.user, orphan_label, actor_id=self.admin,
+        )
+        self.assertEqual(record["lessongroup_id"], orphan_label)
+        self.assertEqual(
+            self.subjcombi.get_current(self.user)["lessongroup_id"],
+            orphan_label,
+        )
+        # Resolve before any timetable exists: the orphan label cannot
+        # translate, so the user is unmapped rather than dangling.
+        group, source = self.subjcombi.resolve(self.user)
+        self.assertIsNone(group)
+        self.assertEqual(source, "unmapped")
+
+    def test_empty_label_rejected(self):
         with self.assertRaises(api_errors.InvalidRequestError):
-            self.subjcombi.set_mapping(
-                self.user,
-                "uid-lessongroup-nonexistent",
-                actor_id=self.admin,
-            )
+            self.subjcombi.set_mapping(self.user, "  ", actor_id=self.admin)
+
+    def test_list_all_returns_current_record_per_user(self):
+        """list_all is the bulk read for version-switch checking: the
+        effective-at-now record per user; pending-only, superseded-only
+        and unknown users are absent; sorted by user_id for stable
+        reports."""
+        u_effective = f"effective-{uuid.uuid4().hex[:8]}@campus.test"
+        u_pending = f"pending-{uuid.uuid4().hex[:8]}@campus.test"
+        u_switched = f"switched-{uuid.uuid4().hex[:8]}@campus.test"
+        self.subjcombi.set_mapping(u_effective, self.lg_a, actor_id=self.admin)
+        self.subjcombi.set_mapping(
+            u_pending, self.lg_a, actor_id=self.admin,
+            effective_from=utc_time.after(hours=1),
+        )
+        self.subjcombi.set_mapping(
+            u_switched, self.lg_a, actor_id=self.admin,
+            effective_from=utc_time.after(hours=-1),
+        )
+        self.subjcombi.set_mapping(u_switched, self.lg_b, actor_id=self.admin)
+
+        listed = self.subjcombi.list_all()
+        by_user = {r["user_id"]: r for r in listed}
+        self.assertEqual([r["user_id"] for r in listed], sorted(by_user))
+        self.assertEqual(by_user[u_effective]["lessongroup_id"], self.lg_a)
+        self.assertNotIn(u_pending, by_user)
+        self.assertEqual(by_user[u_switched]["lessongroup_id"], self.lg_b)
 
     def test_parse_effective_from_variants(self):
         import datetime
@@ -184,15 +225,27 @@ class TestSubjcombiResolve(unittest.TestCase):
         self.assertEqual(source, "roster")
         self.assertEqual(group, lessongroup_id)
 
-        # A maintained mapping overrides the roster.
+        # A maintained mapping overrides the roster. Mappings store the
+        # group's label; resolve translates it to the current
+        # timetable's group id.
         self.subjcombi.set_mapping(
-            self.mapped, lessongroup_id, actor_id="admin@campus.test",
+            self.mapped, "25A1", actor_id="admin@campus.test",
         )
         group, source = self.subjcombi.resolve(self.mapped)
         self.assertEqual(source, "mapping")
         self.assertEqual(group, lessongroup_id)
 
-        # Nobody knows the unknown user.
+        # An orphan label (no current-timetable group carries it) falls
+        # through to unmapped, not to a nonexistent group.
+        orphan = "orphan.student@campus.test"
+        self.subjcombi.set_mapping(
+            orphan, "2607", actor_id="admin@campus.test",
+        )
+        group, source = self.subjcombi.resolve(orphan)
+        self.assertIsNone(group)
+        self.assertEqual(source, "unmapped")
+
+        # Nobody without a mapping is known either.
         group, source = self.subjcombi.resolve(self.unknown)
         self.assertIsNone(group)
         self.assertEqual(source, "unmapped")
