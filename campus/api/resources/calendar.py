@@ -12,7 +12,9 @@ pointer trail owns that, exactly as v1's calendar-editor docs note
 ("changing a day-code does not change the version").
 
 Writes validate the date format and the day-code vocabulary
-(DAY_CODE_VOCABULARY); a write to a well-formed date creates the row.
+(CALENDAR_CODE_VOCABULARY — the model's TT cycle plus the
+whole-school day types); a write to a well-formed date creates the
+row.
 v1's editor could not create rows — the API can, which is what makes
 seeding a school year possible at all (the v1 docs' open question:
 "how a new year's calendar rows come to exist at all" — the seed).
@@ -30,6 +32,22 @@ from campus.model.calendar import DAY_CODE_VOCABULARY
 from campus.storage.documents.interface import PK
 
 calendar_table = campus.storage.get_table("calendar")
+
+# The service extends the model's TT-cycle vocabulary (the ten TT days
+# + "Free") with the whole-school day types the committee picks from
+# the same dropdowns: School Holiday (students and teaching staff off,
+# admin staff in), Public Holiday (everyone off), and Independent
+# Learning Day (students off, teaching staff in). Admin staff are not
+# represented in calendar rows, so these codes are what such a date
+# shows instead of lessons.
+DAY_TYPE_CODES: tuple[str, ...] = (
+    "School Holiday",
+    "Public Holiday",
+    "Independent Learning Day",
+)
+CALENDAR_CODE_VOCABULARY: tuple[str, ...] = (
+    tuple(DAY_CODE_VOCABULARY) + DAY_TYPE_CODES
+)
 
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -60,11 +78,11 @@ def _validated_code(value: str | None, cohort: str) -> str | None:
     """Validate one cohort's day code against the vocabulary."""
     if value is None:
         return None
-    if value not in DAY_CODE_VOCABULARY:
+    if value not in CALENDAR_CODE_VOCABULARY:
         raise api_errors.InvalidRequestError(
             f"Invalid {cohort} code {value!r}: use one of "
-            f"{', '.join(DAY_CODE_VOCABULARY)}, or null to leave the "
-            "field unset"
+            f"{', '.join(CALENDAR_CODE_VOCABULARY)}, or null to leave "
+            "the field unset"
         )
     return str(value)
 
@@ -162,9 +180,9 @@ class CalendarResource:
     ) -> dict:
         """Write one date's day-codes, creating the row if absent.
 
-        Codes must be in DAY_CODE_VOCABULARY (or None to leave the
-        field unset — the day editor's "select schedule", which behaves
-        as a day with no lessons). The write is idempotent: the same
+        Codes must be in CALENDAR_CODE_VOCABULARY (the TT cycle,
+        "Free", or the whole-school day types — or None to leave the
+        field unset, which behaves as a day with no lessons). The write is idempotent: the same
         codes twice leave the same row.
         """
         date_key = _validated_date(date_raw)
