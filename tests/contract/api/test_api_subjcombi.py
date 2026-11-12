@@ -5,6 +5,7 @@ mapping: status codes, response formats, and circle access control.
 
 Subjcombi Endpoints Reference:
 - PUT    /subjcombi/{user_id}           - Set mapping (subjcombi.admin)
+- GET    /subjcombi/                    - Current mapping per user (bulk)
 - GET    /subjcombi/{user_id}           - Current resolved mapping (?at= as-of)
 - GET    /subjcombi/{user_id}/history   - Full mutation trail
 - GET    /subjcombi/pending             - Scheduled, not-yet-effective records
@@ -120,16 +121,15 @@ class TestApiSubjcombiContract(unittest.TestCase):
     # Set + current resolution
 
     def test_set_immediate_returns_record_and_resolves_current(self):
-        lessongroup_id = self._lessongroup_id()
         response = self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": lessongroup_id,
-                  "reason": "contract test"},
+            json={"lessongroup_id": "25A1", "reason": "contract test"},
             headers=self.auth_headers,
         )
         self.assertEqual(response.status_code, 201)
         record = response.get_json()
-        self.assertEqual(record["lessongroup_id"], lessongroup_id)
+        # The label is stored verbatim.
+        self.assertEqual(record["lessongroup_id"], "25A1")
         self.assertEqual(record["actor_id"], str(self.USER_ID))
         self.assertIsNone(record["previous_lessongroup_id"])
         self.assertEqual(record["reason"], "contract test")
@@ -140,16 +140,56 @@ class TestApiSubjcombiContract(unittest.TestCase):
         )
         self.assertEqual(current.status_code, 200)
         data = current.get_json()
-        self.assertEqual(data["lessongroup_id"], lessongroup_id)
+        # The stored label translates to the current timetable's group id.
+        self.assertEqual(data["lessongroup_id"], self._lessongroup_id())
         self.assertEqual(data["source"], "mapping")
 
-    def test_unknown_lessongroup_returns_400(self):
+    def test_orphan_label_is_stored_and_resolves_unmapped(self):
+        """Mappings accept labels no timetable carries (they populate
+        ahead of the upload); a mapping whose label no timetable group
+        carries and whose user is in no roster resolves as unmapped
+        rather than to a nonexistent group."""
+        orphan = schema.UserID("orphan.student@campus.test")
         response = self.client.put(
-            f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": "uid-lessongroup-nonexistent"},
+            f"/api/v1/subjcombi/{orphan}",
+            json={"lessongroup_id": "2607"},
             headers=self.auth_headers,
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["lessongroup_id"], "2607")
+
+        current = self.client.get(
+            f"/api/v1/subjcombi/{orphan}",
+            headers=self.auth_headers,
+        )
+        self.assertEqual(current.status_code, 200)
+        data = current.get_json()
+        self.assertIsNone(data["lessongroup_id"])
+        self.assertEqual(data["source"], "unmapped")
+
+    def test_list_all_returns_current_mapping_per_user(self):
+        other = "other.student@campus.test"
+        grant_circle_admin(other, "subjcombi")
+        for user in (self.USER_ID, other):
+            put = self.client.put(
+                f"/api/v1/subjcombi/{user}",
+                json={"lessongroup_id": "25A1"},
+                headers=get_bearer_auth_headers(create_test_token(user)),
+            )
+            self.assertEqual(put.status_code, 201)
+        # Fresh token for the read: minting for `other` invalidated the
+        # setUp token (credentials are single-active per test user).
+        listed = self.client.get(
+            "/api/v1/subjcombi/",
+            headers=get_bearer_auth_headers(create_test_token(self.USER_ID)),
+        )
+        self.assertEqual(listed.status_code, 200)
+        records = listed.get_json()["data"]
+        self.assertEqual(
+            [r["user_id"] for r in records],
+            sorted(str(u) for u in (self.USER_ID, other)),
+        )
+        self.assertTrue(all(r["lessongroup_id"] == "25A1" for r in records))
 
     def test_roster_fallback_when_unmapped(self):
         # The timetable was created with the user in the roster but no
@@ -166,10 +206,9 @@ class TestApiSubjcombiContract(unittest.TestCase):
     # Pending + cancel lifecycle
 
     def test_scheduled_record_is_pending_then_cancellable(self):
-        lessongroup_id = self._lessongroup_id()
         created = self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": lessongroup_id,
+            json={"lessongroup_id": "25A1",
                   "effective_from": "2027-06-01"},
             headers=self.auth_headers,
         )
@@ -206,10 +245,9 @@ class TestApiSubjcombiContract(unittest.TestCase):
         self.assertEqual(pending.get_json()["data"], [])
 
     def test_cancel_effective_record_returns_409(self):
-        lessongroup_id = self._lessongroup_id()
         created = self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": lessongroup_id},
+            json={"lessongroup_id": "25A1"},
             headers=self.auth_headers,
         )
         record = created.get_json()
@@ -229,7 +267,6 @@ class TestApiSubjcombiContract(unittest.TestCase):
     # History
 
     def test_history_lists_all_records_newest_first(self):
-        lessongroup_id = self._lessongroup_id()
         other = "other.student@campus.test"
         grant_circle_admin(other, "subjcombi")
         # Mint a fresh token per request: token credentials are
@@ -238,13 +275,13 @@ class TestApiSubjcombiContract(unittest.TestCase):
         for user in (self.USER_ID, other):
             put = self.client.put(
                 f"/api/v1/subjcombi/{user}",
-                json={"lessongroup_id": lessongroup_id},
+                json={"lessongroup_id": "25A1"},
                 headers=get_bearer_auth_headers(create_test_token(user)),
             )
             self.assertEqual(put.status_code, 201)
         put = self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
-            json={"lessongroup_id": lessongroup_id},
+            json={"lessongroup_id": "25A1"},
             headers=get_bearer_auth_headers(create_test_token(self.USER_ID)),
         )
         self.assertEqual(put.status_code, 201)

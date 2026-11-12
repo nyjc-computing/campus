@@ -73,8 +73,12 @@ def set_subjcombi(
 
     Body Parameters:
         lessongroup_id: CampusID
-            The lessongroup to map the user to. Must reference a
-            lessongroup of an existing timetable.
+            The lessongroup to map the user to, by label (the v1
+            ttcode, e.g. "2601-H1/P" or a bare class code "2607").
+            Stored verbatim; it need not exist in any timetable yet —
+            mappings populate ahead of the year's first upload, and
+            the version-switch check highlights mappings whose label
+            no uploaded timetable carries.
         reason: str | None (optional)
             Free-text change note, preserved on the trail record.
         effective_from: str | None (optional)
@@ -88,7 +92,7 @@ def set_subjcombi(
             `previous_lessongroup_id` and `actor_id`).
 
         400 Bad Request: dict
-            Unknown lessongroup or malformed `effective_from`.
+            Empty `lessongroup_id` or malformed `effective_from`.
 
         403 Forbidden: None
             Returned if the caller is not a member of the
@@ -122,8 +126,11 @@ def get_subjcombi(
 ) -> flask_campus.JsonResponse:
     """Get the user's effective subject-combination mapping.
 
-    Resolves through the maintained mapping, then the current
-    timetable's file-derived roster, then unmapped.
+    Resolves through the maintained mapping (its stored label
+    translated to a group id through the current timetable), then the
+    current timetable's file-derived roster, then unmapped. A mapping
+    whose label no current-timetable group carries is an orphan and
+    resolves as unmapped.
 
     Method:
         GET /subjcombi/{user_id}
@@ -166,6 +173,26 @@ def get_subjcombi_history(
             {"data": [subjcombi records]}
     """
     records = subjcombi_resource.get_history(user_id)
+    return {"data": [subjcombi_resource.to_resource(r) for r in records]}, 200
+
+
+@bp.get('/')
+def list_subjcombi() -> flask_campus.JsonResponse:
+    """List every user's current effective mapping, one record per user.
+
+    The bulk read the version-switch check uses to compare stored
+    labels against an uploaded timetable's groups. Scheduled (pending)
+    switches are not included (GET /pending); mutation trails stay on
+    GET /<user_id>/history.
+
+    Method:
+        GET /subjcombi/
+
+    Responses:
+        200 OK: dict
+            {"data": [subjcombi records]}
+    """
+    records = subjcombi_resource.list_all()
     return {"data": [subjcombi_resource.to_resource(r) for r in records]}, 200
 
 
