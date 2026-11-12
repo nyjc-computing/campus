@@ -4,6 +4,7 @@ API routes for the Timetable resource.
 """
 
 import datetime
+import io
 
 import flask
 
@@ -15,9 +16,15 @@ from campus.common.utils import utc_time
 from .. import authz
 from ..resources import subjcombi as subjcombi_resource
 from ..resources import timetable as timetable_resource
+from ..resources.files import FileResource
 from ..resources.timetable import parse_effective_from
 
 bp = flask.Blueprint('timetable', __name__, url_prefix='/timetable')
+
+# Attachment content responses cache briefly, mirroring the files
+# routes' budget: attachment slugs are immutable per upload (removal is
+# explicit), so replacements never invalidate a cached copy mid-budget.
+ATTACHMENT_CONTENT_CACHE_MAX_AGE = 60
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
@@ -444,13 +451,14 @@ def get_timetable_metadata(timetable_id: schema.CampusID):
     return timetable.to_resource(), 200
 
 @bp.patch('/<timetable_id>/metadata')
-@flask_campus.unpack_request
-def set_metadata(
-        timetable_id: schema.CampusID,
-        start_date: schema.DateTime,
-        end_date: schema.DateTime,
-) -> flask_campus.JsonResponse:
-    """Update metadata for a specific timetable.
+def set_metadata(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
+    """Update metadata fields for a specific timetable.
+
+    A subset update: send any of `label`, `start_date`, `end_date` —
+    only the fields present in the body change. The label is the
+    committee's user-given display name (timetable-v2 Manage
+    Timetables); `null` clears it back to unnamed. `filename` is the
+    allocation's identity and is not updatable.
 
     Method:
         PATCH /timetable/<timetable_id>/metadata
@@ -460,22 +468,234 @@ def set_metadata(
             The ID of the timetable.
 
     Body Parameters:
-        start_date: DateTime
+        label: str | None (optional)
+            The new display name, or null to clear it. An empty
+            string is rejected — clear with null instead.
+        start_date: DateTime (optional)
             The new start date of the timetable.
-        end_date: DateTime
+        end_date: DateTime (optional)
             The new end date of the timetable.
 
     Responses:
         200 OK: dict
-            {}
+            The updated metadata resource.
+
+        400 Bad Request: dict
+            {"error": error message} — empty body, unknown fields, a
+            `filename` patch attempt, or an empty `label` string.
 
         403 Forbidden: None
             Returned if the caller is not a member of the
             `timetable.admin` circle (only user tokens are eligible).
     """
     authz.require_resource_admin("timetable", "edit timetable metadata")
-    timetable_resource[timetable_id].metadata.update(
-        start_date=start_date,
-        end_date=end_date
+    payload = flask.request.get_json(silent=True)
+    if not isinstance(payload, dict) or not payload:
+        raise api_errors.InvalidRequestError(
+            "Patch body required: send any of 'label', 'start_date', "
+            "'end_date' (only the fields present change)"
+        )
+    if "filename" in payload:
+        raise api_errors.InvalidRequestError(
+            "'filename' is the allocation's identity and cannot be "
+            "changed; import a new timetable version instead"
+        )
+    unknown = set(payload) - {"label", "start_date", "end_date"}
+    if unknown:
+        raise api_errors.InvalidRequestError(
+            f"Unknown fields: {sorted(unknown)}"
+        )
+    if "label" in payload:
+        label = payload["label"]
+        if label is not None and not str(label).strip():
+            raise api_errors.InvalidRequestError(
+                "'label' must be a non-empty string or null (clear it "
+                "with null, not an empty string)"
+            )
+    timetable_resource[timetable_id].metadata.update(**payload)
+    return timetable_resource[timetable_id].metadata.get().to_resource(), 200
+
+
+def _upload_content_type() -> str:
+    """The request's Content-Type header, defaulting to octet-stream."""
+    content_type = flask.request.content_type
+    if not content_type:
+        return "application/octet-stream"
+    # Strip parameters (e.g. "; charset=...") for storage; the MIME
+    # type is what gets served back.
+    return content_type.split(";", 1)[0].strip() or "application/octet-stream"
+
+
+def _upload_principals() -> tuple[str, str | None]:
+    """The authenticated (client, user) pair for attachment uploads.
+
+    The timetable blueprint sits behind the api authenticator, so a
+    client is always present; the user is None for client-credential
+    calls. Admin-gated routes have already established a user.
+    """
+    client = flask.g.get("current_client")
+    client_id = str(getattr(client, "id", "") or "")
+    if not client_id:
+        raise api_errors.UnauthorizedError(
+            "Attachment uploads require an authenticated client"
+        )
+    user = flask.g.get("current_user")
+    user_id = getattr(user, "id", None)
+    return client_id, str(user_id) if user_id else None
+
+
+@bp.post('/<timetable_id>/attachments/')
+def add_timetable_attachment(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
+    """Attach a file (PDF, image, …) to a timetable version.
+
+    The body is the raw file content; the `filename` query parameter
+    carries the committee's original filename (what the card shows)
+    and the Content-Type header is stored and served back. Each upload
+    mints a new attachment — re-uploading the same filename adds a
+    second copy rather than replacing one (removal is explicit).
+
+    Method:
+        POST /timetable/<timetable_id>/attachments/
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable.
+
+    Query Parameters:
+        filename: str (required)
+            The attachment's display filename.
+
+    Body:
+        Raw bytes (any Content-Type; defaults to application/octet-stream).
+
+    Responses:
+        201 Created: dict
+            The attachment record (a files-backend record; the
+            attachment id is the record's `id`).
+
+        400 Bad Request: dict
+            {"error": error message} — missing filename or empty body.
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `timetable.admin` circle (only user tokens are eligible).
+
+        404 Not Found: dict
+            {"error": error message} — unknown timetable_id.
+    """
+    authz.require_resource_admin("timetable", "add timetable attachments")
+    client_id, user_id = _upload_principals()
+    filename = (flask.request.args.get("filename") or "").strip()
+    if not filename:
+        raise api_errors.InvalidRequestError(
+            "Attachment filename required: pass it as the ?filename= "
+            "query parameter"
+        )
+    record = timetable_resource[timetable_id].attachments.add(
+        data=flask.request.get_data(cache=False),
+        filename=filename,
+        content_type=_upload_content_type(),
+        client_id=client_id,
+        user_id=user_id,
     )
+    return FileResource.to_resource(record), 201
+
+
+@bp.get('/<timetable_id>/attachments/')
+def list_timetable_attachments(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
+    """List a timetable version's attachments, newest first.
+
+    Method:
+        GET /timetable/<timetable_id>/attachments/
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable.
+
+    Responses:
+        200 OK: dict
+            {"data": [attachment records]} — files-backend records
+            under the version's attachments namespace.
+
+        404 Not Found: dict
+            {"error": error message} — unknown timetable_id.
+    """
+    result = timetable_resource[timetable_id].attachments.list()
+    return {"data": [FileResource.to_resource(record) for record in result]}, 200
+
+
+@bp.get('/<timetable_id>/attachments/<attachment_id>/content/')
+def get_timetable_attachment_content(
+        timetable_id: schema.CampusID,
+        attachment_id: schema.CampusID,
+) -> flask.Response:
+    """Serve an attachment's bytes.
+
+    The response carries the stored Content-Type, an ETag and the same
+    brief cache budget as the files routes (attachment slugs are
+    immutable per upload).
+
+    Method:
+        GET /timetable/<timetable_id>/attachments/<attachment_id>/content/
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable.
+        attachment_id: CampusID
+            The attachment id (the underlying file record's id).
+
+    Responses:
+        200 OK: bytes
+            The attachment content with its stored Content-Type.
+
+        404 Not Found: dict
+            {"error": error message} — unknown id, or the attachment
+            belongs to a different timetable.
+    """
+    data, record = timetable_resource[timetable_id].attachments.get_content(
+        attachment_id
+    )
+    etag = f'{record["size"]}-{record["updated_at"]}'
+    return flask.send_file(
+        io.BytesIO(data),
+        mimetype=record["content_type"],
+        conditional=True,
+        max_age=ATTACHMENT_CONTENT_CACHE_MAX_AGE,
+        etag=etag,
+    )
+
+
+@bp.delete('/<timetable_id>/attachments/<attachment_id>/')
+def delete_timetable_attachment(
+        timetable_id: schema.CampusID,
+        attachment_id: schema.CampusID,
+) -> flask_campus.JsonResponse:
+    """Remove an attachment from a timetable version.
+
+    Deletes the underlying file record and its content. Removing an
+    attachment never touches the timetable itself.
+
+    Method:
+        DELETE /timetable/<timetable_id>/attachments/<attachment_id>/
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable.
+        attachment_id: CampusID
+            The attachment id to remove.
+
+    Responses:
+        200 OK: dict
+            Empty JSON object indicating successful removal.
+
+        403 Forbidden: None
+            Returned if the caller is not a member of the
+            `timetable.admin` circle (only user tokens are eligible).
+
+        404 Not Found: dict
+            {"error": error message} — unknown id, or the attachment
+            belongs to a different timetable.
+    """
+    authz.require_resource_admin("timetable", "remove timetable attachments")
+    timetable_resource[timetable_id].attachments.delete(attachment_id)
     return {}, 200

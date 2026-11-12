@@ -104,7 +104,7 @@
   "info": {
     "description": "Campus API for managing educational resources.\n\n## Error Responses\n\nAll error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.\n\n## Error Codes\n\nCommon error codes:\n- `INVALID_REQUEST` (400): Malformed or invalid request\n- `UNAUTHORIZED` (401): Missing or invalid authentication\n- `FORBIDDEN` (403): Insufficient permissions\n- `NOT_FOUND` (404): Resource not found\n- `VALIDATION_FAILED` (422): Request validation failed with field-level errors\n- `CONFLICT` (409): Resource state conflict\n- `INTERNAL_ERROR` (500): Unexpected server error\n- `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later\n\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
     "title": "Campus API",
-    "version": "0.21.0"
+    "version": "0.21.1"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -2351,6 +2351,132 @@
         ]
       }
     },
+    "/api/v1/timetable/{timetable_id}/attachments/": {
+      "get": {
+        "description": "Method:\n    GET /timetable/<timetable_id>/attachments/\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n\nResponses:\n    200 OK: dict\n        {\"data\": [attachment records]} \u2014 files-backend records\n        under the version's attachments namespace.\n\n    404 Not Found: dict\n        {\"error\": error message} \u2014 unknown timetable_id.",
+        "operationId": "api_v1_timetable_list_timetable_attachments",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List a timetable version's attachments, newest first.",
+        "tags": [
+          "timetable"
+        ]
+      },
+      "post": {
+        "description": "The body is the raw file content; the `filename` query parameter\ncarries the committee's original filename (what the card shows)\nand the Content-Type header is stored and served back. Each upload\nmints a new attachment \u2014 re-uploading the same filename adds a\nsecond copy rather than replacing one (removal is explicit).\n\nMethod:\n    POST /timetable/<timetable_id>/attachments/\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n\nQuery Parameters:\n    filename: str (required)\n        The attachment's display filename.\n\nBody:\n    Raw bytes (any Content-Type; defaults to application/octet-stream).\n\nResponses:\n    201 Created: dict\n        The attachment record (a files-backend record; the\n        attachment id is the record's `id`).\n\n    400 Bad Request: dict\n        {\"error\": error message} \u2014 missing filename or empty body.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).\n\n    404 Not Found: dict\n        {\"error\": error message} \u2014 unknown timetable_id.",
+        "operationId": "api_v1_timetable_add_timetable_attachment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Attach a file (PDF, image, \u2026) to a timetable version.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/{timetable_id}/attachments/{attachment_id}/": {
+      "delete": {
+        "description": "Deletes the underlying file record and its content. Removing an\nattachment never touches the timetable itself.\n\nMethod:\n    DELETE /timetable/<timetable_id>/attachments/<attachment_id>/\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n    attachment_id: CampusID\n        The attachment id to remove.\n\nResponses:\n    200 OK: dict\n        Empty JSON object indicating successful removal.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).\n\n    404 Not Found: dict\n        {\"error\": error message} \u2014 unknown id, or the attachment\n        belongs to a different timetable.",
+        "operationId": "api_v1_timetable_delete_timetable_attachment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Remove an attachment from a timetable version.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/{timetable_id}/attachments/{attachment_id}/content/": {
+      "get": {
+        "description": "The response carries the stored Content-Type, an ETag and the same\nbrief cache budget as the files routes (attachment slugs are\nimmutable per upload).\n\nMethod:\n    GET /timetable/<timetable_id>/attachments/<attachment_id>/content/\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n    attachment_id: CampusID\n        The attachment id (the underlying file record's id).\n\nResponses:\n    200 OK: bytes\n        The attachment content with its stored Content-Type.\n\n    404 Not Found: dict\n        {\"error\": error message} \u2014 unknown id, or the attachment\n        belongs to a different timetable.",
+        "operationId": "api_v1_timetable_get_timetable_attachment_content",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Serve an attachment's bytes.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
     "/api/v1/timetable/{timetable_id}/entries": {
       "get": {
         "description": "Method:\n    GET /timetable/<timetable_id>/entries\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable to retrieve.\n\nResponses:\n    200 OK: dict\n        {\"entries\": [timetable entry resources with labels]}",
@@ -2407,7 +2533,7 @@
         ]
       },
       "patch": {
-        "description": "Method:\n    PATCH /timetable/<timetable_id>/metadata\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n\nBody Parameters:\n    start_date: DateTime\n        The new start date of the timetable.\n    end_date: DateTime\n        The new end date of the timetable.\n\nResponses:\n    200 OK: dict\n        {}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).",
+        "description": "A subset update: send any of `label`, `start_date`, `end_date` \u2014\nonly the fields present in the body change. The label is the\ncommittee's user-given display name (timetable-v2 Manage\nTimetables); `null` clears it back to unnamed. `filename` is the\nallocation's identity and is not updatable.\n\nMethod:\n    PATCH /timetable/<timetable_id>/metadata\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable.\n\nBody Parameters:\n    label: str | None (optional)\n        The new display name, or null to clear it. An empty\n        string is rejected \u2014 clear with null instead.\n    start_date: DateTime (optional)\n        The new start date of the timetable.\n    end_date: DateTime (optional)\n        The new end date of the timetable.\n\nResponses:\n    200 OK: dict\n        The updated metadata resource.\n\n    400 Bad Request: dict\n        {\"error\": error message} \u2014 empty body, unknown fields, a\n        `filename` patch attempt, or an empty `label` string.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `timetable.admin` circle (only user tokens are eligible).",
         "operationId": "api_v1_timetable_set_metadata",
         "parameters": [
           {
@@ -2419,30 +2545,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "end_date": {
-                    "format": "date-time",
-                    "type": "string"
-                  },
-                  "start_date": {
-                    "format": "date-time",
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "start_date",
-                  "end_date"
-                ],
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Successful response"
@@ -2451,7 +2553,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "summary": "Update metadata for a specific timetable.",
+        "summary": "Update metadata fields for a specific timetable.",
         "tags": [
           "timetable"
         ]

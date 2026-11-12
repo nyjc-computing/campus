@@ -112,6 +112,41 @@ class TestApiTimetablesContract(unittest.TestCase):
         fields = {e["field"] for e in data["error"]["errors"]}
         self.assertIn("filename", fields)
 
+    def test_create_timetable_carries_label(self):
+        """POST /timetable/ stores the committee's label (0.1.7).
+
+        The label is the user-given display name; filename stays the
+        immutable identity. Legacy records without the field read as
+        null (from_storage falls back to the field default).
+        """
+        response = self.client.post(
+            "/api/v1/timetable/",
+            json={
+                "metadata": {
+                    "filename": "labelled-contract.xml",
+                    "start_date": "2026-01-01T00:00:00Z",
+                    "end_date": "2026-12-31T00:00:00Z",
+                    "label": "2026 Term 1",
+                },
+                "data": {"lessongroups": []}
+            },
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()["data"]
+        self.assertEqual(data["label"], "2026 Term 1")
+        self.assertEqual(data["filename"], "labelled-contract.xml")
+
+        listed = self.client.get(
+            "/api/v1/timetable/metadata/", headers=self.auth_headers
+        )
+        row = next(
+            t for t in listed.get_json()["data"]
+            if t["id"] == data["id"]
+        )
+        self.assertEqual(row["label"], "2026 Term 1")
+
 
 class TestTimetablePointersContract(unittest.TestCase):
     """HTTP contract tests for the effective-dated pointer routes (#1075).
@@ -253,6 +288,111 @@ class TestTimetablePointersContract(unittest.TestCase):
             t["id"] for t in response.get_json()["data"]
         ]
         self.assertIn(self.timetable_id, ids)
+
+
+class TestTimetableMetadataPatchContract(unittest.TestCase):
+    """PATCH /timetable/{id}/metadata is a subset update: any of
+    label/start_date/end_date, only the fields present change; filename
+    is refused as the immutable identity."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manager = services.create_service_manager()
+        cls.manager.initialize()
+        cls.app = cls.manager.apps_app
+        cls.user_id = schema.UserID("meta.admin@campus.test")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.manager.cleanup()
+
+    def setUp(self):
+        self.manager.clear_test_data()
+        self.client = self.app.test_client()
+        grant_circle_admin(str(self.user_id), "timetable")
+        self.auth_headers = get_bearer_auth_headers(
+            create_test_token(self.user_id)
+        )
+        response = self.client.post(
+            "/api/v1/timetable/",
+            json={
+                "metadata": {
+                    "filename": "meta-patch.xml",
+                    "start_date": "2026-01-01T00:00:00Z",
+                    "end_date": "2026-12-31T00:00:00Z",
+                },
+                "data": {"lessongroups": []}
+            },
+            headers=self.auth_headers
+        )
+        assert response.status_code == 200, response.get_json()
+        self.timetable_id = response.get_json()["data"]["id"]
+
+    def _patch(self, payload):
+        return self.client.patch(
+            f"/api/v1/timetable/{self.timetable_id}/metadata",
+            json=payload,
+            headers=self.auth_headers,
+        )
+
+    def _metadata(self):
+        return self.client.get(
+            f"/api/v1/timetable/{self.timetable_id}/metadata",
+            headers=self.auth_headers,
+        ).get_json()
+
+    def test_label_only_patch_leaves_dates_alone(self):
+        response = self._patch({"label": "2026 Term 1"})
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertEqual(body["label"], "2026 Term 1")
+        self.assertEqual(body["start_date"], "2026-01-01T00:00:00Z")
+        self.assertEqual(body["end_date"], "2026-12-31T00:00:00Z")
+        self.assertEqual(self._metadata()["label"], "2026 Term 1")
+
+    def test_dates_patch_leaves_label_alone(self):
+        self._patch({"label": "Term 1"})
+        response = self._patch({
+            "start_date": "2026-02-01T00:00:00Z",
+            "end_date": "2026-11-30T00:00:00Z",
+        })
+        self.assertEqual(response.status_code, 200)
+        body = self._metadata()
+        self.assertEqual(body["label"], "Term 1")
+        self.assertEqual(body["start_date"], "2026-02-01T00:00:00Z")
+
+    def test_null_clears_the_label(self):
+        self._patch({"label": "Term 1"})
+        response = self._patch({"label": None})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(self._metadata()["label"])
+
+    def test_patch_requires_auth_and_circle(self):
+        response = self.client.patch(
+            f"/api/v1/timetable/{self.timetable_id}/metadata",
+            json={"label": "sneaky"},
+        )
+        self.assertEqual(response.status_code, 401)
+        outsider = schema.UserID("meta.outsider@campus.test")
+        response = self.client.patch(
+            f"/api/v1/timetable/{self.timetable_id}/metadata",
+            json={"label": "sneaky"},
+            headers=get_bearer_auth_headers(create_test_token(outsider)),
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_patch_rejects_bad_bodies(self):
+        empty = self._patch({})
+        self.assertEqual(empty.status_code, 400)
+        unknown = self._patch({"timezone": "SGT"})
+        self.assertEqual(unknown.status_code, 400)
+        filename = self._patch({"filename": "renamed.xml"})
+        self.assertEqual(filename.status_code, 400)
+        self.assertIn(
+            "cannot be changed", filename.get_json()["error"]["message"]
+        )
+        blank = self._patch({"label": "   "})
+        self.assertEqual(blank.status_code, 400)
 
 
 class TestTimetableMeContract(unittest.TestCase):

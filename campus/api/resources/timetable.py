@@ -33,12 +33,30 @@ from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
 from campus.storage.documents.interface import PK
 
+from . import files as files_resource
+
 timetable_lessongroup_collection = campus.storage.get_collection("timetable_lessongroup")
 timetable_lessongroupmembers_table = campus.storage.get_table("timetable_lessongroupmembers")
 
 timetable_entry_storage = campus.storage.get_collection("timetable_entries")
 timetable_collection = campus.storage.get_collection("timetables")
 timetable_effective_collection = campus.storage.get_collection("timetable_effective")
+
+# Timetable attachments are files in the campus files backend under
+# this slug namespace: timetables/<timetable_id>/attachments/<uid>.
+# Storing attachments as file records (name = the committee's original
+# filename, content bytes in the files bucket) reuses the files
+# backend's content plumbing; the namespace is what binds a record to
+# its version. The generic files routes refuse writes under this
+# namespace to non-timetable-admins (same gate as the timetable
+# mutation routes), so the binding cannot be forged through the files
+# surface. Reads stay authentication-only, like other timetable reads.
+ATTACHMENT_SLUG_NAMESPACE = "timetables/"
+
+
+def attachment_slug_prefix(timetable_id: schema.CampusID) -> str:
+    """The files-backend slug prefix holding this version's attachments."""
+    return f"{ATTACHMENT_SLUG_NAMESPACE}{timetable_id}/attachments/"
 
 # School time is Singapore time (UTC+8, no DST). A date-only pointer
 # effective_from means 07:00 school time — the committee's default
@@ -323,6 +341,7 @@ class TimetablesResource:
             id=timetable_meta.id,
             created_at=timetable_meta.created_at,
             filename=timetable_meta.filename,
+            label=timetable_meta.label,
             start_date=timetable_meta.start_date,
             end_date=timetable_meta.end_date,
             entries=entries,
@@ -431,6 +450,9 @@ class TimetablesResource:
                     campus.storage.errors.NoChangesAppliedError
                 ):
                     storage.delete_matching({"timetable_id": str(timetable_id)})
+            # Attachment files are children too: they go before the
+            # version row, keeping the delete retryable on failure.
+            TimetableAttachmentsResource(timetable_id).delete_all()
             timetable_collection.delete_by_id(str(timetable_id))
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
@@ -674,6 +696,7 @@ class TimetableResource:
             id=schema.CampusID(record["id"]),
             created_at=schema.DateTime(record["created_at"]),
             filename=record["filename"],
+            label=record.get("label"),
             start_date=schema.DateTime(record["start_date"]),
             end_date=schema.DateTime(record["end_date"]),
             entries=entries,
@@ -741,6 +764,11 @@ class TimetableResource:
         """Access the timetable metadata resource."""
         return TimetableMetadataResource(self.timetable_id)
 
+    @property
+    def attachments(self) -> "TimetableAttachmentsResource":
+        """Access the timetable attachments resource."""
+        return TimetableAttachmentsResource(self.timetable_id)
+
 
 class TimetableEntriesResource:
     """Represents the TimetableEntries Resource."""
@@ -776,7 +804,6 @@ class TimetableEntriesResource:
 
 class TimetableMetadataResource:
     """Represents metadata for a single timetable."""
-    
     def __init__(self, timetable_id: schema.CampusID):
         """Initialize with the timetable ID.
 
@@ -828,3 +855,136 @@ class TimetableMetadataResource:
             raise api_errors.InternalError.from_exception(e) from e
 
 
+
+
+class TimetableAttachmentsResource:
+    """Per-version attachments, stored as files in the files backend.
+
+    An attachment is a file record whose slug sits under this version's
+    ``timetables/<timetable_id>/attachments/`` prefix — the namespace is
+    the binding. Records carry the committee's original filename as the
+    display ``name``; content lives in the files bucket. The generic
+    files routes refuse writes under the namespace to non-admins, so a
+    record's presence in the prefix is proof a timetable admin put it
+    there.
+
+    Attachment identity is the underlying file id: it is what list()
+    returns, what content/delete address, and what survives in URLs.
+    """
+
+    def __init__(self, timetable_id: schema.CampusID):
+        """Initialize with the parent timetable ID.
+
+        Args:
+            timetable_id (CampusID): ID of the timetable.
+        """
+        self.timetable_id = timetable_id
+
+    def _prefix(self) -> str:
+        """This version's attachment slug prefix."""
+        return attachment_slug_prefix(self.timetable_id)
+
+    def _require_timetable(self) -> None:
+        """404 when the parent timetable does not exist.
+
+        (metadata.get() reports a missing version as a conflict — a
+        pre-existing quirk this resource does not inherit: an unknown
+        timetable here is a plain not-found.)
+        """
+        try:
+            record = timetable_collection.get_by_id(str(self.timetable_id))
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        if not record:
+            raise api_errors.NotFoundError(
+                "Timetable not found",
+                id=self.timetable_id,
+            )
+
+    def _get(self, attachment_id: schema.CampusID) -> dict:
+        """The attachment record, 404 unless it belongs to this version."""
+        record = files_resource.FileResource(attachment_id).get()
+        if not record["slug"].startswith(self._prefix()):
+            raise api_errors.NotFoundError(
+                "Attachment not found on this timetable",
+                attachment_id=str(attachment_id),
+                timetable_id=str(self.timetable_id),
+            )
+        return record
+
+    def list(self) -> list[dict]:
+        """List this version's attachments, newest first."""
+        self._require_timetable()
+        records = files_resource.FilesResource().list(prefix=self._prefix())
+        return sorted(
+            records,
+            key=lambda record: record["created_at"],
+            reverse=True,
+        )
+
+    def add(
+            self,
+            *,
+            data: bytes,
+            filename: str,
+            content_type: str,
+            client_id: str,
+            user_id: str | None = None,
+    ) -> dict:
+        """Attach a file (raw bytes) to this version.
+
+        The committee's original filename rides as the record's display
+        name; the slug mints a fresh attachment uid, so re-uploading the
+        same filename adds a new attachment rather than silently
+        replacing one (removal is explicit).
+
+        Raises:
+            NotFoundError: unknown timetable_id.
+            InvalidRequestError: empty content.
+        """
+        self._require_timetable()
+        if not data:
+            raise api_errors.InvalidRequestError(
+                "Attachment content required: send the bytes as the "
+                "request body"
+            )
+        slug = (
+                self._prefix()
+                + uid.generate_category_uid("ttattachment", length=8)
+        )
+        record, _created = files_resource.FileResource.update_content_by_slug(
+            slug,
+            data,
+            content_type=content_type,
+            client_id=client_id,
+            user_id=user_id,
+            name=filename,
+        )
+        return record
+
+    def get_content(self, attachment_id: schema.CampusID) -> tuple[bytes, dict]:
+        """The attachment's bytes and record (404 off this version)."""
+        self._get(attachment_id)
+        return files_resource.FileResource(attachment_id).get_content()
+
+    def delete(self, attachment_id: schema.CampusID) -> None:
+        """Remove one attachment (404 off this version)."""
+        self._get(attachment_id)
+        files_resource.FileResource(attachment_id).delete()
+
+    def delete_all(self) -> int:
+        """Remove every attachment (the timetable-delete cascade).
+
+        Tolerates records already gone (per-file NotFound suppressed) —
+        the version row deletes last, so a failed cascade stays
+        retryable. Returns the number of files removed.
+        """
+        records = files_resource.FilesResource().list(prefix=self._prefix())
+        removed = 0
+        for record in records:
+            try:
+                files_resource.FileResource(record["id"]).delete()
+            except api_errors.NotFoundError:
+                continue
+            removed += 1
+        return removed

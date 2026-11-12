@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "campus-suite"
-version = "0.21.0"
+version = "0.21.1"
 description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
@@ -18,19 +18,19 @@ packages = [{include = "campus"}]
 python = ">=3.11.0,<3.15"
 
 # Campus internal dependencies
-# Typed API client (campus_python) - consumed as the campus-api-python v0.9.1 release wheel (the calendar-era campus-model pin)
-campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.9.1/campus_api_python-0.9.1-py3-none-any.whl"}
+# Typed API client (campus_python) - consumed as the campus-api-python v0.10.0 release wheel (the timetable-attachments client)
+campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.0/campus_api_python-0.10.0-py3-none-any.whl"}
 # Stable kernel (campus.common) - consumed as the campus-common v0.3.1 release wheel (#970 phase 3; #1041 adds campus.common.protocol)
 campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.3.1/campus_common-0.3.1-py3-none-any.whl"}
-# Domain models (campus.model) - consumed as the campus-model v0.1.6 release wheel (CalendarDay, the school calendar)
-campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.6/campus_model-0.1.6-py3-none-any.whl"}
+# Domain models (campus.model) - consumed as the campus-model v0.1.7 release wheel (TimetableMetadata.label for Manage Timetables)
+campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.1.7/campus_model-0.1.7-py3-none-any.whl"}
 # Deployment glue (campus.deploy) - consumed as the campus-deploy v0.1.0 release wheel (#970 phase 3, campus#1042); the in-repo module is removed
 campus-deploy = {url = "https://github.com/nyjc-computing/campus-deploy/releases/download/v0.1.0/campus_deploy-0.1.0-py3-none-any.whl"}
 # Flask consumer layer (campus.flask_campus + audit middleware/client/http) - consumed as the flask-campus v0.1.3 release wheel (#970 phase 3, campus#993; 0.1.3 pins the SDK wheel per sdk#137); the in-repo modules are removed
-flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.9/flask_campus-0.1.9-py3-none-any.whl"}
-# Storage + webauth + services (campus.storage/webauth/services) - consumed as the campus-core v0.1.0 release wheel (#970 phase 3, campus#992); the in-repo packages are removed. The suite keeps its direct
+flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.10/flask_campus-0.1.10-py3-none-any.whl"}
+# Storage + webauth + services (campus.storage/webauth/services) - consumed as the campus-core v0.1.4 release wheel (#970 phase 3, campus#992); the in-repo packages are removed. The suite keeps its direct
 # psycopg2/pymongo/boto3 pins below (campus-core's drivers are extras; the suite needs all three).
-campus-core = {url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.3/campus_core-0.1.3-py3-none-any.whl"}
+campus-core = {url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.4/campus_core-0.1.4-py3-none-any.whl"}
 
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^5.0.0"
