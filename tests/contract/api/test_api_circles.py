@@ -14,6 +14,7 @@ Circles Endpoints Reference:
 - DELETE /circles/{circle_id}/                  - Delete a circle
 - POST   /circles/{circle_id}/move              - Move circle (not implemented - 501)
 - GET    /circles/{circle_id}/members/          - Get circle members
+- GET    /circles/{circle_id}/members/{member_id} - Probe one membership (404 when absent)
 - POST   /circles/{circle_id}/members/add       - Add a member to a circle
 - DELETE /circles/{circle_id}/members/remove    - Remove a member from a circle
 - PATCH  /circles/{circle_id}/members/          - Update member access level
@@ -606,6 +607,86 @@ class TestApiCirclesContract(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+
+    def test_probe_circle_member(self):
+        """GET /circles/{id}/members/{member_id} returns the access value."""
+        self._create_test_user_circle("teacher.probe@campus.test")
+        circle_id = self._create_test_circle(name="Probe Circle")
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher.probe@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/teacher.probe@campus.test/",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["member_id"], "teacher.probe@campus.test")
+        self.assertEqual(data["access_value"], 15)
+
+    def test_probe_absent_member_returns_404(self):
+        """GET /circles/{id}/members/{member_id} for a non-member returns 404."""
+        circle_id = self._create_test_circle(name="Probe Absent Circle")
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/ghost@campus.test/",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_probe_member_missing_circle_returns_409(self):
+        """GET /circles/{id}/members/{member_id} for a missing circle returns 409."""
+        response = self.client.get(
+            "/api/v1/circles/nonexistent_id/members/some-member-id/",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 409)
+        data = response.get_json()
+        self.assertIn("error", data)
+        self.assertEqual(data["error"]["code"], "CONFLICT")
+
+    def test_probe_member_requires_auth(self):
+        """GET /circles/{id}/members/{member_id} without auth returns 401."""
+        circle_id = self._create_test_circle()
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/some-member-id/"
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_probe_member_reads_stay_open(self):
+        """The probe needs no role membership, like the members listing."""
+        self._create_test_user_circle("teacher.open@campus.test")
+        circle_id = self._create_test_circle(name="Probe Open Circle")
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher.open@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+        outsider = schema.UserID("outsider@campus.test")
+        outsider_headers = get_bearer_auth_headers(
+            create_test_token(outsider)
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/teacher.open@campus.test/",
+            headers=outsider_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
 
     def test_get_members_missing_circle_returns_error(self):
         """GET /circles/{circle_id}/members/ for non-existent circle returns 409."""

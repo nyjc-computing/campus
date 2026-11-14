@@ -299,5 +299,62 @@ class TestCircleUserMembers(unittest.TestCase):
             )
 
 
+class TestCircleMembersProbe(unittest.TestCase):
+    """CircleMembersResource.get(): the single-membership probe.
+
+    An absent member is an expected None, not an error — clients
+    probe "is this principal in this circle" and treat any non-answer
+    as denial. A missing circle is still a ConflictError.
+    """
+
+    def setUp(self):
+        from campus.api.resources.circle import circle_storage
+        circle_storage.delete_matching({})
+
+    def tearDown(self):
+        from campus.api.resources.circle import circle_storage
+        circle_storage.delete_matching({})
+
+    def _new_circle(self, name: str, tag: str = "test"):
+        from campus.api import resources
+        return resources.circle.new(name=name, tag=tag)
+
+    def test_get_present_member_returns_access_value(self):
+        """get() returns the member's access value."""
+        from campus.api import resources
+
+        self._new_circle("teacher.probe@campus.test", tag="user")
+        circle = self._new_circle("Probe Circle")
+        resources.circle.members.add(
+            str(circle.id), "teacher.probe@campus.test", 15
+        )
+
+        access = resources.circle.members.get(
+            str(circle.id), "teacher.probe@campus.test"
+        )
+        self.assertEqual(access, 15)
+
+    def test_get_absent_member_returns_none(self):
+        """get() returns None (not an error) for a non-member."""
+        from campus.api import resources
+
+        circle = self._new_circle("Probe Absent Circle")
+
+        access = resources.circle.members.get(
+            str(circle.id), "ghost@campus.test"
+        )
+        self.assertIsNone(access)
+
+    def test_get_missing_circle_raises_conflict(self):
+        """get() raises ConflictError when the circle does not exist."""
+        from campus.api import resources
+        from campus.common.errors import api_errors
+
+        with self.assertRaises(api_errors.ConflictError):
+            resources.circle.members.get(
+                "circle_nosuch00", "teacher@campus.test"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

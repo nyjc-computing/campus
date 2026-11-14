@@ -98,6 +98,14 @@ email name needs no UID resolution: it is unique, stable, and is what
 enforcement resolves a caller to anyway (the caller's email → their
 user circle's membership entries).
 
+Single-membership probe: `GET /api/v1/circles/{circle_id}/members/{member_id}`
+returns the member's access value, or 404 when absent (the expected
+negative answer, not an error; a missing circle is a 409). Clients use
+it for cheap, fail-closed role checks — e.g. "is this user in
+`timetable.admin`" — instead of fetching the full members dict. It is
+ungated like the members listing (it leaks nothing the listing does
+not) and probes direct membership only.
+
 Semantics that are convention, not contract, until decided:
 
 - Access values are integers; `15` currently denotes full access
