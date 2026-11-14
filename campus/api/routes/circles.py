@@ -12,6 +12,7 @@ import campus.flask_campus as flask_campus
 import campus.model
 import campus.yapper
 from campus.common import schema
+from campus.common.errors import api_errors
 
 from .. import authz, resources
 
@@ -341,6 +342,80 @@ def get_circle_members(circle_id: str) -> flask_campus.JsonResponse:
     resource = resources.circle.members.list(schema.CampusID(circle_id))
     # TODO: validate response
     return resource, 200
+
+
+@bp.get('/<string:circle_id>/members/<member_id>/')
+def get_circle_member(
+        circle_id: str,
+        member_id: str
+) -> flask_campus.JsonResponse:
+    """Probe circle membership
+
+    Probe a single membership: the member's access value, or 404 when
+    absent.
+
+    Probe a single membership in a circle. An absent member is an
+    expected negative answer (404), not an error: clients use this
+    endpoint for cheap, fail-closed role checks (e.g. "is this user in
+    the timetable.admin role circle") instead of fetching the full
+    members dict.
+
+    Method:
+        GET /circles/{circle_id}/members/{member_id}
+
+    Path Parameters:
+        circle_id: str (required)
+            The unique identifier of the circle to probe.
+        member_id: str (required)
+            The member identifier to look up, as stored: a circle UID
+            or the email name of a user circle.
+
+    Query Parameters:
+        None
+
+    Request Body:
+        None
+
+    Responses:
+        200 OK: dict
+            The member's access value within the circle.
+            Example:
+                {
+                    "member_id": "teacher@campus.test",
+                    "access_value": 15
+                }
+
+        404 Not Found: None
+            Returned if the circle has no such member (the probe's
+            expected negative answer).
+
+        409 Conflict: None
+            Returned if the circle does not exist.
+
+        500 Internal Server Error: None
+            Returned if a storage-level error occurs while probing.
+
+    Notes:
+        - Reads stay open (no role membership required), consistent
+          with GET /circles/{circle_id}/members/: the probe leaks
+          nothing the members listing does not.
+        - Only direct membership is probed; transitive resolution
+          through nested circles does not exist yet.
+        - Emits no events.
+    """
+    access_value = resources.circle.members.get(
+        schema.CampusID(circle_id),
+        schema.CampusID(member_id),
+    )
+    if access_value is None:
+        raise api_errors.NotFoundError(
+            "Member not found in circle",
+            id=member_id
+        )
+    return {
+        "member_id": member_id,
+        "access_value": access_value,
+    }, 200
 
 
 @bp.post('/<string:circle_id>/members/add')

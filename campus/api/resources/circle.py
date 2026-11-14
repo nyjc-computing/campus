@@ -477,6 +477,47 @@ class CircleMembersResource:
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
 
+    def get(
+            self,
+            circle_id: schema.CampusID,
+            member_id: schema.CampusID
+    ) -> int | None:
+        """Get one member's access value: the membership probe.
+
+        An absent member is an expected negative answer (None), not an
+        error — callers probe "is this principal in this circle" and
+        treat any non-answer as denial. A missing circle is still an
+        error, consistent with list/add/remove.
+
+        Args:
+            circle_id: The circle ID
+            member_id: The member identifier as stored (circle UID or
+                user-circle email name)
+
+        Returns:
+            The member's access value, or None if the circle has no
+            such member
+
+        Raises:
+            ConflictError: If circle not found
+            InternalError: For storage errors
+        """
+        try:
+            record = circle_storage.get_by_id(circle_id)
+            if record is None:
+                raise api_errors.ConflictError(
+                    "Circle not found",
+                    id=circle_id
+                )
+            return record.get("members", {}).get(str(member_id))
+        except campus.storage.errors.NotFoundError:
+            raise api_errors.ConflictError(
+                "Circle not found",
+                id=circle_id
+            ) from None
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
     def add(
             self,
             circle_id: schema.CampusID,
