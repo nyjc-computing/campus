@@ -179,8 +179,11 @@ def token(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     never leaves the auth service in this lane.
 
     Denials: user bearers 403 (a user principal is never the
-    session's client, #854), the operator 403 (the credentials
-    management routes are its path), a non-owning client 403.
+    session's client, #854); any client that does not own the
+    session 403 — operator or not. The operator is allowed only
+    where it owns the session: the admin portal (#1055) doubles as
+    operator and session owner and re-acquires its own users'
+    tokens here.
 
     POST /logins/<session_id>/token
     Authorization: Basic (the session-owning confidential client only).
@@ -207,13 +210,15 @@ def token(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     from user-record visibility to token issuance. User principals are
     denied outright (a user bearer is never the session's client,
     #854 — and bearer auth sets current_client to the minting client,
-    which could otherwise pass the ownership check), and the operator
-    is denied too: it already holds the credentials management routes,
-    keeping this route laser-scoped.
+    which could otherwise pass the ownership check). The ownership
+    check is the only gate for client principals: the admin portal
+    (#1055) doubles as operator and session owner and re-acquires its
+    own users' tokens here, while an operator reaching for another
+    client's session is denied like any non-owner (#854).
 
     Errors: 400 invalid_grant (unknown/expired session, no user on the
     session, missing/expired-chain credential), 403 (user principal,
-    operator, or non-owning client).
+    or a client that does not own the session — operator included).
     """
     # Client principals only (A10): user bearers are denied outright,
     # super-admin included — the credentials routes remain the
@@ -221,12 +226,6 @@ def token(session_id: schema.CampusID) -> flask_campus.JsonResponse:
     authz.forbid_user_principal(
         "re-acquire campus tokens via a login session (#963/A10)"
     )
-    if authz.is_operator():
-        raise api_errors.ForbiddenError(
-            "The operator principal uses the credentials management "
-            "routes (#854); login-session token issuance serves the "
-            "session-owning confidential client only (#963/A10)"
-        )
     client = getattr(flask.g, "current_client", None)
     if client is None:
         # Unreachable via the Authenticator (every request resolves to

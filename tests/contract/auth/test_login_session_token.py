@@ -264,9 +264,10 @@ class TestLoginSessionToken(unittest.TestCase):
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.get_json()["error"]["code"], "FORBIDDEN")
 
-    def test_operator_denied_even_on_own_session(self):
-        """The operator is denied outright: the credentials management
-        routes are its path (#854); this route stays laser-scoped."""
+    def test_operator_as_owner_reacquires_token(self):
+        """The operator re-acquires when it owns the session: the admin
+        portal (#1055) doubles as operator and session owner, and its
+        gated views re-acquire user tokens through this route."""
         user_id = TEST_USER
         self._create_user(user_id)
         login_id = self._create_login(env.CLIENT_ID, user_id)
@@ -274,11 +275,15 @@ class TestLoginSessionToken(unittest.TestCase):
 
         resp = self._post_token(login_id, self.operator_headers)
 
-        self.assertEqual(resp.status_code, 403)
-        self.assertEqual(resp.get_json()["error"]["code"], "FORBIDDEN")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertIn("access_token", data)
+        self.assertNotIn("refresh_token", data)
+        self.assertEqual(data["scope"], "read write")
 
     def test_operator_denied_on_foreign_session(self):
-        """The operator is denied on another client's session too."""
+        """The operator is denied on another client's session, like any
+        non-owning client (#854/#963/A10)."""
         user_id = TEST_USER
         self._create_user(user_id)
         limited_id, _ = self._create_limited_client()
@@ -288,6 +293,7 @@ class TestLoginSessionToken(unittest.TestCase):
         resp = self._post_token(login_id, self.operator_headers)
 
         self.assertEqual(resp.status_code, 403)
+        self.assertEqual(resp.get_json()["error"]["code"], "FORBIDDEN")
 
     def test_user_bearer_denied(self):
         """User principals are denied outright (#854): a user bearer is
