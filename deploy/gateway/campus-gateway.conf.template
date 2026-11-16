@@ -1,0 +1,83 @@
+# Campus edge gateway — path-dispatching reverse proxy for the campus
+# services under one hostname (issue #995). Rendered at container start
+# by the nginx image's envsubst runner: only ${VARS} that exist in the
+# environment are substituted; nginx runtime variables ($host etc.) and
+# $-variables we set below pass through untouched.
+#
+# Dispatch (paths passed through UNCHANGED — each service's internal
+# routes already carry its public prefix, and the test harness runs
+# this exact topology):
+#   /auth/*  /integrations/*  -> campus.auth   (/auth/v1, public catalog)
+#   /api/*                    -> campus.api    (/api/v1)
+#   /audit/*                  -> campus.audit  (/audit/v1, web UI, static)
+#
+# Root space: the gateway owns it. /health reports gateway liveness
+# only; per-service health appears at /auth/health, /api/health and
+# /audit/health once the services set PUBLIC_PREFIX (PR #996). Railway
+# healthchecks for the gateway can point at /health.
+
+    # Exported by the stock 15-local-resolvers.envsh (active when the
+    # service sets NGINX_ENTRYPOINT_LOCAL_RESOLVERS): nameservers from
+    # /etc/resolv.conf, IPv6 addresses bracketed — required form for the
+    # resolver directive (Railway's DNS is an IPv6 literal, e.g.
+    # fd12::10, which a bare literal misparses as host:port).
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
+
+server {
+    listen ${PORT};
+    server_name _;
+
+    # Railway terminates TLS at the edge; backends see plain HTTP but
+    # must generate https:// absolute URLs (campus ProxyFix reads the
+    # X-Forwarded-* headers).
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Host $host;
+
+    # Trace-ingestion batches and login form posts are small, but don't
+    # let nginx's 1m default surprise anyone.
+    client_max_body_size 10m;
+
+    # Emit relative Location on redirects (/ -> /audit/): otherwise
+    # nginx makes it absolute from the listen port and leaks :8080.
+    absolute_redirect off;
+
+    # Upstreams: Railway PRIVATE networking (*.railway.internal, IPv6).
+    # To flip to the public hairpin instead (worked around split-horizon
+    # DNS once — see deploy/gateway/README.md), set the three lines to:
+    #   "https://campusauth-development.up.railway.app" (+ proxy_ssl_server_name on)
+    #   "https://campusapi-development.up.railway.app"
+    #   "https://campusaudit-development.up.railway.app"
+    # Variables force per-request DNS resolution (valid=10s below), so
+    # backend redeploys never leave the gateway with a stale address.
+    set $auth_upstream  "http://campus-auth.railway.internal:${AUTH_PORT}";
+    set $api_upstream   "http://campus-api.railway.internal:${API_PORT}";
+    set $audit_upstream "http://campusaudit.railway.internal:${AUDIT_PORT}";
+
+    # SNI for the HTTPS upstreams (*.up.railway.app requires it).
+    proxy_ssl_server_name on;
+
+    # nginx set directives re-assign in order, so exactly ONE active set
+    # of upstream lines may exist here. The private-upstream variant
+    # lives in the flip-back comment above — do NOT add active copies
+    # of it (duplicated lines silently override the hairpin; this exact
+    # leftover caused the 2026-10-29 502 chase, #995).
+
+    location /integrations/ { proxy_pass $auth_upstream; }
+    location /auth/         { proxy_pass $auth_upstream; }
+    location /api/          { proxy_pass $api_upstream; }
+    location /audit/        { proxy_pass $audit_upstream; }
+
+    # Gateway-owned shared root until the cutover decides otherwise
+    # (#995): audit has the only real web UI, so it gets the redirect.
+    location = /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+    location = / {
+        return 302 /audit/;
+    }
+}

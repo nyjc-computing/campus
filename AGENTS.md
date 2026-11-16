@@ -1,0 +1,241 @@
+# Campus Quick Reference
+
+Essential reminders for working on the Campus codebase. This guide applies to both humans and AI assistants—everyone should follow the same workflow and principles.
+
+## Critical Reminders (Read First!)
+
+### 1. One Stream per Worktree (Concurrent Sessions)
+
+Multiple agent sessions and humans work in this clone concurrently. **Never
+create branches or `git checkout` in the main checkout** — switching a
+shared checkout's branch under another active stream makes its next commit
+land on the wrong branch.
+
+- The **main checkout stays on `weekly`** and only ever takes `git pull`.
+- **Every task runs in its own worktree** — one worktree = one branch = one PR:
+
+```bash
+python scripts/worktree.py new feat/your-feature        # code work: worktree + venv
+python scripts/worktree.py new docs/your-doc --no-venv  # docs-only: no venv
+python scripts/worktree.py remove feat/your-feature     # after merge (single-use)
+python scripts/worktree.py list                         # who is working where
+```
+
+- Worktrees are **single-use**: remove the worktree (and its venv) once the
+  task's PRs are merged; build a fresh one for the next task.
+- Never `git checkout` inside another stream's worktree.
+
+Details and the manual recipe: [CONTRIBUTING.md](docs/CONTRIBUTING.md),
+section "Concurrent work streams (worktrees)".
+
+### 2. Python Environment Setup
+
+Campus uses pyenv for Python version management and pipx for Poetry installation.
+
+**Prerequisites:**
+- pyenv with Python 3.11, 3.12, and/or 3.13 installed
+- pipx with Poetry installed
+- `~/.local/bin` and pyenv shims in PATH (configured in `~/.bashrc`)
+
+**Installation:**
+```bash
+# Install pyenv (via package manager)
+# Install supported Python versions
+pyenv install 3.11.11
+pyenv install 3.12.0
+pyenv install 3.13.0
+
+# Prefer 3.13 for new setups; 3.11 and 3.12 remain supported
+pyenv local 3.13.0
+
+# Install Poetry via pipx using the active interpreter
+pipx install poetry
+```
+
+### 3. Running Python Commands
+
+Use `poetry run` for all Python commands - this works consistently across all environments (local, CI, Codespaces).
+
+```bash
+# Install dependencies
+poetry install
+
+# Run tests or main script
+poetry run python tests/run_tests.py unit
+poetry run python main.py
+```
+
+**Note:** The test runner (`tests/run_tests.py`) automatically detects and uses `.venv/bin/python` when available, but using `poetry run` ensures consistency across all environments.
+
+### 4. Use `run_tests.py` for Testing
+
+The only supported test entrypoint is `tests/run_tests.py`. It handles environment setup, cleanup, and isolation. Running tests directly may produce false positives.
+
+```bash
+# Run all tests
+poetry run python tests/run_tests.py all
+
+# Run specific category
+poetry run python tests/run_tests.py unit
+poetry run python tests/run_tests.py integration
+```
+
+### 5. Campus Uses `unittest`, Not pytest
+
+Test files use the standard library `unittest.TestCase` framework. No pytest dependencies are installed.
+
+### 6. Read These Files Before Starting Work
+
+| File | Purpose |
+|------|---------|
+| [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) | Setup and navigation |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and branching |
+| [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md) | Code standards and import patterns |
+| [docs/TESTING-GUIDE.md](docs/TESTING-GUIDE.md) | Testing strategies and how to run tests |
+| [docs/development-guidelines.md](docs/development-guidelines.md) | Architecture patterns and gotchas |
+
+## Project Structure
+
+Campus is a **fleet of six distributions** under one flat `campus`
+namespace (the #970 split, closed 2026-11-04). This repo (campus-suite)
+holds only the auth/api/audit services + yapper + the deploy/gateway
+tooling. The shared layers live in their own repos, consumed as
+version-pinned release wheels:
+
+| Dist | Owns |
+|---|---|
+| [campus-common](https://github.com/nyjc-computing/campus-common) | `campus.common` (env/errors/schema/protocol/services/utils/validation) |
+| [campus-model](https://github.com/nyjc-computing/campus-model) | `campus.model` |
+| [flask-campus](https://github.com/nyjc-computing/flask-campus) | `campus.flask_campus` + `campus.audit/{middleware,client,http,roles}` |
+| [campus-deploy](https://github.com/nyjc-computing/campus-deploy) | `campus.deploy` |
+| [campus-core](https://github.com/nyjc-computing/campus-core) | `campus.storage` + `campus.webauth` + `campus.services` (drivers as extras) |
+
+Import paths are unchanged from the monorepo era (PEP 420 portion
+merge). Version bumps are per-dist strict-0.x (patch = additive, minor =
+breaking); consumers pin release wheels by URL — see
+[docs/PACKAGING.md](docs/PACKAGING.md).
+
+For detailed file locations and architecture, see:
+- [docs/architecture.md](docs/architecture.md) - System design and service boundaries
+- [campus/README.md](campus/README.md) - Package-level documentation
+
+## Quick Links
+
+### Tests
+- [docs/TESTING-GUIDE.md](docs/TESTING-GUIDE.md) - Complete testing guide
+- [tests/README.md](tests/README.md) - Test directory reference
+- [tests/contract/README.md](tests/contract/README.md) - HTTP contract invariants
+
+### Code Standards
+- [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md) - Import patterns, docstrings, commit messages
+- [docs/development-guidelines.md](docs/development-guidelines.md) - Architecture patterns, common pitfalls
+
+### Auth
+- [docs/auth-login-flow.md](docs/auth-login-flow.md) - End-to-end browser login flow: session init, Google federated login, code exchange (read before touching campus.auth or adding a login client)
+
+### Access Control
+- [docs/circles-access-control.md](docs/circles-access-control.md) - How circles implement access control: resource + role circles, membership rules, bootstrap seeding (read before touching circles or adding authorization to API routes)
+
+### Railway & Deployment
+- [docs/railway-architecture.md](docs/railway-architecture.md) - Environments, services, gateway request flow, and the IPv6-only private-networking rules (read before touching Railway service config or adding a deployment)
+- `.zcode/skills/railway-ops` skill - Railway CLI/GraphQL API recipes and traps (mutating service config, triggering deploys, polling deployments)
+
+### Getting Started
+- [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) - Installation and setup
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) - Branching strategy and workflow
+
+## Known Gotchas
+
+These are the things most commonly forgotten—even by experienced developers:
+
+### Storage Initialization Order
+
+Test fixtures must lazy-import `campus.storage` modules. Otherwise storage backends initialize before test mode is set.
+
+```python
+# Bad - initializes storage immediately
+from campus.storage import tables
+
+# Good - lazy import in test method
+def test_something(self):
+    from campus.storage import tables
+```
+
+### Flask Blueprint Registration
+
+Flask blueprints can only be registered once. The test infrastructure shares Flask apps across test classes to avoid "already registered" errors.
+
+### Import Patterns
+
+Import packages, not individual functions. This preserves context and prevents naming conflicts.
+
+```python
+# Good
+from campus.common import utils, env
+
+# Bad - loses context
+from campus.common.utils import uid, utc_time
+```
+
+See [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md) for complete import guidelines.
+
+### Verification & Debugging
+
+When fixing bugs or touching endpoints, verify with these (see
+[docs/TESTING-GUIDE.md](docs/TESTING-GUIDE.md) for details):
+
+```bash
+poetry run python tests/run_tests.py unit          # fast signal
+poetry run python tests/run_tests.py integration   # CI gate
+poetry run python tests/run_tests.py contract      # HTTP contracts (also a blocking CI gate)
+```
+
+- **The contract suite should be green** (all remaining failures are skips
+  that cite their issue). A new contract failure is a regression you
+  introduced. Every skip marker must cite an issue number; re-verify
+  markers with `python scripts/audit_skipped_tests.py`.
+- **Lint must be green**: `ruff check .` (CI gate, config in
+  `pyproject.toml`). See the Linting section of
+  [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md). Caution: ruff's SIM118
+  "in-dict-keys" fix assumes real dicts — `sqlite3.Row` iterates values,
+  not keys, so `.keys()` there is a documented noqa, not a fix.
+- **Before debugging test oddities** (auth failures, 500s that only happen
+  in tests, tokens that "should work"), read the gotchas in
+  [tests/README.md](tests/README.md) and the "How Cross-Service Test
+  Requests Are Routed" section of the Testing Guide — the harness routes
+  requests through Flask test clients and has known lifecycle traps
+  (`clear_test_data()` wipes credentials; test doubles must mirror
+  production error classes).
+
+## Before You Start
+
+- [ ] Are you working in a per-task worktree, not the shared checkout?
+- [ ] Have you read the relevant documentation?
+- [ ] Are you using `poetry run python` for all commands?
+- [ ] Will you use `run_tests.py` for testing?
+- [ ] Do you understand the storage-model-resources pattern?
+
+## Before You Open a PR
+
+- [ ] Check that documentation (error shapes and behavior notes in
+      docstrings, `docs/*.md`, and the OpenAPI `OPENAPI_INFO` /
+      error-spec files) is up to date with the implementation.
+
+- [ ] If a PR adds or changes routes, or edits the handler docstrings
+      that document them: regenerate the committed OpenAPI artifacts
+      and bump the suite version (campus#1029).
+
+      ```bash
+      poetry run python scripts/generate_openapi.py   # or one service: … campus.auth
+      poetry version minor   # spec changed: minor bump; API-preserving: patch
+      ```
+
+      The drift and version-pin tests (`tests/unit/openapi/`) fail CI
+      when a committed `campus/{service}/docs/openapi.json` no longer
+      matches the freshly generated spec or its `info.version` lags
+      `pyproject.toml` — that drift is how `device_authorize` grew a
+      `scope` parameter the hand-maintained spec never learned (#866).
+
+---
+
+**New to Campus?** Start with [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).

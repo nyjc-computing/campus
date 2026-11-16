@@ -6,69 +6,110 @@ Development and testing entry point for Campus services.
 For production deployment, use wsgi.py with Gunicorn or other WSGI servers.
 
 Deployment mode is determined by the DEPLOY environment variable:
-- DEPLOY=vault: Deploys the vault service only  
-- DEPLOY=apps: Deploys the full apps service (default)
+- DEPLOY=campus.auth: Deploys the authentication service
+- DEPLOY=campus.api: Deploys the API service
 
 Usage:
-    DEPLOY=vault python main.py     # Start vault development server
-    DEPLOY=apps python main.py      # Start apps development server
-    gunicorn wsgi:app               # Production deployment
+    DEPLOY=campus.auth python main.py     # Start auth development server
+    DEPLOY=campus.api python main.py      # Start API development server
+    gunicorn wsgi:app                     # Production deployment
 """
 
-import os
+import logging
+
+import flask
+
+from campus import deploy
+from campus.common import env
+from campus.logging_config import configure_logging
+
+# Configure logging with OAuth debugging enabled
+configure_logging(log_level=logging.INFO, enable_oauth_debug=True)
+logger = logging.getLogger(__name__)
 
 
 def get_deployment_mode():
     """Get deployment mode from DEPLOY environment variable"""
-    if "DEPLOY" not in os.environ:
+    mode = env.DEPLOY
+    if not mode:
         raise EnvironmentError(
             "Deployment mode not set. "
-            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
+            "Set environment variable: export DEPLOY=<mode>"
         )
-    mode = os.environ["DEPLOY"]
-
-    if mode not in ["vault", "apps"]:
-        raise ValueError(
-            f"Invalid deployment mode '{mode}'. "
-            "Valid modes are: vault, apps. "
-            "Set environment variable: export DEPLOY=vault or export DEPLOY=apps"
-        )
-
     return mode
 
 
-def create_app():
-    """Create the appropriate Campus app based on deployment mode"""
-    mode = get_deployment_mode()
+def create_app(mode: str | None = None) -> flask.Flask:
+    """Create the appropriate Campus app based on deployment mode.
 
-    match mode:
-        case "vault":
-            print("🔐 Creating Campus Vault Service")
-            from campus.vault import create_app
-            return create_app()
-        case "apps":
-            print("🚀 Creating Campus Apps Service")
-            from campus.apps import create_app
-            return create_app()
-    raise ValueError(
-        f"Unsupported deployment mode '{mode}'. "
-        "Valid modes are: vault, apps"
-    )
+    This factory only initialises the appropriate app.
+    It does not configure for deployment or testing.
+    """
+    import importlib
+    import warnings
+    mode = mode or get_deployment_mode()
+    if '.' not in mode or not mode.startswith('campus.'):
+        warnings.warn(
+            f"Deployment mode {mode!r} will be deprecated.\n"
+            f"Use {('campus.' + mode)!r} instead.", DeprecationWarning, stacklevel=2
+        )
+        mode = 'campus.' + mode
+
+    # Name the boot journey (#114): the worker's startup SDK calls
+    # (boot-time vault reads) join one journey per process boot, and
+    # the name is what journey cards render — "campus.auth.boot"
+    # rather than a raw uid. Before the module import: boot-time vault
+    # reads can happen at import time. Fail-open: boot must not depend
+    # on observability.
+    try:
+        from campus_python import tracing
+        tracing.set_process_journey(name=f"{mode}.boot")
+    except Exception:  # noqa: BLE001 - fail-open: boot must not depend on observability
+        logger.debug("boot journey naming unavailable", exc_info=True)
+
+    try:
+        module = importlib.import_module(mode)
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            f"Unable to create app for deployment mode '{mode}': {e}"
+        ) from e
+    if not isinstance(module, deploy.AppModule):
+        raise TypeError(
+            f"Module '{mode}' does not fulfill the AppModule protocol."
+        )
+    app = deploy.create_app(module)
+    # Migrations phase 4 (#747): warn at startup when the ledger shows
+    # outstanding migrations. Production-style environments only, and
+    # fail-open twice over: warn_if_pending never raises, and the import
+    # is guarded so a deployment without migrations/ still boots.
+    try:
+        from migrations import runner
+        runner.warn_if_pending()
+    except Exception:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
+        logger.debug("migration pending-check unavailable", exc_info=True)
+    return app
 
 
-def main():
+def main(deployment: str | None = None):
     """Development server entry point for testing Campus services locally"""
+    assert env.ENV == env.DEVELOPMENT, (
+        "main() should only be called in development environment for "
+        "testing purposes"
+    )
     # Development server configuration
-    host = "0.0.0.0"
-    port = 5000
-
+    if not env.get("DEPLOY"):
+        env.set('DEPLOY', deployment)
     # Create app instance for development server
-    app = create_app()
+    app = create_app(deployment)
+    deploy.configure_for_development(app)
 
-    print(f"🧪 Starting development server on {host}:{port}")
     print("📝 For production deployment, use wsgi.py with Gunicorn")
+    host = "0.0.0.0"
+    port = int(env.PORT)
     app.run(host=host, port=port, debug=True)
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    deployment = sys.argv[1] if len(sys.argv) >= 2 else None
+    main(deployment=deployment)

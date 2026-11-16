@@ -1,0 +1,273 @@
+"""campus.auth
+
+This module contains the OAuth2 authentication hub for Campus.
+
+campus-auth manages authentication and authorization for Campus
+applications, as well as serving as a proxy for auth with third-party
+integrations.
+"""
+
+# Note: do not expose .resources directly here. It is meant for internal
+# use within campus.auth only.
+__all__ = ["init_app", "get_yapper"]
+
+
+import logging
+from typing import TYPE_CHECKING
+
+import flask
+
+if TYPE_CHECKING:
+    from campus.yapper.base import YapperInterface
+
+# Module-level yapper instance shared across all routes
+_yapper_instance: "YapperInterface | None" = None
+
+logger = logging.getLogger(__name__)
+
+
+def get_yapper() -> "YapperInterface":
+    """Get the module-wide yapper instance.
+
+    Initializes yapper lazily if not already initialized.
+    This should be called at app startup to avoid circular dependencies
+    during request handling.
+
+    The event database URI is read from the auth service's own vault
+    in-process (calling its own HTTP API during initialization would be
+    circular), so it is injected as a provider — yapper itself has no
+    campus.auth dependency (#970 phase 2).
+    """
+    global _yapper_instance
+    if _yapper_instance is None:
+        import campus.yapper
+
+        from .resources import vault
+        _yapper_instance = campus.yapper.create(
+            db_uri_provider=lambda: vault["campus.yapper"]["YAPPERDB_URI"]
+        )
+    return _yapper_instance
+
+
+def _auth_getsecret(name: str) -> str:
+    """Get secret from vault for campus.auth deployment.
+
+    This function is registered with env.register_getsecret() to provide
+    deployment-specific vault access for campus.auth.
+
+    When DEPLOY is campus.auth, uses direct database access to avoid
+    circular dependency during initialization.
+
+    Args:
+        name: Name of the secret to retrieve
+
+    Returns:
+        The secret value from the vault
+
+    Raises:
+        OSError: If DEPLOY environment variable is not set
+        api_errors.InternalError: If the secret is not found in the vault
+    """
+    from campus.common import env
+    from campus.common.errors import api_errors
+
+    deployment = env.get("DEPLOY")
+    if deployment is None:
+        raise OSError("Environment variable 'DEPLOY' required")
+
+    # For campus.auth deployment, use direct database access to avoid
+    # circular dependency (app trying to call its own HTTP API during init)
+    if deployment == "campus.auth":
+        from .resources import vault
+        try:
+            return vault[deployment][name]
+        except KeyError:
+            raise api_errors.InternalError(
+                f"Vault secret '{name}' not found in label '{deployment}'"
+            ) from None
+
+    # For other deployments, use HTTP client to call auth service
+    import campus_python
+    campus_auth = campus_python.Campus().auth
+    try:
+        return campus_auth.vaults[deployment][name]
+    except KeyError:
+        raise api_errors.InternalError(
+            f"Vault secret '{name}' not found in label '{deployment}'"
+        ) from None
+
+
+def init_app(app: flask.Blueprint | flask.Flask) -> None:
+    """Initialize the Campus app with all modules.
+
+    This function sets up all Campus apps components including API,
+    authentication, and OAuth modules.
+
+    Note: For creating new Flask applications, use the recommended
+    pattern:
+        from campus.deploy import create_app
+        import campus.apps
+        app = create_app(campus.apps)
+
+    This ensures proper error handling and deployment configuration.
+    """
+    from campus.common import env
+
+    from . import oauth_proxy, provider, routes
+
+    # Register deployment-specific getsecret function
+    env.register_getsecret(_auth_getsecret)
+
+    bp = flask.Blueprint("auth", __name__, url_prefix="/auth/v1")
+    provider.init_app(bp)
+    oauth_proxy.init_app(bp)
+    routes.init_app(bp)
+
+    # Action journeys (#828), adopt-only: auth's browser surface IS the
+    # login flow — already journeyed via the campus_journey cookie
+    # (#803) — so minting navigations here would fork login journeys.
+    # Adopting SDK-forwarded X-Journey-ID headers still lets auth spans
+    # join the caller's action journey.
+    from campus.audit.middleware import init_journeys
+    init_journeys(app, mint_on_navigation=False)
+
+    # Public integrations catalog at the top-level /integrations/v1
+    # (#688): outside the /auth/v1 prefix, no authentication.
+    from .routes import integrations as integrations_routes
+    integrations_routes.init_app(app)
+
+    if isinstance(app, flask.Flask):
+        from campus.common import env
+        app.secret_key = env.getsecret("SECRET_KEY")
+
+    app.register_blueprint(bp)
+
+    # Miscellaneous fixes
+
+    # Enable strict slashes globally for this app
+    # If disabled, routes not ending in slash are 308-redirected to
+    # slash-ending routes, which results in stripped headers,
+    # causing confusing 401 errors on authenticated endpoints.
+    if isinstance(app, flask.Flask):
+        app.url_map.strict_slashes = True
+
+    # Ensure the auth storage tables exist before seeding/first use.
+    # Same self-heal policy as _seed_public_client below: idempotent,
+    # non-production only, and loud-but-non-fatal on failure.
+    _init_auth_tables()
+
+    # Ensure the public OAuth client ('guest') exists so device-flow
+    # login works out of the box. Runs on every startup (idempotent) so
+    # a database reset self-heals on the next deploy instead of silently
+    # breaking the device flow with client-facing 400s (#605).
+    _seed_public_client()
+
+
+def _init_auth_tables() -> None:
+    """Initialize the credentials storage tables, logging loudly on failure.
+
+    CREATE TABLE IF NOT EXISTS per table (idempotent), so a fresh or
+    reset deployment self-heals on the next deploy. In production,
+    schema management is handled by migrations/scripts (see migration
+    009 for app_credentials), so initialization is skipped there.
+    """
+    from campus.common import env
+
+    try:
+        if env.ENV != env.PRODUCTION:
+            from .resources.credentials import CredentialsResource
+            CredentialsResource.init_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize auth storage tables: credential "
+            "issuance (all OAuth token grants) will fail until the "
+            "tables exist. Recover by running migrations/ against the "
+            "database (see migrations/009_create_app_credentials.py)."
+        )
+
+
+def _seed_public_client() -> None:
+    """Seed the public OAuth client, logging loudly on failure.
+
+    The public client cannot be created through the authenticated HTTP
+    API (chicken-and-egg: authentication requires it to exist), so it
+    must be seeded directly against storage at startup.
+
+    Failure to seed is logged at ERROR level with the recovery command
+    but does not abort startup, so an unrelated seed failure does not
+    take down the rest of the auth service.
+    """
+    import campus.config
+    from campus.common import env
+
+    # Ensure the clients tables exist and their schema is aligned for
+    # public client support before seeding (both no-ops if up to date).
+    # In production, schema management is handled by migrations/scripts,
+    # so table initialization is blocked there.
+    try:
+        if env.ENV != env.PRODUCTION:
+            from .resources.client import (
+                ClientsResource,
+                ensure_public_client_schema,
+            )
+            ClientsResource.init_storage()
+            ensure_public_client_schema()
+        from .resources.client import ensure_public_client
+        if ensure_public_client():
+            logger.info(
+                "Seeded public OAuth client '%s'",
+                campus.config.PUBLIC_OAUTH_CLIENT_ID
+            )
+    except Exception:
+        logger.exception(
+            "Failed to seed public OAuth client '%s': device-flow login "
+            "will fail until the client exists. Recover with: "
+            "python scripts/seed_public_oauth_client.py",
+            campus.config.PUBLIC_OAUTH_CLIENT_ID
+        )
+
+# v0.2.1 campus-common wheel switch deployed from this commit (#988).
+
+
+# Service-level OpenAPI info (campus#1029): consumed by
+# campus.flask_campus.openapi; migrated from the former
+# hand-maintained docs/openapi.yaml.
+OPENAPI_INFO = {
+    "title": "Campus Auth API",
+    "description": """Campus OAuth 2.0 authorization server and authentication API.
+
+The API has two provider families with deliberately different
+mechanics (docs/auth-token-invariants.md):
+
+- `campus` (first-party): Campus's own OAuth 2.0 authorization
+  server — authorization-code, device-code (RFC 8628) and refresh
+  grants issuing Campus bearer tokens.
+- `google`, `github`, `discord` (third-party): OAuth proxies that
+  carry out browser login/consent with the upstream provider and
+  keep custody of the upstream credentials. Upstream access tokens
+  are released to apps only through the token bridge
+  (docs/token-broker.md); refresh tokens never leave Campus.
+
+## Trails
+
+- docs/auth-login-flow.md — the browser login chain
+- docs/token-broker.md — the token bridge contract
+- docs/auth-token-invariants.md — security invariants
+- campus/auth/docs/auth-error-spec.md — error codes
+
+## Error responses
+
+Errors use the Campus error envelope (see `ErrorEnvelope`), with
+`AUTH_*` error codes; RFC 6749 protocol errors surface in
+`error.details` with the OAuth error string. Malformed request
+bodies return the validation-error shape (`ValidationError`).
+There are no endpoint-specific exceptions (#714 normalized the
+last flat-shape holdouts on `/root/` and the vault lookup).
+
+## Trailing slashes
+
+Paths are listed exactly as routed (Flask): a path shown with a
+trailing slash must be requested with it — the no-slash variant
+answers with a 308 redirect.
+""",
+}

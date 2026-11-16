@@ -16,7 +16,7 @@ admin_circle = campus.circles.new(
     name="campus-admin",
     description="Campus admin circle",
     tag="admin",
-    parents={root_circle["id"]: 15}
+    parents={root_circle[schema.CAMPUS_KEY]: 15}
 )
 
 # Initialise venues

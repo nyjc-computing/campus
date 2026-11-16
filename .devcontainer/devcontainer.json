@@ -1,5 +1,5 @@
 {
-	"name": "Python Flask DevContainer",
+	"name": "Python DevContainer",
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "app",
 	"workspaceFolder": "/workspaces/campus",

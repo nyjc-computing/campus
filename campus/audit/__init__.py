@@ -1,0 +1,283 @@
+"""campus.audit
+
+Audit service for tracing and monitoring Campus services.
+
+This package splits across two distributions (#993): this suite portion
+owns the audit SERVICE (init_app, routes, resources, web UI); the
+flask-campus wheel owns the app-facing halves (middleware, client,
+http). pkgutil extend_path merges the portions so every import path
+keeps resolving unchanged — the two portions ship disjoint subpackages,
+so sys.path order between them is irrelevant.
+"""
+
+import pkgutil
+
+__path__ = pkgutil.extend_path(__path__, __name__)
+
+# Note: do not expose .resources directly here. It is meant for internal
+# use within campus.audit only.
+__all__ = ["init_app"]
+
+import logging
+
+import flask
+
+from campus import webauth
+from campus.common.errors import api_errors
+from campus.common.utils import secret
+
+from . import resources
+from .helpers import audit_events
+
+logger = logging.getLogger(__name__)
+
+
+def _authenticate_audit_api_key() -> None:
+    """Validate API key for audit endpoints using webauth.
+
+    This function does not use campus.auth to avoid circular
+    dependencies.
+
+    Sets flask.g.api_key_id for tracing middleware.
+
+    Raises:
+        UnauthorizedError: if API key is invalid or missing
+
+    """
+    import time
+
+    from campus.common import schema
+
+    from .helpers.audit_events import FlaskResponseContext, _extract_request_context, emit_audit_event
+
+    request_context = _extract_request_context(flask.request)
+    started_at = schema.DateTime.utcnow()
+    start_ns = time.perf_counter_ns()
+
+    # Create minimal response context for auth events (no real response yet)
+    def make_response_context(status_code: int) -> FlaskResponseContext:
+        return {
+            "status_code": status_code,
+            "headers": {},
+            "body": {},
+        }
+
+    try:
+        httpauth = webauth.http.HttpAuthenticationScheme.with_header(
+            provider="campus",
+            http_header=dict(flask.request.headers)
+        )
+    except api_errors.UnauthorizedError:
+        # No Authorization header present - emit audit event and raise proper error for 401 response
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Missing API key"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
+        )
+        raise api_errors.UnauthorizedError("Missing API key") from None
+
+    # The audit API only accepts Bearer auth with audit API keys;
+    # reject other schemes (e.g. Basic) with a clear 401 rather than
+    # the scheme-mismatch error from .token (#699)
+    if httpauth.scheme != "bearer":
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Unsupported authentication scheme"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
+        )
+        raise api_errors.UnauthorizedError(
+            "Bearer authentication with an audit API key is required"
+        )
+
+    # Extract API key from Bearer token
+    api_key = httpauth.token
+
+    # Validate format
+    if not secret.is_valid_audit_api_key_format(api_key):
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Invalid API key format"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
+        )
+        raise api_errors.UnauthorizedError(
+            "Invalid API key format. Expected: audit_v1_<22-char-base64url>"
+        )
+
+    # Verify against database
+    api_key_record = resources.apikeys.verify(api_key)
+    if not api_key_record:
+        emit_audit_event(
+            data={"event_type": "audit.apikeys.auth.failed", "reason": "Invalid API key"},
+            api_key_id=None,
+            parent_span_id=None,
+            started_at=started_at,
+            duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+            request_context=request_context,
+            response_context=make_response_context(401),
+        )
+        raise api_errors.UnauthorizedError("Invalid API key")
+
+    # Success - emit audit event
+    emit_audit_event(
+        data={
+            "event_type": "audit.apikeys.auth.success",
+            "api_key_id": api_key_record.id,
+        },
+        api_key_id=api_key_record.id,
+        parent_span_id=None,
+        started_at=started_at,
+        duration_ms=(time.perf_counter_ns() - start_ns) / 1_000_000,
+        request_context=request_context,
+        response_context=make_response_context(200),
+    )
+
+    flask.g.api_key_id = api_key_record.id
+    # Scopes for the authorization layer (@require_scopes, #575)
+    flask.g.api_key_scopes = list(api_key_record.scopes)
+
+
+def init_app(app: flask.Flask | flask.Blueprint) -> None:
+    """Initialise the audit blueprint with the given Flask app."""
+    from campus.common import env
+    from campus.common.errors import handlers
+
+    from . import routes, ui_redirect
+
+    # Ensure audit tables exist (idempotent CREATE TABLE IF NOT EXISTS),
+    # mirroring auth's startup init for ClientsResource. In production,
+    # schema management is handled by scripts against the database (the
+    # storage backend blocks init_from_model there), so initialization
+    # is skipped and any missing-table failure surfaces loudly but does
+    # not abort startup.
+    try:
+        if env.ENV != env.PRODUCTION:
+            from .resources.apikeys import APIKeysResource
+            from .resources.ratelimit import init_storage as init_ratelimit_storage
+            from .resources.traces import TracesResource
+            APIKeysResource.init_storage()
+            TracesResource.init_storage()
+            init_ratelimit_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize audit storage tables: trace ingestion "
+            "and API-key authentication will fail until the tables exist. "
+            "Recover by running the audit storage init against the "
+            "database (see docs/migration-protocol.md)."
+        )
+
+    # Organise audit routes under audit blueprint
+    bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
+
+    # Create route blueprints using create_blueprint() for test isolation
+    traces_blueprint = routes.traces.create_blueprint()
+    traces_blueprint.before_request(_authenticate_audit_api_key)
+    bp.register_blueprint(traces_blueprint)
+
+    apikeys_blueprint = routes.apikeys.create_blueprint()
+    apikeys_blueprint.before_request(_authenticate_audit_api_key)
+    bp.register_blueprint(apikeys_blueprint)
+
+    journeys_blueprint = routes.journeys.create_blueprint()
+    journeys_blueprint.before_request(_authenticate_audit_api_key)
+    bp.register_blueprint(journeys_blueprint)
+
+    # Register public health routes WITHOUT authentication
+    import campus.flask_campus as flask_campus
+    @bp.get("/health")
+    @audit_events.audit_event("audit.health.check")
+    def health_check(**_) -> flask_campus.JsonResponse:
+        """Health check endpoint (no authentication required).
+
+        Returns:
+            - 200 OK with {"status": "ok"} for JSON Accept header
+            - 200 OK with "OK" plain text for text/plain Accept header
+        """
+        return {"status": "ok"}, 200
+
+    app.register_blueprint(bp)
+
+    # The web UI moved to the campus-admin portal; redirect its old
+    # URLs there (AUDIT_UI_URL) or explain the move. The versioned API
+    # above is the service's real surface now.
+    app.register_blueprint(ui_redirect.create_blueprint())
+
+    if isinstance(app, flask.Flask):
+        # Service root / (#842): campus.deploy's generic landing page
+        # registers when the service has no root route of its own —
+        # audit no longer has one (the web UI moved to campus-admin).
+        # Register error handlers for proper error responses
+        handlers.init_app(app)
+        # Lazy import to allow env setup
+        from campus.common import env
+        app.secret_key = env.getsecret("SECRET_KEY")
+
+    # Ensure the operator API key exists so API-key management survives
+    # the loss of every other key (#796). Runs on every startup
+    # (idempotent) so a database reset self-heals on the next deploy.
+    # Same loud-but-non-fatal policy as campus.auth's _seed_public_client.
+    _seed_operator_key()
+
+
+def _seed_operator_key() -> None:
+    """Seed the operator API key, logging loudly on failure.
+
+    The operator key cannot be created through the authenticated HTTP
+    API (chicken-and-egg: apikeys:write requires a key that holds it),
+    so it is seeded directly against storage from the
+    AUDIT_OPERATOR_API_KEY env var. A no-op when the variable is unset.
+
+    Failure to seed is logged at ERROR level with the recovery command
+    but does not abort startup, so an unrelated seed failure does not
+    take down the rest of the audit service.
+    """
+    import campus.config
+    from campus.common import env
+
+    if not env.get("AUDIT_OPERATOR_API_KEY"):
+        logger.debug(
+            "AUDIT_OPERATOR_API_KEY not set; skipping operator key seed"
+        )
+        return
+    try:
+        from .resources.apikeys import ensure_operator_key
+        if ensure_operator_key():
+            logger.info(
+                "Seeded audit operator key '%s'",
+                campus.config.AUDIT_OPERATOR_API_KEY_ID,
+            )
+    except Exception:
+        logger.exception(
+            "Failed to seed audit operator key '%s': API-key management "
+            "will be unavailable until the key exists. Recover with: "
+            "python scripts/seed_audit_operator_key.py",
+            campus.config.AUDIT_OPERATOR_API_KEY_ID,
+        )
+
+
+# Service-level OpenAPI info (campus#1029): consumed by
+# campus.flask_campus.openapi.
+OPENAPI_INFO = {
+    "title": "Campus Audit API",
+    "description": (
+        "Observability backend for Campus: trace/span ingestion, "
+        "querying, journey grouping, and audit API-key management.\n"
+        "\n"
+        "The /audit/v1 endpoints require Bearer authentication with an "
+        "audit API key (audit_v1_<22-char-base64url>). The audit web "
+        "UI lives in the campus-admin portal, which consumes this API "
+        "with its own key; this service redirects the UI's old page "
+        "URLs there (AUDIT_UI_URL)."
+    ),
+}

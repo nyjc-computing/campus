@@ -1,0 +1,251 @@
+# Campus Architecture
+
+## Overview
+
+Campus is a **fleet of six distributions** under one flat `campus` import namespace: this repository (campus-suite) holds the services; the shared layers ship from their own dists ([campus-common](https://github.com/nyjc-computing/campus-common), [campus-model](https://github.com/nyjc-computing/campus-model), [flask-campus](https://github.com/nyjc-computing/flask-campus), [campus-deploy](https://github.com/nyjc-computing/campus-deploy), [campus-core](https://github.com/nyjc-computing/campus-core) — see [PACKAGING.md](PACKAGING.md)). Each service follows the same architectural patterns while maintaining clean boundaries and avoiding circular dependencies.
+
+## Package Structure
+
+```
+campus/
+├── auth/           # Authentication and OAuth services
+│   ├── oauth_proxy/# OAuth provider integrations
+│   ├── resources/  # Business logic
+│   └── routes/     # HTTP endpoints
+├── api/            # RESTful API resources  
+│   ├── resources/  # Business logic
+│   └── routes/     # HTTP endpoints
+├── integrations/   # External service integrations
+└── yapper/         # Event bus (self-contained; docs/yapper.md)
+
+Shared layers ship from their own dists (import paths unchanged via the
+PEP 420 portion merge): campus.common + model + storage + webauth +
+services (campus-common/model/core), campus.flask_campus +
+campus.audit/{middleware,client,http,roles} (flask-campus), and
+campus.deploy (campus-deploy) — see [PACKAGING.md](PACKAGING.md).
+```
+
+## Core Principles
+
+- **Separation of Concerns**: Each service has a single, well-defined responsibility
+- **Loose Coupling**: Services communicate through clean interfaces
+- **API-First**: Most actions have corresponding HTTP API endpoints
+- **Extensible Storage**: Backend-agnostic storage interfaces support multiple implementations
+
+## Service Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Auth          │    │   API           │    │   Common        │
+│   OAuth &       │    │   RESTful       │    │   Utilities     │
+│   Credentials   │    │   Resources     │    │                 │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         │                       │                       │
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Model         │    │   Services      │    │   Integrations  │
+│   Entities      │    │   Email, etc.   │    │   External      │
+│   (dataclasses) │    │                 │    │   APIs          │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │
+                    ┌─────────────────┐
+                    │   Storage       │
+                    │   Data Layer    │
+                    └─────────────────┘
+```
+
+**Client Access:** Services accessed via external `campus_python` client library.
+
+## Package Responsibilities
+
+### `campus.auth`
+Authentication and OAuth services:
+- User authentication and session management
+- OAuth proxy for external providers (Google, GitHub, Discord)
+- Client credential management
+- Token generation and validation
+- Business logic in `.resources` submodule
+
+The end-to-end browser login flow (session init, Google federated
+login, code exchange) is documented in
+[auth-login-flow.md](auth-login-flow.md).
+
+### `campus.api`
+RESTful API resources:
+- Circle (group) management
+- Files: slug-addressable blobs in object storage (`/api/v1/files/...`)
+- Email OTP verification
+- Resource handlers and routing
+- Business logic in `.resources` submodule
+
+### `campus.common`
+Shared modules used by every service:
+- `schema`: OpenAPI-aligned types (str/int subclasses such as `DateTime`, `CampusID`, `Email`); start symbol searches here for type definitions
+- `errors`: error taxonomy (API errors, token errors, validation errors) raised by routes
+- `utils`: general helpers (uids, time, secrets)
+- `env`: environment variable access; deployment-environment constants and gating decorators (`block_env` / `confirm_action_in_env` / `require_env`); `.env` loading
+- `validation`, `http`: request validation, HTTP plumbing
+
+### `campus.deploy`
+Flask app orchestration for deployments (moved out of the former
+`campus.common.devops`, which it must not pull into `campus.common`):
+- `create_app`: single entrypoint for building a deployment app from AppModules
+- `configure_for_development` / `configure_for_deployment` / `configure_for_codespace`
+- `register_health` / `register_generic_landing`: the /health and / conventions (#842)
+
+### `campus.model`
+Entity representation (no business logic) — shipped by the
+[campus-model](https://github.com/nyjc-computing/campus-model)
+distribution:
+- Dataclass definitions (User, Circle, Client, Session, Token, etc.)
+- Credentials (OAuth tokens, user and app credentials)
+- HTTP header models (`HttpHeader`, `HttpHeaderWithAuth`, `HttpAuthProperty`)
+- Pure data structures with keyword-only init
+
+### `campus.webauth`
+
+*(Ships in the campus-core distribution, #992.)*
+Web authentication shared by services (imports model and common):
+- OAuth2 client flows (authorization code, client credentials, device authorization)
+- HTTP Basic/Bearer authentication scheme
+
+### `campus.storage`
+
+*(Ships in the campus-core distribution, #992.)*
+Data persistence interfaces:
+- Backend-agnostic storage abstractions
+- Multi-backend support (PostgreSQL, MongoDB; SQLite in tests)
+- Object (blob) storage in S3-compatible buckets (Railway Bucket in deployment, local filesystem in dev/test)
+- Consistent CRUD operations
+
+## Design Patterns
+
+### Lazy Loading
+Resources are acquired only when first needed, enabling CI/CD builds without production secrets.
+
+### Interface Segregation
+Each service exposes only the interfaces relevant to its clients.
+
+### Dependency Inversion
+Higher-level modules depend on abstractions, not concrete implementations.
+
+## Deployment Models
+
+### Service Deployment
+Individual services can be deployed independently:
+```bash
+export DEPLOY=campus.auth
+poetry run python main.py
+```
+
+or
+
+```bash
+export DEPLOY=campus.api
+poetry run python main.py
+```
+
+### Client Library Usage
+External projects use the `campus_python` client library:
+```python
+import campus_python
+campus = campus_python.Campus()
+```
+
+The SDK is framework-free transport: it holds no session state and no
+web-framework dependency. Flask apps layer the `campus.flask_campus`
+middleware on top — it owns the browser login flow, client-side
+session storage, and trace propagation, and drives the SDK's pure API
+calls through two injectable providers — see the flask-campus dist
+(nyjc-computing/flask-campus, #993).
+
+See the [campus-api-python repository](https://github.com/nyjc-computing/campus-api-python) for client documentation.
+
+## Configuration
+
+Campus uses environment variables for core configuration:
+
+### Environment Variables
+```bash
+ENV="development"                # deployment environment
+DEPLOY="campus.auth"             # deployment mode (campus.auth, campus.api, etc.)
+CLIENT_ID="your-client-id"       # client authentication
+CLIENT_SECRET="your-secret"      # client authentication
+POSTGRESDB_URI="postgresql://..."# auth service database
+```
+
+### Environment Module (`campus.common.env`)
+
+The env module provides clean, thread-safe access to environment variables:
+
+```python
+from campus.common import env
+
+# Function-style access (recommended for setting/deleting)
+env.set('MY_VAR', 'value')
+value = env.get('MY_VAR', 'default')
+env.delete('MY_VAR')
+
+# Attribute-style access (convenient for reading)
+value = env.MY_VAR
+
+# Check existence
+if env.contains('MY_VAR'):
+    # ...
+
+# Require variables (raises OSError if missing)
+env.require('REQUIRED_VAR')
+
+# Get secrets with vault fallback
+secret = env.getsecret('SECRET_KEY')  # checks env, then vault
+```
+
+**Key patterns:**
+- Use `env.set()` and `env.delete()` for modifying environment variables
+- Use attribute access (`env.VAR_NAME`) for convenient reading
+- Use `env.getsecret()` for secrets that fall back to vault storage
+- Use `env.register_getsecret()` to register custom vault access functions (for deployment-specific implementations)
+
+### Secrets Management
+Secrets managed via `campus.auth.vaults` and accessed through the env module:
+
+```python
+from campus.common import env
+
+# Check environment first, fall back to vault
+secret = env.getsecret('MY_SECRET')
+
+# Register custom vault access (for deployment-specific implementations)
+def custom_getsecret(name: str) -> str:
+    # Custom vault access logic
+    return vault_retrieve(name)
+
+env.register_getsecret(custom_getsecret)
+```
+
+## Security Architecture
+
+- **Authentication**: OAuth2 with Google integration
+- **Authorization**: two-scope model (ratified 2026-11-06) —
+  campus.auth's access-grant store gates its management blueprints
+  (vaults, clients, users, credentials, sessions); circle membership
+  gates campus.api domain resources (mutations user-only via
+  `<resource>.admin` role circles; reads authentication-only).
+  See [circles-access-control.md](circles-access-control.md)
+- **Secrets Management**: Centralized vault with encrypted storage
+- **Data Protection**: Field-level encryption for sensitive data
+- **Network Security**: HTTPS-only communication between services
+
+## Testing Architecture
+
+Three-tier testing strategy:
+1. **Unit Tests**: Individual component testing with mocks
+2. **Integration Tests**: Service-to-service communication testing
+3. **End-to-End Tests**: Full application workflow testing
+
+See [TESTING-GUIDE.md](TESTING-GUIDE.md) for detailed testing approaches.

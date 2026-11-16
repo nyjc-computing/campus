@@ -1,0 +1,370 @@
+"""campus.auth.routes.grants
+
+Flask routes for the access-grant store (#883, #886).
+
+The administration surface for generalized grant rows: list (the
+"who can administer what" matrix query, #872), grant, revoke, delete,
+and check — for both client and user grantees across the resource
+vocabularies. The vault-only /clients/{id}/access/ routes remain as a
+compat alias over the same store, on their own deprecation schedule.
+
+Administration matrix (umbrella decision 5, #883):
+
+- the operator principal may administer every vocabulary;
+- a user principal holding <vocabulary>:admin — grant row AND token
+  scope, via require_resource_permission (#885) — may administer that
+  vocabulary only. Administration requires the admin level, the top
+  of each vocabulary, so no principal can grant above its own level
+  (structurally enforced);
+- vault grants are operator-only to administer (#889): a
+  vocabulary-level vaults:admin would read as authority over every
+  label's secrets, so no user leg exists for vault grant
+  administration — fail-closed until a need is pinned;
+- clients may not administer grants at all (clients are never
+  designated admins, #854/#865).
+
+Grant-shape guards (umbrella decisions 4-5), applied to every
+mutation regardless of the caller:
+
+- no self-grants: a user principal may not create or raise a grant
+  naming itself (the operator client granting itself vault bits is
+  the pre-#886 model and stays allowed — bootstrap semantics);
+- no operator-equivalent rows: a vocabulary-level clients:admin grant
+  would recreate the operator outside AUTH_OPERATOR_CLIENT_IDS, so it
+  is rejected outright;
+- reserved vocabulary stays closed: credentials grants are
+  rejected (its routes are operator-only, #889);
+- vault grant rows must name their label (#889): a vault row with
+  an empty resource_id is inert (per-label checks never match it)
+  and is rejected as a shape error.
+
+Bootstrap: the operator env-var leg (AUTH_OPERATOR_CLIENT_IDS) mints
+the first grants (break-glass); every later grant flows through here
+with yapper events and the audit middleware stamping the acting
+principal (#802).
+
+Authentication is handled in a global routes.before_request hook.
+"""
+
+import flask
+
+import campus.flask_campus as flask_campus
+from campus.common.errors import api_errors
+
+from .. import authz, get_yapper
+from ..resources.grant import grants
+
+# Create blueprint for grant administration routes
+bp = flask.Blueprint('grants', __name__, url_prefix='/grants')
+
+
+def _require_grant_admin(resource_type: str) -> None:
+    """Require authority to administer `resource_type`'s grants.
+
+    Delegates to the generalized gate (#885), which settles user
+    principals before the operator bypass — a user minted through
+    the operator client must not inherit its role (#854). A user
+    needs <resource_type>:admin via a grant row AND a token scope;
+    clients are denied everywhere (#854). Vault grant
+    administration is operator-only outright (#889): administering
+    vault grants is authority over every label's secrets.
+    """
+    if resource_type == "vault":
+        # The super-admin root passes (#897): full privileges. Other
+        # user principals are settled before the operator check
+        # (#854): a user minted through the operator client must not
+        # inherit the bypass.
+        if authz.is_super_admin():
+            return
+        if authz.is_user_principal() or not authz.is_operator():
+            raise api_errors.ForbiddenError(
+                "Vault grant administration is operator-only (#889): "
+                "administering grants over vault labels is authority "
+                "over every label's secrets"
+            )
+        return
+    authz.require_resource_permission(resource_type, "admin")
+
+
+def _forbid_self_grant(grantee_type: str, grantee_id: str) -> None:
+    """Reject a user principal administering its own grant (#883).
+
+    The super-admin root is exempt (#897): it cannot escalate (it
+    already holds everything), and self-grants are how a root names
+    itself for day-to-day tooling if ever wanted.
+    """
+    if authz.is_user_principal() and not authz.is_super_admin():
+        user = flask.g.current_user
+        if (
+                grantee_type == "user"
+                and str(user.get("id")) == str(grantee_id)
+        ):
+            raise api_errors.ForbiddenError(
+                "User principals may not administer their own access "
+                "grants (#883): self-grants would bypass the "
+                "designation review"
+            )
+
+
+def _forbid_forbidden_shapes(
+        grantee_type: str,
+        resource_type: str,
+        level: str | None,
+        resource_id: str = "",
+) -> None:
+    """Reject grant shapes the epic keeps closed (#883 decisions 4, 5).
+
+    - vocabulary-level clients:admin rows are operator-equivalent;
+    - user-principal vault grants are reserved until #889;
+    - sessions:admin and credentials:admin rows are inert (#1055):
+      nothing sits above revoke/write, so both vocabularies are
+      grantable up to write and their grant administration stays
+      operator-only;
+    - timetable:mod rows are inert: no moderation action exists on
+      timetables, so the vocabulary is grantable at read/write/admin
+      only.
+    """
+    if resource_type == "clients" and level == "admin":
+        raise api_errors.ForbiddenError(
+            "A vocabulary-level 'clients:admin' grant is "
+            "operator-equivalent (#883): operator authority comes "
+            f"only from {authz.OPERATOR_CLIENT_IDS_ENVVAR}"
+        )
+    if resource_type == "sessions" and level == "admin":
+        raise api_errors.ForbiddenError(
+            "A 'sessions:admin' grant has nothing to govern (#1055): "
+            "the sessions vocabulary is grantable up to write "
+            "(read lists/reads, write revokes); administering its "
+            "grants stays operator-only"
+        )
+    if resource_type == "credentials" and level == "admin":
+        raise api_errors.ForbiddenError(
+            "A 'credentials:admin' grant has nothing to govern "
+            "(#1055): the credentials vocabulary is grantable up to "
+            "write (read reads metadata, write disconnects/updates); "
+            "administering its grants stays operator-only"
+        )
+    if resource_type == "timetable" and level == "mod":
+        raise api_errors.ForbiddenError(
+            "A 'timetable:mod' grant has nothing to govern: the "
+            "timetable vocabulary is grantable at read, write, and "
+            "admin (read views timetable data, write creates/updates "
+            "timetable versions, admin governs its grants)"
+        )
+    if resource_type == "vault" and not resource_id:
+        raise api_errors.InvalidRequestError(
+            "Vault grant rows must name their label (#889): an "
+            "empty resource_id never matches a per-label access "
+            "check"
+        )
+
+
+def _grant_event_name(operation: str) -> str:
+    return f"campus.grants.{operation}"
+
+
+@bp.get("/")
+@flask_campus.unpack_request
+def list_grants(
+        grantee_type: str | None = None,
+        grantee_id: str | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+) -> flask_campus.JsonResponse:
+    """List access-grant rows (the admin matrix)
+
+    The "who can administer what" matrix query (#872, #883). The operator and the super-admin root (#897,
+        AUTH_SUPER_ADMIN) list every row; a same-vocabulary admin (a user holding <vocabulary>:admin via a grant
+        row AND a token scope) may list scoped to resource_type=<their vocabulary>. Unfiltered listing requires
+        the operator or the root.
+
+    GET /grants
+    Authorization: operator for the full matrix; otherwise a
+    same-vocabulary admin scoped to that vocabulary
+    (resource_type=<their vocabulary>).
+
+    Query: grantee_type, grantee_id, resource_type, resource_id
+    (all optional; unfiltered requires the operator or the
+    super-admin root, #906).
+
+    Returns: {"grants": [AccessGrant]}
+    """
+    if authz.is_user_principal():
+        # Users see exactly one vocabulary — the one they administer.
+        # The super-admin root is the exception: it reads the whole
+        # matrix unfiltered (#906 — it passes require_operator, so
+        # the former assert-as-flow-control 500'd here instead).
+        if resource_type is None:
+            if not authz.is_super_admin():
+                authz.require_operator("list access grants")
+        else:
+            _require_grant_admin(resource_type)
+    elif not authz.is_operator():
+        authz.require_operator("list access grants")
+    rows = grants.list(
+        grantee_type=grantee_type,
+        grantee_id=grantee_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+    )
+    return {"grants": rows}, 200
+
+
+@bp.get("/check")
+@flask_campus.unpack_request
+def check_grant(
+        grantee_type: str,
+        grantee_id: str,
+        resource_type: str,
+        resource_id: str = "",
+        bits: int | None = None,
+        level: str | None = None,
+) -> flask_campus.JsonResponse:
+    """Check whether a grantee's row covers a permission
+
+    GET /grants/check
+    Authorization: operator, or a same-vocabulary admin.
+
+    Query: grantee_type, grantee_id, resource_type, resource_id,
+    bits | level.
+
+    Returns: {"granted": bool}
+    """
+    _require_grant_admin(resource_type)
+    granted = grants.check(
+        grantee_type, grantee_id, resource_type, resource_id,
+        bits=bits, level=level,
+    )
+    return {"granted": granted}, 200
+
+
+@bp.post("/")
+@flask_campus.unpack_request
+def grant(
+        grantee_type: str,
+        grantee_id: str,
+        resource_type: str,
+        resource_id: str = "",
+        bits: int | None = None,
+        level: str | None = None,
+) -> flask_campus.JsonResponse:
+    """Grant access (create a row, or raise an existing one)
+
+    The operator, the super-admin root (#897), or a same-vocabulary admin. Vault bits OR into the existing mask;
+        management levels never downgrade. Guards (#883): no self-grants by user principals; vocabulary-level
+        clients:admin rows are rejected (operator-equivalent); the credentials vocabulary and user-principal
+        vault grants stay reserved until #889.
+
+    POST /grants
+    Authorization: operator, or same-vocabulary admin. Vault bits
+    OR into the existing mask; management levels never downgrade.
+
+    Body: {
+        "grantee_type": "user",
+        "grantee_id": "u1",
+        "resource_type": "users",
+        "resource_id": "",
+        "level": "admin"
+    }
+
+    Returns: {"grant": AccessGrant}
+    """
+    _require_grant_admin(resource_type)
+    _forbid_self_grant(grantee_type, grantee_id)
+    _forbid_forbidden_shapes(
+        grantee_type, resource_type, level, resource_id
+    )
+    grants.grant(
+        grantee_type, grantee_id, resource_type, resource_id,
+        bits=bits, level=level,
+    )
+    get_yapper().emit(_grant_event_name("grant"), {
+        "grantee_type": grantee_type,
+        "grantee_id": grantee_id,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+    })
+    row = grants.get(grantee_type, grantee_id, resource_type, resource_id)
+    return {"grant": row}, 201
+
+
+@bp.post("/revoke")
+@flask_campus.unpack_request
+def revoke(
+        grantee_type: str,
+        grantee_id: str,
+        resource_type: str,
+        resource_id: str = "",
+        bits: int | None = None,
+        level: str | None = None,
+) -> flask_campus.JsonResponse:
+    """Revoke access (clear vault bits, delete covered levels)
+
+    Vault rows delete at zero bits; a revoked level's row is deleted when the held level covers it. Operator, or
+        a same-vocabulary admin; user principals may not revoke their own grants.
+
+    POST /grants/revoke
+    Authorization: operator, or same-vocabulary admin. Vault rows
+    delete at zero bits; a revoked level's row is deleted when the
+    held level covers it (#884 semantics).
+
+    Body: same shape as POST /grants
+
+    Returns: {"grant": AccessGrant | null}
+    """
+    _require_grant_admin(resource_type)
+    _forbid_self_grant(grantee_type, grantee_id)
+    grants.revoke(
+        grantee_type, grantee_id, resource_type, resource_id,
+        bits=bits, level=level,
+    )
+    get_yapper().emit(_grant_event_name("revoke"), {
+        "grantee_type": grantee_type,
+        "grantee_id": grantee_id,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+    })
+    row = grants.get(grantee_type, grantee_id, resource_type, resource_id)
+    return {"grant": row}, 200
+
+
+@bp.delete("/<grant_id>")
+@flask_campus.unpack_request
+def delete_grant(grant_id: str) -> flask_campus.JsonResponse:
+    """Delete a grant row outright
+
+    DELETE /grants/{grant_id}
+    Authorization: operator, or a same-vocabulary admin for the
+    row's vocabulary.
+
+    Returns: {}
+    """
+    rows = grants.list()
+    row = next((r for r in rows if str(r.get("id")) == grant_id), None)
+    if row is None:
+        raise api_errors.NotFoundError("Grant not found")
+    resource_type = row["resource_type"]
+    _require_grant_admin(resource_type)
+    _forbid_self_grant(row["grantee_type"], row["grantee_id"])
+    from ..resources.grant import grant_storage
+    grant_storage.delete_by_id(row["id"])
+    get_yapper().emit(_grant_event_name("delete"), {"id": grant_id})
+    return {}, 200
+
+
+def create_blueprint() -> flask.Blueprint:
+    """Create a fresh blueprint with routes for test isolation.
+
+    Creates a new blueprint instance and manually registers all route
+    functions to support creating multiple independent Flask apps.
+    """
+    new_bp = flask.Blueprint('grants', __name__, url_prefix='/grants')
+
+    # Manually register routes (mimicking the decorator behavior)
+    new_bp.add_url_rule("/", "list_grants", list_grants, methods=["GET"])
+    new_bp.add_url_rule("/check", "check_grant", check_grant, methods=["GET"])
+    new_bp.add_url_rule("/", "grant", grant, methods=["POST"])
+    new_bp.add_url_rule("/revoke", "revoke", revoke, methods=["POST"])
+    new_bp.add_url_rule("/<grant_id>", "delete_grant", delete_grant, methods=["DELETE"])
+
+    return new_bp

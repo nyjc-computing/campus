@@ -129,8 +129,11 @@ test.db
 .vscode/settings.json
 .idea/
 
-# Deployment flag (keep deploy.* templates)
-deploy
+# Root-level deployment flag (keep deploy.* templates); /deploy still
+# ignores the flag FILE, and the negated directory form lets tracked
+# deploy/gateway/ edge-gateway config (#995) exist
+/deploy
+!deploy/
 .venv
 env/
 venv/
@@ -181,26 +184,14 @@ replit.nix
 # System files
 *.DS_Store
 
-# Project directories (separate repos)
-campus/
-campus-admin/
-campus-api-python/
-campus-classroom/
-campus-cli/
-devcontainers/
-nyxchange-timetable-v2/
-t1w5-webapp-quiz-submission/
+# Git worktrees (in-repo worktree directories)
+.worktrees/
 
-# Sensitive files and directories (from upstream template)
-.claude/
-.claude-memory/
-*.key
-*.pem
-*.cert
-*.crt
-secrets/
-credentials/
-*.credentials.json
+# 2026-10-27: retrigger dev deploy after postgres/mongo endpoint regularization
 
-# Playwright auth state (contains session cookies/tokens)
-.playwright_auth_state.json
+# Worktree-local venv bootstrap artifact (scripts/worktree.py pip freeze
+# intermediate) — disposable, never commit (accidentally tracked once, e7b025e)
+requirements-freeze.txt
+
+# Local object-storage bucket written by integration tests
+.storage/

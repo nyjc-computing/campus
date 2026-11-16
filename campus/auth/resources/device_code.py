@@ -1,0 +1,308 @@
+"""campus.auth.resources.device_code
+
+Device code resource for OAuth 2.0 Device Authorization Flow.
+
+This module manages device codes for CLI and other device authentication.
+"""
+
+import typing
+
+import campus.config as config
+import campus.model as model
+import campus.storage
+from campus.common import schema
+from campus.common.errors import api_errors
+from campus.common.utils import secret, uid
+
+device_code_storage = campus.storage.get_collection("device_codes")
+
+
+def init_storage() -> None:
+    """Initialize storage for device code resource."""
+    device_code_storage.init_from_model(
+        "device_codes", model.DeviceCode
+    )
+
+
+class DeviceCodeResource:
+    """Represents the device code resource in Campus API Schema."""
+
+    @staticmethod
+    def init_storage() -> None:
+        """Initialize storage for device code resource."""
+        device_code_storage.init_from_model(
+            "device_codes", model.DeviceCode
+        )
+
+    def create(
+            self,
+            *,
+            client_id: schema.CampusID | str,
+            scopes: list[str] | None = None,
+    ) -> model.DeviceCode:
+        """Create a new device code.
+
+        Args:
+            client_id: The OAuth client identifier
+            scopes: Requested OAuth scopes
+
+        Returns:
+            DeviceCode instance
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        device_code_id = uid.generate_category_uid("device_code")
+        device_code_str = secret.generate_device_code()
+        user_code = secret.generate_user_code()
+
+        device_code = model.DeviceCode(
+            id=device_code_id,
+            device_code=device_code_str,
+            user_code=user_code,
+            client_id=schema.CampusID(client_id),
+            scopes=scopes or [],
+            expiry_seconds=config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS,
+            interval=config.DEFAULT_DEVICE_CODE_POLL_INTERVAL,
+            state="pending",
+        )
+
+        try:
+            device_code_storage.insert_one(device_code.to_storage())
+        except Exception as e:
+            logger.error(f"[DEVICE_CODE] Failed to insert device code: {e}")
+            raise api_errors.InternalError.from_exception(e) from e
+        else:
+            return device_code
+
+    def get_by_device_code(
+            self,
+            device_code: str,
+    ) -> model.DeviceCode:
+        """Get a device code by device code string.
+
+        Args:
+            device_code: The device code string
+
+        Returns:
+            DeviceCode instance
+
+        Raises:
+            api_errors.NotFoundError: If device code not found
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        records = device_code_storage.get_matching({"device_code": device_code})
+        if not records:
+            logger.warning(f"[DEVICE_CODE] Device code not found: {device_code}")
+            raise api_errors.NotFoundError(
+                "Device code not found or expired",
+                device_code=device_code
+            )
+
+        device_code_obj = model.DeviceCode.from_storage(records[0])
+
+        # Check if expired
+        if device_code_obj.is_expired():
+            device_code_obj.expire()
+            device_code_storage.update_by_id(
+                device_code_obj.id,
+                {"state": "expired"}
+            )
+            raise api_errors.InvalidRequestError(
+                "The device code has expired. Please restart the authentication flow."
+            )
+
+        return device_code_obj
+
+    def get_by_user_code(
+            self,
+            user_code: str,
+    ) -> model.DeviceCode:
+        """Get a device code by user code string.
+
+        Args:
+            user_code: The user code string
+
+        Returns:
+            DeviceCode instance
+
+        Raises:
+            api_errors.NotFoundError: If user code not found
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        records = device_code_storage.get_matching({"user_code": user_code})
+        if not records:
+            logger.warning(f"[DEVICE_CODE] User code not found: {user_code}")
+            raise api_errors.NotFoundError(
+                "Invalid user code",
+                user_code=user_code
+            )
+
+        device_code_obj = model.DeviceCode.from_storage(records[0])
+
+        # Check if expired
+        if device_code_obj.is_expired():
+            device_code_obj.expire()
+            device_code_storage.update_by_id(
+                device_code_obj.id,
+                {"state": "expired"}
+            )
+            raise api_errors.NotFoundError(
+                "This user code has expired",
+                user_code=user_code
+            )
+
+        return device_code_obj
+
+    def peek_by_user_code(
+            self,
+            user_code: str,
+    ) -> model.DeviceCode | None:
+        """Get a device code by user code in any state, without side effects.
+
+        Unlike get_by_user_code, this never raises NotFoundError for an
+        expired code and does not flip state to "expired" on read. The
+        verification page (#867) uses it to tell pending, expired, and
+        already-used codes apart at render time.
+
+        Args:
+            user_code: The user code string
+
+        Returns:
+            DeviceCode instance, or None if no record exists
+        """
+        records = device_code_storage.get_matching({"user_code": user_code})
+        if not records:
+            return None
+        return model.DeviceCode.from_storage(records[0])
+
+    def update(
+            self,
+            device_code_id: schema.CampusID | str,
+            **updates: typing.Any,
+    ) -> model.DeviceCode:
+        """Update a device code.
+
+        Args:
+            device_code_id: The device code ID
+            **updates: Fields to update
+
+        Returns:
+            Updated DeviceCode instance
+        """
+        device_code_id = schema.CampusID(device_code_id)
+        try:
+            device_code_storage.update_by_id(device_code_id, updates)
+        except campus.storage.errors.NotFoundError as e:
+            raise api_errors.NotFoundError(
+                "Device code not found",
+                device_code_id=str(device_code_id)
+            ) from e
+        except Exception as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
+        return self.get_by_id(device_code_id)
+
+    def get_by_id(
+            self,
+            device_code_id: schema.CampusID | str,
+    ) -> model.DeviceCode:
+        """Get a device code by ID.
+
+        Args:
+            device_code_id: The device code ID
+
+        Returns:
+            DeviceCode instance
+
+        Raises:
+            api_errors.NotFoundError: If device code not found
+        """
+        device_code_id = schema.CampusID(device_code_id)
+        record = device_code_storage.get_by_id(device_code_id)
+        if not record:
+            raise api_errors.NotFoundError(
+                "Device code not found",
+                device_code_id=str(device_code_id)
+            )
+        return model.DeviceCode.from_storage(record)
+
+    def delete(
+            self,
+            device_code_id: schema.CampusID | str,
+    ) -> None:
+        """Delete a device code.
+
+        Args:
+            device_code_id: The device code ID
+        """
+        device_code_id = schema.CampusID(device_code_id)
+        try:
+            device_code_storage.delete_by_id(device_code_id)
+        except campus.storage.errors.NotFoundError:
+            pass
+        except Exception as e:
+            raise api_errors.InternalError.from_exception(e) from e
+
+    def claim(
+            self,
+            device_code_id: schema.CampusID | str,
+    ) -> bool:
+        """Atomically consume a device code by deleting it.
+
+        Single-use claim for token issuance (#356): delete_by_id is
+        rowcount-guarded in every storage backend, so exactly one
+        request can consume a given device code; a concurrent claim
+        finds it already gone and returns False.
+
+        Unlike delete(), a NotFoundError is reported (as False) rather
+        than swallowed, because the caller's decision depends on
+        whether THIS call consumed the code.
+
+        Args:
+            device_code_id: The device code ID
+
+        Returns:
+            True if this call consumed the code, False if it was
+            already consumed or deleted.
+        """
+        device_code_id = schema.CampusID(device_code_id)
+        try:
+            device_code_storage.delete_by_id(device_code_id)
+        except campus.storage.errors.NotFoundError:
+            return False
+        except Exception as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        return True
+
+    def sweep(
+            self,
+            *,
+            at_time: schema.DateTime | None = None
+    ) -> int:
+        """Delete expired device codes from the database.
+
+        Returns the number of deleted device codes.
+        """
+        expired_records = (
+            model.DeviceCode.from_storage(r)
+            for r in device_code_storage.get_matching({})
+        )
+        expired_codes = (
+            dc for dc in expired_records if dc.is_expired(at_time=at_time)
+        )
+        deletion_count = 0
+        for device_code in expired_codes:
+            device_code_storage.delete_by_id(device_code.id)
+            deletion_count += 1
+        return deletion_count
+
+
+
+
+# Singleton instance
+device_code = DeviceCodeResource()

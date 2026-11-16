@@ -1,0 +1,37 @@
+"""campus.api.resources
+
+Namespace for campus.api resources.
+Note: These resources directly access storage without authentication,
+and with minimal model-based validation.
+They are intended for internal use within campus.api.
+External clients should access resources via API endpoints.
+"""
+
+__all__ = [
+    "assignment",
+    "calendar",
+    "circle",
+    "emailotp",
+    "file",
+    "hostedapps",
+    "submission",
+]
+
+from .assignment import AssignmentsResource
+from .calendar import CalendarResource
+from .circle import CirclesResource
+from .emailotp import EmailOTPResource
+from .files import FilesResource
+from .hostedapps import HostedAppsResource
+from .submission import SubmissionsResource
+from .timetable import TimetablesResource
+
+# Initialize resource instances for internal use
+assignment = AssignmentsResource()
+calendar = CalendarResource()
+circle = CirclesResource()
+emailotp = EmailOTPResource()
+file = FilesResource()
+hostedapps = HostedAppsResource()
+submission = SubmissionsResource()
+timetable = TimetablesResource()

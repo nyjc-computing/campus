@@ -1,0 +1,24 @@
+# Shared Poetry-provisioning step for every suite job in ci.yml (#718) —
+# one definition instead of five copies that can drift apart on edits.
+#
+# Why pipx: ubuntu-24.04 runner images preinstall pipx (but not Poetry), so
+# this skips the old `pip install --upgrade pip` preamble (~2-3s/job) and
+# keeps Poetry out of the runner's site-packages. setup-python's `cache: pip`
+# warms pip's wheel cache so warm runs skip the network fetch.
+# Why pinned: `pip install poetry` floated, so a Poetry release could change
+# CI behavior with no repo change. 2.5.1 generated the current poetry.lock
+# (verify: `head -1 poetry.lock`). If you regenerate the lockfile with a
+# newer Poetry, bump this pin in the same commit.
+name: Install Poetry
+description: Install pinned Poetry via preinstalled pipx; configure in-project venvs
+runs:
+  using: composite
+  steps:
+    - name: Install Poetry 2.5.1
+      run: pipx install poetry==2.5.1
+      shell: bash
+    - name: Configure Poetry to use system Python (not its own bundled version)
+      run: |
+        poetry config virtualenvs.create true
+        poetry config virtualenvs.in-project true
+      shell: bash

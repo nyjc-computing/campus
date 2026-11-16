@@ -1,0 +1,129 @@
+# Getting Started with Campus
+
+This guide helps you navigate the documentation based on your role and experience level.
+
+## By Role
+
+### 👨‍💻 New Developers
+Start here if you're new to the codebase:
+1. [CONTRIBUTING.md](CONTRIBUTING.md) - Development workflow and branch strategy
+2. [PACKAGING.md](PACKAGING.md) - the six-distribution layout (what lives where)
+2. [development-guidelines.md](development-guidelines.md) - Coding patterns and best practices
+3. [STYLE-GUIDE.md](STYLE-GUIDE.md) - Code standards and import patterns
+4. [TESTING-GUIDE.md](TESTING-GUIDE.md) - How to run and write tests
+
+### 🏗️ Experienced Developers
+For those familiar with Python/Flask projects:
+1. [architecture.md](architecture.md) - System design and service boundaries
+2. [development-guidelines.md](development-guidelines.md) - Architecture patterns and abstractions
+3. [PACKAGING.md](PACKAGING.md) - The distribution split: six dists, one namespace
+
+### 🎓 Student App Authors
+Building an app that signs in through Campus (not working on the Campus codebase itself):
+1. [student-app-walkthrough.md](student-app-walkthrough.md) - from-zero path: scaffold, SSO, API calls, deploy
+
+### 🚀 DevOps/Infrastructure
+For deployment and operations:
+1. [DEPLOY.md](../DEPLOY.md) - Deployment options
+2. [PACKAGING.md](PACKAGING.md) - Build and distribution
+3. [TESTING-GUIDE.md](TESTING-GUIDE.md) - Testing infrastructure
+
+### 📚 End Users
+For those deploying or using Campus:
+1. [README.md](../README.md) - Project overview
+2. [DEPLOY.md](../DEPLOY.md) - Deployment guide
+3. [architecture.md](architecture.md) - System design
+
+## Installation
+
+### Prerequisites
+- **pyenv** for Python version management
+- **Python 3.11, 3.12, or 3.13** (managed via pyenv; prefer 3.13 for new setups)
+- **pipx** for installing Poetry
+- **Poetry** for dependency management (installed via pipx)
+- PostgreSQL (for auth service database)
+- MongoDB (optional, for alternative storage backend)
+
+### Environment Setup
+
+```bash
+# 1. Install pyenv (Arch: pacman -S python-pyenv)
+# 2. Install supported Python versions
+pyenv install 3.11.11
+pyenv install 3.12.0
+pyenv install 3.13.0
+
+# 3. Select the interpreter for this repo (3.13 preferred; 3.11 and 3.12 also supported)
+pyenv local 3.13.0
+
+# 4. Install Poetry via pipx (user-level, isolated)
+pipx install poetry
+
+# 5. Configure PATH in ~/.bashrc:
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/shims:$PATH"  # pyenv shims first
+export PATH="$HOME/.local/bin:$PATH"    # pipx binaries
+eval "$(pyenv init - bash)"
+```
+
+### Quick Setup
+
+```bash
+# Clone and enter directory
+git clone https://github.com/nyjc-computing/campus.git
+cd campus
+
+# Install dependencies
+poetry install
+
+# Run the application
+.venv/bin/python main.py
+# OR
+poetry run python main.py
+```
+
+### Environment Configuration
+
+```bash
+ENV="development"                     # deployment environment
+CLIENT_ID="your-client-id"           # OAuth credentials
+CLIENT_SECRET="your-client-secret"
+POSTGRESDB_URI="postgresql://..."    # auth service database
+```
+
+Other configuration is managed via `campus.auth.vaults`.
+
+### Running Locally Without External Databases
+
+Campus can run entirely on local storage backends — SQLite tables, in-memory
+documents, and local file objects — with no Postgres or MongoDB required:
+
+```bash
+STORAGE_MODE=1 DEPLOY=campus.api poetry run python main.py
+# or
+STORAGE_MODE=1 DEPLOY=campus.auth poetry run python main.py
+```
+
+This is the same mode the test suites use, so data is not durable across
+runs; it is meant for local development and smoke testing. Backend selection
+lives in `campus.storage.testing` (shipped in the
+[campus-core](https://github.com/nyjc-computing/campus-core) distribution).
+
+## Documentation Index
+
+| Document | Purpose |
+|----------|---------|
+| [AGENTS.md](../AGENTS.md) | Quick reference for humans and AI assistants |
+| [student-app-walkthrough.md](student-app-walkthrough.md) | From-zero guide for apps that sign in through Campus |
+| [architecture.md](architecture.md) | System design and component overview |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and branch strategy |
+| [development-guidelines.md](development-guidelines.md) | Coding patterns and best practices |
+| [STYLE-GUIDE.md](STYLE-GUIDE.md) | Code standards and documentation |
+| [TESTING-GUIDE.md](TESTING-GUIDE.md) | Testing approaches and strategies |
+| [PACKAGING.md](PACKAGING.md) | The distribution split: six dists, one namespace |
+
+## Getting Help
+
+- **[Issues](https://github.com/nyjc-computing/campus/issues)** - Bug reports and feature requests
+- **[Discussions](https://github.com/nyjc-computing/campus/discussions)** - Questions and discussions
+- **[security@nyjc.edu.sg](mailto:security@nyjc.edu.sg)** - Security vulnerabilities

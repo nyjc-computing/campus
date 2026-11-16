@@ -1,0 +1,289 @@
+# Audit Tracing Pipeline
+
+How request spans flow from producers — campus services (`campus.auth`,
+`campus.api`) and traced client apps (campus-classroom first, #816) —
+into the audit service (`campus.audit`), and how to enable the pipeline.
+Parent epic: #424; enablement issue: #699.
+
+## How it works
+
+- `campus.deploy` (shipped in the campus-deploy distribution, campus#1042) registers tracing middleware for
+  `DEPLOY in ('campus.auth', 'campus.api')` when
+  `AUDIT_TRACING_ENABLED=1` (read once at app creation — flipping the
+  flag is a redeploy, not a runtime change). `campus.audit` does not
+  trace its own requests.
+- Client apps that depend on `campus-suite` wire the same middleware
+  themselves: `campus.audit.middleware.init_app(app)` behind their own
+  `AUDIT_TRACING_ENABLED` gate (see the classroom app factory for the
+  reference wiring). A traced client app's requests become root spans,
+  and the campus SDK calls it makes become their child spans (#816).
+- The middleware wraps every request in a span and ingests it via HTTP
+  `POST /audit/v1/traces/` (`{"spans": [span]}`) from a background
+  thread pool. **Ingestion failures never affect user requests** — they
+  degrade to warning logs (`Failed to ingest trace span`).
+- Static-asset requests (`static`/`*.static` endpoints,
+  `/favicon.ico`) are **not spanned** (#818): they can never carry
+  child spans (push_context skips static too, #689) and would only
+  flood the traces list with 1-span rows. HTML page loads stay traced —
+  they are the waterfall roots that give page-fired SDK calls
+  parentage (#816).
+- `campus.audit` does not self-trace, but can emit audit *events*
+  (`AUDIT_EVENTS_ENABLED=1`, login-attempt/API-key events) directly into
+  its own storage.
+
+## Trace context propagation (#794)
+
+Requests spawned by a traced service become **child spans** of the
+originating request, which is what the audit UI's waterfall draws:
+
+- Inbound: `X-Request-ID` (trace id, pre-existing) and `X-Parent-Span-ID`
+  (caller's span id) promote the request from a new root to a child of
+  the caller's span, within the caller's trace.
+- Outbound: the `campus_python` SDK instruments its own sessions at
+  client construction (`campus_python.tracing.instrument_requests_session`,
+  campus-api-python#93), so every call made while handling a traced
+  request — campus.api's `authenticate`, a client app's session lookup —
+  carries both headers and lands as a child span. Headers are computed
+  per call from the active request context — safe for shared sessions,
+  and calls from outside a request context (e.g. the ingestion executor
+  thread) stay unparented. The mirrored copy in
+  `campus.audit.middleware.tracing` remains for server-side sessions
+  built on `campus.audit.http`; the two are idempotent across each
+  other.
+- In tests, `tests.flask_test.TestCampusRequest` merges the same headers
+  so the api→auth chain behaves as in production.
+- Span `started_at` is the wall-clock request start (captured in
+  `before_request`), so waterfall offsets are real start deltas.
+- `TraceTree.from_spans` adopts spans whose parent was not ingested
+  under the earliest-started root — nothing disappears from the view.
+- Header trust matches `X-Request-ID`: internal observability only, not
+  a security boundary. W3C `traceparent` interop is possible future work
+  (it would extend both propagation implementations).
+
+## Login-journey tagging (#803)
+
+Each browser hop of a login flow is its own trace (navigations do not
+replay `X-Request-ID`), so campus.auth correlates them out-of-band:
+
+- `GET /auth/v1/authorize` — the flow's first browser touch — sets an
+  opaque `campus_journey` cookie (~30 min Max-Age, SameSite=Lax) and
+  records the id on the auth session.
+- The tracing middleware stamps every span's `tags.journey_id` from that
+  cookie; the server-to-server `POST /auth/v1/token` (which never
+  carries the cookie) copies the id from the auth session into
+  `flask.g`, and the middleware stamps it from there.
+- `GET /audit/v1/traces/search?journey_id=...` filters traces by the
+  tag; the audit web UI groups a journey at `/audit/journeys/<id>` and
+  chips journey traces in the traces list.
+- The journey view (`/audit/traces?journey_id=<id>`) also renders a
+  **journey waterfall**: one bar per member trace on the journey's
+  shared timeline (positioned by `started_at`, sized by duration,
+  colored by status), so the flow's pacing reads at a glance. Bars
+  link to the trace detail pages, whose span waterfalls drill into
+  each hop.
+
+Journey membership lives in the free-form `tags` dict (zero
+migrations) and is matched in Python over a capped recent-span scan —
+fine at the audit UI's scale; promote to a dedicated column only if
+that ever gets slow.
+
+## Action journeys (#828)
+
+Login journeys correlate the login flow itself; **action journeys**
+group one user-initiated *action episode* — the page load that began
+it, its XHRs and form posts, and the server-to-server calls those
+spawn (which are already one trace each via propagation; the journey
+stitches across browser requests). Same `tags.journey_id` mechanism,
+different lifecycle, owned by `campus.audit.middleware.journeys`:
+
+- **Adopt:** each request picks up the journey from the
+  `X-Journey-ID` header (SDK-forwarded child call, or an app minting
+  client-side) or the `campus_action_journey` cookie (same-origin
+  XHRs/form posts/redirect GETs carry it automatically). A name may
+  ride along on a header-adopted journey via `X-Journey-Name` (#952);
+  cookie-adopted and minted journeys are unnamed. Static requests are
+  skipped (#819).
+- **Mint:** a page navigation (`Sec-Fetch-Mode: navigate` or
+  `Accept: text/html`) with no active journey starts a new episode —
+  the navigation is the user-initiated origin, no client code needed.
+- **Continue:** the cookie is set/refreshed on every journeyed
+  request (sliding ~10 min window), so POST-redirect-GET flows stay
+  whole; idle expiry ends the episode. No explicit end state.
+- **Name:** `@flask_campus.journey("campus.submissions.submit")` on a
+  view attaches a label (`tags.journey_name`) for journey cards;
+  `fresh=True` forces a hard episode boundary mid-visit. Soft by
+  default: adopting never fragments an ongoing episode. Names follow
+  the yapper emission convention and reuse the same labels (#840): a
+  journey is the episode that culminates in an emission, so the label
+  is the emission's — mint a new one (same
+  `campus.<subject>[.<sub>].<action>` format) only when the action has
+  no emission. The audit UI shows the name on journey cards and list
+  meta lines, falling back to the id.
+
+Enable with `init_journeys(app)` (or on a blueprint for scoped
+opt-in). Services whose browser surface is the login flow itself
+(campus.auth) or that serve no browser pages (campus.api) register
+with `mint_on_navigation=False`: adopt-only, so SDK-forwarded headers
+still join their spans to the caller's journey. The SDK
+(`campus_python.tracing`) forwards `X-Journey-ID` — and the journey's
+`X-Journey-Name` label, when one is active (#952) — on outbound calls
+made inside a journeyed request. A decorated view's name wins over a
+forwarded header name.
+
+## Authentication (`AUDIT_API_KEY`)
+
+Producers authenticate to the audit API with a **Bearer `audit_v1_` API
+key**. Set it on each producer:
+
+```bash
+AUDIT_API_KEY=audit_v1_<22-char-base64url>
+```
+
+Priority in `campus.audit.client`:
+
+1. `AuditClient.json_client_class` (test injection only)
+2. `AUDIT_API_KEY` — explicit Bearer auth, scoped to the audit client
+   only (#699)
+3. Ambient env (`ACCESS_TOKEN`, then `CLIENT_ID`/`CLIENT_SECRET` Basic)
+
+**Never** set `ACCESS_TOKEN=<audit key>` to "fix" auth: that variable is
+ambient/shared — every other `DefaultClient` consumer on the producer
+would silently inherit the header. `AUDIT_API_KEY` exists precisely to
+avoid that footgun. The audit API itself rejects Basic auth with a clear
+401; Bearer + valid `audit_v1_` format + match against the `apikeys`
+table is the only accepted scheme.
+
+## Minting and bootstrapping keys
+
+Key scopes follow the `#575` model: producers hold `traces:*` scopes
+(`traces:write` to ingest spans, `traces:read`/`traces:search` to
+query); the **operator key** holds `apikeys:read`/`apikeys:write` plus
+`traces:write` — it bootstraps keys and ingests traces, but holds no
+trace-READ scope: reading traces is a human activity, done through the
+web UI / CLI with a person's own credentials (superadmin OAuth or a
+`traces:read` key), never the deployment's service credential
+(2026-10-21 ruling). A producer key can neither create keys nor
+elevate itself.
+
+**Bootstrap (operator key):** set `AUDIT_OPERATOR_API_KEY=<plaintext>`
+on the campus.audit deployment. The service seeds it at startup under
+the fixed id `uid-apikey-operator-0000` (config:
+`AUDIT_OPERATOR_API_KEY_ID`) with `AUDIT_OPERATOR_API_KEY_SCOPES`,
+following the same idempotent startup-seed pattern as campus.auth's
+public client: an existing record is never modified — rotate by
+deleting that record and restarting with a new value. Deployments
+seeded before the 2026-10-21 narrowing (whose operator key still holds
+`traces:read`/`traces:search`) rotate the same way to pick up the
+narrowed list: delete the record and restart — the same
+`AUDIT_OPERATOR_API_KEY` value re-seeds with the current scope list,
+no new secret needed. Manual recovery /
+initial setup: `AUDIT_OPERATOR_API_KEY=… python
+scripts/seed_audit_operator_key.py`. Generate the plaintext with
+`secret.generate_audit_api_key()` (`audit_v1_` + 22-char base64url);
+keep it out of the repo.
+
+**Subsequent (producer) keys:** `POST /audit/v1/apikeys/` with the
+operator key (name, owner_id, `scopes` such as
+`"traces:write,traces:read"`); the response contains the plaintext.
+Set it as `AUDIT_API_KEY` on the producer.
+
+**Named roles (#918).** Instead of a scope list, a request may name a
+role — a reviewed bundle of scopes, so the issuer grants a privilege
+rather than assembling one by hand:
+
+| Role | Grants |
+|---|---|
+| `traces-viewer` | `traces:read` |
+| `traces-searcher` | `traces:read`, `traces:search` |
+| `traces-producer` | `traces:read`, `traces:search`, `traces:write` |
+| `key-operator` | `apikeys:read`, `apikeys:write` |
+
+`POST /audit/v1/apikeys/` with `{"role": "traces-viewer"}` creates a key
+with that bundle; `PATCH /audit/v1/apikeys/<id>/` with a `role` re-scopes
+one the same way. A role and an explicit scope list are mutually
+exclusive, an unknown role is refused with a message naming the roles
+that exist, and a raw scope list still works everywhere — the
+catalogue is additive. No role resolves to a wildcard: the operator
+key deliberately holds none, and a standing `*` role would be a
+privilege-escalation footgun in the one place keys get minted.
+
+Verify a key works: `GET /audit/v1/traces/` with
+`Authorization: Bearer <key>` → 200 (401 on failure).
+
+## Browser access (who can open the trace viewer)
+
+Minting a key is only half of granting access — the trace viewer at
+`/audit/` has its own gate, with two capabilities
+(`campus/audit/docs/web-ui-requirements.md` §5.2). A session must
+hold the one the surface needs:
+
+| Capability | Campus account | API key |
+|---|---|---|
+| `can_view_traces()` — trace pages, `/audit/api/*` | on the `AUDIT_ADMINS` list | key holding `traces:read` |
+| `can_manage_keys()` — mint, re-scope, rotate, revoke keys | on the `AUDIT_ADMINS` list | key holding `apikeys:write` |
+
+`AUDIT_ADMINS` is the campus.audit **superadmin** list: a member may
+manage API keys *and* read traces. An API key is granted scope by
+scope, exactly like the versioned API — a `traces:read` key reads
+traces and nothing else. The seeded operator key holds both
+capabilities (its scope set is the superadmin shape).
+
+Two ways to give a person browser access:
+
+- **A Campus account** — add their campus.auth email to `AUDIT_ADMINS`
+  **on the campus-admin portal deployment** (dev:
+  `campus-admin.up.railway.app`). The audit UI runs inside the portal
+  (the UI moved out of campus.audit; the portal proxies the versioned
+  API), so the gate reads the **portal's** env — setting the variable
+  on the campus.audit service has no effect on the UI (observed live
+  2026-11-10: the var must be present when the portal deployment
+  starts; Railway env changes need a redeploy to apply). Gate
+  membership is matched on the signed-in user's campus email.
+  Keep the list tiny (≤ 5): a superadmin can mint keys for anyone.
+- **An API key** — mint one with `traces:read` and hand it over. The
+  holder signs in at `/audit/login/key` (development only, #915) and
+  sees the trace viewer; the key never leaves their hands, and
+  revoking it ends their access on the next request.
+
+An audit API key is a bearer credential: whoever holds it can read
+every trace in the deployment. Mint one per person, with the
+narrowest scope that does the job and an expiry.
+
+In the development environment, the audit web UI has a key-management
+page (`/audit/keys`) where an operator can do all of this in the
+browser — list, mint, re-scope, rotate, revoke. It is gated on the
+key-management capability (§5.2) and acts as the session, so the audit
+trail attributes each change to whoever made it.
+
+## Enabling on a deployment
+
+1. Set `AUDIT_API_KEY=<key>` on the producer.
+2. Set `AUDIT_TRACING_ENABLED=1` (and `AUDIT_EVENTS_ENABLED=1` if event
+   coverage is wanted) and redeploy.
+3. Generate traffic and confirm spans appear in the audit UI (`/audit/`)
+   or `GET /audit/v1/traces/`. Watch producer logs for
+   `Failed to ingest trace span` warnings.
+
+Roll out one producer at a time (canary) — ingestion is fail-safe, so a
+misconfigured producer only loses spans, never requests.
+
+## Rate limiting on ingest (#831)
+
+`POST /audit/v1/traces/` enforces a per-minute token bucket per
+identity, keyed by the span's tagged identity in priority order:
+`client_id`+`user_id` pair → `user_id` → `client_id` → the producer
+API key (identity-less spans, e.g. pre-auth login hops). Device IDs are
+deliberately not a key (ephemeral, unbounded cardinality).
+
+- Over-limit batches are denied whole with `429 RATE_LIMITED`, a
+  `Retry-After` header, and the tripped bucket key in
+  `error.details.bucket`. 429s are logged at WARN by audit and never
+  recorded as spans.
+- Legit services should never come near the limit; a WARN 429 is the
+  misconfiguration-detection signal.
+- Config: `AUDIT_RATE_LIMIT_PER_MINUTE` on **campus.audit** (default
+  600, pending tuning against real dev traffic).
+- Producers keep failing open today; the follow-on campus-python
+  circuit breaker (#831) will 503 producer requests while a bucket is
+  tripped. Design:
+  [Phase 3 design on #538](https://github.com/nyjc-computing/campus/issues/538#issuecomment-5996377544).

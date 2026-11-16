@@ -1,0 +1,34 @@
+#!/bin/bash
+# Pre-push hook: Run sanity checks before allowing push to GitHub
+# 
+# This hook prevents pushing code that would fail the CI/CD sanity checks.
+# It catches common issues early without waiting for GitHub Actions.
+#
+# Install with: git config core.hooksPath .githooks
+# Bypass with:  git push --no-verify
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}🔍 Running sanity checks before push...${NC}"
+
+# Check if poetry is installed
+if ! command -v poetry &> /dev/null; then
+    echo -e "${RED}❌ Poetry not found. Install with: pip install poetry${NC}"
+    exit 1
+fi
+
+# Run sanity checks
+if poetry run python tests/sanity_check.py; then
+    echo -e "${GREEN}✅ Sanity checks passed! Proceeding with push...${NC}"
+    exit 0
+else
+    echo -e "${RED}❌ Sanity checks failed! Push blocked.${NC}"
+    echo -e "${YELLOW}Fix the issues and try again, or use: git push --no-verify${NC}"
+    exit 1
+fi

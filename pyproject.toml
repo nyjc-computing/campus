@@ -4,46 +4,103 @@
 
 [tool.poetry]
 name = "campus-suite"
-version = "0.1.0"
+version = "0.24.0"
 description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
 packages = [{include = "campus"}]
 
 [tool.poetry.dependencies]
-python = ">=3.11.0,<3.12"
+# Python support tiers (python.org release status):
+# - security (3.11-3.13): officially supported; CI-required.
+# - bugfix (3.14): unofficial ("not yet but eventually"); CI-tested with
+#   failures allowed; never deployed to prod.
+python = ">=3.11.0,<3.15"
+
+# Campus internal dependencies
+# Typed API client (campus_python) - consumed as the campus-api-python v0.10.3 release wheel (the venues client, campus#1099)
+campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.3/campus_api_python-0.10.3-py3-none-any.whl"}
+# Stable kernel (campus.common) - consumed as the campus-common v0.3.1 release wheel (#970 phase 3; #1041 adds campus.common.protocol)
+campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.3.1/campus_common-0.3.1-py3-none-any.whl"}
+# Domain models (campus.model) - consumed as the campus-model v0.2.0 release wheel (documents-backed Venue for the venues surface, campus-model#9/campus#1099)
+campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.2.0/campus_model-0.2.0-py3-none-any.whl"}
+# Deployment glue (campus.deploy) - consumed as the campus-deploy v0.1.0 release wheel (#970 phase 3, campus#1042); the in-repo module is removed
+campus-deploy = {url = "https://github.com/nyjc-computing/campus-deploy/releases/download/v0.1.0/campus_deploy-0.1.0-py3-none-any.whl"}
+# Flask consumer layer (campus.flask_campus + audit middleware/client/http) - consumed as the flask-campus v0.1.14 release wheel (venues pin rebuild: campus-model v0.2.0 + SDK v0.10.3, flask-campus#18/campus#1099); the in-repo modules are removed
+flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.14/flask_campus-0.1.14-py3-none-any.whl"}
+# Storage + webauth + services (campus.storage/webauth/services) - consumed as the campus-core v0.1.5 release wheel (#970 phase 3, campus#992; v0.1.5 re-pins campus-model v0.2.0 per campus#1099); the in-repo packages are removed. The suite keeps its direct
+# psycopg2/pymongo/boto3 pins below (campus-core's drivers are extras; the suite needs all three).
+campus-core = {url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.5/campus_core-0.1.5-py3-none-any.whl"}
 
 # Client library dependencies (minimal for HTTP requests)
-requests = "^2.32.4"
-
-# Deployment orchestration dependencies (all services) - required for deployment
+bcrypt = "^5.0.0"
 flask = "^3.0.0"
-bcrypt = "^4.2.1"
+jsonschema = "^4.23.0"
+requests = "^2.32.4"
 psycopg2-binary = "^2.9.0"
 pymongo = {extras = ["srv"], version = "^4.13.2"}
-gunicorn = "^21.2.0"
+boto3 = "^1.35.0"
+
+# Deployment orchestration dependencies (all services) - required for deployment
+gunicorn = "^26.2.0"
 werkzeug = "^3.0.0"
 
-[tool.poetry.extras]
-# Optional dependency groups for deployment modes
-vault = ["flask", "bcrypt", "psycopg2-binary", "gunicorn", "werkzeug"]
-apps = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
-full = ["flask", "bcrypt", "psycopg2-binary", "pymongo", "gunicorn", "werkzeug"]
-
 [tool.poetry.group.dev.dependencies]
-pylint = "^3.0"
+ruff = "^0.16.9"
+pyright = "^1.1.391"
+openapi-spec-validator = "^0.7.2"
+boto3-stubs = "^1.42.57"
 
 [tool.poetry.scripts]
 campus = "main:main"
 
 [tool.pyright]
 useLibraryCodeForTypes = true
-exclude = [".cache"]
+extraPaths = ["."]
+venvPath = "."
+venv = ".venv"
+exclude = [".cache", ".venv/Lib/site-packages/campus_python", "**/node_modules", "**/__pycache__", "**/.*", ".venv"]
+reportIncompatibleMethodOverride = "none"
+stubPath = ""
 
 [tool.ruff]
-select = ['E', 'W', 'F', 'I', 'B', 'C4', 'ARG', 'SIM']
-ignore = ['W291', 'W292', 'W293']
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# ARG omitted: unused-argument flags Campus's signature-contract pattern
+# (route handlers bound by unpack_request, interface-conform resource
+# methods) repo-wide; revisit if the routing layer changes.
+select = ['E', 'W', 'F', 'I', 'B', 'C4', 'SIM']
+# Policy (2026-09-30): ruff enforces style; humans rewrite code. Autofixes
+# are disabled repo-wide because they are semantics-preserving only for
+# common types - e.g. SIM118 rewrote `for k in sqlite_row.keys():` into
+# direct iteration, which is correct for dict but breaks sqlite3.Row
+# (iterating it yields values, not column names). Use `ruff check --diff`
+# to review suggested rewrites, then apply them deliberately per site.
+fixable = []
+ignore = [
+    'W291', 'W292', 'W293',  # trailing whitespace: formatting, not lint
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Legacy one-off scripts predating the campus package (the `apps` module no
+# longer exists); kept for history, not executed.
+"migrations/*" = ['F821']
+# scripts/ bootstraps sys.path before importing campus - intentional.
+"scripts/*" = ['E402']
+# Device-verification route embeds a full HTML/CSS/JS template as a string
+# literal; wrapping template lines churns served HTML for no gain.
+"campus/auth/routes/oauth.py" = ['E501']
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff.lint.isort]
+# campus is a PEP 420 namespace spanning multiple distributions: after the
+# campus-common carve, campus.common is no longer in this repo's tree, so
+# ruff's src-based first-party detection would classify it third-party and
+# flag mixed import blocks as unsorted (I001). Pin the whole campus
+# namespace first-party.
+known-first-party = ["campus"]
