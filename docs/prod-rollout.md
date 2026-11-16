@@ -1,167 +1,311 @@
-# Production rollout — per-integration upstream OAuth clients
+# Production deployment playbook
 
-Runbook for the last open lane of the per-integration upstream OAuth work
-(nyjc-computing/campus#733; design and decisions in #730). Everything below
-is **user-gated**: it stands up new production services, creates Google
-Workspace (GCP Internal) clients, and mutates production data.
+Operational playbook for standing up and updating services in the Railway
+**production** environment — the deployment sequence, the credentials map,
+and the traps that have actually bitten (each with its root cause, so the
+fix survives personnel changes).
 
-## Current state (2026-11-16 standup)
+> **Maintenance rule**: this document encodes the audit / authentication /
+> authorization flows as they are wired today. Any change to those flows —
+> new invariants in `docs/auth-token-invariants.md`, new client types, new
+> vault labels, changes to the circles model — must update the matching
+> section here in the same PR. The speedbump catalog (§7) is append-only:
+> add every new trap you hit, with its root cause.
 
-The production environment was stood up on 2026-11-16 (prep for the
-`weekly` → `main` merge):
+Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
+Environments: `development` (weekly, autodeploys), `staging`,
+`production` (`d5221f3b`), `production-legacy` (July-2025 fossil, pending
+retirement).
 
-- **Fleet live and green**: campus.auth, campus.api, campus.audit,
-  campus-gateway (+ their per-service databases). All `/health`
-  endpoints return 200 and gateway dispatch is verified
-  (`/api/openapi.json`, `/integrations/v1/`, `/audit/v1/`).
-- **Topology**: a fresh `production` environment duplicated from
-  development; the July-2025 fossil environment was kept as
-  `production-legacy` (untouched; retirement is a separate decision).
-  Services initially deploy from `weekly` with autodeploy off; the
-  branch flip to `main` is the merge-moment cutover (below).
-- **Databases**: per-service postgres x3 + mongodb x2 with fresh
-  credentials; volumes attached. Prod blocks `init_from_model`, so
-  tables were created by one-off `ENV=development` init runs and the
-  auth migration ledger stamped (see the mirror in
-  [migration-protocol.md](migration-protocol.md)). Migration 011
-  (calendar) was applied to **campus.api's postgres** — where
-  `campus.api` reads it (dev parity) — not the auth DB the runner
-  runs in; the ledger records it in the auth DB either way.
-- **Seeded**: `guest` public client; confidential clients
-  `campus-api-production` (api service credential) and
-  `campus-admin-production` (operator, `AUTH_OPERATOR_CLIENT_IDS`);
-  vault records `campus.yapper`/`YAPPERDB_URI` (yapper role + database
-  created in the auth postgres) and `campus.api`/`campus.auth`
-  `SECRET_KEY`s; vault access grants for both clients; audit operator
-  API key (auto-seeded at audit startup from
-  `AUDIT_OPERATOR_API_KEY`).
-- **Gateway**: nginx path-dispatch, same template as dev (private
-  upstreams); domain `campus-gateway-production.up.railway.app`
-  (port 8080). The audit/gateway domains claimed their clean names;
-  auth/api were globally taken and carry Railway's random suffix
-  (`campusauth-production-25f09d8e`, `campusapi-production-feab0369`).
-- **Bucket**: `campus-api-bucket-prod` (sin) with literal
-  `BUCKET_*` credentials on campus.api (dev pattern).
-- **Known gap — mongodb**: the two mongo volumes initialized with
-  Railway-generated root passwords that predate the credential vars
-  (volume-attach race during standup). The wipe+reinit is
-  user-gated (volume deletion is dashboard-only): see
-  "Remaining user-gated steps" below. Until then every
-  mongo-backed flow (login sessions, device codes, tokens, timetable
-  entries, circles members, hosted apps) fails at the DB.
+Railway API/CLI recipes and their sharpest edges live in the
+`railway-ops` skill (`.zcode/skills/railway-ops/SKILL.md`); this document
+is the playbook — what to do, in what order, and why.
 
-### Remaining user-gated steps
+## 1. Environment model (read first)
 
-1. **Mongo credential repair** (blocking): delete the
-   `campus.auth-mongodb-volume-*` and `campus.api-mongodb-volume-*`
-   volumes of the production environment in the Railway dashboard,
-   then redeploy both mongo services — fresh volumes re-run initdb
-   with the `MONGO_INITDB_ROOT_*` variables already set.
-2. **GCP trio** (Workspace console, Internal classification):
-   `campus` (identity login) and `campus-classroom` clients, redirect
-   URIs per the dev pattern with the prod origins. Seed the matching
-   `google` / `google.classroom` vault labels in prod auth.
-3. **campus-admin production** (consumer repo): needs the operator
-   client secret — rotate `campus-admin-production`'s secret via the
-   credentials API when wiring it (the standup-only secret was
-   discarded). `AUDIT_ADMINS` for the audit UI lives on the
-   campus-admin portal, not campus.audit.
-4. **Legacy cleanup** (optional, non-blocking): retire
-   `production-legacy` (fossil campus.api/vault + "Campus DB") and
-   the CRASHED staging `campus.vault`; decide on the
-   `*.campus.nyjc.app` custom domains (currently attached to the
-   legacy instances).
-5. **Weekly → main merge**: see "Cutover" below.
+- A **service is a project-global entity** (name unique per project) with
+  one **instance per environment**. Instance-scoped: source branch,
+  variables, domains, volumes, deploy settings. Entity-scoped: name, repo.
+  Renaming an entity renames it in **both** environments' canvases.
+- **Naming convention**: suffix-less = prod. Services shared across
+  environments keep the suffix-less name (it *is* the prod name). Services
+  exclusive to dev carry `-dev` (`campus.auth-mongodb-dev`,
+  `campus.api-mongodb-dev`, `campus.api-bucket-dev`, the consumer repos'
+  dev deployments once their prod ghosts are removed). Volumes follow:
+  `*-dev-volume` vs plain.
+- **Prod instances currently auto-deploy from `weekly`** (autodeploy was
+  inherited from the dev duplication and is on). Every push to weekly
+  redeploys the prod fleet. The weekly → main merge cutover flips each
+  prod instance's source branch to `main` (§6) — after that, prod tracks
+  main.
+- **Private endpoints are pinned per instance** (`campus-auth`,
+  `auth-mongodb`, `postgres-94e0`, …). Renaming a service does **not**
+  move its endpoint; two environments share endpoint *names* but not
+  networks. Verify with `railway private-network status -s <svc> -e <env>`;
+  rename with `railway private-network update … <short-name>`.
+- **Public domains are pinned per instance** too. Renaming a service does
+  not reassign its domain. Prod domains today: `campusauth.up.railway.app`,
+  `campusapi.up.railway.app`, `campusaudit.up.railway.app`,
+  `nyjc-campus.up.railway.app` (gateway; the clean `campus.up` and
+  `campus-gateway.up` names were globally claimed and Railway silently
+  appends random suffixes on conflict — always re-list domains after a
+  rename).
+- The master admin account is **`campus-admin@nyjc.edu.sg`**
+  (`AUTH_SUPER_ADMIN` bypass on auth, `campus-admin` circle member,
+  all `<resource>.admin` role circles, `AUDIT_ADMINS` on the admin
+  portal).
 
-## Cutover: merging weekly → main
+## 2. Credentials map
 
-The production instances currently deploy from `weekly` with
-autodeploy **off** (so weekly pushes touch only dev). At the merge:
+| Credential | Lives in | How minted / rotated |
+|---|---|---|
+| Campus OAuth client rows | auth postgres `vault_clients` (name, redirect_uris, allowed_scopes, upstream_scopes, token_bridge, `secret_hash`) | direct row insert (HMAC via `secret.hash_client_secret(secret, key=auth SECRET_KEY)`) or the credentials API; client ids via `uid.generate_category_uid("client", 8)` |
+| Client secrets (plaintext) | `CLIENT_SECRET` var on the consuming service's prod instance | generated once at mint (`secret.generate_client_secret()`); only the hash is stored — **losing the plaintext means rotating** |
+| Operator wiring | `AUTH_OPERATOR_CLIENT_IDS` on prod auth (literal) | points at `campus-admin-production` (`uid-client-6ec13381`). **Intentionally a literal**, not the dev-style `${{campus-admin.CLIENT_ID}}` reference — prod's campus-admin instance carries the *dev* client id until that repo deploys to prod |
+| `SECRET_KEY` (auth) | env var on prod auth **and** vault row `campus.auth/SECRET_KEY` (same value; env wins via `getsecret` precedence) | `token_urlsafe(48)`; HMAC key for client-secret hashing — rotating it invalidates every stored client secret hash |
+| `SECRET_KEY` (api, audit, admin, classroom, apphost, profile, nyxchange) | `SECRET_KEY` env var per service (+ vault row `campus.api/SECRET_KEY`) | fresh `token_urlsafe(48)` per service |
+| Postgres passwords | `POSTGRESDB_URI` on the consuming app (prod), `DATABASE_URL`/`POSTGRES_PASSWORD` on the DB service | `databasePasswordReset` mutation (`databaseType: "postgres"`). **Trap**: the response's `newPassword` is the real password; the `DATABASE_URL` it writes is **wrong** — after rotating, fix `DATABASE_URL`/`PGPASSWORD` vars to the truth *before* anything references them |
+| Mongo credentials | `MONGO_INITDB_ROOT_USERNAME/PASSWORD` on the DB service (init-time only) + `MONGODB_URI` on consuming apps | initdb runs once on first boot of an empty volume — **credentials must exist at service creation**, not patched in after |
+| Bucket keys | `BUCKET_*` on prod campus.api as references `${{campus.api-bucket.*}}` | `railway bucket credentials --bucket campus.api-bucket -e production`; bucket instances are per-environment (same entity, per-env keys) |
+| Audit producer keys (`traces:write`) | `AUDIT_API_KEY` on each producer | minted via `POST /audit/v1/apikeys/` with the operator key bearer; response field `api_key` is the plaintext (shown once) |
+| Audit UI key (`traces:read`, `apikeys:read`, `apikeys:write`) | `AUDIT_UI_API_KEY` on the admin portal | same mint route, name `campus-admin audit UI` |
+| Audit operator key | `AUDIT_OPERATOR_API_KEY` on prod audit | auto-seeded at audit startup into the audit DB (`uid-apikey-operator-0000`); rotate = delete row + new env value + redeploy |
+| Google identity / classroom | vault labels `google/CLIENT_ID,CLIENT_SECRET` and `google.classroom/CLIENT_ID,CLIENT_SECRET,SCOPES,CONNECT_TARGETS` | GCP console (user) + `scripts/seed_integration.py` (classroom; needs a vault-write client) / direct insert (identity) |
+| GitHub / Discord OAuth apps | vault labels `github/CLIENT_ID,CLIENT_SECRET`, `discord/…` | **not yet seeded on prod** — user creates the apps; callbacks `https://campusauth.up.railway.app/auth/v1/{github,discord}/callback`; four vault rows, nothing else |
+| Yapper DB | vault `campus.yapper/YAPPERDB_URI` — a `yapper` role + database **inside the auth postgres**; yapper's tables self-create (raw DDL, not env-blocked) | create role+database in auth postgres, then the vault row |
 
-1. Merge `weekly` into `main` (CI runs on the PR; keep the three
-   devcontainer-only commits that only exist on `main`).
-2. Flip each production instance's source branch `weekly` → `main`
-   (service settings → Deploy → branch, for campus.auth, campus.api,
-   campus.audit, campus-gateway) and re-enable autodeploy.
-3. The merge commit's push to `main` then deploys the fleet. Watch
-   the deploy queue; a first-boot WARN naming pending migrations
-   means a new migration needs the manual runbook above.
-4. Smoke: gateway `/health`, `/api/openapi.json`,
-   `/integrations/v1/`, `/audit/v1/health`, direct auth `/health`.
+Why literals vs references: DB/bucket/domain wiring uses **Railway
+references** (`${{…}}`) where possible — they self-heal on rotation
+(the auth-postgres password rotation incident proved literals rot).
+Credentials that reference *other environments' state* (the operator
+client id) stay literals. Client secrets are env vars by design — the
+auth DB stores only HMAC hashes.
 
-## Runbook (order matters)
+## 3. Deploying a NEW service to prod (staggered sequence)
 
-1. **Stand up prod `campus.auth`** (plus `campus.auth-postgres`, and Mongo
-   if used) in the Railway production environment. Mirror the dev service's
-   variables (`railway variables --service campus.auth --json`), with
-   `ENV=production` and the prod `PUBLIC_URL`.
+Do these in order; each phase depends on the previous. "Blocked" items
+are user-gated and called out.
 
-   > **Database topology caution (2026-10-27 dev lesson):** create each
-   > database as its own real deployment and point each service's URI var
-   > at *that service's* private endpoint — never attach a database
-   > *reference* to another service's instance. Dev's `campus.auth-mongodb`
-   > had been a reference into `campus.api-mongodb`, silently running auth
-   > and api on one shared mongod until the endpoint regularization
-   > (mongo:8.3.13) surfaced it. When mirroring dev variables, take the
-   > endpoint from the owning service's `RAILWAY_PRIVATE_DOMAIN`, and
-   > rotate each database's root password independently after standup.
+### Phase 1 — data stores
+1. Create the DB service **with credentials in the creation payload**
+   (`serviceCreate(variables=…)` / `railway add --variables …`).
+   *Why*: a volume attach on a fresh DB service triggers its first boot;
+   if credentials land after that boot, the datadir initializes with
+   generated passwords and the fix is painful (postgres needs
+   `databasePasswordReset` — trust `newPassword`, its `DATABASE_URL`
+   output lies — mongo needs full recreation; volumes are
+   dashboard-delete-only).
+2. Attach the volume (`volumeCreate`, mount path per image) and set the
+   start command (mongo: `docker-entrypoint.sh mongod --ipv6 --bind_ip
+   ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false`).
+3. Rename the private endpoint to the convention short-name if the
+   default derivation doesn't match (`railway private-network update`).
+4. Deploy, wait SUCCESS, then verify connectivity through a temporary
+   `railway tcp-proxy create` (ping/auth with the intended credentials)
+   — **delete the proxy afterwards**.
 
-2. **Apply migrations**: `railway ssh -s campus.auth -e production` →
-   `python migrations/runner.py apply` — runs every pending revision in
-   order and records each outcome in the ledger. Expected pending: 003–009;
-   001/002 record as historical (their target tables predate the current
-   service topology). Verify with `python migrations/runner.py status`,
-   then update the mirror table in [migration-protocol.md](migration-protocol.md).
+### Phase 2 — schema bootstrap (prod blocks `init_from_model`)
+1. Open a temporary tcp proxy to the DB and run the service's
+   storage init one-off with `ENV=development` for the *process only*
+   (the storage DDL layer is `@block_env(PRODUCTION)` — the audit
+   crash (#1100) is what happens when a service boots without this
+   being understood).
+2. Stamp the migration ledger (`runner.py ensure` + `stamp`; 001/002
+   `--as historical`). Read each migration's docstring for its target
+   DB — the runner executes in the auth context, but tables can belong
+   to another service's DB (011/calendar landed in **api** postgres).
+3. Seed bootstrap data: circles graph (see §5), vault labels the
+   service reads, vault access grants for its client.
 
-3. **Seed vault labels** via `scripts/seed_integration.py
-   --base-url <prod-url>` (supports `--dry-run`): `google` (identity —
-   the prod `campus` GCP client) and `google.classroom` (the prod
-   `campus-classroom` GCP client). `google.calendar` stays a registry
-   stub — no vault label until a consumer exists.
+### Phase 3 — app service
+1. Create the service instance (new entity for a genuinely new service;
+   prod entities for cross-env services can't be re-materialized after
+   instance deletion — see §7.6).
+2. Set **all** variables with `skipDeploys` before any deploy. Minimum
+   set per service: `DEPLOY`, `ENV=production`, `PUBLIC_URL`
+   (`https://${{RAILWAY_PUBLIC_DOMAIN}}`), `HOSTNAME`
+   (`${{RAILWAY_PUBLIC_DOMAIN}}`), `BASE_URL` (gateway origin),
+   DB URIs as references (`${{"campus.auth-postgres".DATABASE_URL}}`
+   — **quoted** service names; unquoted dotted names resolve empty),
+   audit keys, client credentials.
+3. Start command binds `[::]` (mesh is IPv6-only). Healthcheck path
+   `/health` when the app implements it (most prod services don't yet,
+   #1107).
+4. Deploy. **Verify a non-SKIPPED deployment row appears** — see §7.4.
 
-   Also configure the **files object-storage credentials** as
-   `campus.api` environment variables (keys `BUCKET_NAME`,
-   `BUCKET_ENDPOINT`, `BUCKET_ACCESS_KEY_ID`, `BUCKET_SECRET_ACCESS_KEY`,
-   `BUCKET_REGION`): create a prod Railway storage bucket, then set each
-   variable as an internal reference to the bucket's own variables
-   (dev pattern, 2026-10-30 — e.g.
-   `BUCKET_NAME=${{"campus.api-bucket".BUCKET}}`; note the bucket's
-   S3-name variable is `BUCKET`, and service names with dots need
-   quoting in references). Environment variables are resolved before
-   the deployment vault, so no vault seeding is needed. Production
-   `ENV` forces the Railway bucket backend for
-   `campus.storage.get_bucket`, so every file operation fails with a
-   missing-credential `OSError` until these variables exist.
+### Phase 4 — auth wiring
+1. Mint the service's campus client (vault_clients row + HMAC secret
+   under auth's `SECRET_KEY`), set `CLIENT_ID`/`CLIENT_SECRET` on the
+   service, and add vault access grants it needs (mirror the dev
+   client's grants; bits: 1 = read, 15 = full).
+2. Browser-login consumers: set `redirect_uris` to their prod
+   `…/finalize_login` (+ `http://localhost:5000/finalize_login` where
+   dev has it). Token-bridge consumers (classroom): copy
+   `upstream_scopes` + `token_bridge` verbatim from the dev client and
+   add the `campus.yapper` read grant.
+3. `AUTH_SUPER_ADMIN` / `AUTH_OPERATOR_CLIENT_IDS` / `AUDIT_ADMINS`
+   are deployment-policy decisions (see §1 and §5) — not per-service.
 
-4. **GCP trio (Workspace console; Internal classification)**: `campus`
-   (identity login), `campus-classroom`, and `campus-calendar` (only when
-   that consumer exists). Redirect URIs follow the dev pattern — the
-   classroom vault client needs
-   `<prod-auth>/auth/v1/google/classroom/callback`; the identity client's
-   callback is as registered on the dev `campus` GCP client with the prod
-   origin (see [auth-login-flow.md](auth-login-flow.md)).
+### Phase 5 — login + audit wiring
+1. Verify `/auth/v1/oauth/device_authorize` issues codes (exercises
+   client lookup, mongo write, yapper) and `/auth/v1/google/authorize`
+   redirects with the right client (needs the GCP client + vault label).
+2. If the service emits traces: mint its `traces:write` producer key
+   and set `AUDIT_API_KEY`. If it views traces (admin portal): mint the
+   `traces:read` + `apikeys:read`+`write` UI key.
+3. Full verification sweep: gateway `/health`, service `/health`s,
+   `/api/openapi.json`, `/integrations/v1/`, one authenticated flow.
 
-5. **Prod client allowlists**: PATCH each prod consumer client with
-   `upstream_scopes: {"google.classroom": [<9 classroom scopes +
-   userinfo.email + userinfo.profile>]}` and `token_bridge: true` — copy
-   the verbatim value from dev's `uid-client-ef56f01c`, which carries ONLY
-   the `google.classroom` key (the `google` key is retired; prod jumps
-   straight to the end-state). The credentials API is campus-only (basic
-   auth, invariant B1) — never expose it to consumer apps.
+### Blocked / user-gated steps (current)
+- GCP OAuth clients in the Google console: identity done 2026-11-16;
+  classroom pending (vault seeding is scripted once created).
+- GitHub / Discord OAuth apps — pending; four vault rows once created.
+- Repo releases for consumers whose `main` is stale (profile, nyxchange).
 
-6. **Consumer prod deploys** (campus-classroom, campus-profile) ride their
-   own repos' prod lanes, after prod `campus.auth` is live.
+## 4. Updating EXISTING services
 
-7. **Close out**: tick the prod box in #733 and update the migration
-   mirror; #733 can then close.
+1. Code changes ride **weekly** → autodeploy touches prod too (see §1).
+   After a merge, poll the prod deployment row for the service and
+   confirm it is not SKIPPED (§7.4).
+2. Variable changes: `variableUpsert(skipDeploys: true)` for the batch,
+   then ONE redeploy (`deploymentRedeploy` of the ACTIVE deployment —
+   the reliable trigger). Prefer references over literals so future
+   rotations don't need app redeploys.
+3. Credential rotations: rotate → fix the *authoritative* var → fix
+   everything that copied it → redeploy consumers. After a postgres
+   `databasePasswordReset`, immediately correct `DATABASE_URL`/`PGPASSWORD`
+   (they lie) — then any `${{…DATABASE_URL}}` references resolve true.
+4. Domain changes: `serviceDomainUpdate` then update every var that
+   embeds the domain, then redeploy those services. Client
+   `redirect_uris` that embed the domain need a DB/API update too.
+
+## 5. Bootstrap data on prod (what exists and why)
+
+- **Circles** (api mongo `campus_api.circles`): meta doc + root circle
+  `nyjc.edu.sg` → 7 resource circles (`circles`, `timetable`,
+  `assignments`, `bookings`, `submissions`, `subjcombi`, `venues`),
+  each with an `.admin` role circle whose member is
+  `campus-admin@nyjc.edu.sg: 15`; the `campus-admin` circle (admin
+  portal gate) also carries the master account; the meta doc points at
+  the root. Members are keyed by **email string** (not uid). New
+  resources add their pair on dev at startup — prod needs the manual
+  pair (or the circles-bootstrap fix, #1103 family).
+- **Vault labels**: `campus.api/SECRET_KEY`, `campus.auth/SECRET_KEY`,
+  `campus.yapper/YAPPERDB_URI`, `google/*`, `google.classroom/*`
+  (SCOPES = canonical 9; CONNECT_TARGETS = profile-prod +
+  classroom-prod). Vault access grants: api client `bits=1` on
+  campus.api / campus.yapper / google / smtp; admin client `bits=15` on
+  campus / google; classroom client `bits=1` on campus.yapper.
+- **Clients**: guest (public), campus-auth-production,
+  campus-api-production, campus-admin-production (operator),
+  campus-classroom-production (token_bridge + upstream_scopes verbatim
+  from dev), campus-profile-production, nyxchange-timetable-production.
+  campus-apphost shares classroom-production's client.
+- **Audit keys**: operator (auto-seeded), campus-admin tracing +
+  campus-admin audit UI + classroom-tracing + profile-tracing (minted
+  2026-11-16 via the audit API — mint requests require `owner_id`).
+- **A10 amendment (#1110, 2026-11-16)**: the login-session
+  re-acquisition route allows the operator **when it owns the session**
+  — required because the admin portal doubles as operator and session
+  owner; the previous unconditional operator bar 403'd every gated
+  admin view on both environments. If the authz model changes again,
+  re-check §2's operator row and this paragraph together.
+
+## 6. weekly → main merge cutover
+
+1. Merge `weekly` into `main` (CI runs on the PR; keep main's three
+   devcontainer-only commits).
+2. Flip each prod instance's source branch `weekly` → `main`
+   (`serviceConnect(id, input:{repo, branch})`). Autodeploy is already
+   on — the flip is what re-points prod at the release branch.
+3. The merge push then deploys prod. Watch for first-boot migration
+   WARNINGS (fail-open, auth ledger only today — #1104).
+4. Smoke: gateway `/health`, `/api/openapi.json`, `/integrations/v1/`,
+   `/audit/v1/health`, auth `/health`, one device-flow + one browser
+   login.
+
+## 7. Speedbump catalog (append-only)
+
+1. **Volume-attach race**: attaching a volume to a fresh DB service
+   triggers its first boot; credentials landing after that are ignored
+   (datadir initialized). Postgres recovery: `databasePasswordReset`;
+   mongo: no reset — recreate the service. Prevention: credentials in
+   the creation payload, before anything can boot.
+2. **`databasePasswordReset` lies**: response `newPassword` is the real
+   password; the `DATABASE_URL`/vars it writes are not. Fix them
+   manually after rotating.
+3. **No cross-env instance creation**: a service entity's instance
+   cannot be (re-)added to another environment by API/CLI
+   (`serviceCreate` refuses existing names; `serviceConnect` is
+   entity-level). Cross-env splits: rename the dev entity (private
+   endpoints/domains are pinned and unaffected), create a new entity in
+   the target env, rename its private endpoint.
+4. **SKIPPED deploy trap**: `serviceInstanceDeploy` can return true
+   while the deployment row goes SKIPPED and nothing deploys; later
+   triggers keep no-oping. Recovery: `deploymentRedeploy(id of the
+   ACTIVE SUCCESS deployment, usePreviousImageTag:false)` — on SKIPPED
+   rows it fails "without a snapshot"; on CRASHED rows it works.
+5. **Prod boots block `init_from_model`**: unguarded `init_storage()`
+   at startup = crash loop (#1100). Fresh prod DBs need a one-off
+   `ENV=development` init + ledger stamps (#1103).
+6. **Ghost instances**: environment duplication copies every service
+   (with dev variables); deleting a referenced service cascade-redeploys
+   referrers and can silently START ghosts (classroom + apphost did
+   exactly this). Instance removal is dashboard-only.
+7. **Reference syntax**: dotted service names must be quoted —
+   `${{"campus.auth-postgres".DATABASE_URL}}`; unquoted resolves empty
+   (psycopg falls back to a unix socket — bizarre 500s).
+   `${{RAILWAY_PUBLIC_DOMAIN}}` is the bare domain: `PUBLIC_URL` needs
+   `https://` prefixed.
+8. **Domain name conflicts are silent**: `serviceDomainUpdate` returns
+   true while suffixing the name (or not applying it). Re-list domains
+   after every rename. `*.up.railway.app` resolves at the edge for
+   never-created names (`x-railway-fallback` 404 "Application not
+   found") — a resolving hostname proves nothing.
+9. **Mongo dotted keys**: `$set` with a dotted field path nests
+   (`members."a@b.edu.sg"` → nested maps). Replace the whole document
+   field instead.
+10. **Network**: SSH (port 22) is blocked from the office network —
+    use `railway tcp-proxy create/delete` for DB access (always delete
+    after). Private mesh is IPv6-only: listeners bind `[::]`.
+11. **Permission-refused operations** (workspace role): serviceDelete,
+    volumeDelete, volume deletion on service deletion — dashboard-only.
+12. **Windows/CLI traps**: `railway` cannot spawn from Windows-Python
+    subprocess; `--kv` output can carry `\r` that poisons JSON and
+    file-based loops (strip it); keep GraphQL mutation `.gql` files
+    alive until every dependent call ran (a missing file silently
+    no-ops the call).
+13. **Required env vars fail lazily** (#1108): auth needs
+    `CLIENT_ID`/`CLIENT_SECRET` (yapper), api needs them at boot (SDK).
+    Removing a "seemingly unused" var can break a flow hours later —
+    check the required-vars matrix before trimming.
+14. **Migration ledger is auth-only** (#1104): api/audit schema changes
+    have no runner story; read the migration docstring critically and
+    verify the target DB before applying.
+15. **OpenAPI drift is version-coupled**: bumping the suite version
+    drifts *every* committed artifact — regenerate all three services'
+    `docs/openapi.json` on any spec-affecting change.
+
+## 8. Current state (2026-11-16) and open items
+
+Live on prod: campus.auth, campus.api, campus.audit, campus-gateway,
+campus-admin, campus-classroom, campus-apphost (+ 5 DBs, bucket).
+Blocked on their repos: campus-profile, nyxchange-timetable-v2 (stale
+`main` branches — release then redeploy; instances are fully wired).
+Left offline: oauth-proxy (retired candidate, zero vars) and the
+consumer ghost instances that still need dashboard removal.
+
+Open work items: #1103 (bootstrap/guard consolidation), #1104
+(multi-DB migrations), #1105 (DB bootstrap ordering + reset quirk),
+#1106 (SKIPPED deploy), #1107 (healthchecks + alerting), #1108 (lazy
+env-var failures), #1109 (ghost consumers).
 
 ## References
 
-- [migration-protocol.md](migration-protocol.md) — migration runner, prod
-  manual runbook, applied-migrations ledger and mirror
-- [auth-login-flow.md](auth-login-flow.md) — login + integration connect
-  flows
-- [token-broker.md](token-broker.md) — broker routes and allowlist
-  semantics
-- [campus-api-schema.md](campus-api-schema.md) — provider naming grammar,
-  envelope rules
+- `docs/auth-token-invariants.md` — the invariants this playbook wires
+  around (A10 amended by #1110).
+- `docs/migration-protocol.md` — migration runner + mirror table
+  (prod column = 2026-11-16 baseline).
+- `docs/circles-access-control.md` — circles model.
+- `docs/auth-login-flow.md` — browser login chain.
+- `.zcode/skills/railway-ops/SKILL.md` — CLI/GraphQL recipes.
