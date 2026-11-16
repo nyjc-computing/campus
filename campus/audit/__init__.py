@@ -150,18 +150,32 @@ def _authenticate_audit_api_key() -> None:
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
     """Initialise the audit blueprint with the given Flask app."""
+    from campus.common import env
     from campus.common.errors import handlers
 
     from . import routes, ui_redirect
 
     # Ensure audit tables exist (idempotent CREATE TABLE IF NOT EXISTS),
-    # mirroring auth's startup init for ClientsResource.
-    from .resources.apikeys import APIKeysResource
-    from .resources.ratelimit import init_storage as init_ratelimit_storage
-    from .resources.traces import TracesResource
-    APIKeysResource.init_storage()
-    TracesResource.init_storage()
-    init_ratelimit_storage()
+    # mirroring auth's startup init for ClientsResource. In production,
+    # schema management is handled by scripts against the database (the
+    # storage backend blocks init_from_model there), so initialization
+    # is skipped and any missing-table failure surfaces loudly but does
+    # not abort startup.
+    try:
+        if env.ENV != env.PRODUCTION:
+            from .resources.apikeys import APIKeysResource
+            from .resources.ratelimit import init_storage as init_ratelimit_storage
+            from .resources.traces import TracesResource
+            APIKeysResource.init_storage()
+            TracesResource.init_storage()
+            init_ratelimit_storage()
+    except Exception:
+        logger.exception(
+            "Failed to initialize audit storage tables: trace ingestion "
+            "and API-key authentication will fail until the tables exist. "
+            "Recover by running the audit storage init against the "
+            "database (see docs/migration-protocol.md)."
+        )
 
     # Organise audit routes under audit blueprint
     bp = flask.Blueprint('audit_v1', __name__, url_prefix='/audit/v1')
