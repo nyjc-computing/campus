@@ -107,7 +107,8 @@ def update(
 
     Raises:
         api_errors.NotFoundError: If the venue does not exist.
-        api_errors.InvalidRequestError: If no fields are given.
+        api_errors.InvalidRequestError: If no fields are given, or a
+            given field has the wrong shape.
     """
     if metadata is UNSET and notes is UNSET:
         raise api_errors.InvalidRequestError(
@@ -115,15 +116,34 @@ def update(
             "{\"notes\": str | null}"
         )
     venue = get(venue_id)
+    new_metadata: dict[str, typing.Any] = venue.metadata
+    new_notes: str | None = venue.notes
     if metadata is not UNSET:
-        venue.metadata = dict(metadata)
+        if not isinstance(metadata, dict):
+            raise api_errors.InvalidRequestError(
+                "metadata must be an object"
+            )
+        new_metadata = dict(metadata)
     if notes is not UNSET:
-        venue.notes = notes
-    venue.updated_at = schema.DateTime.utcnow()
+        if notes is None:
+            new_notes = None
+        elif isinstance(notes, str):
+            new_notes = notes
+        else:
+            raise api_errors.InvalidRequestError(
+                "notes must be a string or null"
+            )
+    updated = campus.model.Venue(
+        id=venue.id,
+        created_at=venue.created_at,
+        metadata=new_metadata,
+        notes=new_notes,
+        updated_at=schema.DateTime.utcnow(),
+    )
     try:
         venue_collection.update_by_id(
             str(venue_id),
-            venue.to_storage(),
+            updated.to_storage(),
         )
     except campus.storage.errors.NotFoundError:
         raise api_errors.NotFoundError(
@@ -132,7 +152,7 @@ def update(
         ) from None
     except campus.storage.errors.StorageError as e:
         raise api_errors.InternalError.from_exception(e) from e
-    return venue
+    return updated
 
 
 def delete(venue_id: schema.CampusID) -> None:
