@@ -14,6 +14,7 @@ __all__ = [
     "subjcombi",
     "submissions",
     "timetable",
+    "venues",
 ]
 
 from . import (
@@ -27,4 +28,5 @@ from . import (
     subjcombi,
     submissions,
     timetable,
+    venues,
 )
