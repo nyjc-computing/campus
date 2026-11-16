@@ -45,11 +45,13 @@ class DiscordAuthPoxy(base.AuthProxy):
 
     def __init__(self) -> None:
         super().__init__()
-        # Import env at runtime and create OAuth2 scheme
-        from campus.common import env
+        # Create the OAuth2 scheme from the vault-loaded app credentials
+        # (super().__init__ reads CLIENT_ID/CLIENT_SECRET from the
+        # provider's vault label — not the auth deployment's campus
+        # client, which must never appear in an upstream authorize URL).
         self._oauth2 = webauth.oauth2.OAuth2AuthorizationCodeFlowScheme(
             provider=PROVIDER,
-            client_id=env.CLIENT_ID,
+            client_id=self._CLIENT_ID,
             redirect_uri=_get_redirect_uri(),
             authorization_url=schema.Url(
                 "https://discord.com/oauth2/authorize"
