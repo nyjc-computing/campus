@@ -1,6 +1,10 @@
 """campus.api.resources.booking
 
 Booking resource for Campus API.
+
+Bookings reference venues by `venue_id`; the venues themselves are
+documents-backed (campus.api.resources.venue, campus#1099) and are not
+initialized here.
 """
 
 import campus.model as model
@@ -10,22 +14,17 @@ from campus.common.errors import api_errors
 from campus.common.utils import uid
 
 venue_booking_table = campus.storage.get_table("venue_bookings")
-venue_table = campus.storage.get_table("venues")
 
 
 class BookingsResource:
     """Represents the bookings resource."""
-    
+
     @staticmethod
     def init_storage() -> None:
         """Initialize storage."""
         venue_booking_table.init_from_model(
             "venue_bookings",
             model.VenueBooking
-        )
-        venue_table.init_from_model(
-            "venues",
-            model.Venue
         )
 
     def __getitem__(self, booking_id: schema.CampusID) -> "BookingResource":
