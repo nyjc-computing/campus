@@ -163,9 +163,13 @@ replaced (`AppCredentialsResource.issue`).
   token). Denials: user principals are refused outright (a user
   bearer is never the session's client, #854 — bearer auth sets
   `current_client` to the minting client, which could otherwise pass
-  the ownership check), the operator is refused (the credentials
-  management routes are its path; the route stays laser-scoped), and
-  a non-owning client is refused on the ownership check. This lane is
+  the ownership check), and a non-owning client is refused on the
+  ownership check — the operator included. The operator **may**
+  re-acquire when it owns the session: the admin portal (#1055)
+  doubles as operator and session owner, and its gated views
+  re-acquire user tokens through this lane; the ownership check is
+  the only gate, so an operator reaching for another client's
+  session is denied like any non-owner. This lane is
   what `campus_python.with_user_session()` uses after #854 closed the
   credentials reads it previously relied on (#963).
 
@@ -283,7 +287,7 @@ Re-checked at the end of every phase; updated in the phase's PR.
 | A7 | P1 | **enforced** | `routes/oauth.py::device_authorize` + device grant re-check; `test_scope_algebra.py::test_device_authorize_respects_allowlist`, `::test_device_authorize_scope_parameter` |
 | A8 | #865 | **enforced** | `campus/auth/authz.py::_require_user_designation` (grant-row identity + `scopes.grants` capability, #887/#888); `test_management_authorization.py::TestDesignatedAdminUsers` (clients) and `::TestDesignatedUsersAdmins` (users), `tests/unit/auth/test_scopes.py`, `tests/integration/auth/test_authz_grants.py` |
 | A9 | #881 | **enforced** | `campus/auth/authz.py::require_admin_user_or_operator` gates PATCH /clients/{id}/ (client self-PATCH → 403 citing `clients:write`; reads/rotation keep `require_self_or_operator`); user-attribution stamp via `campus/audit/middleware/tracing.py` (#802); `test_management_authorization.py::test_client_self_patch_denied_881`, `::test_write_matrix_mutation_is_audited_881` |
-| A10 | #963 | **enforced** | `routes/logins.py::token` (ownership gate, two-factor Basic + session id, A3 reuse / A2 no-widening / A5 rotation, no-refresh-token response, C5 invalid-grant on missing record); `test_login_session_token.py` full matrix |
+| A10 | #963 | **enforced** | `routes/logins.py::token` (ownership gate — the only gate for client principals, operator allowed when it owns the session (#1055); two-factor Basic + session id, A3 reuse / A2 no-widening / A5 rotation, no-refresh-token response, C5 invalid-grant on missing record); `test_login_session_token.py` full matrix |
 | B1 | P2/P3 | **enforced** | `credentials.new()` provider assertion + credentials API refuses non-campus providers (`routes/credentials.py::_reject_non_campus_provider`); `test_token_broker.py::test_credentials_api_refuses_third_party_provider`. Integration clients custody: vault labels + in-code registry (`campus/auth/integrations.py`, #733) |
 | B2 | P2/P3 | **enforced** | credentials API lockdown closes the token-embedding read path; broker responses are built explicitly without refresh tokens; no proxy path returns/logs refresh tokens |
 | B3 | P2 | **enforced** | identity growth: `provider.authorize` upstream allowlist gate + google proxy scope merge; `tests/contract/auth/test_upstream_scopes.py`; release-time re-check in C3. Integration growth: connect flow guards (`routes/oauth_proxy/google` authorize + `oauth_proxy/google/proxy.py::_validate_connect_binding`, `prompt=consent` forced); `tests/contract/auth/test_integrations.py` |
