@@ -53,6 +53,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
         flask.g.proxy = proxy.get_proxy()
 
     @bp.get("/authorize")
+    @flask_campus.unpack_request
     def authorize(
             target: schema.Url,
             prompt: Literal["consent", "none"] | None = None
