@@ -14,10 +14,13 @@ Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
 |---|---|---|
 | `development` | Live dev; **merges to `weekly` autodeploy here** | push to `weekly` + config changes |
 | `staging` | Parity environment (campus.api, campus.vault, postgres) | manual |
-| `production` | Prod (campus.api, campus.vault, Campus DB) | manual, gated |
+| `production` | Prod fleet (auth/api/audit/gateway + per-service DBs, stood up 2026-11-16, see [prod-rollout.md](prod-rollout.md)) | manual, gated |
 
-The main branch is never deployed; `weekly` is the integration branch for
-all dev work (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+`weekly` is the integration branch for all dev work
+([CONTRIBUTING.md](CONTRIBUTING.md)). Production instances deploy from
+`weekly` with autodeploy off until the `weekly` → `main` merge cutover
+(see [prod-rollout.md](prod-rollout.md), "Cutover"); the July-2025
+fossil environment is retained as `production-legacy`.
 
 ## Service inventory (development)
 
@@ -84,8 +87,8 @@ Railway's private network (the `*.railway.internal` mesh) is **IPv6-only**:
 - Builder: Railpack (Nixpacks-compatible plan inferred from the repo;
   `railway.json` is NOT read by Railpack — use `railpack.json` or
   service-level settings). gunicorn comes from `pyproject.toml`.
-- Start commands are set per service instance (environment-scoped); the
-  production instances currently still bind `0.0.0.0` and must be switched
-  to `[::]` as part of any production rollout (issue #995 checklist).
+- Start commands are set per service instance (environment-scoped);
+  all instances (dev and production) bind `[::]` for the IPv6-only
+  private mesh.
 - Health checks: `GET /health` on every Flask app (#842 convention); the
   gateway serves its own `/health`.
