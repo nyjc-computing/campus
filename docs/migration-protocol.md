@@ -277,19 +277,22 @@ up to date and `apply` is a no-op on dev. Statuses below verified as of
 
 | Migration | Target | Purpose | Dev | Prod |
 |-----------|--------|---------|-----|------|
-| 001_add_assignments_table | Postgres | `assignments` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | not stood up |
-| 002_add_submissions_table | Postgres | `submissions` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | not stood up |
-| 003_add_api_traces_table | Postgres | `spans` table for audit tracing | applied (verified 2026-10-01; stamped 2026-10-03) | not stood up |
-| 004_add_vault_clients_public_columns | Postgres | public-client columns on `vault_clients` | applied (self-healed, verified 2026-09-29; stamped 2026-10-03) | not stood up |
-| 005_backfill_scope_string | Mongo | RFC 6749 scope-string rewrite + token field backfill | applied (2026-09-30; stamped 2026-10-03) | not stood up |
-| 006_add_client_allowed_scopes | Postgres | per-client scope allowlists | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
-| 007_add_client_upstream_scopes | Postgres | per-client upstream scope config | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
-| 008_add_client_token_bridge | Postgres | token-bridge columns | applied (recorded 2026-10-02; stamped 2026-10-03) | pending — run when service is stood up |
-| 009_create_app_credentials | Postgres | `app_credentials` for client_credentials grant | applied (auto-init at startup, non-production; stamped 2026-10-03) | pending — required; prod blocks `init_from_model` |
-| 010_create_access_grants | Postgres | `access_grants` store (#883/#884), backfilling and retiring `vault_access` | applied (2026-10-10, 1.2s; backfill verified — 48 vault grant rows) | pending — required; prod blocks `init_from_model` |
+| 001_add_assignments_table | Postgres | `assignments` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | historical — fresh DB (2026-11-16 standup), recorded `historical` |
+| 002_add_submissions_table | Postgres | `submissions` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | historical — fresh DB (2026-11-16 standup), recorded `historical` |
+| 003_add_api_traces_table | Postgres | `spans` table for audit tracing | applied (verified 2026-10-01; stamped 2026-10-03) | applied — stamped 2026-11-16; audit spans live in the audit service's own postgres, so this legacy table is not recreated |
+| 004_add_vault_clients_public_columns | Postgres | public-client columns on `vault_clients` | applied (self-healed, verified 2026-09-29; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 005_backfill_scope_string | Mongo | RFC 6749 scope-string rewrite + token field backfill | applied (2026-09-30; stamped 2026-10-03) | applied — stamped 2026-11-16 (no legacy rows to backfill) |
+| 006_add_client_allowed_scopes | Postgres | per-client scope allowlists | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 007_add_client_upstream_scopes | Postgres | per-client upstream scope config | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 008_add_client_token_bridge | Postgres | token-bridge columns | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 009_create_app_credentials | Postgres | `app_credentials` for client_credentials grant | applied (auto-init at startup, non-production; stamped 2026-10-03) | applied — stamped 2026-11-16 (table created by `CredentialsResource.init_storage`) |
+| 010_create_access_grants | Postgres | `access_grants` store (#883/#884), backfilling and retiring `vault_access` | applied (2026-10-10, 1.2s; backfill verified — 48 vault grant rows) | applied — stamped 2026-11-16 (fresh grants seeded directly; nothing to backfill) |
+| 011_create_calendar_table | Postgres | `calendar` table (school calendar, timetable-v2) | applied (self-healed by `campus.api` startup init) | applied 2026-11-16 (232 ms) — note: the table was created in **campus.api's postgres** (where `campus.api` reads it, dev parity), not the auth DB the runner runs in; see docs/prod-rollout.md |
 
-Note: production currently has no `campus.auth` service (survey
-2026-09-29); "pending" rows become actionable only when it is stood up.
+Prod baseline (2026-11-16 standup, see docs/prod-rollout.md): the
+production databases were initialized from the current model and the
+ledger stamped to match — `apply` is a no-op until a new migration
+ships. New migrations run via the manual runbook above.
 
 ## Known gaps
 

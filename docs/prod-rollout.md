@@ -5,22 +5,89 @@ Runbook for the last open lane of the per-integration upstream OAuth work
 is **user-gated**: it stands up new production services, creates Google
 Workspace (GCP Internal) clients, and mutates production data.
 
-## Current state (2026-10-03)
+## Current state (2026-11-16 standup)
 
-- The dev lane of #733 is complete: the integrations registry, connect
-  flow, broker integration routes, the `/auth/v1/connections/` inventory +
-  disconnect, and the full `upstream_scope` retirement are live on Railway
-  dev and verified.
-- **Production has no `campus.auth` service at all** (survey 2026-09-29;
-  every row of the migration mirror in [migration-protocol.md](migration-protocol.md)
-  reads "not stood up"). Step 1 below is therefore the real first step,
-  not a formality.
-- Production-style environments block `init_from_model`, so **every schema
-  change is manual** per the
-  [migration runbook](migration-protocol.md#staging--production-style-environments-manual-runbook).
-  As of #747, a prod boot whose ledger shows outstanding migrations logs a
-  startup WARNING naming them, so a deploy that skipped this runbook is
-  visible in the deployment logs.
+The production environment was stood up on 2026-11-16 (prep for the
+`weekly` → `main` merge):
+
+- **Fleet live and green**: campus.auth, campus.api, campus.audit,
+  campus-gateway (+ their per-service databases). All `/health`
+  endpoints return 200 and gateway dispatch is verified
+  (`/api/openapi.json`, `/integrations/v1/`, `/audit/v1/`).
+- **Topology**: a fresh `production` environment duplicated from
+  development; the July-2025 fossil environment was kept as
+  `production-legacy` (untouched; retirement is a separate decision).
+  Services initially deploy from `weekly` with autodeploy off; the
+  branch flip to `main` is the merge-moment cutover (below).
+- **Databases**: per-service postgres x3 + mongodb x2 with fresh
+  credentials; volumes attached. Prod blocks `init_from_model`, so
+  tables were created by one-off `ENV=development` init runs and the
+  auth migration ledger stamped (see the mirror in
+  [migration-protocol.md](migration-protocol.md)). Migration 011
+  (calendar) was applied to **campus.api's postgres** — where
+  `campus.api` reads it (dev parity) — not the auth DB the runner
+  runs in; the ledger records it in the auth DB either way.
+- **Seeded**: `guest` public client; confidential clients
+  `campus-api-production` (api service credential) and
+  `campus-admin-production` (operator, `AUTH_OPERATOR_CLIENT_IDS`);
+  vault records `campus.yapper`/`YAPPERDB_URI` (yapper role + database
+  created in the auth postgres) and `campus.api`/`campus.auth`
+  `SECRET_KEY`s; vault access grants for both clients; audit operator
+  API key (auto-seeded at audit startup from
+  `AUDIT_OPERATOR_API_KEY`).
+- **Gateway**: nginx path-dispatch, same template as dev (private
+  upstreams); domain `campus-gateway-production.up.railway.app`
+  (port 8080). The audit/gateway domains claimed their clean names;
+  auth/api were globally taken and carry Railway's random suffix
+  (`campusauth-production-25f09d8e`, `campusapi-production-feab0369`).
+- **Bucket**: `campus-api-bucket-prod` (sin) with literal
+  `BUCKET_*` credentials on campus.api (dev pattern).
+- **Known gap — mongodb**: the two mongo volumes initialized with
+  Railway-generated root passwords that predate the credential vars
+  (volume-attach race during standup). The wipe+reinit is
+  user-gated (volume deletion is dashboard-only): see
+  "Remaining user-gated steps" below. Until then every
+  mongo-backed flow (login sessions, device codes, tokens, timetable
+  entries, circles members, hosted apps) fails at the DB.
+
+### Remaining user-gated steps
+
+1. **Mongo credential repair** (blocking): delete the
+   `campus.auth-mongodb-volume-*` and `campus.api-mongodb-volume-*`
+   volumes of the production environment in the Railway dashboard,
+   then redeploy both mongo services — fresh volumes re-run initdb
+   with the `MONGO_INITDB_ROOT_*` variables already set.
+2. **GCP trio** (Workspace console, Internal classification):
+   `campus` (identity login) and `campus-classroom` clients, redirect
+   URIs per the dev pattern with the prod origins. Seed the matching
+   `google` / `google.classroom` vault labels in prod auth.
+3. **campus-admin production** (consumer repo): needs the operator
+   client secret — rotate `campus-admin-production`'s secret via the
+   credentials API when wiring it (the standup-only secret was
+   discarded). `AUDIT_ADMINS` for the audit UI lives on the
+   campus-admin portal, not campus.audit.
+4. **Legacy cleanup** (optional, non-blocking): retire
+   `production-legacy` (fossil campus.api/vault + "Campus DB") and
+   the CRASHED staging `campus.vault`; decide on the
+   `*.campus.nyjc.app` custom domains (currently attached to the
+   legacy instances).
+5. **Weekly → main merge**: see "Cutover" below.
+
+## Cutover: merging weekly → main
+
+The production instances currently deploy from `weekly` with
+autodeploy **off** (so weekly pushes touch only dev). At the merge:
+
+1. Merge `weekly` into `main` (CI runs on the PR; keep the three
+   devcontainer-only commits that only exist on `main`).
+2. Flip each production instance's source branch `weekly` → `main`
+   (service settings → Deploy → branch, for campus.auth, campus.api,
+   campus.audit, campus-gateway) and re-enable autodeploy.
+3. The merge commit's push to `main` then deploys the fleet. Watch
+   the deploy queue; a first-boot WARN naming pending migrations
+   means a new migration needs the manual runbook above.
+4. Smoke: gateway `/health`, `/api/openapi.json`,
+   `/integrations/v1/`, `/audit/v1/health`, direct auth `/health`.
 
 ## Runbook (order matters)
 
