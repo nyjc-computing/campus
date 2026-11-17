@@ -276,11 +276,17 @@ Two ways to give a person browser access:
 - **An API key** — mint one with `traces:read` and hand it over. The
   holder signs in at `/audit/login/key` (development only, #915) and
   sees the trace viewer; the key never leaves their hands, and
-  revoking it ends their access on the next request.
+  revoking it ends their access on the next request. Give the mint a
+  **bind** (#944) — `trace_user_id` (the person's id) and/or
+  `trace_client_id` — so the key sees only traces that match it:
+  read-scoped mints without `apikeys:write` or `traces:write` refuse
+  to start without one.
 
-An audit API key is a bearer credential: whoever holds it can read
-every trace in the deployment. Mint one per person, with the
-narrowest scope that does the job and an expiry.
+An audit API key is a bearer credential: **an unscoped key holder can
+read every trace in the deployment**; a bind-carrying key is forced
+to its bind on every read surface, whatever the caller asks for
+(#944, above). Either way, mint one per person, with the narrowest
+scope and bind that does the job and an expiry.
 
 In the development environment, the audit web UI has a key-management
 page (`/audit/keys`) where an operator can do all of this in the
