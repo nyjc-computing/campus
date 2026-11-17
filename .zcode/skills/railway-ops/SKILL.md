@@ -101,6 +101,31 @@ fossil `production-legacy` were deleted 2026-11-17. `railway status
 - `railway logs -s <svc> -e development --lines N` streams deploy logs
   (nginx access+error lines land here).
 
+## Healthchecks — set on every app service (#1107)
+
+- App services run `healthcheckPath: /health` +
+  `healthcheckTimeout: 10` (every service has the #842 `/health`
+  route; it deliberately doesn't touch storage). Set on campus.auth,
+  campus.api, campus.audit, campus-gateway in BOTH environments
+  (2026-11-17). DB services stay restart-policy-only. A NEW app
+  service must set this at creation — a service that boots but 500s on
+  every request is otherwise indistinguishable from healthy, and a
+  crash-looping deploy is invisible (the #1107 incident: audit's first
+  prod boot crash-looped unnoticed; auth booted "SUCCESS" while
+  broken).
+- Recipe (ids via `railway status --json`; the mutation is a bare
+  `Boolean!`, so no selection set):
+  `railway api 'mutation($e:String!,$s:String!){ serviceInstanceUpdate(environmentId:$e, serviceId:$s, input:{healthcheckPath:"/health", healthcheckTimeout:10}) }' --var e=<envId> --var s=<svcId>`
+- After any config change, trigger + verify with
+  `scripts/railway_deploy.sh <svc> <env>` — a config change alone does
+  not redeploy. With a healthcheck set, deploy SUCCESS means `/health`
+  answered: "actually serving", not merely "container up".
+- Deploy-failure **notifications** remain dashboard-only: the API's
+  `notificationRuleCreate` takes an undocumented
+  `NotificationChannelConfig` scalar (blind-guessing its JSON shape is
+  how you email nobody) — Project Settings → Notifications, rule
+  scoped to the production environment.
+
 ## CLI shell traps (Windows / Git Bash)
 
 - `railway` cannot be spawned from Windows-Python `subprocess`

@@ -144,10 +144,17 @@ are user-gated and called out.
    DB URIs as references (`${{"campus.auth-postgres".DATABASE_URL}}`
    — **quoted** service names; unquoted dotted names resolve empty),
    audit keys, client credentials.
-3. Start command binds `[::]` (mesh is IPv6-only). Healthcheck path
-   `/health` when the app implements it (most prod services don't yet,
-   #1107).
+3. Start command binds `[::]` (mesh is IPv6-only). Set the
+   healthcheck: `healthcheckPath: /health` + `healthcheckTimeout: 10`
+   on the instance (every app service has the #842 `/health` route;
+   auth/api/audit/gateway carry it in BOTH environments since #1107 —
+   a new app service must set it too, mutation recipe in the
+   railway-ops skill; DB services stay restart-policy-only).
 4. Deploy. **Verify a non-SKIPPED deployment row appears** — see §7.4.
+   With a healthcheck set, a deploy only reaches SUCCESS when `/health`
+   answered, so SUCCESS now means "actually serving" — and a
+   crash-looping or half-booting deploy is visible in the Railway UI
+   (#1107).
 
 ### Phase 4 — auth wiring
 1. Mint the service's campus client (vault_clients row + HMAC secret
@@ -343,9 +350,12 @@ Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
 release). Left offline: oauth-proxy (retired candidate, zero vars).
 
-Open work items: #1107 (healthchecks + alerting — most prod
-services have no `/health` healthcheck configured and deploy-failure
-alerting is off), #1108 (lazy env-var failures), #1109 (ghost
+Open work items: deploy-failure **notifications** (the #1107 remainder:
+healthchecks are live on all four app services in both environments —
+`/health` + 10s timeout — but Railway deploy-failure alerting is still
+off; enabling it is a dashboard step, Project Settings → Notifications,
+email/webhook rule scoped to the production environment),
+#1108 (lazy env-var failures), #1109 (ghost
 instances — largely superseded: classroom/apphost are intentional now;
 the remainder is the oauth-proxy decision).
 
