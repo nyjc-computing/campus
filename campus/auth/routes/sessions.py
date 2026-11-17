@@ -22,6 +22,7 @@ import flask
 
 import campus.config
 import campus.flask_campus as flask_campus
+from campus.audit.middleware import redact_sensitive
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
 
@@ -440,7 +441,10 @@ def update_provider_session(
         {
             "provider": provider,
             "session_id": str(session_id),
-            "updates": updates
+            # Flow secret: updates carries the authorization_code (a
+            # live bearer-equivalent); the emission records THAT the
+            # session changed, not the code (policy §3, #1126)
+            "updates": redact_sensitive(updates),
         }
     )
     return {}, 200
