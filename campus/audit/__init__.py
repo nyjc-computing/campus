@@ -146,6 +146,11 @@ def _authenticate_audit_api_key() -> None:
     flask.g.api_key_id = api_key_record.id
     # Scopes for the authorization layer (@require_scopes, #575)
     flask.g.api_key_scopes = list(api_key_record.scopes)
+    # Trace-read scoping bind (#944): opaque match-values the read
+    # surfaces force into every query. None on both axes = unscoped
+    # (the operator/admin key class).
+    flask.g.trace_user_filter = api_key_record.trace_user_id
+    flask.g.trace_client_filter = api_key_record.trace_client_id
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:

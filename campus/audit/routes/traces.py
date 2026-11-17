@@ -162,6 +162,7 @@ def list_traces(
         until=until,
         limit=traces_resource.parse_page_size(limit),
         cursor=cursor,
+        trace_filter=decorators.get_trace_filter(),
     )
     return {
         "traces": [s.to_resource() for s in page.summaries],
@@ -186,7 +187,9 @@ def get_trace(trace_id: str) -> flask_campus.JsonResponse:
         JSON: {"trace_id": ..., "root_span": <trace tree with nested children>}
         Text: Waterfall visualization showing timing hierarchy
     """
-    tree = traces_resource[trace_id].get_tree()
+    tree = traces_resource[trace_id].get_tree(
+        trace_filter=decorators.get_trace_filter(),
+    )
     if tree is None:
         raise api_errors.NotFoundError(f"Trace {trace_id} not found")
     # Envelope the root span so the response is self-describing and can
@@ -206,7 +209,9 @@ def list_spans(trace_id: str) -> flask_campus.JsonResponse:
     Returns:
         Flat list of all spans in the trace
     """
-    spans = traces_resource[trace_id]["spans"].list()
+    spans = traces_resource[trace_id]["spans"].list(
+        trace_filter=decorators.get_trace_filter(),
+    )
     return {
         "spans": [s.to_resource() for s in spans]
     }, 200
@@ -225,7 +230,9 @@ def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
     Returns:
         Full span data including request/response headers and bodies
     """
-    span = traces_resource[trace_id]["spans"][span_id].get()
+    span = traces_resource[trace_id]["spans"][span_id].get(
+        trace_filter=decorators.get_trace_filter(),
+    )
     if span is None:
         raise api_errors.NotFoundError(
             f"Span {span_id} not found in trace {trace_id}"
@@ -300,6 +307,7 @@ def search_traces(
         limit=traces_resource.parse_page_size(limit),
         cursor=cursor,
         include_events=events,
+        trace_filter=decorators.get_trace_filter(),
     )
     return {
         "traces": [s.to_resource() for s in page.summaries],

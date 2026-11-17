@@ -39,6 +39,81 @@ _SPAN_FETCH_MULTIPLIER = 10
 _JOURNEY_SPAN_SCAN_CAP = 20_000
 
 
+class TraceFilter(typing.NamedTuple):
+    """Server-forced trace-read scoping from the caller's API key (#944).
+
+    Opaque match-values bound to the key at mint time and applied to
+    every read surface — the caller cannot widen them, only narrow
+    them. Each axis, when set, must equal the span's user_id/client_id
+    exactly as producers wrote it (plain string equality;
+    campus.audit is standalone and never resolves these against
+    campus.auth). None on an axis = no bind on that axis;
+    (None, None) = unscoped (the operator/admin key class).
+
+    Matching is span-level: a trace is visible iff ANY of its spans
+    matches both binds — the same semantics the unscoped search
+    endpoint's user_id/client_id filters have always had, so a scoped
+    key sees exactly what an unscoped search for its bind would.
+    Spans with no identity (null user_id/client_id) match no bind and
+    are invisible to scoped keys.
+
+    Every TracesResource read takes a trace_filter as a REQUIRED
+    keyword: a read path that forgets to thread it is a TypeError at
+    first test run, not a silent unscoped hole.
+    """
+
+    user_id: str | None = None
+    client_id: str | None = None
+
+    def is_scoped(self) -> bool:
+        """True if either axis carries a bind."""
+        return self.user_id is not None or self.client_id is not None
+
+    def matches_span(self, span: dict) -> bool:
+        """True if the span satisfies both bind axes.
+
+        Args:
+            span: Span storage record
+
+        Returns:
+            bool: True if every set bind equals the span's attribute.
+        """
+        return not (
+            (self.user_id is not None and span.get("user_id") != self.user_id)
+            or (self.client_id is not None and span.get("client_id") != self.client_id)
+        )
+
+
+def _apply_bind(query: dict, trace_filter: TraceFilter) -> bool:
+    """Merge the bind axes into a storage query dict.
+
+    The query language is AND-only and keyed by column, so a
+    caller-supplied identity filter that disagrees with the bind
+    cannot be expressed — that is a guaranteed-empty result, not an
+    error: it leaks nothing the endpoint doesn't already reveal, and
+    returning the bind's own data for someone else's filter would be
+    a correctness bug dressed up as scoping.
+
+    Args:
+        query: Query dict to mutate (caller identity filters already
+            merged)
+        trace_filter: The calling key's forced bind
+
+    Returns:
+        bool: False if a caller filter conflicts with the bind on
+            some axis (caller should get an empty result).
+    """
+    if trace_filter.user_id is not None:
+        if query.get("user_id") not in (None, trace_filter.user_id):
+            return False
+        query["user_id"] = trace_filter.user_id
+    if trace_filter.client_id is not None:
+        if query.get("client_id") not in (None, trace_filter.client_id):
+            return False
+        query["client_id"] = trace_filter.client_id
+    return True
+
+
 def _span_has_journey(span: dict, journey_id: str) -> bool:
     """Check whether a span record carries the given journey tag (#803)."""
     tags = span.get("tags") or {}
@@ -292,6 +367,8 @@ class TracesResource:
         until: str | None = None,
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
+        *,
+        trace_filter: TraceFilter,
     ) -> TracePage:
         """List traces newest first with optional time range filter.
 
@@ -300,6 +377,8 @@ class TracesResource:
             until: ISO 8601 timestamp (optional)
             limit: Page size (should be clamped via parse_page_size)
             cursor: Opaque token from a previous page (optional)
+            trace_filter: The calling key's forced bind (#944); a
+                scoped key sees only traces involving its bind
 
         Returns:
             TracePage of TraceSummary model instances
@@ -312,6 +391,11 @@ class TracesResource:
             query["started_at"] = campus.storage.gte(since)
         elif until:
             query["started_at"] = campus.storage.lte(until)
+
+        if not _apply_bind(query, trace_filter):
+            # Unreachable today (list takes no caller identity
+            # filters), kept symmetric with search()
+            return TracePage(summaries=[], next_cursor=None, has_more=False)
 
         return _query_trace_page(query, limit=limit, cursor=cursor)
 
@@ -328,8 +412,15 @@ class TracesResource:
         limit: int = DEFAULT_PAGE_SIZE,
         cursor: str | None = None,
         include_events: bool = True,
+        *,
+        trace_filter: TraceFilter,
     ) -> TracePage:
         """Search traces by multiple filter criteria.
+
+        Caller identity filters are intersected with the key's bind
+        (#944): a filter that disagrees with the bind on some axis
+        yields an empty page (the query language cannot express
+        AND-unequal, and it would be a guaranteed-empty match anyway).
 
         Args:
             path: Filter by endpoint path
@@ -347,6 +438,7 @@ class TracesResource:
                 (#941). The versioned API keeps them — the trail is
                 queryable by design; a viewer can ask for request
                 traces only.
+            trace_filter: The calling key's forced bind (#944)
 
         Returns:
             TracePage of TraceSummary model instances
@@ -370,6 +462,11 @@ class TracesResource:
         elif until:
             query["started_at"] = campus.storage.lte(until)
 
+        if not _apply_bind(query, trace_filter):
+            # Caller named an identity that disagrees with the bind:
+            # guaranteed no matches, so skip the query entirely.
+            return TracePage(summaries=[], next_cursor=None, has_more=False)
+
         return _query_trace_page(
             query,
             limit=limit,
@@ -378,7 +475,12 @@ class TracesResource:
             include_events=include_events,
         )
 
-    def journey(self, journey_id: str) -> "list[model.TraceSummary]":
+    def journey(
+            self,
+            journey_id: str,
+            *,
+            trace_filter: TraceFilter,
+    ) -> "list[model.TraceSummary]":
         """List every trace in one login journey, oldest first (#803).
 
         A journey is the set of traces whose spans carry
@@ -388,8 +490,14 @@ class TracesResource:
         covers the most recent _JOURNEY_SPAN_SCAN_CAP spans, which is
         the whole table at this service's scale.
 
+        The key's bind (#944) is applied to the member spans BEFORE
+        summaries and counts are built, so a scoped key's trace_count
+        never leaks how many of another user's traces sit in the
+        journey.
+
         Args:
             journey_id: The campus_journey cookie value to group by
+            trace_filter: The calling key's forced bind (#944)
 
         Returns:
             TraceSummary instances in (started_at, trace_id) order
@@ -407,6 +515,10 @@ class TracesResource:
         member_spans = [
             s for s in spans if _span_has_journey(s, journey_id)
         ]
+        if trace_filter.is_scoped():
+            member_spans = [
+                s for s in member_spans if trace_filter.matches_span(s)
+            ]
         summaries = _build_trace_summaries(member_spans)
         summaries.sort(key=lambda s: (s.started_at, s.trace_id))
         return summaries
@@ -438,26 +550,42 @@ class TraceResource:
             )
         return TraceSpansResource(self)
 
-    def get_tree(self) -> model.TraceTree | None:
+    def get_tree(self, *, trace_filter: TraceFilter) -> model.TraceTree | None:
         """Get full trace tree with nested children.
 
+        A scoped key (#944) that matches no span of the trace gets
+        None — indistinguishable from a missing trace, so existence
+        never leaks.
+
+        Args:
+            trace_filter: The calling key's forced bind (#944)
+
         Returns:
-            TraceTree with root and nested children, or None if not found
+            TraceTree with root and nested children, or None if not
+            found (or invisible to this key)
         """
         try:
             spans = traces_storage.get_matching({"trace_id": self.trace_id})
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
 
+        if trace_filter.is_scoped() and not any(
+                trace_filter.matches_span(s) for s in spans
+        ):
+            return None
+
         return _build_trace_tree(spans)
 
-    def get(self) -> model.TraceTree | None:
+    def get(self, *, trace_filter: TraceFilter) -> model.TraceTree | None:
         """Get trace summary (alias for get_tree).
+
+        Args:
+            trace_filter: The calling key's forced bind (#944)
 
         Returns:
             TraceTree or None
         """
-        return self.get_tree()
+        return self.get_tree(trace_filter=trace_filter)
 
 
 class TraceSpansResource:
@@ -482,16 +610,37 @@ class TraceSpansResource:
         """
         return SpanResource(self, span_id)
 
-    def list(self) -> list[model.TraceSpan]:
+    def list(self, *, trace_filter: TraceFilter) -> list[model.TraceSpan]:
         """List all spans in the trace (flat list).
+
+        Visibility is trace-level (#944): if any span of the trace
+        matches the bind, the whole trace's spans are returned (the
+        same view an unscoped search for the bind renders); if none
+        match, the trace is invisible and this raises NotFoundError —
+        indistinguishable from a missing trace, so existence never
+        leaks.
+
+        Args:
+            trace_filter: The calling key's forced bind (#944)
 
         Returns:
             List of TraceSpan model instances
+
+        Raises:
+            api_errors.NotFoundError: If the trace does not exist or
+                is invisible to this key.
         """
         try:
             records = traces_storage.get_matching({"trace_id": self._parent.trace_id})
         except campus.storage.errors.StorageError as e:
             raise api_errors.InternalError.from_exception(e) from e
+
+        if trace_filter.is_scoped() and not any(
+                trace_filter.matches_span(s) for s in records
+        ):
+            raise api_errors.NotFoundError(
+                f"Trace {self._parent.trace_id} not found"
+            )
 
         return [model.TraceSpan.from_storage(record) for record in records]
 
@@ -506,11 +655,19 @@ class SpanResource:
         self._parent = parent
         self.span_id = span_id
 
-    def get(self) -> model.TraceSpan | None:
+    def get(self, *, trace_filter: TraceFilter) -> model.TraceSpan | None:
         """Get the span details.
 
+        Visibility is trace-level (#944): the span is returned only if
+        some span of its trace matches the bind — None otherwise, so
+        existence never leaks.
+
+        Args:
+            trace_filter: The calling key's forced bind (#944)
+
         Returns:
-            TraceSpan model instance or None if not found
+            TraceSpan model instance or None if not found (or
+            invisible to this key)
         """
         try:
             # Get by id (storage PK, which is aliased to span_id)
@@ -523,5 +680,15 @@ class SpanResource:
         # Verify it belongs to this trace
         if record.get("trace_id") != self._parent._parent.trace_id:
             return None
+
+        if trace_filter.is_scoped():
+            try:
+                siblings = traces_storage.get_matching(
+                    {"trace_id": record["trace_id"]}
+                )
+            except campus.storage.errors.StorageError as e:
+                raise api_errors.InternalError.from_exception(e) from e
+            if not any(trace_filter.matches_span(s) for s in siblings):
+                return None
 
         return model.TraceSpan.from_storage(record)
