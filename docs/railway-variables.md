@@ -1,7 +1,7 @@
-# Railway environment variables (development)
+# Railway environment variables
 
-Inventory of every user-set environment variable in the campus `development`
-environment on Railway, classified by how its value is maintained:
+Inventory of every user-set environment variable in the campus Railway
+environments, classified by how its value is maintained:
 
 - **Template** — value contains `${{…}}` references. Railway resolves them at
   deploy time from other variables, other services, or the shared layer; they
@@ -15,14 +15,16 @@ Secrets are shown as `<secret>`; this file intentionally contains no secret
 material. OAuth client IDs (`uid-client-…`) are public identifiers and are
 shown as-is.
 
-> **Scope: `development` only.** Production is superadmin-only
-> ([environment-access-policy.md](environment-access-policy.md)); audit it with
-> the same recipe (below) and add a section from a superadmin session. The
-> retired `staging` / `production-legacy` environments were deleted 2026-11-17
-> (campus#1122).
+> **Scope: both environments.** The `development` section is the primary
+> inventory. Production is superadmin-only
+> ([environment-access-policy.md](environment-access-policy.md)) — audit and
+> change it only from a sanctioned superadmin session, using the same recipe;
+> its inventory follows in [Production](#production-environment-superadmin-sessions).
+> The retired `staging` / `production-legacy` environments were deleted
+> 2026-11-17 (campus#1122).
 >
-> **Snapshot: 2026-11-17**, taken immediately after the fleet-wide templating
-> pass of the same date (see [History](#history)).
+> **Snapshots: 2026-11-17**, taken immediately after the fleet-wide templating
+> passes of the same date (see [History](#history)).
 
 ## Auditing live state
 
@@ -56,7 +58,14 @@ Writing values — gotchas (details in the `.zcode/skills/railway-ops` skill):
   `variableUpsert(input:{…, skipDeploys:true})`) for batched edits, then one
   redeploy wave via `scripts/railway_deploy.sh <svc> development`.
 
-## Shared variables (environment-level)
+## Development environment
+
+Environment `e954f5fa-1195-41af-b737-b5732028331b`; weekly autodeploys here.
+Public domains carry the `-development` suffix; the gateway is
+`campus-development.up.railway.app`. Mongo services are named
+`campus.<svc>-mongodb-dev`.
+
+### Shared variables (environment-level)
 
 Referenced as `${{shared.<NAME>}}`. Set once, consumed by many services — the
 preferred home for any value used by more than one service.
@@ -75,7 +84,7 @@ preferred home for any value used by more than one service.
 | `CAMPUS_TEST_STUDENT_USERNAME` | `campus-test-student@nyjc.edu.sg` | literal | manual testing |
 | `CAMPUS_TEST_STUDENT_PASSWORD` | `<secret>` | literal | manual testing |
 
-## Railway-provided variables (never user-set)
+### Railway-provided variables (never user-set)
 
 Injected into every deployment; avoid shadowing these names (user-set values
 would override them):
@@ -95,7 +104,7 @@ would override them):
   `RAILWAY_TCP_APPLICATION_PORT` — exist only while a TCP proxy is attached.
   **No dev service has one** (both DB proxies were deleted 2026-11-17).
 
-## campus.auth
+### campus.auth
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -116,7 +125,7 @@ would override them):
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `WORKSPACE_DOMAIN` | `${{shared.WORKSPACE_DOMAIN}}` | template | |
 
-## campus.api
+### campus.api
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -139,7 +148,7 @@ would override them):
 | `PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | template | |
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 
-## campus.audit
+### campus.audit
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -155,7 +164,7 @@ would override them):
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `SECRET_KEY` | `<secret>` | literal | Flask secret; per-service by design (must differ between services) |
 
-## campus-gateway
+### campus-gateway
 
 The gateway reads upstreams from Railway-provided `RAILWAY_SERVICE_*_URL`
 copies plus these five literals. No shared/templated values.
@@ -166,7 +175,7 @@ copies plus these five literals. No shared/templated values.
 | `PORT` | `8080` | literal | public listen port |
 | `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1` | literal | mesh resolver wiring (see deploy/gateway/README.md) |
 
-## campus-admin
+### campus-admin
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -185,7 +194,7 @@ copies plus these five literals. No shared/templated values.
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `SECRET_KEY` | `<secret>` | literal | |
 
-## campus-classroom
+### campus-classroom
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -202,7 +211,7 @@ copies plus these five literals. No shared/templated values.
 
 No `PYTHON_VERSION`/`RAILPACK_PYTHON_VERSION` — railpack default applies.
 
-## campus-apphost
+### campus-apphost
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -219,7 +228,7 @@ No `PYTHON_VERSION`/`RAILPACK_PYTHON_VERSION` — railpack default applies.
 No `PYTHON_VERSION`/`RAILPACK_PYTHON_VERSION`; no audit vars (apphost does not
 emit audit spans).
 
-## campus-profile
+### campus-profile
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -234,7 +243,7 @@ emit audit spans).
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `SECRET_KEY` | `<secret>` | literal | |
 
-## nyxchange-timetable-v2
+### nyxchange-timetable-v2
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
@@ -252,7 +261,7 @@ emit audit spans).
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `SECRET_KEY` | `<secret>` | literal | |
 
-## Databases (Railway-provisioned connect variables)
+### Databases (Railway-provisioned connect variables)
 
 Railway provisions the connect surface of each database
 ([postgres](https://docs.railway.com/databases/postgresql),
@@ -315,15 +324,24 @@ with credentials in the creation payload (railway-ops skill, #1105).
 "not found", but its credentials **are** referenceable. It exports `BUCKET`
 (the S3 bucket name), `ENDPOINT`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`,
 `REGION`. Consumers must reference these (`${{"campus.api-bucket".…}}` — the
-bucket name is dot-named, so quoting is load-bearing). Rotation:
+bucket name is dot-named, so quoting is load-bearing).
+
+A Railway bucket has **per-environment instances**: each environment gets its
+own S3 bucket name and credential set from the same resource (the dev instance
+exports `campus-api-bucket-w7hhgec` in region `sin`; the production instance
+exports `campusapi-bucket-pdxxria`, also region `sin`). References resolve
+against the environment's own instance — the same template text works in both
+environments. Rotation (per environment):
 
 ```bash
 railway bucket credentials -b campus.api-bucket -e development --reset
+railway bucket credentials -b campus.api-bucket -e production --reset   # superadmin
 ```
 
 the exports update and every `BUCKET_*` reference follows on the next deploy.
-Literal copies of bucket credentials rot silently on reset — dev has none;
-production campus.api is still on literals (playbook docs/prod-rollout.md §2).
+Literal copies of bucket credentials rot silently on reset — both
+environments are now fully on references (production converted 2026-11-17;
+the literals row in docs/prod-rollout.md §2 predates that pass).
 
 ## Maintenance rules
 
@@ -353,17 +371,170 @@ production campus.api is still on literals (playbook docs/prod-rollout.md §2).
 - `DEPLOY` on auth/api/audit — equals `RAILWAY_SERVICE_NAME`;
   `${{RAILWAY_SERVICE_NAME}}` would be equivalent (cosmetic, left literal).
 
+## Production environment (superadmin sessions)
+
+Environment `d5221f3b-b5c9-4d78-ac36-b0cb7b9d0a0e`; deploys from `main` only
+(the weekly → main release PR is the sole path). Public domains are
+suffix-less (`campusauth.up.railway.app`, gateway `nyjc-campus.up.railway.app`).
+Mongo services are named `campus.<svc>-mongodb` (no `-dev` suffix). **Audit
+and change only from a sanctioned superadmin session**; variable changes
+redeploy the production fleet — batch with `skipDeploys`, verify rendered
+values, then a deliberate redeploy wave.
+
+Snapshot 2026-11-17, taken during the production templating pass (same day as
+the development pass; the service inventory below reflects post-pass state).
+
+### Shared variables (production environment-level)
+
+| Variable | Stored value | Kind | Consumed by |
+|---|---|---|---|
+| `AUDIT_API_KEY` | `<secret>` (`audit_v1_…`) | literal — shared producer key | campus.auth, campus.api |
+| `BASE_URL` | `https://nyjc-campus.up.railway.app` | literal — the gateway's public URL | 8 app services |
+| `EMBED_TOKEN_SECRET` | `<secret>` | literal | campus-classroom, campus-apphost |
+| `ENV` | `production` | literal — runtime environment flag | 8 app services (was `development` until 2026-11-17 — see History) |
+| `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `3.12` | literal | six app services |
+| `WORKSPACE_DOMAIN` | `nyjc.edu.sg` | literal | campus.auth (pre-pass value; service-level refs now) |
+| `CAMPUS_TEST_STAFF_USERNAME` / `_PASSWORD` | username literal / `<secret>` | literal | test accounts (#767) |
+| `CAMPUS_TEST_STUDENT_USERNAME` / `_PASSWORD` | username literal / `<secret>` | literal | test accounts (#767) |
+
+### Per-service inventory (production)
+
+Template set common to the app services (identical text to development, with
+production's own domains):
+
+| Variable | Stored value | On services |
+|---|---|---|
+| `BASE_URL` | `${{shared.BASE_URL}}` | all 8 apps |
+| `ENV` | `${{shared.ENV}}` | all 8 apps |
+| `PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | all 8 apps |
+| `HOSTNAME` | `${{RAILWAY_PUBLIC_DOMAIN}}` | auth, api, audit, admin, profile, nyxchange |
+| `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | auth, api, audit, admin, profile, nyxchange |
+
+Service-specific variables:
+
+| Service | Variable | Stored value | Kind | Notes |
+|---|---|---|---|---|
+| campus.auth | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | |
+| campus.auth | `AUDIT_TRACING_ENABLED` | `1` | literal | |
+| campus.auth | `AUTH_OPERATOR_CLIENT_IDS` | `${{"campus-admin".CLIENT_ID}}` | template | stored unquoted by normalizer |
+| campus.auth | `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | |
+| campus.auth | `CLIENT_ID` | `uid-client-1a20f4a5` | literal | prod first-party client |
+| campus.auth | `CLIENT_SECRET` | `<secret>` | literal | |
+| campus.auth | `DEPLOY` | `campus.auth` | literal | vault label |
+| campus.auth | `MONGODB_NAME` | `campus_auth` | literal | |
+| campus.auth | `MONGODB_URI` | `${{"campus.auth-mongodb".MONGO_URL}}` | template | prod mongo names (no `-dev`) |
+| campus.auth | `POSTGRESDB_URI` | `${{"campus.auth-postgres".DATABASE_URL}}` | template | |
+| campus.auth | `SECRET_KEY` | `<secret>` | literal | |
+| campus.auth | `WORKSPACE_DOMAIN` | `${{shared.WORKSPACE_DOMAIN}}` | template | |
+| campus.api | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | |
+| campus.api | `AUDIT_TRACING_ENABLED` | `1` | literal | |
+| campus.api | `BUCKET_*` (5) | `${{"campus.api-bucket".…}}` | template | resolve to the **production** bucket instance (`campusapi-bucket-pdxxria`) |
+| campus.api | `CLIENT_ID` | `uid-client-11098893` | literal | |
+| campus.api | `CLIENT_SECRET` | `<secret>` | literal | |
+| campus.api | `DEPLOY` | `campus.api` | literal | |
+| campus.api | `MONGODB_NAME` | `campus_api` | literal | |
+| campus.api | `MONGODB_URI` | `${{"campus.api-mongodb".MONGO_URL}}` | template | |
+| campus.api | `POSTGRESDB_URI` | `${{"campus.api-postgres".DATABASE_URL}}` | template | |
+| campus.audit | `AUDIT_EVENTS_ENABLED` | `1` | literal | |
+| campus.audit | `AUDIT_OPERATOR_API_KEY` | `<secret>` | literal | |
+| campus.audit | `DEPLOY` | `campus.audit` | literal | |
+| campus.audit | `POSTGRESDB_URI` | `${{"campus.audit-postgres".DATABASE_URL}}` | template | |
+| campus.audit | `SECRET_KEY` | `<secret>` | literal | |
+| campus-gateway | `API_PORT` / `AUTH_PORT` / `AUDIT_PORT` / `PORT` | `8080` | literal | |
+| campus-gateway | `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1` | literal | |
+| campus-admin | `AUDIT_ADMINS` | `campus-admin@nyjc.edu.sg` | literal | differs from dev (no test account in prod) |
+| campus-admin | `AUDIT_API_KEY` / `AUDIT_UI_API_KEY` | `<secret>` | literal | |
+| campus-admin | `AUDIT_TRACING_ENABLED` | `1` | literal | |
+| campus-admin | `AUTH_ADMINS` | `ng_jun_siang@nyjc.edu.sg;campus-admin@nyjc.edu.sg` | literal | |
+| campus-admin | `CLIENT_ID` | `uid-client-6ec13381` | literal | referenced by auth's operator gate |
+| campus-admin | `CLIENT_SECRET` | `<secret>` | literal | |
+| campus-admin | `GUNICORN_CMD_ARGS` | `--timeout 120 --workers 2 …` | literal | |
+| campus-admin | `SECRET_KEY` | `<secret>` | literal | |
+| campus-classroom | `AUDIT_API_KEY` | `<secret>` | literal | own producer key |
+| campus-classroom | `AUDIT_TRACING_ENABLED` | `1` | literal | |
+| campus-classroom | `CLIENT_ID` | `uid-client-38c9647e` | literal | shared with apphost |
+| campus-classroom | `CLIENT_SECRET` | `<secret>` | literal | shared with apphost |
+| campus-classroom | `EMBED_ORIGIN` | `https://${{campus-apphost.RAILWAY_PUBLIC_DOMAIN}}` | template | |
+| campus-classroom | `EMBED_TOKEN_SECRET` | `${{shared.EMBED_TOKEN_SECRET}}` | template | |
+| campus-classroom | `SECRET_KEY` | `<secret>` | literal | |
+| campus-apphost | `CLIENT_ID` | `uid-client-38c9647e` | literal | shared with classroom |
+| campus-apphost | `CLIENT_SECRET` | `<secret>` | literal | shared with classroom |
+| campus-apphost | `EMBED_MODE` | `1` | literal | |
+| campus-apphost | `EMBED_PARENT_ORIGIN` | `https://${{campus-classroom.RAILWAY_PUBLIC_DOMAIN}}` | template | |
+| campus-apphost | `EMBED_TOKEN_SECRET` | `${{shared.EMBED_TOKEN_SECRET}}` | template | |
+| campus-apphost | `SECRET_KEY` | `<secret>` | literal | |
+| campus-profile | `AUDIT_API_KEY` | `<secret>` | literal | |
+| campus-profile | `AUDIT_TRACING_ENABLED` | `1` | literal | |
+| campus-profile | `CLIENT_ID` | `uid-client-25eb4681` | literal | |
+| campus-profile | `CLIENT_SECRET` | `<secret>` | literal | |
+| campus-profile | `SECRET_KEY` | `<secret>` | literal | |
+| nyxchange-timetable-v2 | `BUCKET_*` (5) | `${{"campus.api-bucket".…}}` | template | re-pointed 2026-11-17 from stale dev-bucket literals — instance has no deployment yet; first deploy will read the production bucket correctly |
+| nyxchange-timetable-v2 | `CLIENT_ID` | `uid-client-7f581eab` | literal | |
+| nyxchange-timetable-v2 | `CLIENT_SECRET` | `<secret>` | literal | |
+| nyxchange-timetable-v2 | `SECRET_KEY` | `<secret>` | literal | |
+
+No `PYTHON_VERSION`/`RAILPACK_PYTHON_VERSION` on classroom/apphost (railpack
+default). campus.audit has no `AUDIT_UI_URL`, `CLIENT_ID`/`CLIENT_SECRET` in
+production (the dev audit's `AUDIT_UI_URL` has no prod counterpart — don't add
+one without a code need). campus-profile's `HOSTNAME` is a self-reference.
+
+### Databases (production)
+
+Same canonical shapes as development. Root credential literals differ per
+environment — values are `<secret>`; the api-postgres root is the
+post-`databasePasswordReset` truth (the `POSTGRES_PASSWORD` literal was
+re-rooted onto it in the 2026-11-17 pass), and the audit-postgres root is the
+credential its pre-pass template had baked in.
+
+| Variable | Stored value | Kind | Notes |
+|---|---|---|---|
+| `DATABASE_URL` | `postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:5432/${{PGDATABASE}}` | template | all three postgres DBs |
+| `PGHOST` | `${{RAILWAY_PRIVATE_DOMAIN}}` | template | |
+| `PGDATABASE` | `${{POSTGRES_DB}}` | template | |
+| `PGUSER` | `${{POSTGRES_USER}}` | template | |
+| `PGPASSWORD` | `${{POSTGRES_PASSWORD}}` | template | |
+| `POSTGRES_PASSWORD` | `<secret>` | literal | the rotation root per DB |
+| `POSTGRES_USER` / `POSTGRES_DB` / `PGPORT` / `PGDATA` / `SSL_CERT_DAYS` / `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `postgres` / `railway` / `5432` / `/var/lib/postgresql/data/pgdata` / `820` / `60` | literal | image config |
+| `MONGO_URL` | `mongodb://${{MONGOUSER}}:${{MONGOPASSWORD}}@${{MONGOHOST}}:${{MONGOPORT}}` | template | both mongo DBs |
+| `MONGOHOST` | `${{RAILWAY_PRIVATE_DOMAIN}}` | template | |
+| `MONGOUSER` | `${{MONGO_INITDB_ROOT_USERNAME}}` | template | |
+| `MONGOPASSWORD` | `${{MONGO_INITDB_ROOT_PASSWORD}}` | template | |
+| `MONGO_INITDB_ROOT_USERNAME` | `mongo` | literal | |
+| `MONGO_INITDB_ROOT_PASSWORD` | `<secret>` | literal | the rotation root per mongo |
+
+No TCP proxies and no `*_PUBLIC_URL` variables exist on production databases
+(the ghost TCP-proxy variable and dead `DATABASE_PUBLIC_URL` on the postgres
+services were removed in the 2026-11-17 pass). Consumers reference
+`${{"campus.auth-mongodb".MONGO_URL}}`-style templates; the `-dev` suffix is
+absent from production service names.
+
 ## History
 
 - **2026-10-30** — first reference wiring on dev (audit/auth/api DB URIs,
   bucket creds via #1020's renamed `campus.api-bucket`, self-domain refs).
 - **2026-11-16/17** — the DB recreations and prod-standup work regressed parts
   of that wiring to literals and left the two DB TCP proxies attached.
-- **2026-11-17** — full templating pass (this document's snapshot): shared
-  layer created (`BASE_URL`, `AUDIT_API_KEY`, `EMBED_TOKEN_SECRET`), every
+- **2026-11-17 (development pass)** — full templating pass: shared layer
+  created (`BASE_URL`, `AUDIT_API_KEY`, `EMBED_TOKEN_SECRET`), every
   cross-service URL and DB URI on references, DB connect variables recomposed
   from their built-in definitions, ghost/dead vars deleted, both TCP proxies
   removed. campus-profile and nyxchange-timetable-v2 have the new config
   stored; their running deployments carry identical values, with the new
   templates materializing on their next successful build (their repos had a
   pre-existing poetry.lock drift failure that day).
+- **2026-11-17 (production pass, superadmin session)** — production matched to
+  the development pattern: shared layer created and `shared.ENV` corrected
+  `development → production` (a landmine: the prod shared layer had been
+  seeded with the development value while services carried `ENV=production`
+  literals), all app services converted to shared/self/cross-service
+  references, both bucket consumers moved to bucket references (nyxchange's
+  had pointed at the **development** bucket instance — a latent bug on the
+  never-deployed instance), the three postgres services recomposed to the
+  canonical shape (api-postgres and audit-postgres `POSTGRES_PASSWORD`
+  re-rooted onto their true credentials), ghost/dead vars removed. All
+  rendered values verified byte-identical except the intentional heals; seven
+  apps redeployed SUCCESS through healthchecks and smoke-tested 200.
+  Incident note: an intermediate state briefly set audit-postgres
+  `POSTGRES_PASSWORD` to a self-reference (rendered empty) — caught in
+  post-pass verification and corrected from the pre-change dump before any
+  redeploy consumed it.
