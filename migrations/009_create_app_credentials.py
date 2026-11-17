@@ -14,6 +14,8 @@ init_from_model, so deployments need this migration.
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
 
+TARGET_DB = "auth"
+
 
 def upgrade():
     """Create app_credentials table."""

@@ -2,8 +2,16 @@
 
 Revision ID: 002
 Create Date: 2025-01-29
+
+TARGET_DB is "api": submissions belong to the api service. The postgres
+table this migration created predates the current topology — submissions
+are a document collection now, so the table exists in no environment and
+the migration is recorded `historical` in every ledger (#1104).
 """
+
 from campus.storage.tables.backend.postgres import PostgreSQLTable
+
+TARGET_DB = "api"
 
 
 def upgrade():

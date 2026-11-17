@@ -15,24 +15,30 @@ applied to each environment, and how applied state is tracked.
 
 A migration is a single numbered Python file in `migrations/` at the repo
 root. Each file is self-contained: it carries its own `upgrade()` and
-`downgrade()` functions. Execution is operator-driven — nothing runs
-automatically on deploy. `migrations/runner.py` is the tool for both
-halves of that: it applies migrations in revision order (`apply`) and
-tracks applied state in the `_migrations` ledger table
-(`ensure|stamp|status` — see
+`downgrade()` functions, and a module-level `TARGET_DB` constant naming
+the service whose database it writes (#1104). Execution is
+operator-driven — nothing runs automatically on deploy.
+`migrations/runner.py` is the tool for both halves of that: it applies
+migrations in revision order (`apply`) and tracks applied state in the
+`_migrations` ledger table (`ensure|stamp|status` — see
 [Applied-migrations ledger](#applied-migrations-ledger)). Running a
 single migration script directly still works for special cases (e.g.
 a data backfill's dry-run mode).
 
-Migrations target one of two storage families:
+Since the #970 split each service owns its own databases; a migration
+targets one of them:
 
-| Target | Used for | Access pattern |
-|--------|----------|----------------|
-| Postgres (`campus.auth-postgres` service) | Auth, vault, and audit tables | `PostgreSQLTable` from `campus.storage.tables.backend.postgres`, raw DDL via `init_from_schema` |
-| Mongo (`campus.auth-mongodb`) | Auth document collections | `campus.storage.get_collection`, document-by-document rewrites |
+| TARGET_DB | Service DBs written | Used for | Access pattern |
+|-----------|--------------------|----------|----------------|
+| `auth` | `campus.auth-postgres` / `campus.auth-mongodb` | Auth, vault, clients, grants tables + auth document collections | `PostgreSQLTable` from `campus.storage.tables.backend.postgres` (raw DDL via `init_from_schema`), `campus.storage.get_collection` |
+| `api` | `campus.api-postgres` / `campus.api-mongodb` | api tables (emailotp, timetable members, calendar) + api document collections | same |
+| `audit` | `campus.audit-postgres` | Audit tables (spans, api keys, rate-limit buckets) | `PostgreSQLTable` |
 
-Examples: `migrations/003_add_api_traces_table.py` (Postgres DDL) and
-`migrations/005_backfill_scope_string.py` (Mongo data backfill).
+Examples: `migrations/011_create_calendar_table.py` (`TARGET_DB =
+"api"`, Postgres DDL) and `migrations/005_backfill_scope_string.py`
+(`TARGET_DB = "auth"`, Mongo data backfill). Files predating #1104
+declare `TARGET_DB` retroactively; the runner's default scope is
+`auth`, which keeps every pre-#1104 invocation working verbatim.
 
 ## When a migration is needed
 
@@ -58,6 +64,12 @@ self-healing for an existing environment.
 - **Location and numbering**: `migrations/NNN_short_slug.py`, sequential
   from the highest existing number. Never reuse a number, even if a
   migration was reverted before release.
+- **Target DB**: every migration declares `TARGET_DB = "auth" | "api" |
+  "audit"` — the service whose database `upgrade()` writes (#1104). The
+  runner scopes every command with `--db` and the startup pending-check
+  compares each service against its own ledger; an undeclared file
+  defaults to `auth`, so the constant must be explicit for anything
+  targeting api or audit.
 - **Immutability**: never edit a migration that has been applied to any
   environment. Fix-forward with a new migration instead. Since phase 3
   (#746) this is enforced: `apply` refuses to run when an applied
@@ -179,20 +191,26 @@ non-production boots are unchanged (dev self-heals schema via
 `init_from_model`) — and it never runs anything: migrations stay
 manual, per this runbook:
 
-1. `railway ssh -s campus.auth` (add `-e <environment>` as needed).
-   Service SSH must be enabled in the Railway dashboard.
+1. `railway ssh -s campus.<svc>` for the service whose DB the
+   migration targets (its `TARGET_DB`; add `-e <environment>` as
+   needed). Service SSH must be enabled in the Railway dashboard.
 2. The repo is at `/app`; credentials resolve from the service's
    environment variables.
 3. Run the migration:
-   `python migrations/runner.py apply` runs every pending migration in
-   revision order and records each outcome in the ledger; scope a
-   deliberate partial run with `--up-to <rev>`.
+   `python migrations/runner.py --db <svc> apply` runs every pending
+   migration targeting that service's DB in revision order and records
+   each outcome in that service's ledger; scope a deliberate partial
+   run with `--up-to <rev>`. The `--db` scope matters for revisions
+   that do not target auth: without it the runner silently operates on
+   the wrong DB's ledger (011/calendar's docstring once said "run in
+   the campus.auth context" and the 2026-11-16 prod standup created
+   the table in the auth DB — #1104).
    For data backfills, run the migration's own dry-run first
    (`python migrations/NNN_slug.py`, then `--apply` logic is what
    `runner.py apply` invokes).
    Some migrations are guarded by `@block_env(PRODUCTION)`; where a guard
    must be bypassed for a deliberate production run, use a per-process
-   override (`ENV=development python migrations/runner.py apply`) and say
+   override (`ENV=development python migrations/runner.py --db <svc> apply`) and say
    so in the migration's docstring.
 4. Verify by exercising the affected flow, then check the runner already
    recorded the run (`python migrations/runner.py status`); update the
@@ -215,28 +233,37 @@ running-service config twice — last resort).
 
 ## Applied-migrations ledger
 
-As of 2026-10-03 (#27 phase 1), applied state is tracked in the
-`_migrations` table of the auth Postgres (`campus.auth-postgres`) —
-**the table is the authoritative record wherever it exists**. The table
-below is a human-readable mirror and the record of history that predates
-it. The table is created by the runner, not by a migration file, and
-records both storage families (Postgres DDL and Mongo backfills), since
-every migration runs in the campus.auth context where both secrets
-resolve.
+Applied state is tracked in a `_migrations` table **per service
+database** (#1104): each service's Postgres carries its own ledger,
+recording the migrations whose `TARGET_DB` matches that service. The
+table is the authoritative record wherever it exists; the table below
+is a human-readable mirror and the record of history that predates it.
+The table is created by the runner, not by a migration file, and
+records both storage families (Postgres DDL and Mongo backfills)
+targeting that service. The auth ledger is the oldest and carries
+rows for api/audit-era revisions stamped before per-DB scoping existed
+— those rows are residue, not drift: `status --db auth` skips
+revisions whose files target another DB.
 
-Runner commands (from a context where `POSTGRESDB_URI` resolves, e.g.
-`railway ssh` into campus.auth):
+Runner commands (from a context where the target service's
+`POSTGRESDB_URI` resolves, e.g. `railway ssh` into that service — the
+ledger read/written is the one in the context's DB):
 
 ```bash
-python migrations/runner.py ensure             # create _migrations (idempotent)
-python migrations/runner.py status             # applied/pending per migration file
-python migrations/runner.py stamp 005          # record one migration as applied (no run)
-python migrations/runner.py stamp all          # record every migration as applied
+python migrations/runner.py ensure                  # create _migrations (idempotent)
+python migrations/runner.py status                  # applied/pending per scoped migration file
+python migrations/runner.py stamp 005               # record one migration as applied (no run)
+python migrations/runner.py stamp all               # record every scoped migration as applied
 python migrations/runner.py stamp 001 --as historical   # record as never applicable here
-python migrations/runner.py apply              # run pending migrations in revision order
-python migrations/runner.py apply --up-to 008  # run pending migrations up to 008
+python migrations/runner.py apply                   # run pending scoped migrations in order
+python migrations/runner.py apply --up-to 008       # run pending scoped migrations up to 008
 python migrations/runner.py apply --allow-hash-mismatch  # run despite an edited applied file (warn)
 ```
+
+Append `--db api` / `--db audit` to scope any command to that
+service's migrations (default `auth`). Resolving a revision that
+targets another DB errors with the right `--db` to pass, so a
+wrong-context run cannot silently write the row into the wrong ledger.
 
 Each row records the revision, filename, `status`, the stamp/run time
 and operator (`applied_at`, `applied_by`), the error text for
@@ -277,21 +304,36 @@ up to date and `apply` is a no-op on dev. Statuses below verified as of
 
 | Migration | Target | Purpose | Dev | Prod |
 |-----------|--------|---------|-----|------|
-| 001_add_assignments_table | Postgres | `assignments` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | historical — fresh DB (2026-11-16 standup), recorded `historical` |
-| 002_add_submissions_table | Postgres | `submissions` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | historical — fresh DB (2026-11-16 standup), recorded `historical` |
-| 003_add_api_traces_table | Postgres | `spans` table for audit tracing | applied (verified 2026-10-01; stamped 2026-10-03) | applied — stamped 2026-11-16; audit spans live in the audit service's own postgres, so this legacy table is not recreated |
-| 004_add_vault_clients_public_columns | Postgres | public-client columns on `vault_clients` | applied (self-healed, verified 2026-09-29; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
-| 005_backfill_scope_string | Mongo | RFC 6749 scope-string rewrite + token field backfill | applied (2026-09-30; stamped 2026-10-03) | applied — stamped 2026-11-16 (no legacy rows to backfill) |
-| 006_add_client_allowed_scopes | Postgres | per-client scope allowlists | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
-| 007_add_client_upstream_scopes | Postgres | per-client upstream scope config | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
-| 008_add_client_token_bridge | Postgres | token-bridge columns | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
-| 009_create_app_credentials | Postgres | `app_credentials` for client_credentials grant | applied (auto-init at startup, non-production; stamped 2026-10-03) | applied — stamped 2026-11-16 (table created by `CredentialsResource.init_storage`) |
-| 010_create_access_grants | Postgres | `access_grants` store (#883/#884), backfilling and retiring `vault_access` | applied (2026-10-10, 1.2s; backfill verified — 48 vault grant rows) | applied — stamped 2026-11-16 (fresh grants seeded directly; nothing to backfill) |
-| 011_create_calendar_table | Postgres | `calendar` table (school calendar, timetable-v2) | applied (self-healed by `campus.api` startup init) | applied 2026-11-16 (232 ms) — note: the table was created in **campus.api's postgres** (where `campus.api` reads it, dev parity), not the auth DB the runner runs in; see docs/prod-rollout.md |
+| 001_add_assignments_table | Postgres (api) | `assignments` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | historical — fresh DB (2026-11-16 standup), recorded `historical` |
+| 002_add_submissions_table | Postgres (api) | `submissions` table | historical — tables absent from both dev Postgres DBs (verified 2026-10-03); recorded `historical` in ledger | historical — fresh DB (2026-11-16 standup), recorded `historical` |
+| 003_add_api_traces_table | Postgres (audit) | `spans` table for audit tracing | applied (verified 2026-10-01; stamped 2026-10-03) | applied — stamped 2026-11-16; audit spans live in the audit service's own postgres, so this legacy table is not recreated |
+| 004_add_vault_clients_public_columns | Postgres (auth) | public-client columns on `vault_clients` | applied (self-healed, verified 2026-09-29; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 005_backfill_scope_string | Mongo (auth) | RFC 6749 scope-string rewrite + token field backfill | applied (2026-09-30; stamped 2026-10-03) | applied — stamped 2026-11-16 (no legacy rows to backfill) |
+| 006_add_client_allowed_scopes | Postgres (auth) | per-client scope allowlists | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 007_add_client_upstream_scopes | Postgres (auth) | per-client upstream scope config | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 008_add_client_token_bridge | Postgres (auth) | token-bridge columns | applied (recorded 2026-10-02; stamped 2026-10-03) | applied — stamped 2026-11-16 (fresh DB initialized from current model) |
+| 009_create_app_credentials | Postgres (auth) | `app_credentials` for client_credentials grant | applied (auto-init at startup, non-production; stamped 2026-10-03) | applied — stamped 2026-11-16 (table created by `CredentialsResource.init_storage`) |
+| 010_create_access_grants | Postgres (auth) | `access_grants` store (#883/#884), backfilling and retiring `vault_access` | applied (2026-10-10, 1.2s; backfill verified — 48 vault grant rows) | applied — stamped 2026-11-16 (fresh grants seeded directly; nothing to backfill) |
+| 011_create_calendar_table | Postgres (api) | `calendar` table (school calendar, timetable-v2) | applied (self-healed by `campus.api` startup init) | applied 2026-11-16 (232 ms) — created in **campus.api's postgres** (where `campus.api` reads it, dev parity); the standup first created it in the auth DB per this row's pre-#1104 docstring and dropped it again (#1104) |
+
+Per-DB ledger baselines (#1104): the **auth** ledger keeps the rows it
+has — its pre-#1104 rows for 001/002/003/011 are residue that
+`--db auth` commands skip (their files target api/audit). The **api**
+and **audit** ledgers are baselined at first scope run, in each
+service's context:
+
+```bash
+# campus.api context:   ensure + stamp 001,002 --as historical + stamp 011
+# campus.audit context: ensure + stamp 003
+```
+
+(the spans/calendar tables exist there via the out-of-band storage
+bootstrap, docs/prod-rollout.md §3 phase 2 — the stamps record that
+reality so the startup pending-check reads clean).
 
 Prod baseline (2026-11-16 standup, see docs/prod-rollout.md): the
 production databases were initialized from the current model and the
-ledger stamped to match — `apply` is a no-op until a new migration
+auth ledger stamped to match — `apply` is a no-op until a new migration
 ships. New migrations run via the manual runbook above.
 
 ## Known gaps

@@ -19,6 +19,8 @@ scopes the client was approved for.
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
 
+TARGET_DB = "auth"
+
 
 def upgrade():
     """Add upstream_scopes column to vault_clients."""

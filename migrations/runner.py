@@ -3,27 +3,39 @@
 Revision ID: n/a (the runner is not itself a migration)
 Create Date: 2026-10-03
 
-The `_migrations` table in the auth Postgres (campus.auth-postgres) is
-the authoritative record of which migrations have been applied to an
-environment (#27 phase 1, #744). The doc ledger in
-docs/migration-protocol.md is a human-readable mirror. The table is
-created here, NOT by a migration file, to avoid the chicken-and-egg of
-a migration that records migrations. It records both storage families
-(Postgres DDL and Mongo backfills): every migration runs in the
-campus.auth context where both secrets resolve.
+Applied state is tracked in a `_migrations` table **per service
+database** (#1104): schema is per-DB since the #970 split gave auth,
+api and audit their own Postgres/Mongo services, so each service DB
+carries its own ledger recording the migrations that target it. A
+migration declares its target with a module-level `TARGET_DB` constant
+("auth" | "api" | "audit", default "auth"); the runner scopes every
+command to one DB with `--db` and connects through the POSTGRESDB_URI
+of the context it runs in — run it inside the target service's context
+(`railway ssh -s campus.api`) so the ledger lands in that service's
+DB. The doc ledger in docs/migration-protocol.md is the human-readable
+mirror. The table is created here, NOT by a migration file, to avoid
+the chicken-and-egg of a migration that records migrations. It records
+both storage families (Postgres DDL and Mongo backfills) targeting the
+scoped service.
 
-Commands (run like today's migration scripts, from a context where
-POSTGRESDB_URI resolves, e.g. `railway ssh` into campus.auth):
+Commands (run like today's migration scripts, from a context where the
+target service's POSTGRESDB_URI resolves, e.g. `railway ssh` into that
+service):
 
-    python migrations/runner.py ensure             # create _migrations (idempotent)
-    python migrations/runner.py status             # applied/pending per migration file
-    python migrations/runner.py stamp 005          # record one migration as applied
-    python migrations/runner.py stamp all          # record every migration as applied
+    python migrations/runner.py ensure                  # create _migrations (idempotent)
+    python migrations/runner.py status                  # applied/pending per migration file
+    python migrations/runner.py stamp 005               # record one migration as applied
+    python migrations/runner.py stamp all               # record every migration as applied
     python migrations/runner.py stamp 001 --as historical   # record as never-applicable
-    python migrations/runner.py apply              # run pending migrations in order
-    python migrations/runner.py apply --up-to 008  # run pending migrations up to 008
+    python migrations/runner.py apply                   # run pending migrations in order
+    python migrations/runner.py apply --up-to 008       # run pending migrations up to 008
     python migrations/runner.py apply --allow-hash-mismatch
         # run anyway after the hash guard flagged an edited, applied file
+
+Append `--db api` / `--db audit` to any command to scope it to that
+service's migrations and ledger (default: auth — every pre-#1104
+migration targeted the shared auth context, so the default keeps the
+historical invocations working verbatim).
 
 Ledger statuses:
 
@@ -45,7 +57,9 @@ per-process override for deliberate production runs:
 
 Baseline bootstrap for dev (per the doc ledger, 2026-10-03): 003–009
 stamped applied; 001–002 stamped `--as historical` (their tables are
-absent from both dev Postgres databases).
+absent from both dev Postgres databases). The per-DB ledgers api/audit
+baseline at first scope run (stamp that DB's applied revisions; see
+the protocol doc).
 
 Execution audit (#27 phase 3, #746): every run records who ran it, how
 long it took and a sha256 of the migration file — `applied_by`,
@@ -61,7 +75,9 @@ protocol doc's backup conventions.
 
 Startup visibility (#27 phase 4, #747): production-style boots call
 warn_if_pending() from main.create_app — one WARNING line naming every
-revision the ledger does not record as applied or historical. The check
+revision targeting THAT service's DB which the service's own ledger
+does not record as applied or historical (the #1104 scoping: api/audit
+boots used to find no ledger at all and warn about nothing). The check
 is fail-open (an unreachable ledger never blocks boot) and never runs
 anything: migrations stay manual, never auto-run from Campus apps.
 
@@ -72,6 +88,7 @@ ledger table is runner bookkeeping, not user schema.
 """
 
 import argparse
+import ast
 import hashlib
 import logging
 import re
@@ -85,6 +102,20 @@ from campus.common import env
 logger = logging.getLogger(__name__)
 
 LEDGER_TABLE = "_migrations"
+
+# Per-migration target DBs (#1104): the service whose database a
+# migration writes. Every migration declares TARGET_DB; "auth" is the
+# default so pre-#1104 files without the constant keep their historical
+# meaning (the shared auth context).
+KNOWN_TARGET_DBS = ("auth", "api", "audit")
+DEFAULT_TARGET_DB = "auth"
+
+# env.DEPLOY value -> runner DB scope, for warn_if_pending.
+DEPLOY_TO_TARGET_DB = {
+    "campus.auth": "auth",
+    "campus.api": "api",
+    "campus.audit": "audit",
+}
 
 # Full schema defined up front (#744): phase-3 audit columns are nullable
 # so later phases fill them without DDL changes.
@@ -138,13 +169,42 @@ class MigrationFile:
 
     revision: str  # NNN numeric prefix, e.g. "003"
     filename: str  # full filename, e.g. "003_add_api_traces_table.py"
+    # The service DB this migration writes (#1104); "auth" for
+    # pre-#1104 files without a TARGET_DB constant.
+    target_db: str = DEFAULT_TARGET_DB
+
+
+def _read_target_db(path: Path) -> str:
+    """Read a migration's TARGET_DB declaration without importing it.
+
+    Importing a migration module executes its top-level code (storage
+    imports), which status/ensure must not require — so the constant is
+    parsed out of the AST instead. Files without the constant default
+    to "auth" (the historical shared context); an unknown value is a
+    malformed repo state and raises, like a duplicate revision.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if (isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+                and node.targets[0].id == "TARGET_DB"
+                and isinstance(node.value, ast.Constant)):
+            value = node.value.value
+            if value not in KNOWN_TARGET_DBS:
+                raise ValueError(
+                    f"{path.name}: TARGET_DB {value!r} is not one of "
+                    f"{', '.join(KNOWN_TARGET_DBS)}"
+                )
+            return value
+    return DEFAULT_TARGET_DB
 
 
 def discover_migration_files(migrations_dir: Path = MIGRATIONS_DIR) -> list[MigrationFile]:
     """Return migration files in the directory, sorted by revision.
 
     Only files matching the NNN_slug.py convention are migrations; other
-    entries (runner.py, _init.py, READMEs) are ignored. Duplicate
+    entries (runner.py, _backup.py, READMEs) are ignored. Duplicate
     revisions are a malformed repo state and raise ValueError.
     """
     files: list[MigrationFile] = []
@@ -159,8 +219,29 @@ def discover_migration_files(migrations_dir: Path = MIGRATIONS_DIR) -> list[Migr
                 f"{seen[match.group(1)]} and {path.name}"
             )
         seen[match.group(1)] = path.name
-        files.append(MigrationFile(revision=match.group(1), filename=path.name))
+        files.append(MigrationFile(
+            revision=match.group(1),
+            filename=path.name,
+            target_db=_read_target_db(path),
+        ))
     return files
+
+
+def filter_files_by_db(files: list[MigrationFile],
+                       db: str) -> list[MigrationFile]:
+    """The migrations targeting `db` (#1104 scope)."""
+    return [f for f in files if f.target_db == db]
+
+
+def known_revisions(files: list[MigrationFile]) -> set[str]:
+    """Every revision present on disk, across all target DBs.
+
+    compute_status uses this to tell "ledger row for a revision that
+    targets ANOTHER db" (normal with #1104's per-DB ledgers — the auth
+    ledger carries api/audit-era rows) apart from "row whose file is
+    gone" (real drift).
+    """
+    return {f.revision for f in files}
 
 
 def resolve_revision(arg: str, files: list[MigrationFile]) -> MigrationFile:
@@ -183,9 +264,37 @@ def resolve_revision(arg: str, files: list[MigrationFile]) -> MigrationFile:
     raise ValueError(f"Unknown migration {arg!r} (known revisions: {known})")
 
 
+def resolve_scoped_revision(arg: str, all_files: list[MigrationFile],
+                            db: str) -> MigrationFile:
+    """Resolve a stamp/apply argument within one DB's scope (#1104).
+
+    A revision that exists but targets ANOTHER db gets an actionable
+    error (name the right --db) instead of "unknown migration" — the
+    likely cause is running the runner in the wrong service's context,
+    which would write the row into the wrong ledger.
+    """
+    scoped = filter_files_by_db(all_files, db)
+    try:
+        return resolve_revision(arg, scoped)
+    except ValueError:
+        pass
+    try:
+        file = resolve_revision(arg, all_files)
+    except ValueError:
+        known = ", ".join(f.revision for f in scoped)
+        raise ValueError(
+            f"Unknown migration {arg!r} (known {db} revisions: {known})"
+        ) from None
+    raise ValueError(
+        f"revision {file.revision} targets {file.target_db}, not {db} — "
+        f"re-run with --db {file.target_db} in that service's context"
+    ) from None
+
+
 def compute_status(
     files: list[MigrationFile],
     ledger_rows: dict[str, dict],
+    known_revisions: set[str] | None = None,
 ) -> list[tuple[MigrationFile, str]]:
     """Diff discovered files against ledger rows.
 
@@ -193,15 +302,20 @@ def compute_status(
     its ledger status (APPLIED, FAILED, HISTORICAL) or PENDING when no
     row exists. Ledger rows whose file is gone are reported after files
     with state MISSING_FILE (never reuse a number; a missing file is
-    drift to report).
+    drift to report). With `known_revisions` set (all revisions on
+    disk, across target DBs), a row for a revision that exists but
+    targets ANOTHER db is skipped rather than reported — with #1104's
+    per-DB ledgers the auth ledger legitimately carries rows for
+    api/audit revisions that aren't in the auth scope.
     """
     status: list[tuple[MigrationFile, str]] = []
     for file in files:
         row = ledger_rows.get(file.revision)
         state = row["status"] if row else PENDING
         status.append((file, state))
+    skip = known_revisions or {f.revision for f in files}
     for revision, row in sorted(ledger_rows.items()):
-        if revision not in {f.revision for f in files}:
+        if revision not in skip:
             status.append(
                 (MigrationFile(revision=revision, filename=row.get("filename", "?")),
                  MISSING_FILE)
@@ -238,10 +352,14 @@ def _file_hash(path: Path) -> str | None:
 
 
 def _connect():
-    """Open a connection to the auth Postgres.
+    """Open a connection to the service Postgres of this context.
 
     Same resolution path as the storage backends: POSTGRESDB_URI from
     the environment, or the registered getsecret (vault) fallback.
+    Which DB that IS depends on where the runner runs (#1104): the
+    auth context resolves the auth DB, `railway ssh -s campus.api`
+    resolves the api DB — run the runner in the target service's
+    context so its ledger records the run.
     """
     import psycopg2
     return psycopg2.connect(env.getsecret("POSTGRESDB_URI"))
@@ -419,16 +537,19 @@ def hash_mismatches(
 
 
 def warn_if_pending(env_name: str | None = None,
-                    migrations_dir: Path | None = None) -> list[str]:
+                    migrations_dir: Path | None = None,
+                    db: str | None = None) -> list[str]:
     """Log a WARNING when migrations are outstanding; never raise (#747).
 
     Called at app startup (main.create_app) in production-style
     environments — the ones where startup init_from_model is blocked, so
     only the runner can have brought the schema up to date. Any revision
-    the ledger does not record as applied or historical (pending,
-    failed, or a ledger row whose file is gone) is named in one WARNING
-    line. Unlike the CLI commands this uses logging, not print: it runs
-    inside the app, where stdout is no one's console.
+    targeting this service's DB (#1104 scope: derived from env.DEPLOY,
+    or pass `db` explicitly) that the service's own ledger does not
+    record as applied or historical (pending, failed, or a ledger row
+    whose file is gone) is named in one WARNING line. Unlike the CLI
+    commands this uses logging, not print: it runs inside the app,
+    where stdout is no one's console.
 
     Fail-open by design: an unresolvable POSTGRESDB_URI, a missing
     ledger table, a malformed migrations/ directory — any error is
@@ -445,26 +566,37 @@ def warn_if_pending(env_name: str | None = None,
         env_name = env.ENV
     if env_name not in PENDING_WARN_ENVS:
         return []
+    if db is None:
+        from campus.common import env
+        # DEPLOY is set on every deployed service; absent contexts
+        # (tests, ad-hoc scripts) fall back to the historical auth
+        # scope.
+        db = DEPLOY_TO_TARGET_DB.get(env.get("DEPLOY", "") or "",
+                                     DEFAULT_TARGET_DB)
     try:
-        files = discover_migration_files(migrations_dir or MIGRATIONS_DIR)
+        all_files = discover_migration_files(migrations_dir or MIGRATIONS_DIR)
+        files = filter_files_by_db(all_files, db)
         conn = _connect()
         try:
             rows = _fetch_ledger_rows(conn)
         finally:
             conn.close()
         outstanding = [
-            (file, state) for file, state in compute_status(files, rows)
+            (file, state) for file, state in
+            compute_status(files, rows,
+                           known_revisions={f.revision for f in all_files})
             if state not in (APPLIED, HISTORICAL)
         ]
         if outstanding:
             logger.warning(
-                "%s migration(s) not recorded applied at startup: %s — "
-                "run `python migrations/runner.py status` / `apply` "
-                "out-of-band; startup proceeding (apps never auto-run "
-                "migrations)",
-                len(outstanding),
+                "%s migration(s) targeting %s not recorded applied at "
+                "startup: %s — run `python migrations/runner.py --db %s "
+                "status` / `apply` in this service's context out-of-band; "
+                "startup proceeding (apps never auto-run migrations)",
+                len(outstanding), db,
                 ", ".join(f"{file.filename} [{state}]"
                           for file, state in outstanding),
+                db,
             )
         return [file.revision for file, _ in outstanding]
     except Exception as e:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
@@ -476,12 +608,14 @@ def warn_if_pending(env_name: str | None = None,
 
 def cmd_ensure(args, conn) -> int:
     ensure(conn)
-    print(f"ledger table {LEDGER_TABLE!r} ready")
+    print(f"ledger table {LEDGER_TABLE!r} ready "
+          f"(scope: {args.db} migrations in this service's DB)")
     return 0
 
 
 def cmd_stamp(args, conn) -> int:
-    files = discover_migration_files()
+    all_files = discover_migration_files()
+    files = filter_files_by_db(all_files, args.db)
     ensure(conn)
     status = args.as_status
     if args.revision == "all":
@@ -491,7 +625,8 @@ def cmd_stamp(args, conn) -> int:
             if rows.get(f.revision, {}).get("status") != status
         ]
         if not pending:
-            print(f"nothing to stamp: all migrations already recorded as {status}")
+            print(f"nothing to stamp: all {args.db} migrations "
+                  f"already recorded as {status}")
             return 0
         for file in pending:
             stamp(conn, file, status)
@@ -499,7 +634,7 @@ def cmd_stamp(args, conn) -> int:
         print(f"stamped {len(pending)} migration(s) as {status}")
         return 0
 
-    file = resolve_revision(args.revision, files)
+    file = resolve_scoped_revision(args.revision, all_files, args.db)
     if stamp(conn, file, status):
         print(f"stamped {file.revision} as {status} ({file.filename})")
     else:
@@ -508,9 +643,13 @@ def cmd_stamp(args, conn) -> int:
 
 
 def cmd_status(args, conn) -> int:
-    files = discover_migration_files()
+    all_files = discover_migration_files()
+    files = filter_files_by_db(all_files, args.db)
     rows = _fetch_ledger_rows(conn)
-    status = compute_status(files, rows)
+    status = compute_status(files, rows,
+                            known_revisions={f.revision for f in all_files})
+    print(f"scope: {args.db} (migrations targeting {args.db}, ledger in "
+          "this service's DB)")
     for file, state in status:
         print(f"{file.revision}  {file.filename:<48} {state}")
     print(_format_summary(status))
@@ -518,7 +657,8 @@ def cmd_status(args, conn) -> int:
 
 
 def cmd_apply(args, conn) -> int:
-    files = discover_migration_files()
+    all_files = discover_migration_files()
+    files = filter_files_by_db(all_files, args.db)
     ensure(conn)
     rows = _fetch_ledger_rows(conn)
 
@@ -545,7 +685,8 @@ def cmd_apply(args, conn) -> int:
             file=sys.stderr,
         )
 
-    up_to = resolve_revision(args.up_to, files) if args.up_to else None
+    up_to = (resolve_scoped_revision(args.up_to, all_files, args.db)
+             if args.up_to else None)
     targets = pending_for_apply(files, rows, up_to)
     if not targets:
         print("up to date: nothing to apply")
@@ -587,14 +728,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser(
+    def add_db_argument(sub: argparse.ArgumentParser) -> None:
+        # #1104: scope the command to one service's migrations; the
+        # ledger read/written is the one in the context's POSTGRESDB_URI,
+        # so run the runner in the target service's context
+        # (`railway ssh -s campus.<db>`).
+        sub.add_argument(
+            "--db",
+            choices=KNOWN_TARGET_DBS,
+            default=DEFAULT_TARGET_DB,
+            help="migrations whose TARGET_DB is this service (default: "
+                 "auth, the historical shared context); run in that "
+                 "service's context so its ledger is used",
+        )
+
+    ensure_parser = subparsers.add_parser(
         "ensure",
         help="create the _migrations ledger table (idempotent)",
     )
+    add_db_argument(ensure_parser)
     stamp_parser = subparsers.add_parser(
         "stamp",
         help="record a migration as applied without running it",
     )
+    add_db_argument(stamp_parser)
     stamp_parser.add_argument(
         "revision",
         metavar="rev|all",
@@ -612,6 +769,7 @@ def main(argv: list[str] | None = None) -> int:
         "apply",
         help="run pending migrations in revision order",
     )
+    add_db_argument(apply_parser)
     apply_parser.add_argument(
         "--up-to",
         dest="up_to",
@@ -625,10 +783,11 @@ def main(argv: list[str] | None = None) -> int:
         help="apply even when an applied migration file's hash no longer "
              "matches the ledger (edited file); warn instead of refusing",
     )
-    subparsers.add_parser(
+    status_parser = subparsers.add_parser(
         "status",
         help="diff migrations/ files against the ledger",
     )
+    add_db_argument(status_parser)
 
     args = parser.parse_args(argv)
     handlers = {

@@ -1052,5 +1052,265 @@ class TestWarnIfPending(unittest.TestCase):
         self.assertEqual(outstanding, [])
 
 
+class TestTargetDbDeclaration(unittest.TestCase):
+    """Per-migration TARGET_DB (#1104): AST-parsed without importing,
+    "auth" as the pre-#1104 default, unknown values refused."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.dir = Path(self.tmpdir.name)
+
+    def _discover(self):
+        from migrations import runner
+        return runner.discover_migration_files(self.dir)
+
+    def test_declared_target_is_parsed(self):
+        (self.dir / "001_a.py").write_text('TARGET_DB = "api"\n', encoding="utf-8")
+        files = self._discover()
+        self.assertEqual([f.target_db for f in files], ["api"])
+
+    def test_missing_declaration_defaults_to_auth(self):
+        (self.dir / "001_a.py").write_text("x = 1\n", encoding="utf-8")
+        self.assertEqual(self._discover()[0].target_db, "auth")
+
+    def test_unknown_value_raises(self):
+        (self.dir / "001_a.py").write_text(
+            'TARGET_DB = "yapper"\n', encoding="utf-8")
+        with self.assertRaises(ValueError):
+            self._discover()
+
+    def test_ast_read_does_not_execute_module_code(self):
+        # discovery must not import the migration (status/ensure run in
+        # contexts where storage imports may not resolve)
+        (self.dir / "001_a.py").write_text(
+            'raise RuntimeError("module code executed")\n\n'
+            'TARGET_DB = "audit"\n',
+            encoding="utf-8")
+        self.assertEqual(self._discover()[0].target_db, "audit")
+
+    def test_every_repo_migration_declares_a_known_db(self):
+        from migrations import runner
+        files = runner.discover_migration_files()
+        self.assertTrue(files, "repo migrations/ unexpectedly empty")
+        for file in files:
+            self.assertIn(file.target_db, runner.KNOWN_TARGET_DBS,
+                          file.filename)
+
+    def test_repo_targets_spot_pins(self):
+        # 001/002/011 are api's, 003 is audit's, the client/grant
+        # family is auth's — the drift this PR exists to prevent
+        # (#1104: 011's docstring once sent prod to the auth DB).
+        from migrations import runner
+        by_revision = {
+            f.revision: f.target_db
+            for f in runner.discover_migration_files()
+        }
+        self.assertEqual(by_revision["001"], "api")
+        self.assertEqual(by_revision["002"], "api")
+        self.assertEqual(by_revision["003"], "audit")
+        self.assertEqual(by_revision["004"], "auth")
+        self.assertEqual(by_revision["011"], "api")
+
+
+class TestDbScope(unittest.TestCase):
+    """--db scoping (#1104): file filter, ledger-row known-revision
+    skip, and the cross-db revision error."""
+
+    @staticmethod
+    def _files():
+        from migrations.runner import MigrationFile
+        return [
+            MigrationFile(revision="004", filename="004_auth.py",
+                          target_db="auth"),
+            MigrationFile(revision="011", filename="011_api.py",
+                          target_db="api"),
+        ]
+
+    @staticmethod
+    def _row(revision, filename, status="applied"):
+        return {
+            "revision": revision,
+            "filename": filename,
+            "status": status,
+            "applied_at": datetime(2026, 10, 3),
+            "file_hash": None,
+        }
+
+    def test_filter_files_by_db(self):
+        from migrations.runner import filter_files_by_db
+        api = filter_files_by_db(self._files(), "api")
+        self.assertEqual([f.revision for f in api], ["011"])
+
+    def test_out_of_scope_row_is_not_missing_file(self):
+        # the auth ledger legitimately carries rows for api/audit
+        # revisions stamped before per-DB scoping; with known_revisions
+        # they are neither status entries nor MISSING_FILE drift
+        from migrations.runner import (
+            MISSING_FILE,
+            PENDING,
+            compute_status,
+        )
+        files = [f for f in self._files() if f.target_db == "api"]
+        rows = {
+            "004": self._row("004", "004_auth.py"),
+            "099": self._row("099", "099_gone.py"),
+        }
+        status = compute_status(files, rows,
+                                known_revisions={"004", "011"})
+        self.assertEqual([(f.revision, state) for f, state in status],
+                         [("011", PENDING), ("099", MISSING_FILE)])
+        # legacy call (no known_revisions) still reports 004 as drift —
+        # pre-#1104 callers see the old behavior
+        legacy = compute_status(files, rows)
+        self.assertIn(MISSING_FILE, {state for _, state in legacy})
+
+    def test_resolve_scoped_revision_cross_db_error(self):
+        from migrations.runner import resolve_scoped_revision
+        with self.assertRaises(ValueError) as caught:
+            resolve_scoped_revision("011", self._files(), "auth")
+        self.assertIn("--db api", str(caught.exception))
+        resolved = resolve_scoped_revision("004", self._files(), "auth")
+        self.assertEqual(resolved.revision, "004")
+
+    def test_resolve_scoped_revision_unknown_lists_scope(self):
+        from migrations.runner import resolve_scoped_revision
+        with self.assertRaises(ValueError) as caught:
+            resolve_scoped_revision("999", self._files(), "auth")
+        self.assertIn("004", str(caught.exception))
+        self.assertNotIn("011", str(caught.exception))
+
+    def test_deploy_to_target_db_mapping(self):
+        from migrations.runner import DEPLOY_TO_TARGET_DB
+        self.assertEqual(
+            DEPLOY_TO_TARGET_DB,
+            {"campus.auth": "auth", "campus.api": "api",
+             "campus.audit": "audit"},
+        )
+
+
+class TestWarnIfPendingDbScope(unittest.TestCase):
+    """warn_if_pending scoping (#1104): only migrations targeting the
+    service's DB are checked, scope derived from env.DEPLOY. Fixture
+    files: 001 (auth default), 002 (api)."""
+
+    LOGGER = "migrations.runner"
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.dir = Path(self.tmpdir.name)
+        (self.dir / "001_a.py").write_text("", encoding="utf-8")
+        (self.dir / "002_b.py").write_text('TARGET_DB = "api"' + "\n",
+                                           encoding="utf-8")
+
+    @staticmethod
+    def _ledger_row(revision, filename, status):
+        return {
+            "revision": revision,
+            "filename": filename,
+            "status": status,
+            "applied_at": datetime(2026, 10, 3),
+            "file_hash": None,
+        }
+
+    def _warn_scoped(self, rows, db):
+        from migrations import runner
+        with patch("migrations.runner._connect", lambda: FakeConn()), \
+                patch("migrations.runner._fetch_ledger_rows",
+                      lambda conn: rows):
+            return runner.warn_if_pending(
+                env_name="production", migrations_dir=self.dir, db=db
+            )
+
+    def test_auth_scope_ignores_api_targeted_file(self):
+        # ledger clean for auth (001 applied); 002 targets api and must
+        # not be reported to the auth service
+        rows = {"001": self._ledger_row("001", "001_a.py", "applied")}
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._warn_scoped(rows, db="auth")
+        self.assertEqual(outstanding, [])
+
+    def test_api_scope_reports_pending_api_file(self):
+        rows = {"001": self._ledger_row("001", "001_a.py", "applied")}
+        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+            outstanding = self._warn_scoped(rows, db="api")
+        self.assertEqual(outstanding, ["002"])
+        self.assertIn("targeting api", captured.output[-1])
+
+    def test_scope_defaults_to_deploy_var(self):
+        rows = {"001": self._ledger_row("001", "001_a.py", "applied")}
+        original = os.environ.get("DEPLOY")
+        env.set("DEPLOY", "campus.api")
+        try:
+            from migrations import runner
+            with patch("migrations.runner._connect", lambda: FakeConn()), \
+                    patch("migrations.runner._fetch_ledger_rows",
+                          lambda conn: rows), \
+                    self.assertLogs(self.LOGGER, level="WARNING"):
+                outstanding = runner.warn_if_pending(
+                    env_name="production", migrations_dir=self.dir
+                )
+            self.assertEqual(outstanding, ["002"])
+        finally:
+            if original is None:
+                env.delete("DEPLOY")
+            else:
+                env.set("DEPLOY", original)
+
+
+class TestMainDbScope(TestMain):
+    """CLI --db flag (#1104): scoped status/stamp against faked ledger.
+
+    FILE SETS are passed per-test (explicit target_db), so the
+    inherited TestMain tests run against the untouched base FILES."""
+
+    SCOPED_FILES = None  # built lazily: MigrationFile with explicit dbs
+
+    @classmethod
+    def _scoped_files(cls):
+        if cls.SCOPED_FILES is None:
+            from migrations.runner import MigrationFile
+            cls.SCOPED_FILES = [
+                MigrationFile(revision="003",
+                              filename="003_add_api_traces_table.py",
+                              target_db="audit"),
+                MigrationFile(revision="005",
+                              filename="005_backfill_scope_string.py",
+                              target_db="auth"),
+                MigrationFile(revision="011",
+                              filename="011_create_calendar_table.py",
+                              target_db="api"),
+            ]
+        return cls.SCOPED_FILES
+
+    def test_status_scopes_to_db(self):
+        from migrations.runner import MigrationFile
+        files = [
+            MigrationFile(revision="005", filename="005_auth.py",
+                          target_db="auth"),
+            MigrationFile(revision="011", filename="011_api.py",
+                          target_db="api"),
+        ]
+        cursor = FakeCursor(fetchall_rows=[
+            _row("011", "011_api.py"),
+        ])
+        exit_code, stdout, _ = self._run(["status", "--db", "api"],
+                                         FakeConn(cursor), files=files)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("scope: api", stdout)
+        self.assertIn("011_api.py", stdout)
+        self.assertIn("applied", stdout)
+        self.assertNotIn("005_auth.py", stdout)
+
+    def test_stamp_cross_db_revision_errors(self):
+        cursor = FakeCursor(fetchone_results=[None])
+        exit_code, _, stderr = self._run(["stamp", "011", "--db", "auth"],
+                                         FakeConn(cursor),
+                                         files=self._scoped_files())
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--db api", stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

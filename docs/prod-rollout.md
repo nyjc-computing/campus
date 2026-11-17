@@ -32,11 +32,14 @@ is the playbook — what to do, in what order, and why.
   variables, domains, volumes, deploy settings. Entity-scoped: name, repo.
   Renaming an entity renames it in **both** environments' canvases.
 - **Naming convention**: suffix-less = prod. Services shared across
-  environments keep the suffix-less name (it *is* the prod name). Services
+  environments keep the suffix-less name (it *is* the prod name) —
+  the DB services and the consumer apps (campus-admin, classroom,
+  apphost, profile, nyxchange) are shared, suffix-less. Services
   exclusive to dev carry `-dev` (`campus.auth-mongodb-dev`,
-  `campus.api-mongodb-dev`, `campus.api-bucket-dev`, the consumer repos'
-  dev deployments once their prod ghosts are removed). Volumes follow:
-  `*-dev-volume` vs plain.
+  `campus.api-mongodb-dev`, `campus.api-bucket-dev`). Volumes follow:
+  `*-dev-volume` vs plain. Audit the inventory any time an environment
+  is created or an entity deleted/renamed:
+  `scripts/railway_env_audit.sh` (#1109).
 - **Prod instances track `main` (cutover executed 2026-11-16/17)** —
   campus.auth/api/audit/gateway deploy only on main pushes, and wait
   for the commit's CI checks to pass first (`checkSuites` on every
@@ -109,15 +112,18 @@ are user-gated and called out.
    generated passwords and the fix is painful (postgres needs
    `databasePasswordReset` — trust `newPassword`, its `DATABASE_URL`
    output lies — mongo needs full recreation; volumes are
-   dashboard-delete-only).
+   dashboard-delete-only). The traps + recovery paths are in the
+   railway-ops skill, "Database bootstrap ordering" (#1105).
 2. Attach the volume (`volumeCreate`, mount path per image) and set the
    start command (mongo: `docker-entrypoint.sh mongod --ipv6 --bind_ip
    ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false`).
 3. Rename the private endpoint to the convention short-name if the
    default derivation doesn't match (`railway private-network update`).
 4. Deploy, wait SUCCESS, then verify connectivity through a temporary
-   `railway tcp-proxy create` (ping/auth with the intended credentials)
-   — **delete the proxy afterwards**.
+   `railway tcp-proxy create` (ping/auth with the intended credentials:
+   `psql "$DATABASE_URL" -c 'select 1;'` / `mongosh "$MONGODB_URI"
+   --eval 'db.runCommand({ping: 1})'`) — **delete the proxy
+   afterwards**. Do not wire app URIs until this passes.
 
 ### Phase 2 — schema bootstrap (prod blocks `init_from_model`)
 1. Run the service's storage init one-off with `ENV=development` for
@@ -129,10 +135,16 @@ are user-gated and called out.
    what happens when a service boots without this being understood).
    Reach the DB via `railway ssh` into the service or a temporary tcp
    proxy (**delete the proxy afterwards**).
-2. Stamp the migration ledger (`runner.py ensure` + `stamp`; 001/002
-   `--as historical`). Read each migration's docstring for its target
-   DB — the runner executes in the auth context, but tables can belong
-   to another service's DB (011/calendar landed in **api** postgres).
+2. Stamp the migration ledger per service DB (#1104): each migration
+   declares `TARGET_DB` (auth|api|audit), every runner command takes
+   `--db`, and the ledger read/written is the context's
+   `POSTGRESDB_URI` — run `railway ssh -s campus.<svc>`, then
+   `python migrations/runner.py --db <svc> ensure` +
+   `stamp`/`apply` (api baseline: 001/002 `--as historical` + stamp
+   011; audit baseline: stamp 003). Resolving a revision that targets
+   another DB errors with the right `--db` instead of silently writing
+   the wrong ledger (the trap that put 011 in the auth DB on
+   2026-11-16). See docs/migration-protocol.md.
 3. Seed bootstrap data: circles graph (see §5), vault labels the
    service reads, vault access grants for its client.
 
@@ -140,17 +152,26 @@ are user-gated and called out.
 1. Create the service instance (new entity for a genuinely new service;
    prod entities for cross-env services can't be re-materialized after
    instance deletion — see §7.6).
-2. Set **all** variables with `skipDeploys` before any deploy. Minimum
-   set per service: `DEPLOY`, `ENV=production`, `PUBLIC_URL`
-   (`https://${{RAILWAY_PUBLIC_DOMAIN}}`), `HOSTNAME`
+2. Set **all** variables with `skipDeploys` before any deploy. The
+   authoritative per-service minimum is `docs/required-env-vars.md`
+   (#1108 — enforced at boot in production, so a gap crash-loops
+   visibly instead of breaking one flow hours later). Beyond the
+   matrix: `DEPLOY`, `ENV=production`, `HOSTNAME`
    (`${{RAILWAY_PUBLIC_DOMAIN}}`), `BASE_URL` (gateway origin),
    DB URIs as references (`${{"campus.auth-postgres".DATABASE_URL}}`
-   — **quoted** service names; unquoted dotted names resolve empty),
-   audit keys, client credentials.
-3. Start command binds `[::]` (mesh is IPv6-only). Healthcheck path
-   `/health` when the app implements it (most prod services don't yet,
-   #1107).
+   — **quoted** service names; unquoted dotted names resolve empty,
+   and EMPTY fails the boot check too).
+3. Start command binds `[::]` (mesh is IPv6-only). Set the
+   healthcheck: `healthcheckPath: /health` + `healthcheckTimeout: 10`
+   on the instance (every app service has the #842 `/health` route;
+   auth/api/audit/gateway carry it in BOTH environments since #1107 —
+   a new app service must set it too, mutation recipe in the
+   railway-ops skill; DB services stay restart-policy-only).
 4. Deploy. **Verify a non-SKIPPED deployment row appears** — see §7.4.
+   With a healthcheck set, a deploy only reaches SUCCESS when `/health`
+   answered, so SUCCESS now means "actually serving" — and a
+   crash-looping or half-booting deploy is visible in the Railway UI
+   (#1107).
 
 ### Phase 4 — auth wiring
 1. Mint the service's campus client (vault_clients row + HMAC secret
@@ -188,7 +209,11 @@ are user-gated and called out.
    reach prod through the **`weekly` → `main` release PR** — merging it
    redeploys the prod fleet from `main` (§1). After a release merge, poll
    the prod deployment row for the service and confirm it is not SKIPPED
-   (§7.4).
+   (§7.4) — or let `scripts/railway_deploy.sh <svc> production` do the
+   whole trigger-verify-recover loop: it records the pre-trigger row,
+   waits for a NEW deployment to reach SUCCESS, auto-recovers the
+   SKIPPED trap (§7.4) once, and times out loudly when nothing
+   materializes (#1106).
 2. Variable changes: `variableUpsert(skipDeploys: true)` for the batch,
    then ONE redeploy (`deploymentRedeploy` of the ACTIVE deployment —
    the reliable trigger). Prefer references over literals so future
@@ -286,16 +311,24 @@ branches (#1116/#1117) per the "main is old, discardable" ruling.
    triggers keep no-oping. Recovery: `deploymentRedeploy(id of the
    ACTIVE SUCCESS deployment, usePreviousImageTag:false)` — on SKIPPED
    rows it fails "without a snapshot"; on CRASHED rows it works.
+   `scripts/railway_deploy.sh` wraps trigger-verify-recover so the
+   playbook can't silently skip a service (#1106).
 5. **Prod boots block `init_from_model`**: unguarded `init_storage()`
    at startup = crash loop (#1100). Startup init goes through
    `campus.bootstrap.run_init_storage` (the guard + loud-failure
    convention stated once, #1103); fresh prod DBs need the one-off
    `ENV=development python scripts/init_storage.py --service <svc>` +
    ledger stamps.
-6. **Ghost instances**: environment duplication copies every service
-   (with dev variables); deleting a referenced service cascade-redeploys
-   referrers and can silently START ghosts (classroom + apphost did
-   exactly this). Instance removal is dashboard-only.
+6. **Ghost instances** (resolved #1109): environment duplication
+   copies every service (with dev variables); deleting or renaming a
+   referenced service cascade-redeploys referrers and can silently
+   START ghosts (classroom + apphost did exactly this). The prod
+   ghosts were removed 2026-11-17 — the prod canvas is now exactly
+   the intended fleet (§8) — and oauth-proxy was retired outright.
+   Policy going forward: create services explicitly into the target
+   environment (never duplicate an environment wholesale), and sweep
+   with `scripts/railway_env_audit.sh` after entity-level
+   delete/rename. Instance removal is dashboard-only.
 7. **Reference syntax**: dotted service names must be quoted —
    `${{"campus.auth-postgres".DATABASE_URL}}`; unquoted resolves empty
    (psycopg falls back to a unix socket — bizarre 500s).
@@ -319,13 +352,19 @@ branches (#1116/#1117) per the "main is old, discardable" ruling.
     file-based loops (strip it); keep GraphQL mutation `.gql` files
     alive until every dependent call ran (a missing file silently
     no-ops the call).
-13. **Required env vars fail lazily** (#1108): auth needs
-    `CLIENT_ID`/`CLIENT_SECRET` (yapper), api needs them at boot (SDK).
-    Removing a "seemingly unused" var can break a flow hours later —
-    check the required-vars matrix before trimming.
-14. **Migration ledger is auth-only** (#1104): api/audit schema changes
-    have no runner story; read the migration docstring critically and
-    verify the target DB before applying.
+13. **Required env vars fail lazily** (fixed #1108): the per-service
+    matrix is committed at `docs/required-env-vars.md` (generated from
+    `campus.bootstrap.REQUIRED_ENV_VARS`) and **enforced at boot in
+    production** — a missing or empty var refuses the boot instead of
+    500ing hours later (the trim of auth's CLIENT_ID/SECRET broke the
+    device flow while auth showed healthy). Check the matrix before
+    trimming; a var in the matrix is load-bearing.
+14. **Migration ledgers are per service DB** (fixed #1104): every
+    migration declares `TARGET_DB`; run the runner in that service's
+    context with `--db <svc>`, and stamp each DB's ledger baseline at
+    bootstrap (phase 2). The auth ledger still carries pre-#1104 rows
+    for api/audit revisions — residue that `--db auth` skips, not
+    drift.
 15. **OpenAPI drift is version-coupled**: bumping the suite version
     drifts *every* committed artifact — regenerate all three services'
     `docs/openapi.json` on any spec-affecting change.
@@ -343,14 +382,22 @@ release). oauth-proxy was **deleted from both environments** (2026-11-17): it wa
 a dev-only localhost OAuth-callback relay, superseded by the proxy
 embedded in campus.auth and the campus broker. Its deletion cascade-
 redeployed the services that held its derived reference vars.
+Healthchecks (`/health` + 10s) are live on the four app services in
+both environments (#1107); required env vars are boot-enforced in
+production (#1108).
 
-Open work items: #1104
-(multi-DB migrations), #1105 (DB bootstrap ordering + reset quirk),
-#1106 (SKIPPED deploy), #1107 (healthchecks + alerting — most prod
-services have no `/health` healthcheck configured and deploy-failure
-alerting is off), #1108 (lazy env-var failures), #1109 (ghost
-instances — largely superseded: classroom/apphost are intentional now;
-the remainder is the oauth-proxy decision).
+Open work items: deploy-failure **notifications** (the #1107 remainder:
+healthchecks are live but Railway deploy-failure alerting is still
+off; enabling it is a dashboard step, Project Settings → Notifications,
+email/webhook rule scoped to the production environment).
+
+The #1103–#1109 standup-debt sweep is otherwise closed: #1103
+(init-storage guard + `scripts/init_storage.py`), #1104 (per-DB
+migration ledgers), #1105 (DB bootstrap ordering in the ops skill),
+#1106 (`scripts/railway_deploy.sh` trigger-verify-recover), #1107
+(healthchecks, modulo notifications above), #1108 (boot env
+validation + `docs/required-env-vars.md`), #1109 (ghosts removed,
+explicit-environment-creation policy + `scripts/railway_env_audit.sh`).
 
 ## References
 
