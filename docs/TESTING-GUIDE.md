@@ -309,7 +309,7 @@ dispatch.
 - **Location:** `tests/contract/`
 - **Dependencies:** Flask test client (not real HTTP)
 - **Speed:** Fast
-- **Runs in CI:** Yes — `.github/workflows/ci.yml` runs the suite on PRs and on pushes to `main`/`staging`/`weekly` (docs-only changes are skipped), as a blocking stage after unit and before integration. Contract failures indicate real endpoint regressions; known-but-unfixed bugs are encoded as skip markers citing their issue (see the policy below).
+- **Runs in CI:** Yes — `.github/workflows/ci.yml` runs the suite on PRs and on pushes to `main`/`weekly` (docs-only changes are skipped), as a blocking stage after unit and before integration. Contract failures indicate real endpoint regressions; known-but-unfixed bugs are encoded as skip markers citing their issue (see the policy below).
 - **Examples:**
   - Auth requirements (401 without credentials)
   - Error response formats (409, 400)

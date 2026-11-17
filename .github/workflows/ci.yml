@@ -20,7 +20,7 @@ name: CI
 # `weekly`, whose checks were already being reported.
 on:
   push:
-    branches: [main, staging, weekly]
+    branches: [main, weekly]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
