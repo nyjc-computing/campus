@@ -15,15 +15,15 @@ Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
 | Environment | Purpose | Deploy trigger |
 |---|---|---|
 | `development` | Live dev and **all testing**; **merges to `weekly` autodeploy here** | push to `weekly` + config changes |
-| `staging` | Legacy, unused — pending retirement (was the pre-cutover parity environment) | — |
 | `production` | Prod fleet (auth/api/audit/gateway + consumers + per-service DBs, live 2026-11-16; see [prod-rollout.md](prod-rollout.md)) | push to `main` — i.e. the `weekly` → `main` release PR, the only path to `main` |
 
 `weekly` is the integration branch for all dev work
 ([CONTRIBUTING.md](CONTRIBUTING.md)). The `weekly` → `main` cutover
 completed 2026-11-17: production instances deploy from `main`, and pushes
 to `weekly` touch `development` only (prod-rollout.md §6 records the
-cutover). The July-2025 fossil environment is retained as
-`production-legacy`.
+cutover). Two environments only — the `staging` and
+`production-legacy` Railway environments were deleted 2026-11-17 (the
+retired `staging` git branch + ruleset are pending removal, #1122).
 
 **Access (policy, 2026-11-17):** production Railway access — logs,
 variables, SSH, dashboards, prod data — is **superadmin-only**; routine

@@ -14,11 +14,11 @@ fix survives personnel changes).
 
 Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
 Environments: `development` (`e954f5fa`, autodeploys from `weekly` — all
-testing happens here), `production` (`d5221f3b`, deploys from `main`),
-`staging` (legacy, unused) and `production-legacy` (July-2025 fossil),
-both pending retirement. Access policy: production Railway access is
-**superadmin-only**, production data is never accessed directly, and the
-release path is the `weekly` → `main` PR — see
+testing happens here) and `production` (`d5221f3b`, deploys from `main`).
+`staging` and the July-2025 fossil `production-legacy` were deleted on
+2026-11-17 — two environments only. Access policy: production Railway
+access is **superadmin-only**, production data is never accessed
+directly, and the release path is the `weekly` → `main` PR — see
 [environment-access-policy.md](environment-access-policy.md).
 
 Railway API/CLI recipes and their sharpest edges live in the
