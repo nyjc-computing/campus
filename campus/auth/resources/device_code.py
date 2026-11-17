@@ -95,7 +95,10 @@ class DeviceCodeResource:
 
         records = device_code_storage.get_matching({"device_code": device_code})
         if not records:
-            logger.warning(f"[DEVICE_CODE] Device code not found: {device_code}")
+            # The presented code is withheld: a pending device code is
+            # bearer-equivalent (exchangeable at /oauth/token), so it
+            # never reaches the shared logs (policy §3, #1126)
+            logger.warning("[DEVICE_CODE] Device code not found")
             raise api_errors.NotFoundError(
                 "Device code not found or expired",
                 device_code=device_code
@@ -136,7 +139,8 @@ class DeviceCodeResource:
 
         records = device_code_storage.get_matching({"user_code": user_code})
         if not records:
-            logger.warning(f"[DEVICE_CODE] User code not found: {user_code}")
+            # Withheld for the same reason as device_code above (#1126)
+            logger.warning("[DEVICE_CODE] User code not found")
             raise api_errors.NotFoundError(
                 "Invalid user code",
                 user_code=user_code
