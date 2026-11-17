@@ -95,11 +95,15 @@ audit trail remains superadmin/admin-only.
   (§3) and the [migration runbook](migration-protocol.md#staging--production-style-environments-manual-runbook)
   — superadmin actions, each recorded when used.
 
-> **Status (2026-11-17):** the Railway CLI is still on personal tokens
-> from `railway login`; the API-key switch is tracked as
-> [#1123](https://github.com/nyjc-computing/campus/issues/1123). Until it
-> lands, apply the *access rules* above — who may touch what — as-is; the
-> API key changes the *mechanism*, not the policy.
+> **Status (2026-11-17, live):** routine CLI/automation access on the
+> operator workstation runs on a **development-scoped project token**
+> (`rlwy_proj_…`, env var **`RAILWAY_TOKEN`** — project tokens only work
+> under that name). Verified live: `railway status --json` sees project
+> `campus` / environment `development` only — production resolves as
+> "not found" to this key — and account-level commands (`whoami`,
+> `list`) are denied by design. The personal `railway login` is retained
+> solely as the superadmin's break-glass
+> ([#1123](https://github.com/nyjc-computing/campus/issues/1123)).
 
 Practical recipes (CLI traps, GraphQL schema, deploy queueing) live in
 the `railway-ops` skill (`.zcode/skills/railway-ops/SKILL.md`), which
@@ -161,7 +165,7 @@ Known gaps between this policy and current reality were swept on
 2026-11-17 and are tracked on the sweep tracker
 [#1131](https://github.com/nyjc-computing/campus/issues/1131) — among
 them: main-ruleset admin bypass (#1121), staging retirement (#1122), the
-Railway API-key migration (#1123), the audit-event redaction gap
+Railway API-key migration (#1123 — live, see §2), the audit-event redaction gap
 (#1124), the PII ruling (#1125 — resolved: nyjc.edu.sg identifiers are
 not PII), secrets at WARNING in Railway logs
 (#1126), OAuth-proxy error dumps (#1127), error-message leakage

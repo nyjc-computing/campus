@@ -24,10 +24,17 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
 
 ## Access model (2026-11-17 policy — read before any Railway work)
 
-- **Routine Railway access is environment-bound to `development`** (an
-  API key scoped to that environment replaces personal `railway login`
-  tokens; until the key switch lands, personal tokens still work — the
-  rules below apply regardless of mechanism).
+- **Routine Railway access is environment-bound to `development`**:
+  commands run with `RAILWAY_TOKEN` set to a development-scoped project
+  token (`rlwy_proj_…`; machine file `~/.railway-dev-token`, exported in
+  `~/.bashrc` + the Windows user env). **Variable name matters**: project
+  tokens only authenticate as `RAILWAY_TOKEN` — under `RAILWAY_API_TOKEN`
+  (account keys) every command fails. Verified: `railway status` sees
+  project `campus` / environment `development` only; production resolves
+  as "not found"; account-level commands (`whoami`, `list`) are denied by
+  design. Escape hatch for superadmin production work:
+  `env -u RAILWAY_TOKEN railway <cmd>` (falls through to the personal
+  login).
 - **Production is superadmin-only**: logs, variables, domains, SSH,
   redeploys, and all production data. Do not point CLI/automation at
   production; deployment-side debugging there is a superadmin activity.
