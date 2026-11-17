@@ -156,7 +156,9 @@ class APIKeysResource:
             scopes: str = "",
             role: str | None = None,
             rate_limit: int | None = None,
-            expires_at: schema.DateTime | None = None
+            expires_at: schema.DateTime | None = None,
+            trace_user_id: str | None = None,
+            trace_client_id: str | None = None,
     ) -> tuple[model.APIKey, str]:
         """Create a new API key.
 
@@ -168,6 +170,12 @@ class APIKeysResource:
                 scopes. Mutually exclusive with scopes.
             rate_limit: Optional rate limit for the key
             expires_at: Optional expiration datetime for the key
+            trace_user_id: Optional trace-read bind (#944): opaque
+                match-value enforced on every read surface. Required by
+                the routes layer for keys granting trace reads without
+                apikeys:write; None = unscoped on that axis.
+            trace_client_id: Optional trace-read bind on the client
+                axis (#944), same semantics
 
         Returns:
             The created API key (including the plaintext key value)
@@ -178,7 +186,9 @@ class APIKeysResource:
 
         Note:
             campus.audit is a standalone service with no users/clients.
-            owner_id is for organizational purposes only.
+            owner_id is for organizational purposes only, and the
+            trace binds are opaque match-values the service never
+            resolves against campus.auth.
         """
         scope_list = resolve_scopes(scopes, role)
         apikey_value = secret.generate_audit_api_key()
@@ -192,6 +202,10 @@ class APIKeysResource:
             record["rate_limit"] = schema.Integer(rate_limit)
         if expires_at is not None:
             record["expires_at"] = schema.DateTime(expires_at)
+        if trace_user_id is not None:
+            record["trace_user_id"] = trace_user_id
+        if trace_client_id is not None:
+            record["trace_client_id"] = trace_client_id
         api_key = model.APIKey(**record)
         try:
             apikeys_storage.insert_one(api_key.to_storage())

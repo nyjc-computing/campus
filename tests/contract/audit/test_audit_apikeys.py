@@ -124,13 +124,18 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
 
     def test_create_api_key_with_a_role_returns_201(self):
         """POST /audit/v1/apikeys/ accepts a named role (#918) and
-        grants exactly that role's scopes."""
+        grants exactly that role's scopes.
+
+        traces-viewer resolves to traces:read — a read-only mint, so
+        the #944 fail-closed rule requires a trace bind on it.
+        """
         response = self.client.post(
             "/audit/v1/apikeys/",
             json={
                 "name": "Role Key",
                 "owner_id": "user123",
                 "role": "traces-viewer",
+                "trace_user_id": "user123",
             },
             headers=self.auth_headers
         )
@@ -138,6 +143,7 @@ class TestAuditAPIKeysCreateContract(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         data = response.get_json()
         self.assertEqual(data["scopes"], ["traces:read"])
+        self.assertEqual(data["trace_user_id"], "user123")
 
     def test_create_api_key_with_an_unknown_role_returns_422(self):
         """An unknown role is refused, and the error names the roles

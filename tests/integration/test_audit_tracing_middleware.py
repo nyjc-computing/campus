@@ -815,25 +815,27 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
 
     def test_search_filters_traces_by_journey_tag(self):
         """search(journey_id=...) returns only traces tagged with it (#803)."""
-        from campus.audit.resources.traces import TracesResource
+        from campus.audit.resources.traces import TraceFilter, TracesResource
 
         self._seed_journey_span("a" * 32, "b" * 16, "2026-10-04T10:00:00+00:00", "journey_s1")
         self._seed_journey_span("c" * 32, "d" * 16, "2026-10-04T10:01:00+00:00", None)
         self._seed_journey_span("e" * 32, "f" * 16, "2026-10-04T10:02:00+00:00", "journey_s2")
 
-        page = TracesResource().search(journey_id="journey_s1", limit=10)
+        page = TracesResource().search(
+            journey_id="journey_s1", limit=10, trace_filter=TraceFilter()
+        )
         self.assertEqual(
             sorted(s.trace_id for s in page.summaries),
             ["a" * 32],
         )
 
         # Without the filter, untagged traces are still listed
-        page_all = TracesResource().search(limit=10)
+        page_all = TracesResource().search(limit=10, trace_filter=TraceFilter())
         self.assertEqual(len(page_all.summaries), 3)
 
     def test_journey_groups_member_traces_oldest_first(self):
         """journey() lists each member trace once, in start order (#803)."""
-        from campus.audit.resources.traces import TracesResource
+        from campus.audit.resources.traces import TraceFilter, TracesResource
 
         # trace c carries two tagged spans but must appear once
         self._seed_journey_span("a" * 32, "b" * 16, "2026-10-04T10:00:00+00:00", "journey_j1")
@@ -842,12 +844,17 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         self._seed_journey_span("f" * 32, "0" * 16, "2026-10-04T09:59:00+00:00", "journey_j1")
         self._seed_journey_span("1" * 32, "2" * 16, "2026-10-04T10:02:00+00:00", None)
 
-        summaries = TracesResource().journey("journey_j1")
+        summaries = TracesResource().journey(
+            "journey_j1", trace_filter=TraceFilter()
+        )
         self.assertEqual(
             [s.trace_id for s in summaries],
             ["f" * 32, "a" * 32, "c" * 32],
         )
-        self.assertEqual(TracesResource().journey("journey_missing"), [])
+        self.assertEqual(
+            TracesResource().journey("journey_missing", trace_filter=TraceFilter()),
+            [],
+        )
 
 
 class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, DependencyCheckedTestCase):
