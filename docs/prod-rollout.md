@@ -13,9 +13,13 @@ fix survives personnel changes).
 > add every new trap you hit, with its root cause.
 
 Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
-Environments: `development` (weekly, autodeploys) and `production`
-(`d5221f3b`). `staging` and the July-2025 fossil `production-legacy`
-were deleted on 2026-11-17 — two environments only.
+Environments: `development` (`e954f5fa`, autodeploys from `weekly` — all
+testing happens here) and `production` (`d5221f3b`, deploys from `main`).
+`staging` and the July-2025 fossil `production-legacy` were deleted on
+2026-11-17 — two environments only. Access policy: production Railway
+access is **superadmin-only**, production data is never accessed
+directly, and the release path is the `weekly` → `main` PR — see
+[environment-access-policy.md](environment-access-policy.md).
 
 Railway API/CLI recipes and their sharpest edges live in the
 `railway-ops` skill (`.zcode/skills/railway-ops/SKILL.md`); this document
@@ -35,7 +39,9 @@ is the playbook — what to do, in what order, and why.
   `*-dev-volume` vs plain.
 - **Prod instances track `main` (cutover executed 2026-11-16/17)** —
   campus.auth/api/audit/gateway deploy only on main pushes; weekly
-  pushes touch dev alone. Note for cutover mechanics: a per-instance
+  pushes touch dev alone. `main` changes only through the `weekly` →
+  `main` release PR ([environment-access-policy.md](environment-access-policy.md)).
+  Note for cutover mechanics: a per-instance
   branch flip is dashboard-only (the API's `ServiceSourceInput` has no
   branch field, and `serviceConnect` is entity-level — it would move
   dev too). After a branch flip lands on a stale base, the first
@@ -85,6 +91,10 @@ client id) stay literals. Client secrets are env vars by design — the
 auth DB stores only HMAC hashes.
 
 ## 3. Deploying a NEW service to prod (staggered sequence)
+
+Superadmin-only per the access policy — these are the documented
+break-glass exceptions to "production data is not accessed directly",
+and each use is recorded.
 
 Do these in order; each phase depends on the previous. "Blocked" items
 are user-gated and called out.
@@ -168,9 +178,11 @@ are user-gated and called out.
 
 ## 4. Updating EXISTING services
 
-1. Code changes ride **weekly** → autodeploy touches prod too (see §1).
-   After a merge, poll the prod deployment row for the service and
-   confirm it is not SKIPPED (§7.4).
+1. Code changes ride **`weekly`** (autodeploys `development` only). They
+   reach prod through the **`weekly` → `main` release PR** — merging it
+   redeploys the prod fleet from `main` (§1). After a release merge, poll
+   the prod deployment row for the service and confirm it is not SKIPPED
+   (§7.4).
 2. Variable changes: `variableUpsert(skipDeploys: true)` for the batch,
    then ONE redeploy (`deploymentRedeploy` of the ACTIVE deployment —
    the reliable trigger). Prefer references over literals so future

@@ -24,14 +24,15 @@ Building an app that signs in through Campus (not working on the Campus codebase
 
 ### 🚀 DevOps/Infrastructure
 For deployment and operations:
-1. [DEPLOY.md](../DEPLOY.md) - Deployment options
-2. [PACKAGING.md](PACKAGING.md) - Build and distribution
-3. [TESTING-GUIDE.md](TESTING-GUIDE.md) - Testing infrastructure
+1. [environment-access-policy.md](environment-access-policy.md) - Environment, access, and log policy (read first)
+2. [DEPLOY.md](DEPLOY.md) - Deployment options
+3. [PACKAGING.md](PACKAGING.md) - Build and distribution
+4. [TESTING-GUIDE.md](TESTING-GUIDE.md) - Testing infrastructure
 
 ### 📚 End Users
 For those deploying or using Campus:
 1. [README.md](../README.md) - Project overview
-2. [DEPLOY.md](../DEPLOY.md) - Deployment guide
+2. [DEPLOY.md](DEPLOY.md) - Deployment guide
 3. [architecture.md](architecture.md) - System design
 
 ## Installation
@@ -114,6 +115,7 @@ lives in `campus.storage.testing` (shipped in the
 | Document | Purpose |
 |----------|---------|
 | [AGENTS.md](../AGENTS.md) | Quick reference for humans and AI assistants |
+| [environment-access-policy.md](environment-access-policy.md) | Environment, access, and log-scrubbing policy |
 | [student-app-walkthrough.md](student-app-walkthrough.md) | From-zero guide for apps that sign in through Campus |
 | [architecture.md](architecture.md) | System design and component overview |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow and branch strategy |
