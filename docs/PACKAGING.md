@@ -32,11 +32,13 @@ root `pyproject.toml` and relocks deliberately.
 ### Branch Strategy
 
 ```
-weekly → staging → main
+weekly → main
 ```
-- **`weekly`**: Active development, expected breakage
-- **`staging`**: Extended testing, pre-production validation
-- **`main`**: Stable, production-ready releases
+- **`weekly`**: Active development, expected breakage; autodeploys the
+  `development` environment
+- **`main`**: Stable, production-ready releases; autodeploys the
+  `production` fleet. PRs from `weekly` only — merging one is the
+  release action ([environment-access-policy.md](environment-access-policy.md))
 
 ## Dependency Rules
 
@@ -172,10 +174,12 @@ poetry run python tests/run_tests.py unit
 
 ### Release Process
 
-1. **Development**: Work in `weekly` branch
-2. **Integration**: Merge `weekly` → `staging` for extended testing
-3. **Release**: Merge `staging` → `main` when stable
-4. **Tagging**: Create version tags on `main` branch
+1. **Development**: Work in `weekly` branch (PR from a task worktree;
+   merges autodeploy the `development` environment, where all testing
+   happens)
+2. **Release**: Merge `weekly` → `main` (PR from `weekly` only) — the
+   production release action; the push autodeploys the production fleet
+3. **Tagging**: Create version tags on `main` branch
 
 ### Dependency Updates
 

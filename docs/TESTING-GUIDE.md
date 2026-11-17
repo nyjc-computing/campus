@@ -520,8 +520,13 @@ compatibility check is exercised for every supported minor version.
 
 All supported Python versions are treated as required in CI. Weekly branch
 integration failures remain non-blocking because that branch is used for active
-development, but version-specific failures on staging/main should be fixed
-before merging.
+development, but version-specific failures on `main` should be fixed
+before merging (a `main` push is the production release action).
+
+> **Where tests may run (policy, 2026-11-17):** all testing happens
+> locally or in the `development` environment — never against production
+> (and the retired `staging` branch/environment is not a test target).
+> See [environment-access-policy.md](environment-access-policy.md).
 
 ## Test Scope
 

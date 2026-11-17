@@ -18,6 +18,8 @@ no client may use the bridge until an admin sets token_bridge
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
 
+TARGET_DB = "auth"
+
 
 def upgrade():
     """Add token_bridge column to vault_clients."""

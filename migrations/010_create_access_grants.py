@@ -23,6 +23,8 @@ DO block skips the backfill and drop — only the CREATE runs.
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
 
+TARGET_DB = "auth"
+
 _CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS "access_grants" (
     "id" TEXT PRIMARY KEY NOT NULL,

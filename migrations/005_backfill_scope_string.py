@@ -30,6 +30,8 @@ import typing
 from campus.common import schema
 from campus.storage import get_collection
 
+TARGET_DB = "auth"
+
 SCOPE_COLLECTIONS = ("auth_sessions", "device_codes")
 
 
