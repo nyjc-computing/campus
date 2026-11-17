@@ -37,10 +37,16 @@ is the playbook — what to do, in what order, and why.
   `campus.api-mongodb-dev`, `campus.api-bucket-dev`, the consumer repos'
   dev deployments once their prod ghosts are removed). Volumes follow:
   `*-dev-volume` vs plain.
-- **Prod instances deploy from `main`** (the 2026-11-17 cutover, §6,
-  flipped each prod instance's source branch to `main`). A push to
-  `main` — which happens only through the `weekly` → `main` release PR —
-  redeploys the prod fleet; pushes to `weekly` touch `development` only.
+- **Prod instances track `main` (cutover executed 2026-11-16/17)** —
+  campus.auth/api/audit/gateway deploy only on main pushes; weekly
+  pushes touch dev alone. `main` changes only through the `weekly` →
+  `main` release PR ([environment-access-policy.md](environment-access-policy.md)).
+  Note for cutover mechanics: a per-instance
+  branch flip is dashboard-only (the API's `ServiceSourceInput` has no
+  branch field, and `serviceConnect` is entity-level — it would move
+  dev too). After a branch flip lands on a stale base, the first
+  deploy is SKIPPED; force it with `deploymentRedeploy` of the ACTIVE
+  deployment once the base is current.
 - **Private endpoints are pinned per instance** (`campus-auth`,
   `auth-mongodb`, `postgres-94e0`, …). Renaming a service does **not**
   move its endpoint; two environments share endpoint *names* but not
@@ -74,7 +80,7 @@ is the playbook — what to do, in what order, and why.
 | Audit UI key (`traces:read`, `apikeys:read`, `apikeys:write`) | `AUDIT_UI_API_KEY` on the admin portal | same mint route, name `campus-admin audit UI` |
 | Audit operator key | `AUDIT_OPERATOR_API_KEY` on prod audit | auto-seeded at audit startup into the audit DB (`uid-apikey-operator-0000`); rotate = delete row + new env value + redeploy |
 | Google identity / classroom | vault labels `google/CLIENT_ID,CLIENT_SECRET` and `google.classroom/CLIENT_ID,CLIENT_SECRET,SCOPES,CONNECT_TARGETS` | GCP console (user) + `scripts/seed_integration.py` (classroom; needs a vault-write client) / direct insert (identity) |
-| GitHub / Discord OAuth apps | vault labels `github/CLIENT_ID,CLIENT_SECRET`, `discord/…` | **not yet seeded on prod** — user creates the apps; callbacks `https://campusauth.up.railway.app/auth/v1/{github,discord}/callback`; four vault rows, nothing else |
+| GitHub / Discord OAuth apps | vault labels `github/CLIENT_ID,CLIENT_SECRET`, `discord/…` (seeded 2026-11-16 via the admin vaults UI) | user creates the OAuth apps; callbacks `https://campusauth.up.railway.app/auth/v1/{github,discord}/callback`. **Requires #1114's fix** — the proxies built authorize URLs from `env.CLIENT_ID` instead of the vault credentials; verify redirects carry the app ids after any proxy change |
 | Yapper DB | vault `campus.yapper/YAPPERDB_URI` — a `yapper` role + database **inside the auth postgres**; yapper's tables self-create (raw DDL, not env-blocked) | create role+database in auth postgres, then the vault row |
 
 Why literals vs references: DB/bucket/domain wiring uses **Railway
@@ -164,10 +170,11 @@ are user-gated and called out.
    `/api/openapi.json`, `/integrations/v1/`, one authenticated flow.
 
 ### Blocked / user-gated steps (current)
-- GCP OAuth clients in the Google console: identity done 2026-11-16;
-  classroom pending (vault seeding is scripted once created).
-- GitHub / Discord OAuth apps — pending; four vault rows once created.
-- Repo releases for consumers whose `main` is stale (profile, nyxchange).
+- **campus-profile and nyxchange-timetable-v2**: their `main` branches
+  are stale releases (profile: pre-wheel-pin era with a git dependency
+  on campus `weekly`; nyxchange: June 2026). Owners merge `dev` →
+  `main`, then the prod instances (fully wired — clients, vars, audit
+  key) deploy with one trigger.
 
 ## 4. Updating EXISTING services
 
@@ -220,23 +227,33 @@ are user-gated and called out.
   admin view on both environments. If the authz model changes again,
   re-check §2's operator row and this paragraph together.
 
-## 6. weekly → main merge cutover (completed 2026-11-17)
+## 6. Release flow (weekly → main) — cutover executed 2026-11-16/17
 
-Done: #1117 merged and every prod instance re-pointed to `main`;
-production now tracks `main` and `weekly` touches `development` only.
-Kept as the record — and the repeat recipe if any service ever needs
-re-pointing.
+All four campus-suite prod instances now track `main`; a main push is
+what deploys prod. Future releases:
 
-1. Merge `weekly` into `main` (CI runs on the PR; keep main's three
-   devcontainer-only commits).
-2. Flip each prod instance's source branch `weekly` → `main`
-   (`serviceConnect(id, input:{repo, branch})`). Autodeploy is already
-   on — the flip is what re-points prod at the release branch.
-3. The merge push then deploys prod. Watch for first-boot migration
-   WARNINGS (fail-open, auth ledger only today — #1104).
-4. Smoke: gateway `/health`, `/api/openapi.json`, `/integrations/v1/`,
+1. PR `weekly` → `main` (CI runs on the PR).
+2. Merge needs `--admin`: main's branch policy blocks normal merges
+   even with every check green (#1115). Run `gh pr merge --merge
+   --admin` once CI is green.
+3. If main was reconciled into weekly directly (push), update the PR
+   branch first (`gh pr update-branch`) or the policy will refuse
+   again.
+4. Prod auto-deploys the merge on all four instances; smoke: gateway
+   `/health`, `/api/openapi.json`, `/integrations/v1/`,
    `/audit/v1/health`, auth `/health`, one device-flow + one browser
    login.
+
+Executed-cutover notes (2026-11-16/17): the branch flips happened
+*before* the merge, so Railway SKIPPED the stale-main deploys and kept
+serving weekly content (a36eb258 — code-identical to main tip modulo a
+docs commit). The release merge itself hit real conflicts
+(devcontainer/gitignore/workflow, main's informal upstream commits vs
+weekly) — resolved locally with `git merge -X theirs` in a worktree,
+pushed straight to `main`, then `main` was reconciled back into
+`weekly` (`merge -X ours`) so the next release PR stayed mergeable.
+The now-merged devcontainer configuration was removed from both
+branches (#1116/#1117) per the "main is old, discardable" ruling.
 
 ## 7. Speedbump catalog (append-only)
 
@@ -300,19 +317,24 @@ re-pointing.
     drifts *every* committed artifact — regenerate all three services'
     `docs/openapi.json` on any spec-affecting change.
 
-## 8. Current state (2026-11-16) and open items
+## 8. Current state (2026-11-17) and open items
 
-Live on prod: campus.auth, campus.api, campus.audit, campus-gateway,
-campus-admin, campus-classroom, campus-apphost (+ 5 DBs, bucket).
-Blocked on their repos: campus-profile, nyxchange-timetable-v2 (stale
-`main` branches — release then redeploy; instances are fully wired).
-Left offline: oauth-proxy (retired candidate, zero vars) and the
-consumer ghost instances that still need dashboard removal.
+Live on prod (all tracking `main`): campus.auth, campus.api,
+campus.audit, campus-gateway, campus-admin (vaults view working),
+campus-classroom, campus-apphost (+ 5 DBs, bucket). Sign-in paths live:
+Google (identity + classroom callback registered), GitHub, Discord.
+
+Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
+`main` branches — instances fully wired, one deploy trigger each after
+release). Left offline: oauth-proxy (retired candidate, zero vars).
 
 Open work items: #1103 (bootstrap/guard consolidation), #1104
 (multi-DB migrations), #1105 (DB bootstrap ordering + reset quirk),
-#1106 (SKIPPED deploy), #1107 (healthchecks + alerting), #1108 (lazy
-env-var failures), #1109 (ghost consumers).
+#1106 (SKIPPED deploy), #1107 (healthchecks + alerting — most prod
+services have no `/health` healthcheck configured and deploy-failure
+alerting is off), #1108 (lazy env-var failures), #1109 (ghost
+instances — largely superseded: classroom/apphost are intentional now;
+the remainder is the oauth-proxy decision).
 
 ## References
 
