@@ -19,6 +19,8 @@ was approved for.
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
 
+TARGET_DB = "auth"
+
 
 def upgrade():
     """Add allowed_scopes column to vault_clients."""

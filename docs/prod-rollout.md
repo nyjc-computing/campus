@@ -117,10 +117,16 @@ are user-gated and called out.
    what happens when a service boots without this being understood).
    Reach the DB via `railway ssh` into the service or a temporary tcp
    proxy (**delete the proxy afterwards**).
-2. Stamp the migration ledger (`runner.py ensure` + `stamp`; 001/002
-   `--as historical`). Read each migration's docstring for its target
-   DB — the runner executes in the auth context, but tables can belong
-   to another service's DB (011/calendar landed in **api** postgres).
+2. Stamp the migration ledger per service DB (#1104): each migration
+   declares `TARGET_DB` (auth|api|audit), every runner command takes
+   `--db`, and the ledger read/written is the context's
+   `POSTGRESDB_URI` — run `railway ssh -s campus.<svc>`, then
+   `python migrations/runner.py --db <svc> ensure` +
+   `stamp`/`apply` (api baseline: 001/002 `--as historical` + stamp
+   011; audit baseline: stamp 003). Resolving a revision that targets
+   another DB errors with the right `--db` instead of silently writing
+   the wrong ledger (the trap that put 011 in the auth DB on
+   2026-11-16). See docs/migration-protocol.md.
 3. Seed bootstrap data: circles graph (see §5), vault labels the
    service reads, vault access grants for its client.
 
@@ -306,9 +312,12 @@ branches (#1116/#1117) per the "main is old, discardable" ruling.
     `CLIENT_ID`/`CLIENT_SECRET` (yapper), api needs them at boot (SDK).
     Removing a "seemingly unused" var can break a flow hours later —
     check the required-vars matrix before trimming.
-14. **Migration ledger is auth-only** (#1104): api/audit schema changes
-    have no runner story; read the migration docstring critically and
-    verify the target DB before applying.
+14. **Migration ledgers are per service DB** (fixed #1104): every
+    migration declares `TARGET_DB`; run the runner in that service's
+    context with `--db <svc>`, and stamp each DB's ledger baseline at
+    bootstrap (phase 2). The auth ledger still carries pre-#1104 rows
+    for api/audit revisions — residue that `--db auth` skips, not
+    drift.
 15. **OpenAPI drift is version-coupled**: bumping the suite version
     drifts *every* committed artifact — regenerate all three services'
     `docs/openapi.json` on any spec-affecting change.
@@ -324,8 +333,7 @@ Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
 release). Left offline: oauth-proxy (retired candidate, zero vars).
 
-Open work items: #1104
-(multi-DB migrations), #1105 (DB bootstrap ordering + reset quirk),
+Open work items: #1105 (DB bootstrap ordering + reset quirk),
 #1106 (SKIPPED deploy), #1107 (healthchecks + alerting — most prod
 services have no `/health` healthcheck configured and deploy-failure
 alerting is off), #1108 (lazy env-var failures), #1109 (ghost
