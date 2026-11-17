@@ -69,15 +69,102 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
 - `service delete` (CLI) is permission-refused in this workspace — delete
   services via the dashboard.
 
+## Database bootstrap ordering — credentials BEFORE first boot (#1105)
+
+- **Attaching a volume to a freshly-created DB service triggers a
+  deployment.** The datadir initializes with whatever credentials exist
+  at that moment; `variableUpsert` has `skipDeploys`, `volumeCreate`
+  does not — credentials patched in after the boot are silently
+  ignored (postgres initdb'd with generated passwords; mongo same).
+  Every app URI composed against the intended passwords then fails
+  auth. Safe order: create the service **with credentials in the
+  creation payload** (`serviceCreate(variables=…)` / `railway add
+  --variables "$(cat .tmp-vars.json)"`) → volume → start command →
+  deploy. Verify connectivity (below) before wiring app URIs.
+- **Postgres recovery** (`databasePasswordReset`, `databaseType:
+  "postgres"`) rotates the role password — but its response's
+  `updatedVariables.DATABASE_URL` contains a password **different from
+  the actual `newPassword`** (verified 2026-11-16: only `newPassword`
+  authenticates). Trust `newPassword`; fix the DB service's own
+  `DATABASE_URL`/`PGPASSWORD` vars to the truth manually, then
+  `${{…DATABASE_URL}}` references on consumers resolve correctly.
+- **Mongo has no reset mutation.** Volume deletion is permission-refused
+  for the workspace role (dashboard-only), so recovery is deleting the
+  service (dashboard-only too) and recreating it with credentials in
+  the creation payload.
+- **Verification before wiring app URIs**: `railway tcp-proxy create
+  -s <db-service> -p <port>`, ping with the INTENDED credentials
+  (`psql "$DATABASE_URL" -c 'select 1;'` /
+  `mongosh "$MONGODB_URI" --eval 'db.runCommand({ping: 1})'`), then
+  `railway tcp-proxy delete` — always.
+
 ## Deploy queue and status checks
 
 - Config-change deploys can sit `WAITING` ~4 min before `BUILDING`.
   Poll `activeDeployments[0]` per service (fields: `createdAt`, `status`,
   `meta.serviceManifest.deploy.startCommand`). Terminal: SUCCESS / CRASHED /
   SKIPPED / REMOVED. Expect ~5 min build+deploy for the Flask services.
+- **A trigger can silently NOT deploy (#1106)**:
+  `serviceInstanceDeploy(latestCommit)` can return true while the row is
+  created SKIPPED and nothing ever materializes; later triggers keep
+  no-oping while the stale deployment keeps serving. Always compare
+  `createdAt` against the pre-trigger row — a "successful" trigger call
+  proves nothing. `scripts/railway_deploy.sh <svc> <env>` does the whole
+  trigger-verify-recover loop for you (records the old row, triggers via
+  `railway redeploy --from-source`, polls for a NEW row, recovers a
+  SKIPPED row with a plain redeploy of the active deployment, and times
+  out loudly when no row materializes).
 - A failed healthcheck keeps the OLD deployment live (rollback-safe changes).
 - `railway logs -s <svc> -e development --lines N` streams deploy logs
   (nginx access+error lines land here).
+
+## Healthchecks — set on every app service (#1107)
+
+- App services run `healthcheckPath: /health` +
+  `healthcheckTimeout: 10` (every service has the #842 `/health`
+  route; it deliberately doesn't touch storage). Set on campus.auth,
+  campus.api, campus.audit, campus-gateway in BOTH environments
+  (2026-11-17). DB services stay restart-policy-only. A NEW app
+  service must set this at creation — a service that boots but 500s on
+  every request is otherwise indistinguishable from healthy, and a
+  crash-looping deploy is invisible (the #1107 incident: audit's first
+  prod boot crash-looped unnoticed; auth booted "SUCCESS" while
+  broken).
+- Recipe (ids via `railway status --json`; the mutation is a bare
+  `Boolean!`, so no selection set):
+  `railway api 'mutation($e:String!,$s:String!){ serviceInstanceUpdate(environmentId:$e, serviceId:$s, input:{healthcheckPath:"/health", healthcheckTimeout:10}) }' --var e=<envId> --var s=<svcId>`
+- After any config change, trigger + verify with
+  `scripts/railway_deploy.sh <svc> <env>` — a config change alone does
+  not redeploy. With a healthcheck set, deploy SUCCESS means `/health`
+  answered: "actually serving", not merely "container up".
+- Deploy-failure **notifications** remain dashboard-only: the API's
+  `notificationRuleCreate` takes an undocumented
+  `NotificationChannelConfig` scalar (blind-guessing its JSON shape is
+  how you email nobody) — Project Settings → Notifications, rule
+  scoped to the production environment.
+
+## Environments, ghosts, and cascade redeploys (#1109)
+
+- **Never create an environment by duplicating one.** Duplication
+  copies EVERY service — with the source environment's variables. The
+  2026-11-16 prod standup was bitten twice by the resulting ghosts:
+  they look like fleet members, hold dev secrets in prod-scoped vars,
+  and `serviceCreate` refuses duplicate names, so a removed instance
+  cannot be re-materialized by any API/CLI path. Policy: create
+  services explicitly into the target environment
+  (`serviceCreate(environmentId, …)`); duplication is reserved for
+  app-env parity checks, followed by an inventory sweep.
+- **Deleting or renaming a service cascade-redeploys every service
+  holding its derived references** (`RAILWAY_SERVICE_*` vars, domain
+  deletions): classroom and apphost silently STARTED themselves in
+  prod from a rename cascade. Expect a redeploy wave after any
+  entity-level delete/rename, and re-run `scripts/railway_env_audit.sh`
+  afterwards — it lists both environments' instances and flags
+  NEVER-DEPLOYED instances (the ghost signature) and prod members
+  that are SLEEPING/STOPPED/CRASHED.
+- Instance removal (vs entity deletion) is dashboard-only for the
+  workspace role; serviceDelete likewise. Budget for the dashboard
+  when cleaning up ghosts.
 
 ## CLI shell traps (Windows / Git Bash)
 

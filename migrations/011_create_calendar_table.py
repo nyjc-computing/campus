@@ -12,14 +12,21 @@ timetable pointer trail owns it), matching v1's calendar-editor
 boundary.
 
 The DDL matches what TableInterface.init_from_model generates for
-campus.model.CalendarDay. Run in the campus.auth context
-(`railway ssh -s campus.auth`, then `python migrations/runner.py
-apply`); non-production environments self-heal the table at startup
+campus.model.CalendarDay. TARGET_DB is "api": the `calendar` table
+lives in **campus.api's postgres** (that is where campus.api reads it
+and where dev's startup self-heal creates it) — run the runner in the
+api service's context (`railway ssh -s campus.api`, then `python
+migrations/runner.py --db api apply`). The earlier "run in the
+campus.auth context" wording here sent the 2026-11-16 prod standup to
+the auth DB, where the table had to be dropped again (#1104);
+non-production environments self-heal the table at startup
 (campus.api's _init_api_tables), so this run is only required on
 production. Idempotent: the CREATE is IF NOT EXISTS.
 """
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
+
+TARGET_DB = "api"
 
 _CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS "calendar" (

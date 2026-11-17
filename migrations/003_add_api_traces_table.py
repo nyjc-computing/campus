@@ -2,9 +2,15 @@
 
 Revision ID: 003
 Create Date: 2025-04-08
+
+TARGET_DB is "audit": the spans table belongs to the audit service (its
+own postgres since the #970 split). Run the runner in the audit service
+context for this revision (#1104).
 """
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
+
+TARGET_DB = "audit"
 
 
 def upgrade():

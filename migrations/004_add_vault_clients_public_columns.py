@@ -16,6 +16,8 @@ are confidential) and are required because the columns are NOT NULL.
 
 from campus.storage.tables.backend.postgres import PostgreSQLTable
 
+TARGET_DB = "auth"
+
 
 def upgrade():
     """Add is_public and redirect_uris columns to vault_clients."""

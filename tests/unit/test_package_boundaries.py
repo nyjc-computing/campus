@@ -49,6 +49,9 @@ CAMPUS_DIR = Path(__file__).resolve().parents[2] / "campus"
 # same allowed sets, checked via AST here)
 SHARED_ALLOWED = {
     "config": {"common"},
+    # Startup storage-init policy shared by the three services'
+    # create_app paths (#1103): needs only env (common) to gate on ENV.
+    "bootstrap": {"common"},
     # Self-contained: imports no campus package at all. Emitters (auth,
     # api) may import it; it must never grow campus dependencies back.
     "yapper": set(),
@@ -69,9 +72,10 @@ def _iter_shared_files():
             for path in sorted(root.rglob("*.py")):
                 if "__pycache__" not in path.parts:
                     yield sub, path
-    config = CAMPUS_DIR / "config.py"
-    if config.is_file():
-        yield "config", config
+    for module in ("config", "bootstrap"):
+        path = CAMPUS_DIR / f"{module}.py"
+        if path.is_file():
+            yield module, path
 
 
 def _package_parts(path: Path) -> tuple[str, ...]:
