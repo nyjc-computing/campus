@@ -13,9 +13,9 @@ fix survives personnel changes).
 > add every new trap you hit, with its root cause.
 
 Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
-Environments: `development` (weekly, autodeploys), `staging`,
-`production` (`d5221f3b`), `production-legacy` (July-2025 fossil, pending
-retirement).
+Environments: `development` (weekly, autodeploys) and `production`
+(`d5221f3b`). `staging` and the July-2025 fossil `production-legacy`
+were deleted on 2026-11-17 — two environments only.
 
 Railway API/CLI recipes and their sharpest edges live in the
 `railway-ops` skill (`.zcode/skills/railway-ops/SKILL.md`); this document
