@@ -32,7 +32,7 @@ The three rules in short form:
 
 The `staging` (`43a0d8ed`) and `production-legacy` Railway environments
 were **deleted 2026-11-17** — two environments only. The retired
-`staging` git branch and its ruleset are pending removal
+`staging` git branch and its ruleset were deleted the same day
 ([#1122](https://github.com/nyjc-computing/campus/issues/1122)).
 
 Branch model (the weekly → main cutover completed 2026-11-17):
@@ -46,9 +46,8 @@ task branch ──PR──> weekly ──────────PR (from weekly
 
 - **All testing in `development`** (or locally). Never point test suites,
   smoke scripts, seed scripts, or one-off migrations at any other
-  environment. The `staging` branch is a retired convention from the
-  pre-cutover model — its Railway environment is deleted and the branch
-  itself is pending removal (#1122).
+  environment. `staging` is fully retired (branch, ruleset, and Railway
+  environment all deleted 2026-11-17, #1122).
 - **All code updates through `weekly`.** Every change — code, docs, CI,
   config — lands on `weekly` via a PR from a task worktree branch
   ([CONTRIBUTING.md](CONTRIBUTING.md)).
