@@ -167,23 +167,25 @@ def _init_auth_tables() -> None:
     """Initialize the credentials storage tables, logging loudly on failure.
 
     CREATE TABLE IF NOT EXISTS per table (idempotent), so a fresh or
-    reset deployment self-heals on the next deploy. In production,
-    schema management is handled by migrations/scripts (see migration
-    009 for app_credentials), so initialization is skipped there.
+    reset deployment self-heals on the next deploy. The production
+    guard + loud-failure convention lives in campus.bootstrap
+    (#1103): initialization is skipped in production, where schema is
+    managed by migrations/scripts.
     """
-    from campus.common import env
+    from campus import bootstrap
 
-    try:
-        if env.ENV != env.PRODUCTION:
-            from .resources.credentials import CredentialsResource
-            CredentialsResource.init_storage()
-    except Exception:
-        logger.exception(
-            "Failed to initialize auth storage tables: credential "
-            "issuance (all OAuth token grants) will fail until the "
-            "tables exist. Recover by running migrations/ against the "
-            "database (see migrations/009_create_app_credentials.py)."
-        )
+    def _init_credentials_table() -> None:
+        from .resources.credentials import CredentialsResource
+        CredentialsResource.init_storage()
+
+    bootstrap.run_init_storage(
+        _init_credentials_table,
+        what="the auth credentials table (credential issuance — all "
+             "OAuth token grants — depends on it)",
+        recovery="run migrations/ against the database (see "
+                 "migrations/009_create_app_credentials.py) or "
+                 "python scripts/init_storage.py --service auth",
+    )
 
 
 def _seed_public_client() -> None:
@@ -198,21 +200,31 @@ def _seed_public_client() -> None:
     take down the rest of the auth service.
     """
     import campus.config
-    from campus.common import env
+    from campus import bootstrap
 
     # Ensure the clients tables exist and their schema is aligned for
     # public client support before seeding (both no-ops if up to date).
-    # In production, schema management is handled by migrations/scripts,
-    # so table initialization is blocked there.
+    # In production, schema management is handled by migrations/scripts;
+    # run_init_storage skips initialization there (both calls are DDL).
+    def _init_clients_tables() -> None:
+        from .resources.client import (
+            ClientsResource,
+            ensure_public_client_schema,
+        )
+        ClientsResource.init_storage()
+        ensure_public_client_schema()
+
+    bootstrap.run_init_storage(
+        _init_clients_tables,
+        what="the auth clients tables (client lookup and device-flow "
+             "login depend on them)",
+        recovery="run migrations/ against the database (006/007/008 "
+                 "cover the client schema) or python "
+                 "scripts/init_storage.py --service auth",
+    )
+
+    from .resources.client import ensure_public_client
     try:
-        if env.ENV != env.PRODUCTION:
-            from .resources.client import (
-                ClientsResource,
-                ensure_public_client_schema,
-            )
-            ClientsResource.init_storage()
-            ensure_public_client_schema()
-        from .resources.client import ensure_public_client
         if ensure_public_client():
             logger.info(
                 "Seeded public OAuth client '%s'",

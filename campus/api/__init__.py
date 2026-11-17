@@ -123,63 +123,63 @@ def _init_api_tables() -> None:
     their collections and need no such call; the circles collection is
     additionally seeded with the access-control bootstrap (root/admin
     sentinels and the per-resource role circles,
-    docs/circles-access-control.md). In production, schema
-    management is handled by migrations/scripts, so initialization is
-    skipped there. Same self-heal policy as campus.auth's
-    _init_auth_tables.
+    docs/circles-access-control.md). The production guard +
+    loud-failure convention lives in campus.bootstrap (#1103):
+    initialization is skipped in production, where schema is managed
+    by migrations/scripts.
     """
-    from campus.common import env
+    from campus import bootstrap
 
-    try:
-        if env.ENV != env.PRODUCTION:
-            from .resources.emailotp import EmailOTPResource
-            EmailOTPResource.init_storage()
-    except Exception:
-        logger.exception(
-            "Failed to initialize api storage tables: email OTP "
-            "request/verify will fail until the tables exist. Recover "
-            "by running the resource init against the database."
-        )
+    def _init_emailotp_table() -> None:
+        from .resources.emailotp import EmailOTPResource
+        EmailOTPResource.init_storage()
 
-    try:
-        if env.ENV != env.PRODUCTION:
-            # The timetable members table is a storage table (not a
-            # self-creating collection); without it, creating a
-            # timetable with lessongroup members fails.
-            from .resources.timetable import TimetablesResource
-            TimetablesResource.init_storage()
-    except Exception:
-        logger.exception(
-            "Failed to initialize timetable storage: timetable creation "
-            "will fail until the tables exist. Recover by running the "
-            "resource init against the database."
-        )
+    bootstrap.run_init_storage(
+        _init_emailotp_table,
+        what="the email OTP table (OTP request/verify depends on it)",
+        recovery="python scripts/init_storage.py --service api",
+    )
 
-    try:
-        if env.ENV != env.PRODUCTION:
-            # The school calendar is a storage table (not a
-            # self-creating collection); without it, the calendar
-            # routes and the timetable editor cannot read or write
-            # day-codes.
-            from .resources.calendar import CalendarResource
-            CalendarResource.init_storage()
-    except Exception:
-        logger.exception(
-            "Failed to initialize calendar storage: the school calendar "
-            "will be unreadable until the table exists. Recover by "
-            "running the resource init against the database."
-        )
+    def _init_timetable_table() -> None:
+        # The timetable members table is a storage table (not a
+        # self-creating collection); without it, creating a
+        # timetable with lessongroup members fails.
+        from .resources.timetable import TimetablesResource
+        TimetablesResource.init_storage()
 
-    try:
-        if env.ENV != env.PRODUCTION:
-            from .resources.circle import CirclesResource
-            CirclesResource.init_storage()
-    except Exception:
-        logger.exception(
-            "Failed to initialize the circle access-control bootstrap: "
-            "resource/role circles will be missing until init_storage "
-            "runs against the database."
-        )
+    bootstrap.run_init_storage(
+        _init_timetable_table,
+        what="the timetable members table (timetable creation with "
+             "lessongroup members depends on it)",
+        recovery="python scripts/init_storage.py --service api",
+    )
+
+    def _init_calendar_table() -> None:
+        # The school calendar is a storage table (not a
+        # self-creating collection); without it, the calendar
+        # routes and the timetable editor cannot read or write
+        # day-codes.
+        from .resources.calendar import CalendarResource
+        CalendarResource.init_storage()
+
+    bootstrap.run_init_storage(
+        _init_calendar_table,
+        what="the school calendar table (the calendar routes and the "
+             "timetable editor depend on it)",
+        recovery="python scripts/init_storage.py --service api (or "
+                 "migrations/011_create_calendar_table.py)",
+    )
+
+    def _init_circles_bootstrap() -> None:
+        from .resources.circle import CirclesResource
+        CirclesResource.init_storage()
+
+    bootstrap.run_init_storage(
+        _init_circles_bootstrap,
+        what="the circle access-control bootstrap (resource/role "
+             "circles depend on it, docs/circles-access-control.md)",
+        recovery="python scripts/init_storage.py --service api",
+    )
 
 
 def init_app(app: flask.Flask | flask.Blueprint) -> None:
