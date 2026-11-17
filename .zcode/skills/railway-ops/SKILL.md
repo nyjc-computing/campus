@@ -13,11 +13,11 @@ description: >-
 
 Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments: `development`
 (e954f5fa…, weekly autodeploys here — all testing happens here),
-`staging` and `production-legacy` were deleted 2026-11-17 — two
-environments only (`staging` git branch + ruleset pending removal,
-campus#1122), `production`
+`production`
 (d5221f3b…, deploys from `main` — the weekly → main release PR is the
-only path to `main`; cutover completed 2026-11-17). `railway status
+only path to `main`; cutover completed 2026-11-17). Two environments
+only: `staging`/`production-legacy` and the `staging` git branch +
+ruleset were all deleted 2026-11-17 (campus#1122). `railway status
 --json` lists them with
 `environments.edges[].node.serviceInstances.edges[].node` carrying
 `serviceName`, `serviceId`, `startCommand`, `activeDeployments`.
