@@ -162,15 +162,26 @@ also carries this access model.
 - App-author view (§7): [student-app-walkthrough.md](student-app-walkthrough.md)
 
 Known gaps between this policy and current reality were swept on
-2026-11-17 and are tracked on the sweep tracker
-[#1131](https://github.com/nyjc-computing/campus/issues/1131) — among
-them: main-ruleset admin bypass (#1121), staging retirement (#1122), the
-Railway API-key migration (#1123 — live, see §2), the audit-event redaction gap
-(#1124), the PII ruling (#1125 — resolved: nyjc.edu.sg identifiers are
-not PII), secrets at WARNING in Railway logs
-(#1126), OAuth-proxy error dumps (#1127), error-message leakage
-(#1128 + campus-common#8 + campus-core#8), the AUDIT_ADMINS portal-gate
-ruling (#1129 — resolved: portal relaxes to grant-holders, students
-audit on development only), gateway access-log query strings (#1130), and the
-flask-campus redaction extensions
-([flask-campus#20](https://github.com/nyjc-computing/flask-campus/issues/20)).
+2026-11-17 and tracked on the sweep tracker
+[#1131](https://github.com/nyjc-computing/campus/issues/1131).
+**The sweep is fully closed** — every child issue is closed and shipped
+to development (2026-11-17): main-ruleset enforcement (#1121), staging
+retirement (#1122), the Railway dev-bound key migration (#1123 — live,
+see §2), the audit-event redaction gap (#1124 — producer-side scrub +
+retroactive scrub re-run on development), the PII ruling (#1125 —
+resolved: nyjc.edu.sg identifiers are not PII; names and non-workspace
+emails redacted), secrets at WARNING in Railway logs (#1126),
+OAuth-proxy error dumps (#1127), error-message leakage (#1128 +
+campus-common#8/#10 + campus-core#8/#9 — driver text sanitized at the
+storage boundary and `from_exception` fixed at the error-class
+boundary), the AUDIT_ADMINS portal-gate ruling (#1129 — resolved:
+portal relaxes to grant-holders, students audit on development only),
+gateway access-log query strings (#1130 — `campus_nosecrets` format;
+Railway's own edge request log still records query strings into service
+log streams — platform infrastructure, superadmin-only in production),
+and the flask-campus redaction extensions
+([flask-campus#20](https://github.com/nyjc-computing/flask-campus/issues/20)
+— flow secrets, names, domain-aware email redaction, in-repo tests).
+The production promotion of this sweep rides the usual weekly → main
+release PR; the production audit-trail scrub is a superadmin follow-up
+(same recipe as the #1124 dev scrub).
