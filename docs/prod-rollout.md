@@ -34,8 +34,9 @@ is the playbook — what to do, in what order, and why.
   dev deployments once their prod ghosts are removed). Volumes follow:
   `*-dev-volume` vs plain.
 - **Prod instances track `main` (cutover executed 2026-11-16/17)** —
-  campus.auth/api/audit/gateway deploy only on main pushes; weekly
-  pushes touch dev alone. Note for cutover mechanics: a per-instance
+  campus.auth/api/audit/gateway deploy only on main pushes, and wait
+  for the commit's CI checks to pass first (`checkSuites` on every
+  prod app service); weekly pushes touch dev alone. Note for cutover mechanics: a per-instance
   branch flip is dashboard-only (the API's `ServiceSourceInput` has no
   branch field, and `serviceConnect` is entity-level — it would move
   dev too). After a branch flip lands on a stale base, the first
@@ -227,8 +228,11 @@ what deploys prod. Future releases:
 3. If main was reconciled into weekly directly (push), update the PR
    branch first (`gh pr update-branch`) or the policy will refuse
    again.
-4. Prod auto-deploys the merge on all four instances; smoke: gateway
-   `/health`, `/api/openapi.json`, `/integrations/v1/`,
+4. Prod auto-deploys the merge on all instances — **and waits on CI**:
+   every prod app service has `checkSuites` enabled (2026-11-17), so a
+   deployment only starts after the commit's GitHub checks pass. A
+   forced `deploymentRedeploy` still bypasses the wait.
+5. Smoke: gateway `/health`, `/api/openapi.json`, `/integrations/v1/`,
    `/audit/v1/health`, auth `/health`, one device-flow + one browser
    login.
 
@@ -314,7 +318,10 @@ Google (identity + classroom callback registered), GitHub, Discord.
 
 Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
-release). Left offline: oauth-proxy (retired candidate, zero vars).
+release). oauth-proxy was **deleted from both environments** (2026-11-17): it was
+a dev-only localhost OAuth-callback relay, superseded by the proxy
+embedded in campus.auth and the campus broker. Its deletion cascade-
+redeployed the services that held its derived reference vars.
 
 Open work items: #1103 (bootstrap/guard consolidation), #1104
 (multi-DB migrations), #1105 (DB bootstrap ordering + reset quirk),
