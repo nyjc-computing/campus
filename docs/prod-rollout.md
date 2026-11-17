@@ -148,13 +148,17 @@ are user-gated and called out.
    2026-11-16). See docs/migration-protocol.md.
    **Schema drift on EXISTING tables** (#944): `init_from_model` is
    CREATE IF NOT EXISTS — it never adds columns to a table that
-   already exists. Model-field additions to live DBs go in as one-off
-   `ALTER TABLE … ADD COLUMN <col> … ` (nullable) through the same
-   tcp-proxy/ssh path, BEFORE deploying the code that writes them;
-   nullable additions are backward-compatible with the running code.
-   The `apikeys.trace_user_id`/`trace_client_id` columns (#944) were
-   applied this way to the dev and prod audit DBs (NULL = unscoped,
-   so existing keys keep global read).
+   already exists. Model-field additions to live DBs go in as a
+   proper migration (nullable, idempotent, `TARGET_DB` set) run via
+   the runner through the same tcp-proxy/ssh path, BEFORE deploying
+   the code that writes them; nullable additions are backward-
+   compatible with the running code. Precedent:
+   `migrations/012_add_apikey_trace_binds.py` applied to the dev and
+   prod audit DBs 2026-11-17 (NULL = unscoped, so existing keys keep
+   global read; both audit ledgers also got their 003 baseline stamped
+   at the same time — neither had been baselined at bootstrap).
+3. Seed bootstrap data: circles graph (see §5), vault labels the
+   service reads, vault access grants for its client.
 3. Seed bootstrap data: circles graph (see §5), vault labels the
    service reads, vault access grants for its client.
 
