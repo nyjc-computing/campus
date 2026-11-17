@@ -118,11 +118,15 @@ are user-gated and called out.
    — **delete the proxy afterwards**.
 
 ### Phase 2 — schema bootstrap (prod blocks `init_from_model`)
-1. Open a temporary tcp proxy to the DB and run the service's
-   storage init one-off with `ENV=development` for the *process only*
-   (the storage DDL layer is `@block_env(PRODUCTION)` — the audit
-   crash (#1100) is what happens when a service boots without this
-   being understood).
+1. Run the service's storage init one-off with `ENV=development` for
+   the *process only*: `ENV=development python
+   scripts/init_storage.py --service <svc>` (the consolidated
+   per-service entry point, #1103 — each target is the same idempotent
+   init the service's startup self-heal runs, routed through
+   `campus.bootstrap.run_init_storage`; the audit crash (#1100) is
+   what happens when a service boots without this being understood).
+   Reach the DB via `railway ssh` into the service or a temporary tcp
+   proxy (**delete the proxy afterwards**).
 2. Stamp the migration ledger (`runner.py ensure` + `stamp`; 001/002
    `--as historical`). Read each migration's docstring for its target
    DB — the runner executes in the auth context, but tables can belong
@@ -205,7 +209,8 @@ are user-gated and called out.
   portal gate) also carries the master account; the meta doc points at
   the root. Members are keyed by **email string** (not uid). New
   resources add their pair on dev at startup — prod needs the manual
-  pair (or the circles-bootstrap fix, #1103 family).
+  pair (`python scripts/init_storage.py --service api` runs the same
+  bootstrap, #1103).
 - **Vault labels**: `campus.api/SECRET_KEY`, `campus.auth/SECRET_KEY`,
   `campus.yapper/YAPPERDB_URI`, `google/*`, `google.classroom/*`
   (SCOPES = canonical 9; CONNECT_TARGETS = profile-prod +
@@ -277,8 +282,11 @@ branches (#1116/#1117) per the "main is old, discardable" ruling.
    ACTIVE SUCCESS deployment, usePreviousImageTag:false)` — on SKIPPED
    rows it fails "without a snapshot"; on CRASHED rows it works.
 5. **Prod boots block `init_from_model`**: unguarded `init_storage()`
-   at startup = crash loop (#1100). Fresh prod DBs need a one-off
-   `ENV=development` init + ledger stamps (#1103).
+   at startup = crash loop (#1100). Startup init goes through
+   `campus.bootstrap.run_init_storage` (the guard + loud-failure
+   convention stated once, #1103); fresh prod DBs need the one-off
+   `ENV=development python scripts/init_storage.py --service <svc>` +
+   ledger stamps.
 6. **Ghost instances**: environment duplication copies every service
    (with dev variables); deleting a referenced service cascade-redeploys
    referrers and can silently START ghosts (classroom + apphost did
@@ -328,7 +336,7 @@ Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
 release). Left offline: oauth-proxy (retired candidate, zero vars).
 
-Open work items: #1103 (bootstrap/guard consolidation), #1104
+Open work items: #1104
 (multi-DB migrations), #1105 (DB bootstrap ordering + reset quirk),
 #1106 (SKIPPED deploy), #1107 (healthchecks + alerting — most prod
 services have no `/health` healthcheck configured and deploy-failure
