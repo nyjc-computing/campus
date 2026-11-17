@@ -83,6 +83,7 @@ is the playbook — what to do, in what order, and why.
 | Bucket keys | `BUCKET_*` on prod campus.api as **literals** from `railway bucket credentials -b campus.api-bucket -e production --json` — bucket credentials are NOT service variables, so `${{campus.api-bucket.*}}` references resolve EMPTY (that's how four of the five vars came up empty on 2026-11-16 — the files endpoints couldn't have worked — caught by #1108's matrix grounding and re-set 2026-11-17) | rotate = `railway bucket credentials --reset`, then re-run the command and re-set all five literals on the api instance; they stay non-empty so the #1108 boot check can't catch staleness — files endpoints will 401 until re-set. Bucket instances are per-environment (same entity, per-env keys) |
 | Audit producer keys (`traces:write`) | `AUDIT_API_KEY` on each producer | minted via `POST /audit/v1/apikeys/` with the operator key bearer; response field `api_key` is the plaintext (shown once) |
 | Audit UI key (`traces:read`, `apikeys:read`, `apikeys:write`) | `AUDIT_UI_API_KEY` on the admin portal | same mint route, name `campus-admin audit UI` |
+| Audit scoped keys (#944) | none (dev-only per policy) | mint with `trace_user_id`/`trace_client_id` binds — required (422 `MISSING_TRACE_BIND`) for mints granting trace reads without `apikeys:write`/`traces:write`; NULL bind = unscoped, so existing keys keep global read. Binds are mint-time only |
 | Audit operator key | `AUDIT_OPERATOR_API_KEY` on prod audit | auto-seeded at audit startup into the audit DB (`uid-apikey-operator-0000`); rotate = delete row + new env value + redeploy |
 | Google identity / classroom | vault labels `google/CLIENT_ID,CLIENT_SECRET` and `google.classroom/CLIENT_ID,CLIENT_SECRET,SCOPES,CONNECT_TARGETS` | GCP console (user) + `scripts/seed_integration.py` (classroom; needs a vault-write client) / direct insert (identity) |
 | GitHub / Discord OAuth apps | vault labels `github/CLIENT_ID,CLIENT_SECRET`, `discord/…` (seeded 2026-11-16 via the admin vaults UI) | user creates the OAuth apps; callbacks `https://campusauth.up.railway.app/auth/v1/{github,discord}/callback`. **Requires #1114's fix** — the proxies built authorize URLs from `env.CLIENT_ID` instead of the vault credentials; verify redirects carry the app ids after any proxy change |
@@ -145,6 +146,15 @@ are user-gated and called out.
    another DB errors with the right `--db` instead of silently writing
    the wrong ledger (the trap that put 011 in the auth DB on
    2026-11-16). See docs/migration-protocol.md.
+   **Schema drift on EXISTING tables** (#944): `init_from_model` is
+   CREATE IF NOT EXISTS — it never adds columns to a table that
+   already exists. Model-field additions to live DBs go in as one-off
+   `ALTER TABLE … ADD COLUMN <col> … ` (nullable) through the same
+   tcp-proxy/ssh path, BEFORE deploying the code that writes them;
+   nullable additions are backward-compatible with the running code.
+   The `apikeys.trace_user_id`/`trace_client_id` columns (#944) were
+   applied this way to the dev and prod audit DBs (NULL = unscoped,
+   so existing keys keep global read).
 3. Seed bootstrap data: circles graph (see §5), vault labels the
    service reads, vault access grants for its client.
 

@@ -104,6 +104,32 @@ def _validate_rate_limit_field(
         ))
 
 
+def _needs_trace_bind(scopes: list[str]) -> bool:
+    """True if a (resolved) scope list grants trace reads but the key
+    is neither an admin nor a producer — the mint class that MUST
+    carry a trace bind (#944).
+
+    apikeys:write holders (the operator/admin class) stay unscoped.
+    traces:write holders are producers: machine identities in the
+    tracing pipeline whose keys were never the per-student read
+    surface #944 closes (the reviewed traces-producer role bundles
+    read for exactly that pipeline). The fail-closed rule targets the
+    human debug surface — read-only keys must be scoped per student.
+
+    Wildcard expansion matches the authorization layer's semantics
+    (decorators.scope_matches): "*" grants everything and counts as
+    admin; "traces:*" grants read AND write, so it counts as a
+    producer.
+    """
+    reads = any(decorators.scope_matches(g, "traces:read") for g in scopes)
+    privileged = any(
+        decorators.scope_matches(g, s)
+        for g in scopes
+        for s in ("apikeys:write", "traces:write")
+    )
+    return reads and not privileged
+
+
 @bp.post("/")
 @flask_campus.unpack_request
 @audit_events.audit_event("audit.apikeys.new")
@@ -116,6 +142,8 @@ def new(
         role: schema.String | None = None,
         rate_limit: schema.Integer | None = None,
         expires_at: schema.DateTime | None = None,
+        trace_user_id: str | None = None,
+        trace_client_id: str | None = None,
 ) -> flask_campus.JsonResponse:
     """Create a new API key.
 
@@ -126,12 +154,25 @@ def new(
       "scopes": ["scope1", "scope2"],  // optional
       "role": "traces-viewer",  // optional, a named role (#918)
       "rate_limit": 100,  // optional, requests per minute
-      "expires_at": "ISO 8601"  // optional
+      "expires_at": "ISO 8601",  // optional
+      "trace_user_id": "string",  // optional, trace-read bind (#944)
+      "trace_client_id": "string"  // optional, trace-read bind (#944)
     }
 
     Give either a role or a list of scopes, not both: a role is a named
     bundle of scopes from the catalogue (campus.audit.roles), and
     naming both leaves it ambiguous which one was meant.
+
+    Trace-read scoping (#944): trace_user_id/trace_client_id are
+    opaque bind values the service enforces server-side on every
+    traces:read surface (plain string equality against span identity
+    attributes; campus.audit never resolves them against campus.auth).
+    A mint that grants trace reads without apikeys:write (admin
+    class) or traces:write (producer pipeline) must carry at least
+    one bind — fail-closed, so a per-student key can never be minted
+    globally-readable by accident. Admin/producer keys omit the binds
+    and read unscoped. Binds are mint-time only; PATCH does not
+    accept them.
 
     Returns:
         201 Created with the API key (only shown once) and key details
@@ -151,6 +192,26 @@ def new(
     else:
         _validate_scopes_field(field_errors, scopes)
     _validate_rate_limit_field(field_errors, rate_limit)
+    if trace_user_id is not None:
+        _validate_non_empty_str(field_errors, "trace_user_id", trace_user_id)
+    if trace_client_id is not None:
+        _validate_non_empty_str(field_errors, "trace_client_id", trace_client_id)
+    # Only consult the resolved scopes when everything above is clean:
+    # resolve_role raises on an unknown role, and a mint with any
+    # field error is rejected regardless of the bind (#944).
+    if (not field_errors
+            and trace_user_id is None and trace_client_id is None
+            and _needs_trace_bind(
+                resolve_role(role) if role else [str(s) for s in (scopes or [])]
+            )):
+        field_errors.append(FieldError(
+            field="trace_user_id",
+            code="MISSING_TRACE_BIND",
+            message=(
+                "keys granting trace reads without apikeys:write must be "
+                "minted with a trace_user_id or trace_client_id bind (#944)"
+            ),
+        ))
     if field_errors:
         raise ValidationError(
             message="One or more fields are invalid",
@@ -163,6 +224,8 @@ def new(
         role=role,
         rate_limit=rate_limit,
         expires_at=expires_at,
+        trace_user_id=trace_user_id,
+        trace_client_id=trace_client_id,
     )
     record = api_key.to_resource()
     record["api_key"] = apikey_value

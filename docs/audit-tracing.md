@@ -207,6 +207,39 @@ catalogue is additive. No role resolves to a wildcard: the operator
 key deliberately holds none, and a standing `*` role would be a
 privilege-escalation footgun in the one place keys get minted.
 
+**Per-key trace-read scoping (#944).** Superseding ruling A's
+global-read stance for scoped keys: a `traces:read` key minted with a
+**bind** — `trace_user_id` and/or `trace_client_id`, opaque plain
+strings — sees only traces whose spans match the bind exactly. The
+match is span-level equality, the same semantics the search
+endpoint's identity filters have always had, so a scoped key sees
+exactly what an unscoped search for its bind would. NULL binds =
+unscoped: the operator key and the admin-portal UI key read
+everything, as before. The service never resolves a bind against
+campus.auth — campus.audit is standalone, and the binds match span
+attributes verbatim, whatever producers wrote (they are plain `str`,
+deliberately not identity schema types).
+
+Enforcement is server-side on every read surface (list, trace tree,
+span list, span detail, search, journeys) — the caller cannot widen
+its view by omitting or conflicting filters: a search filter that
+disagrees with the bind yields an empty page, by-id paths return 404
+so other users' trace existence never leaks, journey counts are
+filtered before counting, and anonymous spans (null identity) are
+invisible to scoped keys.
+
+**Fail-closed minting.** A mint that grants trace reads without
+`apikeys:write` (admin class) or `traces:write` (producer pipeline —
+the reviewed `traces-producer` role bundles read for that pipeline)
+must carry at least one bind: 422 `MISSING_TRACE_BIND` otherwise, so
+a per-student key can never be minted globally-readable by accident.
+Binds are mint-time only; PATCH rejects them.
+
+Student-debug key recipe: `POST /audit/v1/apikeys/` with
+`{"role": "traces-viewer", "trace_user_id": "<student email>"}` —
+that key sees only that user's traces, on the development
+environment (the production audit trail is superadmin/admin-only).
+
 Verify a key works: `GET /audit/v1/traces/` with
 `Authorization: Bearer <key>` → 200 (401 on failure).
 

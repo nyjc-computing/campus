@@ -30,6 +30,9 @@ bp = flask.Blueprint('audit_journeys', __name__, url_prefix='/journeys')
 def get_journey(journey_id: str) -> flask_campus.JsonResponse:
     """List the member traces of one journey, oldest first.
 
+    The calling key's trace bind (#944) is applied before counting, so
+    a scoped key's trace_count only counts traces it may see.
+
     Args:
         journey_id: The journey tag carried on the member spans
 
@@ -39,7 +42,10 @@ def get_journey(journey_id: str) -> flask_campus.JsonResponse:
         empty journey is a 200 with trace_count 0, not a 404: the id
         is a tag, not a stored resource.
     """
-    summaries = traces_resource.journey(journey_id)
+    summaries = traces_resource.journey(
+        journey_id,
+        trace_filter=decorators.get_trace_filter(),
+    )
     return {
         "journey_id": journey_id,
         "trace_count": len(summaries),

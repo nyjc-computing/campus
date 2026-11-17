@@ -13,6 +13,7 @@ Issue: #575
 __all__ = [
     "require_scopes",
     "scope_matches",
+    "get_trace_filter",
 ]
 
 import functools
@@ -21,6 +22,9 @@ import typing
 import flask
 
 from campus.common.errors import api_errors
+
+if typing.TYPE_CHECKING:
+    from .resources.traces import TraceFilter
 
 
 def scope_matches(granted: str, required: str) -> bool:
@@ -89,3 +93,23 @@ def require_scopes(
         return wrapper
 
     return decorator
+
+
+def get_trace_filter() -> "TraceFilter":
+    """Return the authenticated key's trace-read bind (#944).
+
+    Reads the bind the API-key authentication middleware published on
+    flask.g (campus.audit.__init__). Keys without a bind (the
+    operator/admin class) get an unscoped TraceFilter; outside an
+    authenticated request context (e.g. unit tests calling resources
+    directly) this is unscoped too.
+
+    Returns:
+        TraceFilter for the calling key.
+    """
+    from .resources.traces import TraceFilter
+
+    return TraceFilter(
+        user_id=getattr(flask.g, "trace_user_filter", None),
+        client_id=getattr(flask.g, "trace_client_filter", None),
+    )
