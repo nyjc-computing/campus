@@ -13,9 +13,13 @@ fix survives personnel changes).
 > add every new trap you hit, with its root cause.
 
 Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
-Environments: `development` (weekly, autodeploys) and `production`
-(`d5221f3b`). `staging` and the July-2025 fossil `production-legacy`
-were deleted on 2026-11-17 — two environments only.
+Environments: `development` (`e954f5fa`, autodeploys from `weekly` — all
+testing happens here) and `production` (`d5221f3b`, deploys from `main`).
+`staging` and the July-2025 fossil `production-legacy` were deleted on
+2026-11-17 — two environments only. Access policy: production Railway
+access is **superadmin-only**, production data is never accessed
+directly, and the release path is the `weekly` → `main` PR — see
+[environment-access-policy.md](environment-access-policy.md).
 
 Railway API/CLI recipes and their sharpest edges live in the
 `railway-ops` skill (`.zcode/skills/railway-ops/SKILL.md`); this document
@@ -37,8 +41,12 @@ is the playbook — what to do, in what order, and why.
   is created or an entity deleted/renamed:
   `scripts/railway_env_audit.sh` (#1109).
 - **Prod instances track `main` (cutover executed 2026-11-16/17)** —
-  campus.auth/api/audit/gateway deploy only on main pushes; weekly
-  pushes touch dev alone. Note for cutover mechanics: a per-instance
+  campus.auth/api/audit/gateway deploy only on main pushes, and wait
+  for the commit's CI checks to pass first (`checkSuites` on every
+  prod app service); weekly pushes touch dev alone. `main` changes
+  only through the `weekly` → `main` release PR
+  ([environment-access-policy.md](environment-access-policy.md)).
+  Note for cutover mechanics: a per-instance
   branch flip is dashboard-only (the API's `ServiceSourceInput` has no
   branch field, and `serviceConnect` is entity-level — it would move
   dev too). After a branch flip lands on a stale base, the first
@@ -88,6 +96,10 @@ client id) stay literals. Client secrets are env vars by design — the
 auth DB stores only HMAC hashes.
 
 ## 3. Deploying a NEW service to prod (staggered sequence)
+
+Superadmin-only per the access policy — these are the documented
+break-glass exceptions to "production data is not accessed directly",
+and each use is recorded.
 
 Do these in order; each phase depends on the previous. "Blocked" items
 are user-gated and called out.
@@ -193,14 +205,15 @@ are user-gated and called out.
 
 ## 4. Updating EXISTING services
 
-1. Code changes ride **weekly** → autodeploy touches prod too (see §1).
-   After a merge, poll the prod deployment row for the service and
-   confirm it is not SKIPPED (§7.4) — or let
-   `scripts/railway_deploy.sh <svc> production` do the whole
-   trigger-verify-recover loop: it records the pre-trigger row, waits
-   for a NEW deployment to reach SUCCESS, auto-recovers the SKIPPED
-   trap (§7.4) once, and times out loudly when nothing materializes
-   (#1106).
+1. Code changes ride **`weekly`** (autodeploys `development` only). They
+   reach prod through the **`weekly` → `main` release PR** — merging it
+   redeploys the prod fleet from `main` (§1). After a release merge, poll
+   the prod deployment row for the service and confirm it is not SKIPPED
+   (§7.4) — or let `scripts/railway_deploy.sh <svc> production` do the
+   whole trigger-verify-recover loop: it records the pre-trigger row,
+   waits for a NEW deployment to reach SUCCESS, auto-recovers the
+   SKIPPED trap (§7.4) once, and times out loudly when nothing
+   materializes (#1106).
 2. Variable changes: `variableUpsert(skipDeploys: true)` for the batch,
    then ONE redeploy (`deploymentRedeploy` of the ACTIVE deployment —
    the reliable trigger). Prefer references over literals so future
@@ -258,8 +271,11 @@ what deploys prod. Future releases:
 3. If main was reconciled into weekly directly (push), update the PR
    branch first (`gh pr update-branch`) or the policy will refuse
    again.
-4. Prod auto-deploys the merge on all four instances; smoke: gateway
-   `/health`, `/api/openapi.json`, `/integrations/v1/`,
+4. Prod auto-deploys the merge on all instances — **and waits on CI**:
+   every prod app service has `checkSuites` enabled (2026-11-17), so a
+   deployment only starts after the commit's GitHub checks pass. A
+   forced `deploymentRedeploy` still bypasses the wait.
+5. Smoke: gateway `/health`, `/api/openapi.json`, `/integrations/v1/`,
    `/audit/v1/health`, auth `/health`, one device-flow + one browser
    login.
 
@@ -362,10 +378,13 @@ Google (identity + classroom callback registered), GitHub, Discord.
 
 Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
-release). oauth-proxy was retired outright on 2026-11-17 (entity
-removed from both environments). Healthchecks (`/health` + 10s) are
-live on the four app services in both environments (#1107); required
-env vars are boot-enforced in production (#1108).
+release). oauth-proxy was **deleted from both environments** (2026-11-17): it was
+a dev-only localhost OAuth-callback relay, superseded by the proxy
+embedded in campus.auth and the campus broker. Its deletion cascade-
+redeployed the services that held its derived reference vars.
+Healthchecks (`/health` + 10s) are live on the four app services in
+both environments (#1107); required env vars are boot-enforced in
+production (#1108).
 
 Open work items: deploy-failure **notifications** (the #1107 remainder:
 healthchecks are live but Railway deploy-failure alerting is still
