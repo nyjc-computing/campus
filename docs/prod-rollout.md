@@ -28,11 +28,14 @@ is the playbook — what to do, in what order, and why.
   variables, domains, volumes, deploy settings. Entity-scoped: name, repo.
   Renaming an entity renames it in **both** environments' canvases.
 - **Naming convention**: suffix-less = prod. Services shared across
-  environments keep the suffix-less name (it *is* the prod name). Services
+  environments keep the suffix-less name (it *is* the prod name) —
+  the DB services and the consumer apps (campus-admin, classroom,
+  apphost, profile, nyxchange) are shared, suffix-less. Services
   exclusive to dev carry `-dev` (`campus.auth-mongodb-dev`,
-  `campus.api-mongodb-dev`, `campus.api-bucket-dev`, the consumer repos'
-  dev deployments once their prod ghosts are removed). Volumes follow:
-  `*-dev-volume` vs plain.
+  `campus.api-mongodb-dev`, `campus.api-bucket-dev`). Volumes follow:
+  `*-dev-volume` vs plain. Audit the inventory any time an environment
+  is created or an entity deleted/renamed:
+  `scripts/railway_env_audit.sh` (#1109).
 - **Prod instances track `main` (cutover executed 2026-11-16/17)** —
   campus.auth/api/audit/gateway deploy only on main pushes; weekly
   pushes touch dev alone. Note for cutover mechanics: a per-instance
@@ -300,10 +303,16 @@ branches (#1116/#1117) per the "main is old, discardable" ruling.
    convention stated once, #1103); fresh prod DBs need the one-off
    `ENV=development python scripts/init_storage.py --service <svc>` +
    ledger stamps.
-6. **Ghost instances**: environment duplication copies every service
-   (with dev variables); deleting a referenced service cascade-redeploys
-   referrers and can silently START ghosts (classroom + apphost did
-   exactly this). Instance removal is dashboard-only.
+6. **Ghost instances** (resolved #1109): environment duplication
+   copies every service (with dev variables); deleting or renaming a
+   referenced service cascade-redeploys referrers and can silently
+   START ghosts (classroom + apphost did exactly this). The prod
+   ghosts were removed 2026-11-17 — the prod canvas is now exactly
+   the intended fleet (§8) — and oauth-proxy was retired outright.
+   Policy going forward: create services explicitly into the target
+   environment (never duplicate an environment wholesale), and sweep
+   with `scripts/railway_env_audit.sh` after entity-level
+   delete/rename. Instance removal is dashboard-only.
 7. **Reference syntax**: dotted service names must be quoted —
    `${{"campus.auth-postgres".DATABASE_URL}}`; unquoted resolves empty
    (psycopg falls back to a unix socket — bizarre 500s).
@@ -353,16 +362,23 @@ Google (identity + classroom callback registered), GitHub, Discord.
 
 Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
-release). Left offline: oauth-proxy (retired candidate, zero vars).
+release). oauth-proxy was retired outright on 2026-11-17 (entity
+removed from both environments). Healthchecks (`/health` + 10s) are
+live on the four app services in both environments (#1107); required
+env vars are boot-enforced in production (#1108).
 
 Open work items: deploy-failure **notifications** (the #1107 remainder:
-healthchecks are live on all four app services in both environments —
-`/health` + 10s timeout — but Railway deploy-failure alerting is still
+healthchecks are live but Railway deploy-failure alerting is still
 off; enabling it is a dashboard step, Project Settings → Notifications,
-email/webhook rule scoped to the production environment),
-#1109 (ghost
-instances — largely superseded: classroom/apphost are intentional now;
-the remainder is the oauth-proxy decision).
+email/webhook rule scoped to the production environment).
+
+The #1103–#1109 standup-debt sweep is otherwise closed: #1103
+(init-storage guard + `scripts/init_storage.py`), #1104 (per-DB
+migration ledgers), #1105 (DB bootstrap ordering in the ops skill),
+#1106 (`scripts/railway_deploy.sh` trigger-verify-recover), #1107
+(healthchecks, modulo notifications above), #1108 (boot env
+validation + `docs/required-env-vars.md`), #1109 (ghosts removed,
+explicit-environment-creation policy + `scripts/railway_env_audit.sh`).
 
 ## References
 

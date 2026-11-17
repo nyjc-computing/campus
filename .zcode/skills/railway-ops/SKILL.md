@@ -126,6 +126,29 @@ fossil `production-legacy` were deleted 2026-11-17. `railway status
   how you email nobody) — Project Settings → Notifications, rule
   scoped to the production environment.
 
+## Environments, ghosts, and cascade redeploys (#1109)
+
+- **Never create an environment by duplicating one.** Duplication
+  copies EVERY service — with the source environment's variables. The
+  2026-11-16 prod standup was bitten twice by the resulting ghosts:
+  they look like fleet members, hold dev secrets in prod-scoped vars,
+  and `serviceCreate` refuses duplicate names, so a removed instance
+  cannot be re-materialized by any API/CLI path. Policy: create
+  services explicitly into the target environment
+  (`serviceCreate(environmentId, …)`); duplication is reserved for
+  app-env parity checks, followed by an inventory sweep.
+- **Deleting or renaming a service cascade-redeploys every service
+  holding its derived references** (`RAILWAY_SERVICE_*` vars, domain
+  deletions): classroom and apphost silently STARTED themselves in
+  prod from a rename cascade. Expect a redeploy wave after any
+  entity-level delete/rename, and re-run `scripts/railway_env_audit.sh`
+  afterwards — it lists both environments' instances and flags
+  NEVER-DEPLOYED instances (the ghost signature) and prod members
+  that are SLEEPING/STOPPED/CRASHED.
+- Instance removal (vs entity deletion) is dashboard-only for the
+  workspace role; serviceDelete likewise. Budget for the dashboard
+  when cleaning up ghosts.
+
 ## CLI shell traps (Windows / Git Bash)
 
 - `railway` cannot be spawned from Windows-Python `subprocess`
