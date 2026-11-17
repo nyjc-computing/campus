@@ -1,0 +1,29 @@
+name: main PR head guard
+
+# GitHub rulesets cannot restrict a PR's head branch (conditions only
+# select the target branch), so the policy rule "main changes only via a
+# PR from weekly" (docs/environment-access-policy.md §1) is enforced by
+# this check, made required on the `production` ruleset for main. The
+# ruleset's admin bypass remains the documented emergency path
+# (#1131/#1121, ruling 2026-11-17).
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  head-branch-is-weekly:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the PR head branch is weekly
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ "$HEAD_REF" = "weekly" ]; then
+            echo "head branch is 'weekly' — release flow OK"
+          else
+            echo "::error::PRs to 'main' must come from 'weekly' (docs/environment-access-policy.md §1); got '$HEAD_REF'"
+            exit 1
+          fi

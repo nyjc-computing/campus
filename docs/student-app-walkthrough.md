@@ -183,14 +183,16 @@ Details: [sign-out chain](auth-login-flow.md#sign-out-chain-785788791).
 ## 7. Debugging with `campus.audit`
 
 When your app misbehaves in a deployment, the audit trail is the shared
-observability surface — and on production it is your **only** network
-debug surface (policy, 2026-11-17): Railway production logs, variables,
-and databases are superadmin-only; you query the audit trail through the
-campus-admin web UI or the campus API/CLI
+observability surface. Access rules (policy, 2026-11-17): you can query
+audit traces on the **development environment only** — through the
+campus-admin portal's audit views or the campus API/CLI. The production
+audit trail is superadmin/admin-only, and Railway production logs,
+variables, and databases are off-limits
 ([environment-access-policy.md](environment-access-policy.md)). Two
-consequences for your app: emit audit traces so production problems are
-diagnosable, and keep error messages clear about what failed (they carry
-the debugging burden) without ever embedding secrets.
+consequences for your app: emit audit traces so problems are diagnosable
+where you can look (development), and keep error messages clear about
+what failed — in production they are the primary debug surface for you
+and your users, without ever embedding secrets.
 
 - **Enable it** on your app: set `AUDIT_API_KEY` (a `audit_v1_` key minted by
   the campus operator) plus `AUDIT_TRACING_ENABLED=1`, then look at your

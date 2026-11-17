@@ -17,10 +17,11 @@ The three rules in short form:
    sensitive secrets (Railway) and all PII plus sensitive secrets
    (campus.audit).
 3. **Production Railway logs are superadmin-only.** Only the superadmin
-   debugs deployment-side issues. Production audit logs are the one
-   network debug surface available to students — via the campus-admin web
-   UI or the campus API/CLI — so error messages must be clear enough to
-   debug from, without revealing sensitive information.
+   debugs deployment-side issues. The production audit trail is
+   superadmin/admin-only; students may access audit traces on the
+   **development environment only**. Error messages are therefore
+   students' production debug surface — keep them clear, never
+   revealing sensitive information.
 
 ## 1. Environments and branches
 
@@ -53,13 +54,25 @@ task branch ──PR──> weekly ──────────PR (from weekly
   `main` autodeploys the production fleet. The release runbook is
   [prod-rollout.md](prod-rollout.md) (§4/§6).
 
-Enforcement today (GitHub ruleset `production` on `main`): PRs required,
-one approving review, required status checks, no force-pushes, linear
-history. What the ruleset cannot express — "PR head must be `weekly`",
-"no admin bypass" — is convention plus review; the gaps are tracked in
+Enforcement (GitHub ruleset `production` on `main`): PRs required, one
+approving review, required status checks, no force-pushes, linear
+history. GitHub rulesets cannot restrict a PR's head branch (conditions
+only select the target branch), so "PRs from `weekly` only" is
+machine-enforced by the required `head-branch-is-weekly` CI guard
+(`.github/workflows/main-pr-head-guard.yml`, added with this policy).
+**Admin bypass stays enabled by design** — the documented emergency
+path. Dependabot is pinned to `weekly` via `target-branch`. Residual
+gaps are tracked in
 [#1131](https://github.com/nyjc-computing/campus/issues/1131)
 ([#1121](https://github.com/nyjc-computing/campus/issues/1121) for the
 ruleset itself).
+
+**Ruling 2026-11-17 (access model):** campus-admin portal access will be
+relaxed to any account holding one or more access grants
+([#1129](https://github.com/nyjc-computing/campus/issues/1129),
+implementation tracked on campus-admin); student accounts may access
+audit traces on the **development environment only** — the production
+audit trail remains superadmin/admin-only.
 
 ## 2. Railway access model
 
@@ -97,31 +110,40 @@ also carries this access model.
   sparingly and never dump environment variables; when adding a log
   line, assume it will be read in a shared console.
 - **campus.audit records in production** must scrub **all PII and
-  sensitive secrets** — emails, names, tokens, secrets — because that
-  trail is student-readable (§4). Redaction is producer-side
+  sensitive secrets** — names, tokens, secrets — because audit records
+  are readable by the superadmin/admins. Ruling 2026-11-17:
+  college-issued identity identifiers — `user_id` values and other
+  `*.nyjc.edu.sg` addresses — are **not** PII (institutional IDs, not
+  personal emails), so identity attribution may keep using them;
+  personal (non-college) email addresses, personal names, tokens, and
+  secrets stay in scrub scope. Redaction is producer-side
   (`redact_sensitive`, campus#805): when a new span/event field could
   carry PII or a secret, extend redaction where the record is *written*,
   not at read time. See [audit-tracing.md](audit-tracing.md).
 
 ## 4. Debug surfaces by role
 
-| Role | Production debug surface | Explicitly not available |
+| Role | Debug surface | Explicitly not available |
 |---|---|---|
-| Superadmin | Railway prod logs and dashboard; everything below | — |
-| Students / app authors | **Production audit trail**: campus-admin web UI audit views, campus API/CLI audit queries | Railway prod logs, prod databases, prod variables, SSH |
+| Superadmin | Railway prod logs and dashboard; the production audit trail; everything below | — |
+| Admins (grant-holders) | campus-admin portal (gate relaxed per the §1 ruling, implementation on campus-admin); production audit views per `AUDIT_ADMINS` | Railway prod logs, prod databases |
+| Students / app authors | **Audit traces on `development` only** (portal audit views or campus API/CLI); error messages everywhere | production audit trail, Railway prod logs, prod databases, prod variables, SSH |
 | Everyone | their own `development` environment and local tests | production anything |
 
-- The production audit trail is the **only network debug surface
-  available to students**. Apps that want debuggable production behavior
-  must emit audit traces ([audit-tracing.md](audit-tracing.md); the
-  student walkthrough's [§7](student-app-walkthrough.md#7-debugging-with-campusaudit)
-  is the app-author recipe).
-- **Error messages are a debug surface.** Since students debug from
-  error messages plus audit traces, fleet-wide error messages should say
-  clearly what failed and why (error code, which request/resource), and
-  must not reveal sensitive information (secrets, tokens, internal
-  hosts). When adding or changing an endpoint, ask: *with only this
-  message and their audit traces, can a student tell what went wrong?*
+- **Audit tracing is the debug surface students get on `development`**
+  (§1 ruling): enable it on your app
+  ([audit-tracing.md](audit-tracing.md); the student walkthrough's
+  [§7](student-app-walkthrough.md#7-debugging-with-campusaudit) is the
+  app-author recipe). The production trail is reserved for the
+  superadmin/admins — production questions from students go through
+  clear error messages and a superadmin, not self-service log access.
+- **Error messages are a debug surface.** Students debug from error
+  messages plus their dev-environment audit traces, so fleet-wide error
+  messages should say clearly what failed and why (error code, which
+  request/resource), and must not reveal sensitive information (secrets,
+  tokens, internal hosts). When adding or changing an endpoint, ask:
+  *with only this message and their dev audit traces, can a student tell
+  what went wrong?*
 
 ## 5. Where this policy is encoded
 
@@ -137,9 +159,11 @@ Known gaps between this policy and current reality were swept on
 [#1131](https://github.com/nyjc-computing/campus/issues/1131) — among
 them: main-ruleset admin bypass (#1121), staging retirement (#1122), the
 Railway API-key migration (#1123), the audit-event redaction gap
-(#1124), the PII ruling (#1125), secrets at WARNING in Railway logs
+(#1124), the PII ruling (#1125 — resolved: nyjc.edu.sg identifiers are
+not PII), secrets at WARNING in Railway logs
 (#1126), OAuth-proxy error dumps (#1127), error-message leakage
 (#1128 + campus-common#8 + campus-core#8), the AUDIT_ADMINS portal-gate
-ruling (#1129), gateway access-log query strings (#1130), and the
+ruling (#1129 — resolved: portal relaxes to grant-holders, students
+audit on development only), gateway access-log query strings (#1130), and the
 flask-campus redaction extensions
 ([flask-campus#20](https://github.com/nyjc-computing/flask-campus/issues/20)).

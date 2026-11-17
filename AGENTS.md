@@ -36,9 +36,10 @@ section "Concurrent work streams (worktrees)".
   `main` is release-only: it changes exclusively via a PR whose head is
   `weekly`, and merging that PR deploys the production fleet.
 - **Production is superadmin-only** on Railway (logs, variables, SSH,
-  data). Production data is never accessed directly; the production
-  audit trail (campus-admin web UI or campus API/CLI) is the only
-  network debug surface for students.
+  data). Production data is never accessed directly. Students get audit
+  traces on the **development environment only**; the production audit
+  trail is superadmin/admin-only. Error messages are students'
+  production debug surface — keep them clear, never leaky.
 
 Full policy: [docs/environment-access-policy.md](docs/environment-access-policy.md).
 
