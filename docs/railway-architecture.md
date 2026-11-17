@@ -1,7 +1,9 @@
 # Railway architecture
 
 How Campus is laid out on Railway: environments, services, request flow, and
-the private-networking rules every deployment must follow. Operational
+the private-networking rules every deployment must follow. The environment,
+access, and log-scrubbing policy lives in
+[environment-access-policy.md](environment-access-policy.md); operational
 CLI/API recipes and their traps live in the `railway-ops` skill
 (`.zcode/skills/railway-ops/SKILL.md`); gateway configuration is documented
 in [deploy/gateway/README.md](../deploy/gateway/README.md).
@@ -12,15 +14,22 @@ Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
 
 | Environment | Purpose | Deploy trigger |
 |---|---|---|
-| `development` | Live dev; **merges to `weekly` autodeploy here** | push to `weekly` + config changes |
-| `staging` | Parity environment (campus.api, campus.vault, postgres) | manual |
-| `production` | Prod fleet (auth/api/audit/gateway + per-service DBs, stood up 2026-11-16, see [prod-rollout.md](prod-rollout.md)) | manual, gated |
+| `development` | Live dev and **all testing**; **merges to `weekly` autodeploy here** | push to `weekly` + config changes |
+| `staging` | Legacy, unused — pending retirement (was the pre-cutover parity environment) | — |
+| `production` | Prod fleet (auth/api/audit/gateway + consumers + per-service DBs, live 2026-11-16; see [prod-rollout.md](prod-rollout.md)) | push to `main` — i.e. the `weekly` → `main` release PR, the only path to `main` |
 
 `weekly` is the integration branch for all dev work
-([CONTRIBUTING.md](CONTRIBUTING.md)). Production instances deploy from
-`weekly` with autodeploy off until the `weekly` → `main` merge cutover
-(see [prod-rollout.md](prod-rollout.md), "Cutover"); the July-2025
-fossil environment is retained as `production-legacy`.
+([CONTRIBUTING.md](CONTRIBUTING.md)). The `weekly` → `main` cutover
+completed 2026-11-17: production instances deploy from `main`, and pushes
+to `weekly` touch `development` only (prod-rollout.md §6 records the
+cutover). The July-2025 fossil environment is retained as
+`production-legacy`.
+
+**Access (policy, 2026-11-17):** production Railway access — logs,
+variables, SSH, dashboards, prod data — is **superadmin-only**; routine
+Railway CLI/API access is environment-bound to `development`; production
+data is never accessed directly. Details:
+[environment-access-policy.md](environment-access-policy.md).
 
 ## Service inventory (development)
 

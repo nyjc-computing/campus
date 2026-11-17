@@ -13,9 +13,13 @@ fix survives personnel changes).
 > add every new trap you hit, with its root cause.
 
 Project: `campus` (`76e0b6d0-0832-41dc-841f-e3bc758d3eca`).
-Environments: `development` (weekly, autodeploys), `staging`,
-`production` (`d5221f3b`), `production-legacy` (July-2025 fossil, pending
-retirement).
+Environments: `development` (`e954f5fa`, autodeploys from `weekly` — all
+testing happens here), `production` (`d5221f3b`, deploys from `main`),
+`staging` (legacy, unused) and `production-legacy` (July-2025 fossil),
+both pending retirement. Access policy: production Railway access is
+**superadmin-only**, production data is never accessed directly, and the
+release path is the `weekly` → `main` PR — see
+[environment-access-policy.md](environment-access-policy.md).
 
 Railway API/CLI recipes and their sharpest edges live in the
 `railway-ops` skill (`.zcode/skills/railway-ops/SKILL.md`); this document
@@ -33,11 +37,10 @@ is the playbook — what to do, in what order, and why.
   `campus.api-mongodb-dev`, `campus.api-bucket-dev`, the consumer repos'
   dev deployments once their prod ghosts are removed). Volumes follow:
   `*-dev-volume` vs plain.
-- **Prod instances currently auto-deploy from `weekly`** (autodeploy was
-  inherited from the dev duplication and is on). Every push to weekly
-  redeploys the prod fleet. The weekly → main merge cutover flips each
-  prod instance's source branch to `main` (§6) — after that, prod tracks
-  main.
+- **Prod instances deploy from `main`** (the 2026-11-17 cutover, §6,
+  flipped each prod instance's source branch to `main`). A push to
+  `main` — which happens only through the `weekly` → `main` release PR —
+  redeploys the prod fleet; pushes to `weekly` touch `development` only.
 - **Private endpoints are pinned per instance** (`campus-auth`,
   `auth-mongodb`, `postgres-94e0`, …). Renaming a service does **not**
   move its endpoint; two environments share endpoint *names* but not
@@ -82,6 +85,10 @@ client id) stay literals. Client secrets are env vars by design — the
 auth DB stores only HMAC hashes.
 
 ## 3. Deploying a NEW service to prod (staggered sequence)
+
+Superadmin-only per the access policy — these are the documented
+break-glass exceptions to "production data is not accessed directly",
+and each use is recorded.
 
 Do these in order; each phase depends on the previous. "Blocked" items
 are user-gated and called out.
@@ -164,9 +171,11 @@ are user-gated and called out.
 
 ## 4. Updating EXISTING services
 
-1. Code changes ride **weekly** → autodeploy touches prod too (see §1).
-   After a merge, poll the prod deployment row for the service and
-   confirm it is not SKIPPED (§7.4).
+1. Code changes ride **`weekly`** (autodeploys `development` only). They
+   reach prod through the **`weekly` → `main` release PR** — merging it
+   redeploys the prod fleet from `main` (§1). After a release merge, poll
+   the prod deployment row for the service and confirm it is not SKIPPED
+   (§7.4).
 2. Variable changes: `variableUpsert(skipDeploys: true)` for the batch,
    then ONE redeploy (`deploymentRedeploy` of the ACTIVE deployment —
    the reliable trigger). Prefer references over literals so future
@@ -211,7 +220,12 @@ are user-gated and called out.
   admin view on both environments. If the authz model changes again,
   re-check §2's operator row and this paragraph together.
 
-## 6. weekly → main merge cutover
+## 6. weekly → main merge cutover (completed 2026-11-17)
+
+Done: #1117 merged and every prod instance re-pointed to `main`;
+production now tracks `main` and `weekly` touches `development` only.
+Kept as the record — and the repeat recipe if any service ever needs
+re-pointing.
 
 1. Merge `weekly` into `main` (CI runs on the PR; keep main's three
    devcontainer-only commits).

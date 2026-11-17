@@ -12,10 +12,26 @@ description: >-
 # Railway ops (campus project)
 
 Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments: `development`
-(e954f5fa…, weekly autodeploys here), `staging` (43a0d8ed…), `production`
-(bb2462d0…). `railway status --json` lists all three with
+(e954f5fa…, weekly autodeploys here — all testing happens here),
+`staging` (43a0d8ed…, legacy/unused, pending retirement), `production`
+(d5221f3b…, deploys from `main` — the weekly → main release PR is the
+only path to `main`; cutover completed 2026-11-17). `railway status
+--json` lists them with
 `environments.edges[].node.serviceInstances.edges[].node` carrying
 `serviceName`, `serviceId`, `startCommand`, `activeDeployments`.
+
+## Access model (2026-11-17 policy — read before any Railway work)
+
+- **Routine Railway access is environment-bound to `development`** (an
+  API key scoped to that environment replaces personal `railway login`
+  tokens; until the key switch lands, personal tokens still work — the
+  rules below apply regardless of mechanism).
+- **Production is superadmin-only**: logs, variables, domains, SSH,
+  redeploys, and all production data. Do not point CLI/automation at
+  production; deployment-side debugging there is a superadmin activity.
+- Production data is never accessed directly (no ssh/tcp-proxy/db reads
+  outside the documented bootstrap runbook in prod-rollout.md §3).
+- Policy: docs/environment-access-policy.md.
 
 ## Private networking is IPv6-only — listeners must bind `[::]`
 
@@ -24,7 +40,8 @@ Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments: `development`
   `http://[fd12:…]:PORT` (fast RST) or a silent established-then-stall hang.
 - Flask services (gunicorn) must use `--bind [::]:$PORT` (dual-stack on
   Linux; keeps public IPv4 working). Applied to dev auth/api/audit
-  2026-10-30; **repeat on staging/production at rollout**.
+  2026-10-30; applied across the production fleet at the 2026-11-16/17
+  rollout.
 - MongoDB containers run `mongod --ipv6 --bind_ip ::,0.0.0.0` for the same
   reason (Railway's documented recipe).
 - Known-good reference pairs: campus.auth → auth-mongodb.railway.internal and
