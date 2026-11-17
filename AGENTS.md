@@ -155,6 +155,7 @@ For detailed file locations and architecture, see:
 ### Railway & Deployment
 - [docs/environment-access-policy.md](docs/environment-access-policy.md) - Environment/branch policy, Railway access model, log-scrubbing rules, debug surfaces by role (read before touching Railway services or production)
 - [docs/railway-architecture.md](docs/railway-architecture.md) - Environments, services, gateway request flow, and the IPv6-only private-networking rules (read before touching Railway service config or adding a deployment)
+- [docs/railway-variables.md](docs/railway-variables.md) - Inventory of Railway env vars per service: templated vs manually-set, shared layer, DB connect variables, audit recipe (read before setting or rotating Railway variables)
 - `.zcode/skills/railway-ops` skill - Railway CLI/GraphQL API recipes and traps (mutating service config, triggering deploys, polling deployments)
 
 ### Getting Started
