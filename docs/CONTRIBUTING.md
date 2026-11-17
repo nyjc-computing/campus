@@ -6,17 +6,22 @@ This guide covers our development workflow, branch strategy, and contribution pr
 
 ## Branch Strategy
 
-Campus uses a three-branch model:
+Campus uses a two-branch model:
 
 ```
-weekly → staging → main
+weekly → main
 ```
 
 | Branch | Purpose | Who Commits |
 |--------|---------|-------------|
-| `weekly` | Active development | All contributors |
-| `staging` | Pre-production validation | Maintainers (via PR) |
-| `main` | Production releases | Maintainers (via PR) |
+| `weekly` | Active development; pushes autodeploy the `development` environment | All contributors (via PR) |
+| `main` | Production releases; pushes autodeploy the `production` fleet | Maintainers (via PR from `weekly` only) |
+
+All testing happens in `development` (or locally). The former `staging`
+branch and environment are retired from the workflow. `main` changes
+**only** through a PR whose head branch is `weekly` — merging that PR is
+the production release action. Environment, access, and log policy:
+[environment-access-policy.md](environment-access-policy.md).
 
 ## Concurrent Work Streams (Worktrees)
 
@@ -212,19 +217,15 @@ The hook runs sanity checks before allowing pushes. To bypass (not recommended):
 
 ## Maintainer Workflow
 
-### Weekly → Staging
+### weekly → main (production release)
 
-After sprint review:
-1. Create PR: `weekly` → `staging`
-2. Title: `"T3W10: weekly PR"` (or appropriate week)
-3. Validate on staging environment
-
-### Staging → Main
-
-After staging validation:
-1. Create PR: `staging` → `main`
-2. Title: `"v0.2.0: staging PR"`
-3. Tag release after merge
+After validation on the `development` environment:
+1. Create PR: `weekly` → `main` (head branch must be `weekly`)
+2. Title: `"v0.24.0: weekly release PR"` (or appropriate version)
+3. Merging the PR is the release action: the push to `main` autodeploys
+   the production fleet. Watch the prod deployment rows for SKIPPED
+   entries ([prod-rollout.md](prod-rollout.md) §7.4), then smoke
+   ([prod-rollout.md](prod-rollout.md) §6).
 
 ## Development Guidelines
 

@@ -3,6 +3,14 @@
 One codebase, one `main.py`, multiple deployment modes. 
 Clients use the `campus_python` library to communicate with deployments via HTTP API.
 
+## Environment & access policy (2026-11-17)
+
+All testing happens in the `development` environment (or locally); code
+reaches `main`/production only through the `weekly` → `main` release PR.
+On Railway, production access (logs, variables, SSH, prod data) is
+**superadmin-only**, and production logs must never print sensitive
+secrets. Details: [environment-access-policy.md](environment-access-policy.md).
+
 ## ⚠️ Required: `PUBLIC_URL` (breaking change, campus#652)
 
 Every deployment **must** set `PUBLIC_URL` to its full public origin

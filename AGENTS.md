@@ -28,7 +28,22 @@ python scripts/worktree.py list                         # who is working where
 Details and the manual recipe: [CONTRIBUTING.md](docs/CONTRIBUTING.md),
 section "Concurrent work streams (worktrees)".
 
-### 2. Python Environment Setup
+### 2. Environments, Branches, and Access (2026-11-17 policy)
+
+- **All testing happens in `development`** (or locally) — never against
+  production or the retired staging environment.
+- **All code updates go through `weekly`** (PR from a task worktree).
+  `main` is release-only: it changes exclusively via a PR whose head is
+  `weekly`, and merging that PR deploys the production fleet.
+- **Production is superadmin-only** on Railway (logs, variables, SSH,
+  data). Production data is never accessed directly. Students get audit
+  traces on the **development environment only**; the production audit
+  trail is superadmin/admin-only. Error messages are students'
+  production debug surface — keep them clear, never leaky.
+
+Full policy: [docs/environment-access-policy.md](docs/environment-access-policy.md).
+
+### 3. Python Environment Setup
 
 Campus uses pyenv for Python version management and pipx for Poetry installation.
 
@@ -52,7 +67,7 @@ pyenv local 3.13.0
 pipx install poetry
 ```
 
-### 3. Running Python Commands
+### 4. Running Python Commands
 
 Use `poetry run` for all Python commands - this works consistently across all environments (local, CI, Codespaces).
 
@@ -67,7 +82,7 @@ poetry run python main.py
 
 **Note:** The test runner (`tests/run_tests.py`) automatically detects and uses `.venv/bin/python` when available, but using `poetry run` ensures consistency across all environments.
 
-### 4. Use `run_tests.py` for Testing
+### 5. Use `run_tests.py` for Testing
 
 The only supported test entrypoint is `tests/run_tests.py`. It handles environment setup, cleanup, and isolation. Running tests directly may produce false positives.
 
@@ -80,16 +95,17 @@ poetry run python tests/run_tests.py unit
 poetry run python tests/run_tests.py integration
 ```
 
-### 5. Campus Uses `unittest`, Not pytest
+### 6. Campus Uses `unittest`, Not pytest
 
 Test files use the standard library `unittest.TestCase` framework. No pytest dependencies are installed.
 
-### 6. Read These Files Before Starting Work
+### 7. Read These Files Before Starting Work
 
 | File | Purpose |
 |------|---------|
 | [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) | Setup and navigation |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and branching |
+| [docs/environment-access-policy.md](docs/environment-access-policy.md) | Environment, access, and log-scrubbing policy |
 | [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md) | Code standards and import patterns |
 | [docs/TESTING-GUIDE.md](docs/TESTING-GUIDE.md) | Testing strategies and how to run tests |
 | [docs/development-guidelines.md](docs/development-guidelines.md) | Architecture patterns and gotchas |
@@ -137,6 +153,7 @@ For detailed file locations and architecture, see:
 - [docs/circles-access-control.md](docs/circles-access-control.md) - How circles implement access control: resource + role circles, membership rules, bootstrap seeding (read before touching circles or adding authorization to API routes)
 
 ### Railway & Deployment
+- [docs/environment-access-policy.md](docs/environment-access-policy.md) - Environment/branch policy, Railway access model, log-scrubbing rules, debug surfaces by role (read before touching Railway services or production)
 - [docs/railway-architecture.md](docs/railway-architecture.md) - Environments, services, gateway request flow, and the IPv6-only private-networking rules (read before touching Railway service config or adding a deployment)
 - `.zcode/skills/railway-ops` skill - Railway CLI/GraphQL API recipes and traps (mutating service config, triggering deploys, polling deployments)
 
@@ -210,6 +227,8 @@ poetry run python tests/run_tests.py contract      # HTTP contracts (also a bloc
 ## Before You Start
 
 - [ ] Are you working in a per-task worktree, not the shared checkout?
+- [ ] Will all your testing stay in `development` (or local) — never
+      production? ([environment-access-policy.md](docs/environment-access-policy.md))
 - [ ] Have you read the relevant documentation?
 - [ ] Are you using `poetry run python` for all commands?
 - [ ] Will you use `run_tests.py` for testing?
