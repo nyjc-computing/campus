@@ -11,9 +11,11 @@ description: >-
 
 # Railway ops (campus project)
 
-Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments: `development`
-(e954f5fa…, weekly autodeploys here), `staging` (43a0d8ed…), `production`
-(bb2462d0…). `railway status --json` lists all three with
+Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments:
+`development` (weekly autodeploys here) and `production` (`d5221f3b…`,
+instances track `main` — the 2026-11-16/17 cutover). `staging` and the
+fossil `production-legacy` were deleted 2026-11-17. `railway status
+--json` lists the environments with
 `environments.edges[].node.serviceInstances.edges[].node` carrying
 `serviceName`, `serviceId`, `startCommand`, `activeDeployments`.
 
@@ -49,6 +51,35 @@ Project: `76e0b6d0-0832-41dc-841f-e3bc758d3eca`. Environments: `development`
   the CLI: `railway domain delete <DOMAIN_OR_ID> -s <svc> --yes`.
 - `service delete` (CLI) is permission-refused in this workspace — delete
   services via the dashboard.
+
+## Database bootstrap ordering — credentials BEFORE first boot (#1105)
+
+- **Attaching a volume to a freshly-created DB service triggers a
+  deployment.** The datadir initializes with whatever credentials exist
+  at that moment; `variableUpsert` has `skipDeploys`, `volumeCreate`
+  does not — credentials patched in after the boot are silently
+  ignored (postgres initdb'd with generated passwords; mongo same).
+  Every app URI composed against the intended passwords then fails
+  auth. Safe order: create the service **with credentials in the
+  creation payload** (`serviceCreate(variables=…)` / `railway add
+  --variables "$(cat .tmp-vars.json)"`) → volume → start command →
+  deploy. Verify connectivity (below) before wiring app URIs.
+- **Postgres recovery** (`databasePasswordReset`, `databaseType:
+  "postgres"`) rotates the role password — but its response's
+  `updatedVariables.DATABASE_URL` contains a password **different from
+  the actual `newPassword`** (verified 2026-11-16: only `newPassword`
+  authenticates). Trust `newPassword`; fix the DB service's own
+  `DATABASE_URL`/`PGPASSWORD` vars to the truth manually, then
+  `${{…DATABASE_URL}}` references on consumers resolve correctly.
+- **Mongo has no reset mutation.** Volume deletion is permission-refused
+  for the workspace role (dashboard-only), so recovery is deleting the
+  service (dashboard-only too) and recreating it with credentials in
+  the creation payload.
+- **Verification before wiring app URIs**: `railway tcp-proxy create
+  -s <db-service> -p <port>`, ping with the INTENDED credentials
+  (`psql "$DATABASE_URL" -c 'select 1;'` /
+  `mongosh "$MONGODB_URI" --eval 'db.runCommand({ping: 1})'`), then
+  `railway tcp-proxy delete` — always.
 
 ## Deploy queue and status checks
 

@@ -97,15 +97,18 @@ are user-gated and called out.
    generated passwords and the fix is painful (postgres needs
    `databasePasswordReset` — trust `newPassword`, its `DATABASE_URL`
    output lies — mongo needs full recreation; volumes are
-   dashboard-delete-only).
+   dashboard-delete-only). The traps + recovery paths are in the
+   railway-ops skill, "Database bootstrap ordering" (#1105).
 2. Attach the volume (`volumeCreate`, mount path per image) and set the
    start command (mongo: `docker-entrypoint.sh mongod --ipv6 --bind_ip
    ::,0.0.0.0 --setParameter diagnosticDataCollectionEnabled=false`).
 3. Rename the private endpoint to the convention short-name if the
    default derivation doesn't match (`railway private-network update`).
 4. Deploy, wait SUCCESS, then verify connectivity through a temporary
-   `railway tcp-proxy create` (ping/auth with the intended credentials)
-   — **delete the proxy afterwards**.
+   `railway tcp-proxy create` (ping/auth with the intended credentials:
+   `psql "$DATABASE_URL" -c 'select 1;'` / `mongosh "$MONGODB_URI"
+   --eval 'db.runCommand({ping: 1})'`) — **delete the proxy
+   afterwards**. Do not wire app URIs until this passes.
 
 ### Phase 2 — schema bootstrap (prod blocks `init_from_model`)
 1. Run the service's storage init one-off with `ENV=development` for
@@ -333,8 +336,7 @@ Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
 release). Left offline: oauth-proxy (retired candidate, zero vars).
 
-Open work items: #1105 (DB bootstrap ordering + reset quirk),
-#1106 (SKIPPED deploy), #1107 (healthchecks + alerting — most prod
+Open work items: #1106 (SKIPPED deploy), #1107 (healthchecks + alerting — most prod
 services have no `/health` healthcheck configured and deploy-failure
 alerting is off), #1108 (lazy env-var failures), #1109 (ghost
 instances — largely superseded: classroom/apphost are intentional now;
