@@ -6,11 +6,15 @@ stored JSON fields: client_secret in /auth/v1/token request bodies,
 access_token/refresh_token in token response bodies, Cookie session headers
 on login spans, and query params on GET /root/authenticate calls. This
 script rewrites those rows in place, applying the SAME redaction function
-the tracing middleware uses (campus.audit.middleware.tracing.redact_sensitive),
+the tracing middleware uses (campus.audit.middleware.redact_sensitive),
 so historical data matches what producers emit from now on.
 
-The redaction is idempotent: values already masked are rewritten to the
-same marker, so a second run reports zero changes.
+Re-run after the policy sweep (campus#1131/#1124, flask-campus#20): the
+key list gained flow secrets (authorization_code/otp/user_code) and PII
+keys (names, non-workspace emails), and the audit service's own events
+stored Authorization headers + plaintext minted API keys unredacted
+before #1124. The redaction is idempotent: values already masked are
+rewritten to the same marker, so a second run reports zero changes.
 
 Usage (dry run by default; --apply writes):
 
@@ -49,8 +53,10 @@ from psycopg2.extras import RealDictCursor
 
 # Import the producer-side redaction so historical data ends up byte-for-byte
 # consistent with what upgraded producers emit. Needs only flask+requests.
+# Re-runs after key-list extensions (flask-campus#20/#1124): the list is
+# shared, so one redeploy picks up the flow-secret and PII keys too.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from campus.audit.middleware.tracing import redact_sensitive  # noqa: E402
+from campus.audit.middleware import redact_sensitive  # noqa: E402
 
 # JSON-bearing span columns scanned for secrets (#805)
 REDACTED_COLUMNS = (

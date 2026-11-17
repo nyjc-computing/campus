@@ -20,6 +20,7 @@ from contextlib import suppress
 import flask
 
 import campus.model as model
+from campus.audit.middleware import redact_sensitive
 from campus.common import env, schema
 from campus.common.utils import uid
 
@@ -207,6 +208,12 @@ def emit_audit_event(
     Creates and ingests a TraceSpan with audit event data. Event type
     should be included in the data dict for easy querying.
 
+    Producer-side scrub (#1124; environment-access-policy §3): the
+    stored span carries no secrets and no PII beyond identity ids.
+    Every context field passes through the SAME keyed redaction the
+    request-tracing middleware uses (one key list — writer ==
+    scrubber), plus two extras below.
+
     Args:
         data: Event metadata stored in tags field (should include event_type)
         api_key_id: API key identifier
@@ -220,6 +227,23 @@ def emit_audit_event(
     if not env.get_flag("AUDIT_EVENTS_ENABLED", False):
         return
 
+    # Defense in depth: the caller's Authorization header is dropped
+    # outright (audit_v1_... keys of EVERY caller landed in stored
+    # headers before #1124), not just keyed-redacted.
+    request_headers = {
+        key: value
+        for key, value in request_context["headers"].items()
+        if key.lower() != "authorization"
+    }
+    # apikeys event types carry the plaintext newly-minted key in the
+    # response body — under "api_key" (POST /) for create, but under
+    # bare "key" (/regenerate) which keyed redaction deliberately
+    # does not cover (#806). Drop the response body for the whole
+    # family: status and headers are the debug-relevant parts.
+    response_body: JsonObject = response_context["body"]
+    if str(data.get("event_type", "")).startswith("audit.apikeys."):
+        response_body = {}
+
     # Create audit span record
     audit_span = model.TraceSpan(
         trace_id=uid.generate_trace_id(),
@@ -227,12 +251,12 @@ def emit_audit_event(
         parent_span_id=parent_span_id,
         method=request_context["method"],
         path=request_context["path"],
-        query_params=request_context["urlparams"],
-        request_headers=request_context["headers"],
-        request_body=request_context["body"],
+        query_params=redact_sensitive(request_context["urlparams"]),
+        request_headers=redact_sensitive(request_headers),
+        request_body=redact_sensitive(request_context["body"]),
         status_code=response_context["status_code"],
-        response_headers=response_context["headers"] or {},
-        response_body=response_context["body"],
+        response_headers=redact_sensitive(response_context["headers"] or {}),
+        response_body=redact_sensitive(response_body),
         started_at=started_at,
         duration_ms=duration_ms,
         api_key_id=api_key_id,  # main source ID in campus.audit
@@ -241,7 +265,7 @@ def emit_audit_event(
         client_ip=request_context["client_ip"] or "unknown",
         user_agent=request_context["user_agent"],
         error_message=None,
-        tags=data  # Event metadata goes here
+        tags=redact_sensitive(data),  # Event metadata goes here
     )
 
     # Lazy-import resources to enable test monkey-patching
