@@ -87,6 +87,16 @@ fossil `production-legacy` were deleted 2026-11-17. `railway status
   Poll `activeDeployments[0]` per service (fields: `createdAt`, `status`,
   `meta.serviceManifest.deploy.startCommand`). Terminal: SUCCESS / CRASHED /
   SKIPPED / REMOVED. Expect ~5 min build+deploy for the Flask services.
+- **A trigger can silently NOT deploy (#1106)**:
+  `serviceInstanceDeploy(latestCommit)` can return true while the row is
+  created SKIPPED and nothing ever materializes; later triggers keep
+  no-oping while the stale deployment keeps serving. Always compare
+  `createdAt` against the pre-trigger row — a "successful" trigger call
+  proves nothing. `scripts/railway_deploy.sh <svc> <env>` does the whole
+  trigger-verify-recover loop for you (records the old row, triggers via
+  `railway redeploy --from-source`, polls for a NEW row, recovers a
+  SKIPPED row with a plain redeploy of the active deployment, and times
+  out loudly when no row materializes).
 - A failed healthcheck keeps the OLD deployment live (rollback-safe changes).
 - `railway logs -s <svc> -e development --lines N` streams deploy logs
   (nginx access+error lines land here).

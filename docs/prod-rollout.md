@@ -183,7 +183,12 @@ are user-gated and called out.
 
 1. Code changes ride **weekly** → autodeploy touches prod too (see §1).
    After a merge, poll the prod deployment row for the service and
-   confirm it is not SKIPPED (§7.4).
+   confirm it is not SKIPPED (§7.4) — or let
+   `scripts/railway_deploy.sh <svc> production` do the whole
+   trigger-verify-recover loop: it records the pre-trigger row, waits
+   for a NEW deployment to reach SUCCESS, auto-recovers the SKIPPED
+   trap (§7.4) once, and times out loudly when nothing materializes
+   (#1106).
 2. Variable changes: `variableUpsert(skipDeploys: true)` for the batch,
    then ONE redeploy (`deploymentRedeploy` of the ACTIVE deployment —
    the reliable trigger). Prefer references over literals so future
@@ -278,6 +283,8 @@ branches (#1116/#1117) per the "main is old, discardable" ruling.
    triggers keep no-oping. Recovery: `deploymentRedeploy(id of the
    ACTIVE SUCCESS deployment, usePreviousImageTag:false)` — on SKIPPED
    rows it fails "without a snapshot"; on CRASHED rows it works.
+   `scripts/railway_deploy.sh` wraps trigger-verify-recover so the
+   playbook can't silently skip a service (#1106).
 5. **Prod boots block `init_from_model`**: unguarded `init_storage()`
    at startup = crash loop (#1100). Startup init goes through
    `campus.bootstrap.run_init_storage` (the guard + loud-failure
@@ -336,7 +343,7 @@ Waiting on their repos: campus-profile, nyxchange-timetable-v2 (stale
 `main` branches — instances fully wired, one deploy trigger each after
 release). Left offline: oauth-proxy (retired candidate, zero vars).
 
-Open work items: #1106 (SKIPPED deploy), #1107 (healthchecks + alerting — most prod
+Open work items: #1107 (healthchecks + alerting — most prod
 services have no `/health` healthcheck configured and deploy-failure
 alerting is off), #1108 (lazy env-var failures), #1109 (ghost
 instances — largely superseded: classroom/apphost are intentional now;
