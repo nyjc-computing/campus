@@ -137,13 +137,15 @@ are user-gated and called out.
 1. Create the service instance (new entity for a genuinely new service;
    prod entities for cross-env services can't be re-materialized after
    instance deletion — see §7.6).
-2. Set **all** variables with `skipDeploys` before any deploy. Minimum
-   set per service: `DEPLOY`, `ENV=production`, `PUBLIC_URL`
-   (`https://${{RAILWAY_PUBLIC_DOMAIN}}`), `HOSTNAME`
+2. Set **all** variables with `skipDeploys` before any deploy. The
+   authoritative per-service minimum is `docs/required-env-vars.md`
+   (#1108 — enforced at boot in production, so a gap crash-loops
+   visibly instead of breaking one flow hours later). Beyond the
+   matrix: `DEPLOY`, `ENV=production`, `HOSTNAME`
    (`${{RAILWAY_PUBLIC_DOMAIN}}`), `BASE_URL` (gateway origin),
    DB URIs as references (`${{"campus.auth-postgres".DATABASE_URL}}`
-   — **quoted** service names; unquoted dotted names resolve empty),
-   audit keys, client credentials.
+   — **quoted** service names; unquoted dotted names resolve empty,
+   and EMPTY fails the boot check too).
 3. Start command binds `[::]` (mesh is IPv6-only). Set the
    healthcheck: `healthcheckPath: /health` + `healthcheckTimeout: 10`
    on the instance (every app service has the #842 `/health` route;
@@ -325,10 +327,13 @@ branches (#1116/#1117) per the "main is old, discardable" ruling.
     file-based loops (strip it); keep GraphQL mutation `.gql` files
     alive until every dependent call ran (a missing file silently
     no-ops the call).
-13. **Required env vars fail lazily** (#1108): auth needs
-    `CLIENT_ID`/`CLIENT_SECRET` (yapper), api needs them at boot (SDK).
-    Removing a "seemingly unused" var can break a flow hours later —
-    check the required-vars matrix before trimming.
+13. **Required env vars fail lazily** (fixed #1108): the per-service
+    matrix is committed at `docs/required-env-vars.md` (generated from
+    `campus.bootstrap.REQUIRED_ENV_VARS`) and **enforced at boot in
+    production** — a missing or empty var refuses the boot instead of
+    500ing hours later (the trim of auth's CLIENT_ID/SECRET broke the
+    device flow while auth showed healthy). Check the matrix before
+    trimming; a var in the matrix is load-bearing.
 14. **Migration ledgers are per service DB** (fixed #1104): every
     migration declares `TARGET_DB`; run the runner in that service's
     context with `--db <svc>`, and stamp each DB's ledger baseline at
@@ -355,7 +360,7 @@ healthchecks are live on all four app services in both environments —
 `/health` + 10s timeout — but Railway deploy-failure alerting is still
 off; enabling it is a dashboard step, Project Settings → Notifications,
 email/webhook rule scoped to the production environment),
-#1108 (lazy env-var failures), #1109 (ghost
+#1109 (ghost
 instances — largely superseded: classroom/apphost are intentional now;
 the remainder is the oauth-proxy decision).
 

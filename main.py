@@ -78,6 +78,14 @@ def create_app(mode: str | None = None) -> flask.Flask:
             f"Module '{mode}' does not fulfill the AppModule protocol."
         )
     app = deploy.create_app(module)
+    # Boot-time env validation (#1108): a deployment missing a required
+    # var (or carrying one that a bad Railway reference resolved to
+    # empty) must fail loudly here, not look healthy and 500 on the
+    # first affected request hours later. Production raises; dev/test
+    # boots log at debug and never block.
+    from campus import bootstrap
+    bootstrap.validate_required_env(
+        mode, bootstrap.REQUIRED_ENV_VARS.get(mode, ()))
     # Migrations phase 4 (#747): warn at startup when the ledger shows
     # outstanding migrations. Production-style environments only, and
     # fail-open twice over: warn_if_pending never raises, and the import
