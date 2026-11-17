@@ -95,11 +95,15 @@ audit trail remains superadmin/admin-only.
   (§3) and the [migration runbook](migration-protocol.md#staging--production-style-environments-manual-runbook)
   — superadmin actions, each recorded when used.
 
-> **Status (2026-11-17):** the Railway CLI is still on personal tokens
-> from `railway login`; the API-key switch is tracked as
-> [#1123](https://github.com/nyjc-computing/campus/issues/1123). Until it
-> lands, apply the *access rules* above — who may touch what — as-is; the
-> API key changes the *mechanism*, not the policy.
+> **Status (2026-11-17, live):** routine CLI/automation access on the
+> operator workstation runs on a **development-scoped project token**
+> (`rlwy_proj_…`, env var **`RAILWAY_TOKEN`** — project tokens only work
+> under that name). Verified live: `railway status --json` sees project
+> `campus` / environment `development` only — production resolves as
+> "not found" to this key — and account-level commands (`whoami`,
+> `list`) are denied by design. The personal `railway login` is retained
+> solely as the superadmin's break-glass
+> ([#1123](https://github.com/nyjc-computing/campus/issues/1123)).
 
 Practical recipes (CLI traps, GraphQL schema, deploy queueing) live in
 the `railway-ops` skill (`.zcode/skills/railway-ops/SKILL.md`), which
@@ -158,15 +162,26 @@ also carries this access model.
 - App-author view (§7): [student-app-walkthrough.md](student-app-walkthrough.md)
 
 Known gaps between this policy and current reality were swept on
-2026-11-17 and are tracked on the sweep tracker
-[#1131](https://github.com/nyjc-computing/campus/issues/1131) — among
-them: main-ruleset admin bypass (#1121), staging retirement (#1122), the
-Railway API-key migration (#1123), the audit-event redaction gap
-(#1124), the PII ruling (#1125 — resolved: nyjc.edu.sg identifiers are
-not PII), secrets at WARNING in Railway logs
-(#1126), OAuth-proxy error dumps (#1127), error-message leakage
-(#1128 + campus-common#8 + campus-core#8), the AUDIT_ADMINS portal-gate
-ruling (#1129 — resolved: portal relaxes to grant-holders, students
-audit on development only), gateway access-log query strings (#1130), and the
-flask-campus redaction extensions
-([flask-campus#20](https://github.com/nyjc-computing/flask-campus/issues/20)).
+2026-11-17 and tracked on the sweep tracker
+[#1131](https://github.com/nyjc-computing/campus/issues/1131).
+**The sweep is fully closed** — every child issue is closed and shipped
+to development (2026-11-17): main-ruleset enforcement (#1121), staging
+retirement (#1122), the Railway dev-bound key migration (#1123 — live,
+see §2), the audit-event redaction gap (#1124 — producer-side scrub +
+retroactive scrub re-run on development), the PII ruling (#1125 —
+resolved: nyjc.edu.sg identifiers are not PII; names and non-workspace
+emails redacted), secrets at WARNING in Railway logs (#1126),
+OAuth-proxy error dumps (#1127), error-message leakage (#1128 +
+campus-common#8/#10 + campus-core#8/#9 — driver text sanitized at the
+storage boundary and `from_exception` fixed at the error-class
+boundary), the AUDIT_ADMINS portal-gate ruling (#1129 — resolved:
+portal relaxes to grant-holders, students audit on development only),
+gateway access-log query strings (#1130 — `campus_nosecrets` format;
+Railway's own edge request log still records query strings into service
+log streams — platform infrastructure, superadmin-only in production),
+and the flask-campus redaction extensions
+([flask-campus#20](https://github.com/nyjc-computing/flask-campus/issues/20)
+— flow secrets, names, domain-aware email redaction, in-repo tests).
+The production promotion of this sweep rides the usual weekly → main
+release PR; the production audit-trail scrub is a superadmin follow-up
+(same recipe as the #1124 dev scrub).

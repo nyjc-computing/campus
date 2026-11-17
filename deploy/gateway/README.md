@@ -22,6 +22,19 @@ service's internal routes already carry its public prefix, and the test
 harness (`tests/fixtures/services.py`) runs this exact single-origin
 topology, so no app-side routing change is involved.
 
+## Access logs carry no query strings (#1130)
+
+The template defines a `campus_nosecrets` log format that logs
+`$uri` (path only) instead of the default `combined` `$request` (full
+request line **including the query string**): OAuth authorization codes
+ride the query string on the provider callbacks
+(`/auth/v1/<provider>/callback?code=…`, `/finalize_login?code=…`) and
+are bearer-equivalent while live. `$http_referer` is dropped for the
+same reason (a navigation away from a callback page carries the
+callback URL, query string included). Environment-access-policy §3
+(2026-11-17): Railway runtime logs must not contain sensitive secrets.
+Query-string debugging belongs to the audit trail, not the gateway log.
+
 ## Environment variables (set on the Railway service)
 
 | Variable    | Value                                    | Purpose |

@@ -23,6 +23,23 @@
     # fd12::10, which a bare literal misparses as host:port).
     resolver ${NGINX_LOCAL_RESOLVERS} valid=10s;
 
+    # Access-log policy (environment-access-policy §3, issue #1130):
+    # Railway runtime logs must not carry secrets, and the default
+    # `combined` format logs the FULL request line including the query
+    # string — exactly where OAuth authorization codes ride on the
+    # provider callbacks (/auth/v1/<provider>/callback?code=…,
+    # /finalize_login?code=…; bearer-equivalent while live) and where
+    # any client app's ?email=… would land. Log the path only ($uri is
+    # the normalized, argument-free path). The referer is dropped too:
+    # a navigation away from a callback page carries the callback URL —
+    # query string included — in Referer. Query-string debugging
+    # belongs to the audit trail, not the shared gateway log.
+    log_format campus_nosecrets
+        '$remote_addr - $remote_user [$time_local] '
+        '"$request_method $uri $server_protocol" '
+        '$status $body_bytes_sent "$http_user_agent"';
+    access_log /dev/stdout campus_nosecrets;
+
 server {
     listen ${PORT};
     server_name _;

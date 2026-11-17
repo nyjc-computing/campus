@@ -230,15 +230,10 @@ def device_authorize(
         "interval": int(device_code.interval),
     }
 
-    # Log types for debugging (remove after fixing)
-    import logging
-    logger = logging.getLogger(__name__)
-    for k, v in response.items():
-        logger.debug(f"Response field '{k}': type={type(v).__name__}, value={v!r}")
-        if isinstance(v, bytes):
-            logger.error(f"Response field '{k}' is bytes, converting to str")
-            response[k] = v.decode('utf-8') if isinstance(v, bytes) else str(v)
-
+    # No field-level logging here: the response carries device_code and
+    # user_code values (bearer-equivalent while pending) — the old
+    # field-by-field debug dump was removed with the logging tiers it
+    # fed (policy §3, #1126).
     return response, 200
 
 
