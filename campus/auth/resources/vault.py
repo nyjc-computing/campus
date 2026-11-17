@@ -3,10 +3,14 @@
 Implements Campus API for vault access.
 """
 
+import logging
+
 import campus.model as model
 import campus.storage
 from campus.common import schema
 from campus.common.utils import uid
+
+logger = logging.getLogger(__name__)
 
 vault_storage = campus.storage.get_table("vault")
 
@@ -68,11 +72,13 @@ class VaultResource:
             raise KeyError(f"{key!r} not found in {self.label!r}")
         
         if len(records) != 1:
-            import logging
-            logger = logging.getLogger(__name__)
+            # Label/key/count only: records carry vault VALUES, and
+            # logging them dumps every secret in the vault (policy §3,
+            # #1126)
             logger.warning(
-                f"Expected 1 record for key={key!r} label={self.label!r}, "
-                f"got {len(records)} records: {records}"
+                "Expected 1 record for key=%r label=%r, got %d records; "
+                "returning the first",
+                key, self.label, len(records),
             )
         
         return records[0]["value"]
