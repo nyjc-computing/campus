@@ -89,7 +89,21 @@ def ingest_spans(
             for span_dict in spans
         ]
     except (KeyError, TypeError, ValueError) as e:
-        raise api_errors.InvalidRequestError(f"Invalid span data: {e}") from e
+        # House validation-error shape (cf. campus/api/payloads.py):
+        # fixed message + structured field error. The raw exception text
+        # can embed the offending span value, so it goes to the server
+        # log only; production strips details from the response (#1128).
+        logger.info(
+            "Span ingestion rejected: %s: %s", type(e).__name__, e,
+        )
+        raise api_errors.InvalidRequestError(
+            "Invalid span data: spans[i] does not match the TraceSpan schema",
+            fields=[{
+                "field": "spans",
+                "code": "INVALID_FORMAT",
+                "message": f"{type(e).__name__}: {e}",
+            }],
+        ) from e
 
     # Rate-limit consumption happens before any span is stored (#831).
     # All-or-nothing per batch: a tripped bucket denies the whole batch.

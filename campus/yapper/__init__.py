@@ -17,6 +17,7 @@ __all__ = [
     "create",
 ]
 
+import logging
 from typing import Callable
 
 from .base import Event, EventHandler, YapperInterface
@@ -108,10 +109,17 @@ def create(
             yapper_vault = campus.auth.vaults["campus.yapper"]
             yapperdb_uri = yapper_vault["YAPPERDB_URI"]
         except Exception as e:
+            # Static message: the vault/SDK exception text can carry
+            # internal hosts and response bodies; it goes to the log
+            # instead (#1128).
+            logging.getLogger(__name__).error(
+                "Failed to retrieve YAPPERDB_URI: %s: %s",
+                type(e).__name__, e,
+            )
             raise ValueError(
-                f"Failed to retrieve YAPPERDB_URI from vault 'campus.yapper' for {env} environment. "
-                f"Vault error: {e}. "
-                f"This could indicate vault service connectivity issues or authentication problems."
+                f"Failed to retrieve YAPPERDB_URI from vault "
+                f"'campus.yapper' for {env} environment; check vault "
+                f"connectivity and credentials (detail logged)"
             ) from e
 
     if not yapperdb_uri:
