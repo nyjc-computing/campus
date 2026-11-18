@@ -105,6 +105,10 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
     return {
         "client": auth_result["client"],
         "user": auth_result.get("user"),
+        # the token's granted scopes (#1183): the Authenticator
+        # hydrates flask.g.current_scopes from this so route gates can
+        # enforce the capability leg of the two-leg model (#865)
+        "scopes": auth_result.get("scopes", []),
     }
 
 # Create authenticator using campus_python

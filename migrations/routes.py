@@ -49,13 +49,11 @@ services settle the DESIGNATION leg over the mesh: an authenticated
 server-to-server GET /grants/check (migrations vocabulary only, per
 the #1168 service leg) using the service's OWN client credentials —
 allowlisted on the auth deployment via AUTH_GRANT_CHECK_CLIENT_IDS.
-The CAPABILITY leg (the caller's bearer carrying migrations:*) is
-fail-closed on api/audit today: neither service's request context
-carries token scopes (see make_grant_check_gate), and scope parsing
-from raw headers is forbidden. The routes stay mounted and return 403
-with that explanation until campus.auth surfaces token scopes to the
-request context; the designation leg is wired and tested so the gate
-lights up when the capability leg lands.
+The CAPABILITY leg (#1183) reads the bearer's scopes from
+flask.g.current_scopes (hydrated by the shared Authenticator from
+POST /root/authenticate's `scopes` field); scopes-less contexts —
+audit API keys, or an auth deployment predating #1183 — fail closed
+with a 403 naming the missing leg.
 """
 
 __all__ = [
@@ -756,16 +754,13 @@ def make_grant_check_gate(service_db: str, *,
       AUTH_GRANT_CHECK_CLIENT_IDS), using this service's OWN client
       credentials (_designation_leg_holds).
     - CAPABILITY leg: the caller's bearer carrying the
-      migrations:<level> scope. FAIL-CLOSED today: the request context
-      on these services carries no token scopes — campus.api's
-      authentication resolves the bearer to client+user records (the
-      user resource has no scopes; the token's scopes stay in
-      campus.auth's credential store), and campus.audit authenticates
-      audit API keys, which are not campus bearers at all. Parsing
-      scopes from raw headers is forbidden, so this leg denies until
-      campus.auth surfaces token scopes to the request context (TODO
-      in the #1169 PR); the designation leg is wired and tested so the
-      gate lights up when the capability leg lands.
+      migrations:<level> scope (#1183): `flask.g.current_scopes` is
+      hydrated by the shared Authenticator from POST
+      /root/authenticate's `scopes` field (campus.api passes the
+      field through; the algebra is mirrored in _scope_grants — do
+      not import the campus.auth package here). Scopes-less contexts
+      fail closed: audit API keys are not campus bearers, and an auth
+      deployment predating #1183 surfaces no scopes.
 
     Args:
         service_db: This service's grant instance ("api" | "audit").
@@ -782,12 +777,12 @@ def make_grant_check_gate(service_db: str, *,
     Returns:
         gate(level) — raises api_errors.ForbiddenError on denial.
     """
-    # The capability leg flag: flip alongside wiring scope checks into
-    # the service middleware once campus.auth exposes token scopes to
-    # the request context (POST /root/authenticate carrying the
-    # token's scopes is the natural vehicle).
-    capability_leg_supported = False
-
+    # The capability leg (#1183): the request context carries the
+    # bearer's granted scopes (flask.g.current_scopes, hydrated by the
+    # shared Authenticator from POST /root/authenticate's `scopes`
+    # field — campus.api passes the field through). Audit API keys and
+    # any deployment pair where auth has not yet been upgraded carry no
+    # scopes here: the check fails closed, exactly as before #1183.
     def gate(level: str) -> None:
         user_id = _principal_user_id()
         if user_id is None:
@@ -798,19 +793,22 @@ def make_grant_check_gate(service_db: str, *,
                 "settle the user's migrations grant via the campus.auth "
                 "grant store"
             )
-        if not capability_leg_supported:
-            # Capability leg: fail-closed (see the docstring) — the
-            # request context exposes no token scopes on this service.
-            # Do not invent scope parsing from raw headers.
+        held = getattr(flask.g, "current_scopes", None) or []
+        if not _scope_grants(held, f"migrations:{level}"):
+            # Capability leg, fail-closed (#865: designation without
+            # the scope must never confer authority — the exact
+            # regression #854 closed). No campus scopes in the request
+            # context = denial: audit API keys are not campus bearers,
+            # and an auth deployment predating #1183 surfaces no
+            # scopes to its services.
             raise api_errors.ForbiddenError(
-                "The migrations capability leg cannot be verified on "
-                "this service yet (#1169): the request context carries "
-                "no token scopes, and management authority requires "
-                f"the 'migrations:{level}' scope on the bearer as well "
-                "as the designation row — the route fails closed until "
-                "campus.auth surfaces token scopes to services; the "
-                "designation leg (GET /grants/check via the #1168 "
-                "service leg) is wired and will engage then"
+                f"Token lacks 'migrations:{level}' (#865, #1183): a "
+                "designated user must hold the management scope on "
+                "the bearer as well as the grant row — mint the token "
+                "through a client whose allowed_scopes includes the "
+                "migrations vocabulary; a scope-less context (audit "
+                "API keys, or an auth deployment predating #1183) "
+                "fails closed"
             )
         if not _designation_leg_holds(
                 user_id, level, service_db,
@@ -824,6 +822,33 @@ def make_grant_check_gate(service_db: str, *,
             )
 
     return gate
+
+
+# The management-scope level algebra, mirrored from campus.auth.scopes
+# (#1183): routes.py is shared by every service and must NOT import
+# the campus.auth package (its module init registers auth's vault
+# getsecret handler on the importing service). Keep in lockstep with
+# campus.auth.scopes._SCOPE_LEVELS / scopes.grants.
+_SCOPE_LEVELS = {"read": 0, "mod": 1, "write": 2, "admin": 3}
+
+
+def _scope_grants(held: list[str], required: str) -> bool:
+    """True if the held scopes confer `required` (monotonic levels).
+
+    `<resource>:<admin>` implies write implies read on the same
+    resource; unknown levels fail closed.
+    """
+    resource, _, level = required.partition(":")
+    required_rank = _SCOPE_LEVELS.get(level)
+    if required_rank is None:
+        return False
+    for scope in held:
+        scope_resource, _, scope_level = scope.partition(":")
+        if scope_resource != resource:
+            continue
+        if _SCOPE_LEVELS.get(scope_level, -1) >= required_rank:
+            return True
+    return False
 
 
 def _designation_leg_holds(user_id: str, level: str, service_db: str, *,

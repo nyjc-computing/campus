@@ -97,15 +97,24 @@ def authenticate_token(token: str) -> flask_campus.JsonResponse:
 
     Tries user credentials first; a miss falls through to app
     credentials (client_credentials grant), which resolve to the
-    client with no user.
+    client with no user. The response carries the token's granted
+    `scopes` (#1183) so resource services can enforce the capability
+    leg of the two-leg management model (#865) without parsing raw
+    headers — the scopes ride on the token record, never on the user
+    resource.
     """
     try:
         user_creds = creds_resource["campus"].get(token)
     except api_errors.NotFoundError:
         return authenticate_app_token(token)
+    # the granted scopes ride on the linked token record (the
+    # credential row itself carries only the provider/user/client
+    # keys + token_id); the resource hydrates the token on read
+    token_scopes = getattr(user_creds.token, "scopes", None) or []
     return {
         "client": client_resource[user_creds.client_id].get().to_resource(),  # type: ignore[index]
         "user": user_resource[user_creds.user_id].get().to_resource(),
+        "scopes": list(token_scopes),
     }, 200
 
 
@@ -124,6 +133,9 @@ def authenticate_app_token(token: str) -> flask_campus.JsonResponse:
             str(err),
             error_code=ErrorConstant.AUTH_TOKEN_INVALID,
         ) from None
+    # No `scopes` key on the app-token path: client principals hold no
+    # management authority (#854), so their capability leg is moot —
+    # the two-leg gates deny client principals regardless.
     return {
         "client": client_resource[app_creds.client_id].get().to_resource(),  # type: ignore[index]
     }, 200

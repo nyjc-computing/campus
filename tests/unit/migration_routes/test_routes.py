@@ -718,23 +718,93 @@ class DesignationLegTestCase(unittest.TestCase):
                 gate("read")
             self.assertIn("audit API keys", str(ctx.exception))
 
-    def test_gate_capability_leg_fails_closed(self):
-        """The current production reality: 403 naming the missing leg."""
+    def test_gate_capability_leg_requires_scopes(self):
+        """A scopes-less context (audit API keys, or an auth deployment
+        predating #1183) fails closed without consulting designation."""
         from migrations.routes import make_grant_check_gate
 
         def check_grant(**query):
             raise AssertionError("designation must not run while the "
-                                 "capability leg fails closed")
+                                 "capability leg already fails")
 
         gate = make_grant_check_gate("api", check_grant=check_grant)
         with flask.Flask(__name__).test_request_context():
-            flask.g.current_user = {"id": "u1", "scopes": []}
+            flask.g.current_user = {"id": "u1"}
+            flask.g.current_scopes = []
             with self.assertRaises(api_errors.ForbiddenError) as ctx:
                 gate("read")
             message = str(ctx.exception)
-            self.assertIn("capability leg", message)
-            self.assertIn("migrations:read", message)
-            self.assertIn("#1169", message)
+            self.assertIn("Token lacks 'migrations:read'", message)
+            self.assertIn("#1183", message)
+            self.assertIn("fails closed", message)
+
+    def test_gate_capability_leg_checks_level_algebra(self):
+        """admin implies write implies read; write does not satisfy
+        admin (mirrors campus.auth.scopes, kept import-free here)."""
+        from migrations.routes import make_grant_check_gate
+
+        gate = make_grant_check_gate("api", check_grant=lambda **q: True)
+        with flask.Flask(__name__).test_request_context():
+            flask.g.current_user = {"id": "u1"}
+            flask.g.current_scopes = ["migrations:admin"]
+            gate("read")
+            gate("write")
+            gate("admin")
+        with flask.Flask(__name__).test_request_context():
+            flask.g.current_user = {"id": "u1"}
+            flask.g.current_scopes = ["migrations:write"]
+            gate("read")
+            gate("write")
+            with self.assertRaises(api_errors.ForbiddenError) as ctx:
+                gate("admin")
+            self.assertIn("Token lacks 'migrations:admin'",
+                          str(ctx.exception))
+
+    def test_gate_capability_leg_scopes_other_vocabulary_inert(self):
+        """A users:admin scope confers nothing on the migrations gate."""
+        from migrations.routes import make_grant_check_gate
+
+        gate = make_grant_check_gate("api", check_grant=lambda **q: True)
+        with flask.Flask(__name__).test_request_context():
+            flask.g.current_user = {"id": "u1"}
+            flask.g.current_scopes = ["users:admin"]
+            with self.assertRaises(api_errors.ForbiddenError):
+                gate("read")
+
+    def test_gate_two_legs_both_required(self):
+        """Scope without designation denies with the #1168 message;
+        designation without scope denies with the #865 message."""
+        from migrations.routes import make_grant_check_gate
+
+        # scope held, no designation
+        gate = make_grant_check_gate("api", check_grant=lambda **q: False)
+        with flask.Flask(__name__).test_request_context():
+            flask.g.current_user = {"id": "u1"}
+            flask.g.current_scopes = ["migrations:write"]
+            with self.assertRaises(api_errors.ForbiddenError) as ctx:
+                gate("write")
+            self.assertIn("No access grant designates this user",
+                          str(ctx.exception))
+
+        # designation would hold, scope missing
+        gate = make_grant_check_gate("api", check_grant=lambda **q: True)
+        with flask.Flask(__name__).test_request_context():
+            flask.g.current_user = {"id": "u1"}
+            flask.g.current_scopes = []
+            with self.assertRaises(api_errors.ForbiddenError) as ctx:
+                gate("write")
+            self.assertIn("Token lacks 'migrations:write'",
+                          str(ctx.exception))
+
+    def test_gate_passes_with_scope_and_designation(self):
+        """The lit-up path (#1183): both legs hold → gate passes."""
+        from migrations.routes import make_grant_check_gate
+
+        gate = make_grant_check_gate("api", check_grant=lambda **q: True)
+        with flask.Flask(__name__).test_request_context():
+            flask.g.current_user = {"id": "u1"}
+            flask.g.current_scopes = ["migrations:write"]
+            gate("write")
 
     def test_remote_check_caches_per_request_only(self):
         from migrations import routes as migration_routes
