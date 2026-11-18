@@ -1437,5 +1437,104 @@ class TestApplyCancel(TestApplyHarnessMixin, unittest.TestCase):
         self.assertIn("applied 1 migration(s)", stdout)
 
 
+class TestBootGate(unittest.TestCase):
+    """Fail-closed boot gate (#1167): warn always (prod-style envs),
+    raise only when MIGRATIONS_ENFORCED is set. Stubbed ledger."""
+
+    LOGGER = "migrations.runner"
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.dir = Path(self.tmpdir.name)
+        (self.dir / "001_a.py").write_text("", encoding="utf-8")
+        (self.dir / "002_b.py").write_text("", encoding="utf-8")
+
+    @staticmethod
+    def _ledger_row(revision, filename, status):
+        return {
+            "revision": revision,
+            "filename": filename,
+            "status": status,
+            "applied_at": datetime(2026, 10, 3),
+            "file_hash": None,
+        }
+
+    def _gate(self, rows, enforced=False, env_name="production",
+              connect=None):
+        """Run boot_gate with the env vars managed per-test."""
+        from campus.common import env
+        from migrations import runner
+        original_env = os.environ.get("ENV")
+        original_flag = os.environ.get("MIGRATIONS_ENFORCED")
+        env.set("ENV", env_name)
+        if enforced:
+            env.set("MIGRATIONS_ENFORCED", "1")
+        try:
+            with patch("migrations.runner._connect",
+                       connect or (lambda: FakeConn())), \
+                    patch("migrations.runner._fetch_ledger_rows",
+                          lambda conn: rows), \
+                    patch("migrations.runner.MIGRATIONS_DIR", self.dir):
+                return runner.boot_gate()
+        finally:
+            if original_env is None:
+                env.delete("ENV")
+            else:
+                env.set("ENV", original_env)
+            if enforced:
+                # restore only what this test set (env.delete raises on
+                # an unset var)
+                if original_flag is None:
+                    env.delete("MIGRATIONS_ENFORCED")
+                else:
+                    env.set("MIGRATIONS_ENFORCED", original_flag)
+
+    def _pending_rows(self):
+        return {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+        }
+
+    def test_not_enforced_warns_and_returns_outstanding(self):
+        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+            outstanding = self._gate(self._pending_rows())
+        self.assertEqual(outstanding, ["002"])
+        self.assertIn("002_b.py [pending]", captured.output[-1])
+
+    def test_enforced_and_pending_raises_naming_revisions(self):
+        with self.assertLogs(self.LOGGER, level="WARNING"), \
+                self.assertRaises(RuntimeError) as caught:
+            self._gate(self._pending_rows(), enforced=True)
+        message = str(caught.exception)
+        self.assertIn("002", message)
+        self.assertIn("MIGRATIONS_ENFORCED", message)
+        self.assertIn("refusing to boot", message)
+
+    def test_enforced_and_clean_boots_without_warning(self):
+        rows = {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+            "002": self._ledger_row("002", "002_b.py", "historical"),
+        }
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._gate(rows, enforced=True)
+        self.assertEqual(outstanding, [])
+
+    def test_enforced_unreachable_ledger_stays_fail_open(self):
+        def connect():
+            raise OSError("POSTGRESDB_URI unresolvable")
+
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._gate({}, enforced=True, connect=connect)
+        self.assertEqual(outstanding, [])
+
+    def test_no_db_touch_outside_production_even_when_enforced(self):
+        def connect():
+            raise AssertionError("must not connect outside production")
+
+        outstanding = self._gate({}, enforced=True, env_name="development",
+                                 connect=connect)
+        self.assertEqual(outstanding, [])
+
+
 if __name__ == "__main__":
     unittest.main()
