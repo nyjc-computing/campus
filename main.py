@@ -88,13 +88,17 @@ def create_app(mode: str | None = None) -> flask.Flask:
         mode, bootstrap.REQUIRED_ENV_VARS.get(mode, ()))
     # Migrations phase 4 (#747): warn at startup when the ledger shows
     # outstanding migrations. Production-style environments only, and
-    # fail-open twice over: warn_if_pending never raises, and the import
-    # is guarded so a deployment without migrations/ still boots.
+    # fail-open in the import: a deployment without migrations/ still
+    # boots. #1167 layers the fail-closed gate on top: boot_gate keeps
+    # the warn-always behavior and raises when MIGRATIONS_ENFORCED is
+    # set and migrations are outstanding — that RuntimeError is
+    # deliberately NOT swallowed here (fail-closed is the point).
     try:
         from migrations import runner
-        runner.warn_if_pending()
     except Exception:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
         logger.debug("migration pending-check unavailable", exc_info=True)
+    else:
+        runner.boot_gate()
     return app
 
 

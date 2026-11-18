@@ -177,6 +177,15 @@ migrations (one migration is the atomic unit, so abort never interrupts
 a running one), cancelled revisions simply stay pending, and the next
 apply resumes them in order.
 
+Boot gate (#1167): production app services may set `MIGRATIONS_ENFORCED`;
+startup then refuses (RuntimeError from `runner.boot_gate()`) while
+outstanding migrations remain, so a release merged before its migrations
+cannot take traffic — the failed deployment never passes its
+healthcheck, the previous deployment keeps serving, and the operator
+applies the pending migrations (admin UI or break-glass job) and
+redeploys. The gate never runs migrations; an unreachable ledger stays
+fail-open (warn only).
+
 ### Development (Railway dev)
 
 Usually nothing to do: deploy and let startup initialization apply schema
