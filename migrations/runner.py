@@ -51,6 +51,15 @@ migration manages its own transactionality (per the protocol doc every
 migration must be idempotent); the runner guarantees the ledger reflects
 exactly what completed — the row is written only after upgrade()
 returns, and a failure row is written before the runner stops.
+
+Apply exclusion (#1166): the run takes a session-level Postgres advisory
+lock on the ledger connection for its whole duration, so concurrent
+applies (a management-route apply racing the break-glass job, or two
+operator shells) cannot interleave — a second apply polls briefly, then
+refuses without writing anything. Programmatic callers may pass a
+`should_cancel` predicate to main(); it is checked between migrations
+(one migration = the atomic unit, so abort never interrupts a running
+one), cancelled revisions stay pending, and the next apply resumes.
 Migrations guarded by `@block_env(PRODUCTION)` follow the documented
 per-process override for deliberate production runs:
 `ENV=development python migrations/runner.py apply`.
@@ -93,6 +102,8 @@ import hashlib
 import logging
 import re
 import sys
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -152,6 +163,15 @@ MISSING_FILE = "missing-file"
 # apply() runs a file only when its ledger status is absent, failed
 # (retry) or pending; applied and historical files are skipped.
 APPLY_RUNNABLE = (APPLIED, FAILED, HISTORICAL)
+
+# Session-level advisory lock guarding apply (#1166): one fixed key
+# agreed by every context, so a management-route apply, the break-glass
+# job and a manual shell run cannot interleave on the same service DB.
+# ("migr" as a big-endian byte value; arbitrary but stable.)
+ADVISORY_LOCK_KEY = 0x6D696772
+
+# How long apply polls for the advisory lock before refusing (#1166).
+APPLY_LOCK_WAIT_SECONDS = 30.0
 
 # #747: production-style environments — where startup init_from_model
 # is blocked, so only the runner can have brought the schema up to
@@ -397,6 +417,42 @@ def ensure(conn) -> None:
     """Create the ledger table if missing. Idempotent."""
     with conn.cursor() as cursor:
         cursor.execute(LEDGER_DDL)
+    conn.commit()
+
+
+def _acquire_apply_lock(conn,
+                        wait_seconds: float | None = None) -> bool:
+    """Take the session-level advisory lock guarding apply (#1166).
+
+    Polls pg_try_advisory_lock on the ledger connection for up to
+    wait_seconds (APPLY_LOCK_WAIT_SECONDS by default), then gives up
+    WITHOUT writing anything: a held lock means another apply is
+    mid-flight (management route, break-glass job or another shell)
+    and the run must not interleave with it. The lock lives for the
+    connection's lifetime — released by _release_apply_lock, or
+    implicitly when the connection closes.
+    """
+    if wait_seconds is None:
+        wait_seconds = APPLY_LOCK_WAIT_SECONDS
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_lock(%s)",
+                           (ADVISORY_LOCK_KEY,))
+            row = cursor.fetchone()
+        conn.commit()
+        held = bool(row and row[0])
+        if held:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.5)
+
+
+def _release_apply_lock(conn) -> None:
+    """Release the apply advisory lock; the session close also would."""
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_unlock(%s)", (ADVISORY_LOCK_KEY,))
     conn.commit()
 
 
@@ -656,10 +712,29 @@ def cmd_status(args, conn) -> int:
     return 0
 
 
-def cmd_apply(args, conn) -> int:
+def cmd_apply(args, conn,
+              should_cancel: Callable[[], bool] | None = None) -> int:
     all_files = discover_migration_files()
     files = filter_files_by_db(all_files, args.db)
     ensure(conn)
+    if not _acquire_apply_lock(conn):
+        print(
+            "error: another migration apply holds the advisory lock "
+            f"(waited {APPLY_LOCK_WAIT_SECONDS:.0f}s) — a run is already "
+            "in flight (management route, break-glass job or another "
+            "shell); nothing was written — retry once it finishes",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        return _apply_locked(args, conn, all_files, files, should_cancel)
+    finally:
+        _release_apply_lock(conn)
+
+
+def _apply_locked(args, conn, all_files, files,
+                  should_cancel: Callable[[], bool] | None = None) -> int:
+    """The apply loop proper; the caller holds the advisory lock (#1166)."""
     rows = _fetch_ledger_rows(conn)
 
     mismatches = hash_mismatches(files, rows)
@@ -692,8 +767,16 @@ def cmd_apply(args, conn) -> int:
         print("up to date: nothing to apply")
         return 0
 
-    import time
     for index, file in enumerate(targets):
+        if should_cancel is not None and should_cancel():
+            print(
+                f"cancelled: {index} of {len(targets)} applied, "
+                f"{len(targets) - index} left pending — ledger unchanged; "
+                "re-run apply to resume",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
         print(f"applying {file.revision} ({file.filename})...", flush=True)
         started = time.perf_counter()
         try:
@@ -721,7 +804,8 @@ def cmd_apply(args, conn) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None,
+         should_cancel: Callable[[], bool] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="migrations/runner.py",
         description="Applied-migrations ledger and migration runner (#27).",
@@ -794,10 +878,14 @@ def main(argv: list[str] | None = None) -> int:
         "ensure": cmd_ensure,
         "stamp": cmd_stamp,
         "status": cmd_status,
-        "apply": cmd_apply,
     }
     conn = _connect()
     try:
+        if args.command == "apply":
+            # apply alone takes the cancel hook (#1166); the other
+            # commands are single-statement ledger operations with
+            # nothing to abort.
+            return cmd_apply(args, conn, should_cancel)
         return handlers[args.command](args, conn)
     except ValueError as e:
         # Usage errors: unknown revision, malformed migrations/ directory

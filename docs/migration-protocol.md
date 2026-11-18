@@ -167,6 +167,16 @@ is the same operation with fewer moving parts to trust.
 
 ## Applying migrations
 
+`apply` is exclusive per service database (#1166): the runner holds a
+session-level Postgres advisory lock for the whole run, so a
+management-route apply (#1169), the break-glass job and a manual shell
+run cannot interleave — a second apply polls briefly, then refuses
+without writing anything. Programmatic callers may pass a
+`should_cancel` predicate to `runner.main()`; it is checked between
+migrations (one migration is the atomic unit, so abort never interrupts
+a running one), cancelled revisions simply stay pending, and the next
+apply resumes them in order.
+
 ### Development (Railway dev)
 
 Usually nothing to do: deploy and let startup initialization apply schema

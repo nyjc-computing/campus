@@ -1,9 +1,10 @@
-"""Test the migration runner (#27 phases 1-3, #744 #745 #746).
+"""Test the migration runner (#27 phases 1-3, #744 #745 #746, #1166).
 
 Covers the pure logic (file discovery, revision resolution, ledger
 diffing, apply targeting, hash-guard scanning), the stamp/ensure DB
 paths via a fake connection, and the apply loop with real (temp-dir)
-migration files — no live database.
+migration files — no live database. #1166 adds the apply advisory-lock
+exclusion and the between-migration cancel hook, tested the same way.
 
 Note: this file lives under storage/ rather than a migrations/ test
 package because a tests/unit/migrations package would shadow the
@@ -651,8 +652,11 @@ class TestApplyHarnessMixin:
         import io
 
         from migrations.runner import main
+        if fetchone_results is None:
+            # the apply advisory lock (#1166) succeeds on first poll
+            fetchone_results = [(True,)]
         cursor = FakeCursor(fetchall_rows=fetchall_rows or [],
-                            fetchone_results=fetchone_results or [])
+                            fetchone_results=fetchone_results)
         conn = FakeConn(cursor)
         stdout, stderr = io.StringIO(), io.StringIO()
         with patch("migrations.runner._connect", return_value=conn), \
@@ -690,7 +694,7 @@ class TestApply(TestApplyHarnessMixin, unittest.TestCase):
         self.assertEqual([params[0] for _, params in inserts], ["001", "002"])
         self.assertEqual([params[2] for _, params in inserts],
                          ["applied", "applied"])
-        self.assertEqual(conn.commits, 3)  # ensure + one per migration row
+        self.assertEqual(conn.commits, 5)  # ensure + lock + rows + unlock
 
     def test_skips_applied_and_historical(self):
         from migrations.runner import APPLIED, HISTORICAL
@@ -1310,6 +1314,127 @@ class TestMainDbScope(TestMain):
                                          files=self._scoped_files())
         self.assertEqual(exit_code, 1)
         self.assertIn("--db api", stderr)
+
+
+class TestApplyLock(TestApplyHarnessMixin, unittest.TestCase):
+    """Advisory-lock exclusion around apply (#1166)."""
+
+    def test_lock_taken_and_released_around_the_run(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, _, _, cursor = self._run_apply([], files)
+        self.assertEqual(exit_code, 0)
+        sqls = [sql for sql, _ in cursor.executed]
+        self.assertIn("SELECT pg_try_advisory_lock", " ".join(sqls))
+        self.assertIn("SELECT pg_advisory_unlock", " ".join(sqls))
+        # the whole run sits between lock and unlock: the ledger row
+        # insert lands before the unlock statement
+        unlock_at = next(i for i, (sql, _) in enumerate(cursor.executed)
+                         if "pg_advisory_unlock" in sql)
+        insert_at = next(i for i, (sql, _) in enumerate(cursor.executed)
+                         if "INSERT INTO" in sql)
+        self.assertLess(insert_at, unlock_at)
+
+    def test_lock_refusal_writes_nothing(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations.runner.APPLY_LOCK_WAIT_SECONDS", 0.0):
+            exit_code, stdout, stderr, _, cursor = self._run_apply(
+                [], files, fetchone_results=[(False,)])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("advisory lock", stderr)
+        self.assertIn("nothing was written", stderr)
+        self.assertNotIn("applying", stdout)
+        self.assertEqual(self._inserts(cursor), [])
+
+    def test_zero_wait_refuses_after_single_attempt(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations.runner.APPLY_LOCK_WAIT_SECONDS", 0.0), \
+                patch("migrations.runner.time.sleep") as sleep:
+            exit_code, _, stderr, _, _ = self._run_apply(
+                [], files, fetchone_results=[(False,)])
+        self.assertEqual(exit_code, 1)
+        sleep.assert_not_called()
+        self.assertIn("advisory lock", stderr)
+
+    def test_lock_free_on_second_poll_applies(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations.runner.time.sleep") as sleep:
+            exit_code, stdout, _, _, _ = self._run_apply(
+                [], files, fetchone_results=[(False,), (True,)])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("applied 001", stdout)
+        sleep.assert_called_once()
+
+    def test_unlock_still_runs_when_migration_fails(self):
+        self._write_migration(
+            "001_bad.py", "():\n    raise RuntimeError('boom')\n")
+        files = self._files(("001", "001_bad.py"))
+        exit_code, _, stderr, _, cursor = self._run_apply([], files)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("FAILED 001", stderr)
+        self.assertIn("SELECT pg_advisory_unlock",
+                      " ".join(sql for sql, _ in cursor.executed))
+
+
+class TestApplyCancel(TestApplyHarnessMixin, unittest.TestCase):
+    """The should_cancel hook: checked between migrations (#1166)."""
+
+    def _run_apply_cancel(self, should_cancel, files):
+        import contextlib
+        import io
+
+        from migrations.runner import main
+        cursor = FakeCursor(fetchall_rows=[], fetchone_results=[(True,)])
+        conn = FakeConn(cursor)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch("migrations.runner._connect", return_value=conn), \
+                patch("migrations.runner.discover_migration_files",
+                      return_value=files), \
+                patch("migrations.runner.MIGRATIONS_DIR", self.dir), \
+                contextlib.redirect_stdout(stdout), \
+                contextlib.redirect_stderr(stderr):
+            exit_code = main(["apply"], should_cancel=should_cancel)
+        return exit_code, stdout.getvalue(), stderr.getvalue(), conn, cursor
+
+    def test_cancel_before_first_migration_runs_nothing(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, stderr, _, cursor = self._run_apply_cancel(
+            lambda: True, files)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("cancelled: 0 of 1 applied, 1 left pending", stderr)
+        self.assertNotIn("applying", stdout)
+        self.assertEqual(self._inserts(cursor), [])
+
+    def test_cancel_stops_between_migrations(self):
+        # 001 runs and flips the flag (marker file appears); 002 must
+        # never start — abort takes effect at the migration boundary
+        self._write_migration(
+            "001_a.py",
+            "():\n    open({!r}, 'a').write('001\\n')\n".format(
+                str(self.marker)))
+        self._write_migration(
+            "002_b.py", "():\n    raise AssertionError('must not run')\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        exit_code, stdout, stderr, _, cursor = self._run_apply_cancel(
+            lambda: self.marker.exists(), files)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("cancelled: 1 of 2 applied, 1 left pending", stderr)
+        self.assertIn("applying 001", stdout)
+        self.assertNotIn("applying 002", stdout)
+        inserts = self._inserts(cursor)
+        self.assertEqual([params[0] for _, params in inserts], ["001"])
+        self.assertEqual(inserts[0][1][2], "applied")
+
+    def test_no_cancel_hook_runs_to_completion(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, _, _, _ = self._run_apply_cancel(None, files)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("applied 1 migration(s)", stdout)
 
 
 if __name__ == "__main__":
