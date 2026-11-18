@@ -77,6 +77,16 @@ implementation tracked on campus-admin); student accounts may access
 audit traces on the **development environment only** — the production
 audit trail remains superadmin/admin-only.
 
+**Ruling 2026-11-18 (migration operations):** applying, aborting and
+rolling back migrations against production is permitted for designated
+admins holding the per-service `migrations:write` / `migrations:admin`
+access grants (#1168) — a deliberate relaxation of the superadmin-only
+production rule for this surface ONLY. Grant seeding and administration
+stay operator/superadmin-only; every run is recorded by the per-service
+migration ledger (who, when, duration, file hash) and audit traces.
+Everything else in production remains superadmin-only. Procedure:
+[migration runbook](migration-protocol.md#production-style-environments-manual-runs-admin-ui-first).
+
 ## 2. Railway access model
 
 - **Routine Railway access is environment-bound to `development`.** A
@@ -92,8 +102,11 @@ audit trail remains superadmin/admin-only.
   is reached only through the product's own surfaces (the versioned
   APIs, the campus-admin portal). The documented exceptions are the
   one-off bootstrap steps in the [prod rollout playbook](prod-rollout.md)
-  (§3) and the [migration runbook](migration-protocol.md#staging--production-style-environments-manual-runbook)
-  — superadmin actions, each recorded when used.
+  (§3) and the [migration runbook](migration-protocol.md#production-style-environments-manual-runs-admin-ui-first)
+  — superadmin actions, or (for migration apply/abort/rollback only,
+  per the 2026-11-18 ruling above) designated admins holding the
+  `migrations:write`/`migrations:admin` grants. Each use is recorded
+  when it happens.
 
 > **Status (2026-11-17, live):** routine CLI/automation access on the
 > operator workstation runs on a **development-scoped project token**
