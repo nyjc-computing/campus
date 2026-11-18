@@ -1536,5 +1536,151 @@ class TestBootGate(unittest.TestCase):
         self.assertEqual(outstanding, [])
 
 
+class TestRollback(TestApplyHarnessMixin, unittest.TestCase):
+    """rollback REV (#1170): declaration-gated reversal; the ledger row
+    is deleted on success (revision pending again) and untouched on
+    failure; hash-guarded and advisory-locked like apply."""
+
+    def _run_rollback(self, argv, files, rows, fetchone_results=None):
+        import contextlib
+        import io
+
+        from migrations.runner import main
+        if fetchone_results is None:
+            # the advisory lock succeeds on first poll
+            fetchone_results = [(True,)]
+        cursor = FakeCursor(fetchall_rows=rows,
+                            fetchone_results=fetchone_results)
+        conn = FakeConn(cursor)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch("migrations.runner._connect", return_value=conn), \
+                patch("migrations.runner.discover_migration_files",
+                      return_value=files), \
+                patch("migrations.runner.MIGRATIONS_DIR", self.dir), \
+                contextlib.redirect_stdout(stdout), \
+                contextlib.redirect_stderr(stderr):
+            exit_code = main(["rollback", *argv])
+        return exit_code, stdout.getvalue(), stderr.getvalue(), conn, cursor
+
+    def _write_rollback_migration(self, name, declaration, extra=""):
+        self._write_migration(name, f"():\n    pass\n{declaration}\n{extra}")
+
+    def _applied_rows(self, *files):
+        from migrations.runner import _file_hash
+        return [
+            _row(f.revision, f.filename,
+                 file_hash=_file_hash(self.dir / f.filename))
+            for f in files
+        ]
+
+    def test_ddl_rollback_runs_downgrade_and_clears_ledger_row(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'",
+            extra="def downgrade():\n"
+                  f"    open({str(self.marker)!r}, 'a').write('down\\n')\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, _, _, cursor = self._run_rollback(
+            ["001"], files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 0)
+        self.assertIn("rolled back 001", stdout)
+        self.assertIn("pending again", stdout)
+        self.assertEqual(self.marker.read_text(), "down\n")
+        deletes = [sql for sql, _ in cursor.executed
+                   if "DELETE FROM" in sql]
+        self.assertEqual(len(deletes), 1)
+        self.assertIn('_migrations"', deletes[0])
+
+    def test_undeclared_migration_refuses(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, _, stderr, _, cursor = self._run_rollback(
+            ["001"], files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 1)
+        self.assertIn("declares no ROLLBACK_SUPPORTED", stderr)
+        self.assertFalse(
+            any("DELETE FROM" in sql for sql, _ in cursor.executed))
+
+    def test_backup_declaration_requires_from_backup(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'backup'")
+        files = self._files(("001", "001_a.py"))
+        exit_code, _, stderr, _, _ = self._run_rollback(
+            ["001"], files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--from-backup", stderr)
+
+    def test_backup_rollback_delegates_to_restore(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'backup'")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations._backup.restore") as restore:
+            exit_code, stdout, _, _, _ = self._run_rollback(
+                ["001", "--from-backup", "envelope.json"],
+                files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 0)
+        restore.assert_called_once_with("envelope.json")
+        self.assertIn("rolled back 001", stdout)
+
+    def test_backup_rollback_accepts_bucket_uri(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'backup'")
+        files = self._files(("001", "001_a.py"))
+        envelope = self.dir / "downloaded.json"
+        with patch("migrations._backup.download_backup",
+                   return_value=envelope) as download, \
+                patch("migrations._backup.restore") as restore:
+            exit_code, _, _, _, _ = self._run_rollback(
+                ["001", "--from-backup",
+                 "bucket://campus-backups/migrations/001/x/backup.json"],
+                files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 0)
+        (uri, _dest), _ = download.call_args
+        self.assertEqual(
+            uri, "bucket://campus-backups/migrations/001/x/backup.json")
+        restore.assert_called_once_with(envelope)
+
+    def test_not_applied_revision_refuses(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'")
+        files = self._files(("001", "001_a.py"))
+        exit_code, _, stderr, _, cursor = self._run_rollback(
+            ["001"], files, [])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("not recorded applied", stderr)
+        self.assertFalse(
+            any("DELETE FROM" in sql for sql, _ in cursor.executed))
+
+    def test_hash_mismatch_refuses_and_allows_override(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'",
+            extra="def downgrade():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        wrong = [_row("001", "001_a.py", file_hash="0" * 64)]
+        exit_code, _, stderr, _, _ = self._run_rollback(
+            ["001"], files, wrong)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("hash guard", stderr)
+        exit_code, stdout, _, _, _ = self._run_rollback(
+            ["001", "--allow-hash-mismatch"], files, wrong)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("rolled back 001", stdout)
+
+    def test_lock_refusal_writes_nothing(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'",
+            extra="def downgrade():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        # exhaust the fetchone queue: the advisory lock never asserts;
+        # zero wait keeps the poll loop to a single attempt
+        with patch("migrations.runner.APPLY_LOCK_WAIT_SECONDS", 0.0):
+            exit_code, _, stderr, _, cursor = self._run_rollback(
+                ["001"], files, self._applied_rows(files[0]),
+                fetchone_results=[])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("advisory lock", stderr)
+        self.assertFalse(
+            any("DELETE FROM" in sql for sql, _ in cursor.executed))
+
+
 if __name__ == "__main__":
     unittest.main()
