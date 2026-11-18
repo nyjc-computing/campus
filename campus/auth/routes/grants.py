@@ -34,6 +34,15 @@ mutation regardless of the caller:
   is rejected outright;
 - reserved vocabulary stays closed: credentials grants are
   rejected (its routes are operator-only, #889);
+- migration rows name their service (#1168): resource_id is the
+  service DB ("auth", "api" or "audit") the grant covers — per-service
+  subsets, no vocabulary-level rows — and migrations:mod rows are
+  inert (rejected), so grant administration for the vocabulary stays
+  operator-only by construction;
+- the migrations grant-check service leg (#1168): allowlisted
+  deployment services (AUTH_GRANT_CHECK_CLIENT_IDS) may call
+  GET /grants/check for the migrations vocabulary only, settling the
+  designation leg of their #1169 migration routes over the mesh;
 - vault grant rows must name their label (#889): a vault row with
   an empty resource_id is inert (per-label checks never match it)
   and is rejected as a shape error.
@@ -123,6 +132,11 @@ def _forbid_forbidden_shapes(
     - timetable:mod rows are inert: no moderation action exists on
       timetables, so the vocabulary is grantable at read/write/admin
       only.
+    - migrations rows (#1168) name their service: resource_id is the
+      service DB ("auth", "api" or "audit") — per-service subsets,
+      never a vocabulary-level row — and migrations:mod is inert
+      (grantable at read/write/admin only; administering the
+      vocabulary's grants stays operator-only by construction).
     """
     if resource_type == "clients" and level == "admin":
         raise api_errors.ForbiddenError(
@@ -150,6 +164,23 @@ def _forbid_forbidden_shapes(
             "timetable vocabulary is grantable at read, write, and "
             "admin (read views timetable data, write creates/updates "
             "timetable versions, admin governs its grants)"
+        )
+    if resource_type == "migrations" and level == "mod":
+        raise api_errors.ForbiddenError(
+            "A 'migrations:mod' grant has nothing to govern (#1168): "
+            "the migrations vocabulary is grantable at read, write, "
+            "and admin (read views the plan/ledger, write applies and "
+            "aborts, admin rolls back and restores); administering its "
+            "grants stays operator-only"
+        )
+    if resource_type == "migrations" and resource_id not in (
+            "auth", "api", "audit"):
+        raise api_errors.InvalidRequestError(
+            "Migration grant rows name their service (#1168): "
+            "resource_id is the service DB ('auth', 'api' or 'audit') "
+            "the grant covers — per-service subsets, never a "
+            "vocabulary-level row; authority over one service's "
+            "migration surface never covers the fleet"
         )
     if resource_type == "vault" and not resource_id:
         raise api_errors.InvalidRequestError(
@@ -210,6 +241,22 @@ def list_grants(
     return {"grants": rows}, 200
 
 
+def _require_check_permission(resource_type: str) -> None:
+    """Settle who may call GET /grants/check (#1168).
+
+    The service leg first (#1168): an allowlisted deployment service
+    (AUTH_GRANT_CHECK_CLIENT_IDS) checking the migrations vocabulary —
+    how the api/audit services settle the designation leg of their
+    #1169 migration routes, since the grant store lives only in
+    campus.auth's database. Scoped to migrations only; every other
+    vocabulary (and every non-allowlisted caller) takes the standard
+    grant-admin gate.
+    """
+    if authz.is_grant_check_caller() and resource_type == "migrations":
+        return
+    _require_grant_admin(resource_type)
+
+
 @bp.get("/check")
 @flask_campus.unpack_request
 def check_grant(
@@ -223,14 +270,19 @@ def check_grant(
     """Check whether a grantee's row covers a permission
 
     GET /grants/check
-    Authorization: operator, or a same-vocabulary admin.
+    Authorization: operator, a same-vocabulary admin, or — for the
+    migrations vocabulary only (#1168) — a deployment service client
+    listed in AUTH_GRANT_CHECK_CLIENT_IDS (how the api/audit services
+    settle the designation leg of their #1169 migration routes; the
+    grant store lives only in campus.auth's database). Fail-closed:
+    an unset allowlist means no service leg.
 
     Query: grantee_type, grantee_id, resource_type, resource_id,
     bits | level.
 
     Returns: {"granted": bool}
     """
-    _require_grant_admin(resource_type)
+    _require_check_permission(resource_type)
     granted = grants.check(
         grantee_type, grantee_id, resource_type, resource_id,
         bits=bits, level=level,

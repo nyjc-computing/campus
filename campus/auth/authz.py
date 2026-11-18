@@ -98,10 +98,16 @@ __all__ = [
     "CLIENTS_WRITE",
     "CREDENTIALS_READ",
     "CREDENTIALS_WRITE",
+    "GRANT_CHECK_CLIENT_IDS_ENVVAR",
+    "MIGRATIONS_ADMIN",
+    "MIGRATIONS_READ",
+    "MIGRATIONS_WRITE",
     "SESSIONS_READ",
     "SESSIONS_WRITE",
     "forbid_user_principal",
+    "grant_check_client_ids",
     "has_admin_scope",
+    "is_grant_check_caller",
     "is_operator",
     "is_super_admin",
     "operator_client_ids",
@@ -199,6 +205,21 @@ TIMETABLE_READ = "timetable:read"
 TIMETABLE_WRITE = "timetable:write"
 TIMETABLE_ADMIN = "timetable:admin"
 
+# Migrations vocabulary (#1168): the campus-admin Migrations view and
+# the per-service migration management routes (#1169). read views the
+# plan delta and ledger history; write triggers apply and abort
+# (implies read); admin rolls back / restores from backup (implies
+# write) — the destructive cap, granted sparingly. Rows are
+# instance-scoped by service DB (#1104): resource_id names the service
+# ("auth", "api" or "audit"), so authority covers one service's
+# migration surface, never the whole fleet (the ratified subsets
+# ruling). mod rows are rejected as inert, and there are no
+# vocabulary-level migration rows — grant administration for the
+# vocabulary stays operator-only by construction.
+MIGRATIONS_READ = "migrations:read"
+MIGRATIONS_WRITE = "migrations:write"
+MIGRATIONS_ADMIN = "migrations:admin"
+
 # Client record fields reserved for the clients:admin scope: the scope
 # caps and the token-bridge flag are operator-controlled registration
 # data (docs/auth-token-invariants.md A1/B3/C1); a client-principal
@@ -251,6 +272,42 @@ def super_admin_email() -> str | None:
     """
     raw = env.get(SUPER_ADMIN_ENVVAR) or ""
     return raw.strip() or None
+
+
+# Client ids allowed to use the migrations leg of GET /grants/check
+# (#1168): the deployment's api/audit services settle the designation
+# leg of their migration management routes (#1169) there — the grant
+# store lives only in campus.auth's database, so the other services
+# cannot check it directly. Scoped to migrations checks only; every
+# other vocabulary keeps the operator/admin gate. Fail-closed: unset
+# or empty means no client may use this leg.
+GRANT_CHECK_CLIENT_IDS_ENVVAR = "AUTH_GRANT_CHECK_CLIENT_IDS"
+
+
+def grant_check_client_ids() -> frozenset[str]:
+    """Parse the migrations grant-check allowlist from the environment.
+
+    Read at request time (not import time), mirroring
+    operator_client_ids: deployments rotate the list without a process
+    restart.
+    """
+    raw = env.get(GRANT_CHECK_CLIENT_IDS_ENVVAR) or ""
+    return frozenset({
+        client_id.strip()
+        for client_id in raw.split(",")
+        if client_id.strip()
+    })
+
+
+def is_grant_check_caller() -> bool:
+    """True if the authenticated client may settle migrations checks.
+
+    Only meaningful for client principals (the calling service's own
+    client credentials), like is_operator.
+    """
+    client = getattr(flask.g, "current_client", None)
+    return (client is not None
+            and str(client.id) in grant_check_client_ids())
 
 
 def is_super_admin() -> bool:
