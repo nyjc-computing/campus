@@ -223,5 +223,45 @@ class TestClientAccessCompat(GrantsTestCase):
         self.assertEqual(access.list(), {"shared": 5})
 
 
+class TestMigrationsVocabulary(GrantsTestCase):
+    """The migrations vocabulary (#1168): monotonic levels and the
+    per-service instance scoping (resource_id names the service DB —
+    the ratified api/audit subsets ruling)."""
+
+    def test_levels_use_monotonic_algebra(self):
+        from campus.auth.resources.grant import grants
+        grants.grant("user", "u10", "migrations", "api", level="write")
+        self.assertTrue(
+            grants.check("user", "u10", "migrations", "api", level="write"))
+        self.assertTrue(
+            grants.check("user", "u10", "migrations", "api", level="read"))
+        self.assertFalse(
+            grants.check("user", "u10", "migrations", "api", level="admin"))
+
+    def test_instance_scope_covers_only_that_service(self):
+        from campus.auth.resources.grant import grants
+        grants.grant("user", "u11", "migrations", "api", level="write")
+        self.assertTrue(
+            grants.check("user", "u11", "migrations", "api", level="write"))
+        # authority over one service's migration surface never covers
+        # another service's, and no row means no coverage anywhere else
+        self.assertFalse(
+            grants.check("user", "u11", "migrations", "audit", level="read"))
+        self.assertFalse(
+            grants.check("user", "u11", "migrations", "auth", level="read"))
+        self.assertFalse(
+            grants.check("user", "u11", "migrations", "", level="read"))
+
+    def test_grant_never_downgrades_and_revoke_deletes(self):
+        from campus.auth.resources.grant import grants
+        grants.grant("user", "u12", "migrations", "audit", level="admin")
+        grants.grant("user", "u12", "migrations", "audit", level="read")
+        self.assertTrue(
+            grants.check("user", "u12", "migrations", "audit",
+                         level="admin"))
+        grants.revoke("user", "u12", "migrations", "audit", level="admin")
+        self.assertIsNone(grants.get("user", "u12", "migrations", "audit"))
+
+
 if __name__ == "__main__":
     unittest.main()
