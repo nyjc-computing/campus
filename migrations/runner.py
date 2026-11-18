@@ -182,6 +182,10 @@ APPLY_LOCK_WAIT_SECONDS = 30.0
 # lazily in warn_if_pending).
 PENDING_WARN_ENVS = ("production",)
 
+# #1167: fail-closed production boot gate — set on production app
+# services only; unset on dev/test, where boot behavior is unchanged.
+MIGRATIONS_ENFORCED_ENVVAR = "MIGRATIONS_ENFORCED"
+
 
 @dataclass(frozen=True)
 class MigrationFile:
@@ -660,6 +664,43 @@ def warn_if_pending(env_name: str | None = None,
             "migration pending-check skipped: %s: %s", type(e).__name__, e
         )
         return []
+
+
+def boot_gate() -> list[str]:
+    """Startup pending-check; refuses to boot when enforced (#1167).
+
+    main.create_app calls this instead of warn_if_pending() directly.
+    The #747 warning behavior is unchanged: production-style boots log
+    one WARNING naming outstanding revisions targeting this service's
+    DB; dev/test boots return before touching the database. When
+    MIGRATIONS_ENFORCED is set (production app services) AND the
+    outstanding list is non-empty, raise RuntimeError naming them: the
+    boot fails, the healthcheck never passes, and Railway keeps the
+    previous deployment live — an out-of-order release merge
+    self-heals once the pending migrations are applied and the service
+    is redeployed. The gate never runs anything (apps never auto-run
+    migrations), and ledger failures stay fail-open via
+    warn_if_pending: an unreachable ledger can warn, never block boot
+    on its own. With the var unset (dev/test) the raise is unreachable.
+
+    Returns the outstanding revisions ([] outside production-style
+    envs, when clean, or when the ledger is unreachable).
+    """
+    outstanding = warn_if_pending()
+    if not outstanding:
+        return outstanding
+    from campus.common import env
+    if not env.get(MIGRATIONS_ENFORCED_ENVVAR, ""):
+        return outstanding
+    raise RuntimeError(
+        f"{len(outstanding)} pending migration(s) targeting this "
+        f"service DB ({', '.join(outstanding)}) and "
+        f"{MIGRATIONS_ENFORCED_ENVVAR} is set — refusing to boot over "
+        "out-of-date schema (#1167): apply the pending migrations "
+        "(campus-admin Migrations view, or the break-glass job) and "
+        "redeploy; unsetting the var is a superadmin break-glass "
+        "action, not a fix"
+    )
 
 
 def cmd_ensure(args, conn) -> int:
