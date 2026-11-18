@@ -123,6 +123,33 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     oauth_proxy.init_app(bp)
     routes.init_app(bp)
 
+    # Migration management routes (#1169): the campus-admin Migrations
+    # view drives plan/apply/abort/rollback per service. Shared
+    # blueprint from migrations/routes.py; auth's gate is the full
+    # two-leg store check (migrations vocabulary, #1168, instance =
+    # this service), and mutations emit yapper events stamped with the
+    # acting user (the grants-routes precedent).
+    import migrations.routes as migration_routes
+
+    def _migrations_gate(level: str) -> None:
+        from . import authz
+
+        authz.require_resource_permission(
+            "migrations", level, instance="auth"
+        )
+
+    def _migrations_emit(event: str, data: dict) -> None:
+        user = getattr(flask.g, "current_user", None) or {}
+        get_yapper().emit(event, {
+            **data,
+            "acting_user": str(user.get("id") or "") if isinstance(
+                user, dict) else str(getattr(user, "id", "")),
+        })
+
+    migration_routes.init_app(
+        bp, service_db="auth", gate=_migrations_gate, emit=_migrations_emit
+    )
+
     # Action journeys (#828), adopt-only: auth's browser surface IS the
     # login flow — already journeyed via the campus_journey cookie
     # (#803) — so minting navigations here would fork login journeys.
