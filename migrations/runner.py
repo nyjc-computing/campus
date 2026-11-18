@@ -31,6 +31,8 @@ service):
     python migrations/runner.py apply --up-to 008       # run pending migrations up to 008
     python migrations/runner.py apply --allow-hash-mismatch
         # run anyway after the hash guard flagged an edited, applied file
+    python migrations/runner.py rollback 007                 # reverse one applied migration
+    python migrations/runner.py rollback 005 --from-backup bucket://campus-backups/migrations/005/.../backup.json
 
 Append `--db api` / `--db audit` to any command to scope it to that
 service's migrations and ledger (default: auth — every pre-#1104
@@ -102,6 +104,7 @@ import hashlib
 import logging
 import re
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -845,6 +848,121 @@ def _apply_locked(args, conn, all_files, files,
     return 0
 
 
+def cmd_rollback(args, conn) -> int:
+    """Reverse one applied migration per its ROLLBACK_SUPPORTED decl.
+
+    'ddl' calls the module's downgrade() (additive-DDL reversals);
+    'backup' restores the envelope given via --from-backup (a local
+    path or a bucket://<name>/<key> URI, #1170). Undeclared migrations
+    refuse. On success the ledger row is DELETED — the revision is
+    pending again and the next apply re-runs it; rollback history
+    lives in this output and the doc ledger, not a ledger status. On
+    any failure the row stays applied. Hash-guarded like apply, and
+    holding the same advisory lock: rollback is a schema mutation and
+    must not interleave with a concurrent apply.
+    """
+    all_files = discover_migration_files()
+    file = resolve_scoped_revision(args.revision, all_files, args.db)
+    if not _acquire_apply_lock(conn):
+        print(
+            "error: another migration run holds the advisory lock "
+            f"(waited {APPLY_LOCK_WAIT_SECONDS:.0f}s) — nothing was "
+            "written; retry once the running apply finishes",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        return _rollback_locked(args, conn, all_files, file)
+    finally:
+        _release_apply_lock(conn)
+
+
+def _rollback_locked(args, conn, all_files, file) -> int:
+    """The rollback proper; the caller holds the advisory lock (#1166)."""
+    rows = _fetch_ledger_rows(conn)
+    row = rows.get(file.revision)
+    if not row or row.get("status") != APPLIED:
+        print(
+            f"error: {file.revision} is not recorded applied — "
+            "nothing to roll back",
+            file=sys.stderr,
+        )
+        return 1
+    current = _file_hash(MIGRATIONS_DIR / file.filename)
+    stored = row.get("file_hash")
+    if (stored and current is not None and current != stored
+            and not args.allow_hash_mismatch):
+        print(
+            f"error: hash guard: {file.filename} changed since it was "
+            "applied — refusing to roll back with different code than "
+            "the upgrade ran (fix the file, or pass "
+            "--allow-hash-mismatch to proceed anyway)",
+            file=sys.stderr,
+        )
+        return 1
+    module = load_migration(file)
+    declared = getattr(module, "ROLLBACK_SUPPORTED", None)
+    try:
+        if declared == "ddl":
+            downgrade = getattr(module, "downgrade", None)
+            if not callable(downgrade):
+                print(
+                    f"error: {file.filename} declares "
+                    "ROLLBACK_SUPPORTED='ddl' but defines no downgrade()",
+                    file=sys.stderr,
+                )
+                return 1
+            downgrade()
+        elif declared == "backup":
+            if not args.from_backup:
+                print(
+                    f"error: {file.filename} rolls back via its backup "
+                    "envelope — pass --from-backup <path> (or "
+                    "bucket://<bucket>/<key>)",
+                    file=sys.stderr,
+                )
+                return 1
+            from migrations import _backup
+
+            if args.from_backup.startswith("bucket://"):
+                dest = Path(tempfile.mkdtemp(prefix="campus-rollback-"))
+                envelope = _backup.download_backup(
+                    args.from_backup, dest / "envelope.json")
+            else:
+                envelope = args.from_backup
+            _backup.restore(envelope)
+        else:
+            print(
+                f"error: {file.filename} declares no ROLLBACK_SUPPORTED "
+                "— it cannot be rolled back automatically (manual "
+                "downgrade() or backup restore only; see the protocol "
+                "doc)",
+                file=sys.stderr,
+            )
+            return 1
+    except Exception as e:  # noqa: BLE001 - the row stays applied on any failure
+        print(
+            f"FAILED rollback of {file.revision}: "
+            f"{type(e).__name__}: {e}\n"
+            "the ledger row is unchanged (still applied)",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 1
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f'DELETE FROM "{LEDGER_TABLE}" WHERE revision = %s',
+            (file.revision,),
+        )
+    conn.commit()
+    print(
+        f"rolled back {file.revision} ({file.filename}) — ledger row "
+        "removed; the revision is pending again and the next apply "
+        "re-runs it"
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None,
          should_cancel: Callable[[], bool] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -913,12 +1031,37 @@ def main(argv: list[str] | None = None,
         help="diff migrations/ files against the ledger",
     )
     add_db_argument(status_parser)
+    rollback_parser = subparsers.add_parser(
+        "rollback",
+        help="reverse one applied migration per ROLLBACK_SUPPORTED (#1170)",
+    )
+    add_db_argument(rollback_parser)
+    rollback_parser.add_argument(
+        "revision",
+        metavar="rev",
+        help="the applied migration to roll back (e.g. 007)",
+    )
+    rollback_parser.add_argument(
+        "--from-backup",
+        dest="from_backup",
+        metavar="PATH|bucket://NAME/KEY",
+        help="backup envelope for migrations declaring "
+             "ROLLBACK_SUPPORTED='backup' (#1170)",
+    )
+    rollback_parser.add_argument(
+        "--allow-hash-mismatch",
+        dest="allow_hash_mismatch",
+        action="store_true",
+        help="roll back even when the applied file's hash no longer "
+             "matches the ledger (edited file)",
+    )
 
     args = parser.parse_args(argv)
     handlers = {
         "ensure": cmd_ensure,
         "stamp": cmd_stamp,
         "status": cmd_status,
+        "rollback": cmd_rollback,
     }
     conn = _connect()
     try:

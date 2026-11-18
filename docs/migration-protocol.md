@@ -160,10 +160,19 @@ cover what a rollback tool would do, without a half-executed
   when, how long it took, the file hash and the error text (see
   [Applied-migrations ledger](#applied-migrations-ledger)).
 
-A `runner.py rollback REV` subcommand — restricted to additive-DDL
-migrations, refusing data rewrites — stays shelved until a production
-database with real data exists; until then the manual `downgrade()` run
-is the same operation with fewer moving parts to trust.
+`runner.py rollback REV` (#1170) reverses one applied migration per its
+declaration: modules set `ROLLBACK_SUPPORTED = "ddl"` (downgrade()
+drops what upgrade() added — additive DDL only) or `"backup"` (the
+rewrite is reversed by restoring its envelope via
+`--from-backup <path|bucket://name/key>`); undeclared migrations
+refuse. On success the ledger row is deleted — the revision is pending
+again and the next apply re-runs it; on any failure the row stays
+applied. Rollback is hash-guarded like apply, holds the same advisory
+lock, and at runtime it is admin-gated (`migrations:admin`) behind the
+#1169 routes. Backup durability (#1170): when `MIGRATION_BACKUP_BUCKET`
+is set, every envelope is also uploaded to that bucket before the
+migration's first write — fail-closed, so an upload failure aborts the
+migration rather than run unbacked.
 
 ## Applying migrations
 

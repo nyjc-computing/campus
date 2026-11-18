@@ -21,6 +21,15 @@ the affected documents keyed by collection name. `default=str` keeps
 non-JSON values (datetimes) representable — a restore writes their
 string form, which is what the models already parse.
 
+Durable backups (#1170): when `MIGRATION_BACKUP_BUCKET` is set, the
+envelope is ALSO uploaded to that object bucket under
+`migrations/<revision>/<utc-timestamp>/<name>` — fail-closed, because
+a backup that never reached durable storage is not a backup: an upload
+failure raises, aborting the migration before its first write.
+`download_backup` fetches an envelope back from a
+`bucket://<name>/<key>` URI for `restore` (and
+`runner.py rollback REV --from-backup` accepts the URI directly).
+
 Restore from the same context a migration runs in (storage secrets
 resolve):
 
@@ -45,6 +54,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BACKUP_FORMAT = "campus-migration-backup/1"
+
+# Object bucket for durable backup envelopes (#1170): unset (dev) keeps
+# the local-file-only behavior; set (production runs) every envelope is
+# uploaded before the migration's first write.
+MIGRATION_BACKUP_BUCKET_ENVVAR = "MIGRATION_BACKUP_BUCKET"
 
 
 def _get_user() -> str | None:
@@ -78,7 +92,52 @@ def write_backup(
     Path(path).write_text(
         json.dumps(envelope, indent=2, default=str), encoding="utf-8"
     )
+    uploaded = upload_backup(path, revision)
+    if uploaded is not None:
+        print(f"backup uploaded to bucket: {uploaded}", flush=True)
     return sum(len(docs) for docs in collections.values())
+
+
+def upload_backup(path: str | Path, revision: str) -> str | None:
+    """Upload a backup envelope to the configured object bucket (#1170).
+
+    Returns the bucket key, or None when MIGRATION_BACKUP_BUCKET is
+    unset (local-file-only runs). Fail-closed: any storage failure
+    raises — backup-before-write is only as good as the backup's
+    durability, so a failed upload must abort the migration before its
+    first write.
+    """
+    from campus.common import env
+
+    bucket_name = env.get(MIGRATION_BACKUP_BUCKET_ENVVAR, "")
+    if not bucket_name:
+        return None
+    from campus.storage import get_bucket
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    key = f"migrations/{revision}/{stamp}/{Path(path).name}"
+    get_bucket(bucket_name).put(key, Path(path).read_bytes())
+    return key
+
+
+def download_backup(uri: str, dest: str | Path) -> Path:
+    """Fetch a backup envelope from a bucket://<name>/<key> URI (#1170).
+
+    Writes the envelope bytes to dest and returns its Path. Raises
+    ValueError for anything that is not a bucket URI (a bare path is
+    not an error here — callers route on the scheme).
+    """
+    prefix = "bucket://"
+    if not uri.startswith(prefix):
+        raise ValueError(f"not a bucket URI: {uri!r} (expected bucket://<name>/<key>)")
+    bucket, _, key = uri[len(prefix):].partition("/")
+    if not bucket or not key:
+        raise ValueError(f"malformed bucket URI: {uri!r}")
+    from campus.storage import get_bucket
+
+    dest_path = Path(dest)
+    dest_path.write_bytes(get_bucket(bucket).get(key))
+    return dest_path
 
 
 def read_backup(path: str | Path) -> dict:
