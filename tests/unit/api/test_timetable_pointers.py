@@ -124,6 +124,32 @@ class TestTimetablePointerTrail(unittest.TestCase):
         self.assertEqual(self.timetables.get_current(), self.tt_a)
         self.assertEqual(self.timetables.get_next()["timetable_id"], self.tt_b)
 
+    def test_equal_effective_from_resolves_in_append_order(self):
+        """Two trail rows sharing an effective_from stamp resolve in
+        append order: the row appended last is current (#1174).
+
+        Back-to-back flips share a stamp whenever they land in one
+        clock tick (Windows datetime.now() granularity is ~1 ms;
+        MongoDB keeps ms precision), and the latest flip is the latest
+        decision — the stale row must not win the tie.
+        """
+        from campus.api.resources.timetable import (
+            timetable_effective_collection,
+        )
+
+        stamp = utc_time.to_rfc3339(utc_time.now())
+        for target in (self.tt_a, self.tt_b):
+            timetable_effective_collection.insert_one({
+                "timetable_id": str(target),
+                "effective_from": stamp,
+                "actor_id": self.admin,
+                "created_at": stamp,
+                "superseded_by": None,
+                "cancelled_at": None,
+                "cancelled_by": None,
+            })
+        self.assertEqual(self.timetables.get_current(), self.tt_b)
+
     def test_unknown_timetable_pointer_rejected(self):
         with self.assertRaises(api_errors.NotFoundError):
             self.timetables.flip_current(
