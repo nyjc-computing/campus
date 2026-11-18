@@ -106,6 +106,7 @@ Test files use the standard library `unittest.TestCase` framework. No pytest dep
 | [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md) | Setup and navigation |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Development workflow and branching |
 | [docs/environment-access-policy.md](docs/environment-access-policy.md) | Environment, access, and log-scrubbing policy |
+| [docs/migration-protocol.md](docs/migration-protocol.md) | Migrations: when one is needed, the ledger, and the production ops loop (admin-UI first, grants, boot gate) |
 | [docs/STYLE-GUIDE.md](docs/STYLE-GUIDE.md) | Code standards and import patterns |
 | [docs/TESTING-GUIDE.md](docs/TESTING-GUIDE.md) | Testing strategies and how to run tests |
 | [docs/development-guidelines.md](docs/development-guidelines.md) | Architecture patterns and gotchas |

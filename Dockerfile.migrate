@@ -1,0 +1,15 @@
+# Break-glass migration job image (campus-deploy#4, prod-migration-ops
+# epic campus#1172). The campus-migrate Railway service builds THIS
+# Dockerfile (builder = Dockerfile, path = Dockerfile.migrate): railpack
+# ignores start commands (#1131), so the job entrypoint must be the
+# image CMD. The service's deploy triggers are paused — the job runs
+# only when scripts/prod_migrate.sh (campus-deploy) triggers it
+# explicitly, with MIGRATE_JOB_MODE selecting plan|apply at trigger
+# time. Entrypoint contract: migrations/prod_job.py.
+FROM python:3.13-slim
+
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir .
+
+CMD ["python", "-m", "migrations.prod_job"]
