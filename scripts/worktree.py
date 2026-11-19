@@ -119,8 +119,11 @@ def bootstrap_venv(wt_root: Path, main_root_path: Path) -> None:
     run([str(main_py), "-m", "venv", str(wt_root / VENV_REL)])
 
     freeze = run([str(main_py), "-m", "pip", "freeze", "--exclude-editable"]).stdout
+    # Third-party pins only: every campus-family distribution resolves
+    # through poetry (the sync below) and none of them exist on any index,
+    # so freeze lines for them would make the pip install fail outright.
     keep = [line for line in freeze.splitlines()
-            if line and not re.match(r"^(pip|setuptools|wheel|campus)", line,
+            if line and not re.match(r"^(pip|setuptools|wheel|campus[-_a-zA-Z0-9]*|flask-campus)", line,
                                      re.IGNORECASE)]
     freeze_file = wt_root / "requirements-freeze.txt"
     freeze_file.write_text("\n".join(keep) + "\n", encoding="utf-8")
