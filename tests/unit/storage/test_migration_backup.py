@@ -11,13 +11,19 @@ before test mode is set).
 import contextlib
 import io
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from migrations._backup import read_backup, restore, write_backup
+from migrations._backup import (
+    download_backup,
+    read_backup,
+    restore,
+    write_backup,
+)
 
 
 class FakeCollection:
@@ -202,6 +208,84 @@ class TestMain(BackupTestCase):
         exit_code, _, stderr = self._run(["restore", str(path)])
         self.assertEqual(exit_code, 1)
         self.assertIn("error:", stderr)
+
+
+class TestUploadBackup(BackupTestCase):
+    """Bucket upload (#1170): MIGRATION_BACKUP_BUCKET gates it; upload
+    failure raises so the migration aborts before its first write."""
+
+    def test_no_bucket_configured_skips_upload(self):
+        # env var unset in tests: write_backup must not touch storage
+        # at all (no bucket import beyond the env read)
+        with patch("campus.storage.get_bucket") as get_bucket:
+            count = write_backup(
+                self._path(), "005", "005_x.py", {"tokens": [_doc("t1")]})
+        self.assertEqual(count, 1)
+        get_bucket.assert_not_called()
+
+    def test_uploads_envelope_when_bucket_configured(self):
+        uploaded = {}
+
+        class FakeBucket:
+            def put(self, key, content):
+                uploaded["key"] = key
+                uploaded["content"] = content
+
+        with patch.dict(os.environ, {"MIGRATION_BACKUP_BUCKET": "campus-backups"}), \
+                patch("campus.storage.get_bucket",
+                      return_value=FakeBucket()):
+            write_backup(
+                self._path(), "005", "005_x.py",
+                {"tokens": [_doc("t1")]})
+        self.assertTrue(uploaded["key"].startswith("migrations/005/"))
+        self.assertTrue(uploaded["key"].endswith("backup.json"))
+        self.assertIn(b"campus-migration-backup/1", uploaded["content"])
+
+    def test_upload_failure_aborts_write_backup(self):
+        class FailingBucket:
+            def put(self, key, content):
+                raise OSError("bucket unreachable")
+
+        with patch.dict(os.environ, {"MIGRATION_BACKUP_BUCKET": "campus-backups"}), \
+                patch("campus.storage.get_bucket",
+                      return_value=FailingBucket()), \
+                self.assertRaises(OSError):
+            write_backup(
+                self._path(), "005", "005_x.py",
+                {"tokens": [_doc("t1")]})
+
+
+class TestDownloadBackup(BackupTestCase):
+    """bucket:// URI fetch (#1170): scheme validation + round trip."""
+
+    def test_rejects_non_bucket_uri(self):
+        with self.assertRaises(ValueError):
+            download_backup("backup.json", self._path("d.json"))
+
+    def test_rejects_malformed_uri(self):
+        with self.assertRaises(ValueError):
+            download_backup("bucket://no-key-part", self._path("d.json"))
+
+    def test_fetches_envelope_from_bucket(self):
+        envelope = {
+            "format": "campus-migration-backup/1",
+            "collections": {"tokens": [_doc("t1")]},
+        }
+
+        class FakeBucket:
+            def get(self, key):
+                self.key = key
+                return json.dumps(envelope).encode()
+
+        bucket = FakeBucket()
+        dest = self._path("d.json")
+        with patch("campus.storage.get_bucket", return_value=bucket):
+            download_backup(
+                "bucket://campus-backups/migrations/005/x/backup.json",
+                dest)
+        self.assertEqual(bucket.key, "migrations/005/x/backup.json")
+        self.assertEqual(read_backup(dest)["format"],
+                         "campus-migration-backup/1")
 
 
 if __name__ == "__main__":

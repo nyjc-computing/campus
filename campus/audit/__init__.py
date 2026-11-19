@@ -219,6 +219,47 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     journeys_blueprint.before_request(_authenticate_audit_api_key)
     bp.register_blueprint(journeys_blueprint)
 
+    # Migration management routes (#1169): the campus-admin Migrations
+    # view drives plan/apply/abort/rollback per service. Shared
+    # blueprint from migrations/routes.py behind the same API-key
+    # authentication as the rest of the versioned API. The grant store
+    # lives only in campus.auth's database, so the gate is the #1168
+    # service leg (GET /grants/check with THIS deployment's client
+    # credentials, allowlisted by AUTH_GRANT_CHECK_CLIENT_IDS); the
+    # capability leg fails closed today (audit API keys are not campus
+    # bearers — no user principal, no token scopes). Mutations land an
+    # audit trace naming the action and the calling key.
+    import migrations.routes as migration_routes
+
+    def _migrations_emit(event: str, data: dict) -> None:
+        from campus.common import schema
+
+        from .helpers.audit_events import (
+            FlaskResponseContext,
+            _extract_request_context,
+            emit_audit_event,
+        )
+
+        emit_audit_event(
+            data={"event_type": event, **data},
+            api_key_id=getattr(flask.g, "api_key_id", None),
+            parent_span_id=None,
+            started_at=schema.DateTime.utcnow(),
+            duration_ms=0.0,
+            request_context=_extract_request_context(flask.request),
+            response_context=FlaskResponseContext(
+                status_code=200, headers={}, body={},
+            ),
+        )
+
+    migrations_blueprint = migration_routes.create_blueprint(
+        service_db="audit",
+        gate=migration_routes.make_grant_check_gate("audit"),
+        emit=_migrations_emit,
+    )
+    migrations_blueprint.before_request(_authenticate_audit_api_key)
+    bp.register_blueprint(migrations_blueprint)
+
     # Register public health routes WITHOUT authentication
     import campus.flask_campus as flask_campus
     @bp.get("/health")

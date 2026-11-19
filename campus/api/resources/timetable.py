@@ -481,7 +481,13 @@ class TimetablesResource:
             if effective_at is not None and effective_at <= at_dt:
                 past.append((effective_at, row))
         if past:
-            _, latest = max(past, key=lambda pair: pair[0])
+            # Equal effective_from stamps resolve in append order: two
+            # flips can land in one clock tick (Windows datetime.now()
+            # granularity is ~1 ms, so back-to-back flips share a stamp;
+            # MongoDB keeps ms precision), and for an append-only trail
+            # the row appended last is the latest decision (#1174).
+            # max() keeps the first maximal element, so scan reversed.
+            _, latest = max(reversed(past), key=lambda pair: pair[0])
             return schema.CampusID(latest["timetable_id"])
         return self._legacy_pointer("current")
 

@@ -41,8 +41,14 @@ _GRANTEE_TYPES = ("client", "user")
 # data, write creates/updates timetable versions, admin governs the
 # vocabulary's grants (the timetable upload endpoint gates on it).
 # mod rows are rejected at the grant routes as inert.
+# migrations (#1168): the campus-admin Migrations view and the #1169
+# per-service migration routes — instance-scoped by service DB, so
+# resource_id names the service ("auth", "api" or "audit"); the grant
+# routes enforce the per-service subsets shape (mod inert, no
+# vocabulary-level rows).
 _RESOURCE_TYPES = (
     VAULT, "clients", "users", "credentials", "sessions", "timetable",
+    "migrations",
 )
 _LEVELS = ("read", "mod", "write", "admin")
 

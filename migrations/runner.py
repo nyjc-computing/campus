@@ -31,6 +31,8 @@ service):
     python migrations/runner.py apply --up-to 008       # run pending migrations up to 008
     python migrations/runner.py apply --allow-hash-mismatch
         # run anyway after the hash guard flagged an edited, applied file
+    python migrations/runner.py rollback 007                 # reverse one applied migration
+    python migrations/runner.py rollback 005 --from-backup bucket://campus-backups/migrations/005/.../backup.json
 
 Append `--db api` / `--db audit` to any command to scope it to that
 service's migrations and ledger (default: auth — every pre-#1104
@@ -51,6 +53,15 @@ migration manages its own transactionality (per the protocol doc every
 migration must be idempotent); the runner guarantees the ledger reflects
 exactly what completed — the row is written only after upgrade()
 returns, and a failure row is written before the runner stops.
+
+Apply exclusion (#1166): the run takes a session-level Postgres advisory
+lock on the ledger connection for its whole duration, so concurrent
+applies (a management-route apply racing the break-glass job, or two
+operator shells) cannot interleave — a second apply polls briefly, then
+refuses without writing anything. Programmatic callers may pass a
+`should_cancel` predicate to main(); it is checked between migrations
+(one migration = the atomic unit, so abort never interrupts a running
+one), cancelled revisions stay pending, and the next apply resumes.
 Migrations guarded by `@block_env(PRODUCTION)` follow the documented
 per-process override for deliberate production runs:
 `ENV=development python migrations/runner.py apply`.
@@ -93,6 +104,9 @@ import hashlib
 import logging
 import re
 import sys
+import tempfile
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -153,6 +167,15 @@ MISSING_FILE = "missing-file"
 # (retry) or pending; applied and historical files are skipped.
 APPLY_RUNNABLE = (APPLIED, FAILED, HISTORICAL)
 
+# Session-level advisory lock guarding apply (#1166): one fixed key
+# agreed by every context, so a management-route apply, the break-glass
+# job and a manual shell run cannot interleave on the same service DB.
+# ("migr" as a big-endian byte value; arbitrary but stable.)
+ADVISORY_LOCK_KEY = 0x6D696772
+
+# How long apply polls for the advisory lock before refusing (#1166).
+APPLY_LOCK_WAIT_SECONDS = 30.0
+
 # #747: production-style environments — where startup init_from_model
 # is blocked, so only the runner can have brought the schema up to
 # date — log a startup WARNING when migrations are outstanding.
@@ -161,6 +184,10 @@ APPLY_RUNNABLE = (APPLIED, FAILED, HISTORICAL)
 # importable without the campus package (campus.common is imported
 # lazily in warn_if_pending).
 PENDING_WARN_ENVS = ("production",)
+
+# #1167: fail-closed production boot gate — set on production app
+# services only; unset on dev/test, where boot behavior is unchanged.
+MIGRATIONS_ENFORCED_ENVVAR = "MIGRATIONS_ENFORCED"
 
 
 @dataclass(frozen=True)
@@ -400,6 +427,42 @@ def ensure(conn) -> None:
     conn.commit()
 
 
+def _acquire_apply_lock(conn,
+                        wait_seconds: float | None = None) -> bool:
+    """Take the session-level advisory lock guarding apply (#1166).
+
+    Polls pg_try_advisory_lock on the ledger connection for up to
+    wait_seconds (APPLY_LOCK_WAIT_SECONDS by default), then gives up
+    WITHOUT writing anything: a held lock means another apply is
+    mid-flight (management route, break-glass job or another shell)
+    and the run must not interleave with it. The lock lives for the
+    connection's lifetime — released by _release_apply_lock, or
+    implicitly when the connection closes.
+    """
+    if wait_seconds is None:
+        wait_seconds = APPLY_LOCK_WAIT_SECONDS
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_lock(%s)",
+                           (ADVISORY_LOCK_KEY,))
+            row = cursor.fetchone()
+        conn.commit()
+        held = bool(row and row[0])
+        if held:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.5)
+
+
+def _release_apply_lock(conn) -> None:
+    """Release the apply advisory lock; the session close also would."""
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT pg_advisory_unlock(%s)", (ADVISORY_LOCK_KEY,))
+    conn.commit()
+
+
 def _upsert_row(conn, file: MigrationFile, status: str,
                 error: str | None = None,
                 duration_ms: int | None = None) -> None:
@@ -606,6 +669,43 @@ def warn_if_pending(env_name: str | None = None,
         return []
 
 
+def boot_gate() -> list[str]:
+    """Startup pending-check; refuses to boot when enforced (#1167).
+
+    main.create_app calls this instead of warn_if_pending() directly.
+    The #747 warning behavior is unchanged: production-style boots log
+    one WARNING naming outstanding revisions targeting this service's
+    DB; dev/test boots return before touching the database. When
+    MIGRATIONS_ENFORCED is set (production app services) AND the
+    outstanding list is non-empty, raise RuntimeError naming them: the
+    boot fails, the healthcheck never passes, and Railway keeps the
+    previous deployment live — an out-of-order release merge
+    self-heals once the pending migrations are applied and the service
+    is redeployed. The gate never runs anything (apps never auto-run
+    migrations), and ledger failures stay fail-open via
+    warn_if_pending: an unreachable ledger can warn, never block boot
+    on its own. With the var unset (dev/test) the raise is unreachable.
+
+    Returns the outstanding revisions ([] outside production-style
+    envs, when clean, or when the ledger is unreachable).
+    """
+    outstanding = warn_if_pending()
+    if not outstanding:
+        return outstanding
+    from campus.common import env
+    if not env.get(MIGRATIONS_ENFORCED_ENVVAR, ""):
+        return outstanding
+    raise RuntimeError(
+        f"{len(outstanding)} pending migration(s) targeting this "
+        f"service DB ({', '.join(outstanding)}) and "
+        f"{MIGRATIONS_ENFORCED_ENVVAR} is set — refusing to boot over "
+        "out-of-date schema (#1167): apply the pending migrations "
+        "(campus-admin Migrations view, or the break-glass job) and "
+        "redeploy; unsetting the var is a superadmin break-glass "
+        "action, not a fix"
+    )
+
+
 def cmd_ensure(args, conn) -> int:
     ensure(conn)
     print(f"ledger table {LEDGER_TABLE!r} ready "
@@ -656,10 +756,29 @@ def cmd_status(args, conn) -> int:
     return 0
 
 
-def cmd_apply(args, conn) -> int:
+def cmd_apply(args, conn,
+              should_cancel: Callable[[], bool] | None = None) -> int:
     all_files = discover_migration_files()
     files = filter_files_by_db(all_files, args.db)
     ensure(conn)
+    if not _acquire_apply_lock(conn):
+        print(
+            "error: another migration apply holds the advisory lock "
+            f"(waited {APPLY_LOCK_WAIT_SECONDS:.0f}s) — a run is already "
+            "in flight (management route, break-glass job or another "
+            "shell); nothing was written — retry once it finishes",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        return _apply_locked(args, conn, all_files, files, should_cancel)
+    finally:
+        _release_apply_lock(conn)
+
+
+def _apply_locked(args, conn, all_files, files,
+                  should_cancel: Callable[[], bool] | None = None) -> int:
+    """The apply loop proper; the caller holds the advisory lock (#1166)."""
     rows = _fetch_ledger_rows(conn)
 
     mismatches = hash_mismatches(files, rows)
@@ -692,8 +811,16 @@ def cmd_apply(args, conn) -> int:
         print("up to date: nothing to apply")
         return 0
 
-    import time
     for index, file in enumerate(targets):
+        if should_cancel is not None and should_cancel():
+            print(
+                f"cancelled: {index} of {len(targets)} applied, "
+                f"{len(targets) - index} left pending — ledger unchanged; "
+                "re-run apply to resume",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
         print(f"applying {file.revision} ({file.filename})...", flush=True)
         started = time.perf_counter()
         try:
@@ -721,7 +848,123 @@ def cmd_apply(args, conn) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def cmd_rollback(args, conn) -> int:
+    """Reverse one applied migration per its ROLLBACK_SUPPORTED decl.
+
+    'ddl' calls the module's downgrade() (additive-DDL reversals);
+    'backup' restores the envelope given via --from-backup (a local
+    path or a bucket://<name>/<key> URI, #1170). Undeclared migrations
+    refuse. On success the ledger row is DELETED — the revision is
+    pending again and the next apply re-runs it; rollback history
+    lives in this output and the doc ledger, not a ledger status. On
+    any failure the row stays applied. Hash-guarded like apply, and
+    holding the same advisory lock: rollback is a schema mutation and
+    must not interleave with a concurrent apply.
+    """
+    all_files = discover_migration_files()
+    file = resolve_scoped_revision(args.revision, all_files, args.db)
+    if not _acquire_apply_lock(conn):
+        print(
+            "error: another migration run holds the advisory lock "
+            f"(waited {APPLY_LOCK_WAIT_SECONDS:.0f}s) — nothing was "
+            "written; retry once the running apply finishes",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        return _rollback_locked(args, conn, all_files, file)
+    finally:
+        _release_apply_lock(conn)
+
+
+def _rollback_locked(args, conn, all_files, file) -> int:
+    """The rollback proper; the caller holds the advisory lock (#1166)."""
+    rows = _fetch_ledger_rows(conn)
+    row = rows.get(file.revision)
+    if not row or row.get("status") != APPLIED:
+        print(
+            f"error: {file.revision} is not recorded applied — "
+            "nothing to roll back",
+            file=sys.stderr,
+        )
+        return 1
+    current = _file_hash(MIGRATIONS_DIR / file.filename)
+    stored = row.get("file_hash")
+    if (stored and current is not None and current != stored
+            and not args.allow_hash_mismatch):
+        print(
+            f"error: hash guard: {file.filename} changed since it was "
+            "applied — refusing to roll back with different code than "
+            "the upgrade ran (fix the file, or pass "
+            "--allow-hash-mismatch to proceed anyway)",
+            file=sys.stderr,
+        )
+        return 1
+    module = load_migration(file)
+    declared = getattr(module, "ROLLBACK_SUPPORTED", None)
+    try:
+        if declared == "ddl":
+            downgrade = getattr(module, "downgrade", None)
+            if not callable(downgrade):
+                print(
+                    f"error: {file.filename} declares "
+                    "ROLLBACK_SUPPORTED='ddl' but defines no downgrade()",
+                    file=sys.stderr,
+                )
+                return 1
+            downgrade()
+        elif declared == "backup":
+            if not args.from_backup:
+                print(
+                    f"error: {file.filename} rolls back via its backup "
+                    "envelope — pass --from-backup <path> (or "
+                    "bucket://<bucket>/<key>)",
+                    file=sys.stderr,
+                )
+                return 1
+            from migrations import _backup
+
+            if args.from_backup.startswith("bucket://"):
+                dest = Path(tempfile.mkdtemp(prefix="campus-rollback-"))
+                envelope = _backup.download_backup(
+                    args.from_backup, dest / "envelope.json")
+            else:
+                envelope = args.from_backup
+            _backup.restore(envelope)
+        else:
+            print(
+                f"error: {file.filename} declares no ROLLBACK_SUPPORTED "
+                "— it cannot be rolled back automatically (manual "
+                "downgrade() or backup restore only; see the protocol "
+                "doc)",
+                file=sys.stderr,
+            )
+            return 1
+    except Exception as e:  # noqa: BLE001 - the row stays applied on any failure
+        print(
+            f"FAILED rollback of {file.revision}: "
+            f"{type(e).__name__}: {e}\n"
+            "the ledger row is unchanged (still applied)",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 1
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f'DELETE FROM "{LEDGER_TABLE}" WHERE revision = %s',
+            (file.revision,),
+        )
+    conn.commit()
+    print(
+        f"rolled back {file.revision} ({file.filename}) — ledger row "
+        "removed; the revision is pending again and the next apply "
+        "re-runs it"
+    )
+    return 0
+
+
+def main(argv: list[str] | None = None,
+         should_cancel: Callable[[], bool] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="migrations/runner.py",
         description="Applied-migrations ledger and migration runner (#27).",
@@ -788,16 +1031,45 @@ def main(argv: list[str] | None = None) -> int:
         help="diff migrations/ files against the ledger",
     )
     add_db_argument(status_parser)
+    rollback_parser = subparsers.add_parser(
+        "rollback",
+        help="reverse one applied migration per ROLLBACK_SUPPORTED (#1170)",
+    )
+    add_db_argument(rollback_parser)
+    rollback_parser.add_argument(
+        "revision",
+        metavar="rev",
+        help="the applied migration to roll back (e.g. 007)",
+    )
+    rollback_parser.add_argument(
+        "--from-backup",
+        dest="from_backup",
+        metavar="PATH|bucket://NAME/KEY",
+        help="backup envelope for migrations declaring "
+             "ROLLBACK_SUPPORTED='backup' (#1170)",
+    )
+    rollback_parser.add_argument(
+        "--allow-hash-mismatch",
+        dest="allow_hash_mismatch",
+        action="store_true",
+        help="roll back even when the applied file's hash no longer "
+             "matches the ledger (edited file)",
+    )
 
     args = parser.parse_args(argv)
     handlers = {
         "ensure": cmd_ensure,
         "stamp": cmd_stamp,
         "status": cmd_status,
-        "apply": cmd_apply,
+        "rollback": cmd_rollback,
     }
     conn = _connect()
     try:
+        if args.command == "apply":
+            # apply alone takes the cancel hook (#1166); the other
+            # commands are single-statement ledger operations with
+            # nothing to abort.
+            return cmd_apply(args, conn, should_cancel)
         return handlers[args.command](args, conn)
     except ValueError as e:
         # Usage errors: unknown revision, malformed migrations/ directory

@@ -160,12 +160,40 @@ cover what a rollback tool would do, without a half-executed
   when, how long it took, the file hash and the error text (see
   [Applied-migrations ledger](#applied-migrations-ledger)).
 
-A `runner.py rollback REV` subcommand — restricted to additive-DDL
-migrations, refusing data rewrites — stays shelved until a production
-database with real data exists; until then the manual `downgrade()` run
-is the same operation with fewer moving parts to trust.
+`runner.py rollback REV` (#1170) reverses one applied migration per its
+declaration: modules set `ROLLBACK_SUPPORTED = "ddl"` (downgrade()
+drops what upgrade() added — additive DDL only) or `"backup"` (the
+rewrite is reversed by restoring its envelope via
+`--from-backup <path|bucket://name/key>`); undeclared migrations
+refuse. On success the ledger row is deleted — the revision is pending
+again and the next apply re-runs it; on any failure the row stays
+applied. Rollback is hash-guarded like apply, holds the same advisory
+lock, and at runtime it is admin-gated (`migrations:admin`) behind the
+#1169 routes. Backup durability (#1170): when `MIGRATION_BACKUP_BUCKET`
+is set, every envelope is also uploaded to that bucket before the
+migration's first write — fail-closed, so an upload failure aborts the
+migration rather than run unbacked.
 
 ## Applying migrations
+
+`apply` is exclusive per service database (#1166): the runner holds a
+session-level Postgres advisory lock for the whole run, so a
+management-route apply (#1169), the break-glass job and a manual shell
+run cannot interleave — a second apply polls briefly, then refuses
+without writing anything. Programmatic callers may pass a
+`should_cancel` predicate to `runner.main()`; it is checked between
+migrations (one migration is the atomic unit, so abort never interrupts
+a running one), cancelled revisions simply stay pending, and the next
+apply resumes them in order.
+
+Boot gate (#1167): production app services may set `MIGRATIONS_ENFORCED`;
+startup then refuses (RuntimeError from `runner.boot_gate()`) while
+outstanding migrations remain, so a release merged before its migrations
+cannot take traffic — the failed deployment never passes its
+healthcheck, the previous deployment keeps serving, and the operator
+applies the pending migrations (admin UI or break-glass job) and
+redeploys. The gate never runs migrations; an unreachable ledger stays
+fail-open (warn only).
 
 ### Development (Railway dev)
 
@@ -179,46 +207,84 @@ Manual runs are still needed on dev when startup init cannot produce the
 change (e.g. destructive DDL or a Mongo backfill) — follow the manual
 runbook below.
 
-### Staging / production-style environments (manual runbook)
+### Production-style environments (manual runs, admin-UI first)
 
-These environments block `init_from_model`, so every migration is a
-manual, per-service run. Since phase 4 (#747, 2026-10-03) the app
-surfaces skipped runs itself: `main.create_app` logs one WARNING at
-startup naming every revision the ledger does not record as applied or
-historical (pending, failed, or a ledger row whose file is gone). The
-check is fail-open — an unreachable ledger never blocks boot, and
-non-production boots are unchanged (dev self-heals schema via
-`init_from_model`) — and it never runs anything: migrations stay
-manual, per this runbook:
+Production blocks `init_from_model`, so every migration is a
+deliberate, per-service run by a human holding the right grant. Since
+phase 4 (#747, 2026-10-03) the app surfaces skipped runs itself:
+`main.create_app` logs one WARNING at startup naming every revision the
+ledger does not record as applied or historical. With the fail-closed
+boot gate (#1167), a deployment whose `MIGRATIONS_ENFORCED` var is set
+refuses to boot over outstanding migrations entirely — the healthcheck
+never passes, Railway keeps the previous deployment live, and an
+out-of-order release merge therefore cannot take traffic over stale
+schema (it self-heals: apply the migrations, redeploy).
 
-1. `railway ssh -s campus.<svc>` for the service whose DB the
-   migration targets (its `TARGET_DB`; add `-e <environment>` as
-   needed). Service SSH must be enabled in the Railway dashboard.
-2. The repo is at `/app`; credentials resolve from the service's
-   environment variables.
-3. Run the migration:
-   `python migrations/runner.py --db <svc> apply` runs every pending
-   migration targeting that service's DB in revision order and records
-   each outcome in that service's ledger; scope a deliberate partial
-   run with `--up-to <rev>`. The `--db` scope matters for revisions
-   that do not target auth: without it the runner silently operates on
-   the wrong DB's ledger (011/calendar's docstring once said "run in
-   the campus.auth context" and the 2026-11-16 prod standup created
-   the table in the auth DB — #1104).
-   For data backfills, run the migration's own dry-run first
-   (`python migrations/NNN_slug.py`, then `--apply` logic is what
-   `runner.py apply` invokes).
-   Some migrations are guarded by `@block_env(PRODUCTION)`; where a guard
-   must be bypassed for a deliberate production run, use a per-process
-   override (`ENV=development python migrations/runner.py --db <svc> apply`) and say
-   so in the migration's docstring.
-4. Verify by exercising the affected flow, then check the runner already
-   recorded the run (`python migrations/runner.py status`); update the
-   mirror table in the same PR that ships the migration.
+**Who may run migrations.** Admins designated in the access-grant store
+(#1168): a `migrations:write` grant for a service DB may apply and
+abort that service's migrations; `migrations:admin` may roll back.
+Rows are per-service (`resource_id` names auth, api or audit) —
+authority over one service's migration surface never covers the fleet.
+Grant seeding and administration stay operator/superadmin-only; this
+is the ratified relaxation of the superadmin-only production rule for
+this surface (see
+[environment-access-policy.md](environment-access-policy.md)).
 
-Alternatives when SSH is unavailable: `railway run -s campus.auth` locally
-(needs the DB reachable), or a temporary `ENV` flip + redeploy (mutates
-running-service config twice — last resort).
+**The loop (primary path — the campus-admin Migrations view):**
+
+1. **Write** the migration on a task branch → PR to `weekly`; dev
+   validates it (self-heal, or the dev manual path below when startup
+   init cannot produce the change). Every prod-bound migration must be
+   LIVE-SAFE against the currently deployed `main`: additive /
+   expand-first, runnable while the previous release serves;
+   destructive/contract steps go in a separate later migration that
+   gates on the new code being live. Long backfills batch and may be
+   staged across windows with `--up-to`. Data-touching migrations
+   follow the dry-run-by-default convention, declare their backup
+   scope, and declare `ROLLBACK_SUPPORTED` (#1170) — or explicitly
+   cannot be rolled back.
+2. **Plan and approve**: after the `weekly` PR merges, a
+   grants-bearing admin opens the Migrations view and reviews the
+   pending delta — revisions, file hashes, declared impact/backup
+   scope. The plan delta is the approval artifact. Time the apply for
+   the lowest-usage window (end of day).
+3. **Apply**: trigger from the view. Backups upload to the object
+   bucket (`MIGRATION_BACKUP_BUCKET`) before any data write —
+   fail-closed (#1170); the advisory lock (#1166) serializes runs; a
+   failure records the ledger `failed` row and stops; abort takes
+   effect between migrations. Verify: the ledger (view or
+   `runner.py status`) shows applied, and the next app boots log no
+   pending WARNING.
+4. **Merge** `weekly` → `main` once pending migrations are applied
+   (the orderly path: migrate → merge → green deploy). Update the
+   doc ledger mirror table in the PR that shipped the migration.
+5. **Recover** when needed: abort from the view (takes effect at the
+   migration boundary); rollback per the migration's declared support
+   — `ddl` via `downgrade()`, `backup` via the envelope restore
+   (`--from-backup`, accepting `bucket://` URIs), both gated at
+   `migrations:admin`.
+
+**Break-glass paths** (when the admin surface is unavailable — e.g. a
+service cannot boot far enough to serve its own routes):
+
+- The dormant `campus-migrate` job service in the production
+  environment (recipe: campus-deploy#4): explicit trigger only, builds
+  from `weekly` (migrations run BEFORE the release merge), plan/apply
+  modes selected at trigger time; `scripts/prod_migrate.sh plan|apply`
+  wraps the trigger-verify-poll loop.
+- The direct runner: `railway ssh -s campus.<svc> -e production`; the
+  repo is at `/app`; credentials resolve from the service's
+  environment variables; `python migrations/runner.py --db <svc>
+  status|apply`. The `--db` scope matters (#1104): without it the
+  runner silently operates on the wrong DB's ledger (011/calendar's
+  docstring once said "run in the campus.auth context" and the
+  2026-11-16 prod standup created the table in the auth DB). For data
+  backfills, run the migration's own dry-run first. Note `railway
+  ssh` needs port 22 egress AND account-token auth — blocked on the
+  office network (work from any network where SSH egress is open).
+- Emergency-only: a temporary `ENV` flip + redeploy (mutates
+  running-service config twice — reserved for superadmin recovery,
+  never routine).
 
 > **DB reachability.** The DB hosts sit on Railway's restricted internal
 > network and are not directly reachable from dev machines — including

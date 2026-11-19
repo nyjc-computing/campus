@@ -1,9 +1,10 @@
-"""Test the migration runner (#27 phases 1-3, #744 #745 #746).
+"""Test the migration runner (#27 phases 1-3, #744 #745 #746, #1166).
 
 Covers the pure logic (file discovery, revision resolution, ledger
 diffing, apply targeting, hash-guard scanning), the stamp/ensure DB
 paths via a fake connection, and the apply loop with real (temp-dir)
-migration files — no live database.
+migration files — no live database. #1166 adds the apply advisory-lock
+exclusion and the between-migration cancel hook, tested the same way.
 
 Note: this file lives under storage/ rather than a migrations/ test
 package because a tests/unit/migrations package would shadow the
@@ -651,8 +652,11 @@ class TestApplyHarnessMixin:
         import io
 
         from migrations.runner import main
+        if fetchone_results is None:
+            # the apply advisory lock (#1166) succeeds on first poll
+            fetchone_results = [(True,)]
         cursor = FakeCursor(fetchall_rows=fetchall_rows or [],
-                            fetchone_results=fetchone_results or [])
+                            fetchone_results=fetchone_results)
         conn = FakeConn(cursor)
         stdout, stderr = io.StringIO(), io.StringIO()
         with patch("migrations.runner._connect", return_value=conn), \
@@ -690,7 +694,7 @@ class TestApply(TestApplyHarnessMixin, unittest.TestCase):
         self.assertEqual([params[0] for _, params in inserts], ["001", "002"])
         self.assertEqual([params[2] for _, params in inserts],
                          ["applied", "applied"])
-        self.assertEqual(conn.commits, 3)  # ensure + one per migration row
+        self.assertEqual(conn.commits, 5)  # ensure + lock + rows + unlock
 
     def test_skips_applied_and_historical(self):
         from migrations.runner import APPLIED, HISTORICAL
@@ -1310,6 +1314,372 @@ class TestMainDbScope(TestMain):
                                          files=self._scoped_files())
         self.assertEqual(exit_code, 1)
         self.assertIn("--db api", stderr)
+
+
+class TestApplyLock(TestApplyHarnessMixin, unittest.TestCase):
+    """Advisory-lock exclusion around apply (#1166)."""
+
+    def test_lock_taken_and_released_around_the_run(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, _, _, cursor = self._run_apply([], files)
+        self.assertEqual(exit_code, 0)
+        sqls = [sql for sql, _ in cursor.executed]
+        self.assertIn("SELECT pg_try_advisory_lock", " ".join(sqls))
+        self.assertIn("SELECT pg_advisory_unlock", " ".join(sqls))
+        # the whole run sits between lock and unlock: the ledger row
+        # insert lands before the unlock statement
+        unlock_at = next(i for i, (sql, _) in enumerate(cursor.executed)
+                         if "pg_advisory_unlock" in sql)
+        insert_at = next(i for i, (sql, _) in enumerate(cursor.executed)
+                         if "INSERT INTO" in sql)
+        self.assertLess(insert_at, unlock_at)
+
+    def test_lock_refusal_writes_nothing(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations.runner.APPLY_LOCK_WAIT_SECONDS", 0.0):
+            exit_code, stdout, stderr, _, cursor = self._run_apply(
+                [], files, fetchone_results=[(False,)])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("advisory lock", stderr)
+        self.assertIn("nothing was written", stderr)
+        self.assertNotIn("applying", stdout)
+        self.assertEqual(self._inserts(cursor), [])
+
+    def test_zero_wait_refuses_after_single_attempt(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations.runner.APPLY_LOCK_WAIT_SECONDS", 0.0), \
+                patch("migrations.runner.time.sleep") as sleep:
+            exit_code, _, stderr, _, _ = self._run_apply(
+                [], files, fetchone_results=[(False,)])
+        self.assertEqual(exit_code, 1)
+        sleep.assert_not_called()
+        self.assertIn("advisory lock", stderr)
+
+    def test_lock_free_on_second_poll_applies(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations.runner.time.sleep") as sleep:
+            exit_code, stdout, _, _, _ = self._run_apply(
+                [], files, fetchone_results=[(False,), (True,)])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("applied 001", stdout)
+        sleep.assert_called_once()
+
+    def test_unlock_still_runs_when_migration_fails(self):
+        self._write_migration(
+            "001_bad.py", "():\n    raise RuntimeError('boom')\n")
+        files = self._files(("001", "001_bad.py"))
+        exit_code, _, stderr, _, cursor = self._run_apply([], files)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("FAILED 001", stderr)
+        self.assertIn("SELECT pg_advisory_unlock",
+                      " ".join(sql for sql, _ in cursor.executed))
+
+
+class TestApplyCancel(TestApplyHarnessMixin, unittest.TestCase):
+    """The should_cancel hook: checked between migrations (#1166)."""
+
+    def _run_apply_cancel(self, should_cancel, files):
+        import contextlib
+        import io
+
+        from migrations.runner import main
+        cursor = FakeCursor(fetchall_rows=[], fetchone_results=[(True,)])
+        conn = FakeConn(cursor)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch("migrations.runner._connect", return_value=conn), \
+                patch("migrations.runner.discover_migration_files",
+                      return_value=files), \
+                patch("migrations.runner.MIGRATIONS_DIR", self.dir), \
+                contextlib.redirect_stdout(stdout), \
+                contextlib.redirect_stderr(stderr):
+            exit_code = main(["apply"], should_cancel=should_cancel)
+        return exit_code, stdout.getvalue(), stderr.getvalue(), conn, cursor
+
+    def test_cancel_before_first_migration_runs_nothing(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, stderr, _, cursor = self._run_apply_cancel(
+            lambda: True, files)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("cancelled: 0 of 1 applied, 1 left pending", stderr)
+        self.assertNotIn("applying", stdout)
+        self.assertEqual(self._inserts(cursor), [])
+
+    def test_cancel_stops_between_migrations(self):
+        # 001 runs and flips the flag (marker file appears); 002 must
+        # never start — abort takes effect at the migration boundary
+        self._write_migration(
+            "001_a.py",
+            "():\n    open({!r}, 'a').write('001\\n')\n".format(
+                str(self.marker)))
+        self._write_migration(
+            "002_b.py", "():\n    raise AssertionError('must not run')\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        exit_code, stdout, stderr, _, cursor = self._run_apply_cancel(
+            lambda: self.marker.exists(), files)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("cancelled: 1 of 2 applied, 1 left pending", stderr)
+        self.assertIn("applying 001", stdout)
+        self.assertNotIn("applying 002", stdout)
+        inserts = self._inserts(cursor)
+        self.assertEqual([params[0] for _, params in inserts], ["001"])
+        self.assertEqual(inserts[0][1][2], "applied")
+
+    def test_no_cancel_hook_runs_to_completion(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, _, _, _ = self._run_apply_cancel(None, files)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("applied 1 migration(s)", stdout)
+
+
+class TestBootGate(unittest.TestCase):
+    """Fail-closed boot gate (#1167): warn always (prod-style envs),
+    raise only when MIGRATIONS_ENFORCED is set. Stubbed ledger."""
+
+    LOGGER = "migrations.runner"
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmpdir.cleanup)
+        self.dir = Path(self.tmpdir.name)
+        (self.dir / "001_a.py").write_text("", encoding="utf-8")
+        (self.dir / "002_b.py").write_text("", encoding="utf-8")
+
+    @staticmethod
+    def _ledger_row(revision, filename, status):
+        return {
+            "revision": revision,
+            "filename": filename,
+            "status": status,
+            "applied_at": datetime(2026, 10, 3),
+            "file_hash": None,
+        }
+
+    def _gate(self, rows, enforced=False, env_name="production",
+              connect=None):
+        """Run boot_gate with the env vars managed per-test."""
+        from campus.common import env
+        from migrations import runner
+        original_env = os.environ.get("ENV")
+        original_flag = os.environ.get("MIGRATIONS_ENFORCED")
+        env.set("ENV", env_name)
+        if enforced:
+            env.set("MIGRATIONS_ENFORCED", "1")
+        try:
+            with patch("migrations.runner._connect",
+                       connect or (lambda: FakeConn())), \
+                    patch("migrations.runner._fetch_ledger_rows",
+                          lambda conn: rows), \
+                    patch("migrations.runner.MIGRATIONS_DIR", self.dir):
+                return runner.boot_gate()
+        finally:
+            if original_env is None:
+                env.delete("ENV")
+            else:
+                env.set("ENV", original_env)
+            if enforced:
+                # restore only what this test set (env.delete raises on
+                # an unset var)
+                if original_flag is None:
+                    env.delete("MIGRATIONS_ENFORCED")
+                else:
+                    env.set("MIGRATIONS_ENFORCED", original_flag)
+
+    def _pending_rows(self):
+        return {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+        }
+
+    def test_not_enforced_warns_and_returns_outstanding(self):
+        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+            outstanding = self._gate(self._pending_rows())
+        self.assertEqual(outstanding, ["002"])
+        self.assertIn("002_b.py [pending]", captured.output[-1])
+
+    def test_enforced_and_pending_raises_naming_revisions(self):
+        with self.assertLogs(self.LOGGER, level="WARNING"), \
+                self.assertRaises(RuntimeError) as caught:
+            self._gate(self._pending_rows(), enforced=True)
+        message = str(caught.exception)
+        self.assertIn("002", message)
+        self.assertIn("MIGRATIONS_ENFORCED", message)
+        self.assertIn("refusing to boot", message)
+
+    def test_enforced_and_clean_boots_without_warning(self):
+        rows = {
+            "001": self._ledger_row("001", "001_a.py", "applied"),
+            "002": self._ledger_row("002", "002_b.py", "historical"),
+        }
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._gate(rows, enforced=True)
+        self.assertEqual(outstanding, [])
+
+    def test_enforced_unreachable_ledger_stays_fail_open(self):
+        def connect():
+            raise OSError("POSTGRESDB_URI unresolvable")
+
+        with self.assertNoLogs(self.LOGGER, level="WARNING"):
+            outstanding = self._gate({}, enforced=True, connect=connect)
+        self.assertEqual(outstanding, [])
+
+    def test_no_db_touch_outside_production_even_when_enforced(self):
+        def connect():
+            raise AssertionError("must not connect outside production")
+
+        outstanding = self._gate({}, enforced=True, env_name="development",
+                                 connect=connect)
+        self.assertEqual(outstanding, [])
+
+
+class TestRollback(TestApplyHarnessMixin, unittest.TestCase):
+    """rollback REV (#1170): declaration-gated reversal; the ledger row
+    is deleted on success (revision pending again) and untouched on
+    failure; hash-guarded and advisory-locked like apply."""
+
+    def _run_rollback(self, argv, files, rows, fetchone_results=None):
+        import contextlib
+        import io
+
+        from migrations.runner import main
+        if fetchone_results is None:
+            # the advisory lock succeeds on first poll
+            fetchone_results = [(True,)]
+        cursor = FakeCursor(fetchall_rows=rows,
+                            fetchone_results=fetchone_results)
+        conn = FakeConn(cursor)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with patch("migrations.runner._connect", return_value=conn), \
+                patch("migrations.runner.discover_migration_files",
+                      return_value=files), \
+                patch("migrations.runner.MIGRATIONS_DIR", self.dir), \
+                contextlib.redirect_stdout(stdout), \
+                contextlib.redirect_stderr(stderr):
+            exit_code = main(["rollback", *argv])
+        return exit_code, stdout.getvalue(), stderr.getvalue(), conn, cursor
+
+    def _write_rollback_migration(self, name, declaration, extra=""):
+        self._write_migration(name, f"():\n    pass\n{declaration}\n{extra}")
+
+    def _applied_rows(self, *files):
+        from migrations.runner import _file_hash
+        return [
+            _row(f.revision, f.filename,
+                 file_hash=_file_hash(self.dir / f.filename))
+            for f in files
+        ]
+
+    def test_ddl_rollback_runs_downgrade_and_clears_ledger_row(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'",
+            extra="def downgrade():\n"
+                  f"    open({str(self.marker)!r}, 'a').write('down\\n')\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, stdout, _, _, cursor = self._run_rollback(
+            ["001"], files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 0)
+        self.assertIn("rolled back 001", stdout)
+        self.assertIn("pending again", stdout)
+        self.assertEqual(self.marker.read_text(), "down\n")
+        deletes = [sql for sql, _ in cursor.executed
+                   if "DELETE FROM" in sql]
+        self.assertEqual(len(deletes), 1)
+        self.assertIn('_migrations"', deletes[0])
+
+    def test_undeclared_migration_refuses(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        exit_code, _, stderr, _, cursor = self._run_rollback(
+            ["001"], files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 1)
+        self.assertIn("declares no ROLLBACK_SUPPORTED", stderr)
+        self.assertFalse(
+            any("DELETE FROM" in sql for sql, _ in cursor.executed))
+
+    def test_backup_declaration_requires_from_backup(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'backup'")
+        files = self._files(("001", "001_a.py"))
+        exit_code, _, stderr, _, _ = self._run_rollback(
+            ["001"], files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 1)
+        self.assertIn("--from-backup", stderr)
+
+    def test_backup_rollback_delegates_to_restore(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'backup'")
+        files = self._files(("001", "001_a.py"))
+        with patch("migrations._backup.restore") as restore:
+            exit_code, stdout, _, _, _ = self._run_rollback(
+                ["001", "--from-backup", "envelope.json"],
+                files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 0)
+        restore.assert_called_once_with("envelope.json")
+        self.assertIn("rolled back 001", stdout)
+
+    def test_backup_rollback_accepts_bucket_uri(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'backup'")
+        files = self._files(("001", "001_a.py"))
+        envelope = self.dir / "downloaded.json"
+        with patch("migrations._backup.download_backup",
+                   return_value=envelope) as download, \
+                patch("migrations._backup.restore") as restore:
+            exit_code, _, _, _, _ = self._run_rollback(
+                ["001", "--from-backup",
+                 "bucket://campus-backups/migrations/001/x/backup.json"],
+                files, self._applied_rows(files[0]))
+        self.assertEqual(exit_code, 0)
+        (uri, _dest), _ = download.call_args
+        self.assertEqual(
+            uri, "bucket://campus-backups/migrations/001/x/backup.json")
+        restore.assert_called_once_with(envelope)
+
+    def test_not_applied_revision_refuses(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'")
+        files = self._files(("001", "001_a.py"))
+        exit_code, _, stderr, _, cursor = self._run_rollback(
+            ["001"], files, [])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("not recorded applied", stderr)
+        self.assertFalse(
+            any("DELETE FROM" in sql for sql, _ in cursor.executed))
+
+    def test_hash_mismatch_refuses_and_allows_override(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'",
+            extra="def downgrade():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        wrong = [_row("001", "001_a.py", file_hash="0" * 64)]
+        exit_code, _, stderr, _, _ = self._run_rollback(
+            ["001"], files, wrong)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("hash guard", stderr)
+        exit_code, stdout, _, _, _ = self._run_rollback(
+            ["001", "--allow-hash-mismatch"], files, wrong)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("rolled back 001", stdout)
+
+    def test_lock_refusal_writes_nothing(self):
+        self._write_rollback_migration(
+            "001_a.py", "ROLLBACK_SUPPORTED = 'ddl'",
+            extra="def downgrade():\n    pass\n")
+        files = self._files(("001", "001_a.py"))
+        # exhaust the fetchone queue: the advisory lock never asserts;
+        # zero wait keeps the poll loop to a single attempt
+        with patch("migrations.runner.APPLY_LOCK_WAIT_SECONDS", 0.0):
+            exit_code, _, stderr, _, cursor = self._run_rollback(
+                ["001"], files, self._applied_rows(files[0]),
+                fetchone_results=[])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("advisory lock", stderr)
+        self.assertFalse(
+            any("DELETE FROM" in sql for sql, _ in cursor.executed))
 
 
 if __name__ == "__main__":

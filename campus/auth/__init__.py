@@ -123,6 +123,45 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     oauth_proxy.init_app(bp)
     routes.init_app(bp)
 
+    # Migration management routes (#1169): the campus-admin Migrations
+    # view drives plan/apply/abort/rollback per service. Shared
+    # blueprint from migrations/routes.py; auth's gate is the full
+    # two-leg store check (migrations vocabulary, #1168, instance =
+    # this service), and mutations emit yapper events stamped with the
+    # acting user (the grants-routes precedent).
+    import migrations.routes as migration_routes
+
+    def _migrations_gate(level: str) -> None:
+        from . import authz
+
+        authz.require_resource_permission(
+            "migrations", level, instance="auth"
+        )
+
+    def _migrations_emit(event: str, data: dict) -> None:
+        user = getattr(flask.g, "current_user", None) or {}
+        get_yapper().emit(event, {
+            **data,
+            "acting_user": str(user.get("id") or "") if isinstance(
+                user, dict) else str(getattr(user, "id", "")),
+        })
+
+    migration_blueprint = migration_routes.create_blueprint(
+        service_db="auth", gate=_migrations_gate, emit=_migrations_emit
+    )
+    # The shared blueprint must authenticate like every other
+    # management blueprint: routes.init_app applies
+    # before_request(resource_authenticator.authenticate) per
+    # blueprint, and init_app(bp) registers the migrations blueprint
+    # onto bp — whose own hooks (if any) belong to other route
+    # modules. Without this hook the request context carries no
+    # principal at all and every caller — operator, root, designated
+    # admin — is denied by the gate as an anonymous client (#1185).
+    from .routes import resource_authenticator
+
+    migration_blueprint.before_request(resource_authenticator.authenticate)
+    bp.register_blueprint(migration_blueprint)
+
     # Action journeys (#828), adopt-only: auth's browser surface IS the
     # login flow — already journeyed via the campus_journey cookie
     # (#803) — so minting navigations here would fork login journeys.

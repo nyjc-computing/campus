@@ -69,9 +69,15 @@ server {
     #   "https://campusaudit-development.up.railway.app"
     # Variables force per-request DNS resolution (valid=10s below), so
     # backend redeploys never leave the gateway with a stale address.
-    set $auth_upstream  "http://campus-auth.railway.internal:${AUTH_PORT}";
-    set $api_upstream   "http://campus-api.railway.internal:${API_PORT}";
-    set $audit_upstream "http://campusaudit.railway.internal:${AUDIT_PORT}";
+    # Upstream HOSTS come from per-environment service variables (AUTH_HOST,
+    # API_HOST, AUDIT_HOST) — the service rename + private-domain
+    # regularization (2026-11-19) decoupled names from aliases, so a
+    # host literal here silently rots: campusaudit.railway.internal 502'd
+    # every /audit/ route the day campus.audit's alias became
+    # campus-audit.railway.internal.
+    set $auth_upstream  "http://${AUTH_HOST}:${AUTH_PORT}";
+    set $api_upstream   "http://${API_HOST}:${API_PORT}";
+    set $audit_upstream "http://${AUDIT_HOST}:${AUDIT_PORT}";
 
     # SNI for the HTTPS upstreams (*.up.railway.app requires it).
     proxy_ssl_server_name on;

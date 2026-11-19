@@ -105,6 +105,10 @@ def bearer_authenticate(token: str) -> dict[str, Any]:
     return {
         "client": auth_result["client"],
         "user": auth_result.get("user"),
+        # the token's granted scopes (#1183): the Authenticator
+        # hydrates flask.g.current_scopes from this so route gates can
+        # enforce the capability leg of the two-leg model (#865)
+        "scopes": auth_result.get("scopes", []),
     }
 
 # Create authenticator using campus_python
@@ -224,6 +228,44 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
 
     # Apply authentication to all API routes
     bp.before_request(campus_authenticator.authenticate)
+
+    # Migration management routes (#1169): the campus-admin Migrations
+    # view drives plan/apply/abort/rollback per service. Shared
+    # blueprint from migrations/routes.py, inside the authenticated api
+    # namespace. The grant store lives only in campus.auth's database,
+    # so the gate settles the designation leg over the mesh (#1168
+    # service leg: GET /grants/check with THIS deployment's client
+    # credentials, allowlisted by AUTH_GRANT_CHECK_CLIENT_IDS) —
+    # reusing the shared SDK client so the check rides the traced
+    # session (#794). Mutations emit yapper events stamped with the
+    # acting user.
+    import migrations.routes as migration_routes
+
+    _migrations_yapper = None
+
+    def _migrations_emit(event: str, data: dict) -> None:
+        nonlocal _migrations_yapper
+        import campus.yapper
+
+        if _migrations_yapper is None:
+            _migrations_yapper = campus.yapper.create()
+        user = getattr(flask.g, "current_user", None) or {}
+        _migrations_yapper.emit(event, {
+            **data,
+            "acting_user": str(user.get("id") or "") if isinstance(
+                user, dict) else str(getattr(user, "id", "")),
+        })
+
+    migration_routes.init_app(
+        bp,
+        service_db="api",
+        gate=migration_routes.make_grant_check_gate(
+            "api",
+            client_getter=lambda: campus.auth,
+            principal_description="Client principals",
+        ),
+        emit=_migrations_emit,
+    )
 
     # Action journeys (#828), adopt-only: campus.api serves no browser
     # pages, so there is nothing to mint on — adopting SDK-forwarded

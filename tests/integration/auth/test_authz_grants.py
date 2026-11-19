@@ -321,5 +321,111 @@ class TestVaultWrapper(unittest.TestCase):
             self.vault_gate({}, "email", 1)
 
 
+class TestMigrationsShapesAndServiceLeg(unittest.TestCase):
+    """#1168: the migrations shape guards at the grant routes, and the
+    /grants/check service leg that lets the api/audit services settle
+    the designation leg of their migration routes over the mesh."""
+
+    @classmethod
+    def setUpClass(cls):
+        import campus.storage.testing
+
+        campus.storage.testing.configure_test_storage()
+        campus.storage.testing.configure_test_db()
+
+        from campus.auth.resources.grant import GrantsResource
+        GrantsResource.init_storage()
+
+        cls.app = flask.Flask(__name__)
+
+    @classmethod
+    def tearDownClass(cls):
+        import campus.storage.testing
+        campus.storage.testing.clear_all_data()
+
+    def setUp(self):
+        import campus.storage.testing
+        campus.storage.testing.clear_all_data()
+
+    def check_gate(self, principal, resource_type, extra_env=None):
+        """Invoke _require_check_permission under a synthetic principal."""
+        from campus.auth.routes.grants import _require_check_permission
+
+        envvars = dict(OPERATOR_ENV)
+        if extra_env:
+            envvars.update(extra_env)
+        with (
+            mock.patch.dict(os.environ, envvars),
+            self.app.test_request_context(),
+        ):
+            for attr, value in principal.items():
+                setattr(flask.g, attr, value)
+            _require_check_permission(resource_type)
+
+    def test_mod_rows_rejected_as_inert(self):
+        from campus.auth.routes.grants import _forbid_forbidden_shapes
+        with self.assertRaises(api_errors.ForbiddenError):
+            _forbid_forbidden_shapes("user", "migrations", "mod")
+
+    def test_rows_must_name_a_known_service(self):
+        from campus.auth.routes.grants import _forbid_forbidden_shapes
+        # no vocabulary-level migration rows: authority over one
+        # service's migration surface never covers the fleet
+        with self.assertRaises(api_errors.InvalidRequestError):
+            _forbid_forbidden_shapes("user", "migrations", "write")
+        with self.assertRaises(api_errors.InvalidRequestError):
+            _forbid_forbidden_shapes("user", "migrations", "admin")
+        # the known service DBs are accepted
+        for service in ("auth", "api", "audit"):
+            _forbid_forbidden_shapes(
+                "user", "migrations", "write", service)
+
+    def test_service_leg_allows_allowlisted_client_for_migrations(self):
+        self.check_gate(
+            {"current_client": SimpleNamespace(id="cl_service_api")},
+            "migrations",
+            extra_env={"AUTH_GRANT_CHECK_CLIENT_IDS": "cl_service_api"},
+        )
+
+    def test_service_leg_denied_for_unlisted_client(self):
+        with self.assertRaises(api_errors.ForbiddenError):
+            self.check_gate(
+                {"current_client": SimpleNamespace(id="cl_other")},
+                "migrations",
+                extra_env={"AUTH_GRANT_CHECK_CLIENT_IDS": "cl_service_api"},
+            )
+
+    def test_service_leg_fail_closed_when_allowlist_unset(self):
+        with self.assertRaises(api_errors.ForbiddenError):
+            self.check_gate(
+                {"current_client": SimpleNamespace(id="cl_service_api")},
+                "migrations",
+            )
+
+    def test_service_leg_scoped_to_migrations_only(self):
+        with self.assertRaises(api_errors.ForbiddenError):
+            self.check_gate(
+                {"current_client": SimpleNamespace(id="cl_service_api")},
+                "users",
+                extra_env={"AUTH_GRANT_CHECK_CLIENT_IDS": "cl_service_api"},
+            )
+
+    def test_operator_still_settles_migrations_checks(self):
+        self.check_gate(
+            {"current_client": operator_client()}, "migrations"
+        )
+
+    def test_migrations_grant_administration_is_operator_only(self):
+        # no vocabulary-level migration row can exist (shape guard),
+        # so the <vocabulary>:admin designation leg is unsatisfiable
+        # for users — even holding the scope
+        with self.assertRaises(api_errors.ForbiddenError):
+            self.check_gate(
+                {"current_user": user_principal(
+                    "u_mig", ["migrations:admin"])},
+                "migrations",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

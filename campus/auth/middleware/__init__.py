@@ -82,6 +82,12 @@ class Authenticator:
                 )
         flask.g.current_client = auth_result.get("client")
         flask.g.current_user = auth_result.get("user")
+        # The token's granted scopes (#1183): services enforce the
+        # capability leg of the two-leg management model (#865) from
+        # this — e.g. the migrations routes (#1169). Absent for
+        # authenticators that don't return it (empty list), which
+        # fails those checks closed.
+        flask.g.current_scopes = list(auth_result.get("scopes") or [])
 
     def _authenticate_basic(self, client_id: str, client_secret: str):
         """Authenticate using HTTP Basic Authentication."""
