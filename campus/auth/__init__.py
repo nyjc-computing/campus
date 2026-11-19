@@ -146,9 +146,21 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
                 user, dict) else str(getattr(user, "id", "")),
         })
 
-    migration_routes.init_app(
-        bp, service_db="auth", gate=_migrations_gate, emit=_migrations_emit
+    migration_blueprint = migration_routes.create_blueprint(
+        service_db="auth", gate=_migrations_gate, emit=_migrations_emit
     )
+    # The shared blueprint must authenticate like every other
+    # management blueprint: routes.init_app applies
+    # before_request(resource_authenticator.authenticate) per
+    # blueprint, and init_app(bp) registers the migrations blueprint
+    # onto bp — whose own hooks (if any) belong to other route
+    # modules. Without this hook the request context carries no
+    # principal at all and every caller — operator, root, designated
+    # admin — is denied by the gate as an anonymous client (#1185).
+    from .routes import resource_authenticator
+
+    migration_blueprint.before_request(resource_authenticator.authenticate)
+    bp.register_blueprint(migration_blueprint)
 
     # Action journeys (#828), adopt-only: auth's browser surface IS the
     # login flow — already journeyed via the campus_journey cookie
