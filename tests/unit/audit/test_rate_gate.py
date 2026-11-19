@@ -29,7 +29,7 @@ def _429_body(bucket: str) -> dict:
 def _make_app(**identity) -> flask.Flask:
     """Flask app with the tracing middleware and a stub identity hook.
 
-    The identity stub is registered BEFORE middleware.init_app so the
+    The identity stub is registered BEFORE middleware init (init_tracing) so the
     gate (a later before_request hook) observes it — mirroring how
     app-level hooks registered earlier run first.
     """
@@ -41,7 +41,7 @@ def _make_app(**identity) -> flask.Flask:
         for key, value in identity.items():
             setattr(flask.g, key, value)
 
-    from campus.audit.middleware import init_app as init_tracing
+    from campus.flask_campus.audit import init_tracing
 
     init_tracing(app)
 
@@ -126,7 +126,7 @@ class TestClientObserveHook(unittest.TestCase):
         self.addCleanup(ratelimit.breaker.reset)
 
     def _traces_with_response(self, status: int, body: dict, raises: bool):
-        from campus.audit.client.v1.traces import Traces
+        from campus_python.audit.v1.traces import Traces
 
         response = mock.Mock()
         response.status_code = status

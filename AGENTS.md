@@ -123,7 +123,7 @@ version-pinned release wheels:
 |---|---|
 | [campus-common](https://github.com/nyjc-computing/campus-common) | `campus.common` (env/errors/schema/protocol/services/utils/validation) |
 | [campus-model](https://github.com/nyjc-computing/campus-model) | `campus.model` |
-| [flask-campus](https://github.com/nyjc-computing/flask-campus) | `campus.flask_campus` + `campus.audit/{middleware,client,http,roles}` |
+| [flask-campus](https://github.com/nyjc-computing/flask-campus) | `campus.flask_campus` + `campus.flask_campus.audit` middleware (audit client ships with campus-api-python as `campus_python.audit`) |
 | [campus-deploy](https://github.com/nyjc-computing/campus-deploy) | `campus.deploy` |
 | [campus-core](https://github.com/nyjc-computing/campus-core) | `campus.storage` + `campus.webauth` + `campus.services` (drivers as extras) |
 

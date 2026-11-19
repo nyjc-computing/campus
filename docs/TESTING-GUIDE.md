@@ -266,12 +266,12 @@ mgr.cleanup()
 ### Testing Service Code That Makes Its Own HTTP Calls (`json_client_class`)
 
 The transport patch above covers calls routed through `campus_python`.
-Service code that builds its own HTTP client on `campus.audit.http`
+Service code that builds its own HTTP client on `campus_python.audit.http`
 (`DefaultClient`) does **not** go through that patch — instead, such
 clients expose a `json_client_class` **class attribute** that tests set
 to a test double. Established instances:
 
-- `campus.audit.client.AuditClient.json_client_class` — the tracing
+- `campus_python.audit.client.AuditClient.json_client_class` — the tracing
   middleware's span ingestion; the harness sets it to
   `flask_test.TestJsonClient` (see `tests/fixtures/services.py`), which
   routes to the registered audit app and loads credentials dynamically.

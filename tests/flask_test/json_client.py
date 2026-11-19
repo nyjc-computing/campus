@@ -3,7 +3,7 @@
 Test-compatible JsonClient that uses Flask test clients for routing.
 
 This module provides a drop-in replacement for
-campus.audit.http.DefaultClient that uses Flask test clients for local
+campus_python.audit.http.DefaultClient that uses Flask test clients for local
 testing without actual HTTP calls.
 """
 
@@ -11,8 +11,8 @@ from typing import Any, Iterable, Mapping, Self
 from urllib.parse import urljoin
 
 import flask
+from campus_python.audit.http.interface import JsonDict, JsonResponse
 
-from campus.audit.http.interface import JsonDict, JsonResponse
 from campus.common import env
 from campus.model import HttpHeader
 
@@ -23,7 +23,7 @@ from .response import FlaskTestResponse
 class TestJsonClient:
     """Test-compatible JsonClient using Flask test clients with routing.
 
-    This class implements the campus.audit.http.JsonClient protocol and
+    This class implements the campus_python.audit.http.JsonClient protocol and
     routes requests to the correct Flask app based on base_url and path
     prefix, using the same routing mechanism as TestCampusRequest.
 
@@ -245,12 +245,12 @@ class TestJsonClient:
         return FlaskTestResponse(response)
 
 
-    """Restore original campus.audit.http.DefaultClient.
+    """Restore original campus_python.audit.http.DefaultClient.
 
     Call this in test teardown to clean up the monkey-patch.
     """
-    import campus.audit.http
+    import campus_python.audit.http
 
-    if hasattr(campus.audit.http, "_original_DefaultClient"):
-        campus.audit.http.DefaultClient = campus.audit.http._original_DefaultClient
-        delattr(campus.audit.http, "_original_DefaultClient")
+    if hasattr(campus_python.audit.http, "_original_DefaultClient"):
+        campus_python.audit.http.DefaultClient = campus_python.audit.http._original_DefaultClient
+        delattr(campus_python.audit.http, "_original_DefaultClient")

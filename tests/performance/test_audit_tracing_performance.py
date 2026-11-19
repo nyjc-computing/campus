@@ -12,9 +12,9 @@ import time
 import unittest
 from contextlib import suppress
 
-from campus.audit.middleware import tracing
 from campus.audit.resources.traces import TracesResource
 from campus.common import env
+from campus.flask_campus.audit import tracing
 from tests.fixtures.tokens import get_basic_auth_headers
 from tests.integration.base import DependencyCheckedTestCase, IsolatedIntegrationTestCase
 

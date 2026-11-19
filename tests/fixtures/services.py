@@ -158,7 +158,7 @@ class ServiceManager:
         # Configure AuditClient to use TestJsonClient for testing
         # TestJsonClient loads credentials from environment dynamically,
         # just like FlaskTestClient/TestCampusRequest
-        from campus.audit.client import AuditClient
+        from campus_python.audit import AuditClient
 
         AuditClient.json_client_class = flask_test.TestJsonClient
 
@@ -273,11 +273,11 @@ class ServiceManager:
             env.delete("AUTH_ADMIN_USER_IDS")
 
         # Clean up audit client configuration
-        from campus.audit.client import AuditClient
+        from campus_python.audit import AuditClient
         AuditClient.json_client_class = None  # Reset to None
 
         # Clear audit client singleton
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
         # For non-shared instances, clean up apps for full isolation
@@ -336,7 +336,7 @@ class ServiceManager:
 
         See: #520 - Discussion of executor idempotency patterns
         """
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         # ExecutorManager.shutdown() is idempotent by design
         # No exception handling needed - it handles state tracking internally
         tracing._ingestion_executor_manager.shutdown(wait=True)
@@ -462,7 +462,7 @@ class ServiceManager:
 
         # Reset audit client singleton to pick up the new ACCESS_TOKEN
         # Note: We don't reset json_client_class as that would break TestJsonClient injection
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None  # Clear singleton so it recreates with new token
 
     def clear_test_data(self):
