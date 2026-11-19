@@ -393,10 +393,10 @@ class TestAuthHook(IsolatedIntegrationTestCase):
     def test_migrations_blueprint_carries_the_auth_hook(self):
         """The wiring applies the authenticator as a before_request on
         the registered migrations blueprint (app-level funcs keyed by
-        blueprint name)."""
-        self.assertIn("migrations", self.manager.auth_app.blueprints)
+        the nested blueprint's full name)."""
+        self.assertIn("auth.migrations", self.manager.auth_app.blueprints)
         funcs = self.manager.auth_app.before_request_funcs.get(
-            "migrations") or []
+            "auth.migrations") or []
         self.assertTrue(funcs, "migrations blueprint has no auth hook")
 
 
