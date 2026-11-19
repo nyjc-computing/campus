@@ -12,8 +12,8 @@ import unittest
 import flask
 
 import campus.common.protocol as protocol
-from campus.audit.middleware import init_journeys, tracing
 from campus.flask_campus import journey
+from campus.flask_campus.audit import init_journeys, tracing
 
 
 class JourneyAppTestCase(unittest.TestCase):

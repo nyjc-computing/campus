@@ -25,7 +25,7 @@ class TestRoleCatalogue(unittest.TestCase):
     """Verify the catalogue itself."""
 
     def test_every_role_resolves_to_a_scope_list(self):
-        from campus.audit import roles
+        from campus_python.audit import roles
 
         for name, scopes in roles.list_roles().items():
             with self.subTest(role=name):
@@ -35,7 +35,8 @@ class TestRoleCatalogue(unittest.TestCase):
 
     def test_the_catalogue_covers_the_scope_vocabulary(self):
         """The roles between them cover every scope the service issues."""
-        from campus.audit import roles
+        from campus_python.audit import roles
+
         from campus.config import AUDIT_OPERATOR_API_KEY_SCOPES
 
         covered = {
@@ -54,7 +55,7 @@ class TestRoleCatalogue(unittest.TestCase):
     def test_no_role_resolves_to_a_wildcard(self):
         """A standing '*' role would be a privilege-escalation
         footgun in the one place keys get minted."""
-        from campus.audit import roles
+        from campus_python.audit import roles
 
         for name, scopes in roles.CATALOGUE.items():
             with self.subTest(role=name):
@@ -63,7 +64,7 @@ class TestRoleCatalogue(unittest.TestCase):
                     self.assertFalse(scope.endswith(":*"))
 
     def test_an_unknown_role_is_rejected(self):
-        from campus.audit import roles
+        from campus_python.audit import roles
 
         with self.assertRaises(roles.UnknownRoleError) as ctx:
             roles.resolve_role("no-such-role")
@@ -75,13 +76,13 @@ class TestRoleCatalogue(unittest.TestCase):
             self.assertIn(name, message)
 
     def test_a_role_and_a_scope_list_are_mutually_exclusive(self):
-        from campus.audit import roles
+        from campus_python.audit import roles
 
         with self.assertRaises(ValueError):
             roles.resolve_scopes("traces:read", "traces-viewer")
 
     def test_a_scope_list_alone_still_resolves(self):
-        from campus.audit import roles
+        from campus_python.audit import roles
 
         self.assertEqual(
             roles.resolve_scopes("traces:read, traces:search"),
@@ -128,7 +129,8 @@ class TestRoleInTheResourceLayer(unittest.TestCase):
         )
 
     def test_an_unknown_role_is_rejected_at_the_resource_layer(self):
-        from campus.audit import roles
+        from campus_python.audit import roles
+
         from campus.audit.resources import apikeys
 
         with self.assertRaises(roles.UnknownRoleError):

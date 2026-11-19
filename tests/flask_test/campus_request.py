@@ -258,7 +258,7 @@ class TestCampusRequest(JsonClient):
             headers = dict(self._override_auth_headers)
         else:
             headers = dict(self._load_auth_headers())
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
 
         for name, value in tracing.propagation_headers().items():
             headers.setdefault(name, value)

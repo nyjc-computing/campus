@@ -14,9 +14,9 @@ __all__ = [
 ]
 
 import flask
+from campus_python.audit.roles import CATALOGUE, resolve_role
 
 import campus.flask_campus as flask_campus
-from campus.audit.roles import CATALOGUE, resolve_role
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
 
@@ -160,7 +160,7 @@ def new(
     }
 
     Give either a role or a list of scopes, not both: a role is a named
-    bundle of scopes from the catalogue (campus.audit.roles), and
+    bundle of scopes from the catalogue (campus_python.audit.roles), and
     naming both leaves it ambiguous which one was meant.
 
     Trace-read scoping (#944): trace_user_id/trace_client_id are
@@ -315,7 +315,7 @@ def update(
     }
 
     Give either a role or a list of scopes, not both: a role is a named
-    bundle of scopes from the catalogue (campus.audit.roles), and
+    bundle of scopes from the catalogue (campus_python.audit.roles), and
     naming both leaves it ambiguous which one was meant.
 
     Returns:

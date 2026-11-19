@@ -7,7 +7,7 @@ class TestCommonImportWeight(unittest.TestCase):
     """Guard the lean-import contract of the campus.common namespace (#967).
 
     Importing campus.common must not drag in requests or bcrypt: after
-    the http client moved to campus.audit.http (#970), nothing in the
+    the http client moved to campus_python.audit.http (#970), nothing in the
     namespace's eager import chain pulls a third-party module any more.
     Assertions run in a subprocess because this test process may
     legitimately have those modules loaded by other imports.

@@ -6,7 +6,7 @@ stored JSON fields: client_secret in /auth/v1/token request bodies,
 access_token/refresh_token in token response bodies, Cookie session headers
 on login spans, and query params on GET /root/authenticate calls. This
 script rewrites those rows in place, applying the SAME redaction function
-the tracing middleware uses (campus.audit.middleware.redact_sensitive),
+the tracing middleware uses (campus.flask_campus.audit.redact_sensitive),
 so historical data matches what producers emit from now on.
 
 Re-run after the policy sweep (campus#1131/#1124, flask-campus#20): the
@@ -56,7 +56,7 @@ from psycopg2.extras import RealDictCursor
 # Re-runs after key-list extensions (flask-campus#20/#1124): the list is
 # shared, so one redeploy picks up the flow-secret and PII keys too.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from campus.audit.middleware import redact_sensitive  # noqa: E402
+from campus.flask_campus.audit import redact_sensitive  # noqa: E402
 
 # JSON-bearing span columns scanned for secrets (#805)
 REDACTED_COLUMNS = (

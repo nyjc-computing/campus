@@ -1,6 +1,6 @@
 """Pure unit tests for trace context propagation.
 
-Covers the #794 propagation seam in campus.audit.middleware.tracing:
+Covers the #794 propagation seam in campus.flask_campus.audit.tracing:
 - start_span() intake of X-Request-ID / X-Parent-Span-ID headers
 - propagation_headers() for outbound requests
 - instrument_requests_session() wrapping of requests.Session
@@ -13,7 +13,7 @@ import unittest
 import flask
 import requests
 
-from campus.audit.middleware import tracing
+from campus.flask_campus.audit import tracing
 
 
 class TestStartSpanContextIntake(unittest.TestCase):

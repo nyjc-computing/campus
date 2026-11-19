@@ -167,7 +167,7 @@ def init_app(app: flask.Blueprint | flask.Flask) -> None:
     # (#803) — so minting navigations here would fork login journeys.
     # Adopting SDK-forwarded X-Journey-ID headers still lets auth spans
     # join the caller's action journey.
-    from campus.audit.middleware import init_journeys
+    from campus.flask_campus.audit import init_journeys
     init_journeys(app, mint_on_navigation=False)
 
     # Public integrations catalog at the top-level /integrations/v1

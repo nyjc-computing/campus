@@ -1,20 +1,20 @@
 """Unit tests for keyed redaction of sensitive span fields (#805).
 
 Covers redact_sensitive() and _is_sensitive_key() in
-campus.audit.middleware.tracing: the blocklist matching rules and the
+campus.flask_campus.audit.tracing: the blocklist matching rules and the
 recursive masking of dict/list structures. No storage or network.
 """
 
 import unittest
 
-from campus.audit.middleware.tracing import redact_sensitive
+from campus.flask_campus.audit.tracing import redact_sensitive
 
 
 class TestSensitiveKeyMatching(unittest.TestCase):
     """_is_sensitive_key matching rules."""
 
     def test_exact_keys_from_blocklist(self):
-        from campus.audit.middleware.tracing import SENSITIVE_KEYS
+        from campus.flask_campus.audit.tracing import SENSITIVE_KEYS
 
         for key in SENSITIVE_KEYS:
             self.assertTrue(
