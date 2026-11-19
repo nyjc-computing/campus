@@ -28,6 +28,8 @@ from unittest import mock
 
 import flask
 
+from tests.integration.base import IsolatedIntegrationTestCase
+
 OPERATOR_ID = "cl_operator"
 OPERATOR_ENV = {"AUTH_OPERATOR_CLIENT_IDS": OPERATOR_ID}
 
@@ -361,6 +363,41 @@ class MigrationsRouteGateMatrix(unittest.TestCase):
             response = self._request("GET", "/admin/migrations/",
                                      principal)
             self.assertEqual(response.status_code, 200)
+
+
+class TestAuthHook(IsolatedIntegrationTestCase):
+    """The auth migrations blueprint must authenticate like every
+    other management blueprint (#1185).
+
+    #1182 registered the shared blueprint onto /auth/v1 WITHOUT the
+    per-blueprint `before_request(resource_authenticator.authenticate)`
+    hook that routes.init_app applies to each route module's own
+    blueprint. Requests to /auth/v1/admin/migrations were therefore
+    never authenticated at all: g stayed principal-less and the gate
+    denied every caller — operator, root, designated admin — with the
+    #854 anonymous-client 403.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.auth_client = cls.manager.auth_app.test_client()
+
+    def test_unauthenticated_request_is_401_from_middleware(self):
+        """No Authorization header → 401 from the authentication hook
+        (the #1185 bug surfaced as the gate's anonymous-client 403).
+        Trailing slash: auth sets strict slashes app-wide (#843 era)."""
+        response = self.auth_client.get("/auth/v1/admin/migrations/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_migrations_blueprint_carries_the_auth_hook(self):
+        """The wiring applies the authenticator as a before_request on
+        the registered migrations blueprint (app-level funcs keyed by
+        blueprint name)."""
+        self.assertIn("migrations", self.manager.auth_app.blueprints)
+        funcs = self.manager.auth_app.before_request_funcs.get(
+            "migrations") or []
+        self.assertTrue(funcs, "migrations blueprint has no auth hook")
 
 
 if __name__ == "__main__":
