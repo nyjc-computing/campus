@@ -195,3 +195,8 @@ requirements-freeze.txt
 
 # Local object-storage bucket written by integration tests
 .storage/
+
+# ZCode session-local artifacts (per-machine agent tool state, not project
+# config — session plans and the auto-synced ignore file)
+.zcode/plans/
+.zcodeignore
