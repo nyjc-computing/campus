@@ -172,7 +172,11 @@ lock, and at runtime it is admin-gated (`migrations:admin`) behind the
 #1169 routes. Backup durability (#1170): when `MIGRATION_BACKUP_BUCKET`
 is set, every envelope is also uploaded to that bucket before the
 migration's first write — fail-closed, so an upload failure aborts the
-migration rather than run unbacked.
+migration rather than run unbacked. The upload target is the dedicated
+backups bucket (`campus-backups-prod`): auth/audit point their default
+`BUCKET_*` at it, and campus.api scopes it via the `MIGRATION_BUCKET_*`
+credential overrides (its default `BUCKET_*` is the live objects
+bucket).
 
 ## Applying migrations
 
@@ -248,8 +252,10 @@ this surface (see
    pending delta — revisions, file hashes, declared impact/backup
    scope. The plan delta is the approval artifact. Time the apply for
    the lowest-usage window (end of day).
-3. **Apply**: trigger from the view. Backups upload to the object
-   bucket (`MIGRATION_BACKUP_BUCKET`) before any data write —
+3. **Apply**: trigger from the view. Backups upload to the dedicated
+   backups bucket (`MIGRATION_BACKUP_BUCKET`, credentials via
+   `MIGRATION_BUCKET_*` overrides / the service's `BUCKET_*`) before
+   any data write —
    fail-closed (#1170); the advisory lock (#1166) serializes runs; a
    failure records the ledger `failed` row and stops; abort takes
    effect between migrations. Verify: the ledger (view or

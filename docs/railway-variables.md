@@ -343,6 +343,15 @@ Literal copies of bucket credentials rot silently on reset — both
 environments are now fully on references (production converted 2026-11-17;
 the literals row in docs/prod-rollout.md §2 predates that pass).
 
+`campus-backups-prod` (production-only, created 2026-11-20) is the
+**dedicated migration-backup bucket** (#1172 backup durability): its
+instances hold only `migrations/<revision>/…` envelopes — no app data —
+so restoring after a bad rewrite never depends on an app bucket's
+lifecycle. campus.auth/audit reference it as their default `BUCKET_*`;
+campus.api reaches it through `MIGRATION_BUCKET_*` overrides on
+`migrations/_backup.py` (its default `BUCKET_*` stays the live objects
+bucket). Region `sin`, like the rest of the fleet.
+
 ## Maintenance rules
 
 1. **Anything consumed by 2+ services belongs in the shared layer**, not
@@ -426,6 +435,10 @@ Service-specific variables:
 | campus.auth | `POSTGRESDB_URI` | `${{"campus.auth-postgres".DATABASE_URL}}` | template | |
 | campus.auth | `SECRET_KEY` | `<secret>` | literal | |
 | campus.auth | `WORKSPACE_DOMAIN` | `${{shared.WORKSPACE_DOMAIN}}` | template | |
+| campus.auth | `AUTH_GRANT_CHECK_CLIENT_IDS` | `uid-client-11098893` | literal | api's prod client (#1172 rollout) |
+| campus.auth | `MIGRATIONS_ENFORCED` | `1` | literal | fail-closed boot gate |
+| campus.auth | `MIGRATION_BACKUP_BUCKET` | `campus-backups-prod` | literal | dedicated backups bucket |
+| campus.auth | `BUCKET_*` (5) | `${{"campus-backups-prod".…}}` | template | default bucket = backups bucket (auth has no app object storage) |
 | campus.api | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | |
 | campus.api | `AUDIT_TRACING_ENABLED` | `1` | literal | |
 | campus.api | `BUCKET_*` (5) | `${{"campus.api-bucket".…}}` | template | resolve to the **production** bucket instance (`campusapi-bucket-pdxxria`) |
@@ -433,12 +446,18 @@ Service-specific variables:
 | campus.api | `CLIENT_SECRET` | `<secret>` | literal | |
 | campus.api | `DEPLOY` | `campus.api` | literal | |
 | campus.api | `MONGODB_NAME` | `campus_api` | literal | |
+| campus.api | `MIGRATIONS_ENFORCED` | `1` | literal | fail-closed boot gate |
+| campus.api | `MIGRATION_BACKUP_BUCKET` | `campus-backups-prod` | literal | dedicated backups bucket |
+| campus.api | `MIGRATION_BUCKET_*` (5) | `${{"campus-backups-prod".…}}` | template | override creds: default `BUCKET_*` is the live objects bucket |
 | campus.api | `MONGODB_URI` | `${{"campus.api-mongodb".MONGO_URL}}` | template | |
 | campus.api | `POSTGRESDB_URI` | `${{"campus.api-postgres".DATABASE_URL}}` | template | |
 | campus.audit | `AUDIT_EVENTS_ENABLED` | `1` | literal | |
 | campus.audit | `AUDIT_OPERATOR_API_KEY` | `<secret>` | literal | |
 | campus.audit | `DEPLOY` | `campus.audit` | literal | |
 | campus.audit | `POSTGRESDB_URI` | `${{"campus.audit-postgres".DATABASE_URL}}` | template | |
+| campus.audit | `MIGRATIONS_ENFORCED` | `1` | literal | fail-closed boot gate |
+| campus.audit | `MIGRATION_BACKUP_BUCKET` | `campus-backups-prod` | literal | dedicated backups bucket |
+| campus.audit | `BUCKET_*` (5) | `${{"campus-backups-prod".…}}` | template | default bucket = backups bucket (audit has no app object storage) |
 | campus.audit | `SECRET_KEY` | `<secret>` | literal | |
 | campus-gateway | `API_PORT` / `AUTH_PORT` / `AUDIT_PORT` / `PORT` | `8080` | literal | |
 | campus-gateway | `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1` | literal | |
