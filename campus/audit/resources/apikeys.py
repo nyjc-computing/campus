@@ -12,9 +12,10 @@ __all__ = []
 import logging
 from typing import Any
 
+from campus_python.audit.roles import resolve_scopes
+
 import campus.model as model
 import campus.storage
-from campus.audit.roles import resolve_scopes
 from campus.common import schema
 from campus.common.errors import api_errors
 from campus.common.utils import secret

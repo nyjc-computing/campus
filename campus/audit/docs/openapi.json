@@ -104,7 +104,7 @@
   "info": {
     "description": "Observability backend for Campus: trace/span ingestion, querying, journey grouping, and audit API-key management.\n\nThe /audit/v1 endpoints require Bearer authentication with an audit API key (audit_v1_<22-char-base64url>). The audit web UI lives in the campus-admin portal, which consumes this API with its own key; this service redirects the UI's old page URLs there (AUDIT_UI_URL).\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
     "title": "Campus Audit API",
-    "version": "0.29.0"
+    "version": "0.29.2"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -294,7 +294,7 @@
         ]
       },
       "post": {
-        "description": "Request body:\n{\n  \"name\": \"string\",\n  \"owner_id\": \"string\",\n  \"scopes\": [\"scope1\", \"scope2\"],  // optional\n  \"role\": \"traces-viewer\",  // optional, a named role (#918)\n  \"rate_limit\": 100,  // optional, requests per minute\n  \"expires_at\": \"ISO 8601\",  // optional\n  \"trace_user_id\": \"string\",  // optional, trace-read bind (#944)\n  \"trace_client_id\": \"string\"  // optional, trace-read bind (#944)\n}\n\nGive either a role or a list of scopes, not both: a role is a named\nbundle of scopes from the catalogue (campus.audit.roles), and\nnaming both leaves it ambiguous which one was meant.\n\nTrace-read scoping (#944): trace_user_id/trace_client_id are\nopaque bind values the service enforces server-side on every\ntraces:read surface (plain string equality against span identity\nattributes; campus.audit never resolves them against campus.auth).\nA mint that grants trace reads without apikeys:write (admin\nclass) or traces:write (producer pipeline) must carry at least\none bind \u2014 fail-closed, so a per-student key can never be minted\nglobally-readable by accident. Admin/producer keys omit the binds\nand read unscoped. Binds are mint-time only; PATCH does not\naccept them.\n\nReturns:\n    201 Created with the API key (only shown once) and key details\n    422 Unprocessable Entity on invalid input",
+        "description": "Request body:\n{\n  \"name\": \"string\",\n  \"owner_id\": \"string\",\n  \"scopes\": [\"scope1\", \"scope2\"],  // optional\n  \"role\": \"traces-viewer\",  // optional, a named role (#918)\n  \"rate_limit\": 100,  // optional, requests per minute\n  \"expires_at\": \"ISO 8601\",  // optional\n  \"trace_user_id\": \"string\",  // optional, trace-read bind (#944)\n  \"trace_client_id\": \"string\"  // optional, trace-read bind (#944)\n}\n\nGive either a role or a list of scopes, not both: a role is a named\nbundle of scopes from the catalogue (campus_python.audit.roles), and\nnaming both leaves it ambiguous which one was meant.\n\nTrace-read scoping (#944): trace_user_id/trace_client_id are\nopaque bind values the service enforces server-side on every\ntraces:read surface (plain string equality against span identity\nattributes; campus.audit never resolves them against campus.auth).\nA mint that grants trace reads without apikeys:write (admin\nclass) or traces:write (producer pipeline) must carry at least\none bind \u2014 fail-closed, so a per-student key can never be minted\nglobally-readable by accident. Admin/producer keys omit the binds\nand read unscoped. Binds are mint-time only; PATCH does not\naccept them.\n\nReturns:\n    201 Created with the API key (only shown once) and key details\n    422 Unprocessable Entity on invalid input",
         "operationId": "audit_v1_apikeys_create",
         "requestBody": {
           "content": {
@@ -415,7 +415,7 @@
         ]
       },
       "patch": {
-        "description": "Only name, scopes, and rate_limit can be updated.\nUse DELETE to revoke an API key.\n\nArgs:\n    api_key_id: The API key identifier\n\nRequest body:\n{\n  \"name\": \"new name\",  // optional\n  \"scopes\": [\"scope1\", \"scope2\"],  // optional\n  \"role\": \"traces-viewer\",  // optional, a named role (#918)\n  \"rate_limit\": 200  // optional\n}\n\nGive either a role or a list of scopes, not both: a role is a named\nbundle of scopes from the catalogue (campus.audit.roles), and\nnaming both leaves it ambiguous which one was meant.\n\nReturns:\n    200 OK with updated API key details\n    404 Not Found if API key doesn't exist\n    422 Unprocessable Entity on invalid input",
+        "description": "Only name, scopes, and rate_limit can be updated.\nUse DELETE to revoke an API key.\n\nArgs:\n    api_key_id: The API key identifier\n\nRequest body:\n{\n  \"name\": \"new name\",  // optional\n  \"scopes\": [\"scope1\", \"scope2\"],  // optional\n  \"role\": \"traces-viewer\",  // optional, a named role (#918)\n  \"rate_limit\": 200  // optional\n}\n\nGive either a role or a list of scopes, not both: a role is a named\nbundle of scopes from the catalogue (campus_python.audit.roles), and\nnaming both leaves it ambiguous which one was meant.\n\nReturns:\n    200 OK with updated API key details\n    404 Not Found if API key doesn't exist\n    422 Unprocessable Entity on invalid input",
         "operationId": "audit_v1_apikeys_update",
         "parameters": [
           {

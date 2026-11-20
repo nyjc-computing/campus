@@ -204,7 +204,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # auth span ingests as a child of the api request's span (#794).
     # In tests the SDK is patched to TestCampusRequest, which has no
     # requests.Session; those requests get headers from tests.flask_test.
-    from campus.audit.middleware import tracing
+    from campus.flask_campus.audit import tracing
 
     session = getattr(campus.auth.client, "_session", None)
     if session is not None:
@@ -271,7 +271,7 @@ def init_app(app: flask.Flask | flask.Blueprint) -> None:
     # pages, so there is nothing to mint on — adopting SDK-forwarded
     # X-Journey-ID headers lets api spans join the caller's action
     # journey (e.g. a classroom submit and its assignment POST).
-    from campus.audit.middleware import init_journeys
+    from campus.flask_campus.audit import init_journeys
     init_journeys(app, mint_on_navigation=False)
 
     app.register_blueprint(bp)

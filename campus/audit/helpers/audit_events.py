@@ -20,9 +20,9 @@ from contextlib import suppress
 import flask
 
 import campus.model as model
-from campus.audit.middleware import redact_sensitive
 from campus.common import env, schema
 from campus.common.utils import uid
+from campus.flask_campus.audit import redact_sensitive
 
 # Standardize JsonObject representation in campus.audit
 JsonObject = dict[str, typing.Any]

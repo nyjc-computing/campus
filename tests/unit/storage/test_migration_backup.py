@@ -254,6 +254,65 @@ class TestUploadBackup(BackupTestCase):
                 self._path(), "005", "005_x.py",
                 {"tokens": [_doc("t1")]})
 
+    def test_override_credentials_target_dedicated_bucket(self):
+        # Complete MIGRATION_BUCKET_* override: the envelope goes through
+        # RailwayBucket with the override credential set (the dedicated
+        # backups bucket), not the deployment's default bucket creds.
+        override_env = {
+            "MIGRATION_BACKUP_BUCKET": "campus-backups",
+            "MIGRATION_BUCKET_NAME": "campus-backups",
+            "MIGRATION_BUCKET_ENDPOINT": "https://t3.storageapi.dev",
+            "MIGRATION_BUCKET_ACCESS_KEY_ID": "tid_test",
+            "MIGRATION_BUCKET_SECRET_ACCESS_KEY": "tsec_test",
+            "MIGRATION_BUCKET_REGION": "sin",
+        }
+        constructed = {}
+
+        class FakeRailwayBucket:
+            def __init__(self, name, credentials=None):
+                constructed["name"] = name
+                constructed["credentials"] = credentials
+
+            def put(self, key, content):
+                constructed["key"] = key
+
+        with patch.dict(os.environ, override_env), \
+                patch("campus.storage.objects.backend.railway.RailwayBucket",
+                      FakeRailwayBucket), \
+                patch("campus.storage.get_bucket") as get_bucket:
+            write_backup(
+                self._path(), "005", "005_x.py",
+                {"tokens": [_doc("t1")]})
+        get_bucket.assert_not_called()
+        self.assertEqual(constructed["name"], "campus-backups")
+        self.assertEqual(constructed["credentials"]["BUCKET_NAME"],
+                         "campus-backups")
+        self.assertEqual(constructed["credentials"]["BUCKET_ACCESS_KEY_ID"],
+                         "tid_test")
+        self.assertEqual(constructed["credentials"]["BUCKET_REGION"], "sin")
+
+    def test_partial_override_falls_back_to_default_bucket(self):
+        # A partial MIGRATION_BUCKET_* set is ignored (never
+        # half-applied): the default get_bucket resolution applies.
+        class FailingBucket:
+            def put(self, key, content):
+                raise OSError("bucket unreachable")
+
+        with patch.dict(os.environ, {
+            "MIGRATION_BACKUP_BUCKET": "campus-backups",
+            "MIGRATION_BUCKET_NAME": "campus-backups",
+            # ENDPOINT and keys deliberately missing.
+        }), \
+                patch("campus.storage.objects.backend.railway.RailwayBucket") as rb, \
+                patch("campus.storage.get_bucket",
+                      return_value=FailingBucket()) as get_bucket, \
+                self.assertRaises(OSError):
+            write_backup(
+                self._path(), "005", "005_x.py",
+                {"tokens": [_doc("t1")]})
+        rb.assert_not_called()
+        get_bucket.assert_called_once_with("campus-backups")
+
 
 class TestDownloadBackup(BackupTestCase):
     """bucket:// URI fetch (#1170): scheme validation + round trip."""

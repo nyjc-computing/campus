@@ -22,9 +22,9 @@ import flask
 
 import campus.config
 import campus.flask_campus as flask_campus
-from campus.audit.middleware import redact_sensitive
 from campus.common import schema
 from campus.common.errors import FieldError, ValidationError, api_errors
+from campus.flask_campus.audit import redact_sensitive
 
 from .. import authz, get_yapper, scopes
 from ..resources import client as client_resource

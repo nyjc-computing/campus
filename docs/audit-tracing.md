@@ -13,7 +13,7 @@ Parent epic: #424; enablement issue: #699.
   flag is a redeploy, not a runtime change). `campus.audit` does not
   trace its own requests.
 - Client apps that depend on `campus-suite` wire the same middleware
-  themselves: `campus.audit.middleware.init_app(app)` behind their own
+  themselves: `campus.flask_campus.audit.init_tracing(app)` behind their own
   `AUDIT_TRACING_ENABLED` gate (see the classroom app factory for the
   reference wiring). A traced client app's requests become root spans,
   and the campus SDK calls it makes become their child spans (#816).
@@ -47,8 +47,8 @@ originating request, which is what the audit UI's waterfall draws:
   per call from the active request context — safe for shared sessions,
   and calls from outside a request context (e.g. the ingestion executor
   thread) stay unparented. The mirrored copy in
-  `campus.audit.middleware.tracing` remains for server-side sessions
-  built on `campus.audit.http`; the two are idempotent across each
+  `campus.flask_campus.audit.tracing` remains for server-side sessions
+  built on `campus_python.audit.http`; the two are idempotent across each
   other.
 - In tests, `tests.flask_test.TestCampusRequest` merges the same headers
   so the api→auth chain behaves as in production.
@@ -94,7 +94,7 @@ group one user-initiated *action episode* — the page load that began
 it, its XHRs and form posts, and the server-to-server calls those
 spawn (which are already one trace each via propagation; the journey
 stitches across browser requests). Same `tags.journey_id` mechanism,
-different lifecycle, owned by `campus.audit.middleware.journeys`:
+different lifecycle, owned by `campus.flask_campus.audit.journeys`:
 
 - **Adopt:** each request picks up the journey from the
   `X-Journey-ID` header (SDK-forwarded child call, or an app minting
@@ -139,7 +139,7 @@ key**. Set it on each producer:
 AUDIT_API_KEY=audit_v1_<22-char-base64url>
 ```
 
-Priority in `campus.audit.client`:
+Priority in `campus_python.audit.client`:
 
 1. `AuditClient.json_client_class` (test injection only)
 2. `AUDIT_API_KEY` — explicit Bearer auth, scoped to the audit client

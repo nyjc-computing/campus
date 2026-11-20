@@ -615,13 +615,13 @@ botocore = ["botocore"]
 
 [[package]]
 name = "campus-api-python"
-version = "0.10.8"
+version = "0.10.9"
 description = "Campus API for Python projects"
 optional = false
 python-versions = ">=3.11,<3.15"
 groups = ["main"]
 files = [
-    {file = "campus_api_python-0.10.8-py3-none-any.whl", hash = "sha256:b6dcefaca5a831d85f827e3ccbfa53a62734c7052eb036da5f5f3ab2e50d4b39"},
+    {file = "campus_api_python-0.10.9-py3-none-any.whl", hash = "sha256:73e7d550cc8232fde9536db1469a6859654ea8204c08f5d4a311ea358099648d"},
 ]
 
 [package.dependencies]
@@ -631,7 +631,7 @@ requests = ">=2.32.4,<3.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.8/campus_api_python-0.10.8-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.9/campus_api_python-0.10.9-py3-none-any.whl"
 
 [[package]]
 name = "campus-common"
@@ -678,13 +678,13 @@ url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.9/ca
 
 [[package]]
 name = "campus-deploy"
-version = "0.1.3"
+version = "0.2.0"
 description = "Campus deployment glue: create_app, health/landing/OpenAPI route conventions - PEP 420 namespace portion under campus/deploy"
 optional = false
 python-versions = ">=3.11.0,<3.15"
 groups = ["main"]
 files = [
-    {file = "campus_deploy-0.1.3-py3-none-any.whl", hash = "sha256:ff69d4247d0e24c883ca03357dbb5ffc2041e5689fc7390eb85173e56058c817"},
+    {file = "campus_deploy-0.2.0-py3-none-any.whl", hash = "sha256:fda21fa674bb9185351673b90cb2c7db7cb5144132ec9f9f7fbca60cc0854c28"},
 ]
 
 [package.dependencies]
@@ -694,7 +694,7 @@ werkzeug = ">=3.0.0,<4.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/campus-deploy/releases/download/v0.1.3/campus_deploy-0.1.3-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/campus-deploy/releases/download/v0.2.0/campus_deploy-0.2.0-py3-none-any.whl"
 
 [[package]]
 name = "campus-model"
@@ -967,17 +967,17 @@ dotenv = ["python-dotenv"]
 
 [[package]]
 name = "flask-campus"
-version = "0.1.19"
-description = "Flask consumer layer for Campus apps: flask_campus glue + audit middleware/client/http - PEP 420 namespace portions under campus/flask_campus and campus/audit"
+version = "0.2.0"
+description = "Flask consumer layer for Campus apps: flask_campus glue + audit middleware - PEP 420 namespace portion under campus/flask_campus (the audit client ships with campus-api-python)"
 optional = false
 python-versions = ">=3.11.0,<3.15"
 groups = ["main"]
 files = [
-    {file = "flask_campus-0.1.19-py3-none-any.whl", hash = "sha256:720495b554ef1b03c77fe7d687ec219ece4721f32a3f5dfc05accf01c3eb2970"},
+    {file = "flask_campus-0.2.0-py3-none-any.whl", hash = "sha256:13144c6ade262488030b38947ea69c8c2f5b2f0b60c96256b8e0d25bfb051283"},
 ]
 
 [package.dependencies]
-campus_api_python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.8/campus_api_python-0.10.8-py3-none-any.whl"}
+campus_api_python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.9/campus_api_python-0.10.9-py3-none-any.whl"}
 campus_common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.5.1/campus_common-0.5.1-py3-none-any.whl"}
 campus_model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.2.4/campus_model-0.2.4-py3-none-any.whl"}
 flask = ">=3.0.0,<4.0.0"
@@ -986,7 +986,7 @@ werkzeug = ">=3.0.0,<4.0.0"
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.1.19/flask_campus-0.1.19-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.2.0/flask_campus-0.2.0-py3-none-any.whl"
 
 [[package]]
 name = "gunicorn"
@@ -2022,4 +2022,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "3d0e0576705315038235cc03dfd10f3b251b09e06097451e188f9d8a90ff9baf"
+content-hash = "0987c2fb1aa4a3aefa7ffa3bd12e6b8e23d2d38b748a90d3271ebc7964412a77"

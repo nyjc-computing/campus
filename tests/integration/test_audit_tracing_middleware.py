@@ -66,7 +66,7 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
 
         # Reset audit client singleton to ensure fresh client for this test class
         # This is important because the singleton persists across test classes
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
     @classmethod
@@ -75,7 +75,7 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
         super().tearDownClass()  # Uses new API: cleanup()
 
         # Reset audit client singleton after cleanup to avoid stale credentials
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
     def setUp(self):
@@ -101,7 +101,7 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
         self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
 
         # Reset audit client singleton to ensure fresh client for each test
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
         # Clear trace storage between tests for isolation
@@ -119,7 +119,7 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
         super().tearDown()
 
         # Reset the audit client singleton so next test gets a fresh one
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
         # Re-create the executor for next test using the new API
@@ -129,7 +129,7 @@ class TestTracingMiddlewareBasic(IsolatedIntegrationTestCase):
     def test_request_succeeds_when_audit_unavailable(self):
         """Test that requests succeed even when audit service is unavailable."""
         # Mock the audit client to raise connection error
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
 
         _ = tracing._get_audit_client()
 
@@ -199,7 +199,7 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
 
         # Reset audit client singleton to ensure fresh client for this test class
         # This is important because the singleton persists across test classes
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
     @classmethod
@@ -208,7 +208,7 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         super().tearDownClass()  # Uses new API: cleanup()
 
         # Reset audit client singleton after cleanup to avoid stale credentials
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
     def test_000_dependencies(self):
@@ -240,7 +240,7 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         # CRITICAL FIX: Use a fresh executor for dependency check
         # The ExecutorManager handles proper lifecycle management, ensuring
         # clean state for this dependency check.
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
 
         # Use the new API: recreate() handles shutdown and creation atomically
         # This prevents issue #496 where pending tasks from previous test classes
@@ -325,7 +325,7 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
 
         # Reset audit client singleton to ensure fresh client for each test
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
         # Clear trace storage between tests for isolation
@@ -343,7 +343,7 @@ class TestTracingMiddlewareSpanIngestion(IsolatedIntegrationTestCase, Dependency
         super().tearDown()
 
         # Reset the audit client singleton so next test gets a fresh one
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
         # Re-create the executor for next test using the new API
@@ -880,7 +880,7 @@ class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, Dependency
         cls.apps_app = cls.manager.apps_app
         cls.audit_app = cls.manager.audit_app
 
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
 
     def setUp(self):
@@ -894,8 +894,8 @@ class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, Dependency
         self.audit_headers = get_bearer_auth_headers(env.ACCESS_TOKEN)
 
         import campus.storage
-        from campus.audit.middleware import tracing
         from campus.audit.resources.traces import traces_storage
+        from campus.flask_campus.audit import tracing
 
         tracing._audit_client = None
         # Fresh executor per test: a previous class's teardown may have
@@ -908,7 +908,7 @@ class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, Dependency
         """Restore executor state between tests."""
         super().tearDown()
 
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
         tracing._audit_client = None
         tracing.recreate_executor()
 
@@ -935,7 +935,7 @@ class TestTracingCrossServicePropagation(IsolatedIntegrationTestCase, Dependency
 
     def test_000_dependencies(self):
         """Verify span ingestion works before testing propagation."""
-        from campus.audit.middleware import tracing
+        from campus.flask_campus.audit import tracing
 
         # Fresh executor: pending shutdown from previous classes would
         # silently drop spans (#496)

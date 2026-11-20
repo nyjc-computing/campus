@@ -8,7 +8,7 @@ Campus ships as a **fleet of six distributions** under one flat `campus` import 
 |---|---|---|
 | [campus-common](https://github.com/nyjc-computing/campus-common) | `campus.common` — env, errors, schema, protocol constants, service URL registry, utils, validation | everything |
 | [campus-model](https://github.com/nyjc-computing/campus-model) | `campus.model` — entity dataclasses + header value classes | suite, SDK, profile, classroom |
-| [flask-campus](https://github.com/nyjc-computing/flask-campus) | `campus.flask_campus` glue + `campus.audit.{middleware,client,http,roles}` | the four Flask apps + suite |
+| [flask-campus](https://github.com/nyjc-computing/flask-campus) | `campus.flask_campus` glue + `campus.flask_campus.audit` middleware | the four Flask apps + suite |
 | [campus-deploy](https://github.com/nyjc-computing/campus-deploy) | `campus.deploy` — create_app, health/landing/OpenAPI conventions | suite, nyxchange |
 | [campus-core](https://github.com/nyjc-computing/campus-core) | `campus.storage` + `campus.webauth` + `campus.services` (DB drivers as extras) | campus-suite **only** |
 | [campus-suite](https://github.com/nyjc-computing/campus) (this repo) | `campus.auth`, `campus.api`, `campus.audit` services + `campus.yapper` | deploy targets only — **no app installs it** |
@@ -48,8 +48,8 @@ auth, api, audit → services, storage, webauth, model, common,
 storage → model, common               (campus-core)
 webauth → model, common               (campus-core)
 services → common                     (campus-core)
-flask_campus, audit.middleware/client/http/roles → common, model
-                                      (flask-campus; never imports services)
+flask_campus (+ flask_campus.audit middleware) → common, model,
+                                      campus_python (flask-campus; never imports services)
 yapper → (nothing — self-contained)
 deploy → flask-campus, common         (campus-deploy)
 ```
@@ -73,14 +73,17 @@ distribution owns its own subtree and consumers import one flat namespace:
 - `campus-suite` (this repo) ships `campus/auth/`, `campus/api/`, `campus/audit/` (service half), `campus/yapper/`
 - `campus-common` ships `campus/common/`
 - `campus-model` ships `campus/model/`
-- `flask-campus` ships `campus/flask_campus/` + the app-facing `campus/audit/{middleware,client,http,roles}/`
+- `flask-campus` ships `campus/flask_campus/` (including the `campus.flask_campus.audit` middleware)
 - `campus-deploy` ships `campus/deploy.py`
 - `campus-core` ships `campus/storage/`, `campus/webauth/`, `campus/services/`
 
-`campus.audit` is a **shared subnamespace**: the suite owns its
-`__init__.py` (the audit service's `init_app`) via `pkgutil.extend_path`,
-while flask-campus contributes the app-facing halves — disjoint
-subpackages, so the merge is safe.
+`campus.audit` used to be a **shared subnamespace** (the suite's
+service half + flask-campus's app-facing
+`campus.audit.{middleware,client,http,roles}`). Since flask-campus#31
+flask-campus ships no `campus.audit` portion at all — the middleware is
+`campus.flask_campus.audit` and the caller-side audit client ships with
+campus-api-python as `campus_python.audit` — so `campus.audit` is
+**suite-owned only** (one owner per import prefix).
 
 Rules:
 
@@ -118,9 +121,11 @@ flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/d
 campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.6.0/campus_api_python-0.6.0-py3-none-any.whl"}
 ```
 
-Import paths are unchanged from the monorepo era — the portions merge
-(`from campus.flask_campus import OAuthLoginManager`,
-`from campus.audit.middleware import init_app`).
+Import paths merge across the portions (`from campus.flask_campus
+import OAuthLoginManager, audit`). The audit middleware is
+`campus.flask_campus.audit` — `init_tracing`/`init_journeys` — and the
+audit client is `campus_python.audit` (flask-campus#31 unfroze the
+monorepo-era `campus.audit.middleware` paths).
 
 ### For the suite (this repo's deploy targets)
 

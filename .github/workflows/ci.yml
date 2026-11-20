@@ -64,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Classify change set
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -144,7 +144,7 @@ jobs:
           cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
@@ -190,7 +190,7 @@ jobs:
           cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
@@ -237,7 +237,7 @@ jobs:
           cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
@@ -284,7 +284,7 @@ jobs:
           cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
@@ -332,7 +332,7 @@ jobs:
           cache-dependency-path: poetry.lock
       - name: Cache virtualenv
         if: needs.changes.outputs.code == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .venv
           key: venv-${{ runner.os }}-py${{ matrix.python-version }}-${{ hashFiles('poetry.lock') }}
