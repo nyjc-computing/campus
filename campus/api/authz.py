@@ -12,10 +12,14 @@ denied.
 
 Model: circles contain only circles. Each guarded resource family has
 a resource circle with an `<resource>.admin` role circle whose members
-(user circles, named after the email account) hold the admin role on
-that resource family. Since user circles are named after the email,
-the check for a user principal is a direct members-dict lookup keyed
-by the caller's user ID (the email).
+hold the admin role on that resource family. Members are either user
+circles (named after the email account) or nested circles (group
+circles). Since user circles are named after the email, the check for
+a user principal is a direct members-dict lookup keyed by the caller's
+user ID (the email); on a direct miss, membership resolves
+transitively through the role circle's member group circles (#1196) —
+a seeded group (e.g. a school-wide `student` group) confers the role
+to its users without enumerating them into the role circle.
 
 Principals:
 
@@ -76,6 +80,51 @@ def _admin_role_members(resource: str) -> dict | None:
     return matches[0].get("members", {})
 
 
+def _member_circle_ids(members: dict) -> list[str]:
+    """Member keys that address nested circles (non-email-shaped).
+
+    Mirrors resources.circle._member_kind: email-shaped keys name user
+    circles; every other key addresses a circle by UID.
+    """
+    return [str(key) for key in members if "@" not in str(key)]
+
+
+def _member_via_groups(members: dict, user_id: str) -> bool:
+    """Resolve the user transitively through member group circles (#1196).
+
+    A role-circle member key that is not email-shaped addresses a
+    nested circle (a group circle). The user holds the role if their
+    email appears in any reachable member circle's members dict, so a
+    seeded group can confer role-circle membership without enumerating
+    its users into the role circle.
+
+    The walk is cycle-safe: a visited set bounds it to one visit per
+    distinct circle, so DAGs and cycles both terminate. A stale member
+    key (circle deleted after being added) fails closed for that key
+    only — resolution continues through the remaining members.
+    """
+    from campus.storage import errors as storage_errors
+
+    pending = _member_circle_ids(members)
+    visited: set[str] = set()
+    while pending:
+        circle_id = pending.pop()
+        if circle_id in visited:
+            continue
+        visited.add(circle_id)
+        try:
+            record = circle_storage.get_by_id(circle_id)
+        except storage_errors.NotFoundError:
+            continue
+        if not record:
+            continue
+        group_members = record.get("members", {})
+        if user_id in group_members:
+            return True
+        pending.extend(_member_circle_ids(group_members))
+    return False
+
+
 def require_resource_admin(
         resource: str,
         action_label: str | None = None,
@@ -84,8 +133,9 @@ def require_resource_admin(
 
     The domain gate for campus.api mutation routes: the caller must be
     a user principal whose user ID (email, = their user circle's name)
-    appears in the role circle's members dict. Everything else is
-    denied.
+    appears in the role circle's members dict, or is a member of a
+    circle reachable through the role circle's member group circles
+    (#1196). Everything else is denied.
 
     Args:
         resource: The API resource family, matching its bootstrap
@@ -114,7 +164,7 @@ def require_resource_admin(
             f"denying '{action}' fail-closed — run the circles "
             "bootstrap (docs/circles-access-control.md)"
         )
-    if user_id not in members:
+    if user_id not in members and not _member_via_groups(members, user_id):
         raise api_errors.ForbiddenError(
             f"Only members of the '{resource}.admin' circle may "
             f"{action} on the '{resource}' resource"
