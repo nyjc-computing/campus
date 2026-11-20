@@ -153,6 +153,11 @@ For detailed file locations and architecture, see:
 ### Access Control
 - [docs/circles-access-control.md](docs/circles-access-control.md) - How circles implement access control: resource + role circles, membership rules, bootstrap seeding (read before touching circles or adding authorization to API routes)
 
+### User-Facing Dist Docs (published to GitHub Pages)
+- [campus-api-python docs](https://nyjc-computing.github.io/campus-api-python/) - SDK guides + auto-generated API reference (mkdocstrings; read before changing SDK public surfaces)
+- [campus-cli docs](https://nyjc-computing.github.io/campus-cli/) - CLI guides + command reference generated from the Typer app (read before adding/changing commands)
+- [flask-campus docs](https://nyjc-computing.github.io/flask-campus/) - flask_campus guides + reference (read before changing login/audit middleware surfaces)
+
 ### Railway & Deployment
 - [docs/environment-access-policy.md](docs/environment-access-policy.md) - Environment/branch policy, Railway access model, log-scrubbing rules, debug surfaces by role (read before touching Railway services or production)
 - [docs/railway-architecture.md](docs/railway-architecture.md) - Environments, services, gateway request flow, and the IPv6-only private-networking rules (read before touching Railway service config or adding a deployment)
@@ -256,6 +261,16 @@ poetry run python tests/run_tests.py contract      # HTTP contracts (also a bloc
       matches the freshly generated spec or its `info.version` lags
       `pyproject.toml` — that drift is how `device_authorize` grew a
       `scope` parameter the hand-maintained spec never learned (#866).
+
+- [ ] If a PR bumps a user-facing dist version (campus-api-python,
+      campus-cli, flask-campus): **every version bump must ship with
+      up-to-date docs.** Each dist has a MkDocs site (published to
+      GitHub Pages) whose version stamp is generated from its
+      `pyproject.toml` — run the dist's `scripts/sync_docs_version.py`
+      (and, for the CLI, `scripts/generate_cli_reference.py`) after
+      bumping, and update the guides/examples the bump affects. The
+      dist's CI fails on stale artifacts; each dist's AGENTS.md has
+      the exact workflow.
 
 ---
 
