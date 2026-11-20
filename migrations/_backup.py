@@ -30,6 +30,13 @@ failure raises, aborting the migration before its first write.
 `bucket://<name>/<key>` URI for `restore` (and
 `runner.py rollback REV --from-backup` accepts the URI directly).
 
+Credential override (dedicated backups bucket): `get_bucket` resolves
+ONE credential set per deployment (env-first, then the vault), which
+for campus.api is the live objects bucket — not a backups bucket. When
+the `MIGRATION_BUCKET_*` keys are configured (same resolution), their
+credential set wins and `MIGRATION_BACKUP_BUCKET` names the actual
+target; a partial override set is ignored rather than half-applied.
+
 Restore from the same context a migration runs in (storage secrets
 resolve):
 
@@ -59,6 +66,22 @@ BACKUP_FORMAT = "campus-migration-backup/1"
 # the local-file-only behavior; set (production runs) every envelope is
 # uploaded before the migration's first write.
 MIGRATION_BACKUP_BUCKET_ENVVAR = "MIGRATION_BACKUP_BUCKET"
+
+# Purpose-scoped credential override (dedicated backups bucket): the
+# storage layer resolves one credential set per deployment, so a service
+# whose default bucket is app data (campus.api) could not otherwise
+# target a dedicated backups bucket. These keys use the same
+# env-first/vault fallback resolution as BUCKET_*; a partial set is
+# ignored.
+OVERRIDE_CREDENTIAL_VARS = {
+    "BUCKET_NAME": "MIGRATION_BUCKET_NAME",
+    "BUCKET_ENDPOINT": "MIGRATION_BUCKET_ENDPOINT",
+    "BUCKET_ACCESS_KEY_ID": "MIGRATION_BUCKET_ACCESS_KEY_ID",
+    "BUCKET_SECRET_ACCESS_KEY": "MIGRATION_BUCKET_SECRET_ACCESS_KEY",
+}
+OVERRIDE_OPTIONAL_VARS = {
+    "BUCKET_REGION": "MIGRATION_BUCKET_REGION",
+}
 
 
 def _get_user() -> str | None:
@@ -98,25 +121,58 @@ def write_backup(
     return sum(len(docs) for docs in collections.values())
 
 
+def _resolve_override_credentials() -> dict[str, str] | None:
+    """The MIGRATION_BUCKET_* credential override set, or None.
+
+    Resolution mirrors the storage backend (environment first, then the
+    deployment vault via getsecret). None unless every required key
+    resolves — a partial override is ignored so a typo can't silently
+    redirect backups to the deployment's default bucket.
+    """
+    from campus.storage.objects.backend.railway import resolve_credential
+
+    creds: dict[str, str] = {}
+    for cred_key, override_key in OVERRIDE_CREDENTIAL_VARS.items():
+        value = resolve_credential(override_key)
+        if not value:
+            return None
+        creds[cred_key] = value
+    for cred_key, override_key in OVERRIDE_OPTIONAL_VARS.items():
+        value = resolve_credential(override_key)
+        if value:
+            creds[cred_key] = value
+    return creds
+
+
 def upload_backup(path: str | Path, revision: str) -> str | None:
     """Upload a backup envelope to the configured object bucket (#1170).
 
     Returns the bucket key, or None when MIGRATION_BACKUP_BUCKET is
-    unset (local-file-only runs). Fail-closed: any storage failure
-    raises — backup-before-write is only as good as the backup's
-    durability, so a failed upload must abort the migration before its
-    first write.
+    unset (local-file-only runs). When the MIGRATION_BUCKET_* override
+    keys resolve, their credential set targets the dedicated backups
+    bucket; otherwise the deployment's default bucket credentials
+    apply. Fail-closed: any storage failure raises — backup-before-write
+    is only as good as the backup's durability, so a failed upload must
+    abort the migration before its first write.
     """
     from campus.common import env
 
     bucket_name = env.get(MIGRATION_BACKUP_BUCKET_ENVVAR, "")
     if not bucket_name:
         return None
-    from campus.storage import get_bucket
+    override = _resolve_override_credentials()
+    if override is not None:
+        from campus.storage.objects.backend.railway import RailwayBucket
+
+        bucket = RailwayBucket(bucket_name, credentials=override)
+    else:
+        from campus.storage import get_bucket
+
+        bucket = get_bucket(bucket_name)
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     key = f"migrations/{revision}/{stamp}/{Path(path).name}"
-    get_bucket(bucket_name).put(key, Path(path).read_bytes())
+    bucket.put(key, Path(path).read_bytes())
     return key
 
 
