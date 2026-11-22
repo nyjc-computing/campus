@@ -14,7 +14,8 @@ Circles Endpoints Reference:
 - DELETE /circles/{circle_id}/                  - Delete a circle
 - POST   /circles/{circle_id}/move              - Move circle (not implemented - 501)
 - GET    /circles/{circle_id}/members/          - Get circle members
-- GET    /circles/{circle_id}/members/{member_id} - Probe one membership (404 when absent)
+- GET    /circles/{circle_id}/members/{member_id} - Probe one membership
+                                                   (404 when absent; ?resolve=transitive walks groups)
 - POST   /circles/{circle_id}/members/add       - Add a member to a circle
 - DELETE /circles/{circle_id}/members/remove    - Remove a member from a circle
 - PATCH  /circles/{circle_id}/members/          - Update member access level
@@ -687,6 +688,167 @@ class TestApiCirclesContract(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
+
+    # Transitive probe (#1202): ?resolve=transitive answers through the
+    # shared resolver, with the same semantics as the enforcement gate.
+    # The direct-only default is preserved for back-compat.
+
+    def _wire_group_membership(
+            self, email: str, group_name: str, circle_name: str,
+    ) -> str:
+        """Create circle -> group -> user circle; returns the circle ID."""
+        self._create_test_user_circle(email)
+        group_id = self._create_test_circle(name=group_name, tag="group")
+        circle_id = self._create_test_circle(name=circle_name)
+        self.client.post(
+            f"/api/v1/circles/{group_id}/members/add",
+            json={"member_id": email, "access_value": 10},
+            headers=self.auth_headers
+        )
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={"member_id": group_id, "access_value": 15},
+            headers=self.auth_headers
+        )
+        return circle_id
+
+    def test_probe_default_stays_direct_only(self):
+        """Without ?resolve, a group-only member still probes 404."""
+        circle_id = self._wire_group_membership(
+            "teacher.grouponly@campus.test",
+            "grouponly-group",
+            "Probe Default Circle",
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.grouponly@campus.test/",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_probe_transitive_resolves_group_member(self):
+        """?resolve=transitive answers a group-only member with the chain."""
+        circle_id = self._wire_group_membership(
+            "teacher.viagroup@campus.test",
+            "viagroup-group",
+            "Probe Transitive Circle",
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.viagroup@campus.test/?resolve=transitive",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["member_id"], "teacher.viagroup@campus.test")
+        self.assertEqual(data["access_value"], 10)
+        self.assertFalse(data["direct"])
+        self.assertEqual(data["via"], ["viagroup-group"])
+
+    def test_probe_transitive_direct_member(self):
+        """A direct member probes direct=True with an empty via."""
+        self._create_test_user_circle("teacher.direct@campus.test")
+        circle_id = self._create_test_circle(name="Probe Direct Circle")
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher.direct@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.direct@campus.test/?resolve=transitive",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertTrue(data["direct"])
+        self.assertEqual(data["via"], [])
+
+    def test_probe_transitive_reports_max_access_value(self):
+        """Multi-path hits report the max; the default reports the edge."""
+        email = "teacher.multipath@campus.test"
+        self._create_test_user_circle(email)
+        group_id = self._create_test_circle(name="multipath-group", tag="group")
+        circle_id = self._create_test_circle(name="Probe Multipath Circle")
+        self.client.post(
+            f"/api/v1/circles/{group_id}/members/add",
+            json={"member_id": email, "access_value": 10},
+            headers=self.auth_headers
+        )
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={"member_id": group_id, "access_value": 15},
+            headers=self.auth_headers
+        )
+        # Direct edge with a LOWER value than the group path.
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={"member_id": email, "access_value": 5},
+            headers=self.auth_headers
+        )
+
+        default_response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/{email}/",
+            headers=self.auth_headers
+        )
+        transitive_response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/{email}/"
+            "?resolve=transitive",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(default_response.status_code, 200)
+        self.assertEqual(default_response.get_json()["access_value"], 5)
+        self.assertEqual(transitive_response.status_code, 200)
+        self.assertEqual(transitive_response.get_json()["access_value"], 10)
+
+    def test_probe_transitive_unreachable_returns_404(self):
+        """?resolve=transitive 404s when no path reaches the member."""
+        self._create_test_user_circle("teacher.detached@campus.test")
+        detached_id = self._create_test_circle(
+            name="Detached Group", tag="group"
+        )
+        self.client.post(
+            f"/api/v1/circles/{detached_id}/members/add",
+            json={
+                "member_id": "teacher.detached@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+        circle_id = self._create_test_circle(name="Probe Detached Circle")
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.detached@campus.test/?resolve=transitive",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_probe_rejects_unknown_resolve_value(self):
+        """An unknown resolve value is a 422 validation error."""
+        self._create_test_user_circle("teacher.typo@campus.test")
+        circle_id = self._create_test_circle(name="Probe Typo Circle")
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.typo@campus.test/?resolve=recursivce",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 422)
+        data = response.get_json()
+        self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
 
     def test_get_members_missing_circle_returns_error(self):
         """GET /circles/{circle_id}/members/ for non-existent circle returns 409."""

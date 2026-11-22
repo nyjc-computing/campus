@@ -69,6 +69,157 @@ def _member_kind(member_id: str) -> str:
     return "user" if "@" in member_id else "circle"
 
 
+def resolve_member(
+        circle_id: schema.CampusID,
+        member_id: schema.CampusID,
+        *,
+        transitive: bool = True,
+) -> dict | None:
+    """Resolve one membership through the shared resolver (#1202).
+
+    The single implementation of "can this member be reached from this
+    circle": the enforcement gate (campus.api.authz) and the membership
+    probe route both answer through it, so their semantics cannot
+    drift. Resolution is a pure graph walk over membership edges —
+    circles contain only circles, so every member key addresses a
+    circle: email-shaped keys name leaf user circles (personal circles,
+    the account being their member), every other key addresses a circle
+    by UID.
+
+    Args:
+        circle_id: The circle from which resolution starts.
+        member_id: The member identifier to resolve, as stored (a
+            circle UID or the email name of a user circle).
+        transitive: Follow member group circles beyond the direct
+            members dict. False answers the direct-only question
+            (the probe's back-compat default).
+
+    Returns:
+        None if the member is not reachable (the fail-closed negative
+        callers probe for), otherwise a dict:
+
+            {
+                "member_id": str,      # as passed
+                "access_value": int,   # max across resolving paths
+                "direct": bool,        # edge on the circle itself
+                "via": list[str],      # circle names target->hit
+            }
+
+        access_value is the maximum over all resolving paths: edges are
+        uniform (a circle is a member wherever it appears, directly or
+        through groups), so the most permissive path is the member's
+        effective access (#1202 ruling).
+
+    Raises:
+        ConflictError: If the circle does not exist.
+        InternalError: For storage errors.
+    """
+    try:
+        record = circle_storage.get_by_id(circle_id)
+        if record is None:
+            raise api_errors.ConflictError(
+                "Circle not found",
+                id=circle_id
+            )
+    except campus.storage.errors.NotFoundError:
+        raise api_errors.ConflictError(
+            "Circle not found",
+            id=circle_id
+        ) from None
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+
+    key = str(member_id)
+    direct_value = record.get("members", {}).get(key)
+
+    if not transitive:
+        if direct_value is None:
+            return None
+        return {
+            "member_id": key,
+            "access_value": direct_value,
+            "direct": True,
+            "via": [],
+        }
+
+    # Breadth-first walk over membership edges, cycle-safe: one visit
+    # per distinct circle, so DAGs and cycles both terminate. Email-
+    # shaped keys name user circles (addressable by name, not UID), so
+    # the walk never descends through them — it only matches them as
+    # keys, the same rule the #1197 enforcement walk used. A stale
+    # member key (circle deleted after being added) fails closed for
+    # that key only: resolution continues through the remaining edges.
+    from campus.storage import errors as storage_errors
+
+    best: dict | None = None
+    best_depth = -1
+    # parent maps a circle key to the record it was reached from, for
+    # reconstructing the containment chain of the shortest hit path.
+    parents: dict[str, dict] = {}
+    pending: list[tuple[dict, int]] = [(record, 0)]
+    visited: set[str] = set()
+    while pending:
+        current, depth = pending.pop(0)
+        current_key = str(current.get(schema.CAMPUS_KEY))
+        if current_key in visited:
+            continue
+        visited.add(current_key)
+        members = current.get("members", {})
+        if key in members:
+            # First hit at the shallowest depth wins the via chain;
+            # deeper or later hits only compete on access_value.
+            if best is None or depth < best_depth:
+                best = {
+                    "member_id": key,
+                    "access_value": members[key],
+                    "direct": current is record,
+                    "via": _member_chain(current, parents),
+                }
+                best_depth = depth
+            elif members[key] > best["access_value"]:
+                best["access_value"] = members[key]
+        for member_key in members:
+            if _member_kind(str(member_key)) != "circle":
+                continue
+            member_key = str(member_key)
+            if member_key in visited or member_key in parents:
+                continue
+            try:
+                member_record = circle_storage.get_by_id(
+                    schema.CampusID(member_key)
+                )
+            except storage_errors.NotFoundError:
+                continue
+            except campus.storage.errors.StorageError as e:
+                raise api_errors.InternalError.from_exception(e) from e
+            if not member_record:
+                continue
+            parents[member_key] = current
+            pending.append((member_record, depth + 1))
+    return best
+
+
+def _member_chain(hit: dict, parents: dict[str, dict]) -> list[str]:
+    """Reconstruct the containment chain target->hit as circle names.
+
+    `parents` maps each reached circle's key to the record it was
+    reached from; the chain of names (UID if unnamed) reads in the
+    containment direction, e.g. ["staff", "teachers"] for
+    role -> staff -> teachers -> user circle. An empty chain is a
+    direct edge.
+    """
+    chain: list[str] = []
+    current = hit
+    while True:
+        current_key = str(current.get(schema.CAMPUS_KEY))
+        parent = parents.get(current_key)
+        if parent is None:
+            break
+        chain.append(str(current.get("name") or current_key))
+        current = parent
+    chain.reverse()
+    return chain
+
 
 def get_circle_meta() -> dict:
     """Get the circle meta record from the circles collection."""
@@ -657,3 +808,37 @@ class CircleMembersResource:
         """
         # For now, set and add operations are identical
         self.add(circle_id, member_id, access_value)
+
+    def resolve(
+            self,
+            circle_id: schema.CampusID,
+            member_id: schema.CampusID,
+            *,
+            transitive: bool = True,
+    ) -> dict | None:
+        """Resolve one membership through the shared resolver (#1202).
+
+        Resource-layer surface for the module-level resolve_member:
+        the gate (campus.api.authz) imports the module function
+        directly; route handlers and in-process callers go through
+        this method. See resolve_member for semantics.
+
+        Args:
+            circle_id: The circle from which resolution starts.
+            member_id: The member identifier to resolve, as stored.
+            transitive: Follow member group circles beyond the direct
+                members dict.
+
+        Returns:
+            None if the member is not reachable, otherwise the
+            resolution dict (member_id, access_value, direct, via).
+
+        Raises:
+            ConflictError: If the circle does not exist.
+            InternalError: For storage errors.
+        """
+        return resolve_member(
+            circle_id,
+            member_id,
+            transitive=transitive,
+        )

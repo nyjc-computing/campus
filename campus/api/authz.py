@@ -19,7 +19,9 @@ a user principal is a direct members-dict lookup keyed by the caller's
 user ID (the email); on a direct miss, membership resolves
 transitively through the role circle's member group circles (#1196) —
 a seeded group (e.g. a school-wide `student` group) confers the role
-to its users without enumerating them into the role circle.
+to its users without enumerating them into the role circle. The
+transitive walk is resources.circle.resolve_member (#1202), the single
+membership resolver shared with the probe route.
 
 Principals:
 
@@ -48,9 +50,10 @@ __all__ = [
 
 import flask
 
+from campus.common import schema
 from campus.common.errors import api_errors
 
-from .resources.circle import circle_storage
+from .resources.circle import circle_storage, resolve_member
 
 
 def _principal_user_id() -> str | None:
@@ -68,8 +71,8 @@ def _principal_user_id() -> str | None:
     return str(value) if value else None
 
 
-def _admin_role_members(resource: str) -> dict | None:
-    """The members dict of `<resource>.admin`, or None if absent.
+def _admin_role_circle(resource: str) -> dict | None:
+    """The `<resource>.admin` role circle record, or None if absent.
 
     Circle names are unique (best-effort), so the role circle is
     resolved by name — the stable key across UID format changes.
@@ -77,52 +80,7 @@ def _admin_role_members(resource: str) -> dict | None:
     matches = circle_storage.get_matching({"name": f"{resource}.admin"})
     if not matches:
         return None
-    return matches[0].get("members", {})
-
-
-def _member_circle_ids(members: dict) -> list[str]:
-    """Member keys that address nested circles (non-email-shaped).
-
-    Mirrors resources.circle._member_kind: email-shaped keys name user
-    circles; every other key addresses a circle by UID.
-    """
-    return [str(key) for key in members if "@" not in str(key)]
-
-
-def _member_via_groups(members: dict, user_id: str) -> bool:
-    """Resolve the user transitively through member group circles (#1196).
-
-    A role-circle member key that is not email-shaped addresses a
-    nested circle (a group circle). The user holds the role if their
-    email appears in any reachable member circle's members dict, so a
-    seeded group can confer role-circle membership without enumerating
-    its users into the role circle.
-
-    The walk is cycle-safe: a visited set bounds it to one visit per
-    distinct circle, so DAGs and cycles both terminate. A stale member
-    key (circle deleted after being added) fails closed for that key
-    only — resolution continues through the remaining members.
-    """
-    from campus.storage import errors as storage_errors
-
-    pending = _member_circle_ids(members)
-    visited: set[str] = set()
-    while pending:
-        circle_id = pending.pop()
-        if circle_id in visited:
-            continue
-        visited.add(circle_id)
-        try:
-            record = circle_storage.get_by_id(circle_id)
-        except storage_errors.NotFoundError:
-            continue
-        if not record:
-            continue
-        group_members = record.get("members", {})
-        if user_id in group_members:
-            return True
-        pending.extend(_member_circle_ids(group_members))
-    return False
+    return matches[0]
 
 
 def require_resource_admin(
@@ -157,14 +115,23 @@ def require_resource_admin(
             "resource: domain administration must be attributable to "
             "a user (#854)"
         )
-    members = _admin_role_members(resource)
-    if members is None:
+    role_circle = _admin_role_circle(resource)
+    if role_circle is None:
         raise api_errors.ForbiddenError(
             f"No '{resource}.admin' role circle is configured: "
             f"denying '{action}' fail-closed — run the circles "
             "bootstrap (docs/circles-access-control.md)"
         )
-    if user_id not in members and not _member_via_groups(members, user_id):
+    members = role_circle.get("members", {})
+    # The direct dict hit stays as the cheap fast path (#1202): direct
+    # membership trivially implies transitive membership, so the
+    # decision is identical either way. On a direct miss, resolution
+    # goes through the shared resolver — the same implementation the
+    # membership probe answers through, so gate and probe cannot drift.
+    if user_id not in members and not resolve_member(
+            schema.CampusID(role_circle[schema.CAMPUS_KEY]),
+            schema.CampusID(user_id),
+    ):
         raise api_errors.ForbiddenError(
             f"Only members of the '{resource}.admin' circle may "
             f"{action} on the '{resource}' resource"
