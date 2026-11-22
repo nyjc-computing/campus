@@ -348,7 +348,7 @@ def get_circle_members(circle_id: str) -> flask_campus.JsonResponse:
 def get_circle_member(
         circle_id: str,
         member_id: str
-) -> flask_campus.JsonResponse:
+) -> flask.Response:
     """Probe circle membership
 
     Probe a single membership: the member's access value, or 404 when
@@ -427,8 +427,13 @@ def get_circle_member(
           across resolving paths; "direct" flags a direct edge and
           "via" lists the containment chain of circle names from the
           probed circle to the member (empty when direct).
-        - The default remains direct-only for back-compat (#1202);
-          switching the default is a tracked switchover.
+        - The default remains direct-only for back-compat (#1202),
+          under deprecation: an unparameterized probe (no resolve
+          param) carries `Deprecation: true` and a `Sunset` date —
+          at Sunset the default flips to transitive, and direct-only
+          requires the explicit ?resolve=direct. An explicit
+          ?resolve=direct is the migrated spelling and is never
+          flagged.
         - Emits no events.
     """
     resolve = flask.request.args.get("resolve")
@@ -455,7 +460,16 @@ def get_circle_member(
     if resolve == "transitive":
         result["direct"] = resolution["direct"]
         result["via"] = resolution["via"]
-    return result, 200
+        return flask.make_response(result, 200)
+    response = flask.make_response(result, 200)
+    if resolve is None:
+        # Unparameterized invocation = the legacy direct-only default
+        # (#1202 switchover): answered as today, but flagged — the
+        # default flips to transitive at the Sunset date, after which
+        # direct-only requires the explicit ?resolve=direct.
+        response.headers["Deprecation"] = "true"
+        response.headers["Sunset"] = "Mon, 04 Jan 2027 00:00:00 GMT"
+    return response
 
 
 @bp.post('/<string:circle_id>/members/add')

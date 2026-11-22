@@ -850,6 +850,57 @@ class TestApiCirclesContract(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
 
+    def test_probe_unparameterized_carries_deprecation_headers(self):
+        """The legacy default probe is flagged for the #1202 switchover.
+
+        An unparameterized probe (no resolve param) answers as today
+        but carries Deprecation/Sunset headers: the direct-only
+        default flips to transitive at the Sunset date.
+        """
+        self._create_test_user_circle("teacher.sunset@campus.test")
+        circle_id = self._create_test_circle(name="Probe Sunset Circle")
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher.sunset@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.sunset@campus.test/",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("Deprecation"), "true")
+        self.assertIn("Sunset", response.headers)
+
+    def test_probe_explicit_direct_not_flagged(self):
+        """The migrated spelling (?resolve=direct) carries no warning."""
+        self._create_test_user_circle("teacher.optedin@campus.test")
+        circle_id = self._create_test_circle(name="Probe Optedin Circle")
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher.optedin@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.optedin@campus.test/?resolve=direct",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.headers.get("Deprecation"))
+        self.assertIsNone(response.headers.get("Sunset"))
+
     def test_get_members_missing_circle_returns_error(self):
         """GET /circles/{circle_id}/members/ for non-existent circle returns 409."""
         response = self.client.get(
