@@ -41,6 +41,8 @@ PATCH  /clients/{client_id}/  # Update a client
 # Sub-resources that can have further navigation (with trailing slash)
 GET    /circles/{circle_id}/members/  # List members of a circle
 POST   /circles/{circle_id}/members/  # Add a member
+GET    /circles/{circle_id}/members/{member_id}/  # Probe one membership
+                                                  # (default resolves transitively; ?resolve=direct is direct-only)
 GET    /clients/{client_id}/access/   # Get client access
 
 # Dead-end subresources (without trailing slash)
@@ -53,6 +55,7 @@ POST   /clients/{id}/revoke         # Revoke client secret (action endpoint)
 GET    /clients/{id}/access/check   # Check access (action endpoint)
 GET    /submissions/by-assignment/{id}  # Filter by assignment (dead-end)
 GET    /submissions/by-student/{id}     # Filter by student (dead-end)
+GET    /users/{user_id}/roles           # List a user's role memberships (dead-end, #1202)
 ```
 
 #### Determining Trailing Slash Usage
