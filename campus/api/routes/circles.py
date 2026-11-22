@@ -352,7 +352,8 @@ def get_circle_member(
     """Probe circle membership
 
     Probe a single membership: the member's access value, or 404 when
-    absent.
+    absent. Optionally resolve transitively through member group
+    circles.
 
     Probe a single membership in a circle. An absent member is an
     expected negative answer (404), not an error: clients use this
@@ -371,26 +372,46 @@ def get_circle_member(
             or the email name of a user circle.
 
     Query Parameters:
-        None
+        resolve: str (optional)
+            Membership resolution mode. Omit (or "direct") to probe
+            the circle's direct members dict only — the back-compat
+            default. "transitive" additionally resolves through
+            member group circles, with the same semantics as the
+            enforcement gate (#1202): cycle-safe, stale keys fail
+            closed per key. Any other value is a validation error.
 
     Request Body:
         None
 
     Responses:
         200 OK: dict
-            The member's access value within the circle.
-            Example:
+            The member's access value within the circle. The default
+            (direct) probe returns the member_id and access_value
+            fields only. A transitive probe adds resolution detail.
+            Example (direct):
                 {
                     "member_id": "teacher@campus.test",
                     "access_value": 15
                 }
+            Example (?resolve=transitive, reached via a group):
+                {
+                    "member_id": "teacher@campus.test",
+                    "access_value": 15,
+                    "direct": false,
+                    "via": ["students"]
+                }
 
         404 Not Found: None
-            Returned if the circle has no such member (the probe's
-            expected negative answer).
+            Returned if the circle has no such member under the
+            requested resolution mode (the probe's expected negative
+            answer).
 
         409 Conflict: None
             Returned if the circle does not exist.
+
+        422 Unprocessable Entity: None
+            Returned if resolve has a value other than "direct" or
+            "transitive".
 
         500 Internal Server Error: None
             Returned if a storage-level error occurs while probing.
@@ -399,23 +420,42 @@ def get_circle_member(
         - Reads stay open (no role membership required), consistent
           with GET /circles/{circle_id}/members/: the probe leaks
           nothing the members listing does not.
-        - Only direct membership is probed; transitive resolution
-          through nested circles does not exist yet.
+        - Transitive resolution answers through the shared membership
+          resolver (resources.circle.resolve_member, #1202) — the same
+          implementation the enforcement gate uses, so gate and probe
+          decisions agree by construction. access_value is the maximum
+          across resolving paths; "direct" flags a direct edge and
+          "via" lists the containment chain of circle names from the
+          probed circle to the member (empty when direct).
+        - The default remains direct-only for back-compat (#1202);
+          switching the default is a tracked switchover.
         - Emits no events.
     """
-    access_value = resources.circle.members.get(
+    resolve = flask.request.args.get("resolve")
+    if resolve is not None and resolve not in ("direct", "transitive"):
+        raise api_errors.ValidationError(
+            f"Invalid resolve value: {resolve!r} "
+            '(expected "direct" or "transitive")',
+            field="resolve",
+        )
+    resolution = resources.circle.members.resolve(
         schema.CampusID(circle_id),
         schema.CampusID(member_id),
+        transitive=resolve == "transitive",
     )
-    if access_value is None:
+    if resolution is None:
         raise api_errors.NotFoundError(
             "Member not found in circle",
             id=member_id
         )
-    return {
+    result = {
         "member_id": member_id,
-        "access_value": access_value,
-    }, 200
+        "access_value": resolution["access_value"],
+    }
+    if resolve == "transitive":
+        result["direct"] = resolution["direct"]
+        result["via"] = resolution["via"]
+    return result, 200
 
 
 @bp.post('/<string:circle_id>/members/add')
