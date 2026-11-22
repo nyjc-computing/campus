@@ -15,7 +15,7 @@ Circles Endpoints Reference:
 - POST   /circles/{circle_id}/move              - Move circle (not implemented - 501)
 - GET    /circles/{circle_id}/members/          - Get circle members
 - GET    /circles/{circle_id}/members/{member_id} - Probe one membership
-                                                   (404 when absent; ?resolve=transitive walks groups)
+                                                   (default resolves transitively; ?resolve=direct is direct-only)
 - POST   /circles/{circle_id}/members/add       - Add a member to a circle
 - DELETE /circles/{circle_id}/members/remove    - Remove a member from a circle
 - PATCH  /circles/{circle_id}/members/          - Update member access level
@@ -610,7 +610,7 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_probe_circle_member(self):
-        """GET /circles/{id}/members/{member_id} returns the access value."""
+        """GET /circles/{id}/members/{member_id} returns the transitive shape."""
         self._create_test_user_circle("teacher.probe@campus.test")
         circle_id = self._create_test_circle(name="Probe Circle")
         self.client.post(
@@ -631,6 +631,12 @@ class TestApiCirclesContract(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["member_id"], "teacher.probe@campus.test")
         self.assertEqual(data["access_value"], 15)
+        # The #1207 default: transitive shape, direct edge flagged.
+        self.assertEqual(
+            set(data), {"member_id", "access_value", "direct", "via"}
+        )
+        self.assertIs(data["direct"], True)
+        self.assertEqual(data["via"], [])
 
     def test_probe_absent_member_returns_404(self):
         """GET /circles/{id}/members/{member_id} for a non-member returns 404."""
@@ -689,9 +695,9 @@ class TestApiCirclesContract(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    # Transitive probe (#1202): ?resolve=transitive answers through the
-    # shared resolver, with the same semantics as the enforcement gate.
-    # The direct-only default is preserved for back-compat.
+    # Membership probe (#1202/#1207): the default resolves transitively
+    # through the shared resolver — the enforcement gate's semantics;
+    # ?resolve=direct is the explicit direct-only spelling.
 
     def _wire_group_membership(
             self, email: str, group_name: str, circle_name: str,
@@ -712,8 +718,8 @@ class TestApiCirclesContract(unittest.TestCase):
         )
         return circle_id
 
-    def test_probe_default_stays_direct_only(self):
-        """Without ?resolve, a group-only member still probes 404."""
+    def test_probe_default_is_transitive(self):
+        """#1207: an unparameterized probe resolves group-only members."""
         circle_id = self._wire_group_membership(
             "teacher.grouponly@campus.test",
             "grouponly-group",
@@ -726,7 +732,64 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertFalse(data["direct"])
+        self.assertEqual(data["via"], ["grouponly-group"])
+
+    def test_probe_direct_mode_stays_direct_only(self):
+        """?resolve=direct keeps answering the direct dict only."""
+        circle_id = self._wire_group_membership(
+            "teacher.explicitdirect@campus.test",
+            "explicitdirect-group",
+            "Probe Explicit Direct Circle",
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.explicitdirect@campus.test/?resolve=direct",
+            headers=self.auth_headers
+        )
+
         self.assertEqual(response.status_code, 404)
+        message = response.get_json()["error"]["message"]
+        # The direct-mode caller asked for exactly that: no
+        # switchover hint in the message.
+        self.assertNotIn("resolve=direct", message)
+
+    def test_probe_default_unreachable_404_hints_at_direct(self):
+        """A transitive-mode miss points direct-only callers at the
+        explicit spelling (#1207 footgun guard)."""
+        circle_id = self._wire_group_membership(
+            "teacher.detached404@campus.test",
+            "detached404-group",
+            "Probe Hint Circle",
+        )
+        # Detach the group from the circle: reachable nowhere. Members
+        # are keyed by the identifier they were added with — the UID.
+        from campus.api.resources.circle import circle_storage
+        from campus.common import schema as schema_mod
+
+        group_record = circle_storage.get_matching(
+            {"name": "detached404-group"}
+        )[0]
+        self.client.delete(
+            f"/api/v1/circles/{circle_id}/members/remove",
+            json={"member_id": str(schema_mod.CampusID(
+                group_record[schema_mod.CAMPUS_KEY]
+            ))},
+            headers=self.auth_headers
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.detached404@campus.test/",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 404)
+        message = response.get_json()["error"]["message"]
+        self.assertIn("resolve=direct", message)
 
     def test_probe_transitive_resolves_group_member(self):
         """?resolve=transitive answers a group-only member with the chain."""
@@ -774,7 +837,7 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(data["via"], [])
 
     def test_probe_transitive_reports_max_access_value(self):
-        """Multi-path hits report the max; the default reports the edge."""
+        """Multi-path hits report the max; ?resolve=direct the edge."""
         email = "teacher.multipath@campus.test"
         self._create_test_user_circle(email)
         group_id = self._create_test_circle(name="multipath-group", tag="group")
@@ -796,20 +859,20 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
 
+        direct_response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/{email}/"
+            "?resolve=direct",
+            headers=self.auth_headers
+        )
         default_response = self.client.get(
             f"/api/v1/circles/{circle_id}/members/{email}/",
             headers=self.auth_headers
         )
-        transitive_response = self.client.get(
-            f"/api/v1/circles/{circle_id}/members/{email}/"
-            "?resolve=transitive",
-            headers=self.auth_headers
-        )
 
+        self.assertEqual(direct_response.status_code, 200)
+        self.assertEqual(direct_response.get_json()["access_value"], 5)
         self.assertEqual(default_response.status_code, 200)
-        self.assertEqual(default_response.get_json()["access_value"], 5)
-        self.assertEqual(transitive_response.status_code, 200)
-        self.assertEqual(transitive_response.get_json()["access_value"], 10)
+        self.assertEqual(default_response.get_json()["access_value"], 10)
 
     def test_probe_transitive_unreachable_returns_404(self):
         """?resolve=transitive 404s when no path reaches the member."""
@@ -849,6 +912,30 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         data = response.get_json()
         self.assertEqual(data["error"]["code"], "VALIDATION_FAILED")
+
+    def test_probe_direct_mode_returns_direct_shape(self):
+        """?resolve=direct keeps the two-field shape (#1207)."""
+        self._create_test_user_circle("teacher.optedin@campus.test")
+        circle_id = self._create_test_circle(name="Probe Optedin Circle")
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={
+                "member_id": "teacher.optedin@campus.test",
+                "access_value": 15,
+            },
+            headers=self.auth_headers
+        )
+
+        response = self.client.get(
+            f"/api/v1/circles/{circle_id}/members/"
+            "teacher.optedin@campus.test/?resolve=direct",
+            headers=self.auth_headers
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(set(data), {"member_id", "access_value"})
+        self.assertEqual(data["access_value"], 15)
 
     def test_get_members_missing_circle_returns_error(self):
         """GET /circles/{circle_id}/members/ for non-existent circle returns 409."""
