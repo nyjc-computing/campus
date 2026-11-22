@@ -104,7 +104,29 @@ negative answer, not an error; a missing circle is a 409). Clients use
 it for cheap, fail-closed role checks — e.g. "is this user in
 `timetable.admin`" — instead of fetching the full members dict. It is
 ungated like the members listing (it leaks nothing the listing does
-not) and probes direct membership only.
+not).
+
+Resolution mode (#1202): by default the probe answers direct
+membership only — the back-compat default, preserved until the tracked
+switchover flips it. `?resolve=transitive` additionally resolves
+through member group circles, with the same semantics as the
+enforcement gate: both answer through the shared resolver
+(`resources.circle.resolve_member`), so their decisions agree by
+construction (a randomized unit test pins gate == probe). A transitive
+hit reports `direct` (whether a direct edge exists), `via` (the
+containment chain of circle names from the probed circle to the
+member, empty when direct), and the maximum access value across
+resolving paths — membership edges are uniform (a circle is a member
+wherever it appears), so the most permissive path is the member's
+effective access. An unknown `resolve` value is a 422.
+
+Inverted check: `GET /api/v1/users/{user_id}/roles` enumerates the
+role circles (tag `role`) the user holds under the same transitive
+semantics — sorted by role circle name, each entry carrying
+`circle_id`, `name`, `access_value`, `direct`, `via`. A user with no
+resolvable memberships answers an empty list. Ungated like the other
+circles reads (#1202; answers the ops question that previously
+required hand-rolled members-dict diffing, #1196).
 
 Semantics that are convention, not contract, until decided:
 
@@ -202,10 +224,16 @@ authz.require_resource_admin(resource, action_label=None)
   group circles (transitive resolution, #1196). The role circle is
   resolved by name; a missing role circle denies (fail-closed, no
   500). User circles are named after the email, so the primary check
-  is a direct members-dict lookup; the transitive walk runs only on a
-  direct miss, is cycle-safe via a visited set, and skips stale
-  member keys (circle deleted after being added) fail-closed without
-  blocking resolution through the remaining members.
+  is a direct members-dict lookup (a cheap fast path — direct
+  membership trivially implies transitive, so the decision is
+  identical either way); the transitive walk runs only on a direct
+  miss and answers through the shared membership resolver
+  (`resources.circle.resolve_member`, #1202) — the single
+  implementation, shared with the transitive probe, so gate and probe
+  decisions cannot drift. The walk is cycle-safe via a visited set
+  and skips stale member keys (circle deleted after being added)
+  fail-closed without blocking resolution through the remaining
+  members.
 - **Denials (403)**: client principals (HTTP Basic or app-scoped
   tokens — domain administration must be attributable to a user, the
   #854 rule), authenticated users without the role, and any caller
