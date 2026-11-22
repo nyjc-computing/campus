@@ -18,8 +18,8 @@ packages = [{include = "campus"}]
 python = ">=3.11.0,<3.15"
 
 # Campus internal dependencies
-# Typed API client + audit client (campus_python.audit, flask-campus#31) - consumed as the campus-api-python v0.10.11 release wheel (members.resolve gate-parity probe + api.users.roles inverted check, campus#1202)
-campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.11/campus_api_python-0.10.11-py3-none-any.whl"}
+# Typed API client + audit client (campus_python.audit, flask-campus#31) - consumed as the campus-api-python v0.10.12 release wheel (explicit ?resolve= on every membership probe — invariant across the #1207 default flip; v0.10.11 shipped members.resolve + api.users.roles, campus#1202)
+campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.12/campus_api_python-0.10.12-py3-none-any.whl"}
 # Stable kernel (campus.common) - consumed as the campus-common v0.5.1 release wheel (production token errors keep the oauth_error protocol code — RFC 8628 pollers need it; campus-common#11)
 campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.5.1/campus_common-0.5.1-py3-none-any.whl"}
 # Domain models (campus.model) - consumed as the campus-model v0.2.5 release wheel (TraceTreeNode.tags for the tree/detail path, campus#1175)
