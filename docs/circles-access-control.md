@@ -161,7 +161,13 @@ therefore carry, granted 2026-11-06 (verified by the #81 live E2E):
 Grant recipe: a user circle (tag `user`, named after the email) must
 exist before `members/add` accepts an email-shaped member; a
 `circles.admin` member then adds it to the role circles at access
-level 15 (`POST /api/v1/circles/{id}/members/add`). The designated
+level 15 (`POST /api/v1/circles/{id}/members/add`). For school-wide
+roles, seed a group circle instead and add it to the role circle once
+(#1196): create the group (e.g. `student`, tag `group`), add user
+circles to it, then add the group's UID to each role circle its
+members should hold — enforcement resolves the role transitively
+through member group circles, so users need not be enumerated into
+the role circle. The designated
 grantor is `campus-test-admin` (its credentials are not shared — grants
 run through its own device-flow login). Extending
 `BOOTSTRAP_ADMIN_USERS` would remove the manual step but is a
@@ -191,10 +197,15 @@ authz.require_resource_admin(resource, action_label=None)
 
 - **Decision**: the caller must be a user principal (bearer token)
   whose user ID — the email, which is also their user circle's name —
-  appears in the `<resource>.admin` role circle's members dict. The
-  role circle is resolved by name; a missing role circle denies
-  (fail-closed, no 500). User circles are named after the email, so
-  this is a direct members-dict lookup: no resolution hop.
+  appears in the `<resource>.admin` role circle's members dict, or is
+  a member of a circle reachable through the role circle's member
+  group circles (transitive resolution, #1196). The role circle is
+  resolved by name; a missing role circle denies (fail-closed, no
+  500). User circles are named after the email, so the primary check
+  is a direct members-dict lookup; the transitive walk runs only on a
+  direct miss, is cycle-safe via a visited set, and skips stale
+  member keys (circle deleted after being added) fail-closed without
+  blocking resolution through the remaining members.
 - **Denials (403)**: client principals (HTTP Basic or app-scoped
   tokens — domain administration must be attributable to a user, the
   #854 rule), authenticated users without the role, and any caller
@@ -224,10 +235,11 @@ authz.require_resource_admin(resource, action_label=None)
   live in `tests/contract/api/test_api_circles.py`.
 
 Later refinements, in rough order: access-value tiers (the gate takes
-a level checked against the member's access value), transitive
-resolution through nested circles, caching invalidated by the
-existing `campus.circles.*` yapper events, and private-resource
-access resolving through the owning user's circle contents.
+a level checked against the member's access value), caching
+invalidated by the existing `campus.circles.*` yapper events, and
+private-resource access resolving through the owning user's circle
+contents. (Transitive resolution through nested circles shipped
+2026-11-21, #1196.)
 
 ## Open design questions
 
@@ -243,7 +255,5 @@ access resolving through the owning user's circle contents.
   its access control naturally.
 - Role administration flow (who may edit role-circle membership, and
   via what UI/CLI) — replaces the hardcoded bootstrap admin.
-- Transitive membership resolution (circle → circle → role circle)
-  and DAG/cycle policy.
 - `move` (re-parenting) and `users` (enumerate users in a circle)
   endpoints are still 501 stubs.
