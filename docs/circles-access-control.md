@@ -99,18 +99,16 @@ enforcement resolves a caller to anyway (the caller's email → their
 user circle's membership entries).
 
 Single-membership probe: `GET /api/v1/circles/{circle_id}/members/{member_id}`
-returns the member's access value, or 404 when absent (the expected
+returns the member's access value, or 404 when unreachable (the expected
 negative answer, not an error; a missing circle is a 409). Clients use
 it for cheap, fail-closed role checks — e.g. "is this user in
 `timetable.admin`" — instead of fetching the full members dict. It is
 ungated like the members listing (it leaks nothing the listing does
 not).
 
-Resolution mode (#1202): by default the probe answers direct
-membership only — the back-compat default, preserved until the tracked
-switchover flips it. `?resolve=transitive` additionally resolves
-through member group circles, with the same semantics as the
-enforcement gate: both answer through the shared resolver
+Resolution mode (#1202, switched over by #1207): by default the probe
+resolves through member group circles — the enforcement gate's own
+semantics; the two answer through the shared resolver
 (`resources.circle.resolve_member`), so their decisions agree by
 construction (a randomized unit test pins gate == probe). A transitive
 hit reports `direct` (whether a direct edge exists), `via` (the
@@ -118,7 +116,13 @@ containment chain of circle names from the probed circle to the
 member, empty when direct), and the maximum access value across
 resolving paths — membership edges are uniform (a circle is a member
 wherever it appears), so the most permissive path is the member's
-effective access. An unknown `resolve` value is a 422.
+effective access. `?resolve=direct` is the explicit direct-only
+spelling (two-field response): callers that want the pre-#1207
+direct-only default must pass it. A transitive-mode 404 says so in its
+message and points at `?resolve=direct`; an unknown `resolve` value is
+a 422. The switchover completed 2026-11-22, ahead of the Sunset date
+the interim deprecation headers (#1206) advertised — the headers are
+retired.
 
 Inverted check: `GET /api/v1/users/{user_id}/roles` enumerates the
 role circles (tag `role`) the user holds under the same transitive

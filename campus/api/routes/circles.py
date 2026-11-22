@@ -348,18 +348,19 @@ def get_circle_members(circle_id: str) -> flask_campus.JsonResponse:
 def get_circle_member(
         circle_id: str,
         member_id: str
-) -> flask.Response:
+) -> flask_campus.JsonResponse:
     """Probe circle membership
 
     Probe a single membership: the member's access value, or 404 when
-    absent. Optionally resolve transitively through member group
-    circles.
+    unreachable. Resolves transitively through member group circles by
+    default — the same question campus.api's enforcement gate answers.
 
-    Probe a single membership in a circle. An absent member is an
+    Probe a single membership in a circle. An unreachable member is an
     expected negative answer (404), not an error: clients use this
     endpoint for cheap, fail-closed role checks (e.g. "is this user in
     the timetable.admin role circle") instead of fetching the full
-    members dict.
+    members dict. A direct-only answer is available explicitly via
+    ?resolve=direct.
 
     Method:
         GET /circles/{circle_id}/members/{member_id}
@@ -373,12 +374,12 @@ def get_circle_member(
 
     Query Parameters:
         resolve: str (optional)
-            Membership resolution mode. Omit (or "direct") to probe
-            the circle's direct members dict only — the back-compat
-            default. "transitive" additionally resolves through
-            member group circles, with the same semantics as the
-            enforcement gate (#1202): cycle-safe, stale keys fail
-            closed per key. Any other value is a validation error.
+            Membership resolution mode. Omit (or "transitive") to
+            resolve through member group circles — the default, with
+            the same semantics as the enforcement gate (#1202/#1207):
+            cycle-safe, stale keys fail closed per key. "direct"
+            probes the circle's direct members dict only. Any other
+            value is a validation error.
 
     Request Body:
         None
@@ -386,25 +387,28 @@ def get_circle_member(
     Responses:
         200 OK: dict
             The member's access value within the circle. The default
-            (direct) probe returns the member_id and access_value
-            fields only. A transitive probe adds resolution detail.
-            Example (direct):
-                {
-                    "member_id": "teacher@campus.test",
-                    "access_value": 15
-                }
-            Example (?resolve=transitive, reached via a group):
+            (transitive) probe adds resolution detail; ?resolve=direct
+            returns the member_id and access_value fields only.
+            Example (default / ?resolve=transitive, reached via a
+            group):
                 {
                     "member_id": "teacher@campus.test",
                     "access_value": 15,
                     "direct": false,
                     "via": ["students"]
                 }
+            Example (?resolve=direct):
+                {
+                    "member_id": "teacher@campus.test",
+                    "access_value": 15
+                }
 
         404 Not Found: None
             Returned if the circle has no such member under the
             requested resolution mode (the probe's expected negative
-            answer).
+            answer). Under the default transitive mode the message
+            points at ?resolve=direct, the common cause being callers
+            that expected the pre-#1207 direct-only default.
 
         409 Conflict: None
             Returned if the circle does not exist.
@@ -420,20 +424,17 @@ def get_circle_member(
         - Reads stay open (no role membership required), consistent
           with GET /circles/{circle_id}/members/: the probe leaks
           nothing the members listing does not.
-        - Transitive resolution answers through the shared membership
-          resolver (resources.circle.resolve_member, #1202) — the same
+        - Resolution answers through the shared membership resolver
+          (resources.circle.resolve_member, #1202) — the same
           implementation the enforcement gate uses, so gate and probe
           decisions agree by construction. access_value is the maximum
           across resolving paths; "direct" flags a direct edge and
           "via" lists the containment chain of circle names from the
           probed circle to the member (empty when direct).
-        - The default remains direct-only for back-compat (#1202),
-          under deprecation: an unparameterized probe (no resolve
-          param) carries `Deprecation: true` and a `Sunset` date —
-          at Sunset the default flips to transitive, and direct-only
-          requires the explicit ?resolve=direct. An explicit
-          ?resolve=direct is the migrated spelling and is never
-          flagged.
+        - The default flipped from direct-only to transitive
+          (#1207), completing the #1202 switchover ahead of its
+          Sunset date; the Deprecation/Sunset headers are retired.
+          Direct-only callers must pass the explicit ?resolve=direct.
         - Emits no events.
     """
     resolve = flask.request.args.get("resolve")
@@ -446,30 +447,33 @@ def get_circle_member(
     resolution = resources.circle.members.resolve(
         schema.CampusID(circle_id),
         schema.CampusID(member_id),
-        transitive=resolve == "transitive",
+        transitive=resolve != "direct",
     )
     if resolution is None:
+        if resolve == "direct":
+            # The caller asked for direct-only; the answer needs no
+            # switchover hint.
+            raise api_errors.NotFoundError(
+                "Member not found in circle",
+                id=member_id
+            )
+        # The default walks the whole graph; callers that expected the
+        # pre-#1207 direct-only default are the common cause — point
+        # them at the explicit spelling.
         raise api_errors.NotFoundError(
-            "Member not found in circle",
+            "Member not found in circle: not a direct member and not "
+            "reachable through any member group. Pass ?resolve=direct "
+            "for a direct-only probe.",
             id=member_id
         )
     result = {
         "member_id": member_id,
         "access_value": resolution["access_value"],
     }
-    if resolve == "transitive":
+    if resolve != "direct":
         result["direct"] = resolution["direct"]
         result["via"] = resolution["via"]
-        return flask.make_response(result, 200)
-    response = flask.make_response(result, 200)
-    if resolve is None:
-        # Unparameterized invocation = the legacy direct-only default
-        # (#1202 switchover): answered as today, but flagged — the
-        # default flips to transitive at the Sunset date, after which
-        # direct-only requires the explicit ?resolve=direct.
-        response.headers["Deprecation"] = "true"
-        response.headers["Sunset"] = "Mon, 04 Jan 2027 00:00:00 GMT"
-    return response
+    return result, 200
 
 
 @bp.post('/<string:circle_id>/members/add')
