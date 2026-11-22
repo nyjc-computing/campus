@@ -348,7 +348,7 @@ def get_circle_members(circle_id: str) -> flask_campus.JsonResponse:
 def get_circle_member(
         circle_id: str,
         member_id: str
-) -> flask_campus.JsonResponse:
+) -> flask.Response:
     """Probe circle membership
 
     Probe a single membership: the member's access value, or 404 when
@@ -460,17 +460,16 @@ def get_circle_member(
     if resolve == "transitive":
         result["direct"] = resolution["direct"]
         result["via"] = resolution["via"]
-        return result, 200
+        return flask.make_response(result, 200)
+    response = flask.make_response(result, 200)
     if resolve is None:
         # Unparameterized invocation = the legacy direct-only default
         # (#1202 switchover): answered as today, but flagged — the
         # default flips to transitive at the Sunset date, after which
         # direct-only requires the explicit ?resolve=direct.
-        return result, 200, {
-            "Deprecation": "true",
-            "Sunset": "Mon, 04 Jan 2027 00:00:00 GMT",
-        }
-    return result, 200
+        response.headers["Deprecation"] = "true"
+        response.headers["Sunset"] = "Mon, 04 Jan 2027 00:00:00 GMT"
+    return response
 
 
 @bp.post('/<string:circle_id>/members/add')
