@@ -6,6 +6,7 @@ API routes for the circles resource.
 from typing import Any
 
 import campus_python
+import campus.storage
 import flask
 
 import campus.flask_campus as flask_campus
@@ -844,7 +845,7 @@ def get_circle_users(circle_id: str) -> flask_campus.JsonResponse:
     except campus.storage.errors.StorageError as e:
         raise api_errors.InternalError.from_exception(e) from e
 
-    users: set[str] = []
+    users: list[str] = []
     visited: set[str] = set()
     pending = [start]
     while pending:

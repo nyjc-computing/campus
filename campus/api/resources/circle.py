@@ -110,13 +110,13 @@ def validate_access_constant(value: object) -> int:
             ratified constants (the pre-ratification 4-bit values
             included).
     """
-    if not is_access_constant(value):
+    if not isinstance(value, int) or value not in ACCESS_CONSTANTS.values():
         raise api_errors.InvalidRequestError(
             "Access value must be one of the ratified constants "
             f"{sorted(ACCESS_CONSTANTS.items())} — got {value!r} "
             "(campus#1216)"
         )
-    return int(value)
+    return value
 
 
 def has_permission(value: int, scope: str, permission: str) -> bool:
