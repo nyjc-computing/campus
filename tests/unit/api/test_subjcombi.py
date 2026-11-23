@@ -203,11 +203,14 @@ class TestSubjcombiResolve(unittest.TestCase):
         self.unknown = "nobody@campus.test"
 
     def test_mapping_overrides_roster_and_unmapped(self):
+        now = utc_time.now()
         timetable = self.timetables.new(
             metadata={
                 "filename": "resolve-test.xml",
-                "start_date": "2026-01-01T00:00:00Z",
-                "end_date": "2026-12-31T00:00:00Z",
+                # Covering window: the version is derived-current, which
+                # is what resolve() translates labels through.
+                "start_date": utc_time.to_rfc3339(utc_time.after(now, days=-1)),
+                "end_date": utc_time.to_rfc3339(utc_time.after(now, days=30)),
             },
             lessongroups=[{
                 "label": "25A1",
@@ -217,7 +220,6 @@ class TestSubjcombiResolve(unittest.TestCase):
                 ],
             }],
         )
-        self.timetables.flip_current(timetable.id, actor_id="admin@campus.test")
 
         # No maintained mapping: the roster answers for its member.
         lessongroup_id = timetable.entries[0].lessongroup_id
