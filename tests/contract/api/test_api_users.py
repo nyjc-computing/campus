@@ -93,7 +93,7 @@ class TestApiUsersContract(unittest.TestCase):
     def test_get_user_roles_lists_direct_and_transitive(self):
         """GET /users/{id}/roles answers direct and group-held roles."""
         email = "roles.mixed@campus.test"
-        self._grant_direct(email, "bookings.admin")
+        self._grant_direct(email, "subjcombi.admin")
         self._grant_via_group(email, "timetable-staff", "timetable.admin")
 
         response = self.client.get(
@@ -105,10 +105,10 @@ class TestApiUsersContract(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["user_id"], email)
         names = [role["name"] for role in data["roles"]]
-        self.assertEqual(names, ["bookings.admin", "timetable.admin"])
+        self.assertEqual(names, ["subjcombi.admin", "timetable.admin"])
         by_name = {role["name"]: role for role in data["roles"]}
-        self.assertTrue(by_name["bookings.admin"]["direct"])
-        self.assertEqual(by_name["bookings.admin"]["via"], [])
+        self.assertTrue(by_name["subjcombi.admin"]["direct"])
+        self.assertEqual(by_name["subjcombi.admin"]["via"], [])
         self.assertFalse(by_name["timetable.admin"]["direct"])
         self.assertEqual(
             by_name["timetable.admin"]["via"], ["timetable-staff"]

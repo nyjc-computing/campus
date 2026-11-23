@@ -28,11 +28,16 @@ BOOTSTRAP_RESOURCES = (
     "circles",
     "timetable",
     "assignments",
-    "bookings",
     "submissions",
     "subjcombi",
     "venues",
 )
+# "bookings" is deliberately absent (campus#1217): booking authority
+# is venue-scoped (venues.admin globally, venues.<category-slug>.admin
+# per category), so a flat bookings.admin role circle has nothing to
+# gate. Environments that still hold the retired circles from the old
+# bootstrap delete them (dev did on 2026-11-23); the seed never
+# re-creates them.
 
 # Circles contain only circles: a user participates through their user
 # circle (tag USER_TAG), named after their email account, which also

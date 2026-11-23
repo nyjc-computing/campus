@@ -34,6 +34,16 @@ Principals:
   route. Domain administration must be attributable to a user, the
   same rule campus.auth applies to its management blueprints (#854).
 
+Booking authority is venue-scoped, not a flat resource family
+(campus#1217): `venues.admin` members act on every venue's bookings,
+and a venue whose metadata carries a `category` additionally answers
+to a standalone `venues.<category-slug>.admin` role circle ("Sports
+Facilities" -> `venues.sports-facilities.admin`). The scoped circles
+are deliberately NOT members of `venues.admin` — nesting would confer
+all-venue authority through transitive resolution (#1196) — and the
+bootstrap no longer seeds a flat `bookings.admin` role circle; there
+is no `require_resource_admin("bookings")`.
+
 Enforcement lives in the route modules (the resources must stay
 ungated for in-process callers, such as test fixtures and the other
 services sharing this deployment shape).
@@ -46,13 +56,19 @@ See docs/circles-access-control.md.
 
 __all__ = [
     "require_resource_admin",
+    "require_user_principal",
+    "require_venue_authority",
+    "has_venue_authority",
 ]
+
+import re
 
 import flask
 
 from campus.common import schema
 from campus.common.errors import api_errors
 
+from .resources import venue as venue_resource
 from .resources.circle import circle_storage, resolve_member
 
 
@@ -71,13 +87,15 @@ def _principal_user_id() -> str | None:
     return str(value) if value else None
 
 
-def _admin_role_circle(resource: str) -> dict | None:
-    """The `<resource>.admin` role circle record, or None if absent.
+def _admin_role_circle(role_name: str) -> dict | None:
+    """The named role circle record, or None if absent.
 
     Circle names are unique (best-effort), so the role circle is
     resolved by name — the stable key across UID format changes.
+    Callers pass the full circle name ("timetable.admin",
+    "venues.sports-facilities.admin").
     """
-    matches = circle_storage.get_matching({"name": f"{resource}.admin"})
+    matches = circle_storage.get_matching({"name": role_name})
     if not matches:
         return None
     return matches[0]
@@ -115,7 +133,7 @@ def require_resource_admin(
             "resource: domain administration must be attributable to "
             "a user (#854)"
         )
-    role_circle = _admin_role_circle(resource)
+    role_circle = _admin_role_circle(f"{resource}.admin")
     if role_circle is None:
         raise api_errors.ForbiddenError(
             f"No '{resource}.admin' role circle is configured: "
@@ -136,3 +154,131 @@ def require_resource_admin(
             f"Only members of the '{resource}.admin' circle may "
             f"{action} on the '{resource}' resource"
         )
+
+def require_user_principal(action_label: str | None = None) -> str:
+    """Require a user principal and return its ID (the email).
+
+    Client principals (no user) are denied: the action must be
+    attributable to a user (#854). Routes that attribute a record to
+    its creator rather than to a role — booking creation — call this
+    instead of a role gate.
+    """
+    action = action_label or "perform this action"
+    user_id = _principal_user_id()
+    if user_id is None:
+        raise api_errors.ForbiddenError(
+            f"Client principals may not {action}: domain "
+            "administration must be attributable to a user (#854)"
+        )
+    return user_id
+
+
+def category_slug(category: str) -> str:
+    """Slug a venue category into the scoped-circle name fragment.
+
+    The contract backing `venues.<category-slug>.admin` resolution:
+    lowercase, collapse every non-alphanumeric run to a single
+    hyphen, strip the ends — "Sports Facilities" becomes
+    "sports-facilities".
+    """
+    return re.sub(r"[^a-z0-9]+", "-", category.strip().lower()).strip("-")
+
+
+def _is_role_member(role_name: str, user_id: str) -> bool:
+    """True if user_id holds the named role circle, transitively.
+
+    A missing circle is simply not a membership (callers that need to
+    distinguish it for the denial message do their own lookup). The
+    direct hit stays as the fast path, with the shared resolver
+    behind it (#1202) — the same decision require_resource_admin
+    makes for flat resource families.
+    """
+    role_circle = _admin_role_circle(role_name)
+    if role_circle is None:
+        return False
+    members = role_circle.get("members", {})
+    if user_id in members:
+        return True
+    return bool(resolve_member(
+        schema.CampusID(role_circle[schema.CAMPUS_KEY]),
+        schema.CampusID(user_id),
+    ))
+
+
+def _venue_authority_denial(
+        venue_id: schema.CampusID,
+        user_id: str,
+        action: str,
+) -> str | None:
+    """Why the user lacks booking authority on the venue, or None.
+
+    `venues.admin` is the global authority (campus#1217's ratified
+    bundling of bookings into venues). A venue whose metadata carries
+    a `category` additionally answers to the standalone
+    `venues.<category-slug>.admin` circle; uncategorized venues are
+    venues.admin-only, and a missing scoped circle denies fail-closed
+    rather than silently widening to nobody-or-global.
+    """
+    if _is_role_member("venues.admin", user_id):
+        return None
+    venue = venue_resource.get(venue_id)  # unknown venue -> 404
+    category = venue.metadata.get("category")
+    if not isinstance(category, str) or not category.strip():
+        return (
+            f"Venue {venue_id} has no \"category\" in its metadata: "
+            f"only venues.admin members may {action} its bookings"
+        )
+    role_name = f"venues.{category_slug(category)}.admin"
+    if _admin_role_circle(role_name) is None:
+        return (
+            f"No '{role_name}' circle is configured for venue "
+            f"{venue_id}'s \"{category}\" category: denying "
+            "fail-closed — create the circle to delegate booking "
+            "authority for the category"
+        )
+    if not _is_role_member(role_name, user_id):
+        return (
+            f"Only members of 'venues.admin' or '{role_name}' may "
+            f"{action} bookings for venue {venue_id}"
+        )
+    return None
+
+
+def require_venue_authority(
+        venue_id: schema.CampusID,
+        action_label: str | None = None,
+) -> None:
+    """Require booking authority on the venue (campus#1217).
+
+    The domain gate for booking decisions: the caller must be a user
+    principal holding `venues.admin` (any venue) or membership in the
+    standalone `venues.<category-slug>.admin` circle for the venue's
+    metadata category. Unknown venues surface as 404 via the venue
+    lookup; everything else fails closed with the specific reason.
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks authority.
+        api_errors.NotFoundError: If the venue does not exist.
+    """
+    action = action_label or "perform this action"
+    user_id = require_user_principal(action)
+    denial = _venue_authority_denial(venue_id, user_id, action)
+    if denial is not None:
+        raise api_errors.ForbiddenError(denial)
+
+
+def has_venue_authority(venue_id: schema.CampusID) -> bool:
+    """Non-raising venue-authority check for owner-or-authority rules.
+
+    Same decision `require_venue_authority` makes; an unknown venue
+    is not authority. Routes use it where the caller's own record
+    (e.g. their pending booking) already grants the action and the
+    gate only widens it.
+    """
+    user_id = _principal_user_id()
+    if user_id is None:
+        return False
+    try:
+        return _venue_authority_denial(venue_id, user_id, "act on") is None
+    except api_errors.NotFoundError:
+        return False

@@ -60,6 +60,7 @@ def _auth_targets() -> list[tuple[str, Callable[[], None]]]:
 
 
 def _api_targets() -> list[tuple[str, Callable[[], None]]]:
+    from campus.api.resources.booking import init_storage as init_bookings
     from campus.api.resources.calendar import CalendarResource
     from campus.api.resources.circle import CirclesResource
     from campus.api.resources.emailotp import EmailOTPResource
@@ -67,6 +68,7 @@ def _api_targets() -> list[tuple[str, Callable[[], None]]]:
 
     return [
         ("emailotp table", EmailOTPResource.init_storage),
+        ("venue bookings table", init_bookings),
         ("timetable members table", TimetablesResource.init_storage),
         ("school calendar table", CalendarResource.init_storage),
         ("circles collection + access-control bootstrap",
