@@ -43,13 +43,22 @@ class TestTimetableAttachments(IntegrationTestCase):
 
     def _create_timetable(self, filename: str | None = None) -> str:
         filename = filename or f"attach-{uuid.uuid4().hex[:6]}.xml"
+        # Wholly-past window: a historical version, deletable under the
+        # derived delete-guard (campus#1222) — the cascade test relies
+        # on that.
+        from campus.common.utils import utc_time
+        now = utc_time.now()
         response = self.client.post(
             "/api/v1/timetable/",
             json={
                 "metadata": {
                     "filename": filename,
-                    "start_date": "2026-01-01T00:00:00Z",
-                    "end_date": "2026-12-31T00:00:00Z",
+                    "start_date": utc_time.to_rfc3339(
+                        utc_time.after(now, days=-730)
+                    ),
+                    "end_date": utc_time.to_rfc3339(
+                        utc_time.after(now, days=-365)
+                    ),
                     "label": "Attachment test",
                 },
                 "data": {"lessongroups": []},
