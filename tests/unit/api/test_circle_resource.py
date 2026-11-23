@@ -41,7 +41,7 @@ class TestCirclesResourceList(unittest.TestCase):
 
         names = [circle.name for circle in circles]
         self.assertIn("nyjc.edu.sg", names)
-        self.assertIn("campus-admin", names)
+        self.assertIn("campus", names)
         # Hydrated circles only: every record must carry circle fields
         self.assertTrue(all(circle.tag for circle in circles))
 
@@ -118,8 +118,8 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
         from campus.api.resources.circle import circle_storage
         circle_storage.delete_matching({})
 
-    def test_bootstrap_seeds_resource_and_role_circles(self):
-        """Each guarded resource gets a resource circle and an admin role circle."""
+    def test_bootstrap_seeds_grant_circles_without_role_circles(self):
+        """Each guarded resource gets a grant circle; no role circles."""
         from campus.api.resources.circle import BOOTSTRAP_RESOURCES, CirclesResource
 
         CirclesResource.init_storage()
@@ -127,13 +127,13 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
         names = {c.name for c in CirclesResource().list()}
         for resource_name in BOOTSTRAP_RESOURCES:
             self.assertIn(resource_name, names)
-            self.assertIn(f"{resource_name}.admin", names)
+            self.assertNotIn(f"{resource_name}.admin", names)
+        self.assertIn("campus", names)
 
-    def test_bootstrap_role_circle_hierarchy(self):
-        """Role circles are tagged "role" and members of their resource circle."""
+    def test_bootstrap_wildcard_hierarchy(self):
+        """The campus wildcard is tagged "group" and a member of the root."""
         from campus.api.resources.circle import (
             RESOURCE_TAG,
-            ROLE_TAG,
             CirclesResource,
             circle_storage,
         )
@@ -141,41 +141,41 @@ class TestCirclesResourceBootstrap(unittest.TestCase):
 
         CirclesResource.init_storage()
 
-        resource_record = circle_storage.get_matching(
+        family_record = circle_storage.get_matching(
             {"name": "circles"}
         )[0]
-        role_record = circle_storage.get_matching(
-            {"name": "circles.admin"}
+        wildcard_record = circle_storage.get_matching(
+            {"name": "campus"}
         )[0]
 
-        self.assertEqual(resource_record["tag"], RESOURCE_TAG)
-        self.assertEqual(role_record["tag"], ROLE_TAG)
+        self.assertEqual(family_record["tag"], RESOURCE_TAG)
+        self.assertEqual(wildcard_record["tag"], "group")
+        root_record = circle_storage.get_matching({"name": "nyjc.edu.sg"})[0]
         self.assertIn(
-            role_record[schema.CAMPUS_KEY],
-            resource_record["members"],
+            wildcard_record[schema.CAMPUS_KEY],
+            root_record["members"],
         )
 
-    def test_bootstrap_seeds_admin_user(self):
-        """Every temporary bootstrap admin is a member of every role circle."""
+    def test_bootstrap_seeds_admin_user_into_wildcard(self):
+        """Every temporary bootstrap admin is a campus wildcard member."""
         from campus.api.resources.circle import (
-            BOOTSTRAP_ACCESS_VALUE,
+            ACCESS_ADMIN,
             BOOTSTRAP_ADMIN_USERS,
-            BOOTSTRAP_RESOURCES,
+            CAMPUS_CIRCLE_NAME,
             CirclesResource,
             circle_storage,
         )
 
         CirclesResource.init_storage()
 
-        for resource_name in BOOTSTRAP_RESOURCES:
-            role_record = circle_storage.get_matching(
-                {"name": f"{resource_name}.admin"}
-            )[0]
-            for admin_user in BOOTSTRAP_ADMIN_USERS:
-                self.assertEqual(
-                    role_record["members"].get(admin_user),
-                    BOOTSTRAP_ACCESS_VALUE,
-                )
+        wildcard_record = circle_storage.get_matching(
+            {"name": CAMPUS_CIRCLE_NAME}
+        )[0]
+        for admin_user in BOOTSTRAP_ADMIN_USERS:
+            self.assertEqual(
+                wildcard_record["members"].get(admin_user),
+                ACCESS_ADMIN,
+            )
 
     def test_bootstrap_seeds_user_circle(self):
         """Every bootstrap admin's user circle exists, tagged "user"."""
@@ -232,10 +232,10 @@ class TestCircleUserMembers(unittest.TestCase):
         self._new_user_circle("teacher@campus.test")
         circle = self._new_circle("User Member Circle")
         members = resources.circle.members
-        members.add(str(circle.id), "teacher@campus.test", 15)
+        members.add(str(circle.id), "teacher@campus.test", 126)
 
         self.assertEqual(
-            members.list(str(circle.id)).get("teacher@campus.test"), 15
+            members.list(str(circle.id)).get("teacher@campus.test"), 126
         )
 
         members.remove(str(circle.id), "teacher@campus.test")
@@ -251,7 +251,7 @@ class TestCircleUserMembers(unittest.TestCase):
         circle = self._new_circle("No User Circle")
         with self.assertRaises(api_errors.ConflictError):
             resources.circle.members.add(
-                str(circle.id), "ghost@campus.test", 15
+                str(circle.id), "ghost@campus.test", 126
             )
 
     def test_user_member_with_dotted_email(self):
@@ -260,7 +260,7 @@ class TestCircleUserMembers(unittest.TestCase):
 
         self._new_user_circle("t.user@campus.test")
         circle = self._new_circle("Dotted Email Circle")
-        resources.circle.members.add(str(circle.id), "t.user@campus.test", 15)
+        resources.circle.members.add(str(circle.id), "t.user@campus.test", 126)
 
         stored = resources.circle.members.list(str(circle.id))
         self.assertIn("t.user@campus.test", stored)
@@ -274,7 +274,7 @@ class TestCircleUserMembers(unittest.TestCase):
 
         circle = self._new_circle("Bad Member Circle")
         with self.assertRaises(api_errors.ConflictError):
-            resources.circle.members.add(str(circle.id), "some-member-id", 15)
+            resources.circle.members.add(str(circle.id), "some-member-id", 126)
 
     def test_add_missing_circle_member_raises_conflict(self):
         """A circle_-prefixed member ID must exist."""
@@ -284,7 +284,7 @@ class TestCircleUserMembers(unittest.TestCase):
         circle = self._new_circle("Missing Member Circle")
         with self.assertRaises(api_errors.ConflictError):
             resources.circle.members.add(
-                str(circle.id), "circle_nosuch00", 15
+                str(circle.id), "circle_nosuch00", 126
             )
 
     def test_add_user_member_to_missing_circle_raises_conflict(self):
@@ -295,7 +295,7 @@ class TestCircleUserMembers(unittest.TestCase):
         self._new_user_circle("teacher@campus.test")
         with self.assertRaises(api_errors.ConflictError):
             resources.circle.members.add(
-                "circle_nosuch00", "teacher@campus.test", 15
+                "circle_nosuch00", "teacher@campus.test", 126
             )
 
 
@@ -326,13 +326,13 @@ class TestCircleMembersProbe(unittest.TestCase):
         self._new_circle("teacher.probe@campus.test", tag="user")
         circle = self._new_circle("Probe Circle")
         resources.circle.members.add(
-            str(circle.id), "teacher.probe@campus.test", 15
+            str(circle.id), "teacher.probe@campus.test", 126
         )
 
         access = resources.circle.members.get(
             str(circle.id), "teacher.probe@campus.test"
         )
-        self.assertEqual(access, 15)
+        self.assertEqual(access, 126)
 
     def test_get_absent_member_returns_none(self):
         """get() returns None (not an error) for a non-member."""

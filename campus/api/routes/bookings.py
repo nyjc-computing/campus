@@ -124,6 +124,16 @@ def create_booking(
     """
     user_id = authz.require_user_principal("create bookings")
     venue_resource.get(venue_id)  # unknown venue → 404
+    # Creating your own booking is a self-scope create on venues: staff
+    # hold it through the staff → venues:self edge; students (no venues
+    # edge) and bare client principals deny. Category never narrows
+    # self-scope authority.
+    authz.require_resource_access(
+        "venues",
+        "self",
+        "create",
+        action_label="create bookings",
+    )
     try:
         start = schema.Time(start_time)
         end = schema.Time(end_time)
@@ -222,9 +232,19 @@ def update_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
             "decide bookings (set status)",
         )
     elif booking.user_id != user_id:
-        # Description-only: the owner's text; anyone else is a
-        # non-owner edit and needs venue authority.
+        # Description-only: anyone else is a non-owner edit and needs
+        # venue authority.
         authz.require_venue_authority(booking.venue_id, "edit bookings")
+    else:
+        # The owner's text is a self-scope modify on venues: a staff
+        # member manages their own bookings through the
+        # staff → venues:self edge.
+        authz.require_resource_access(
+            "venues",
+            "self",
+            "modify",
+            action_label="edit your booking",
+        )
     updated = booking_resource.update(
         booking_id,
         description=payload.get("description", booking_resource.UNSET),
@@ -266,5 +286,15 @@ def delete_booking(booking_id: schema.CampusID) -> flask_campus.JsonResponse:
     is_owner_withdrawal = booking.user_id == user_id and booking.status == "pending"
     if not is_owner_withdrawal:
         authz.require_venue_authority(booking.venue_id, "delete bookings")
+    else:
+        # Withdrawing your own pending booking is the delete-own power:
+        # the self-scope create bit carries it (c ⇒ delete, ratified
+        # convention).
+        authz.require_resource_access(
+            "venues",
+            "self",
+            "create",
+            action_label="withdraw your booking",
+        )
     booking_resource.delete(booking_id)
     return {}, 200

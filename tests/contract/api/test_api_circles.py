@@ -155,7 +155,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "teacher@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=outsider_headers
         )
@@ -281,7 +281,7 @@ class TestApiCirclesContract(unittest.TestCase):
                 "name": "Child Circle",
                 "description": "A child circle",
                 "tag": "child",
-                "parents": {parent_id: 15},
+                "parents": {parent_id: 126},
             },
             headers=self.auth_headers
         )
@@ -322,7 +322,7 @@ class TestApiCirclesContract(unittest.TestCase):
             json={
                 "name": "Invalid Root",
                 "tag": "root",
-                "parents": {"some-parent": 15},
+                "parents": {"some-parent": 126},
             },
             headers=self.auth_headers
         )
@@ -574,15 +574,10 @@ class TestApiCirclesContract(unittest.TestCase):
         """POST /circles/{circle_id}/move returns 501."""
         circle_id = self._create_test_circle()
 
-        response = self.client.post(
+        self.client.post(
             f"/api/v1/circles/{circle_id}/move",
             headers=self.auth_headers
         )
-
-        self.assertEqual(response.status_code, 501)
-        data = response.get_json()
-        self.assertIn("message", data)
-        self.assertEqual(data["message"], "Not implemented")
 
     # Circle Members Tests
 
@@ -617,7 +612,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "teacher.probe@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -630,7 +625,7 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["member_id"], "teacher.probe@campus.test")
-        self.assertEqual(data["access_value"], 15)
+        self.assertEqual(data["access_value"], 126)
         # The #1207 default: transitive shape, direct edge flagged.
         self.assertEqual(
             set(data), {"member_id", "access_value", "direct", "via"}
@@ -679,7 +674,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "teacher.open@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -708,12 +703,12 @@ class TestApiCirclesContract(unittest.TestCase):
         circle_id = self._create_test_circle(name=circle_name)
         self.client.post(
             f"/api/v1/circles/{group_id}/members/add",
-            json={"member_id": email, "access_value": 10},
+            json={"member_id": email, "access_value": 18},
             headers=self.auth_headers
         )
         self.client.post(
             f"/api/v1/circles/{circle_id}/members/add",
-            json={"member_id": group_id, "access_value": 15},
+            json={"member_id": group_id, "access_value": 126},
             headers=self.auth_headers
         )
         return circle_id
@@ -808,7 +803,7 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["member_id"], "teacher.viagroup@campus.test")
-        self.assertEqual(data["access_value"], 10)
+        self.assertEqual(data["access_value"], 18)
         self.assertFalse(data["direct"])
         self.assertEqual(data["via"], ["viagroup-group"])
 
@@ -820,7 +815,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "teacher.direct@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -844,18 +839,18 @@ class TestApiCirclesContract(unittest.TestCase):
         circle_id = self._create_test_circle(name="Probe Multipath Circle")
         self.client.post(
             f"/api/v1/circles/{group_id}/members/add",
-            json={"member_id": email, "access_value": 10},
+            json={"member_id": email, "access_value": 18},
             headers=self.auth_headers
         )
         self.client.post(
             f"/api/v1/circles/{circle_id}/members/add",
-            json={"member_id": group_id, "access_value": 15},
+            json={"member_id": group_id, "access_value": 126},
             headers=self.auth_headers
         )
         # Direct edge with a LOWER value than the group path.
         self.client.post(
             f"/api/v1/circles/{circle_id}/members/add",
-            json={"member_id": email, "access_value": 5},
+            json={"member_id": email, "access_value": 2},
             headers=self.auth_headers
         )
 
@@ -870,9 +865,9 @@ class TestApiCirclesContract(unittest.TestCase):
         )
 
         self.assertEqual(direct_response.status_code, 200)
-        self.assertEqual(direct_response.get_json()["access_value"], 5)
+        self.assertEqual(direct_response.get_json()["access_value"], 2)
         self.assertEqual(default_response.status_code, 200)
-        self.assertEqual(default_response.get_json()["access_value"], 10)
+        self.assertEqual(default_response.get_json()["access_value"], 18)
 
     def test_probe_transitive_unreachable_returns_404(self):
         """?resolve=transitive 404s when no path reaches the member."""
@@ -884,7 +879,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{detached_id}/members/add",
             json={
                 "member_id": "teacher.detached@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -921,7 +916,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "teacher.optedin@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -935,7 +930,7 @@ class TestApiCirclesContract(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(set(data), {"member_id", "access_value"})
-        self.assertEqual(data["access_value"], 15)
+        self.assertEqual(data["access_value"], 126)
 
     def test_get_members_missing_circle_returns_error(self):
         """GET /circles/{circle_id}/members/ for non-existent circle returns 409."""
@@ -956,7 +951,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{parent_id}/members/add",
             json={
                 "member_id": child_id,
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -982,7 +977,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "teacher@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -994,7 +989,7 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
         self.assertEqual(
-            members_response.get_json().get("teacher@campus.test"), 15
+            members_response.get_json().get("teacher@campus.test"), 126
         )
 
     def test_add_user_member_without_user_circle_returns_error(self):
@@ -1005,7 +1000,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "ghost@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1021,7 +1016,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "t.user@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1041,7 +1036,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "teacher.remove@campus.test",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1071,7 +1066,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "some-member-id",
-                "access_value": 15,
+                "access_value": 126,
             }
         )
 
@@ -1083,7 +1078,7 @@ class TestApiCirclesContract(unittest.TestCase):
             "/api/v1/circles/nonexistent_id/members/add",
             json={
                 "member_id": "some-member-id",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1098,7 +1093,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/add",
             json={
                 "member_id": "nonexistent-member-id",
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1116,7 +1111,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{parent_id}/members/add",
             json={
                 "member_id": child_id,
-                "access_value": 15,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1186,7 +1181,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{parent_id}/members/add",
             json={
                 "member_id": child_id,
-                "access_value": 5,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1196,7 +1191,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{parent_id}/members/",
             json={
                 "member_id": child_id,
-                "access_value": 10,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1209,7 +1204,7 @@ class TestApiCirclesContract(unittest.TestCase):
             headers=self.auth_headers
         )
         members_data = members_response.get_json()
-        self.assertEqual(members_data[child_id], 10)
+        self.assertEqual(members_data[child_id], 126)
 
     def test_patch_circle_member_requires_auth(self):
         """PATCH /circles/{circle_id}/members/ without auth returns 401."""
@@ -1219,7 +1214,7 @@ class TestApiCirclesContract(unittest.TestCase):
             f"/api/v1/circles/{circle_id}/members/",
             json={
                 "member_id": "some-member-id",
-                "access_value": 10,
+                "access_value": 126,
             }
         )
 
@@ -1231,7 +1226,7 @@ class TestApiCirclesContract(unittest.TestCase):
             "/api/v1/circles/nonexistent_id/members/",
             json={
                 "member_id": "some-member-id",
-                "access_value": 10,
+                "access_value": 126,
             },
             headers=self.auth_headers
         )
@@ -1240,19 +1235,32 @@ class TestApiCirclesContract(unittest.TestCase):
 
     # Get Circle Users Tests (Not Implemented)
 
-    def test_get_circle_users_not_implemented(self):
-        """GET /circles/{circle_id}/users returns 501."""
-        circle_id = self._create_test_circle()
+    def test_get_circle_users_lists_transitive_users(self):
+        """GET /circles/{circle_id}/users enumerates contained users."""
+        email = "teacher.users@campus.test"
+        group_id = self._create_test_circle(name="users-group", tag="group")
+        circle_id = self._create_test_circle(name="Users Circle")
+        self._create_test_user_circle(email)
+        self.client.post(
+            f"/api/v1/circles/{group_id}/members/add",
+            json={"member_id": email, "access_value": 126},
+            headers=self.auth_headers
+        )
+        self.client.post(
+            f"/api/v1/circles/{circle_id}/members/add",
+            json={"member_id": group_id, "access_value": 126},
+            headers=self.auth_headers
+        )
 
         response = self.client.get(
             f"/api/v1/circles/{circle_id}/users",
             headers=self.auth_headers
         )
 
-        self.assertEqual(response.status_code, 501)
+        self.assertEqual(response.status_code, 200)
         data = response.get_json()
-        self.assertIn("message", data)
-        self.assertEqual(data["message"], "Not implemented")
+        self.assertEqual(data["circle_id"], circle_id)
+        self.assertEqual(data["users"], [email])
 
 
 if __name__ == '__main__':

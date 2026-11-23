@@ -15,6 +15,7 @@ from campus.common import schema
 from campus.common.errors import api_errors
 
 from .. import authz, resources
+from ..resources.circle import circle_storage
 
 bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
@@ -676,6 +677,102 @@ def patch_circle_member(
 
 @bp.get('/<string:circle_id>/users')
 def get_circle_users(circle_id: str) -> flask_campus.JsonResponse:
-    # TODO: validate request
-    """Get users in a circle."""
-    return {"message": "Not implemented"}, 501
+    """List the user circles reachable through a circle's membership graph.
+
+    Walk the circle's members transitively and enumerate every
+    contained user circle (by email name) — the audit question
+    "who is venues:admin", answered without clients hand-walking
+    members dicts. Group circles are traversed; user circles are
+    collected; stale member keys (circle deleted after being added)
+    are skipped fail-closed without blocking the remaining walk.
+
+    Method:
+        GET /api/v1/circles/{circle_id}/users
+
+    Path Parameters:
+        circle_id: str (required)
+            The circle whose membership graph to enumerate.
+
+    Query Parameters:
+        None
+
+    Request Body:
+        None
+
+    Responses:
+        200 OK: dict
+            {"circle_id": str, "users": [email names, sorted]}
+
+        401 Unauthorized: None
+            Returned if the request carries no valid authentication.
+
+        409 Conflict: None
+            Returned if the circle does not exist (consistent with
+            the members listing).
+
+    Notes:
+        - Reads stay open (no membership required), consistent with
+          the members listing: this enumerates exactly what a client
+          could compute by walking the members listings, so it leaks
+          nothing new.
+        - Emits no events.
+    """
+    from campus.storage import errors as storage_errors
+
+    try:
+        start = circle_storage.get_by_id(schema.CampusID(circle_id))
+        if start is None:
+            raise api_errors.ConflictError(
+                "Circle not found",
+                id=circle_id
+            )
+    except storage_errors.NotFoundError:
+        raise api_errors.ConflictError(
+            "Circle not found",
+            id=circle_id
+        ) from None
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+
+    users: set[str] = []
+    visited: set[str] = set()
+    pending = [start]
+    while pending:
+        record = pending.pop()
+        key = str(record.get(schema.CAMPUS_KEY))
+        if key in visited:
+            continue
+        visited.add(key)
+        if record.get("tag") == "user":
+            users.append(str(record.get("name") or key))
+            continue  # user circles are leaves
+        for member_key in (record.get("members") or {}):
+            member_key = str(member_key)
+            if member_key in visited:
+                continue
+            if "@" not in member_key:
+                try:
+                    member_record = circle_storage.get_by_id(
+                        schema.CampusID(member_key)
+                    )
+                except storage_errors.NotFoundError:
+                    continue
+                except campus.storage.errors.StorageError as e:
+                    raise api_errors.InternalError.from_exception(e) from e
+                if member_record:
+                    pending.append(member_record)
+            else:
+                # Email-shaped keys name user circles directly; verify
+                # the circle exists rather than trusting the key.
+                try:
+                    member_record = circle_storage.get_matching(
+                        {"name": member_key}
+                    )
+                except campus.storage.errors.StorageError as e:
+                    raise api_errors.InternalError.from_exception(e) from e
+                if member_record:
+                    pending.append(member_record[0])
+    return {
+        "circle_id": circle_id,
+        "users": sorted(users),
+    }, 200

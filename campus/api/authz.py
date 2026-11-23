@@ -1,48 +1,53 @@
 """campus.api.authz
 
 Fail-closed authorization for campus.api routes, backed by circles
-(docs/circles-access-control.md).
+(docs/circles-access-control.md — the ratified access model,
+campus#1216).
 
 Authentication (campus.auth.middleware via the api blueprint's
 before_request) establishes who is calling and pushes the principal
 into flask.g; this module decides what the principal may do on the
 api's domain resources. Every check fails closed: a principal that
-matches no role, a missing role circle, or a missing user identity is
-denied.
+holds no applicable value, a missing grant circle, or a missing user
+identity is denied.
 
-Model: circles contain only circles. Each guarded resource family has
-a resource circle with an `<resource>.admin` role circle whose members
-hold the admin role on that resource family. Members are either user
-circles (named after the email account) or nested circles (group
-circles). Since user circles are named after the email, the check for
-a user principal is a direct members-dict lookup keyed by the caller's
-user ID (the email); on a direct miss, membership resolves
-transitively through the role circle's member group circles (#1196) —
-a seeded group (e.g. a school-wide `student` group) confers the role
-to its users without enumerating them into the role circle. The
-transitive walk is resources.circle.resolve_member (#1202), the single
-membership resolver shared with the probe route.
+Model (ratified 2026-11-23): authority is the access value on
+membership edges, encoded as 8-bit dual-scope constants
+(`0 | G-c G-m G-r | S-c S-m S-r | 0`) — group-scope and self-scope
+permission sets per family. Three sources combine per the resolution
+algorithm:
+
+- the `campus` wildcard: a campus:admin membership confers admin on
+  every family (the one cross-family authority, checked first);
+- the baseline: a principal's primary-group membership value
+  (`staff:viewer`, `student:guest`) is their platform-wide floor;
+- family-directed edges: values on edges into the family's grant
+  circle, reached directly (user circles) or through member-list
+  circles (committees, venue-category subcircles). Category
+  subcircles narrow group-scope authority (a sports booking resolves
+  through `venues.sports-facilities`, not through family-level
+  edges); self-scope authority is never narrowed.
+
+Resolution answers through the shared membership resolver
+(resources.circle.resolve_member / resolve_family_access) — the same
+implementation the probe route answers through, so gate and probe
+cannot drift.
 
 Principals:
 
-- User principals (bearer tokens minted for an end user): authorized
-  by membership in the resource's admin role circle. The role circle's
-  configured access values are a reserved refinement (tiers) — today
-  membership alone grants the role.
+- User principals (bearer tokens minted for an end user) resolve as
+  above.
 - Client principals (HTTP Basic or app-scoped client_credentials
-  tokens): hold no domain authority and are denied on every gated
+  tokens) hold no domain authority and are denied on every gated
   route. Domain administration must be attributable to a user, the
   same rule campus.auth applies to its management blueprints (#854).
 
-Booking authority is venue-scoped, not a flat resource family
-(campus#1217): `venues.admin` members act on every venue's bookings,
-and a venue whose metadata carries a `category` additionally answers
-to a standalone `venues.<category-slug>.admin` role circle ("Sports
-Facilities" -> `venues.sports-facilities.admin`). The scoped circles
-are deliberately NOT members of `venues.admin` — nesting would confer
-all-venue authority through transitive resolution (#1196) — and the
-bootstrap no longer seeds a flat `bookings.admin` role circle; there
-is no `require_resource_admin("bookings")`.
+Booking authority is venue-derived, not a flat resource family
+(campus#1217/#1218): a booking decision is a group-scope modify on
+the `venues` family, category-narrowed by the booking venue's
+metadata category; creating and managing one's own bookings is a
+self-scope check on the same family. There is no
+`require_resource_admin("bookings")`.
 
 Enforcement lives in the route modules (the resources must stay
 ungated for in-process callers, such as test fixtures and the other
@@ -55,10 +60,20 @@ See docs/circles-access-control.md.
 """
 
 __all__ = [
+    "ACCESS_ADMIN",
+    "ACCESS_EDITOR",
+    "ACCESS_VIEWER",
+    "ACCESS_SELF",
+    "ACCESS_GUEST",
+    "ACCESS_CONSTANTS",
+    "has_permission",
+    "validate_access_constant",
+    "require_resource_access",
     "require_resource_admin",
     "require_user_principal",
     "require_venue_authority",
     "has_venue_authority",
+    "category_slug",
 ]
 
 import re
@@ -69,7 +84,50 @@ from campus.common import schema
 from campus.common.errors import api_errors
 
 from .resources import venue as venue_resource
-from .resources.circle import circle_storage, resolve_member
+from .resources.circle import (
+    ACCESS_ADMIN,
+    ACCESS_CONSTANTS,
+    ACCESS_EDITOR,
+    ACCESS_GUEST,
+    ACCESS_SELF,
+    ACCESS_VIEWER,
+    CAMPUS_CIRCLE_NAME,
+    GROUP_FIELD_MASK,
+    SELF_FIELD_MASK,
+    circle_storage,
+    has_permission,
+    resolve_family_access,
+    resolve_member,
+    validate_access_constant,
+)
+
+# Family × operation table (docs/circles-access-control.md): which
+# (scope, permission) checks each family honors. A check a family does
+# not honor denies regardless of the resolved value — self-scope
+# authority on a family with no own-semantics is vacuous, and the
+# table is where that ruling lives.
+FAMILY_OPERATIONS: dict[str, dict[str, set[str]]] = {
+    "timetable": {
+        "group": {"create", "modify", "read"},
+        "self": {"read"},
+    },
+    "subjcombi": {
+        "group": {"create", "modify", "read"},
+        "self": {"read"},
+    },
+    "venues": {
+        "group": {"create", "modify", "read"},
+        "self": {"create", "modify", "read"},
+    },
+    "files": {
+        "group": {"create", "modify", "read"},
+        "self": {"create", "modify", "read"},
+    },
+    "assignments": {"group": {"create", "modify", "read"}},
+    "submissions": {"group": {"create", "modify", "read"}},
+    "circles": {"group": {"create", "modify", "read"}},
+    "hostedapps": {"group": {"create", "modify", "read"}},
+}
 
 
 def _principal_user_id() -> str | None:
@@ -87,81 +145,13 @@ def _principal_user_id() -> str | None:
     return str(value) if value else None
 
 
-def _admin_role_circle(role_name: str) -> dict | None:
-    """The named role circle record, or None if absent.
-
-    Circle names are unique (best-effort), so the role circle is
-    resolved by name — the stable key across UID format changes.
-    Callers pass the full circle name ("timetable.admin",
-    "venues.sports-facilities.admin").
-    """
-    matches = circle_storage.get_matching({"name": role_name})
-    if not matches:
-        return None
-    return matches[0]
-
-
-def require_resource_admin(
-        resource: str,
-        action_label: str | None = None,
-) -> None:
-    """Require membership in the `<resource>.admin` role circle.
-
-    The domain gate for campus.api mutation routes: the caller must be
-    a user principal whose user ID (email, = their user circle's name)
-    appears in the role circle's members dict, or is a member of a
-    circle reachable through the role circle's member group circles
-    (#1196). Everything else is denied.
-
-    Args:
-        resource: The API resource family, matching its bootstrap
-            circle name ("circles", "timetable", "assignments",
-            "bookings", "submissions").
-        action_label: Optional verb phrase for the denial message
-            (e.g. "create bookings"), interpolated as
-            "... may {action_label}". Labels never gate: omitting one
-            only degrades the message to "perform this action".
-
-    Raises:
-        api_errors.ForbiddenError: If the caller lacks the role.
-    """
-    action = action_label or "perform this action"
-    user_id = _principal_user_id()
-    if user_id is None:
-        raise api_errors.ForbiddenError(
-            f"Client principals may not {action} on the '{resource}' "
-            "resource: domain administration must be attributable to "
-            "a user (#854)"
-        )
-    role_circle = _admin_role_circle(f"{resource}.admin")
-    if role_circle is None:
-        raise api_errors.ForbiddenError(
-            f"No '{resource}.admin' role circle is configured: "
-            f"denying '{action}' fail-closed — run the circles "
-            "bootstrap (docs/circles-access-control.md)"
-        )
-    members = role_circle.get("members", {})
-    # The direct dict hit stays as the cheap fast path (#1202): direct
-    # membership trivially implies transitive membership, so the
-    # decision is identical either way. On a direct miss, resolution
-    # goes through the shared resolver — the same implementation the
-    # membership probe answers through, so gate and probe cannot drift.
-    if user_id not in members and not resolve_member(
-            schema.CampusID(role_circle[schema.CAMPUS_KEY]),
-            schema.CampusID(user_id),
-    ):
-        raise api_errors.ForbiddenError(
-            f"Only members of the '{resource}.admin' circle may "
-            f"{action} on the '{resource}' resource"
-        )
-
 def require_user_principal(action_label: str | None = None) -> str:
     """Require a user principal and return its ID (the email).
 
     Client principals (no user) are denied: the action must be
     attributable to a user (#854). Routes that attribute a record to
     its creator rather than to a role — booking creation — call this
-    instead of a role gate.
+    alongside a scope gate.
     """
     action = action_label or "perform this action"
     user_id = _principal_user_id()
@@ -173,10 +163,148 @@ def require_user_principal(action_label: str | None = None) -> str:
     return user_id
 
 
-def category_slug(category: str) -> str:
-    """Slug a venue category into the scoped-circle name fragment.
+def is_platform_admin(user_id: str) -> bool:
+    """True if the user holds the `campus` wildcard at admin.
 
-    The contract backing `venues.<category-slug>.admin` resolution:
+    A campus:admin membership confers admin on every resource family;
+    checked before any family resolution. The resolved value must
+    carry the group-create bit — membership at a lesser constant does
+    not wildcard.
+    """
+    try:
+        matches = circle_storage.get_matching({"name": CAMPUS_CIRCLE_NAME})
+    except Exception:
+        return False
+    if not matches:
+        return False
+    resolution = resolve_member(
+        schema.CampusID(matches[0][schema.CAMPUS_KEY]),
+        schema.CampusID(user_id),
+    )
+    if resolution is None:
+        return False
+    return has_permission(resolution["access_value"], "group", "create")
+
+
+def _effective(
+        resource: str,
+        user_id: str,
+        category: str | None = None,
+) -> dict | None:
+    """The principal's effective access on a family, or None.
+
+    None means fail-closed: no grant circle for the family. The
+    wildcard short-circuits to full admin on both scopes; otherwise
+    resolution goes through resolve_family_access (baseline + family
+    edges + category narrowing of the group field).
+    """
+    if is_platform_admin(user_id):
+        return {
+            "g": GROUP_FIELD_MASK,
+            "s": SELF_FIELD_MASK,
+            "narrowed": False,
+            "wildcard": True,
+        }
+    return resolve_family_access(
+        resource,
+        schema.CampusID(user_id),
+        narrow_to_label=category_slug(category) if category else None,
+    )
+
+
+def require_resource_access(
+        resource: str,
+        scope: str,
+        permission: str,
+        action_label: str | None = None,
+        category: str | None = None,
+) -> None:
+    """Require an effective permission bit on a resource family.
+
+    The domain gate for campus.api routes. The caller must be a user
+    principal whose effective access on the family — baseline, family
+    edges, category narrowing, `campus` wildcard — carries the
+    permission bit in the requested scope, and the family's operation
+    table must honor the (scope, permission) check.
+
+    Args:
+        resource: The API resource family, matching its grant circle
+            name ("circles", "timetable", "venues", ...).
+        scope: "group" (family's shared resources) or "self" (the
+            caller's own resources within the family).
+        permission: "create", "modify", or "read".
+        action_label: Optional verb phrase for the denial message
+            (e.g. "create bookings"); labels never gate.
+        category: Optional venue category for category-narrowed
+            families (booking ops on `venues`): when the caller holds
+            the matching category subcircle, its edge is the sole
+            source of group-scope authority.
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks the permission.
+    """
+    action = action_label or "perform this action"
+    user_id = require_user_principal(action)
+    honored = FAMILY_OPERATIONS.get(resource, {}).get(scope, set())
+    if permission not in honored:
+        raise api_errors.ForbiddenError(
+            f"The '{resource}' family does not honor {scope}-scope "
+            f"{permission} operations"
+        )
+    effective = _effective(resource, user_id, category)
+    if effective is None:
+        raise api_errors.ForbiddenError(
+            f"No '{resource}' grant circle is configured: denying "
+            f"'{action}' fail-closed — run the circles bootstrap "
+            "(docs/circles-access-control.md)"
+        )
+    field = effective["g"] if scope == "group" else effective["s"]
+    if not has_permission(field, scope, permission):
+        raise api_errors.ForbiddenError(
+            _denial_message(resource, scope, permission, action, effective)
+        )
+
+
+def _denial_message(
+        resource: str,
+        scope: str,
+        permission: str,
+        action: str,
+        effective: dict,
+) -> str:
+    """Shape the 403 message with the resolution's provenance."""
+    detail = "baseline and family edges"
+    if effective.get("wildcard"):
+        detail = "the campus wildcard"  # unreachable: wildcard passes
+    elif effective.get("narrowed"):
+        detail = "the category subcircle edge (narrowest path)"
+    return (
+        f"Effective access on '{resource}' ({detail}) does not carry "
+        f"{scope}-scope {permission}: may not {action} "
+        f"(resolved group=0b{effective['g']:07b}, "
+        f"self=0b{effective['s']:07b})"
+    )
+
+
+def require_resource_admin(
+        resource: str,
+        action_label: str | None = None,
+) -> None:
+    """Require group-scope create authority on a resource family.
+
+    The CRUD gate: family-resource create (and, by the c⇒delete
+    convention, delete) plus every lesser group power. Kept as the
+    legacy call-site spelling — timetable/venue/subjcombi/... mutation
+    routes express their gate through it; the decision is
+    require_resource_access(resource, "group", "create").
+    """
+    require_resource_access(resource, "group", "create", action_label)
+
+
+def category_slug(category: str) -> str:
+    """Slug a venue category into the scoped-circle label fragment.
+
+    The contract backing `venues.<category-slug>` subcircle matching:
     lowercase, collapse every non-alphanumeric run to a single
     hyphen, strip the ends — "Sports Facilities" becomes
     "sports-facilities".
@@ -184,87 +312,49 @@ def category_slug(category: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", category.strip().lower()).strip("-")
 
 
-def _is_role_member(role_name: str, user_id: str) -> bool:
-    """True if user_id holds the named role circle, transitively.
+def _venue_category(venue_id: schema.CampusID) -> str | None:
+    """Load the venue and return its metadata category, or None.
 
-    A missing circle is simply not a membership (callers that need to
-    distinguish it for the denial message do their own lookup). The
-    direct hit stays as the fast path, with the shared resolver
-    behind it (#1202) — the same decision require_resource_admin
-    makes for flat resource families.
+    Raises:
+        api_errors.NotFoundError: If the venue does not exist.
     """
-    role_circle = _admin_role_circle(role_name)
-    if role_circle is None:
-        return False
-    members = role_circle.get("members", {})
-    if user_id in members:
-        return True
-    return bool(resolve_member(
-        schema.CampusID(role_circle[schema.CAMPUS_KEY]),
-        schema.CampusID(user_id),
-    ))
-
-
-def _venue_authority_denial(
-        venue_id: schema.CampusID,
-        user_id: str,
-        action: str,
-) -> str | None:
-    """Why the user lacks booking authority on the venue, or None.
-
-    `venues.admin` is the global authority (campus#1217's ratified
-    bundling of bookings into venues). A venue whose metadata carries
-    a `category` additionally answers to the standalone
-    `venues.<category-slug>.admin` circle; uncategorized venues are
-    venues.admin-only, and a missing scoped circle denies fail-closed
-    rather than silently widening to nobody-or-global.
-    """
-    if _is_role_member("venues.admin", user_id):
-        return None
     venue = venue_resource.get(venue_id)  # unknown venue -> 404
     category = venue.metadata.get("category")
     if not isinstance(category, str) or not category.strip():
-        return (
-            f"Venue {venue_id} has no \"category\" in its metadata: "
-            f"only venues.admin members may {action} its bookings"
-        )
-    role_name = f"venues.{category_slug(category)}.admin"
-    if _admin_role_circle(role_name) is None:
-        return (
-            f"No '{role_name}' circle is configured for venue "
-            f"{venue_id}'s \"{category}\" category: denying "
-            "fail-closed — create the circle to delegate booking "
-            "authority for the category"
-        )
-    if not _is_role_member(role_name, user_id):
-        return (
-            f"Only members of 'venues.admin' or '{role_name}' may "
-            f"{action} bookings for venue {venue_id}"
-        )
-    return None
+        return None
+    return category
 
 
 def require_venue_authority(
         venue_id: schema.CampusID,
         action_label: str | None = None,
 ) -> None:
-    """Require booking authority on the venue (campus#1217).
+    """Require booking authority on the venue (campus#1217/#1218).
 
-    The domain gate for booking decisions: the caller must be a user
-    principal holding `venues.admin` (any venue) or membership in the
-    standalone `venues.<category-slug>.admin` circle for the venue's
-    metadata category. Unknown venues surface as 404 via the venue
-    lookup; everything else fails closed with the specific reason.
+    The domain gate for booking decisions: a group-scope modify on
+    the `venues` family, category-narrowed — a caller holding the
+    venue's category subcircle resolves authority through that edge
+    exclusively; otherwise family-level edges and the baseline apply,
+    and the `campus` wildcard passes everywhere. Uncategorized venues
+    resolve at family level (whoever holds group authority on venues
+    decides their bookings). Unknown venues surface as 404 via the
+    venue lookup; everything else fails closed with the specific
+    reason.
 
     Raises:
         api_errors.ForbiddenError: If the caller lacks authority.
         api_errors.NotFoundError: If the venue does not exist.
     """
     action = action_label or "perform this action"
-    user_id = require_user_principal(action)
-    denial = _venue_authority_denial(venue_id, user_id, action)
-    if denial is not None:
-        raise api_errors.ForbiddenError(denial)
+    require_user_principal(action)
+    category = _venue_category(venue_id)
+    require_resource_access(
+        "venues",
+        "group",
+        "modify",
+        action_label=action,
+        category=category,
+    )
 
 
 def has_venue_authority(venue_id: schema.CampusID) -> bool:
@@ -279,6 +369,12 @@ def has_venue_authority(venue_id: schema.CampusID) -> bool:
     if user_id is None:
         return False
     try:
-        return _venue_authority_denial(venue_id, user_id, "act on") is None
+        category = _venue_category(venue_id)
     except api_errors.NotFoundError:
         return False
+    if "modify" not in FAMILY_OPERATIONS["venues"]["group"]:
+        return False
+    effective = _effective("venues", user_id, category)
+    if effective is None:
+        return False
+    return has_permission(effective["g"], "group", "modify")
