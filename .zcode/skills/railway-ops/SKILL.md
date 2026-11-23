@@ -57,6 +57,10 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
     re-copy of a stale dialog re-copies a dead value — always mint a
     fresh entry when a token stops authenticating (symptom:
     `Invalid RAILWAY_TOKEN` on every command including `status`).
+    The creation dialog must ALSO be completed/dismissed before the
+    token activates — a minted-but-unconfirmed token reads as invalid
+    too (hit live 2026-11-23: the token was correct all along and
+    started authenticating the moment the dialog was clicked through).
 - **Production is superadmin-only**: logs, variables, domains, SSH,
   redeploys, and all production data. Do not point CLI/automation at
   production; deployment-side debugging there is a superadmin activity.
@@ -212,6 +216,18 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
   grep. When inspecting token env vars, filter output through
   `sed 's/rlwy_[a-zA-Z0-9_-]*/[REDACTED]/'` and never let the value
   reach the transcript.
+- **Agent/tool shells must not rely on `~/.bashrc` for Railway auth**
+  (hit live 2026-11-23): non-interactive tool shells don't source it,
+  so `railway` inherits whatever stale `RAILWAY_TOKEN` /
+  `RAILWAY_API_TOKEN` the parent process carries and authenticates
+  with those — a valid `~/.railway-dev-token` reads as "Invalid
+  RAILWAY_TOKEN" while the file is fine. In agent shells always pass
+  the token explicitly and strip the account-key var:
+  `env -u RAILWAY_API_TOKEN RAILWAY_TOKEN="$(cat ~/.railway-dev-token
+  | tr -d ' \t\r\n')" railway <cmd>` (prod: same with the
+  `.railway-prod-token` file). Sanity-check with
+  `[ "$RAILWAY_TOKEN" = "$(cat ~/.railway-dev-token | tr -d ' \t\r\n')" ]` —
+  env-vs-file equality, never by printing values.
 
 ## Networking gotchas
 
