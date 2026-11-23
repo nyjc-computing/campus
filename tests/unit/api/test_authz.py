@@ -1,9 +1,12 @@
 """Unit tests for campus.api.authz (circle-backed route gates).
 
-require_resource_admin must fail closed: only a user principal whose
-ID (email, = user-circle name) is a member of the <resource>.admin
-role circle passes. Client principals, missing role circles, and
-non-members are denied. action_label only shapes the message.
+The ratified access model (campus#1216): authority is the effective
+access value on a family — baseline (primary-group membership) +
+family-directed edges, reduced per scope (G fields for group ops, S
+for self ops), with the `campus` wildcard short-circuiting and
+category subcircles narrowing group scope. Gates fail closed: client
+principals, missing grant circles, and principals without the
+required bit are denied. action_label only shapes the message.
 """
 
 import unittest
@@ -21,8 +24,8 @@ TEST_USER = "teacher@campus.test"
 OUTSIDER = "outsider@campus.test"
 
 
-class TestRequireResourceAdmin(unittest.TestCase):
-    """The circles-backed gate denies everything but role members."""
+class GateTestBase(unittest.TestCase):
+    """Shared harness: fresh bootstrapped circle store per test."""
 
     def setUp(self):
         from campus.api.resources.circle import (
@@ -37,11 +40,7 @@ class TestRequireResourceAdmin(unittest.TestCase):
         from campus.api.resources.circle import circle_storage
         circle_storage.delete_matching({})
 
-    def _grant(self, user_id: str, family: str = "circles"):
-        from tests.fixtures.circles import grant_circle_admin
-        grant_circle_admin(user_id, family)
-
-    def _gate(self, user, resource: str = "circles", **kwargs):
+    def _gate_admin(self, user, resource: str = "circles", **kwargs):
         from campus.api.authz import require_resource_admin
 
         app = flask.Flask(__name__)
@@ -49,185 +48,370 @@ class TestRequireResourceAdmin(unittest.TestCase):
             flask.g.current_user = user
             require_resource_admin(resource, **kwargs)
 
-    def test_member_dict_principal_passes(self):
-        """A member user principal (dict shape) passes the gate."""
-        self._grant(TEST_USER)
-        self._gate({"id": TEST_USER})
+    def _gate_access(self, user, resource: str, scope: str, permission: str,
+                     **kwargs):
+        from campus.api.authz import require_resource_access
 
-    def test_member_object_principal_passes(self):
-        """A member user principal (model-object shape) passes the gate."""
-        self._grant(TEST_USER)
-        self._gate(SimpleNamespace(id=TEST_USER))
+        app = flask.Flask(__name__)
+        with app.test_request_context():
+            flask.g.current_user = user
+            require_resource_access(resource, scope, permission, **kwargs)
 
-    def test_non_member_user_denied(self):
-        """An authenticated user without the role is denied."""
+
+class TestRequireResourceAdmin(GateTestBase):
+    """The CRUD gate (group-scope create) denies everything but holders."""
+
+    def test_direct_edge_passes(self):
+        """A family:admin edge passes the gate (dict principal shape)."""
+        from tests.fixtures.circles import grant_circle_admin
+        grant_circle_admin(TEST_USER, "circles")
+        self._gate_admin({"id": TEST_USER})
+
+    def test_direct_edge_passes_object_principal(self):
+        """A family:admin edge passes (model-object principal shape)."""
+        from tests.fixtures.circles import grant_circle_admin
+        grant_circle_admin(TEST_USER, "circles")
+        self._gate_admin(SimpleNamespace(id=TEST_USER))
+
+    def test_non_holder_denied(self):
+        """An authenticated user with no applicable edge is denied."""
         with self.assertRaises(api_errors.ForbiddenError):
-            self._gate({"id": OUTSIDER})
+            self._gate_admin({"id": OUTSIDER})
 
     def test_client_principal_denied(self):
-        """A client principal (no user) is denied even for a member id."""
-        self._grant(TEST_USER)
+        """A client principal (no user) is denied even for a holder id."""
+        from tests.fixtures.circles import grant_circle_admin
+        grant_circle_admin(TEST_USER, "circles")
         with self.assertRaises(api_errors.ForbiddenError) as ctx:
-            self._gate(None)
+            self._gate_admin(None)
         self.assertIn("Client principals", str(ctx.exception))
 
-    def test_missing_role_circle_denied(self):
-        """A missing role circle denies fail-closed (no 500, no pass)."""
+    def test_missing_grant_circle_denied(self):
+        """A family with no grant circle denies fail-closed (no 500)."""
+        from campus.api.resources.circle import circle_storage
+        from campus.common import schema
+
+        family_id = schema.CampusID(
+            circle_storage.get_matching({"name": "timetable"})[0][
+                schema.CAMPUS_KEY
+            ]
+        )
+        circle_storage.delete_by_id(family_id)
         with self.assertRaises(api_errors.ForbiddenError) as ctx:
-            self._gate({"id": TEST_USER}, resource="bookings")
-        self.assertIn("bookings.admin", str(ctx.exception))
+            self._gate_admin({"id": TEST_USER}, resource="timetable")
+        self.assertIn("grant circle", str(ctx.exception))
 
     def test_action_label_in_message(self):
         """A provided action_label appears in the denial message."""
         with self.assertRaises(api_errors.ForbiddenError) as ctx:
-            self._gate({"id": OUTSIDER}, action_label="create bookings")
+            self._gate_admin({"id": OUTSIDER}, action_label="create bookings")
         self.assertIn("create bookings", str(ctx.exception))
 
     def test_missing_action_label_degrades_message(self):
         """Omitting action_label degrades the message, never the gate."""
         with self.assertRaises(api_errors.ForbiddenError) as ctx:
-            self._gate({"id": OUTSIDER})
+            self._gate_admin({"id": OUTSIDER})
         self.assertIn("perform this action", str(ctx.exception))
 
-    def _new_group(self, name: str) -> str:
-        """Create a group circle and return its UID."""
-        from campus.api import resources
-        from campus.common import schema
-        group = resources.circle.new(name=name, tag="group")
-        return str(schema.CampusID(group.id))
+    def test_group_circle_edge_confers(self):
+        """A member circle contained in the family confers its edge value.
 
-    def test_group_circle_member_confers_role(self):
-        """Membership in a member group circle confers the role (#1196).
-
-        The prod seeding pattern: a school-wide `student` group is
-        added to the role circle once; every group member gains the
-        role without enumerating user emails into the role circle.
+        The prod seeding pattern: a committee group joins the family
+        grant circle once; every member gains the authority without
+        enumerating user emails into the family circle.
         """
         from campus.api import resources
-        from campus.api.resources.circle import circle_storage
+        from campus.api.resources.circle import ACCESS_ADMIN, circle_storage
         from campus.common import schema
+        from tests.fixtures.circles import _ensure_user_circle
 
-        # The user's circle must exist before members/add accepts the
-        # email-shaped member (same rule the fixture enforces).
-        if not circle_storage.get_matching({"name": TEST_USER}):
-            resources.circle.new(name=TEST_USER, tag="user")
-        group_id = self._new_group("students")
-        role_id = schema.CampusID(
-            circle_storage.get_matching({"name": "circles.admin"})[0][
+        _ensure_user_circle(TEST_USER)
+        family_id = schema.CampusID(
+            circle_storage.get_matching({"name": "circles"})[0][
                 schema.CAMPUS_KEY
             ]
         )
-        resources.circle.members.add(
-            schema.CampusID(group_id), member_id=schema.CampusID(TEST_USER),
-            access_value=15,
+        committee = resources.circle.new(
+            name="committees.timetabling", tag="group",
+            parents={family_id: ACCESS_ADMIN},
         )
         resources.circle.members.add(
-            role_id, member_id=schema.CampusID(group_id), access_value=15
+            schema.CampusID(committee.id),
+            member_id=schema.CampusID(TEST_USER),
+            access_value=ACCESS_ADMIN,
         )
-        self._gate({"id": TEST_USER})
+        self._gate_admin({"id": TEST_USER})
 
-    def test_nested_group_confers_role(self):
-        """Resolution walks nested groups (user → group → role circle)."""
+    def test_nested_groups_confer(self):
+        """Resolution walks nested member circles (user → group → family)."""
         from campus.api import resources
-        from campus.api.resources.circle import circle_storage
+        from campus.api.resources.circle import ACCESS_ADMIN, circle_storage
         from campus.common import schema
+        from tests.fixtures.circles import _ensure_user_circle
 
-        if not circle_storage.get_matching({"name": TEST_USER}):
-            resources.circle.new(name=TEST_USER, tag="user")
-        outer_id = self._new_group("staff")
-        inner_id = self._new_group("teachers")
-        role_id = schema.CampusID(
-            circle_storage.get_matching({"name": "circles.admin"})[0][
+        _ensure_user_circle(TEST_USER)
+        family_id = schema.CampusID(
+            circle_storage.get_matching({"name": "circles"})[0][
                 schema.CAMPUS_KEY
             ]
         )
-        resources.circle.members.add(
-            schema.CampusID(inner_id), member_id=schema.CampusID(TEST_USER),
-            access_value=15,
+        outer = resources.circle.new(name="outer-group", tag="group")
+        inner = resources.circle.new(
+            name="inner-group", tag="group",
+            parents={schema.CampusID(outer.id): ACCESS_ADMIN},
         )
         resources.circle.members.add(
-            schema.CampusID(outer_id), member_id=schema.CampusID(inner_id),
-            access_value=15,
+            schema.CampusID(inner.id), member_id=schema.CampusID(TEST_USER),
+            access_value=ACCESS_ADMIN,
         )
         resources.circle.members.add(
-            role_id, member_id=schema.CampusID(outer_id), access_value=15
+            family_id, member_id=schema.CampusID(outer.id),
+            access_value=ACCESS_ADMIN,
         )
-        self._gate({"id": TEST_USER})
+        self._gate_admin({"id": TEST_USER})
 
     def test_member_group_cycle_terminates(self):
-        """A cycle between member groups resolves without hanging (#1196)."""
+        """A cycle between member circles resolves without hanging."""
         from campus.api import resources
-        from campus.api.resources.circle import circle_storage
+        from campus.api.resources.circle import ACCESS_ADMIN, circle_storage
         from campus.common import schema
+        from tests.fixtures.circles import _ensure_user_circle
 
-        if not circle_storage.get_matching({"name": TEST_USER}):
-            resources.circle.new(name=TEST_USER, tag="user")
-        group_a = self._new_group("cycle-a")
-        group_b = self._new_group("cycle-b")
-        role_id = schema.CampusID(
-            circle_storage.get_matching({"name": "circles.admin"})[0][
+        _ensure_user_circle(TEST_USER)
+        family_id = schema.CampusID(
+            circle_storage.get_matching({"name": "circles"})[0][
                 schema.CAMPUS_KEY
             ]
         )
+        group_a = resources.circle.new(name="cycle-a", tag="group")
+        group_b = resources.circle.new(name="cycle-b", tag="group")
         resources.circle.members.add(
-            schema.CampusID(group_a), member_id=schema.CampusID(TEST_USER),
-            access_value=15,
-        )
-        # group_a → group_b → group_a
-        resources.circle.members.add(
-            schema.CampusID(group_b), member_id=schema.CampusID(group_a),
-            access_value=15,
+            schema.CampusID(group_a.id), member_id=schema.CampusID(TEST_USER),
+            access_value=ACCESS_ADMIN,
         )
         resources.circle.members.add(
-            schema.CampusID(group_a), member_id=schema.CampusID(group_b),
-            access_value=15,
+            schema.CampusID(group_b.id), member_id=schema.CampusID(group_a.id),
+            access_value=ACCESS_ADMIN,
         )
         resources.circle.members.add(
-            role_id, member_id=schema.CampusID(group_b), access_value=15
+            schema.CampusID(group_a.id), member_id=schema.CampusID(group_b.id),
+            access_value=ACCESS_ADMIN,
         )
-        self._gate({"id": TEST_USER})
+        resources.circle.members.add(
+            family_id, member_id=schema.CampusID(group_b.id),
+            access_value=ACCESS_ADMIN,
+        )
+        self._gate_admin({"id": TEST_USER})
 
     def test_stale_member_group_fails_closed_without_blocking_others(self):
-        """A deleted member circle denies for it but not for valid ones.
-
-        The stale key (circle removed after being added to the role
-        circle) is skipped fail-closed; resolution continues through
-        the remaining member groups.
-        """
+        """A deleted member circle denies for it but not for valid ones."""
         from campus.api import resources
-        from campus.api.resources.circle import circle_storage
+        from campus.api.resources.circle import ACCESS_ADMIN, circle_storage
         from campus.common import schema
+        from tests.fixtures.circles import _ensure_user_circle
 
-        if not circle_storage.get_matching({"name": TEST_USER}):
-            resources.circle.new(name=TEST_USER, tag="user")
-        stale_id = self._new_group("graduated-cohort")
-        good_id = self._new_group("students")
-        role_id = schema.CampusID(
-            circle_storage.get_matching({"name": "circles.admin"})[0][
+        _ensure_user_circle(TEST_USER)
+        stale = resources.circle.new(name="graduated-cohort", tag="group")
+        good = resources.circle.new(name="students-group", tag="group")
+        family_id = schema.CampusID(
+            circle_storage.get_matching({"name": "circles"})[0][
                 schema.CAMPUS_KEY
             ]
         )
         resources.circle.members.add(
-            schema.CampusID(good_id), member_id=schema.CampusID(TEST_USER),
-            access_value=15,
+            schema.CampusID(good.id), member_id=schema.CampusID(TEST_USER),
+            access_value=ACCESS_ADMIN,
         )
         resources.circle.members.add(
-            role_id, member_id=schema.CampusID(stale_id), access_value=15
+            family_id, member_id=schema.CampusID(stale.id),
+            access_value=ACCESS_ADMIN,
         )
         resources.circle.members.add(
-            role_id, member_id=schema.CampusID(good_id), access_value=15
+            family_id, member_id=schema.CampusID(good.id),
+            access_value=ACCESS_ADMIN,
         )
-        circle_storage.delete_by_id(schema.CampusID(stale_id))
-        self._gate({"id": TEST_USER})
+        circle_storage.delete_by_id(schema.CampusID(stale.id))
+        self._gate_admin({"id": TEST_USER})
         with self.assertRaises(api_errors.ForbiddenError):
-            self._gate({"id": OUTSIDER})
+            self._gate_admin({"id": OUTSIDER})
 
     def test_gate_is_per_resource(self):
-        """Membership in one role circle does not confer another's role."""
-        self._grant(TEST_USER, "timetable")
+        """Authority on one family does not confer another's."""
+        from tests.fixtures.circles import grant_circle_admin
+        grant_circle_admin(TEST_USER, "timetable")
         with self.assertRaises(api_errors.ForbiddenError):
-            self._gate({"id": TEST_USER}, resource="circles")
-        self._gate({"id": TEST_USER}, resource="timetable")
+            self._gate_admin({"id": TEST_USER}, resource="circles")
+        self._gate_admin({"id": TEST_USER}, resource="timetable")
+
+
+class TestValueSemantics(GateTestBase):
+    """The dual-scope constants gate by field, not by membership."""
+
+    def test_editor_can_modify_but_not_create(self):
+        """editor's G field carries modify+read, not create."""
+        from campus.api.resources.circle import ACCESS_EDITOR
+        from tests.fixtures.circles import grant_family_access
+
+        grant_family_access(TEST_USER, "venues", ACCESS_EDITOR)
+        self._gate_access(
+            {"id": TEST_USER}, "venues", "group", "modify")
+        with self.assertRaises(api_errors.ForbiddenError):
+            self._gate_access({"id": TEST_USER}, "venues", "group", "create")
+
+    def test_viewer_is_read_only(self):
+        """viewer's G field carries read only."""
+        from campus.api.resources.circle import ACCESS_VIEWER
+        from tests.fixtures.circles import grant_family_access
+
+        grant_family_access(TEST_USER, "timetable", ACCESS_VIEWER)
+        self._gate_access({"id": TEST_USER}, "timetable", "group", "read")
+        with self.assertRaises(api_errors.ForbiddenError):
+            self._gate_access({"id": TEST_USER}, "timetable", "group", "modify")
+
+    def test_staff_baseline_reads_everything(self):
+        """staff:viewer baseline reads any family without family edges."""
+        from tests.fixtures.circles import grant_staff_baseline
+
+        grant_staff_baseline(TEST_USER)
+        self._gate_access({"id": TEST_USER}, "timetable", "group", "read")
+        self._gate_access({"id": TEST_USER}, "subjcombi", "group", "read")
+        with self.assertRaises(api_errors.ForbiddenError):
+            self._gate_access({"id": TEST_USER}, "timetable", "group", "create")
+
+    def test_student_guest_is_own_read_only(self):
+        """student:guest reads own-scope where the family honors it."""
+        from campus.api import resources
+        from campus.api.resources.circle import ACCESS_GUEST, circle_storage
+        from campus.common import schema
+        if not circle_storage.get_matching({"name": TEST_USER}):
+            resources.circle.new(name=TEST_USER, tag="user")
+        if not circle_storage.get_matching({"name": "student"}):
+            resources.circle.new(name="student", tag="group")
+        student_id = schema.CampusID(
+            circle_storage.get_matching({"name": "student"})[0][
+                schema.CAMPUS_KEY
+            ]
+        )
+        resources.circle.members.add(
+            student_id, member_id=schema.CampusID(TEST_USER),
+            access_value=ACCESS_GUEST,
+        )
+        # timetable honors self-scope read (subject-match own timetable)
+        self._gate_access({"id": TEST_USER}, "timetable", "self", "read")
+        # and nothing beyond it: no group read, no self create
+        with self.assertRaises(api_errors.ForbiddenError):
+            self._gate_access({"id": TEST_USER}, "timetable", "group", "read")
+        with self.assertRaises(api_errors.ForbiddenError):
+            self._gate_access({"id": TEST_USER}, "timetable", "self", "create")
+
+    def test_family_table_blanks_vacuous_self_scopes(self):
+        """A family without own-semantics denies self-scope checks."""
+        from campus.api.resources.circle import ACCESS_ADMIN
+        from tests.fixtures.circles import grant_family_access
+
+        grant_family_access(TEST_USER, "assignments", ACCESS_ADMIN)
+        with self.assertRaises(api_errors.ForbiddenError) as ctx:
+            self._gate_access(
+                {"id": TEST_USER}, "assignments", "self", "read")
+        self.assertIn("does not honor", str(ctx.exception))
+
+    def test_non_constant_edge_values_rejected(self):
+        """members/add rejects values outside the constant set."""
+        from campus.api import resources
+        from campus.api.resources.circle import circle_storage
+        from campus.common import schema
+        from tests.fixtures.circles import _ensure_user_circle
+
+        _ensure_user_circle(TEST_USER)
+        family_id = schema.CampusID(
+            circle_storage.get_matching({"name": "circles"})[0][
+                schema.CAMPUS_KEY
+            ]
+        )
+        with self.assertRaises(api_errors.InvalidRequestError):
+            resources.circle.members.add(
+                family_id, member_id=schema.CampusID(TEST_USER),
+                access_value=15,  # legacy value: retired
+            )
+
+
+class TestWildcard(GateTestBase):
+    """The campus wildcard confers admin on every family."""
+
+    def test_wildcard_passes_everywhere(self):
+        """campus:admin passes gates on families with no other edges."""
+        from tests.fixtures.circles import grant_campus_admin
+
+        grant_campus_admin(TEST_USER)
+        self._gate_admin({"id": TEST_USER}, resource="circles")
+        self._gate_admin({"id": TEST_USER}, resource="subjcombi")
+        self._gate_access(
+            {"id": TEST_USER}, "venues", "self", "create")
+
+    def test_lesser_campus_membership_does_not_wildcard(self):
+        """A non-admin campus membership confers nothing cross-family."""
+        from campus.api.resources.circle import ACCESS_GUEST
+        from tests.fixtures.circles import grant_family_access
+
+        grant_family_access(TEST_USER, "campus", ACCESS_GUEST)
+        with self.assertRaises(api_errors.ForbiddenError):
+            self._gate_admin({"id": TEST_USER}, resource="timetable")
+
+
+class TestCategoryNarrowing(GateTestBase):
+    """Category subcircles narrow group scope; self scope never narrows."""
+
+    def _seed_sports(self) -> None:
+        from tests.fixtures.circles import (
+            grant_category_booking_admin,
+            grant_staff_baseline,
+        )
+        grant_staff_baseline(TEST_USER)
+        grant_category_booking_admin(TEST_USER, "Sports Facilities")
+
+    def test_category_edge_decides_own_category(self):
+        """A sports approver decides sports bookings (G-m via the edge)."""
+        self._seed_sports()
+        self._gate_access(
+            {"id": TEST_USER}, "venues", "group", "modify",
+            category="Sports Facilities",
+        )
+
+    def test_category_edge_does_not_decide_elsewhere(self):
+        """The narrowest-path rule: no science-labs membership, no G-m
+        outside the category — the family-level edges (baseline viewer)
+        carry no modify."""
+        self._seed_sports()
+        with self.assertRaises(api_errors.ForbiddenError):
+            self._gate_access(
+                {"id": TEST_USER}, "venues", "group", "modify",
+                category="Science Labs",
+            )
+
+    def test_self_scope_never_narrowed(self):
+        """Own-booking powers survive a weaker category edge (the
+        science-labs-viewer trap): the S field resolves family-wide."""
+        self._seed_sports()
+        self._gate_access(
+            {"id": TEST_USER}, "venues", "self", "create",
+            category="Sports Facilities",
+        )
+
+    def test_family_level_admin_decides_any_category(self):
+        """A venues:admin holder (no category membership) decides
+        everywhere: without a matching category edge, family edges max."""
+        from campus.api.resources.circle import ACCESS_ADMIN
+        from tests.fixtures.circles import grant_family_access
+
+        grant_family_access(TEST_USER, "venues", ACCESS_ADMIN)
+        self._gate_access(
+            {"id": TEST_USER}, "venues", "group", "modify",
+            category="Sports Facilities",
+        )
+        self._gate_access(
+            {"id": TEST_USER}, "venues", "group", "modify",
+            category="Science Labs",
+        )
 
 
 if __name__ == "__main__":

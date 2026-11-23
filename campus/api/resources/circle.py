@@ -16,14 +16,16 @@ circle_storage = campus.storage.get_collection("circles")
 # TODO: Make domain configurable
 DOMAIN = "nyjc.edu.sg"
 
-# Access-control bootstrap (docs/circles-access-control.md): each guarded
-# API resource family gets a resource circle (tag RESOURCE_TAG), and each
-# resource circle gets an admin role circle (tag ROLE_TAG) named
-# "<resource>.admin" — role circles carry the principals granted the
-# role and never contain resources of their own. Resource circles hang
-# under the root circle; role circles hang under their resource circle.
+# Access-control bootstrap (docs/circles-access-control.md, ratified
+# 2026-11-23, campus#1216): each guarded API resource family gets a
+# grant circle (tag RESOURCE_TAG) that authorization resolves against.
+# There are no role circles: authority is the access value carried by
+# the membership edge into the grant circle, plus the `campus`
+# wildcard (admin on every family) and the primary-group baseline
+# (`staff:viewer`, `student:guest`). Grant circles hang under the
+# root circle.
 RESOURCE_TAG = "resource"
-ROLE_TAG = "role"
+ROLE_TAG = "role"  # legacy tag; no longer seeded, kept for migration filters
 BOOTSTRAP_RESOURCES = (
     "circles",
     "timetable",
@@ -31,13 +33,14 @@ BOOTSTRAP_RESOURCES = (
     "submissions",
     "subjcombi",
     "venues",
+    "files",
+    "hostedapps",
 )
-# "bookings" is deliberately absent (campus#1217): booking authority
-# is venue-scoped (venues.admin globally, venues.<category-slug>.admin
-# per category), so a flat bookings.admin role circle has nothing to
-# gate. Environments that still hold the retired circles from the old
-# bootstrap delete them (dev did on 2026-11-23); the seed never
-# re-creates them.
+# "bookings" is deliberately absent (campus#1217/#1218): booking
+# authority is venue-derived (the family tables classify booking ops
+# against the venues grant circle, category-narrowed). Environments
+# that still hold the retired circles from the old bootstrap delete
+# them; the seed never re-creates them.
 
 # Circles contain only circles: a user participates through their user
 # circle (tag USER_TAG), named after their email account, which also
@@ -46,20 +49,86 @@ BOOTSTRAP_RESOURCES = (
 # existing user circle.
 USER_TAG = "user"
 
+# The reserved wildcard circle (docs/circles-access-control.md): a
+# campus:admin membership confers admin on every resource family.
+# Checked by the authz layer before family resolution. Seeded empty
+# except for the bootstrap admins below (init_storage runs in
+# non-production environments; production seeds its own platform
+# admin via the migration).
+CAMPUS_CIRCLE_NAME = "campus"
+
 # Bootstrap seeding, temporary: these accounts' user circles are
-# created and added to every <resource>.admin role circle at init
-# until role administration and user-circle provisioning have
-# management flows. The second account is a shared automation admin
-# (campus-test-admin) so live testing never runs as a personal
-# account.
+# created and contained in the `campus` wildcard at init until
+# user-circle provisioning has management flows. The second account
+# is a shared automation admin (campus-test-admin) so live testing
+# never runs as a personal account.
 BOOTSTRAP_ADMIN_USERS: tuple[schema.CampusID, ...] = (
     schema.CampusID("ng_jun_siang@nyjc.edu.sg"),
     schema.CampusID("campus-test-admin@nyjc.edu.sg"),
 )
 
-# Access-value convention: 15 denotes full access, mirroring the seeded
-# campus-admin -> root edge. Exact semantics are still to be decided.
-BOOTSTRAP_ACCESS_VALUE = 15
+# Access values (ratified 2026-11-23, campus#1216): 8-bit dual-scope
+# constants `0 | G-c G-m G-r | S-c S-m S-r | 0(reserved)`. c⇒m⇒r holds
+# within each field; group roles mirror into self. Edge values MUST be
+# one of these five constants — no arbitrary integers (validated at
+# member add/update and circle creation).
+ACCESS_ADMIN = 0b01111110   # 126
+ACCESS_EDITOR = 0b00110110  # 54
+ACCESS_VIEWER = 0b00010010  # 18
+ACCESS_SELF = 0b00001110    # 14
+ACCESS_GUEST = 0b00000010   # 2
+
+ACCESS_CONSTANTS: dict[str, int] = {
+    "admin": ACCESS_ADMIN,
+    "editor": ACCESS_EDITOR,
+    "viewer": ACCESS_VIEWER,
+    "self": ACCESS_SELF,
+    "guest": ACCESS_GUEST,
+}
+ACCESS_NAMES: dict[int, str] = {v: k for k, v in ACCESS_CONSTANTS.items()}
+
+GROUP_FIELD_MASK = 0b01110000  # bits 6..4: G-c G-m G-r
+SELF_FIELD_MASK = 0b00001110   # bits 3..1: S-c S-m S-r
+PERMISSION_SHIFTS = {"create": 2, "modify": 1, "read": 0}
+
+# The primary groups whose membership value is an account's
+# platform-wide baseline (docs/circles-access-control.md, "Baseline").
+# Provisioning artifacts: the bootstrap does not create them.
+PRIMARY_GROUPS = ("staff", "student")
+
+
+def is_access_constant(value: object) -> bool:
+    """True if the value is one of the five ratified constants."""
+    return isinstance(value, int) and value in ACCESS_CONSTANTS.values()
+
+
+def validate_access_constant(value: object) -> int:
+    """Validate an edge access value against the constant set.
+
+    Raises:
+        InvalidRequestError: If the value is not one of the five
+            ratified constants (the pre-ratification 4-bit values
+            included).
+    """
+    if not isinstance(value, int) or value not in ACCESS_CONSTANTS.values():
+        raise api_errors.InvalidRequestError(
+            "Access value must be one of the ratified constants "
+            f"{sorted(ACCESS_CONSTANTS.items())} — got {value!r} "
+            "(campus#1216)"
+        )
+    return value
+
+
+def has_permission(value: int, scope: str, permission: str) -> bool:
+    """True if the value carries `permission` in the field for `scope`.
+
+    The G field lives at bit base 4 (b6..b4 = c,m,r), the S field at
+    bit base 1 (b3..b1 = c,m,r); permission names map to their offset
+    within the field (c⇒m⇒r means a create check answers only the
+    create bit; callers gate read ops with "read").
+    """
+    base = 4 if scope == "group" else 1
+    return bool(value & (1 << (PERMISSION_SHIFTS[permission] + base)))
 
 
 def _member_kind(member_id: str) -> str:
@@ -226,6 +295,129 @@ def _member_chain(hit: dict, parents: dict[str, dict]) -> list[str]:
     return chain
 
 
+def resolve_family_access(
+        family_name: str,
+        member_id: schema.CampusID,
+        narrow_to_label: str | None = None,
+) -> dict | None:
+    """Resolve a principal's effective access on a grant circle.
+
+    The ratified resolution (docs/circles-access-control.md): the
+    principal's baseline (the value on their primary-group membership
+    — `staff`/`student`) combined with every family-directed edge
+    reachable through member circles, reduced to two effective fields
+    — group-scope (`g`) and self-scope (`s`).
+
+    Category narrowing applies to the group field only: when
+    `narrow_to_label` names a member circle of the family (a venue
+    category subcircle, matched by label) that contains the principal,
+    the group field comes exclusively from that edge — a booking in a
+    category the principal scope-manages is not also widened by their
+    family-level edges. The self field is never narrowed: own-scope
+    authority survives whatever category edges exist.
+
+    Args:
+        family_name: The grant circle's name ("venues", "timetable").
+        member_id: The principal's user ID (their user circle's email
+            name).
+        narrow_to_label: Optional member-circle label whose edge, when
+            applicable to the principal, becomes the sole source of
+            the group field.
+
+    Returns:
+        None if the grant circle does not exist (callers deny
+        fail-closed), otherwise:
+
+            {
+                "g": int,        # effective group-scope field
+                "s": int,        # effective self-scope field
+                "baseline": int, # the primary-group value (0 if none)
+                "narrowed": bool,# group field came from a category edge
+            }
+
+    Non-constant values (legacy edges awaiting migration) still
+    contribute whatever their bit fields carry — the gates check
+    bits, not membership, so a legacy 15 yields self-scope authority
+    and no group-scope authority until the edge is rewritten.
+    """
+    from campus.storage import errors as storage_errors
+
+    try:
+        matches = circle_storage.get_matching({"name": family_name})
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+    if not matches:
+        return None
+    family = matches[0]
+
+    email = str(member_id)
+
+    baseline = 0
+    for group_name in PRIMARY_GROUPS:
+        try:
+            group_matches = circle_storage.get_matching({"name": group_name})
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        if group_matches:
+            direct = group_matches[0].get("members", {}).get(email)
+            if direct is not None and direct > baseline:
+                baseline = direct
+
+    applicable: list[tuple[int, str | None, bool]] = []
+    for member_key, value in family.get("members", {}).items():
+        member_key = str(member_key)
+        if member_key == email:
+            applicable.append((int(value), None, False))
+            continue
+        if _member_kind(member_key) != "circle":
+            continue
+        try:
+            member_record = circle_storage.get_by_id(
+                schema.CampusID(member_key)
+            )
+        except storage_errors.NotFoundError:
+            continue
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        if not member_record:
+            continue
+        if resolve_member(
+                schema.CampusID(member_record[schema.CAMPUS_KEY]),
+                member_id,
+        ) is not None:
+            # A member circle tagged "category" is a venue-category
+            # subcircle: its edge applies only to resources in its own
+            # category (the narrowest-path rule) — it must not widen
+            # the family-level max for other categories.
+            label = str(member_record.get("name") or "")
+            is_category = member_record.get("tag") == "category"
+            applicable.append((int(value), label, is_category))
+
+    narrowed = False
+    if narrow_to_label is not None:
+        category_edges = [
+            v & GROUP_FIELD_MASK
+            for v, label, is_cat in applicable
+            if is_cat and label == narrow_to_label
+        ]
+    else:
+        category_edges = []
+    other_g = [
+        v & GROUP_FIELD_MASK for v, _, is_cat in applicable if not is_cat
+    ]
+    if category_edges:
+        g_values = category_edges
+        narrowed = True
+    else:
+        g_values = other_g
+    g = max([baseline & GROUP_FIELD_MASK, *g_values]) if g_values \
+        else baseline & GROUP_FIELD_MASK
+    s = max([baseline & SELF_FIELD_MASK]
+            + [v & SELF_FIELD_MASK for v, _, _ in applicable]) \
+        if applicable else baseline & SELF_FIELD_MASK
+    return {"g": g, "s": s, "baseline": baseline, "narrowed": narrowed}
+
+
 def get_circle_meta() -> dict:
     """Get the circle meta record from the circles collection."""
     try:
@@ -327,9 +519,11 @@ class CirclesResource:
         """Initialize storage for circle management.
 
         Seeds the access-control bootstrap on top of the collection:
-        the @meta record, the root and campus-admin sentinels, and the
-        per-resource authorization circles with their admin role
-        circles (docs/circles-access-control.md). Idempotent.
+        the @meta record, the root circle, the reserved `campus`
+        wildcard circle (holding the bootstrap admins), and a grant
+        circle per guarded resource family — no role circles
+        (docs/circles-access-control.md, ratified campus#1216).
+        Idempotent.
         """
         # Initialize the collection (creates it if needed)
         circle_storage.init_collection()
@@ -369,24 +563,34 @@ class CirclesResource:
                 }
             )
 
-        # Check for existing admin circle, otherwise create one
-        admin_circles = circle_storage.get_matching({"name": "campus-admin"})
-        assert len(admin_circles) <= 1, (
-            admin_circles, "More than one admin circle found"
+        # The reserved `campus` wildcard circle (docs/circles-access-
+        # control.md): a campus:admin membership confers admin on every
+        # resource family. Seeded empty of members except the bootstrap
+        # admins below (non-production init; production seeds its own
+        # platform admin via migration).
+        campus_circles = circle_storage.get_matching(
+            {"name": CAMPUS_CIRCLE_NAME}
         )
-        if not admin_circles:
-            CirclesResource().new(
-                name="campus-admin",
-                description="Campus admin circle",
-                tag="admin",
-                parents={root_circle.id: 15}
+        assert len(campus_circles) <= 1, (
+            campus_circles, "More than one campus wildcard circle found"
+        )
+        if not campus_circles:
+            campus_circle = CirclesResource().new(
+                name=CAMPUS_CIRCLE_NAME,
+                description=(
+                    "Platform admin wildcard: admin on every resource family"
+                ),
+                tag="group",
+                parents={root_circle.id: ACCESS_ADMIN},
             )
+        else:
+            campus_circle = model.Circle.from_storage(campus_circles[0])
 
         # User circles for the bootstrap admins
         # (docs/circles-access-control.md): users participate through
         # their user circle, named after the email account; it also
         # holds the user's private resources. Created standalone (no
-        # parents) — role memberships are the access grants, not the
+        # parents) — memberships are the access grants, not the
         # user circle's position in the tree. Temporary until
         # user-circle provisioning has a flow.
         for admin_user in BOOTSTRAP_ADMIN_USERS:
@@ -397,34 +601,28 @@ class CirclesResource:
                     f"Personal circle for {admin_user} (private resources)"
                 ),
             )
+            # Bootstrap admins hold the wildcard, not per-family grants.
+            _ensure_member(
+                campus_circle.id,
+                admin_user,
+                ACCESS_ADMIN,
+            )
 
-        # Resource authorization circles (docs/circles-access-control.md):
-        # a resource circle per guarded API resource family, each with an
-        # admin role circle for role assignment. Idempotent: name-keyed
-        # lookups make re-runs no-ops.
+        # Grant circles (docs/circles-access-control.md): one per
+        # guarded API resource family, contained in the root. No role
+        # circles — authority is the value on the membership edge into
+        # the grant circle (plus the campus wildcard and the
+        # primary-group baseline). Idempotent: name-keyed lookups make
+        # re-runs no-ops.
         for resource_name in BOOTSTRAP_RESOURCES:
-            resource_circle = _ensure_circle(
+            _ensure_circle(
                 resource_name,
                 tag=RESOURCE_TAG,
                 description=(
                     f"Authorization circle for the {resource_name} resource"
                 ),
-                parents={root_circle.id: BOOTSTRAP_ACCESS_VALUE},
+                parents={root_circle.id: ACCESS_ADMIN},
             )
-            role_circle = _ensure_circle(
-                f"{resource_name}.admin",
-                tag=ROLE_TAG,
-                description=f"Admin role for the {resource_name} resource",
-                parents={resource_circle.id: BOOTSTRAP_ACCESS_VALUE},
-            )
-            # Temporary bootstrap admins: membership is held by the
-            # user circle (named after the email), not the account.
-            for admin_user in BOOTSTRAP_ADMIN_USERS:
-                _ensure_member(
-                    role_circle.id,
-                    admin_user,
-                    BOOTSTRAP_ACCESS_VALUE,
-                )
 
     def __getitem__(self, circle_id: schema.CampusID) -> "CircleResource":
         """Get a circle resource by circle ID.
@@ -702,6 +900,7 @@ class CircleMembersResource:
                 is already present with the same access
             InternalError: For storage errors
         """
+        access_value = validate_access_constant(access_value)
         if _member_kind(str(member_id)) == "user":
             # Email-shaped IDs name the user's circle; the user circle
             # must exist for the membership to be valid.

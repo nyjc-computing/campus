@@ -21,6 +21,7 @@ from tests.fixtures import services
 from tests.fixtures.circles import (
     grant_category_booking_admin,
     grant_circle_admin,
+    grant_staff_baseline,
 )
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 
@@ -48,6 +49,10 @@ class TestApiBookingsContract(unittest.TestCase):
         # per-test state is recreated here.
         self.manager.clear_test_data()
         self.client = self.app.test_client()
+        # The ratified model gates booking create/edit/withdraw on
+        # self-scope venues authority: the fixture owner books as staff
+        # (staff:viewer baseline + the staff → venues:self edge).
+        grant_staff_baseline(str(OWNER))
 
     def _headers(self, user_id) -> dict:
         return get_bearer_auth_headers(create_test_token(user_id))
@@ -96,12 +101,47 @@ class TestApiBookingsContract(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_any_user_creates_pending_booking(self):
-        """No authority needed to book: the request starts pending."""
+        """Staff book without venue authority: the request starts pending."""
         admin_headers = self._grant_global()
         venue = self._create_venue(admin_headers)
         created = self._create_booking(venue["id"], self._headers(OWNER))
         self.assertEqual(created["status"], "pending")
         self.assertEqual(created["user_id"], str(OWNER))
+
+    def test_student_cannot_create_booking(self):
+        """Students hold no venues edge: booking is staff-only (v1)."""
+        from campus.api import resources
+        from campus.api.resources.circle import (
+            ACCESS_GUEST,
+            circle_storage,
+        )
+        from campus.common import schema as sch
+
+        student = sch.UserID("student@campus.test")
+        if not circle_storage.get_matching({"name": str(student)}):
+            resources.circle.new(name=str(student), tag="user")
+        if not circle_storage.get_matching({"name": "student"}):
+            resources.circle.new(name="student", tag="group")
+        student_group = circle_storage.get_matching({"name": "student"})[0]
+        resources.circle.members.add(
+            schema.CampusID(student_group[schema.CAMPUS_KEY]),
+            member_id=schema.CampusID(str(student)),
+            access_value=ACCESS_GUEST,
+        )
+        admin_headers = self._grant_global()
+        venue = self._create_venue(admin_headers)
+        response = self.client.post(
+            "/api/v1/bookings/",
+            json={
+                "venue_id": venue["id"],
+                "description": "student booking",
+                "start_time": "1600",
+                "end_time": "1800",
+                "date": "2026-11-24",
+            },
+            headers=self._headers(student),
+        )
+        self.assertEqual(response.status_code, 403)
 
     def test_create_unknown_venue_returns_404(self):
         response = self.client.post(
