@@ -14,21 +14,31 @@ Tests drive the resources directly and pass explicit times, so no
 clock mocking is needed (same pattern as test_timetable_pointers).
 """
 
+import datetime
 import unittest
 import uuid
 
 from campus.common import env
 from campus.common.errors import api_errors
+from campus.common.utils import utc_time
 
 # Configure test storage before importing storage-backed modules
 env.set('STORAGE_MODE', "1")
 
 
 def _metadata(filename: str) -> dict:
+    """A window covering today (year-proof): under derived pointers
+    (#1222) the newest such version is the derived-current one, with
+    created_at breaking the identical-window tie."""
+    now = utc_time.now()
     return {
         "filename": filename,
-        "start_date": "2026-01-01T00:00:00Z",
-        "end_date": "2026-12-31T00:00:00Z",
+        "start_date": utc_time.to_rfc3339(
+            now - datetime.timedelta(days=1)
+        ),
+        "end_date": utc_time.to_rfc3339(
+            now + datetime.timedelta(days=30)
+        ),
     }
 
 
@@ -221,14 +231,13 @@ class TestSubjcombiMappingSurvivesVersionSwitch(unittest.TestCase):
         self.user = f"student-{self.marker}@campus.test"
 
     def _create(self, filename: str, labels: list[str]):
-        timetable = self.resource.new(
+        # The covering window makes each new version derived-current in
+        # turn (identical windows: created_at breaks the tie), so the
+        # second create performs the v1→v2 switch.
+        return self.resource.new(
             metadata=_metadata(f"{self.marker}-{filename}"),
             lessongroups=_groups(labels),
         )
-        self.resource.flip_current(
-            timetable.id, actor_id="admin@campus.test"
-        )
-        return timetable
 
     def test_mapping_survives_switch(self):
         """set_mapping by label on v1 → v2 reuses the id → mapping still

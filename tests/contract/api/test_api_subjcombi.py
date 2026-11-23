@@ -52,25 +52,26 @@ class TestApiSubjcombiContract(unittest.TestCase):
         self.token = create_test_token(self.USER_ID)
         self.auth_headers = get_bearer_auth_headers(self.token)
         grant_circle_admin(self.USER_ID, "subjcombi", "timetable")
+        # The timetable's window covers today, so it is the derived
+        # current version — the roster fallback has something to
+        # resolve against (#1222: pointers derive, no flip needed).
         self.timetable_id = self._create_timetable()
-        # Activate the timetable so the roster fallback has a current
-        # version to resolve against.
-        activated = self.client.patch(
-            "/api/v1/timetable/",
-            json={"current": self.timetable_id},
-            headers=self.auth_headers,
-        )
-        assert activated.status_code == 200, activated.get_json()
 
     def _create_timetable(self) -> str:
         """Create a timetable with one lessongroup; return its id."""
+        from campus.common.utils import utc_time
+        now = utc_time.now()
         response = self.client.post(
             "/api/v1/timetable/",
             json={
                 "metadata": {
                     "filename": "subjcombi-contract.xml",
-                    "start_date": "2026-01-01T00:00:00Z",
-                    "end_date": "2026-12-31T00:00:00Z",
+                    "start_date": utc_time.to_rfc3339(
+                        utc_time.after(now, days=-1)
+                    ),
+                    "end_date": utc_time.to_rfc3339(
+                        utc_time.after(now, days=30)
+                    ),
                 },
                 "data": {
                     "lessongroups": [{
