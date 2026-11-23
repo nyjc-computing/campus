@@ -12,14 +12,15 @@ A label claimed by two or more rows is historical drift and fails the
 create with a 409; labels absent from the new allocation are left
 untouched.
 
-The active (current/next) timetable pointers are an effective-dated
-trail (#1075): every change appends a row — {timetable_id,
-effective_from, actor} — and "current at T" is the latest row whose
-effective_from is at or before T, so a scheduled version switch flips
-as a read-time fact (no scheduler process). A pending flip is
-superseded by a newer schedule or cancelled outright; effective rows
-are immutable. Legacy deployments' bare @metadata pointer documents
-keep resolving as a fallback until first written through the trail.
+The active (current/next) timetable "pointers" are derived, not stored
+(#1222): current is the version whose validity window covers today
+(Asia/Singapore dates — latest start_date wins overlapping windows),
+next is the wholly-future version with the earliest start_date. There
+is no pointer document to keep in sync: changing what runs means
+editing a version's window (PATCH /timetable/{id}/metadata). A
+deployment with no covering window serves current: null. The retired
+effective-dated trail (#1075) and legacy @metadata documents are never
+read or written; lingering rows are inert history.
 """
 
 import contextlib
@@ -29,7 +30,7 @@ import typing
 import campus.model as model
 import campus.storage
 from campus.common import schema
-from campus.common.errors import api_errors
+from campus.common.errors import ValidationError, api_errors
 from campus.common.utils import uid, utc_time
 from campus.storage.documents.interface import PK
 
@@ -40,7 +41,6 @@ timetable_lessongroupmembers_table = campus.storage.get_table("timetable_lessong
 
 timetable_entry_storage = campus.storage.get_collection("timetable_entries")
 timetable_collection = campus.storage.get_collection("timetables")
-timetable_effective_collection = campus.storage.get_collection("timetable_effective")
 
 # Timetable attachments are files in the campus files backend under
 # this slug namespace: timetables/<timetable_id>/attachments/<uid>.
@@ -58,10 +58,11 @@ def attachment_slug_prefix(timetable_id: schema.CampusID) -> str:
     """The files-backend slug prefix holding this version's attachments."""
     return f"{ATTACHMENT_SLUG_NAMESPACE}{timetable_id}/attachments/"
 
-# School time is Singapore time (UTC+8, no DST). A date-only pointer
-# effective_from means 07:00 school time — the committee's default
-# switch-over hour, before the first period. (Shared with the
-# subjcombi resource, which re-exports it.)
+# School time is Singapore time (UTC+8, no DST). Validity-window
+# derivation and effective-dated subjcombi records both compare school
+# dates: date-only values mean 07:00 school time — the committee's
+# default switch-over hour, before the first period. (parse_effective_from
+# is shared with the subjcombi resource, which re-exports it.)
 SGT = datetime.timezone(datetime.timedelta(hours=8), name="SGT")
 
 
@@ -160,36 +161,49 @@ def _upsert(table, key: str, data: dict) -> None:
         table.insert_one({PK: key, **data})
 
 
-def _pointer_id(value: typing.Any) -> str | None:
-    """Normalise a stored pointer value to a bare timetable id.
+def _version_windows() -> list[tuple[model.TimetableMetadata, datetime.datetime | None]]:
+    """Every timetable version as (metadata, created_at), leniently.
 
-    Legacy @metadata documents have stored pointer values both as bare
-    ids and as `{"timetable_id": ...}` objects; accept either so old
-    documents keep resolving as the trail fallback.
+    Rows whose metadata does not parse (a legacy pointer document, a
+    manual write missing a window) are skipped rather than failing the
+    whole pointer state: a version without a usable window can be
+    neither current nor next by definition (#1222).
     """
-    if isinstance(value, dict):
-        value = value.get("timetable_id")
-    return str(value) if value else None
-
-
-def _pointer_rows() -> list[dict]:
-    """Active (not superseded, not cancelled) pointer-trail rows."""
     try:
-        records = timetable_effective_collection.get_matching({})
+        records = timetable_collection.get_matching({})
     except campus.storage.errors.StorageError as e:
         raise api_errors.InternalError.from_exception(e) from e
-    return [
-        r for r in records
-        if not r.get("superseded_by") and not r.get("cancelled_at")
-    ]
+    versions: list[tuple[model.TimetableMetadata, datetime.datetime | None]] = []
+    for record in records:
+        if str(record.get("id", "")).startswith("@"):
+            continue  # retired legacy @metadata pointer documents (#1075)
+        try:
+            meta = model.TimetableMetadata.from_storage(record)
+        except (KeyError, TypeError, ValueError, ValidationError):
+            continue
+        created_at = record.get("created_at")
+        versions.append((
+            meta,
+            utc_time.from_rfc3339(created_at) if created_at else None,
+        ))
+    return versions
 
 
-def _row_effective_at(record: dict) -> datetime.datetime | None:
-    """The row's effective_from as an aware UTC datetime (undated rows
-    have none — they only flip when pointed at manually).
+def _sgt_date(dt: datetime.datetime) -> datetime.date:
+    """An instant as a school (Singapore) calendar date."""
+    return dt.astimezone(SGT).date()
+
+
+def _covers_today(meta: model.TimetableMetadata, at_date: datetime.date) -> bool:
+    """Whether the version's validity window covers a school date.
+
+    Dates are inclusive on both ends (the model's field contract:
+    end_date is 00:00 on the last day the timetable is effective); a
+    reversed window can never cover.
     """
-    raw = record.get("effective_from")
-    return utc_time.from_rfc3339(raw) if raw else None
+    start = _sgt_date(meta.start_date.to_datetime())
+    end = _sgt_date(meta.end_date.to_datetime())
+    return start <= at_date <= end
 
 
 class TimetablesResource:
@@ -205,18 +219,6 @@ class TimetablesResource:
         timetable_lessongroup_collection.init_collection()
         timetable_entry_storage.init_collection()
         timetable_collection.init_collection()
-        timetable_effective_collection.init_collection()
-        # Use a metadata document to store current & next
-        _upsert(
-            timetable_collection,
-            "@metadata",
-            {
-                "current": None,
-                "next": None
-            }
-        )
-        # Use this to update the metadata doc
-        # timetable_collection.update_by_id("@metadata", {"current": ...})
 
     def __getitem__(self, timetable_id: schema.CampusID) -> "TimetableResource":
         """Return a resource object for a specific timetable.
@@ -238,7 +240,9 @@ class TimetablesResource:
         Returns:
             list[model.TimetableMetadata]: Matching timetable metadata objects.
         """
-        # Exclude metadata document
+        # Defensive: the retired legacy @metadata pointer document
+        # (#1075) may linger in deployments whose storage was bootstrapped
+        # before #1222 — never a version row.
         filters["id"] = campus.storage.query.ne("@metadata")
         try:
             records = timetable_collection.get_matching(filters)
@@ -396,9 +400,9 @@ class TimetablesResource:
         reused is owned by the *later* version (update-in-place), so
         deleting the older version never strips a live group.
 
-        Refuses to delete the version the current or next pointer
-        names — move/cancel the pointer first. Historical versions
-        are fair game.
+        Refuses to delete the version the derived current or next
+        pointer names (#1222) — adjust the validity windows first.
+        Historical versions are fair game.
 
         Raises:
             NotFoundError: unknown timetable_id.
@@ -420,7 +424,7 @@ class TimetablesResource:
         if current is not None and str(current) == str(timetable_id):
             raise api_errors.ConflictError(
                 "Refusing to delete the timetable the current pointer "
-                f"names ({timetable_id}); move the pointer first"
+                f"names ({timetable_id}); adjust the validity windows first"
             )
         scheduled_next = self.get_next()
         if (
@@ -429,7 +433,7 @@ class TimetablesResource:
         ):
             raise api_errors.ConflictError(
                 "Refusing to delete the timetable scheduled as next "
-                f"({timetable_id}); cancel the pending switch first"
+                f"({timetable_id}); adjust the validity windows first"
             )
 
         # TODO: Atomic transactions across multiple storage objects —
@@ -467,68 +471,72 @@ class TimetablesResource:
     ) -> schema.CampusID | None:
         """Retrieve the current active timetable ID at `at` (default now).
 
-        The latest effective-dated pointer row at or before `at`; falls
-        back to the legacy @metadata pointer while the trail has no
-        effective rows.
+        Derived from the validity windows (#1222): the covering
+        version's window includes `at` as a school (Singapore) date;
+        when several windows overlap, the latest start_date wins, with
+        created_at breaking exact ties. No covering version — including
+        a deployment whose every window is wholly past — serves None.
 
         Returns:
             schema.CampusID | None: The current timetable ID, or None if not set.
         """
         at_dt = at or utc_time.now()
-        past: list[tuple[datetime.datetime, dict]] = []
-        for row in _pointer_rows():
-            effective_at = _row_effective_at(row)
-            if effective_at is not None and effective_at <= at_dt:
-                past.append((effective_at, row))
-        if past:
-            # Equal effective_from stamps resolve in append order: two
-            # flips can land in one clock tick (Windows datetime.now()
-            # granularity is ~1 ms, so back-to-back flips share a stamp;
-            # MongoDB keeps ms precision), and for an append-only trail
-            # the row appended last is the latest decision (#1174).
-            # max() keeps the first maximal element, so scan reversed.
-            _, latest = max(reversed(past), key=lambda pair: pair[0])
-            return schema.CampusID(latest["timetable_id"])
-        return self._legacy_pointer("current")
+        at_date = _sgt_date(at_dt)
+        covering = [
+            (meta, created_at)
+            for meta, created_at in _version_windows()
+            if _covers_today(meta, at_date)
+        ]
+        if not covering:
+            return None
+        # Latest start_date wins; created_at (None sorts oldest) breaks
+        # exact-start ties deterministically.
+        meta, _ = max(
+            covering,
+            key=lambda pair: (
+                _sgt_date(pair[0].start_date.to_datetime()),
+                pair[1] or datetime.datetime.min.replace(tzinfo=datetime.timezone.utc),
+            ),
+        )
+        return schema.CampusID(meta.id)
 
     def get_next(self) -> dict | None:
         """Retrieve the next scheduled timetable and its effective date.
 
+        Derived from the validity windows (#1222): the wholly-future
+        version with the earliest start_date; its effective_from is
+        that start date. None when no version starts in the future.
+
         Returns:
             dict | None: {"timetable_id": ..., "effective_from": str |
-            None} for the pending switch — earliest future-dated row,
-            else the latest undated row — or None when nothing is
-            scheduled (legacy @metadata `next` resolves as undated).
+            None} for the pending switch, or None when nothing is
+            scheduled.
         """
-        now_dt = utc_time.now()
-        pending: list[dict] = []
-        dated: list[tuple[datetime.datetime, dict]] = []
-        for row in _pointer_rows():
-            effective_at = _row_effective_at(row)
-            if effective_at is None or effective_at > now_dt:
-                pending.append(row)
-                if effective_at is not None:
-                    dated.append((effective_at, row))
-        if pending:
-            row = (
-                min(dated, key=lambda pair: pair[0])[1]
-                if dated
-                else max(pending, key=lambda r: r["created_at"])
-            )
-            return {
-                "timetable_id": schema.CampusID(row["timetable_id"]),
-                "effective_from": row.get("effective_from"),
-            }
-        legacy = self._legacy_pointer("next")
-        if legacy is not None:
-            return {"timetable_id": legacy, "effective_from": None}
-        return None
+        today = _sgt_date(utc_time.now())
+        future: list[tuple[model.TimetableMetadata, datetime.datetime | None]] = [
+            (meta, created_at)
+            for meta, created_at in _version_windows()
+            if _sgt_date(meta.start_date.to_datetime()) > today
+        ]
+        if not future:
+            return None
+        meta, _ = min(
+            future,
+            key=lambda pair: (
+                _sgt_date(pair[0].start_date.to_datetime()),
+                (pair[1] or datetime.datetime.max.replace(tzinfo=datetime.timezone.utc)),
+            ),
+        )
+        return {
+            "timetable_id": schema.CampusID(meta.id),
+            "effective_from": str(meta.start_date),
+        }
 
     def pointers_state(self) -> dict:
-        """The pointer state served by GET /timetable/ (#1075).
+        """The pointer state served by GET /timetable/ (#1222).
 
         {"current": id | None, "next": id | None, "effective_from":
-        ts | None} — flat, with the pending switch's effective date.
+        ts | None} — flat, with the next version's window start.
         """
         nxt = self.get_next()
         return {
@@ -536,116 +544,6 @@ class TimetablesResource:
             "next": nxt["timetable_id"] if nxt else None,
             "effective_from": nxt["effective_from"] if nxt else None,
         }
-
-    def _legacy_pointer(self, key: str) -> schema.CampusID | None:
-        """Pre-trail pointer fallback: the legacy @metadata document."""
-        try:
-            metadata = timetable_collection.get_by_id("@metadata")
-        except campus.storage.errors.NotFoundError:
-            return None
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-        if metadata is None:
-            return None
-        timetable_id = _pointer_id(metadata.get(key))
-        return schema.CampusID(timetable_id) if timetable_id else None
-
-    def _append_pointer_row(
-            self,
-            timetable_id: schema.CampusID,
-            effective_from: datetime.datetime | None,
-            actor_id: schema.UserID,
-    ) -> dict:
-        """Append a pointer-trail row after validating the target."""
-        TimetableResource(timetable_id).get()
-        row = {
-            schema.CAMPUS_KEY: uid.generate_category_uid("tteffective"),
-            "timetable_id": str(timetable_id),
-            "effective_from": (
-                utc_time.to_rfc3339(effective_from) if effective_from else None
-            ),
-            "actor_id": str(actor_id),
-            "created_at": utc_time.to_rfc3339(utc_time.now()),
-            "superseded_by": None,
-            "cancelled_at": None,
-            "cancelled_by": None,
-        }
-        try:
-            timetable_effective_collection.insert_one(row)
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-        return row
-
-    def flip_current(
-            self,
-            timetable_id: schema.CampusID,
-            actor_id: schema.UserID,
-    ) -> None:
-        """Make `timetable_id` the current timetable, effective now.
-
-        Scheduled future switches (if any) remain pending and still
-        flip at their effective dates.
-        """
-        self._append_pointer_row(timetable_id, utc_time.now(), actor_id)
-
-    def schedule_next(
-            self,
-            timetable_id: schema.CampusID,
-            effective_from: datetime.datetime | None,
-            actor_id: schema.UserID,
-    ) -> dict:
-        """Schedule (or reschedule) the pending switch to `timetable_id`.
-
-        `effective_from` None means undated: the switch is staged but
-        only applies when pointed at manually. Any previous pending
-        row is superseded (one pending switch at a time).
-
-        Returns:
-            dict: The appended trail row.
-        """
-        now_dt = utc_time.now()
-        pending: list[dict] = []
-        for stale_row in _pointer_rows():
-            effective_at = _row_effective_at(stale_row)
-            if effective_at is None or effective_at > now_dt:
-                pending.append(stale_row)
-        try:
-            row = self._append_pointer_row(
-                timetable_id, effective_from, actor_id
-            )
-            for stale in pending:
-                timetable_effective_collection.update_by_id(
-                    stale[schema.CAMPUS_KEY],
-                    {"superseded_by": row[schema.CAMPUS_KEY]},
-                )
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-        return row
-
-    def cancel_next(self, actor_id: schema.UserID) -> typing.List[dict]:
-        """Cancel the pending switch (trail-preserving tombstones).
-
-        Already-effective rows are immutable history and are left
-        alone.
-        """
-        now_dt = utc_time.now()
-        now_str = utc_time.to_rfc3339(now_dt)
-        cancelled = []
-        try:
-            for r in _pointer_rows():
-                ef = _row_effective_at(r)
-                if ef is None or ef > now_dt:
-                    timetable_effective_collection.update_by_id(
-                        r[schema.CAMPUS_KEY],
-                        {
-                            "cancelled_at": now_str,
-                            "cancelled_by": str(actor_id),
-                        },
-                    )
-                    cancelled.append(r)
-        except campus.storage.errors.StorageError as e:
-            raise api_errors.InternalError.from_exception(e) from e
-        return cancelled
 
 class TimetableResource:
     """Represents a single timetable."""

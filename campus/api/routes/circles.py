@@ -10,11 +10,13 @@ import flask
 
 import campus.flask_campus as flask_campus
 import campus.model
+import campus.storage
 import campus.yapper
 from campus.common import schema
 from campus.common.errors import api_errors
 
 from .. import authz, resources
+from ..resources.circle import circle_storage, resolve_family_access
 
 bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
@@ -674,8 +676,214 @@ def patch_circle_member(
     return {}, 200
 
 
+@bp.get('/<string:circle_id>/access/<string:member_id>/')
+def get_circle_access(circle_id: str, member_id: str) -> flask_campus.JsonResponse:
+    """Resolve a principal's effective access on a grant circle.
+
+    The family-resolution probe: answers exactly what the enforcement
+    gate answers (campus.api.authz) — the `campus` wildcard, the
+    primary-group baseline, family-directed edges, and venue-category
+    narrowing of the group field — reduced to the two effective
+    fields. The plain membership probe answers the raw containment
+    question (the value at the hit circle); this endpoint answers the
+    authority question apps gate on ("is this principal a timetable
+    admin"), so gate and probe cannot drift.
+
+    Method:
+        GET /api/v1/circles/{circle_id}/access/{member_id}?category=<slug>
+
+    Path Parameters:
+        circle_id: str (required)
+            The grant circle to resolve against (e.g. the timetable
+            family's circle).
+        member_id: str (required)
+            The principal's user ID (their email, naming their user
+            circle).
+
+    Query Parameters:
+        category: str (optional)
+            A venue category; when present, the group field resolves
+            narrowed (a matching category subcircle edge is the sole
+            source of group-scope authority).
+
+    Responses:
+        200 OK: dict
+            {
+                "circle_id": str,
+                "member_id": str,
+                "wildcard": bool,   # campus:admin (admin everywhere)
+                "g": int,           # effective group-scope field
+                "s": int            # effective self-scope field
+            }
+
+        401 Unauthorized: None
+            Returned if the request carries no valid authentication.
+
+        409 Conflict: None
+            Returned if the circle does not exist (consistent with
+            the members probe).
+
+    Notes:
+        - Reads stay open (no membership required), consistent with
+          the other circles reads: this answers what any client could
+          compute from the members listings plus the documented
+          resolution algorithm.
+        - Answers through resources.circle.resolve_family_access and
+          authz.is_platform_admin — the same implementations the
+          gates call, so the decisions cannot drift.
+        - Emits no events.
+    """
+    from campus.storage import errors as storage_errors
+
+    from ..authz import category_slug, is_platform_admin
+
+    try:
+        record = circle_storage.get_by_id(schema.CampusID(circle_id))
+        if record is None:
+            raise api_errors.ConflictError(
+                "Circle not found",
+                id=circle_id
+            )
+    except storage_errors.NotFoundError:
+        raise api_errors.ConflictError(
+            "Circle not found",
+            id=circle_id
+        ) from None
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+
+    if is_platform_admin(member_id):
+        return {
+            "circle_id": circle_id,
+            "member_id": member_id,
+            "wildcard": True,
+            "g": 0b1110000,
+            "s": 0b0001110,
+        }, 200
+
+    category = flask.request.args.get("category")
+    access = resolve_family_access(
+        str(record.get("name") or ""),
+        schema.CampusID(member_id),
+        narrow_to_label=category_slug(category) if category else None,
+    )
+    if access is None:
+        # The circle exists but names no grant family (e.g. a group
+        # circle): no family authority resolves here.
+        return {
+            "circle_id": circle_id,
+            "member_id": member_id,
+            "wildcard": False,
+            "g": 0,
+            "s": 0,
+        }, 200
+    return {
+        "circle_id": circle_id,
+        "member_id": member_id,
+        "wildcard": False,
+        "g": access["g"],
+        "s": access["s"],
+    }, 200
+
+
 @bp.get('/<string:circle_id>/users')
 def get_circle_users(circle_id: str) -> flask_campus.JsonResponse:
-    # TODO: validate request
-    """Get users in a circle."""
-    return {"message": "Not implemented"}, 501
+    """List the user circles reachable through a circle's membership graph.
+
+    Walk the circle's members transitively and enumerate every
+    contained user circle (by email name) — the audit question
+    "who is venues:admin", answered without clients hand-walking
+    members dicts. Group circles are traversed; user circles are
+    collected; stale member keys (circle deleted after being added)
+    are skipped fail-closed without blocking the remaining walk.
+
+    Method:
+        GET /api/v1/circles/{circle_id}/users
+
+    Path Parameters:
+        circle_id: str (required)
+            The circle whose membership graph to enumerate.
+
+    Query Parameters:
+        None
+
+    Request Body:
+        None
+
+    Responses:
+        200 OK: dict
+            {"circle_id": str, "users": [email names, sorted]}
+
+        401 Unauthorized: None
+            Returned if the request carries no valid authentication.
+
+        409 Conflict: None
+            Returned if the circle does not exist (consistent with
+            the members listing).
+
+    Notes:
+        - Reads stay open (no membership required), consistent with
+          the members listing: this enumerates exactly what a client
+          could compute by walking the members listings, so it leaks
+          nothing new.
+        - Emits no events.
+    """
+    from campus.storage import errors as storage_errors
+
+    try:
+        start = circle_storage.get_by_id(schema.CampusID(circle_id))
+        if start is None:
+            raise api_errors.ConflictError(
+                "Circle not found",
+                id=circle_id
+            )
+    except storage_errors.NotFoundError:
+        raise api_errors.ConflictError(
+            "Circle not found",
+            id=circle_id
+        ) from None
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+
+    users: list[str] = []
+    visited: set[str] = set()
+    pending = [start]
+    while pending:
+        record = pending.pop()
+        key = str(record.get(schema.CAMPUS_KEY))
+        if key in visited:
+            continue
+        visited.add(key)
+        if record.get("tag") == "user":
+            users.append(str(record.get("name") or key))
+            continue  # user circles are leaves
+        for member_key in (record.get("members") or {}):
+            member_key = str(member_key)
+            if member_key in visited:
+                continue
+            if "@" not in member_key:
+                try:
+                    member_record = circle_storage.get_by_id(
+                        schema.CampusID(member_key)
+                    )
+                except storage_errors.NotFoundError:
+                    continue
+                except campus.storage.errors.StorageError as e:
+                    raise api_errors.InternalError.from_exception(e) from e
+                if member_record:
+                    pending.append(member_record)
+            else:
+                # Email-shaped keys name user circles directly; verify
+                # the circle exists rather than trusting the key.
+                try:
+                    member_record = circle_storage.get_matching(
+                        {"name": member_key}
+                    )
+                except campus.storage.errors.StorageError as e:
+                    raise api_errors.InternalError.from_exception(e) from e
+                if member_record:
+                    pending.append(member_record[0])
+    return {
+        "circle_id": circle_id,
+        "users": sorted(users),
+    }, 200

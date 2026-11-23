@@ -1,10 +1,11 @@
-"""Unit tests for venue-scoped booking authority (campus#1217).
+"""Unit tests for venue-scoped booking authority (campus#1217/#1218).
 
-require_venue_authority must allow venues.admin globally, allow the
-standalone venues.<category-slug>.admin circle for its category only,
-and deny fail-closed on uncategorized venues, missing scoped circles,
-client principals, and non-members. has_venue_authority answers the
-same decision without raising.
+require_venue_authority is a group-scope modify on the `venues`
+family, category-narrowed: a venues:admin holder decides any venue's
+bookings, a venues.<category-slug> subcircle member decides only
+within the category, and everyone else (baseline viewer included)
+denies. has_venue_authority answers the same decision without
+raising.
 """
 
 import contextlib
@@ -90,50 +91,42 @@ class TestVenueBookingAuthority(unittest.TestCase):
         return str(schema.CampusID(venue.id))
 
     def test_global_venues_admin_passes_everywhere(self):
-        """venues.admin decides bookings on any venue, categorized or not."""
+        """venues:admin decides bookings on any venue, categorized or not."""
         admin = {"id": ADMIN}
         self._gate(admin, self._venue_id(self.sports_venue))
         self._gate(admin, self._venue_id(self.meeting_venue))
         self._gate(admin, self._venue_id(self.plain_venue))
 
-    def test_category_admin_passes_within_category(self):
-        """The scoped circle's member decides bookings for its category."""
+    def test_category_edge_passes_within_category(self):
+        """The category subcircle's member decides bookings for its
+        category — narrowest path wins."""
         self._gate({"id": SPORTS_ADMIN}, self._venue_id(self.sports_venue))
 
-    def test_category_admin_denied_outside_category(self):
-        """The scoped member has no authority over another category."""
+    def test_category_edge_denied_outside_category(self):
+        """The category edge is authoritative only within its category:
+        for another category it is excluded, and the member has no
+        family-level edges, so the modify bit is missing."""
         with self.assertRaises(api_errors.ForbiddenError) as ctx:
             self._gate(
                 {"id": SPORTS_ADMIN},
                 self._venue_id(self.meeting_venue),
                 action_label="decide bookings",
             )
-        self.assertIn("venues.meeting-rooms.admin", str(ctx.exception))
+        self.assertIn("group-scope modify", str(ctx.exception))
 
-    def test_uncategorized_venue_is_global_admin_only(self):
-        """No category in metadata: scoped members are denied."""
-        with self.assertRaises(api_errors.ForbiddenError) as ctx:
+    def test_uncategorized_venue_resolves_at_family_level(self):
+        """No category in metadata: no narrowing applies. The scoped
+        member (whose only edge is category-tagged) has no family-level
+        authority and denies; the venues:admin holder passes."""
+        with self.assertRaises(api_errors.ForbiddenError):
             self._gate(
                 {"id": SPORTS_ADMIN},
                 self._venue_id(self.plain_venue),
             )
-        self.assertIn('no "category"', str(ctx.exception))
         self._gate({"id": ADMIN}, self._venue_id(self.plain_venue))
 
-    def test_missing_scoped_circle_denies_fail_closed(self):
-        """A category with no scoped circle denies (nobody but global)."""
-        from campus.api.authz import category_slug
-
-        assert not _circle_exists(f"venues.{category_slug('Meeting Rooms')}.admin")
-        with self.assertRaises(api_errors.ForbiddenError) as ctx:
-            self._gate(
-                {"id": SPORTS_ADMIN},
-                self._venue_id(self.meeting_venue),
-            )
-        self.assertIn("fail-closed", str(ctx.exception))
-
     def test_outsider_denied_everywhere(self):
-        """A non-member decides nothing, anywhere."""
+        """A principal with no edges and no baseline decides nothing."""
         outsider = {"id": OUTSIDER}
         for venue in (self.sports_venue, self.meeting_venue):
             with self.assertRaises(api_errors.ForbiddenError):
@@ -145,24 +138,21 @@ class TestVenueBookingAuthority(unittest.TestCase):
             self._gate(None, self._venue_id(self.sports_venue))
         self.assertIn("Client principals", str(ctx.exception))
 
-    def test_unknown_venue_404_comes_from_the_lookup_not_the_gate(self):
-        """Unknown venues 404 only where the venue must be loaded.
-
-        The gate answers global venues.admin membership without
-        loading the venue (routes 404 phantoms themselves when they
-        resolve the booking/venue), so a global admin passes; a
-        scoped decision path does load the venue and surfaces
-        NotFound.
-        """
+    def test_unknown_venue_404_from_the_lookup(self):
+        """Booking authority is category-narrowed, so the gate loads the
+        venue for every caller: unknown venues surface NotFound for
+        everyone (routes 404 phantoms the same way when they resolve
+        the booking), and the non-raising check answers False."""
         from campus.common import schema
 
         missing = schema.CampusID("uid-venue-zzzzzzzz")
-        self._gate({"id": ADMIN}, missing)  # global: venue never loaded
+        with self.assertRaises(api_errors.NotFoundError):
+            self._gate({"id": ADMIN}, missing)
         with self.assertRaises(api_errors.NotFoundError):
             self._gate({"id": SPORTS_ADMIN}, missing)
         with self.assertRaises(api_errors.NotFoundError):
             self._gate({"id": OUTSIDER}, missing)
-        self.assertTrue(self._has({"id": ADMIN}, missing))
+        self.assertFalse(self._has({"id": ADMIN}, missing))
         self.assertFalse(self._has({"id": SPORTS_ADMIN}, missing))
 
     def test_has_venue_authority_matches_require(self):
@@ -174,12 +164,6 @@ class TestVenueBookingAuthority(unittest.TestCase):
         self.assertFalse(self._has({"id": SPORTS_ADMIN}, meeting_id))
         self.assertFalse(self._has({"id": OUTSIDER}, sports_id))
         self.assertFalse(self._has(None, sports_id))
-
-
-def _circle_exists(name: str) -> bool:
-    from campus.api.resources.circle import circle_storage
-
-    return bool(circle_storage.get_matching({"name": name}))
 
 
 if __name__ == "__main__":

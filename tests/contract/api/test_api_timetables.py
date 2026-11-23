@@ -8,17 +8,21 @@ This is enforced via before_request hook in the API blueprint.
 
 Timetable Endpoints Reference:
 - POST   /timetable/                  - Create a new timetable
-- GET    /timetable/                  - Pointer state (current/next/effective_from)
-- PATCH  /timetable/                  - Patch one pointer (flip current, schedule/cancel next)
+- GET    /timetable/                  - Pointer state (current/next/effective_from),
+                                        derived from validity windows (#1222)
+- PATCH  /timetable/                  - RETIRED (#1222): pointers derive from
+                                        windows; the route now 405s
 - GET    /timetable/metadata/         - List timetable metadata records
 - GET    /timetable/{id}/             - Get a full timetable
 - GET    /timetable/current           - Get the current timetable ID
 - GET    /timetable/next              - Get the next timetable ID + effective date
 """
 
+import datetime
 import unittest
 
 from campus.common import schema
+from campus.common.utils import utc_time
 from tests.fixtures import services
 from tests.fixtures.circles import grant_circle_admin
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
@@ -149,11 +153,13 @@ class TestApiTimetablesContract(unittest.TestCase):
 
 
 class TestTimetablePointersContract(unittest.TestCase):
-    """HTTP contract tests for the effective-dated pointer routes (#1075).
+    """HTTP contract tests for the derived pointer routes (#1222).
 
-    GET /timetable/ (pointer state), PATCH /timetable/ (one-key patch),
-    GET /timetable/next ({value, effective_from}), and the relocated
-    metadata list at GET /timetable/metadata/.
+    Pointer state derives from the versions' validity windows: GET
+    /timetable/ ({current, next, effective_from}), GET /timetable/current,
+    GET /timetable/next, and the relocated metadata list at
+    GET /timetable/metadata/. The pointer PATCH is retired — the route
+    now 405s.
     """
 
     @classmethod
@@ -168,118 +174,116 @@ class TestTimetablePointersContract(unittest.TestCase):
         cls.manager.cleanup()
 
     def setUp(self):
-        import contextlib
-
-        import campus.storage
-        from campus.api.resources.timetable import (
-            timetable_collection,
-            timetable_effective_collection,
-        )
-
-        # The pointer trail is deployment-global: reset it per test.
         self.manager.clear_test_data()
-        timetable_effective_collection.delete_matching({})
-        with contextlib.suppress(campus.storage.errors.NotFoundError):
-            timetable_collection.delete_by_id("@metadata")
         self.client = self.app.test_client()
         self.auth_headers = get_bearer_auth_headers(
             create_test_token(self.user_id)
         )
         grant_circle_admin(str(self.user_id), "timetable")
-        self.timetable_id = self._create_timetable()
+        self.now = utc_time.now()
 
-    def _create_timetable(self) -> str:
+    def _create_timetable(
+            self,
+            filename: str,
+            start: datetime.datetime,
+            end: datetime.datetime,
+    ) -> str:
         response = self.client.post(
             "/api/v1/timetable/",
             json={
                 "metadata": {
-                    "filename": "pointers-contract.xml",
-                    "start_date": "2026-01-01T00:00:00Z",
-                    "end_date": "2026-12-31T00:00:00Z"
+                    "filename": filename,
+                    "start_date": utc_time.to_rfc3339(start),
+                    "end_date": utc_time.to_rfc3339(end),
                 },
                 "data": {"lessongroups": []}
             },
             headers=self.auth_headers
         )
-        assert response.status_code == 200
+        assert response.status_code == 200, response.get_data()
         return response.get_json()["data"]["id"]
 
-    def _patch(self, payload, headers=None):
-        return self.client.patch(
-            "/api/v1/timetable/",
-            json=payload,
-            headers=headers or self.auth_headers,
+    def _window_covering_now(self) -> tuple[datetime.datetime, datetime.datetime]:
+        return (
+            self.now - datetime.timedelta(days=1),
+            self.now + datetime.timedelta(days=30),
         )
 
-    def test_patch_current_flips_and_state_resolves(self):
-        response = self._patch({"current": self.timetable_id})
+    def test_pointer_state_derives_from_covering_window(self):
+        timetable_id = self._create_timetable(
+            "pointers-covering-contract.xml", *self._window_covering_now()
+        )
+        response = self.client.get(
+            "/api/v1/timetable/", headers=self.auth_headers
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.get_json()["current"], self.timetable_id)
-        current = self.client.get("/api/v1/timetable/current")
-        # Reads are authentication-only; the pointer reads here use the
-        # same authenticated client.
+        state = response.get_json()
+        self.assertEqual(state["current"], timetable_id)
+        self.assertIsNone(state["next"])
+        self.assertIsNone(state["effective_from"])
         current = self.client.get(
             "/api/v1/timetable/current", headers=self.auth_headers
         )
-        self.assertEqual(current.get_json()["value"], self.timetable_id)
+        self.assertEqual(current.get_json()["value"], timetable_id)
 
-    def test_patch_next_dated_applies_0700_school_time(self):
-        response = self._patch({
-            "next": self.timetable_id,
-            "effective_from": "2027-06-01",
-        })
+    def test_next_derives_earliest_future_start(self):
+        self._create_timetable(
+            "pointers-covering-contract.xml", *self._window_covering_now()
+        )
+        start = self.now + datetime.timedelta(days=60)
+        end = self.now + datetime.timedelta(days=300)
+        next_id = self._create_timetable(
+            "pointers-future-contract.xml", start, end
+        )
+        response = self.client.get(
+            "/api/v1/timetable/", headers=self.auth_headers
+        )
         self.assertEqual(response.status_code, 200)
         state = response.get_json()
-        self.assertEqual(state["next"], self.timetable_id)
-        # Date-only effective_from: 07:00 SGT = 23:00 UTC the day before.
-        self.assertEqual(state["effective_from"], "2027-05-31T23:00:00+00:00")
+        self.assertEqual(state["next"], next_id)
+        # effective_from is the next version's window start, verbatim.
+        self.assertEqual(state["effective_from"], utc_time.to_rfc3339(start))
         nxt = self.client.get(
             "/api/v1/timetable/next", headers=self.auth_headers
         )
         self.assertEqual(nxt.status_code, 200)
-        self.assertEqual(nxt.get_json()["value"], self.timetable_id)
+        self.assertEqual(nxt.get_json()["value"], next_id)
         self.assertEqual(
-            nxt.get_json()["effective_from"], "2027-05-31T23:00:00+00:00"
+            nxt.get_json()["effective_from"], utc_time.to_rfc3339(start)
         )
 
-    def test_patch_next_null_cancels_pending(self):
-        self._patch({"next": self.timetable_id, "effective_from": "2027-06-01"})
-        cancelled = self._patch({"next": None})
-        self.assertEqual(cancelled.status_code, 200)
-        self.assertIsNone(cancelled.get_json()["next"])
-        self.assertIsNone(cancelled.get_json()["effective_from"])
-
-    def test_patch_validation_errors(self):
-        both = self._patch({
-            "current": self.timetable_id, "next": self.timetable_id
-        })
-        self.assertEqual(both.status_code, 400)
-        unknown = self._patch({"mode": "flip"})
-        self.assertEqual(unknown.status_code, 400)
-        date_only_cancel = self._patch({
-            "next": None, "effective_from": "2027-06-01"
-        })
-        self.assertEqual(date_only_cancel.status_code, 400)
-        empty = self._patch({"effective_from": "2027-06-01"})
-        self.assertEqual(empty.status_code, 400)
-        unset = self._patch({"current": None})
-        self.assertEqual(unset.status_code, 400)
-
-    def test_patch_requires_auth_and_circle(self):
-        response = self.client.patch(
-            "/api/v1/timetable/", json={"current": self.timetable_id}
+    def test_no_covering_window_serves_null(self):
+        # Every window wholly past: current is null, not the newest.
+        self._create_timetable(
+            "pointers-past-contract.xml",
+            self.now - datetime.timedelta(days=40),
+            self.now - datetime.timedelta(days=10),
         )
-        self.assertEqual(response.status_code, 401)
-        outsider = schema.UserID("pointer.outsider@campus.test")
+        response = self.client.get(
+            "/api/v1/timetable/", headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.get_json()["current"])
+        current = self.client.get(
+            "/api/v1/timetable/current", headers=self.auth_headers
+        )
+        self.assertIsNone(current.get_json()["value"])
+
+    def test_pointer_patch_route_is_retired(self):
+        timetable_id = self._create_timetable(
+            "pointers-covering-contract.xml", *self._window_covering_now()
+        )
         response = self.client.patch(
             "/api/v1/timetable/",
-            json={"current": self.timetable_id},
-            headers=get_bearer_auth_headers(create_test_token(outsider)),
+            json={"current": timetable_id},
+            headers=self.auth_headers,
         )
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.get_json()["error"]["code"], "FORBIDDEN")
+        self.assertEqual(response.status_code, 405)
 
     def test_metadata_list_route(self):
+        timetable_id = self._create_timetable(
+            "pointers-covering-contract.xml", *self._window_covering_now()
+        )
         response = self.client.get(
             "/api/v1/timetable/metadata/", headers=self.auth_headers
         )
@@ -287,7 +291,7 @@ class TestTimetablePointersContract(unittest.TestCase):
         ids = [
             t["id"] for t in response.get_json()["data"]
         ]
-        self.assertIn(self.timetable_id, ids)
+        self.assertIn(timetable_id, ids)
 
 
 class TestTimetableMetadataPatchContract(unittest.TestCase):
@@ -416,18 +420,7 @@ class TestTimetableMeContract(unittest.TestCase):
         cls.manager.cleanup()
 
     def setUp(self):
-        import contextlib
-
-        import campus.storage
-        from campus.api.resources.timetable import (
-            timetable_collection,
-            timetable_effective_collection,
-        )
-
         self.manager.clear_test_data()
-        timetable_effective_collection.delete_matching({})
-        with contextlib.suppress(campus.storage.errors.NotFoundError):
-            timetable_collection.delete_by_id("@metadata")
         self.client = self.app.test_client()
         grant_circle_admin(str(self.USER_ID), "timetable", "subjcombi")
 
@@ -450,6 +443,8 @@ class TestTimetableMeContract(unittest.TestCase):
             filename: str,
             member: str | None,
             labels: tuple[str, ...] = ("25A1",),
+            start: str | None = None,
+            end: str | None = None,
     ) -> str:
         lessongroups = [{
             "label": label,
@@ -457,13 +452,20 @@ class TestTimetableMeContract(unittest.TestCase):
             "entries": [{"weekday": "MON", "timeslot": "0800",
                          "venue": "B1-01"}],
         } for label in labels]
+        now = utc_time.now()
+        if start is None:
+            # Default window edges: covering today — the version is the
+            # derived-current one (#1222).
+            start = utc_time.to_rfc3339(utc_time.after(now, days=-1))
+        if end is None:
+            end = utc_time.to_rfc3339(utc_time.after(now, days=30))
         response = self.client.post(
             "/api/v1/timetable/",
             json={
                 "metadata": {
                     "filename": filename,
-                    "start_date": "2026-01-01T00:00:00Z",
-                    "end_date": "2026-12-31T00:00:00Z",
+                    "start_date": start,
+                    "end_date": end,
                 },
                 "data": {"lessongroups": lessongroups},
             },
@@ -478,11 +480,6 @@ class TestTimetableMeContract(unittest.TestCase):
 
     def test_roster_current_and_no_next(self):
         tt_v1 = self._create_timetable("me-v1.xml", str(self.USER_ID))
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"current": tt_v1},
-            headers=self._headers(),
-        )
         view = self.client.get(
             "/api/v1/timetable/me", headers=self._headers()
         )
@@ -494,11 +491,12 @@ class TestTimetableMeContract(unittest.TestCase):
         self.assertIsNone(data["next"])
 
     def test_scheduled_subjcombi_is_next(self):
-        tt_v1 = self._create_timetable("me-s1.xml", str(self.USER_ID))
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"current": tt_v1},
-            headers=self._headers(),
+        # The version's window must still cover the scheduled switch
+        # instant (2027), or the derivation would serve a gap there.
+        tt_v1 = self._create_timetable(
+            "me-s1.xml",
+            str(self.USER_ID),
+            end="2027-12-31T00:00:00Z",
         )
         put = self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
@@ -521,16 +519,11 @@ class TestTimetableMeContract(unittest.TestCase):
 
     def test_scheduled_version_switch_is_next(self):
         tt_v1 = self._create_timetable("me-vv1.xml", str(self.USER_ID))
-        tt_v2 = self._create_timetable("me-vv2.xml", str(self.USER_ID))
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"current": tt_v1},
-            headers=self._headers(),
-        )
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"next": tt_v2, "effective_from": "2027-07-01"},
-            headers=self._headers(),
+        tt_v2 = self._create_timetable(
+            "me-vv2.xml",
+            str(self.USER_ID),
+            start="2027-07-01T00:00:00Z",
+            end="2028-06-30T00:00:00Z",
         )
         view = self.client.get(
             "/api/v1/timetable/me", headers=self._headers()
@@ -546,23 +539,17 @@ class TestTimetableMeContract(unittest.TestCase):
         With label-anchored reuse (#592) a version switch alone keeps
         the group id stable, so the "both" case needs the mapping to
         actually move: the student's new combination is a group whose
-        label is new to the v2 allocation.
+        label is new to the v2 allocation. The v2 window starts at
+        07:00 school time on 2027-07-01 — the same instant the
+        date-only subjcombi effective_from applies.
         """
-        tt_v1 = self._create_timetable("me-b1.xml", str(self.USER_ID))
+        self._create_timetable("me-b1.xml", str(self.USER_ID))
         tt_v2 = self._create_timetable(
-            "me-b2.xml", str(self.USER_ID), labels=("25A1", "25B2")
-        )
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"current": tt_v1},
-            headers=self._headers(),
-        )
-        # Both changes take effect at the same instant (date-only ->
-        # 07:00 SGT on the same day).
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"next": tt_v2, "effective_from": "2027-07-01"},
-            headers=self._headers(),
+            "me-b2.xml",
+            str(self.USER_ID),
+            labels=("25A1", "25B2"),
+            start="2027-06-30T23:00:00Z",
+            end="2028-06-30T00:00:00Z",
         )
         self.client.put(
             f"/api/v1/subjcombi/{self.USER_ID}",
@@ -578,17 +565,12 @@ class TestTimetableMeContract(unittest.TestCase):
         self.assertEqual(data["next"]["timetable_id"], tt_v2)
 
     def test_as_of_resolves_future_state(self):
-        tt_v1 = self._create_timetable("me-a1.xml", str(self.USER_ID))
-        tt_v2 = self._create_timetable("me-a2.xml", str(self.USER_ID))
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"current": tt_v1},
-            headers=self._headers(),
-        )
-        self.client.patch(
-            "/api/v1/timetable/",
-            json={"next": tt_v2, "effective_from": "2027-07-01"},
-            headers=self._headers(),
+        self._create_timetable("me-a1.xml", str(self.USER_ID))
+        tt_v2 = self._create_timetable(
+            "me-a2.xml",
+            str(self.USER_ID),
+            start="2027-07-01T00:00:00Z",
+            end="2028-06-30T00:00:00Z",
         )
         view = self.client.get(
             "/api/v1/timetable/me",

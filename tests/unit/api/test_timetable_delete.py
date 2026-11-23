@@ -5,30 +5,41 @@ duplicate-label row is owned by the superseded version that minted it,
 so deleting that version removes the row and unblocks the create. A
 group row that a later create reused is owned by the later version
 (update-in-place, #592/campus#1080) and survives the deletion of the
-older version. The current and next pointer targets are undeletable
-until moved/cancelled.
+older version. The derived current and next pointer targets (#1222)
+are undeletable until the validity windows change.
 
-Tests drive the resources directly and pass explicit times/actors, so
-no clock mocking is needed (same pattern as
-test_timetable_lessongroups).
+Tests drive the resources directly with explicit windows, so no clock
+mocking is needed (same pattern as test_timetable_lessongroups).
 """
 
+import datetime
 import unittest
 import uuid
 
 from campus.common import env
 from campus.common.errors import api_errors
-from campus.common.utils import uid
+from campus.common.utils import uid, utc_time
 
 # Configure test storage before importing storage-backed modules
 env.set('STORAGE_MODE', "1")
 
 
-def _metadata(filename: str) -> dict:
+def _metadata(
+        filename: str,
+        start: datetime.datetime | None = None,
+        end: datetime.datetime | None = None,
+) -> dict:
+    now = utc_time.now()
     return {
         "filename": filename,
-        "start_date": "2026-01-01T00:00:00Z",
-        "end_date": "2026-12-31T00:00:00Z",
+        # Default window is wholly past (two to one year ago): a
+        # historical version, deletable under the derived delete-guard.
+        "start_date": utc_time.to_rfc3339(
+            start or now - datetime.timedelta(days=730)
+        ),
+        "end_date": utc_time.to_rfc3339(
+            end or now - datetime.timedelta(days=365)
+        ),
     }
 
 
@@ -57,11 +68,10 @@ class TestTimetableDelete(unittest.TestCase):
         self.resource = TimetablesResource()
         self.resource.init_storage()
         self.marker = uuid.uuid4().hex[:6]
-        self.actor = uid.generate_category_uid("user")
 
-    def _create(self, filename: str, labels: list[str]):
+    def _create(self, filename: str, labels: list[str], **window):
         return self.resource.new(
-            metadata=_metadata(f"{self.marker}-{filename}"),
+            metadata=_metadata(f"{self.marker}-{filename}", **window),
             lessongroups=_groups(labels),
         )
 
@@ -113,19 +123,32 @@ class TestTimetableDelete(unittest.TestCase):
             {"25A-Math"},
         )
 
-    def test_delete_refuses_current_pointer_target(self):
-        v1 = self._create("v1.xml", ["25A-Math"])
-        self.resource.flip_current(v1.id, self.actor)
+    def test_delete_refuses_derived_current(self):
+        # A window covering today makes the version derived-current.
+        now = utc_time.now()
+        v1 = self._create(
+            "v1.xml",
+            ["25A-Math"],
+            start=now - datetime.timedelta(days=1),
+            end=now + datetime.timedelta(days=30),
+        )
         with self.assertRaises(api_errors.ConflictError):
             self.resource.delete(v1.id)
-        # Deleting the other (pointerless) version is fine.
+        # A historical (wholly-past window) version deletes fine.
         v2 = self._create("v2.xml", ["25B-Chem"])
         self.resource.delete(v2.id)
 
-    def test_delete_refuses_next_pointer_target(self):
+    def test_delete_refuses_derived_next(self):
+        # A wholly-future window makes the version derived-next
+        # (earliest future start).
+        now = utc_time.now()
         v1 = self._create("v1.xml", ["25A-Math"])
-        v2 = self._create("v2.xml", ["25B-Chem"])
-        self.resource.schedule_next(v2.id, None, self.actor)
+        v2 = self._create(
+            "v2.xml",
+            ["25B-Chem"],
+            start=now + datetime.timedelta(days=60),
+            end=now + datetime.timedelta(days=300),
+        )
         with self.assertRaises(api_errors.ConflictError):
             self.resource.delete(v2.id)
         # The historical version is deletable while v2 sits in next.

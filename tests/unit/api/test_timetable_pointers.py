@@ -1,11 +1,14 @@
-"""Unit tests for the effective-dated timetable pointer trail (#1075).
+"""Unit tests for derived timetable pointer state (#1222).
 
-current(T) is the latest trail row at or before T; a pending switch
-(one per deployment) is superseded by a newer schedule or cancelled
-outright; legacy @metadata pointers keep resolving as a fallback.
-Tests pass explicit `at` times, so no clock mocking is needed.
+current(T) is the version whose validity window covers T as a
+Singapore school date — latest start_date wins overlapping windows;
+next is the wholly-future version with the earliest start_date, its
+effective_from that start date. There is no pointer document: the
+windows are written with the version create / metadata patch, and the
+tests pass explicit `at` instants, so no clock mocking is needed.
 """
 
+import datetime
 import unittest
 import uuid
 
@@ -16,155 +19,180 @@ from campus.common.utils import utc_time
 # Configure test storage before importing storage-backed modules
 env.set('STORAGE_MODE', "1")
 
+SGT = datetime.timezone(datetime.timedelta(hours=8))
 
-class TestTimetablePointerTrail(unittest.TestCase):
-    """Effective-dated pointer semantics."""
+
+def _rfc3339(dt: datetime.datetime) -> str:
+    return utc_time.to_rfc3339(dt)
+
+
+class TestDerivedPointerState(unittest.TestCase):
+    """Validity-window derivation semantics."""
 
     def setUp(self):
-        import contextlib
-
-        import campus.storage
         from campus.api.resources.timetable import (
             TimetablesResource,
             timetable_collection,
-            timetable_effective_collection,
         )
 
-        # The pointer trail is deployment-global: reset it per test
-        # (test storage persists across tests in the process).
-        timetable_effective_collection.delete_matching({})
-        with contextlib.suppress(campus.storage.errors.NotFoundError):
-            timetable_collection.delete_by_id("@metadata")
+        # Derived state reads the version rows themselves: reset them
+        # per test (test storage persists across tests in the process).
+        timetable_collection.delete_matching({})
         self.timetables = TimetablesResource()
         self.timetables.init_storage()
         self.admin = "admin@campus.test"
-        self.tt_a = self._create_timetable("a")
-        self.tt_b = self._create_timetable("b")
+        self.now = utc_time.now()
 
-    def _create_timetable(self, tag: str) -> str:
+    def _create_timetable(
+            self,
+            tag: str,
+            start: datetime.datetime,
+            end: datetime.datetime,
+    ) -> str:
         timetable = self.timetables.new(
             metadata={
                 "filename": f"pointers-{uuid.uuid4().hex[:8]}-{tag}.xml",
-                "start_date": "2026-01-01T00:00:00Z",
-                "end_date": "2026-12-31T00:00:00Z",
+                "start_date": _rfc3339(start),
+                "end_date": _rfc3339(end),
             },
             lessongroups=[],
         )
         return timetable.id
 
-    def test_flip_current_and_state(self):
-        self.timetables.flip_current(self.tt_a, actor_id=self.admin)
-        self.assertEqual(self.timetables.get_current(), self.tt_a)
+    def _window_around_now(self, **delta) -> tuple[datetime.datetime, datetime.datetime]:
+        """A window that started yesterday (school dates) and ends at a
+        delta from now — covering today by construction."""
+        start = self.now - datetime.timedelta(days=1)
+        end = utc_time.after(self.now, **delta)
+        return start, end
+
+    def test_covering_window_is_current(self):
+        start, end = self._window_around_now(days=30)
+        tt_a = self._create_timetable("a", start, end)
+        self.assertEqual(self.timetables.get_current(), tt_a)
         state = self.timetables.pointers_state()
-        self.assertEqual(state["current"], self.tt_a)
+        self.assertEqual(state["current"], tt_a)
         self.assertIsNone(state["next"])
         self.assertIsNone(state["effective_from"])
 
-    def test_scheduled_switch_flips_by_read_time(self):
-        soon = utc_time.after(hours=1)
-        later = utc_time.after(hours=2)
-        self.timetables.flip_current(self.tt_a, actor_id=self.admin)
-        self.timetables.schedule_next(
-            self.tt_b, effective_from=soon, actor_id=self.admin
-        )
-        self.assertEqual(self.timetables.get_current(), self.tt_a)
-        nxt = self.timetables.get_next()
-        self.assertEqual(nxt["timetable_id"], self.tt_b)
-        self.assertEqual(nxt["effective_from"], utc_time.to_rfc3339(soon))
-        # After the effective time, the switch has happened.
-        self.assertEqual(self.timetables.get_current(at=later), self.tt_b)
+    def test_latest_start_wins_overlapping_windows(self):
+        start_old = self.now - datetime.timedelta(days=10)
+        start_new = self.now - datetime.timedelta(days=1)
+        end = utc_time.after(self.now, days=30)
+        self._create_timetable("old", start_old, end)
+        tt_new = self._create_timetable("new", start_new, end)
+        self.assertEqual(self.timetables.get_current(), tt_new)
 
-    def test_reschedule_supersedes_pending_switch(self):
-        soon = utc_time.after(hours=1)
-        later = utc_time.after(hours=2)
-        first = self.timetables.schedule_next(
-            self.tt_a, effective_from=soon, actor_id=self.admin
+    def test_gap_between_windows_serves_null(self):
+        # Every window is wholly past: nothing covers today.
+        self._create_timetable(
+            "past",
+            self.now - datetime.timedelta(days=40),
+            self.now - datetime.timedelta(days=10),
         )
-        second = self.timetables.schedule_next(
-            self.tt_b, effective_from=later, actor_id=self.admin
-        )
-        # The pending view points only at the latest schedule.
-        self.assertEqual(self.timetables.get_next()["timetable_id"], self.tt_b)
-        history = self._pointer_history()
-        self.assertEqual(len(history), 2)
-        stored_first = next(r for r in history if r["id"] == first["id"])
-        self.assertEqual(stored_first["superseded_by"], second["id"])
-
-    def _pointer_history(self):
-        from campus.api.resources.timetable import timetable_effective_collection
-        return timetable_effective_collection.get_matching({})
-
-    def test_undated_next_stages_but_does_not_flip(self):
-        self.timetables.flip_current(self.tt_a, actor_id=self.admin)
-        self.timetables.schedule_next(
-            self.tt_b, effective_from=None, actor_id=self.admin
-        )
-        nxt = self.timetables.get_next()
-        self.assertEqual(nxt["timetable_id"], self.tt_b)
-        self.assertIsNone(nxt["effective_from"])
-        # Undated switches never flip by themselves.
-        self.assertEqual(self.timetables.get_current(), self.tt_a)
-
-    def test_cancel_pending_switch(self):
-        self.timetables.schedule_next(
-            self.tt_a, effective_from=utc_time.after(hours=1),
-            actor_id=self.admin,
-        )
-        self.timetables.cancel_next(actor_id=self.admin)
-        self.assertIsNone(self.timetables.get_next())
         self.assertIsNone(self.timetables.get_current())
+        state = self.timetables.pointers_state()
+        self.assertIsNone(state["current"])
 
-    def test_flip_current_keeps_future_switch_pending(self):
-        soon = utc_time.after(hours=1)
-        self.timetables.flip_current(self.tt_a, actor_id=self.admin)
-        self.timetables.schedule_next(
-            self.tt_b, effective_from=soon, actor_id=self.admin
+    def test_get_current_at_explicit_instant(self):
+        start = self.now - datetime.timedelta(days=1)
+        end = utc_time.after(self.now, days=30)
+        tt_a = self._create_timetable("a", start, end)
+        # Inside the window: current. A day past the end: not.
+        self.assertEqual(
+            self.timetables.get_current(at=utc_time.after(self.now, hours=1)),
+            tt_a,
         )
-        self.timetables.flip_current(self.tt_a, actor_id=self.admin)
-        self.assertEqual(self.timetables.get_current(), self.tt_a)
-        self.assertEqual(self.timetables.get_next()["timetable_id"], self.tt_b)
-
-    def test_equal_effective_from_resolves_in_append_order(self):
-        """Two trail rows sharing an effective_from stamp resolve in
-        append order: the row appended last is current (#1174).
-
-        Back-to-back flips share a stamp whenever they land in one
-        clock tick (Windows datetime.now() granularity is ~1 ms;
-        MongoDB keeps ms precision), and the latest flip is the latest
-        decision — the stale row must not win the tie.
-        """
-        from campus.api.resources.timetable import (
-            timetable_effective_collection,
+        self.assertIsNone(
+            self.timetables.get_current(at=utc_time.after(self.now, days=31)),
         )
 
-        stamp = utc_time.to_rfc3339(utc_time.now())
-        for target in (self.tt_a, self.tt_b):
-            timetable_effective_collection.insert_one({
-                "timetable_id": str(target),
-                "effective_from": stamp,
-                "actor_id": self.admin,
-                "created_at": stamp,
-                "superseded_by": None,
-                "cancelled_at": None,
-                "cancelled_by": None,
-            })
-        self.assertEqual(self.timetables.get_current(), self.tt_b)
+    def test_end_date_is_inclusive(self):
+        # The window's last day (as a school date) still covers.
+        start = self.now - datetime.timedelta(days=1)
+        end = utc_time.after(self.now, hours=1)
+        tt_a = self._create_timetable("a", start, end)
+        # An instant on the same school date as end_date: covered.
+        self.assertEqual(self.timetables.get_current(), tt_a)
 
-    def test_unknown_timetable_pointer_rejected(self):
-        with self.assertRaises(api_errors.NotFoundError):
-            self.timetables.flip_current(
-                "uid-timetable-nonexistent", actor_id=self.admin
-            )
+    def test_next_is_earliest_future_start(self):
+        start_far = utc_time.after(self.now, days=10)
+        start_soon = utc_time.after(self.now, days=2)
+        horizon = utc_time.after(self.now, days=300)
+        self._create_timetable("far", start_far, horizon)
+        tt_soon = self._create_timetable("soon", start_soon, horizon)
+        nxt = self.timetables.get_next()
+        self.assertEqual(nxt["timetable_id"], tt_soon)
+        self.assertEqual(nxt["effective_from"], _rfc3339(start_soon))
+        state = self.timetables.pointers_state()
+        self.assertEqual(state["next"], tt_soon)
+        self.assertEqual(state["effective_from"], _rfc3339(start_soon))
 
-    def test_legacy_metadata_pointer_fallback(self):
-        from campus.api.resources.timetable import _upsert, timetable_collection
-        # Bare-id shape.
-        _upsert(timetable_collection, "@metadata", {"current": self.tt_a})
-        self.assertEqual(self.timetables.get_current(), self.tt_a)
-        # Object shape.
-        _upsert(
-            timetable_collection,
-            "@metadata",
-            {"current": {"timetable_id": self.tt_b}},
+    def test_past_or_covering_window_is_never_next(self):
+        # A covering version and a past version, nothing future.
+        covering_start = self.now - datetime.timedelta(days=1)
+        self._create_timetable(
+            "past",
+            self.now - datetime.timedelta(days=40),
+            self.now - datetime.timedelta(days=10),
         )
-        self.assertEqual(self.timetables.get_current(), self.tt_b)
+        self._create_timetable(
+            "covering",
+            covering_start,
+            utc_time.after(self.now, days=30),
+        )
+        self.assertIsNotNone(self.timetables.get_current())
+        self.assertIsNone(self.timetables.get_next())
+
+    def test_start_date_boundary_flips_to_next_on_the_day(self):
+        # A version starting tomorrow (school date) is not current
+        # today and is the next pending switch; at tomorrow's midnight
+        # (school time) it becomes current and the pending switch is
+        # gone. Anchored to Singapore midnight so the test cannot
+        # flake on the wall clock.
+        sgt_midnight_tomorrow = datetime.datetime.combine(
+            (self.now.astimezone(SGT) + datetime.timedelta(days=1)).date(),
+            datetime.time(0, 0),
+            tzinfo=SGT,
+        )
+        start = sgt_midnight_tomorrow
+        end = utc_time.after(self.now, days=300)
+        tt_a = self._create_timetable("a", start, end)
+        self.assertIsNone(self.timetables.get_current())
+        nxt = self.timetables.get_next()
+        self.assertEqual(nxt["timetable_id"], tt_a)
+        self.assertEqual(nxt["effective_from"], _rfc3339(start))
+        # A minute before the start date: still future.
+        before = start - datetime.timedelta(minutes=1)
+        self.assertIsNone(self.timetables.get_current(at=before))
+        # On the start date: current. (The pending switch as of NOW is
+        # still this version — get_next has no as-of parameter.)
+        on_day = start + datetime.timedelta(hours=1)
+        self.assertEqual(self.timetables.get_current(at=on_day), tt_a)
+
+    def test_unparseable_rows_are_skipped(self):
+        """A row without a usable window cannot be current or next and
+        must not break the derived state (#1222 leniency)."""
+        from campus.api.resources.timetable import timetable_collection
+
+        timetable_collection.insert_one({
+            "id": "uid-timetable-junkrow",
+            "filename": "",
+        })
+        start, end = self._window_around_now(days=30)
+        tt_a = self._create_timetable("a", start, end)
+        self.assertEqual(self.timetables.get_current(), tt_a)
+        self.assertEqual(self.timetables.pointers_state()["current"], tt_a)
+
+    def test_delete_guard_refuses_derived_current_and_next(self):
+        start, end = self._window_around_now(days=30)
+        tt_current = self._create_timetable("current", start, end)
+        tt_next = self._create_timetable(
+            "next",
+            utc_time.after(self.now, days=60),
+            utc_time.after(self.now, days=300),
+        )
+        with self.assertRaises(api_errors.ConflictError):
+            self.timetables.delete(tt_current)
+        with self.assertRaises(api_errors.ConflictError):
+            self.timetables.delete(tt_next)
