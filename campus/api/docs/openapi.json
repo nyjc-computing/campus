@@ -985,6 +985,42 @@
         ]
       }
     },
+    "/api/v1/circles/{circle_id}/access/{member_id}/": {
+      "get": {
+        "description": "The family-resolution probe: answers exactly what the enforcement\ngate answers (campus.api.authz) \u2014 the `campus` wildcard, the\nprimary-group baseline, family-directed edges, and venue-category\nnarrowing of the group field \u2014 reduced to the two effective\nfields. The plain membership probe answers the raw containment\nquestion (the value at the hit circle); this endpoint answers the\nauthority question apps gate on (\"is this principal a timetable\nadmin\"), so gate and probe cannot drift.\n\nMethod:\n    GET /api/v1/circles/{circle_id}/access/{member_id}?category=<slug>\n\nPath Parameters:\n    circle_id: str (required)\n        The grant circle to resolve against (e.g. the timetable\n        family's circle).\n    member_id: str (required)\n        The principal's user ID (their email, naming their user\n        circle).\n\nQuery Parameters:\n    category: str (optional)\n        A venue category; when present, the group field resolves\n        narrowed (a matching category subcircle edge is the sole\n        source of group-scope authority).\n\nResponses:\n    200 OK: dict\n        {\n            \"circle_id\": str,\n            \"member_id\": str,\n            \"wildcard\": bool,   # campus:admin (admin everywhere)\n            \"g\": int,           # effective group-scope field\n            \"s\": int            # effective self-scope field\n        }\n\n    401 Unauthorized: None\n        Returned if the request carries no valid authentication.\n\n    409 Conflict: None\n        Returned if the circle does not exist (consistent with\n        the members probe).\n\nNotes:\n    - Reads stay open (no membership required), consistent with\n      the other circles reads: this answers what any client could\n      compute from the members listings plus the documented\n      resolution algorithm.\n    - Answers through resources.circle.resolve_family_access and\n      authz.is_platform_admin \u2014 the same implementations the\n      gates call, so the decisions cannot drift.\n    - Emits no events.",
+        "operationId": "api_v1_circles_get_circle_access",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "circle_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "member_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Resolve a principal's effective access on a grant circle.",
+        "tags": [
+          "circles"
+        ]
+      }
+    },
     "/api/v1/circles/{circle_id}/members/": {
       "get": {
         "description": "Retrieve the member IDs of a circle along with their access values\n\nRetrieve the member IDs of a circle along with their access values.\n\nMethod:\n    GET /circles/{circle_id}/members\n\nPath Parameters:\n    circle_id: str (required)\n        The unique identifier of the circle whose members are to be listed.\n\nQuery Parameters:\n    None\n\nRequest Body:\n    None\n\nResponses:\n    200 OK: dict\n        A mapping of member IDs to their access values within the circle.\n        Example:\n            {\n                \"user:alice\": \"admin\",\n                \"user:bob\": \"read\"\n            }\n\n    409 Conflict: None\n        Returned if the circle does not exist.\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs while retrieving members.\n\nNotes:\n    - The result includes only direct members of the circle.\n    - If the circle has no members, an empty object is returned.\n    - Emits no events and does not currently validate the response structure.",

@@ -15,7 +15,7 @@ from campus.common import schema
 from campus.common.errors import api_errors
 
 from .. import authz, resources
-from ..resources.circle import circle_storage
+from ..resources.circle import circle_storage, resolve_family_access
 
 bp = flask.Blueprint('circles', __name__, url_prefix='/circles')
 
@@ -673,6 +673,116 @@ def patch_circle_member(
     )
     yapper.emit('campus.circles.members.set', {"circle_id": circle_id, "member_id": member_id})
     return {}, 200
+
+
+@bp.get('/<string:circle_id>/access/<string:member_id>/')
+def get_circle_access(circle_id: str, member_id: str) -> flask_campus.JsonResponse:
+    """Resolve a principal's effective access on a grant circle.
+
+    The family-resolution probe: answers exactly what the enforcement
+    gate answers (campus.api.authz) — the `campus` wildcard, the
+    primary-group baseline, family-directed edges, and venue-category
+    narrowing of the group field — reduced to the two effective
+    fields. The plain membership probe answers the raw containment
+    question (the value at the hit circle); this endpoint answers the
+    authority question apps gate on ("is this principal a timetable
+    admin"), so gate and probe cannot drift.
+
+    Method:
+        GET /api/v1/circles/{circle_id}/access/{member_id}?category=<slug>
+
+    Path Parameters:
+        circle_id: str (required)
+            The grant circle to resolve against (e.g. the timetable
+            family's circle).
+        member_id: str (required)
+            The principal's user ID (their email, naming their user
+            circle).
+
+    Query Parameters:
+        category: str (optional)
+            A venue category; when present, the group field resolves
+            narrowed (a matching category subcircle edge is the sole
+            source of group-scope authority).
+
+    Responses:
+        200 OK: dict
+            {
+                "circle_id": str,
+                "member_id": str,
+                "wildcard": bool,   # campus:admin (admin everywhere)
+                "g": int,           # effective group-scope field
+                "s": int            # effective self-scope field
+            }
+
+        401 Unauthorized: None
+            Returned if the request carries no valid authentication.
+
+        409 Conflict: None
+            Returned if the circle does not exist (consistent with
+            the members probe).
+
+    Notes:
+        - Reads stay open (no membership required), consistent with
+          the other circles reads: this answers what any client could
+          compute from the members listings plus the documented
+          resolution algorithm.
+        - Answers through resources.circle.resolve_family_access and
+          authz.is_platform_admin — the same implementations the
+          gates call, so the decisions cannot drift.
+        - Emits no events.
+    """
+    from campus.storage import errors as storage_errors
+
+    from ..authz import category_slug, is_platform_admin
+
+    try:
+        record = circle_storage.get_by_id(schema.CampusID(circle_id))
+        if record is None:
+            raise api_errors.ConflictError(
+                "Circle not found",
+                id=circle_id
+            )
+    except storage_errors.NotFoundError:
+        raise api_errors.ConflictError(
+            "Circle not found",
+            id=circle_id
+        ) from None
+    except campus.storage.errors.StorageError as e:
+        raise api_errors.InternalError.from_exception(e) from e
+
+    if is_platform_admin(member_id):
+        return {
+            "circle_id": circle_id,
+            "member_id": member_id,
+            "wildcard": True,
+            "g": 0b1110000,
+            "s": 0b0001110,
+        }, 200
+
+    category = flask.request.args.get("category")
+    access = resolve_family_access(
+        str(record.get("name") or ""),
+        schema.CampusID(member_id),
+        narrow_to_label=category_slug(category) if category else None,
+    )
+    if access is None:
+        # The circle exists but names no grant family (e.g. a group
+        # circle): no family authority resolves here.
+        return {
+            "circle_id": circle_id,
+            "member_id": member_id,
+            "wildcard": False,
+            "g": 0,
+            "s": 0,
+        }, 200
+    return {
+        "circle_id": circle_id,
+        "member_id": member_id,
+        "wildcard": False,
+        "g": access["g"],
+        "s": access["s"],
+    }, 200
 
 
 @bp.get('/<string:circle_id>/users')

@@ -1235,6 +1235,64 @@ class TestApiCirclesContract(unittest.TestCase):
 
     # Get Circle Users Tests (Not Implemented)
 
+    def test_probe_family_access_answers_authority(self):
+        """GET /circles/{id}/access/{member} answers what the gate does.
+
+        A committee member resolves group-admin on the family through
+        the member circle's edge; an outsider resolves zeros; the
+        wildcard answers admin on any circle."""
+        from campus.api.resources.circle import (
+            ACCESS_ADMIN,
+            ACCESS_VIEWER,
+            circle_storage,
+        )
+        from tests.fixtures.circles import grant_campus_admin
+
+        email = "chair.access@campus.test"
+        self._create_test_user_circle(email)
+        family_id = str(schema.CampusID(
+            circle_storage.get_matching({"name": "timetable"})[0][
+                schema.CAMPUS_KEY
+            ]
+        ))
+        committee_id = self._create_test_circle(
+            name="committees.timetabling", tag="group"
+        )
+        self.client.post(
+            f"/api/v1/circles/{committee_id}/members/add",
+            json={"member_id": email, "access_value": ACCESS_VIEWER},
+            headers=self.auth_headers
+        )
+        self.client.post(
+            f"/api/v1/circles/{family_id}/members/add",
+            json={"member_id": committee_id, "access_value": ACCESS_ADMIN},
+            headers=self.auth_headers
+        )
+
+        chair = self.client.get(
+            f"/api/v1/circles/{family_id}/access/{email}/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(chair.status_code, 200)
+        data = chair.get_json()
+        self.assertTrue(data["g"] & 0b1000000, "group-create bit expected")
+
+        outsider = self.client.get(
+            f"/api/v1/circles/{family_id}/access/nobody@campus.test/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(outsider.status_code, 200)
+        self.assertEqual(outsider.get_json()["g"], 0)
+
+        wildcard_email = "wildcard.access@campus.test"
+        grant_campus_admin(wildcard_email)
+        wildcard = self.client.get(
+            f"/api/v1/circles/{family_id}/access/{wildcard_email}/",
+            headers=self.auth_headers
+        )
+        self.assertEqual(wildcard.status_code, 200)
+        self.assertTrue(wildcard.get_json()["wildcard"])
+
     def test_get_circle_users_lists_transitive_users(self):
         """GET /circles/{circle_id}/users enumerates contained users."""
         email = "teacher.users@campus.test"
