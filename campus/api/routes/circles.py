@@ -6,11 +6,11 @@ API routes for the circles resource.
 from typing import Any
 
 import campus_python
-import campus.storage
 import flask
 
 import campus.flask_campus as flask_campus
 import campus.model
+import campus.storage
 import campus.yapper
 from campus.common import schema
 from campus.common.errors import api_errors
