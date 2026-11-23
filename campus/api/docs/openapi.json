@@ -516,7 +516,7 @@
         ]
       },
       "post": {
-        "description": "Method:\n    POST /bookings\n\nBody Parameters (application/json):\n    venue_id: schema.CampusID (required)\n        The ID of the venue to book.\n    description: str (required)\n        A description of the booking purpose.\n    start_time: schema.Time (required)\n        Start time in HH:MM format.\n    end_time: schema.Time (required)\n        End time in HH:MM format.\n    date: schema.Date (required)\n        Booking date in YYYY-MM-DD format.\n\nResponses:\n    201 Created: dict\n        Booking resource\n\n    400 Bad Request: dict\n        {\"error\": error message}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `bookings.admin` circle (only user tokens are eligible).",
+        "description": "Method:\n    POST /bookings\n\nAny authenticated user may book; the booking is attributed to the\nprincipal (client tokens denied \u2014 #854). The venue must exist.\nThe booking starts \"pending\": deciding it is the venue\nauthority's call (PATCH status).\n\nThe time fields are plain strings rather than schema.Time\nannotations on purpose: flask_campus's request unpacking\ninstantiates str-subclass annotations itself and its coercion\nloop does not catch ValueError, so a malformed value would 500\ninstead of reaching this handler's 400.\n\nBody Parameters (application/json):\n    venue_id: schema.CampusID (required)\n        The ID of the venue to book.\n    description: str (required)\n        A description of the booking purpose.\n    start_time: str (required)\n        Start time in HHMM format.\n    end_time: str (required)\n        End time in HHMM format.\n    date: str (required)\n        Booking date in YYYY-MM-DD format.\n\nResponses:\n    201 Created: dict\n        Booking resource\n\n    400 Bad Request: dict\n        {\"error\": error message} \u2014 missing fields, a malformed\n        HHMM time or date, or end_time not after start_time.\n\n    403 Forbidden: None\n        Returned for client principals (attribution, #854).\n\n    404 Not Found: dict\n        {\"error\": \"Venue not found\"}\n\n    409 Conflict: dict\n        {\"error\": error message} \u2014 an identical booking (same\n        venue, date, start and end time) already exists.",
         "operationId": "api_v1_bookings_create_booking",
         "requestBody": {
           "content": {
@@ -524,18 +524,15 @@
               "schema": {
                 "properties": {
                   "date": {
-                    "format": "date",
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
                   },
                   "end_time": {
-                    "format": "hhmm",
                     "type": "string"
                   },
                   "start_time": {
-                    "format": "hhmm",
                     "type": "string"
                   },
                   "venue_id": {
@@ -563,7 +560,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "summary": "Create a new venue booking.",
+        "summary": "Create a new venue booking (pending until decided).",
         "tags": [
           "bookings"
         ]
@@ -571,7 +568,7 @@
     },
     "/api/v1/bookings/{booking_id}/": {
       "delete": {
-        "description": "Method:\n    DELETE /bookings/{booking_id}\n\nPath Parameters:\n    booking_id: schema.CampusID (required)\n        The unique identifier of the booking.\n\nResponses:\n    200 OK: dict\n        Empty object on success.\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `bookings.admin` circle (only user tokens are eligible).\n\n    404 Not Found: dict\n        {\"error\": \"Booking not found\"}",
+        "description": "Method:\n    DELETE /bookings/{booking_id}\n\nAuthority (campus#1217): the owner may withdraw their own booking\nwhile it is still pending; once decided (or for anyone other than\nthe owner), deletion is venue authority \u2014 mirroring v1, where\nusers managed their own bookings and the committee managed\neveryone's.\n\nPath Parameters:\n    booking_id: schema.CampusID (required)\n        The unique identifier of the booking.\n\nResponses:\n    200 OK: dict\n        Empty object on success.\n\n    403 Forbidden: None\n        Not the owner (or the booking is decided) and no venue\n        authority.\n\n    404 Not Found: dict\n        {\"error\": \"Booking not found\"}",
         "operationId": "api_v1_bookings_delete_booking",
         "parameters": [
           {
@@ -623,7 +620,7 @@
         ]
       },
       "patch": {
-        "description": "Note: Only the description can be modified. Changes to venue, date,\n    or time require creating a new booking.\n\nMethod:\n    PATCH /bookings/{booking_id}\n\nPath Parameters:\n    booking_id: schema.CampusID (required)\n        The unique identifier of the booking.\n\nBody Parameters (application/json):\n    description: str (optional)\n        New description for the booking.\n\nResponses:\n    200 OK: dict\n        Empty object on success.\n\n    400 Bad Request: dict\n        {\"error\": error message}\n\n    403 Forbidden: None\n        Returned if the caller is not a member of the\n        `bookings.admin` circle (only user tokens are eligible).\n\n    404 Not Found: dict\n        {\"error\": \"Booking not found\"}",
+        "description": "Method:\n    PATCH /bookings/{booking_id}\n\nAuthority (campus#1217): a `status` field is a decision on the\nbooking \u2014 venue authority only (venues.admin globally, or the\nvenue category's venues.<category-slug>.admin circle). A\ndescription-only patch is the owner's right; anyone else needs\nthe same venue authority. Venue, date, and times are immutable:\nchanges there are delete-and-recreate.\n\nPath Parameters:\n    booking_id: schema.CampusID (required)\n        The unique identifier of the booking.\n\nBody Parameters (application/json):\n    description: str (optional)\n        New description of the booking purpose.\n    status: str (optional)\n        \"approved\" or \"denied\" (venue authority); \"pending\"\n        resets a decision.\n\nResponses:\n    200 OK: dict\n        Booking resource\n\n    400 Bad Request: dict\n        {\"error\": error message} \u2014 empty body, unknown fields,\n        or a status outside the vocabulary.\n\n    403 Forbidden: None\n        A status change (or non-owner description change)\n        without venue authority.\n\n    404 Not Found: dict\n        {\"error\": \"Booking not found\"}",
         "operationId": "api_v1_bookings_update_booking",
         "parameters": [
           {
@@ -635,22 +632,6 @@
             }
           }
         ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {
-                  "description": {
-                    "nullable": true,
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              }
-            }
-          },
-          "required": false
-        },
         "responses": {
           "200": {
             "description": "Successful response"
@@ -659,7 +640,7 @@
             "$ref": "#/components/responses/Error"
           }
         },
-        "summary": "Update an existing booking.",
+        "summary": "Update a booking's description and/or approval status.",
         "tags": [
           "bookings"
         ]

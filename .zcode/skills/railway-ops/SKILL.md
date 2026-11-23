@@ -26,15 +26,41 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
 
 - **Routine Railway access is environment-bound to `development`**:
   commands run with `RAILWAY_TOKEN` set to a development-scoped project
-  token (`rlwy_proj_…`; machine file `~/.railway-dev-token`, exported in
-  `~/.bashrc` + the Windows user env). **Variable name matters**: project
-  tokens only authenticate as `RAILWAY_TOKEN` — under `RAILWAY_API_TOKEN`
-  (account keys) every command fails. Verified: `railway status` sees
-  project `campus` / environment `development` only; production resolves
-  as "not found"; account-level commands (`whoami`, `list`) are denied by
-  design. Escape hatch for superadmin production work:
-  `env -u RAILWAY_TOKEN railway <cmd>` (falls through to the personal
-  login).
+  token (`rlwy_proj_…`; machine file `~/.railway-dev-token`, exported
+  into each Git Bash session by `~/.bashrc`). **Variable name matters**:
+  project tokens only authenticate as `RAILWAY_TOKEN` — under
+  `RAILWAY_API_TOKEN` (account keys) every command fails. Verified:
+  `railway status` sees project `campus` / environment `development`
+  only; production resolves as "not found"; account-level commands
+  (`whoami`, `list`) are denied by design — **auth-check with
+  `railway status`, never `whoami`** (a valid project token 401s
+  `whoami` and looks dead when it isn't). Escape hatch for superadmin
+  production work: `env -u RAILWAY_TOKEN railway <cmd>` (falls through
+  to the personal login).
+- **Token storage layout (rotated 2026-11-21 after a transcript leak;
+  the old user-scope Windows env var `RAILWAY_TOKEN` was removed from
+  HKCU and must NOT be re-created — it silently overrides the file
+  export in non-bash processes and outlives rotations):**
+  - dev: `~/.railway-dev-token` (project token for the campus dev
+    environment; `~/.bashrc` exports it as `RAILWAY_TOKEN` per shell).
+  - prod: `campus-prod/.railway-prod-token` and
+    `campus-staging/.railway-prod-token` (per-directory, never
+    exported). Use as
+    `RAILWAY_TOKEN="$(cat .railway-prod-token)" railway <cmd>`.
+    Project tokens carry their project/environment scope, so these
+    resolve `campus`/`production` with no linked config. Both
+    dirs share one token today; split them if prod/staging ever
+    diverge again.
+  - The parent `D:/nyjc-computing` repo's `.gitignore` carries
+    `.railway-*-token` so `git add -A` sweeps can't commit them.
+  - Token values are shown ONCE at creation in the dashboard; a
+    re-copy of a stale dialog re-copies a dead value — always mint a
+    fresh entry when a token stops authenticating (symptom:
+    `Invalid RAILWAY_TOKEN` on every command including `status`).
+    The creation dialog must ALSO be completed/dismissed before the
+    token activates — a minted-but-unconfirmed token reads as invalid
+    too (hit live 2026-11-23: the token was correct all along and
+    started authenticating the moment the dialog was clicked through).
 - **Production is superadmin-only**: logs, variables, domains, SSH,
   redeploys, and all production data. Do not point CLI/automation at
   production; deployment-side debugging there is a superadmin activity.
@@ -183,6 +209,25 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
   `json.dump` to a file and pass `--variables "$(cat .tmp-vars.json)"`.
 - Don't expand `$PORT` in double quotes when composing start commands —
   it must reach Railway literally.
+- MSYS path-mangling eats single-letter flags: `reg query "HKCU\Environment" /v NAME`
+  fails with "Invalid syntax" because Git Bash rewrites `/v` as a path.
+  Prefix with `MSYS_NO_PATHCONV=1` (`MSYS_NO_PATHCONV=1 reg delete
+  "HKCU\Environment" /v RAILWAY_TOKEN /f`) — or dump without `/v` and
+  grep. When inspecting token env vars, filter output through
+  `sed 's/rlwy_[a-zA-Z0-9_-]*/[REDACTED]/'` and never let the value
+  reach the transcript.
+- **Agent/tool shells must not rely on `~/.bashrc` for Railway auth**
+  (hit live 2026-11-23): non-interactive tool shells don't source it,
+  so `railway` inherits whatever stale `RAILWAY_TOKEN` /
+  `RAILWAY_API_TOKEN` the parent process carries and authenticates
+  with those — a valid `~/.railway-dev-token` reads as "Invalid
+  RAILWAY_TOKEN" while the file is fine. In agent shells always pass
+  the token explicitly and strip the account-key var:
+  `env -u RAILWAY_API_TOKEN RAILWAY_TOKEN="$(cat ~/.railway-dev-token
+  | tr -d ' \t\r\n')" railway <cmd>` (prod: same with the
+  `.railway-prod-token` file). Sanity-check with
+  `[ "$RAILWAY_TOKEN" = "$(cat ~/.railway-dev-token | tr -d ' \t\r\n')" ]` —
+  env-vs-file equality, never by printing values.
 
 ## Networking gotchas
 
