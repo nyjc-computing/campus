@@ -144,6 +144,22 @@ def _init_api_tables() -> None:
         recovery="python scripts/init_storage.py --service api",
     )
 
+    def _init_bookings_table() -> None:
+        # The venue bookings table is a storage table (not a
+        # self-creating collection); without it, the bookings routes
+        # cannot create or read bookings (campus#1217).
+        from .resources.booking import init_storage as init_bookings
+
+        init_bookings()
+
+    bootstrap.run_init_storage(
+        _init_bookings_table,
+        what="the venue bookings table (the bookings routes depend "
+             "on it, campus#1217)",
+        recovery="python scripts/init_storage.py --service api (or "
+                 "migrations/013_create_venue_bookings_table.py)",
+    )
+
     def _init_timetable_table() -> None:
         # The timetable members table is a storage table (not a
         # self-creating collection); without it, creating a
