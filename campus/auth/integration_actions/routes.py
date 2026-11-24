@@ -25,6 +25,7 @@ import flask
 import campus.flask_campus as flask_campus
 from campus.common import schema
 from campus.common.errors import api_errors
+from campus.common.errors import base as error_base
 
 from .. import authz, get_yapper, integrations
 from . import classroom
@@ -116,7 +117,7 @@ def _run(
             campus_integration, target_id, list(required_scopes),
         )
         result = run(access_token=access_token)
-    except api_errors.APIError as err:
+    except (api_errors.APIError, error_base.OAuthError) as err:
         _emit(
             "campus.integrations.action_fail",
             actor,

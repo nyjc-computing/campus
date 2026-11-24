@@ -9,7 +9,7 @@ surface as typed campus errors with the upstream status attached
 
 import requests
 
-from campus.common.errors import api_errors
+from campus.common.errors import api_errors, auth_errors
 
 BASE_URL = "https://classroom.googleapis.com/v1"
 TIMEOUT = 10  # seconds; matches the webauth OAuth scheme's budget
@@ -48,7 +48,7 @@ def _request(
             timeout=TIMEOUT,
         )
     except requests.RequestException as err:
-        raise api_errors.TemporarilyUnavailableError(
+        raise auth_errors.TemporarilyUnavailableError(
             f"Classroom API unreachable: {err}"
         ) from err
 
@@ -67,7 +67,7 @@ def _request(
         if response.status_code == 403:
             raise api_errors.ForbiddenError(message, **details)
         if response.status_code == 429 or response.status_code >= 500:
-            raise api_errors.TemporarilyUnavailableError(message, **details)
+            raise auth_errors.TemporarilyUnavailableError(message, **details)
         raise api_errors.InvalidRequestError(message, **details)
     return body
 

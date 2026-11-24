@@ -18,12 +18,16 @@ from campus.common import schema
 from campus.common.errors import api_errors
 
 from .. import integrations
-from ..oauth_proxy.base import AuthProxy
 from ..resources import credentials as creds_resource
 
 
-def get_integration_proxy(integration: integrations.Integration) -> AuthProxy:
-    """The integration's base-provider OAuth proxy (lazy import)."""
+def get_integration_proxy(integration: integrations.Integration):
+    """The integration's base-provider OAuth proxy (lazy import).
+
+    Untyped on purpose, like the broker's _get_integration_proxy: the
+    importlib seam carries no stubs, and the proxy's private `_oauth2`
+    scheme is the broker-established refresh surface.
+    """
     import importlib
 
     if integration.base_provider != "google":
