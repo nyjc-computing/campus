@@ -65,9 +65,11 @@ is the playbook — what to do, in what order, and why.
   appends random suffixes on conflict — always re-list domains after a
   rename).
 - The master admin account is **`campus-admin@nyjc.edu.sg`**
-  (`AUTH_SUPER_ADMIN` bypass on auth, `campus-admin` circle member,
-  all `<resource>.admin` role circles, `AUDIT_ADMINS` on the admin
-  portal).
+  (hardcoded super-admin on auth since 2026-11-24 —
+  `campus-admin@<WORKSPACE_DOMAIN>`, no env nomination; `campus-admin`
+  circle member, all `<resource>.admin` role circles, `AUDIT_ADMINS`
+  on the admin portal). Its login is blocked on every non-production
+  environment.
 
 ## 2. Credentials map
 
@@ -199,6 +201,10 @@ are user-gated and called out.
    add the `campus.yapper` read grant.
 3. `AUTH_SUPER_ADMIN` / `AUTH_OPERATOR_CLIENT_IDS` / `AUDIT_ADMINS`
    are deployment-policy decisions (see §1 and §5) — not per-service.
+   Since the 2026-11-24 hardcode, `AUTH_SUPER_ADMIN` is dev-only
+   (production derives the super-admin from `WORKSPACE_DOMAIN`, and
+   the hardcoded identity's login is blocked on dev); the prod-stored
+   value is an ignored leftover, safe to unset.
 
 ### Phase 5 — login + audit wiring
 1. Verify `/auth/v1/oauth/device_authorize` issues codes (exercises

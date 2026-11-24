@@ -26,10 +26,15 @@ designated admin users (#865), never client principals.
 Principals:
 
 - Super-admin root (#897, decision 8): the single user account
-  nominated by AUTH_SUPER_ADMIN (matched by account email), holding
+  configured as the super-admin (matched by account email), holding
   full privileges on every resource with no grant rows and no
   token-scope requirement — the human break-glass root, used
-  primarily to seed sub-admin grants. Authority comes from the
+  primarily to seed sub-admin grants. On ENV=production the identity
+  is hardcoded to campus-admin@<WORKSPACE_DOMAIN> (2026-11-24
+  decision; AUTH_SUPER_ADMIN is not consulted there) and its
+  interactive login is blocked on every other environment
+  (assert_login_allowed); elsewhere it is nominated via
+  AUTH_SUPER_ADMIN. Authority comes from the
   account's own identity, never from the minting client; the
   clients:admin grant-shape rejection still applies to it.
 - Operator clients: confidential clients whose ids are listed in the
@@ -104,6 +109,8 @@ __all__ = [
     "MIGRATIONS_WRITE",
     "SESSIONS_READ",
     "SESSIONS_WRITE",
+    "SUPER_ADMIN_LOCALPART",
+    "assert_login_allowed",
     "forbid_user_principal",
     "grant_check_client_ids",
     "has_admin_scope",
@@ -124,6 +131,8 @@ __all__ = [
     "super_admin_email",
 ]
 
+import logging
+
 import flask
 
 from campus.common import env
@@ -132,20 +141,32 @@ from campus.model.client import ClientAccess
 
 from . import scopes
 
+logger = logging.getLogger(__name__)
+
 # Comma-separated client ids granted the operator role on the management
 # blueprints (vaults, clients, users, credentials). Configure per
 # deployment (e.g. the campus-admin portal's client); unset means no
 # principal may manage the deployment.
 OPERATOR_CLIENT_IDS_ENVVAR = "AUTH_OPERATOR_CLIENT_IDS"
 
-# The env-nominated super-admin root account (#897, decision 8): one
-# user account (recommended: a dedicated, rarely used one) holding
-# full privileges on every resource with no grant rows and no
-# token-scope requirement — the identity leg alone suffices. Read at
-# request time; the value is the account email. Safeguarding the
-# account is the deployer's responsibility; its primary use is
-# seeding sub-admin grants via /grants/.
+# The super-admin root account (#897, decision 8): one user account
+# holding full privileges on every resource with no grant rows and no
+# token-scope requirement — the identity leg alone suffices. Its
+# primary use is seeding sub-admin grants via /grants/.
+#
+# On ENV=production the identity is hardcoded (2026-11-24 decision):
+# campus-admin@<WORKSPACE_DOMAIN> — the local part is fixed in code
+# below and the domain comes from WORKSPACE_DOMAIN, so no env
+# nomination is consulted and AUTH_SUPER_ADMIN is not required on
+# production deployments. Elsewhere (development/test) the account is
+# nominated via AUTH_SUPER_ADMIN, read at request time; the value is
+# the account email. The hardcoded identity's interactive login is
+# blocked outside production — see assert_login_allowed.
 SUPER_ADMIN_ENVVAR = "AUTH_SUPER_ADMIN"
+
+# Fixed local part of the production super-admin identity: the
+# break-glass root on the deployment's Google Workspace domain.
+SUPER_ADMIN_LOCALPART = "campus-admin"
 
 # Management-scope vocabulary, v1: clients (#888, store-backed;
 # grantable up to write — admin rows are operator-equivalent,
@@ -263,15 +284,66 @@ def operator_client_ids() -> frozenset[str]:
     })
 
 
-def super_admin_email() -> str | None:
-    """The env-nominated super-admin account email, if configured.
+def _production_super_admin_email() -> str | None:
+    """The hardcoded production super-admin email (2026-11-24 decision).
 
-    Read at request time (not import time), mirroring
-    operator_client_ids: unset or empty means the deployment has no
-    super-admin root.
+    campus-admin@<WORKSPACE_DOMAIN>: the local part is fixed and the
+    domain comes from the deployment's WORKSPACE_DOMAIN. An unset or
+    empty domain means no super-admin root (fail-closed), mirroring the
+    unset-env case.
     """
+    domain = (env.get("WORKSPACE_DOMAIN") or "").strip()
+    if not domain:
+        return None
+    return f"{SUPER_ADMIN_LOCALPART}@{domain}"
+
+
+def super_admin_email() -> str | None:
+    """The super-admin account email, if one is configured.
+
+    ENV=production: hardcoded to campus-admin@<WORKSPACE_DOMAIN>
+    (2026-11-24 decision) — AUTH_SUPER_ADMIN is not consulted there.
+
+    Other environments: the AUTH_SUPER_ADMIN env nomination, read at
+    request time (not import time) mirroring operator_client_ids;
+    unset or empty means the deployment has no super-admin root.
+    """
+    if env.ENV == env.PRODUCTION:
+        return _production_super_admin_email()
     raw = env.get(SUPER_ADMIN_ENVVAR) or ""
     return raw.strip() or None
+
+
+def assert_login_allowed(email: str) -> None:
+    """Reject an interactive login as the hardcoded super-admin
+    identity outside production (2026-11-24 decision).
+
+    campus-admin@<WORKSPACE_DOMAIN> may only authenticate on
+    ENV=production — the one environment where it holds root
+    authority. On ENV=development (the default when ENV is unset) its
+    login is refused with a 403 and a server-side warning, so the
+    break-glass identity can never mint credentials on a lower
+    environment. Call at every identity acceptance point: the Google
+    consent callback (the hop every login flow shares), verify_login,
+    and the device-flow bind.
+
+    Raises:
+        api_errors.ForbiddenError: If `email` names the hardcoded
+            super-admin identity and the deployment is not production.
+    """
+    if env.ENV == env.PRODUCTION:
+        return
+    blocked = _production_super_admin_email()
+    if blocked and str(email).strip().lower() == blocked.lower():
+        logger.warning(
+            "Blocked login attempt as the production super-admin "
+            "identity '%s' on ENV=%s", blocked, env.ENV,
+        )
+        raise api_errors.ForbiddenError(
+            f"Login is blocked for '{blocked}' on this environment: "
+            "that account is reserved as the production super-admin "
+            "(break-glass) identity; sign in with your own account"
+        )
 
 
 # Client ids allowed to use the migrations leg of GET /grants/check
@@ -311,13 +383,15 @@ def is_grant_check_caller() -> bool:
 
 
 def is_super_admin() -> bool:
-    """True if the caller is the env-nominated super-admin (#897).
+    """True if the caller is the configured super-admin (#897).
 
     Authority comes from the account's own identity — never from the
     client it was minted through — so this is only meaningful for
     user principals and is matched against the principal's record
-    email (enriched at authentication time). Fail-closed: no env var
-    or no email on the principal means no root.
+    email (enriched at authentication time). Fail-closed: no
+    configured super-admin email (unset AUTH_SUPER_ADMIN outside
+    production, or no WORKSPACE_DOMAIN on production) or no email on
+    the principal means no root.
     """
     if not is_user_principal():
         return False
