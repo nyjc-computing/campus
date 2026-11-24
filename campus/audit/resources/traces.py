@@ -19,6 +19,8 @@ import campus.model as model
 import campus.storage
 from campus.common.errors import api_errors
 
+from ..helpers import span_enrichment
+
 traces_storage = campus.storage.tables.get_db("spans")
 
 # Page size bounds for trace list/search pagination (issue #698).
@@ -337,18 +339,33 @@ class TracesResource:
         """
         return TraceResource(trace_id)
 
-    def ingest(self, spans: typing.Sequence[model.TraceSpan]) -> dict:
+    def ingest(
+        self,
+        spans: typing.Sequence[model.TraceSpan],
+        *,
+        producer_id: str | None = None,
+    ) -> dict:
         """Ingest a batch of trace spans.
+
+        Each span is stored with the audit service's own stamps
+        (campus.audit.helpers.span_enrichment): ``tags.queue_ms`` when
+        the request carried ``X-Request-Start``, and ``tags.producer_id``
+        when a producer is given.
 
         Args:
             spans: List of TraceSpan model instances
+            producer_id: The API key that delivered the batch, recorded
+                as ``tags.producer_id`` (#1244). Omitted for the audit
+                service's own events, which are not a producer's spans.
 
         Returns:
             Dictionary with created/failed span IDs
         """
-        errors = traces_storage.insert_many(
-            [span.to_storage() for span in spans]
-        )
+        rows = [
+            span_enrichment.stamp(span, producer_id=producer_id)
+            for span in spans
+        ]
+        errors = traces_storage.insert_many(rows)
         if errors:
             # Partial failure - return 207 Multi-Status format
             failed_indices = set(errors.keys())

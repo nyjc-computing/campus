@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @bp.post("/")
-@audit_events.audit_event("audit.traces.ingest")
+@audit_events.audit_event("audit.traces.ingest", on_success=False)
 @decorators.require_scopes("traces:write")
 @flask_campus.unpack_request
 def ingest_spans(
@@ -75,11 +75,15 @@ def ingest_spans(
             bucket key in the error details
 
     Note:
-        Audit events are emitted for both successful ingestions (201/207)
-        and validation failures (400) via the @audit_event decorator.
-        The decorator uses flask.after_this_request to capture the final
-        response after error handlers run, so failed ingestions are logged
-        with error details.
+        campus.audit stamps each stored span itself. ``tags.producer_id``
+        is the API key that made this request (#1244), and
+        ``tags.queue_ms`` is the wait between the request's arrival
+        (``X-Request-Start``) and the span's ``started_at``. A producer
+        supplying either tag has its value replaced.
+
+        A successful ingest writes no audit event: the spans are the
+        record. A rejected one (400 or 429) writes ``audit.traces.ingest``
+        with the batch it refused, kept to the first 64 KB (#1243).
     """
     # Convert dicts to TraceSpan models with validation
     import campus.model as model
@@ -125,12 +129,15 @@ def ingest_spans(
             bucket=tripped_key,
         )
 
-    result = traces_resource.ingest(span_models)
+    result = traces_resource.ingest(
+        span_models,
+        producer_id=getattr(flask.g, "api_key_id", None),
+    )
     return result, 201
 
 
 @bp.get("/")
-@audit_events.audit_event("audit.traces.list")
+@audit_events.audit_event("audit.traces.list", bodies_on_success=False)
 @decorators.require_scopes("traces:read")
 @flask_campus.unpack_request
 def list_traces(
@@ -171,7 +178,7 @@ def list_traces(
 
 
 @bp.get("/<trace_id>")
-@audit_events.audit_event("audit.traces.get")
+@audit_events.audit_event("audit.traces.get", bodies_on_success=False)
 @decorators.require_scopes("traces:read")
 def get_trace(trace_id: str) -> flask_campus.JsonResponse:
     """Get full trace tree with child spans.
@@ -198,7 +205,7 @@ def get_trace(trace_id: str) -> flask_campus.JsonResponse:
 
 
 @bp.get("/<trace_id>/spans")
-@audit_events.audit_event("audit.traces.spans.list")
+@audit_events.audit_event("audit.traces.spans.list", bodies_on_success=False)
 @decorators.require_scopes("traces:read")
 def list_spans(trace_id: str) -> flask_campus.JsonResponse:
     """List all spans in a trace (flat list).
@@ -218,7 +225,7 @@ def list_spans(trace_id: str) -> flask_campus.JsonResponse:
 
 
 @bp.get("/<trace_id>/spans/<span_id>")
-@audit_events.audit_event("audit.traces.spans.get")
+@audit_events.audit_event("audit.traces.spans.get", bodies_on_success=False)
 @decorators.require_scopes("traces:read")
 def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
     """Get single span detail including full headers and bodies.
@@ -241,7 +248,7 @@ def get_span(trace_id: str, span_id: str) -> flask_campus.JsonResponse:
 
 
 @bp.get("/search")
-@audit_events.audit_event("audit.traces.search")
+@audit_events.audit_event("audit.traces.search", bodies_on_success=False)
 @decorators.require_scopes("traces:read")
 @flask_campus.unpack_request
 def search_traces(

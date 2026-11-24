@@ -13,6 +13,7 @@ Three ways in:
 """
 
 import functools
+import json
 import time
 import typing
 from contextlib import suppress
@@ -116,10 +117,8 @@ def emit_web_event(
 
     The @audit_event decorator does not fit a web route: it assumes
     the view returns a (response_dict, status_code) tuple, while a
-    browser route returns a flask.Response — and emit_from_flask only
-    emits for 2xx/3xx, so a failure branch would be silent. This helper
-    emits for any status, success and failure alike, from the live
-    request.
+    browser route returns a flask.Response. This helper emits for any
+    status, success and failure alike, from the live request.
 
     The request context reads the request body as JSON, so a
     form-encoded POST contributes an empty body and its fields never
@@ -157,14 +156,16 @@ def emit_from_flask(
         *,
         event_type: str,
         data: JsonObject,
-        api_key_id: str | None,
-        started_at: schema.DateTime,
-        duration_ms: float,
+    api_key_id: str | None,
+    started_at: schema.DateTime,
+    duration_ms: float,
+    on_success: bool = True,
+    bodies_on_success: bool = True,
 ) -> None:
     """Emit audit event from Flask request/response objects.
 
     Extracts request and response context from Flask objects and emits
-    an audit event with full context. Only emits for 2XX and 3XX responses.
+    an audit event with full context.
 
     Args:
         request: Flask request object (uses flask.request if None)
@@ -174,23 +175,73 @@ def emit_from_flask(
         api_key_id: API key identifier (falls back to flask.g.api_key_id)
         started_at: When the operation started
         duration_ms: Operation duration in milliseconds
+        on_success: Emit for 2XX and 3XX responses. False keeps only
+            failures, for routes whose success is already recorded by
+            what the route stores.
+        bodies_on_success: Keep the request and response bodies on 2XX
+            and 3XX responses. False drops them, for read routes whose
+            response is a copy of data that is already stored. A failure
+            always keeps its bodies: they are the evidence.
     """
+    succeeded = 200 <= response.status_code < 400
+    if succeeded and not on_success:
+        return
+
     request_context = _extract_request_context(request or flask.request)
     response_context = _extract_response_context(response)
+    if succeeded and not bodies_on_success:
+        request_context["body"] = {}
+        response_context["body"] = {}
 
-    # Only emit audit events for 2XX and 3XX responses
-    if 200 <= response_context["status_code"] < 400:
-        # Include event_type in metadata for easy querying
-        event_metadata = {**data, "event_type": event_type}
-        emit_audit_event(
-            data=event_metadata,
-            api_key_id=api_key_id or getattr(flask.g, "api_key_id", None),
-            parent_span_id=flask.g.get('span_id'),
-            started_at=started_at,
-            duration_ms=duration_ms,
-            request_context=request_context,
-            response_context=response_context,
-        )
+    # Include event_type in metadata for easy querying
+    event_metadata = {**data, "event_type": event_type}
+    emit_audit_event(
+        data=event_metadata,
+        api_key_id=api_key_id or getattr(flask.g, "api_key_id", None),
+        parent_span_id=flask.g.get('span_id'),
+        started_at=started_at,
+        duration_ms=duration_ms,
+        request_context=request_context,
+        response_context=response_context,
+    )
+
+
+# A rejected ingest carries the batch it refused. A batch can be as
+# large as the gateway's body limit, so the event keeps a prefix of the
+# spans that fits this budget and says how many it dropped.
+_MAX_EVENT_BODY_BYTES = 64 * 1024
+
+
+def _truncate_span_batch(body: typing.Any) -> typing.Any:
+    """Keep the leading spans of an ingest batch within the body budget.
+
+    The first span is always kept, however large, so the reason for a
+    rejection survives even when one oversized span caused it.
+
+    Args:
+        body: The request body of an ingest call
+
+    Returns:
+        The body unchanged when it is not a span batch or already fits;
+        otherwise the leading spans plus a ``_truncated`` note.
+    """
+    if not isinstance(body, dict) or not isinstance(body.get("spans"), list):
+        return body
+    spans = body["spans"]
+    kept: list[typing.Any] = []
+    size = 0
+    for span in spans:
+        size += len(json.dumps(span, default=str)) + 1
+        if kept and size > _MAX_EVENT_BODY_BYTES:
+            break
+        kept.append(span)
+    if len(kept) == len(spans):
+        return body
+    return {
+        **body,
+        "spans": kept,
+        "_truncated": f"{len(kept)} of {len(spans)} spans kept",
+    }
 
 
 def emit_audit_event(
@@ -243,6 +294,9 @@ def emit_audit_event(
     response_body: JsonObject = response_context["body"]
     if str(data.get("event_type", "")).startswith("audit.apikeys."):
         response_body = {}
+    request_body: typing.Any = request_context["body"]
+    if str(data.get("event_type", "")) == "audit.traces.ingest":
+        request_body = _truncate_span_batch(request_body)
 
     # Create audit span record
     audit_span = model.TraceSpan(
@@ -253,7 +307,7 @@ def emit_audit_event(
         path=request_context["path"],
         query_params=redact_sensitive(request_context["urlparams"]),
         request_headers=redact_sensitive(request_headers),
-        request_body=redact_sensitive(request_context["body"]),
+        request_body=redact_sensitive(request_body),
         status_code=response_context["status_code"],
         response_headers=redact_sensitive(response_context["headers"] or {}),
         response_body=redact_sensitive(response_body),
@@ -276,7 +330,10 @@ def emit_audit_event(
 
 
 def audit_event(
-        event_type: str,
+    event_type: str,
+    *,
+    on_success: bool = True,
+    bodies_on_success: bool = True,
 ) -> typing.Callable[[typing.Any], typing.Any]:
     """Decorator to emit audit events for route functions.
 
@@ -302,6 +359,12 @@ def audit_event(
 
     Args:
         event_type: Event type (e.g., "audit.apikeys.new")
+        on_success: Emit for 2XX and 3XX responses. False keeps only
+            failures, for a route whose success is already recorded by
+            what it stores.
+        bodies_on_success: Keep the request and response bodies on 2XX
+            and 3XX responses. False drops them, for a read route whose
+            response is a copy of data that is already stored.
 
     Example:
         @bp.post("/")
@@ -362,6 +425,8 @@ def audit_event(
                     api_key_id=getattr(flask.g, "api_key_id", None),
                     started_at=started_at,
                     duration_ms=duration_ms,
+                    on_success=on_success,
+                    bodies_on_success=bodies_on_success,
                 )
 
                 event_emitted = True

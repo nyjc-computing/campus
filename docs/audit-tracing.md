@@ -27,9 +27,11 @@ Parent epic: #424; enablement issue: #699.
   flood the traces list with 1-span rows. HTML page loads stay traced —
   they are the waterfall roots that give page-fired SDK calls
   parentage (#816).
-- `campus.audit` does not self-trace, but can emit audit *events*
-  (`AUDIT_EVENTS_ENABLED=1`, login-attempt/API-key events) directly into
-  its own storage.
+- `campus.audit` does not self-trace. It records audit *events*
+  (`AUDIT_EVENTS_ENABLED=1`) about calls to its own API, and stamps each
+  span it stores — see [Stamps added at ingest](#stamps-added-at-ingest-1243-1244)
+  and [What campus.audit records about its own API](#what-campusaudit-records-about-its-own-api)
+  below.
 
 ## Trace context propagation (#794)
 
@@ -316,8 +318,10 @@ deliberately not a key (ephemeral, unbounded cardinality).
 
 - Over-limit batches are denied whole with `429 RATE_LIMITED`, a
   `Retry-After` header, and the tripped bucket key in
-  `error.details.bucket`. 429s are logged at WARN by audit and never
-  recorded as spans.
+  `error.details.bucket`. 429s are logged at WARN by audit, the denied
+  spans are never stored, and the denied call is recorded as an
+  `audit.traces.ingest` event so rate-limit trips can be counted
+  (campus#1243).
 - Legit services should never come near the limit; a WARN 429 is the
   misconfiguration-detection signal.
 - Config: `AUDIT_RATE_LIMIT_PER_MINUTE` on **campus.audit** (default
@@ -326,3 +330,63 @@ deliberately not a key (ephemeral, unbounded cardinality).
   circuit breaker (#831) will 503 producer requests while a bucket is
   tripped. Design:
   [Phase 3 design on #538](https://github.com/nyjc-computing/campus/issues/538#issuecomment-5996377544).
+
+## Stamps added at ingest (#1243, #1244)
+
+campus.audit adds two tags to every span it stores. Both are the audit
+service's own assertion, so a producer that supplies either has its
+value replaced.
+
+- `tags.producer_id` — the API key that delivered the span. The ingest
+  request is authenticated with the producer's own key, so this is the
+  one service attribution a producer cannot get wrong. Before it, a
+  stored span did not say which service produced it; only the path
+  prefix hinted. The key's name in the `apikeys` table is its readable
+  label.
+- `tags.queue_ms` — the wait between the request's arrival and the
+  span's `started_at`, in milliseconds, signed. It is read from
+  `X-Request-Start`, which Railway's edge sets on every public request
+  as Unix milliseconds. The gateway stamp that PR #1242 added sent
+  `t=<seconds.milliseconds>` and was removed in #1250; stored spans
+  carry both forms and the parser accepts either. A wait longer than an
+  hour in either direction is clock skew or a forged stamp and is not
+  recorded.
+
+`queue_ms` is absent when the request carried no usable arrival header
+(internal calls, health checks). Both tags live in the free-form `tags`
+dict, so every read surface — trace summary, tree, span detail — shows
+them without a model change. They are written on campus.audit's own
+event rows too, where `queue_ms` is the service's own
+arrival-to-first-code time (#1245).
+
+Spans stored before this carry neither tag. Migration
+`014_backfill_span_stamps` adds them: `producer_id` is recovered from
+the `audit.traces.ingest` event rows that used to be written for every
+successful ingest, and `queue_ms` from each span's own headers. It is
+idempotent and safe to run before or after the service deploys — see
+[docs/migration-protocol.md](migration-protocol.md).
+
+## What campus.audit records about its own API
+
+With `AUDIT_EVENTS_ENABLED=1`, campus.audit writes an event (a span row
+with `tags.event_type`) for calls to its own API. The events are its
+record of who used which key to read or change the audit trail. The
+policy keeps that record and drops what duplicated data that is already
+stored (campus#1243):
+
+| Call | Event written |
+|---|---|
+| Successful ingest (`201`/`207`) | None — the spans are the record |
+| Rejected ingest (`400`, `429`) | `audit.traces.ingest`, with the refused batch kept to its first 64 KB |
+| Read (`list`, `get`, `search`, `spans.*`, `journey`) | The route event, with no copy of the response; a failure keeps its error envelope |
+| Mutation (`apikeys.*`, migrations) | The route event, unchanged |
+| Successful authentication | None of its own: the route event carries the key in `api_key_id` |
+| Failed authentication | `audit.apikeys.auth.failed`, with a reason |
+
+Route events are written for every status, including `4XX` and `5XX`.
+Before campus#1243 they were written only for `2XX` and `3XX`, so a 429
+rate-limit trip or a 403 scope denial left no event at all.
+
+`@audit_events.audit_event` takes two keyword arguments for this:
+`on_success=False` keeps only failures, and `bodies_on_success=False`
+drops the request and response bodies of successful calls.
