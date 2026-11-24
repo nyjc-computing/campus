@@ -7,8 +7,11 @@ files surface that keeps the binding unforgeable.
 """
 
 import uuid
+from datetime import timedelta
+from unittest import mock
 
 from campus.common import schema
+from campus.common.utils import utc_time
 from tests.fixtures.circles import grant_circle_admin
 from tests.fixtures.tokens import create_test_token, get_bearer_auth_headers
 from tests.integration.base import IntegrationTestCase
@@ -120,7 +123,13 @@ class TestTimetableAttachments(IntegrationTestCase):
 
     def test_list_returns_records_newest_first(self):
         first = self._upload(filename="a.pdf")
-        second = self._upload(filename="b.pdf")
+        # The listing orders by created_at. Two uploads made inside one
+        # OS clock tick (~15 ms on Windows) share a created_at, and the
+        # tie falls back to slug order, so the second upload gets a
+        # later clock instead of racing the first one.
+        later = utc_time.now() + timedelta(seconds=1)
+        with mock.patch("campus.common.utils.utc_time.now", return_value=later):
+            second = self._upload(filename="b.pdf")
         assert first.status_code == 201 and second.status_code == 201
         listing = self.client.get(
             f"/api/v1/timetable/{self.timetable_id}/attachments/",

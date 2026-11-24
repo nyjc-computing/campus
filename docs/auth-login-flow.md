@@ -295,10 +295,14 @@ stateDiagram-v2
     Bound --> Swept: 10 min TTL
 ```
 
-- Session TTL (10 min) is enforced by the **sweep** job
-  (`POST /auth/v1/sessions/sweep`), not on every read.
+- Session TTL (10 min) is enforced by the **sweep**
+  (`POST /auth/v1/sessions/sweep`), not on every read. Nothing calls
+  the sweep on a schedule today (#1253), so a stale session is removed
+  only when something invokes it.
 - The access token lives 7 days and is minted together with a refresh
   token (authorization-code exchange and device flow alike). The
+  server does not yet enforce that expiry: an access token keeps
+  authenticating until it is refreshed or revoked (#1254). The
   refresh token rotates on every refresh: `POST /auth/v1/oauth/token`
   with `grant_type=refresh_token` issues a new pair and deletes the
   old record, so refresh tokens are single-use (#678). Refreshing
@@ -543,7 +547,8 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
    logic lives in `campus/auth/resources/`, routes stay thin — put
    new behavior in the resource layer.
 9. **Auth session TTL is swept, not checked per-read**: a stale
-   session may pass validation until the next sweep.
+   session may pass validation until a sweep runs, and no scheduled
+   caller exists yet (#1253).
 10. **Google consent screens cannot tell you a user's Classroom
     role** (observed 2026-10-07 on dev): the `google.classroom`
     integration scope set — including `classroom.addons.teacher` and

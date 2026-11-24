@@ -161,10 +161,51 @@ def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
     Returns: {
         "swept_count": 42
     }
+
+    `at_time` sweeps as of that moment. It must be an ISO 8601
+    date-time, and it may not lie more than five minutes ahead of the
+    server clock: the sweep deletes every session expired by then, so a
+    future moment would delete live sessions. The tolerance covers a
+    caller's clock running slightly fast.
     """
-    swept_count = session_resource.sweep(at_time=at_time)
+    swept_count = session_resource.sweep(at_time=_sweep_moment(at_time))
     get_yapper().emit('campus.sessions.sweep')
     return {"swept_count": swept_count}, 200
+
+
+# How far ahead of the server clock a sweep's at_time may lie. It
+# exists only for caller clock skew: a sweep is about the past.
+SWEEP_FUTURE_TOLERANCE_SECONDS = 300
+
+
+def _sweep_moment(at_time: schema.DateTime | None) -> schema.DateTime | None:
+    """Validate a sweep's at_time and return it as a DateTime.
+
+    The request body delivers at_time as plain text. The sweep compares
+    it through DateTime.to_datetime(), so it needs the typed value;
+    handed the text, the sweep raised AttributeError and answered 500
+    for every at_time it was given.
+
+    Raises:
+        api_errors.InvalidRequestError: If at_time is not an ISO 8601
+            date-time, or lies beyond the tolerance ahead of now.
+    """
+    if at_time is None:
+        return None
+    try:
+        moment = schema.DateTime(str(at_time))
+        at_timestamp = moment.to_timestamp()
+    except (TypeError, ValueError, OverflowError, OSError) as e:
+        raise api_errors.InvalidRequestError(
+            "at_time must be an ISO 8601 date-time"
+        ) from e
+    now_timestamp = schema.DateTime.utcnow().to_timestamp()
+    if at_timestamp > now_timestamp + SWEEP_FUTURE_TOLERANCE_SECONDS:
+        raise api_errors.InvalidRequestError(
+            "at_time must not be in the future: the sweep would delete "
+            "live sessions"
+        )
+    return moment
 
 
 @bp.get("/")
