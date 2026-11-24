@@ -729,8 +729,13 @@ def require_resource_permission(
       pins their matrix;
     - the operator client bypasses every check;
     - any other client principal is denied on the level vocabularies
-      (clients are never designated admins, #854/#865) and keeps
-      bitflag semantics on vault labels (`bits`).
+      with one carve-out: a client may hold a **read-level** grant row
+      (#1226 — the users directory facade forwards its queries under
+      the api service's credential, and the acting person is
+      attributed one layer up at the facade). Clients never reach
+      mod/write/admin here: mutation attribution stays person-only
+      (#854/#865). Clients keep bitflag semantics on vault labels
+      (`bits`).
 
     Raises:
         api_errors.ForbiddenError: If the caller lacks authority.
@@ -753,6 +758,20 @@ def require_resource_permission(
             )
         _require_vault_bitflags(instance or "", bits)
         return
+    # The read-level client carve-out (#1226): one leg — clients
+    # authenticate by credential (HTTP Basic), so there is no
+    # token-scope leg; the credential plus an operator-administered
+    # grant row is the assurance, the same structure as the vault
+    # bitflag path.
+    if level == "read":
+        client = getattr(flask.g, "current_client", None)
+        if client is not None:
+            from .resources.grant import grants
+
+            if grants.check(
+                "client", str(client.id), resource, level="read"
+            ):
+                return
     client = getattr(flask.g, "current_client", None)
     who = f"Client '{client.id}'" if client else "Client principals"
     raise api_errors.ForbiddenError(
