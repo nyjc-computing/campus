@@ -146,6 +146,14 @@ memoryGB})`; read back with `serviceInstanceLimits` (returns
   live replica, visible from t+5s on a fresh scale-out. Externally,
   `deployment(id){ instances { id status } }` (works with the dev project
   token); instance `id` == `RAILWAY_REPLICA_ID`.
+- **Request arrival**: Railway's edge stamps `X-Request-Start` on every
+  public request (Unix milliseconds; documented in Specs & Limits), on
+  direct service domains too. Don't add a gateway `proxy_set_header` for
+  it — that overwrites the edge value (#1242's stamp was reverted, #1243).
+- **Serverless sleep**: a service sleeps 5–10 min after its last OUTBOUND
+  packet (network requests, DB connections, even NTP) — CPU% is not the
+  signal. Any timer that talks keeps it awake; background work must ride
+  on inbound requests (#1249).
 - **Probing recipe** (`railway ssh` is BLOCKED from the office host —
   `ssh.railway.com:22` connection timeout even with a valid personal
   login; it's port filtering, not auth):

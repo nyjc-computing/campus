@@ -123,6 +123,34 @@ What a deployment can measure about itself (probed empirically 2026-11-24,
   `numReplicas` AND `multiRegionConfig.<region>.numReplicas` set to the
   same value — the per-region entry (default 1) silently overrides the
   top-level field. Recipe in the railway-ops skill.
+- **Request arrival time**: Railway's edge stamps every public request with
+  `X-Request-Start` — Unix milliseconds for when the request was received
+  ([Specs & Limits](https://docs.railway.com/networking/public-networking/specs-and-limits)).
+  It is present on requests to the services' own domains as well. The
+  gateway passes it through; never stamp it there, because
+  `proxy_set_header` would overwrite the edge's earlier value (#1243). The
+  gap between that stamp and a service's first line of code is the queue
+  wait that WSGI cannot see by itself. A development sample on 2026-11-24
+  put it at 5–7 ms on campus.auth and campus-admin and at about 110 ms on
+  campus.audit (#1245); clock skew between the edge and the VM is part of
+  the measurement.
+
+## Sleep: outbound traffic keeps a service awake
+
+Railway's serverless deployments sleep on **outbound** traffic, not CPU:
+"Inactivity is based on the detection of any outbound packets, which could
+include network requests, database connections, or even NTP." A service is
+treated as inactive 5 minutes after its last packet and, because
+inactivity is sampled, sleeps somewhere between 5 and 10 minutes after it.
+Inbound traffic from the internet or from another service in the same
+project wakes it, and the first request to a slept service may get a 502
+([Deployments → Serverless](https://docs.railway.com/deployments/serverless)).
+
+The rule that follows: **no outbound packets except while serving an
+inbound request.** A timer may compute, sample and buffer locally; it must
+not send. A heartbeat thread, a connection pool with keep-alives, or a
+cron that pings a service every minute keeps it awake for good. Periodic
+work rides on request traffic instead (#1249).
 
 ## Build & runtime configuration
 

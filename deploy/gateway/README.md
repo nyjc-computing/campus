@@ -35,16 +35,22 @@ callback URL, query string included). Environment-access-policy §3
 (2026-11-17): Railway runtime logs must not contain sensitive secrets.
 Query-string debugging belongs to the audit trail, not the gateway log.
 
-## Arrival stamp: `X-Request-Start` (#1241)
+## Arrival timestamp: `X-Request-Start` comes from Railway's edge
 
-Every proxied request carries `X-Request-Start: t=<unix-epoch-seconds.milliseconds>`
-(stamped via nginx's `$msec`). It must be set at the gateway because it
-cannot be recovered downstream: WSGI only sees a request once a gunicorn
-worker picks it up, so time spent waiting in the kernel listen backlog is
-invisible to the services — the gateway is the only layer that observes
-true client arrival. Consumers (none yet; tracked in #1241) TTL-check by
-parsing the float after the `t=` prefix and comparing against their own
-clock to reject stale requests (`408`/`503` + `Retry-After`).
+Railway's edge sets `X-Request-Start` on every public request: a Unix
+milliseconds timestamp for when the request was received
+([Specs & Limits](https://docs.railway.com/networking/public-networking/specs-and-limits)).
+The gateway passes it through untouched and must not stamp its own:
+`proxy_set_header` would overwrite the edge's value with a later time in a
+different format. The stamp added for #1241 in PR #1242 was removed for
+that reason (#1243). The header is also present on requests addressed to
+the services' own domains, which never cross the gateway.
+
+Consumers must accept both forms, because stored spans carry both:
+`1795515478341` (the edge: epoch milliseconds) and `t=1795515478.341`
+(the former gateway stamp: epoch seconds). campus.audit derives
+`tags.queue_ms` from it at ingest (#1243). Rejecting stale requests with a
+TTL check remains future work under #1241.
 
 ## Environment variables (set on the Railway service)
 
