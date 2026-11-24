@@ -653,13 +653,13 @@ url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.5.1/
 
 [[package]]
 name = "campus-core"
-version = "0.1.11"
+version = "0.1.12"
 description = "Campus storage + webauth + email services - PEP 420 namespace portion under campus/ ; DB drivers are extras, never installed downstream"
 optional = false
 python-versions = ">=3.11.0,<3.15"
 groups = ["main"]
 files = [
-    {file = "campus_core-0.1.11-py3-none-any.whl", hash = "sha256:bbaba49202c3b35b80cf20a98f1fda96b223dbf6ea0a6782fbd30ff944f5bb54"},
+    {file = "campus_core-0.1.12-py3-none-any.whl", hash = "sha256:1d7d47dc448176dcce8c70ac1992a66994608d0dfb45dffcfee47e16d3c7851a"},
 ]
 
 [package.dependencies]
@@ -674,7 +674,7 @@ s3 = ["boto3 (>=1.35.0,<2.0.0)"]
 
 [package.source]
 type = "url"
-url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.11/campus_core-0.1.11-py3-none-any.whl"
+url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.12/campus_core-0.1.12-py3-none-any.whl"
 
 [[package]]
 name = "campus-deploy"
@@ -2022,4 +2022,4 @@ watchdog = ["watchdog (>=2.3)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11.0,<3.15"
-content-hash = "b831243f9a53969b5bf621575f7250e2b1cdf975cdb97dc5b497260daf377b89"
+content-hash = "8aae5a577eae663bb4c75933b5dbba707e2bea9d5097a47bd527d2acca600a54"
