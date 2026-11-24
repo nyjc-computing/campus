@@ -35,6 +35,17 @@ callback URL, query string included). Environment-access-policy §3
 (2026-11-17): Railway runtime logs must not contain sensitive secrets.
 Query-string debugging belongs to the audit trail, not the gateway log.
 
+## Arrival stamp: `X-Request-Start` (#1241)
+
+Every proxied request carries `X-Request-Start: t=<unix-epoch-seconds.milliseconds>`
+(stamped via nginx's `$msec`). It must be set at the gateway because it
+cannot be recovered downstream: WSGI only sees a request once a gunicorn
+worker picks it up, so time spent waiting in the kernel listen backlog is
+invisible to the services — the gateway is the only layer that observes
+true client arrival. Consumers (none yet; tracked in #1241) TTL-check by
+parsing the float after the `t=` prefix and comparing against their own
+clock to reject stale requests (`408`/`503` + `Retry-After`).
+
 ## Environment variables (set on the Railway service)
 
 | Variable    | Value                                    | Purpose |
