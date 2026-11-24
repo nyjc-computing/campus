@@ -303,6 +303,7 @@ mechanics (docs/auth-token-invariants.md):
 
 - docs/auth-login-flow.md — the browser login chain
 - docs/token-broker.md — the token bridge contract
+- docs/integration-actions.md — the integration action proxies (#1221)
 - docs/auth-token-invariants.md — security invariants
 - campus/auth/docs/auth-error-spec.md — error codes
 
