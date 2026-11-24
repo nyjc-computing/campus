@@ -97,9 +97,12 @@ REQUIRED_ENV_VARS: dict[str, tuple[str, ...]] = {
         "POSTGRESDB_URI",
         # trace emission credential
         "AUDIT_API_KEY",
-        # deployment policy: admin bypass + operator clients + the
-        # Google Workspace hostgate for identity logins
-        "AUTH_SUPER_ADMIN",
+        # deployment policy: operator clients + the Google Workspace
+        # hostgate for identity logins. The production super-admin is
+        # hardcoded as campus-admin@<WORKSPACE_DOMAIN> (2026-11-24
+        # decision), so AUTH_SUPER_ADMIN is neither required nor
+        # consulted on production — WORKSPACE_DOMAIN supplies the
+        # domain for both the hostgate and the hardcoded identity.
         "AUTH_OPERATOR_CLIENT_IDS",
         "WORKSPACE_DOMAIN",
         # canonical public origin (#653: fallback removed)

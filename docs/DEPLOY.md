@@ -223,13 +223,20 @@ time.
 
 #### The super-admin root account (#897, umbrella decision 8)
 
-`AUTH_SUPER_ADMIN` names one user account by email — the human
-break-glass root, holding **full privileges on every resource with no
-grant rows and no token-scope requirement** (the identity leg alone
+On `ENV=production` the super-admin is **hardcoded** (2026-11-24
+decision): `campus-admin@<WORKSPACE_DOMAIN>`, derived in code from the
+deployment's `WORKSPACE_DOMAIN` — `AUTH_SUPER_ADMIN` is not consulted
+and is no longer in the production boot-gate required list. On every
+other environment the root is nominated by `AUTH_SUPER_ADMIN` (account
+email), and the hardcoded identity's login is refused with 403 so the
+production break-glass account can never authenticate anywhere below
+production. The root is the human
+break-glass identity, holding **full privileges on every resource with
+no grant rows and no token-scope requirement** (the identity leg alone
 suffices; the minting client's scope cap does not bound it — the one
 deliberate A8 exception). The matrix answer is the grants query plus
-two env roots: `AUTH_OPERATOR_CLIENT_IDS` (the machine root) and
-`AUTH_SUPER_ADMIN` (the human root). Use the root primarily to seed
+two roots: `AUTH_OPERATOR_CLIENT_IDS` (the machine root) and the
+super-admin account (the human root). Use the root primarily to seed
 sub-admin grants via `POST /auth/v1/grants`, then sign out:
 safeguarding the account (a dedicated, rarely used identity such as
 `campus-admin@domain.edu.sg`) is the deployer's responsibility. The

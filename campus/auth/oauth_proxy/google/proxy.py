@@ -17,7 +17,13 @@ from campus.common import schema
 from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import url
 
-from ... import get_yapper, integrations, resources, scopes
+from ... import (
+    authz,
+    get_yapper,
+    integrations,
+    resources,
+    scopes,
+)
 from .. import base
 
 PROVIDER = "google"
@@ -227,6 +233,11 @@ class GoogleAuthProxy(base.AuthProxy):
                 "Domain not allowed",
                 domain=user_email.domain
             )
+        # The hardcoded production super-admin identity may not log in
+        # outside production (2026-11-24 decision): this callback is
+        # the one hop all login flows share, so the block lands before
+        # any user row, Google credential or campus cookie is created.
+        authz.assert_login_allowed(user_email)
         user_id = schema.UserID(userinfo["email"])
         # Provision the user record on every identity verification
         # (#903): this callback is the one hop all login flows share —

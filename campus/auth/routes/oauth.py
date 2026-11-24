@@ -19,7 +19,7 @@ from campus.common import schema
 from campus.common.errors import api_errors, token_errors
 from campus.common.utils import secret, url
 
-from .. import get_yapper, scopes
+from .. import authz, get_yapper, scopes
 from ..resources import app_credentials
 from ..resources import client as client_resource
 from ..resources import credentials as credentials_resource
@@ -739,6 +739,12 @@ def device_verification(user_code: str | None = None):
             target=login_callback
         )
         return flask.redirect(oauth_authorize_url)
+
+    # The hardcoded production super-admin identity may not authorize
+    # device codes outside production (2026-11-24 decision): the page's
+    # no-JS POST fallback binds from this session identity directly, so
+    # the guard covers GET and POST before either can reach a bind.
+    authz.assert_login_allowed(user_id)
 
     # The browser's SSO session silently decides who authorizes the device,
     # so the page must name that account (#852). The escape hatch routes
@@ -1470,9 +1476,11 @@ def device_authorize_submit(
 
     Error responses return appropriate error codes for the frontend to handle:
     - invalid_code: The user code doesn't exist
-    - expired: The user code has expired
-    - already_used: The user code has already been used/authorized
+    - expired: This user code has expired
+    - already_used: This user code has already been used/authorized
     - denied: The authorization was denied
+    - 403 Forbidden: The user_id names the hardcoded production
+    super-admin identity, whose login is blocked on this environment
     """
     if not user_code:
         raise api_errors.InvalidRequestError(
@@ -1484,6 +1492,11 @@ def device_authorize_submit(
             "user_id is required",
             error_code="invalid_code"
         )
+    # The hardcoded production super-admin identity may not authorize
+    # device codes outside production (2026-11-24 decision): this bind
+    # is what turns an authenticated browser session into a CLI
+    # bearer token.
+    authz.assert_login_allowed(user_id)
 
     try:
         dc = device_code_resource.get_by_user_code(user_code)
