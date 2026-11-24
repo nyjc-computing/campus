@@ -16,6 +16,7 @@ __all__ = [
     "connections",
     "credentials",
     "grants",
+    "integration_actions",
     "integrations",
     "logins",
     "logout",
@@ -34,6 +35,7 @@ from campus.common.errors import api_errors
 from campus.common.errors.base import ErrorConstant
 
 from .. import resources
+from ..integration_actions import routes as integration_actions
 from ..middleware import Authenticator
 from . import (
     broker,
@@ -58,6 +60,7 @@ _AUTHENTICATED_ROUTE_MODULES = [
     connections,
     credentials,
     grants,
+    integration_actions,
     logins,
     sessions,
     users,

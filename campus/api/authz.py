@@ -115,6 +115,18 @@ FAMILY_OPERATIONS: dict[str, dict[str, set[str]]] = {
         "group": {"create", "modify", "read"},
         "self": {"read"},
     },
+    # The users directory (#1226): read-only by construction — the
+    # family honors no write semantics, so identity mutation stays
+    # walled in campus.auth's management surface. Group read serves
+    # the /users facade's full-list lane (staff:viewer baseline);
+    # self read lets any authenticated user fetch their own record
+    # (student:guest carries S-r). Student group-read is granted by
+    # no baseline: their visibility is the facade's query rewrite
+    # over circles they can read.
+    "users": {
+        "group": {"read"},
+        "self": {"read"},
+    },
     "venues": {
         "group": {"create", "modify", "read"},
         "self": {"create", "modify", "read"},
