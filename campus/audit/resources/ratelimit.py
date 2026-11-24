@@ -242,6 +242,10 @@ def _maybe_cleanup(now: float) -> None:
         bucket_storage.delete_matching({
             "last_refill": campus.storage.lt(now - BUCKET_TTL_SECONDS),
         })
+    except campus.storage.errors.NoChangesAppliedError:
+        # Nothing stale to remove: the common outcome, and a success.
+        # The Postgres backend raises on a delete that matched no row.
+        pass
     except Exception:
         logger.exception("rate limit bucket cleanup failed")
 

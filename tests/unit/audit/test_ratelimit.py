@@ -9,6 +9,7 @@ Issue: #831 (Phase 3 of #538)
 """
 
 import unittest
+from unittest import mock
 
 RATE_TABLE = "rate_limit_buckets"
 
@@ -284,6 +285,44 @@ class TestBucketCleanup(unittest.TestCase):
         self.assertEqual(
             len(rl.bucket_storage.get_matching({"id": "user=old2"})), 1
         )
+
+    def test_nothing_stale_is_not_a_failure(self):
+        """An empty sweep must not log an exception.
+
+        The Postgres backend raises NoChangesAppliedError when a delete
+        matches no row. With nothing stale that is every hourly sweep,
+        and each one used to log a traceback.
+        """
+        import campus.storage
+
+        rl = self.ratelimit
+        nothing_stale = campus.storage.errors.NoChangesAppliedError(
+            "delete", {}, rl.bucket_storage.name,
+        )
+        with (
+            mock.patch.object(
+                rl.bucket_storage, "delete_matching", side_effect=nothing_stale,
+            ),
+            mock.patch.object(rl.logger, "exception") as logged,
+        ):
+            rl._maybe_cleanup(now=rl.BUCKET_TTL_SECONDS + 1.0)
+        logged.assert_not_called()
+
+    def test_a_real_sweep_failure_is_still_logged_and_fail_open(self):
+        """A storage error in the sweep is logged, and never reaches ingest."""
+        import campus.storage
+
+        rl = self.ratelimit
+        with (
+            mock.patch.object(
+                rl.bucket_storage, "delete_matching",
+                side_effect=campus.storage.errors.StorageError("database is down"),
+            ) as failing,
+            mock.patch.object(rl.logger, "exception") as logged,
+        ):
+            self.assertEqual(rl.consume_for_spans([]), (None, 0))
+        failing.assert_called_once()
+        logged.assert_called_once()
 
 
 if __name__ == "__main__":
