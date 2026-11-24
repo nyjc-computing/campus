@@ -19,6 +19,7 @@ import uuid
 from campus.common import env
 from campus.common.errors import api_errors
 from campus.common.utils import uid, utc_time
+from tests.unit.api import _derived_current_stamp as _stamp
 
 # Configure test storage before importing storage-backed modules
 env.set('STORAGE_MODE', "1")
@@ -40,6 +41,11 @@ def _metadata(
         "end_date": utc_time.to_rfc3339(
             end or now - datetime.timedelta(days=365)
         ),
+        # created_at comes from the process-global monotonic stamp: the
+        # derived-current/next tie-breaks read the clock-stamped field,
+        # and Windows's ~15.6 ms system-clock tick makes back-to-back
+        # creates stamp identical values (see test_timetable_lessongroups).
+        "created_at": utc_time.to_rfc3339(_stamp.stamp()),
     }
 
 
@@ -125,11 +131,19 @@ class TestTimetableDelete(unittest.TestCase):
 
     def test_delete_refuses_derived_current(self):
         # A window covering today makes the version derived-current.
+        # The start is staggered forward (1h ago, not 1d) so this
+        # version wins the derived-current key's start-date leg over
+        # any earlier test's covering version; created_at (the other
+        # tie-break leg) comes from the monotonic stamp, so the pick
+        # stays deterministic even when the Windows clock tick makes
+        # real stamps identical — on an exact tie the derived-current
+        # pick degenerated to storage row order and the delete wrongly
+        # succeeded.
         now = utc_time.now()
         v1 = self._create(
             "v1.xml",
             ["25A-Math"],
-            start=now - datetime.timedelta(days=1),
+            start=now - datetime.timedelta(hours=1),
             end=now + datetime.timedelta(days=30),
         )
         with self.assertRaises(api_errors.ConflictError):

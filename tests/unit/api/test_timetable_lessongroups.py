@@ -21,24 +21,35 @@ import uuid
 from campus.common import env
 from campus.common.errors import api_errors
 from campus.common.utils import utc_time
+from tests.unit.api import _derived_current_stamp as _stamp
 
 # Configure test storage before importing storage-backed modules
 env.set('STORAGE_MODE', "1")
 
 
 def _metadata(filename: str) -> dict:
-    """A window covering today (year-proof): under derived pointers
-    (#1222) the newest such version is the derived-current one, with
-    created_at breaking the identical-window tie."""
+    """A window starting today (year-proof): under derived pointers
+    (#1222) the newest such version is the derived-current one.
+
+    The derived-current key is (SGT start DATE, created_at): the date
+    leg dominates, so every covering fixture in the suite must start on
+    the SAME school date (today) and let created_at decide — tests that
+    need a specific version current stamp it with the process-global
+    monotonic helper (see _derived_current_stamp): Windows's ~15.6 ms
+    system-clock tick makes back-to-back utc_time.now() calls return
+    the identical value, so same-tick creates would tie on the model's
+    clock-stamped created_at too and the pick degenerates to storage
+    row order — the bug that made these tests fail deterministically
+    on Windows while passing CI (Linux clocks tick at microsecond
+    resolution)."""
     now = utc_time.now()
     return {
         "filename": filename,
-        "start_date": utc_time.to_rfc3339(
-            now - datetime.timedelta(days=1)
-        ),
+        "start_date": utc_time.to_rfc3339(now),
         "end_date": utc_time.to_rfc3339(
             now + datetime.timedelta(days=30)
         ),
+        "created_at": utc_time.to_rfc3339(_stamp.stamp()),
     }
 
 
@@ -231,9 +242,9 @@ class TestSubjcombiMappingSurvivesVersionSwitch(unittest.TestCase):
         self.user = f"student-{self.marker}@campus.test"
 
     def _create(self, filename: str, labels: list[str]):
-        # The covering window makes each new version derived-current in
-        # turn (identical windows: created_at breaks the tie), so the
-        # second create performs the v1→v2 switch.
+        # created_at comes from the process-global monotonic stamp (see
+        # _metadata), so the derived-current pick is deterministic even
+        # when the Windows clock tick makes real stamps identical.
         return self.resource.new(
             metadata=_metadata(f"{self.marker}-{filename}"),
             lessongroups=_groups(labels),
