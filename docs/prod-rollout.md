@@ -203,8 +203,9 @@ are user-gated and called out.
    are deployment-policy decisions (see §1 and §5) — not per-service.
    Since the 2026-11-24 hardcode, `AUTH_SUPER_ADMIN` is dev-only
    (production derives the super-admin from `WORKSPACE_DOMAIN`, and
-   the hardcoded identity's login is blocked on dev); the prod-stored
-   value is an ignored leftover, safe to unset.
+   the hardcoded identity's login is blocked on dev); it was UNSET on
+   both environments on 2026-11-24. Fresh prod setups need no
+   `AUTH_SUPER_ADMIN` at all.
 
 ### Phase 5 — login + audit wiring
 1. Verify `/auth/v1/oauth/device_authorize` issues codes (exercises
