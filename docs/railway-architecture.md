@@ -150,7 +150,8 @@ The rule that follows: **no outbound packets except while serving an
 inbound request.** A timer may compute, sample and buffer locally; it must
 not send. A heartbeat thread, a connection pool with keep-alives, or a
 cron that pings a service every minute keeps it awake for good. Periodic
-work rides on request traffic instead (#1249).
+work belongs in a Railway cron job, which starts on a schedule, runs and
+exits, or on the request path — never on a timer that sends (#1249).
 
 ## Build & runtime configuration
 
