@@ -41,9 +41,9 @@ class TestProdJob(unittest.TestCase):
         code = self._run(fake_main, self._env())
         self.assertEqual(code, 0)
         self.assertEqual([c[0] for c in calls], [
-            ["--db", "auth", "status"],
-            ["--db", "api", "status"],
-            ["--db", "audit", "status"],
+            ["status", "--db", "auth"],
+            ["status", "--db", "api"],
+            ["status", "--db", "audit"],
         ])
         # the context was swapped per scope: each run saw its own URI,
         # and audit (the last scope) won the env
@@ -62,14 +62,15 @@ class TestProdJob(unittest.TestCase):
             self._env(MIGRATE_JOB_MODE="apply", MIGRATE_JOB_UP_TO="008"))
         self.assertEqual(code, 0)
         self.assertEqual(calls, [
-            ["--db", "auth", "apply", "--up-to", "008"],
-            ["--db", "api", "apply", "--up-to", "008"],
-            ["--db", "audit", "apply", "--up-to", "008"],
+            ["apply", "--up-to", "008", "--db", "auth"],
+            ["apply", "--up-to", "008", "--db", "api"],
+            ["apply", "--up-to", "008", "--db", "audit"],
         ])
 
     def test_stops_on_first_failing_scope(self):
         def fake_main(argv, *args, **kwargs):
-            return 1 if argv[1] == "api" else 0
+            # Order-agnostic: the api scope is the failing one.
+            return 1 if "api" in argv else 0
 
         code = self._run(fake_main, self._env(MIGRATE_JOB_MODE="apply"))
         self.assertEqual(code, 1)
@@ -86,7 +87,7 @@ class TestProdJob(unittest.TestCase):
         code = self._run(fake_main, env)
         self.assertEqual(code, 2)
         # auth ran (its URI was present); the job stopped before api
-        self.assertEqual(calls, [["--db", "auth", "status"]])
+        self.assertEqual(calls, [["status", "--db", "auth"]])
 
     def test_invalid_mode_refuses_before_any_run(self):
         def fake_main(argv, *args, **kwargs):
