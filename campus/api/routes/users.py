@@ -8,7 +8,8 @@ The /users surface, two layers deep:
   every authenticated user able to fetch their own record. The
   records themselves live in campus.auth (separate storage — service
   boundaries hold), so authorized queries are *forwarded* to auth's
-  read-only /directory surface under the api's own service client;
+  /users management surface at READ level under the api's own
+  service credential (a `users:read` grant row; #854 carve-out);
   campus.api authorizes and rewrites the query, auth never sees an
   end-user principal.
 - the **inverted membership check** (#1196): "which circles does this
@@ -162,18 +163,18 @@ def _fetch_directory() -> list[dict]:
     """Fetch the full user directory from campus.auth.
 
     Service boundary (#1226): the records live in campus.auth (separate
-    storage), so authorized queries are forwarded to auth's read-only
-    /directory surface under this service's own client credentials —
-    the auth side allowlists that client; end-user principals never
-    reach auth here. No query parameters travel: auth dumps the
-    directory, campus.api does the scoping, filtering, and pagination
-    (the rewrite happens before anything is served).
+    storage), so authorized queries forward to auth's /users management
+    surface at READ level under this service's own client credentials —
+    the gate's client carve-out honors the service's `users:read` grant
+    row; end-user principals never reach auth here. No query parameters
+    travel: auth dumps the directory, campus.api does the scoping,
+    filtering, and pagination (the rewrite happens before serving).
     """
     import campus_python
 
     try:
         response = campus_python.Campus().auth.client.get(
-            "/auth/v1/directory/users"
+            "/auth/v1/users/"
         )
     except Exception as err:  # network-level failure
         raise api_errors.InternalError(
@@ -351,7 +352,7 @@ def get_user(user_id: schema.CampusID) -> flask_campus.JsonResponse:
 
     try:
         response = campus_python.Campus().auth.client.get(
-            f"/auth/v1/directory/users/{user_id}"
+            f"/auth/v1/users/{user_id}/"
         )
     except Exception as err:  # network-level failure
         raise api_errors.InternalError(
