@@ -860,3 +860,81 @@ def require_vault_enumeration() -> None:
         "vault grant and the 'vaults:read' scope (#1055); client "
         "principals hold per-label access only (#881)"
     )
+
+
+# --- Integration action proxies (#1221) --------------------------------------
+
+def integration_admin_scope(provider: str) -> str:
+    """The management scope authorizing action proxies for an integration.
+
+    `integrations.<provider>:admin` — named per integration so a
+    designation for one integration's actions never implies another's
+    (the dotted resource parses fine through the monotonic algebra:
+    `scopes.grants` partitions on the first colon).
+    """
+    return f"integrations.{provider}:admin"
+
+
+def require_integration_action(provider: str, action: str) -> None:
+    """Gate for integration action proxies (#1221).
+
+    An action proxy performs an upstream-provider verb (e.g. Classroom
+    turnIn) on a TARGET user's stored credential at an administrator's
+    request. The gate composes the two independent authorities the
+    issue pins — neither suffices alone, and neither grants the other:
+
+    - capability leg: the caller's token carries
+      `integrations.<provider>:admin` (#865). Who can HOLD the scope
+      is curated by the operator through the minting client's
+      allowed_scopes; mint time validates the ask against that
+      allowlist.
+    - custody leg: vault access to the integration's vault label
+      (#883/#889) — the credentials being acted on are that label's,
+      so the actor must hold at least read authority over it. Checked
+      via require_vault_permission, whose user leg is the per-label
+      grant row + `vaults:*` token scope.
+
+    The operator client and the super-admin root bypass (house
+    pattern); any other client principal is denied outright — action
+    proxies mutate user-bound upstream state and must stay
+    user-attributable (#881).
+
+    Args:
+        provider: the namespaced provider (e.g. "google.classroom").
+        action: the allowlisted action name; surfaced in denial
+            messages only.
+
+    Raises:
+        api_errors.ForbiddenError: If the caller lacks authority.
+    """
+    del action  # surfaced by callers in audit events, not in the gate
+    if is_user_principal():
+        if is_super_admin():
+            return
+        required = integration_admin_scope(provider)
+        if not scopes.grants(_user_token_scopes(), required):
+            raise api_errors.ForbiddenError(
+                f"Token lacks '{required}' (#865): integration action "
+                "proxies require the per-integration management scope, "
+                "mintable only against a client whose allowed_scopes "
+                "carries it"
+            )
+        from campus.model.client import ClientAccess
+
+        # Lazy imports: keep authz importable ahead of storage
+        # initialization, same as the other designation checks.
+        from . import integrations as integrations_registry
+
+        vault_label = integrations_registry.resolve(provider).vault_label
+        require_vault_permission(vault_label, ClientAccess.READ)
+        return
+    if is_operator():
+        return
+    client = getattr(flask.g, "current_client", None)
+    who = f"Client '{client.id}'" if client else "Client principals"
+    raise api_errors.ForbiddenError(
+        f"{who} may not drive integration action proxies (#1221): "
+        "actions on user-bound upstream credentials are "
+        "user-attributable (#881) — call them with a designated "
+        "user's bearer token or as the operator"
+    )
