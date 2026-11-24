@@ -18,6 +18,7 @@ import typing
 import campus.model as model
 import campus.storage
 from campus.common.errors import api_errors
+from campus.storage import query as storage_query
 
 from ..helpers import span_enrichment
 
@@ -215,6 +216,32 @@ def _decode_cursor(cursor: str) -> tuple[str, str]:
         raise api_errors.InvalidRequestError("Invalid cursor token") from e
 
 
+def _bounded_for_continuation(existing: typing.Any, cursor_ts: str) -> typing.Any:
+    """Merge a caller's started_at bound with a continuation upper bound.
+
+    Keyset pagination walks (started_at, trace_id) descending, so every
+    continuation page must stay at or before the cursor timestamp — but
+    it must also KEEP the caller's own time filter: the query dict is
+    AND-only and holds one operator per field, so the two bounds merge
+    into a single between() range. Overwriting the caller's bound (the
+    old behavior) made every filtered search's continuation pages
+    silently return traces older than the filter — the 2026-11-24
+    classroom investigation pulled 2,406 raw rows for a 1,246-trace
+    window because of it.
+    """
+    if isinstance(existing, storage_query.gte):
+        return campus.storage.between(existing.value, cursor_ts)
+    if isinstance(existing, storage_query.between):
+        lower, upper = existing.value
+        return campus.storage.between(lower, min(upper, cursor_ts))
+    if isinstance(existing, storage_query.lte):
+        return campus.storage.lte(min(existing.value, cursor_ts))
+    if existing is None:
+        return campus.storage.lte(cursor_ts)
+    # Legacy exact match: the cursor bound wins, as before.
+    return campus.storage.lte(cursor_ts)
+
+
 def _query_trace_page(
         query: dict,
         *,
@@ -257,7 +284,12 @@ def _query_trace_page(
     # (started_at, trace_id) of the last trace on the previous page
     cursor_key = _decode_cursor(cursor) if cursor is not None else None
     if cursor_key is not None:
-        effective_query["started_at"] = campus.storage.lte(cursor_key[0])
+        # Merge the cursor's upper bound with (not instead of) whatever
+        # time filter the caller supplied — see
+        # _bounded_for_continuation.
+        effective_query["started_at"] = _bounded_for_continuation(
+            effective_query.get("started_at"), cursor_key[0]
+        )
 
     try:
         spans = traces_storage.get_matching(
