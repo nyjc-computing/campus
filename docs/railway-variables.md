@@ -111,7 +111,6 @@ would override them):
 | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | producer key shared with campus.api |
 | `AUDIT_TRACING_ENABLED` | `1` | literal | audit span emission flag |
 | `AUTH_OPERATOR_CLIENT_IDS` | `${{campus-admin.CLIENT_ID}}` | template | operator gate (#854); stored unquoted by Railway's normalizer |
-| `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | dev superadmin nomination — INERT on dev since the 2026-11-24 hardcode: that identity's login is blocked on dev (403) and production derives the super-admin from `WORKSPACE_DOMAIN`; unset anytime, or repoint at a dev-only account |
 | `BASE_URL` | `${{shared.BASE_URL}}` | template | |
 | `CLIENT_ID` | `uid-client-761d9293-f4bf-4e` | literal | auth's own first-party OAuth client (minted by campus.auth; no Railway source) |
 | `CLIENT_SECRET` | `<secret>` | literal | pair of `CLIENT_ID`; rotate via campus CLI clients surface |
@@ -374,7 +373,7 @@ bucket). Region `sin`, like the rest of the fleet.
 - `SECRET_KEY` — Flask signing secrets, unique per service by design.
 - Audit producer/operator keys (`AUDIT_API_KEY` copies besides the shared one,
   `AUDIT_OPERATOR_API_KEY`, `AUDIT_UI_API_KEY`) — issued by campus.audit's API.
-- Allowlists/emails (`AUTH_SUPER_ADMIN`, `AUDIT_ADMINS`, `AUTH_ADMINS`),
+- Allowlists/emails (`AUDIT_ADMINS`, `AUTH_ADMINS`),
   feature flags, ports, `GUNICORN_CMD_ARGS`, image-init literals on DBs,
   test-account credentials (shared layer).
 - `DEPLOY` on auth/api/audit — equals `RAILWAY_SERVICE_NAME`;
@@ -426,7 +425,6 @@ Service-specific variables:
 | campus.auth | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | |
 | campus.auth | `AUDIT_TRACING_ENABLED` | `1` | literal | |
 | campus.auth | `AUTH_OPERATOR_CLIENT_IDS` | `${{"campus-admin".CLIENT_ID}}` | template | stored unquoted by normalizer |
-| campus.auth | `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | IGNORED on prod (2026-11-24 hardcode: super-admin = `campus-admin@${{campus.auth.WORKSPACE_DOMAIN}}` in code); safe to unset — removed from the boot-gate required list |
 | campus.auth | `CLIENT_ID` | `uid-client-1a20f4a5` | literal | prod first-party client |
 | campus.auth | `CLIENT_SECRET` | `<secret>` | literal | |
 | campus.auth | `DEPLOY` | `campus.auth` | literal | vault label |
@@ -557,3 +555,13 @@ absent from production service names.
   `POSTGRES_PASSWORD` to a self-reference (rendered empty) — caught in
   post-pass verification and corrected from the pre-change dump before any
   redeploy consumed it.
+- **2026-11-24** — `AUTH_SUPER_ADMIN` unset on campus.auth in BOTH
+  environments (the 2026-11-24 superadmin hardcode, PR #1234): production
+  derives the super-admin from `WORKSPACE_DOMAIN` in code and no longer
+  consults the nomination (also dropped from the production boot-gate
+  required list), and on development the hardcoded identity's login is
+  blocked outright, so the stored nomination had been inert. Variable
+  delete does not redeploy: the then-running deployments carry the baked
+  value until their next deploy, by which point the new code is live —
+  no window where a deployment both reads the nomination and runs the
+  old code.
