@@ -91,6 +91,39 @@ Railway's private network (the `*.railway.internal` mesh) is **IPv6-only**:
   (`MONGODB_URI`, `POSTGRESDB_URI`, …); some one-off tooling uses the public
   TCP proxy instead (e.g. audit-postgres from a workstation).
 
+## In-deployment observability
+
+What a deployment can measure about itself (probed empirically 2026-11-24,
+#1239 — recipes and traps live in the railway-ops skill):
+
+- **Every replica is a dedicated microVM** (boot log: "Booting VM for
+  replica N"; kernel `6.18.60-railway`), sized to the service's instance
+  limits. The defaults are generous — 32 vCPU / 32 GB / pid limit 1000 —
+  and the guest sees its entitlement directly: `nproc` and
+  `os.cpu_count()` report the vCPU limit, `/proc/meminfo` reports the
+  memory limit. Worker sizing off `os.cpu_count()` is therefore
+  entitlement-correct, but a service with no limits set looks like a
+  32-core machine.
+- **CPU%**: sample `/sys/fs/cgroup/cpu.stat` and diff `usage_usec` against
+  wall time; `nr_throttled` / `throttled_usec` double as a CPU-starvation
+  signal. The other cgroup files (`cpu.max`, `memory.max` / `memory.current` /
+  `memory.peak`, `pids.*`) are **empty** — Railway sizes the VM instead of
+  enforcing cgroup quotas, so the quota-denominator question doesn't arise.
+- **RAM**: `/proc/meminfo` `MemAvailable` (VM headroom),
+  `/proc/self/status` `VmRSS` (process), `/sys/fs/cgroup/memory.stat`
+  (anon/file breakdown). psutil is not in the fleet images — parse the
+  files.
+- **Instance identity and count**: `RAILWAY_REPLICA_ID` names the replica;
+  no variable exposes the count. From inside, resolve
+  `$RAILWAY_PRIVATE_DOMAIN` — the mesh DNS returns one AAAA record per
+  live replica. From outside, GraphQL `deployment(id){ instances { id
+  status } }` lists them, and instance `id` == the in-guest
+  `RAILWAY_REPLICA_ID`.
+- **Scaling replicas** (e.g. for the multi-region failover pattern) needs
+  `numReplicas` AND `multiRegionConfig.<region>.numReplicas` set to the
+  same value — the per-region entry (default 1) silently overrides the
+  top-level field. Recipe in the railway-ops skill.
+
 ## Build & runtime configuration
 
 - Builder: Railpack (Nixpacks-compatible plan inferred from the repo;

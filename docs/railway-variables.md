@@ -94,6 +94,17 @@ would override them):
   `RAILWAY_ENVIRONMENT`, `RAILWAY_ENVIRONMENT_ID`,
   `RAILWAY_ENVIRONMENT_NAME`, `RAILWAY_SERVICE_NAME`, `RAILWAY_SERVICE_ID`,
   `RAILWAY_STATIC_URL`
+- Deployment/replica identity (fresh values per boot; probed 2026-11-24,
+  #1239): `RAILWAY_DEPLOYMENT_ID`, `RAILWAY_REPLICA_ID` (present even with a
+  single replica), `RAILWAY_REPLICA_INCARNATION` (== the container hostname,
+  `rep-<deployment8>-<uid>-<index>-<n>`), `RAILWAY_REPLICA_REGION`,
+  `RAILWAY_SNAPSHOT_ID`; GitHub-triggered deploys also get
+  `RAILWAY_GIT_COMMIT_SHA` / `RAILWAY_GIT_BRANCH` / `RAILWAY_GIT_AUTHOR` /
+  `RAILWAY_GIT_REPO_NAME` / `RAILWAY_GIT_REPO_OWNER` / `RAILWAY_GIT_COMMIT_MESSAGE`.
+  **No variable exposes the instance count** — count unique AAAA records for
+  `$RAILWAY_PRIVATE_DOMAIN` from inside the deployment, or query GraphQL
+  `deployment(id){ instances { id status } }` from outside (instance `id` ==
+  `RAILWAY_REPLICA_ID`); see the railway-ops skill.
 - Cross-service domain copies: `RAILWAY_SERVICE_<OTHER_SERVICE>_*_URL` —
   derived from every other service's public domain in the environment;
   Railway manages these (deleting a domain cascade-deletes its copies and

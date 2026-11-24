@@ -4,9 +4,11 @@ description: >-
   Traps and recipes for the Railway CLI/GraphQL API and Railway private
   networking in this project — service config mutations (schema changed),
   triggering redeploys, deleting services, deploy queueing, IPv6-only mesh
-  requirements, and Windows shell quirks. Use when touching Railway services
-  (vars, domains, healthchecks, start commands), debugging gateway/upstream
-  failures, or waiting on deployments.
+  requirements, in-deployment observability/probing (replica id, CPU/RAM,
+  instance discovery), and Windows shell quirks. Use when touching Railway
+  services (vars, domains, healthchecks, start commands, replica counts),
+  debugging gateway/upstream failures, waiting on deployments, or measuring
+  a deployment from inside it.
 ---
 
 # Railway ops (campus project)
@@ -92,6 +94,19 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
   input), and it returns a bare `Boolean!` (no selection subfields).
   Input fields: startCommand, healthcheckPath, rootDirectory, watchPatterns,
   numReplicas, … (introspect `ServiceInstanceUpdateInput`).
+- **`numReplicas` silently no-ops unless `multiRegionConfig` is set too**
+  (hit 2026-11-24): the deployment manifest's
+  `multiRegionConfig.<region>.numReplicas` (default 1) OVERRIDES the
+  top-level `numReplicas` — the override is visible in `deployment.meta`
+  (`deploy.multiRegionConfig`). Set BOTH: `input:{numReplicas:N,
+  multiRegionConfig:$m}` with
+  `--var m='{"asia-southeast1-eqsg3a":{"numReplicas":N}}'` (the hyphenated
+  region key can't be a GraphQL object-literal key → must pass as a JSON
+  variable; region id = `RAILWAY_REPLICA_REGION` inside any of the
+  service's deployments). Verify with
+  `deployment(id){ instances { id status } }` — one entry per live
+  replica, and instance `id` == `RAILWAY_REPLICA_ID` as seen inside the
+  guest.
 - `serviceInstanceDeploy(environmentId:…, serviceId:…, latestCommit:true)` —
   explicitly triggers a deployment of the current config. **Config mutations
   do not always auto-trigger a deploy** (observed: of three identical
@@ -101,6 +116,55 @@ ruleset were all deleted 2026-11-17 (campus#1122). `railway status
   the CLI: `railway domain delete <DOMAIN_OR_ID> -s <svc> --yes`.
 - `service delete` (CLI) is permission-refused in this workspace — delete
   services via the dashboard.
+
+## In-deployment observability & probing (probed 2026-11-24)
+
+Each replica boots its own microVM ("Booting VM for replica N" in the
+deploy log; kernel `6.18.60-railway`) **sized to the service's instance
+limits** — defaults are 32 vCPU / 32 GB / pidLimit 1000. The guest sees its
+entitlement directly: `nproc` / `os.cpu_count()` == the vCPU limit,
+`/proc/meminfo` == the memory limit. cgroup v2 exists
+(`/workload/app.scope`) but the quota files (`cpu.max`, `memory.max` /
+`memory.current` / `memory.peak`, `pids.*`) are EMPTY — Railway does not
+enforce via cgroups. Set limits with
+`serviceInstanceLimitsUpdate(input:{environmentId, serviceId, vCPUs,
+memoryGB})`; read back with `serviceInstanceLimits` (returns
+`containers:{cpu, memoryBytes, pidLimit}`).
+
+- **Identity vars**: `RAILWAY_DEPLOYMENT_ID`, `RAILWAY_REPLICA_ID`
+  (present even at 1 replica), `RAILWAY_REPLICA_INCARNATION` (== hostname,
+  `rep-<dep8>-<uid>-<idx>-<n>`), `RAILWAY_REPLICA_REGION`,
+  `RAILWAY_SNAPSHOT_ID`. NO var exposes the instance count.
+- **CPU%**: diff `/sys/fs/cgroup/cpu.stat` `usage_usec` across a wall-time
+  window (idle fleet services sit at a few % of one core; boot churn reads
+  much higher — sample after settle). `nr_throttled`/`throttled_usec` =
+  starvation signal. RAM: `/proc/meminfo`, `VmRSS`,
+  `memory.stat` anon/file. psutil is NOT in slim/python images — parse
+  files.
+- **Instance count**: in-guest, count unique AAAA records for
+  `$RAILWAY_PRIVATE_DOMAIN` (`getent ahostsv6 … | sort -u`) — one per
+  live replica, visible from t+5s on a fresh scale-out. Externally,
+  `deployment(id){ instances { id status } }` (works with the dev project
+  token); instance `id` == `RAILWAY_REPLICA_ID`.
+- **Probing recipe** (`railway ssh` is BLOCKED from the office host —
+  `ssh.railway.com:22` connection timeout even with a valid personal
+  login; it's port filtering, not auth):
+  1. `serviceCreate(input:{projectId, environmentId, name:"probe-tmp",
+     source:{image:"python:3.13-slim"}, variables:{…}})` — image deploys
+     skip the build entirely.
+  2. `serviceInstanceUpdate(input:{startCommand:"/bin/sh -c \"echo <b64>
+     | base64 -d | sh\"", restartPolicyType:NEVER})` — **the script must
+     travel base64-encoded**: raw `$VAR`-style interpolation of a
+     multi-line value in startCommand flattens the script to one line and
+     it never executes (boot log shows the flattened text; hit live
+     2026-11-24).
+  3. `serviceInstanceDeploy(environmentId, serviceId, latestCommit:true)`,
+     poll `activeDeployments[0]` (a probe that exits 0 lands SUCCESS or
+     CRASHED — logs are readable either way by explicit deployment id:
+     `railway logs <DEPLOYMENT_ID> -s probe-tmp -e development --lines N`).
+  4. Cleanup: `deploymentRemove(id)` works via project token;
+     `serviceDelete` is permission-refused for the workspace role —
+     dashboard-delete the dormant service shell.
 
 ## Database bootstrap ordering — credentials BEFORE first boot (#1105)
 
