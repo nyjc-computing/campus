@@ -53,16 +53,10 @@ server {
     proxy_set_header X-Forwarded-Proto https;
     proxy_set_header X-Forwarded-Host $host;
 
-    # Arrival timestamp (unix epoch seconds.milliseconds, "t=" prefix).
-    # Stamped HERE because it cannot be recovered later: WSGI only sees a
-    # request once a gunicorn worker picks it up, so time spent waiting in
-    # the kernel listen backlog is invisible to the services — the gateway
-    # is the only layer that observes true client arrival. Consumers
-    # TTL-check by parsing the float and comparing against their clock
-    # (issue #1241: stale-request rejection is future work; this is the
-    # carrier). $msec is an nginx runtime variable: envsubst passes it
-    # through untouched (msec is never in the environment).
-    proxy_set_header X-Request-Start "t=$msec";
+    # X-Request-Start arrives from Railway's edge: Unix milliseconds for
+    # when the request was received. Do NOT stamp it here — proxy_set_header
+    # would overwrite that earlier value. Pass-through is the default.
+    # Consumers accept both this form and "t=<seconds.milliseconds>" (#1243).
 
     # Trace-ingestion batches and login form posts are small, but don't
     # let nginx's 1m default surprise anyone.
