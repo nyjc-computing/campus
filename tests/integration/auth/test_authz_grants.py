@@ -200,14 +200,18 @@ class TestResourceGate(unittest.TestCase):
                 "users", "read",
             )
 
-    def test_client_denied_on_level_vocabularies(self):
+    def test_client_read_grant_honored_write_denied(self):
         from campus.auth.resources.grant import grants
-        # Even a grant row naming the client confers nothing (#854:
-        # clients are never designated admins)
-        grants.grant("client", LIMITED_ID, "users", level="admin")
+        # The read-level carve-out (#1226): a client holding a users
+        # grant row passes READ checks — the facade's forward leg, with
+        # the acting person attributed one layer up at the facade.
+        # Write stays person-only (#854): even a row naming the client
+        # confers nothing there.
+        grants.grant("client", LIMITED_ID, "users", level="read")
+        self.gate({"current_client": limited_client()}, "users", "read")
         with self.assertRaises(api_errors.ForbiddenError):
             self.gate(
-                {"current_client": limited_client()}, "users", "read"
+                {"current_client": limited_client()}, "users", "write"
             )
 
     def test_unauthenticated_caller_denied_everywhere(self):
