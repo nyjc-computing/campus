@@ -103,11 +103,15 @@ replaced (`AppCredentialsResource.issue`).
   end to end: a user token can carry a management scope only if the
   minting client's `allowed_scopes` cap includes it (A1), so every
   user-admin grant is an operator decision twice over. Sole exception
-  (#897, umbrella decision 8): the env-nominated super-admin root
-  (`AUTH_SUPER_ADMIN`, matched by account email) needs neither leg —
+  (#897, umbrella decision 8): the configured super-admin root
+  (hardcoded on `ENV=production` as `campus-admin@<WORKSPACE_DOMAIN>`,
+  2026-11-24 decision; nominated via `AUTH_SUPER_ADMIN` elsewhere,
+  matched by account email) needs neither leg —
   its authority is the identity alone, unbounded by the minting
   client's scope cap; safeguarding that account is the deployer's
-  responsibility.
+  responsibility. That identity's interactive login is refused (403)
+  on every non-production environment, so the root can only ever
+  authenticate where it holds authority.
 - **A9 — Client principals are read-only; mutations are
   user-attributable (#881).** Client principals hold the bare minimum
   access their role needs — the vault role (per-label vault grant

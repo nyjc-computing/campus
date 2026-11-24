@@ -46,7 +46,7 @@ from campus.common import env, protocol, schema
 from campus.common.errors import api_errors, auth_errors, token_errors
 from campus.common.utils import secret, uid, url, utc_time
 
-from . import resources, scopes
+from . import authz, resources, scopes
 
 logger = logging.getLogger(__name__)
 
@@ -511,6 +511,8 @@ def verify_login_and_redirect(
     Responses:
         302 Found: Redirect to app callback (redirect_uri) with authorization code
         401 Not authenticated: User domain not allowed or no valid Google credential
+        403 Forbidden: Login blocked for the hardcoded production
+        super-admin identity (non-production environments only)
     """
     # Get user from Flask session (set by Google OAuth callback)
     user_str = flask.session.get('user_id')
@@ -526,6 +528,12 @@ def verify_login_and_redirect(
             "Domain not allowed",
             domain=user.domain
         )
+
+    # The hardcoded production super-admin identity may not log in
+    # outside production (2026-11-24 decision): defense in depth for a
+    # campus login cookie minted before the callback-side block
+    # deployed — no user row is provisioned and no code is bound.
+    authz.assert_login_allowed(user)
 
     # Verify user has valid Google credential and get userinfo for provisioning
     google_client_id = resources.vault["google"]["CLIENT_ID"]

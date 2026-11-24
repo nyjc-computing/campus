@@ -137,13 +137,17 @@ class TestValidateRequiredEnv(unittest.TestCase):
         # Pins the declaration keys against the 2026-11-17 prod
         # standup (docs/prod-rollout.md §2): every var in the matrix
         # is one prod actually sets, so the enforcement can never
-        # crash-loop a correctly-configured deployment.
+        # crash-loop a correctly-configured deployment. AUTH_SUPER_ADMIN
+        # left the list in the 2026-11-24 superadmin-hardcode decision:
+        # production derives the super-admin identity from
+        # WORKSPACE_DOMAIN, so the env nomination is neither required
+        # nor consulted there (a prod-set leftover stays harmless).
         from campus.bootstrap import REQUIRED_ENV_VARS
         self.assertEqual(
             REQUIRED_ENV_VARS["campus.auth"],
             ("CLIENT_ID", "CLIENT_SECRET", "SECRET_KEY",
              "MONGODB_URI", "POSTGRESDB_URI", "AUDIT_API_KEY",
-             "AUTH_SUPER_ADMIN", "AUTH_OPERATOR_CLIENT_IDS",
+             "AUTH_OPERATOR_CLIENT_IDS",
              "WORKSPACE_DOMAIN", "PUBLIC_URL"),
         )
         self.assertEqual(

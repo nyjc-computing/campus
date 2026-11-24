@@ -49,11 +49,12 @@ def render() -> str:
         "AUDIT_OPERATOR_API_KEY": "Operator API key auto-seeded into "
                                   "the audit DB at startup",
         # policy
-        "AUTH_SUPER_ADMIN": "Master admin email (auth bypass)",
         "AUTH_OPERATOR_CLIENT_IDS": "Client ids allowed on operator "
                                     "routes",
         "WORKSPACE_DOMAIN": "Google Workspace hostgate for identity "
-                            "logins",
+                            "logins; also supplies the domain for the "
+                            "hardcoded production super-admin "
+                            "(campus-admin@<domain>)",
         "PUBLIC_URL": "Canonical public origin for absolute URL "
                       "generation (#653)",
     }

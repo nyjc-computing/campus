@@ -33,7 +33,6 @@
 - `MONGODB_URI` — Mongo connection URI (document collections: sessions, device codes, circles, …)
 - `POSTGRESDB_URI` — Postgres connection URI (vault/clients/credentials/audit tables)
 - `AUDIT_API_KEY` — Trace-emission credential (traces:write) for the audit API
-- `AUTH_SUPER_ADMIN` — Master admin email (auth bypass)
 - `AUTH_OPERATOR_CLIENT_IDS` — Client ids allowed on operator routes
-- `WORKSPACE_DOMAIN` — Google Workspace hostgate for identity logins
+- `WORKSPACE_DOMAIN` — Google Workspace hostgate for identity logins; also supplies the domain for the hardcoded production super-admin (campus-admin@<domain>)
 - `PUBLIC_URL` — Canonical public origin for absolute URL generation (#653)

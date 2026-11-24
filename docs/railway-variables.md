@@ -111,7 +111,7 @@ would override them):
 | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | producer key shared with campus.api |
 | `AUDIT_TRACING_ENABLED` | `1` | literal | audit span emission flag |
 | `AUTH_OPERATOR_CLIENT_IDS` | `${{campus-admin.CLIENT_ID}}` | template | operator gate (#854); stored unquoted by Railway's normalizer |
-| `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | bootstrap superadmin email |
+| `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | dev superadmin nomination — INERT on dev since the 2026-11-24 hardcode: that identity's login is blocked on dev (403) and production derives the super-admin from `WORKSPACE_DOMAIN`; unset anytime, or repoint at a dev-only account |
 | `BASE_URL` | `${{shared.BASE_URL}}` | template | |
 | `CLIENT_ID` | `uid-client-761d9293-f4bf-4e` | literal | auth's own first-party OAuth client (minted by campus.auth; no Railway source) |
 | `CLIENT_SECRET` | `<secret>` | literal | pair of `CLIENT_ID`; rotate via campus CLI clients surface |
@@ -426,7 +426,7 @@ Service-specific variables:
 | campus.auth | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | |
 | campus.auth | `AUDIT_TRACING_ENABLED` | `1` | literal | |
 | campus.auth | `AUTH_OPERATOR_CLIENT_IDS` | `${{"campus-admin".CLIENT_ID}}` | template | stored unquoted by normalizer |
-| campus.auth | `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | |
+| campus.auth | `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | IGNORED on prod (2026-11-24 hardcode: super-admin = `campus-admin@${{campus.auth.WORKSPACE_DOMAIN}}` in code); safe to unset — removed from the boot-gate required list |
 | campus.auth | `CLIENT_ID` | `uid-client-1a20f4a5` | literal | prod first-party client |
 | campus.auth | `CLIENT_SECRET` | `<secret>` | literal | |
 | campus.auth | `DEPLOY` | `campus.auth` | literal | vault label |

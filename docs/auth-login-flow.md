@@ -189,10 +189,17 @@ proxy (`google/proxy.py::handle_consent_callback`):
    endpoint;
 2. verifies the granted scopes and fetches userinfo;
 3. rejects emails whose domain != `WORKSPACE_DOMAIN`;
-4. upserts the user's *Google* credential (Campus stores the Google
+4. **blocks the production super-admin identity** outside production
+   (2026-11-24 decision): a sign-in as
+   `campus-admin@<WORKSPACE_DOMAIN>` on any non-production environment
+   is refused with 403 before the user row, the Google credential, or
+   the campus login cookie is created — the break-glass account can
+   only ever authenticate on `ENV=production`. `verify_login` and the
+   device-flow bind re-check the same identity as defense in depth;
+5. upserts the user's *Google* credential (Campus stores the Google
    access/refresh token for later Google API calls);
-5. sets the Campus login cookie: `flask.session["user_id"] = <email>`;
-6. redirects to the saved `target` — for the login flow, that is
+6. sets the Campus login cookie: `flask.session["user_id"] = <email>`;
+7. redirects to the saved `target` — for the login flow, that is
    `verify_login` with `state` preserved.
 
 ### 4. `verify_login` issues the Campus authorization code
@@ -436,8 +443,10 @@ CLIs and other input-constrained clients use RFC 8628 instead
    `--scope users:admin` for user management (campus-cli#42). A
    management scope alone still confers nothing: the account must
    also hold the matching row in the access-grant store
-   (`/auth/v1/grants/`, #883) — see invariant A8; the
-   `AUTH_SUPER_ADMIN` root is the sole exception.
+   (`/auth/v1/grants/`, #883) — see invariant A8; the super-admin
+   root is the sole exception (hardcoded on production as
+   `campus-admin@<WORKSPACE_DOMAIN>`; nominated via `AUTH_SUPER_ADMIN`
+   elsewhere).
 
 ## Endpoint reference
 
@@ -475,7 +484,7 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
 | Setting | Where | Default | Effect |
 |---|---|---|---|
 | `PUBLIC_URL` | env (required) | — | canonical origin for every absolute redirect URL (#653); wrong value breaks the Google handoff |
-| `WORKSPACE_DOMAIN` | env | — | only emails on this domain may log in |
+| `WORKSPACE_DOMAIN` | env | — | only emails on this domain may log in; on `ENV=production` it also completes the hardcoded super-admin identity (`campus-admin@<domain>`, login-blocked everywhere else) |
 | `DEFAULT_OAUTH_EXPIRY_MINUTES` | `campus/config.py` | 10 | auth session TTL |
 | `DEVICE_COOKIE` / `DEVICE_COOKIE_MAX_AGE` | `campus/config.py` | `campus_device` / 400 days | stable browser-profile identity cookie (#825) |
 | `DEFAULT_TOKEN_EXPIRY_DAYS` | `campus/config.py` | 7 | access token TTL |
