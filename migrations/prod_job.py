@@ -46,6 +46,13 @@ def _runner_argv(mode: str, up_to: str | None) -> list[str]:
         argv = ["apply"]
         if up_to:
             argv += ["--up-to", up_to]
+        # Break-glass override for the edited-applied-file hash guard:
+        # applied migrations are never re-run; this only lets apply
+        # reach the PENDING tail past files that drifted since their
+        # application (docstring/format edits on long-applied
+        # revisions). Opt-in at trigger time.
+        if os.environ.get("MIGRATE_JOB_ALLOW_HASH_MISMATCH"):
+            argv += ["--allow-hash-mismatch"]
         return argv
     return ["status"]
 
@@ -62,8 +69,17 @@ def main() -> int:
         return 2
     up_to = os.environ.get("MIGRATE_JOB_UP_TO") or None
 
+    # Scope restriction at trigger time: the runner hard-errors when an
+    # apply walks past a PENDING revision targeting another scope, so a
+    # single pending api migration blocks the auth/audit no-op passes.
+    # Restricting to just the scopes with pending work sidesteps that.
+    scopes = [
+        s for s in SCOPES
+        if s in os.environ.get("MIGRATE_JOB_SCOPES", ",".join(SCOPES))
+        or os.environ.get("MIGRATE_JOB_SCOPES", "") == ""
+    ] or list(SCOPES)
     exit_code = 0
-    for scope in SCOPES:
+    for scope in scopes:
         uri = os.environ.get(f"MIGRATE_JOB_{scope.upper()}_POSTGRESDB_URI")
         if not uri:
             print(
@@ -85,8 +101,11 @@ def main() -> int:
             os.environ.pop("MONGODB_URI", None)
 
         print(f"=== migrations job: {mode} {scope} ===", flush=True)
+        # The runner's parser takes the subcommand first, then options
+        # ("status --db api") — a leading --db makes argparse read the
+        # scope as the command.
         code = runner.main(
-            ["--db", scope, *_runner_argv(mode, up_to)])
+            [*_runner_argv(mode, up_to), "--db", scope])
         if code != 0:
             print(
                 f"=== migrations job: {scope} exited {code} — stopping "
@@ -96,8 +115,8 @@ def main() -> int:
                 flush=True,
             )
             return code
-    print(f"=== migrations job: {mode} complete across {len(SCOPES)} "
-          "scope(s) ===", flush=True)
+    print(f"=== migrations job: {mode} complete across {len(scopes)} "
+          f"scope(s) {scopes} ===", flush=True)
     return exit_code
 
 
