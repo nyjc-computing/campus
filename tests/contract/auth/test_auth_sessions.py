@@ -20,8 +20,11 @@ Sessions Endpoints Reference:
 """
 
 import unittest
+from datetime import timedelta
+from unittest import mock
 
-from campus.common import env
+from campus.common import env, schema
+from campus.common.utils import utc_time
 from tests.fixtures import services
 from tests.fixtures.tokens import get_basic_auth_headers
 
@@ -83,6 +86,109 @@ class TestAuthSessionsContract(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertIn("swept_count", data)
+
+    def _create_session(self) -> str:
+        """One live auth session, owned by this test's client."""
+        response = self.client.post(
+            f"/auth/v1/sessions/{self.test_provider}/",
+            json={
+                "client_id": env.CLIENT_ID,
+                "redirect_uri": self.test_redirect_uri,
+                "scopes": ["read"],
+            },
+            headers=self.auth_headers,
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        return response.get_json()["id"]
+
+    def _get_session(self, session_id: str):
+        return self.client.get(
+            f"/auth/v1/sessions/{self.test_provider}/{session_id}/",
+            headers=self.auth_headers,
+        )
+
+    def _sweep_at(self, at_time: str):
+        return self.client.post(
+            "/auth/v1/sessions/sweep",
+            json={"at_time": at_time},
+            headers=self.auth_headers,
+        )
+
+    def test_sweep_refuses_a_future_at_time_and_keeps_live_sessions(self):
+        """A future at_time would sweep live sessions, so it is refused.
+
+        Any authenticated client can call the sweep, so at_time must not
+        be a way to delete everyone's in-progress login.
+        """
+        session_id = self._create_session()
+        an_hour_ahead = schema.DateTime.utcafter(
+            schema.DateTime.utcnow(), minutes=60,
+        )
+
+        response = self._sweep_at(str(an_hour_ahead))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"]["code"], "INVALID_REQUEST",
+        )
+        self.assertEqual(self._get_session(session_id).status_code, 200)
+
+    def test_sweep_tolerates_a_slightly_fast_caller_clock(self):
+        """Within the tolerance, a caller's clock running ahead is fine."""
+        session_id = self._create_session()
+        slightly_ahead = schema.DateTime.utcafter(
+            schema.DateTime.utcnow(), minutes=2,
+        )
+
+        response = self._sweep_at(str(slightly_ahead))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("swept_count", response.get_json())
+        self.assertEqual(self._get_session(session_id).status_code, 200)
+
+    def test_sweep_honours_a_past_at_time(self):
+        """A supplied at_time is swept as of, instead of answering 500.
+
+        The value arrives as text; handed to the sweep untyped it raised
+        AttributeError for every at_time, so the parameter never worked.
+        """
+        session_id = self._create_session()
+
+        response = self._sweep_at("2024-01-01T00:00:00Z")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["swept_count"], 0)
+        self.assertEqual(self._get_session(session_id).status_code, 200)
+
+    def test_sweep_removes_an_expired_session_and_keeps_a_live_one(self):
+        """The sweep deletes what has expired by at_time and nothing else.
+
+        This is what an auth housekeeping job relies on: nothing runs it
+        today, so expired sessions are never removed.
+        """
+        long_ago = utc_time.now() - timedelta(minutes=30)
+        with mock.patch("campus.common.utils.utc_time.now",
+                        return_value=long_ago):
+            expired_id = self._create_session()
+        live_id = self._create_session()
+
+        response = self.client.post(
+            "/auth/v1/sessions/sweep", json={}, headers=self.auth_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["swept_count"], 1)
+        self.assertEqual(self._get_session(expired_id).status_code, 404)
+        self.assertEqual(self._get_session(live_id).status_code, 200)
+
+    def test_sweep_rejects_a_malformed_at_time(self):
+        """An unreadable at_time is a field error, not a server error."""
+        response = self._sweep_at("not a date")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.get_json()["error"]["code"], "INVALID_REQUEST",
+        )
 
     def test_create_provider_session(self):
         """POST /sessions/{provider}/ creates a new auth session."""
