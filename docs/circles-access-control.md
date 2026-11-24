@@ -166,6 +166,7 @@ For principal *u*, family *F*, operation *op*:
 | `timetable` | version CRUD, pointer moves, attachments | read own timetable (subject-match) | no own-write semantics |
 | `subjcombi` | set/cancel mappings | read own mapping | mutations are committee-only |
 | `venues` | venue CRUD; booking decisions (approve/deny) on the family's venues | create/modify/withdraw **own bookings** | venue CRUD needs `G-c`; deciding needs `G-m` |
+| `users` | directory read: list/search the user base — `G-r` only, the family honors **no write semantics** (identity mutation stays in campus.auth's walled management surface, #1226) | read **own** record (`S-r`; every baseline constant carries it) | served by the read-only `/users` facade: staff get the full list via the `staff:viewer` baseline; a caller without group-read is scoped by query rewrite to the members of circles they can read (guest memberships confer nothing) |
 | `files` | file management | own uploads | full `self` honored |
 | `assignments`, `submissions`, `circles`, `hostedapps` | family CRUD | inapplicable — `S` fields ignored | `G`-only |
 

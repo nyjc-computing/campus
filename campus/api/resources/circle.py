@@ -32,6 +32,7 @@ BOOTSTRAP_RESOURCES = (
     "assignments",
     "submissions",
     "subjcombi",
+    "users",
     "venues",
     "files",
     "hostedapps",

@@ -2725,6 +2725,81 @@
         ]
       }
     },
+    "/api/v1/users/": {
+      "get": {
+        "description": "Method:\n    GET /users/\n\nAuthorization (#1226): a user principal with group-read on the\nusers family (staff:viewer baseline) gets the full list; any\nother authenticated user gets the members of circles they can\nread (plus themselves); client principals are denied.\n\nQuery Parameters:\n    q: str (optional) \u2014 case-insensitive substring over name and\n        id (the id IS the email).\n    limit: int (optional) \u2014 page size, default 50, capped at 200.\n    cursor: str (optional) \u2014 the previous response's next_cursor.\n\nResponses:\n    200 OK: {\"users\": [directory records], \"next_cursor\": str | None}\n    502: the campus.auth directory forward failed.",
+        "operationId": "api_v1_users_list_users",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "nullable": true,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Search the user directory (read-only facade).",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/": {
+      "get": {
+        "description": "Method:\n    GET /users/{user_id}\n\nAuthorization (#1226): a user principal with group-read on the\nusers family sees any record; any authenticated user sees their\nown record (self read via the baseline); a scoped caller sees a\nrecord only when it sits in their circle-visible set. An\ninvisible or absent user is indistinguishable (404) \u2014 scoped\ncallers learn nothing about who exists outside their slice.\n\nResponses:\n    200 OK: directory record\n    404: the record is absent or outside the caller's slice\n    502: the campus.auth directory forward failed.",
+        "operationId": "api_v1_users_get_user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Fetch one directory record (read-only facade).",
+        "tags": [
+          "users"
+        ]
+      }
+    },
     "/api/v1/users/{user_id}/roles": {
       "get": {
         "description": "List every circle the given user holds \u2014 directly or through\nmember circles \u2014 as absolute paths with their access values: the\ninverted membership check. The membership probe answers \"is this\nuser in this circle\", this endpoint answers \"which circles is\nthis user in\" without clients diffing members dicts (the stopgap\nthe #1196 prod ops run had to hand-roll).\n\nMethod:\n    GET /users/{user_id}/roles\n\nPath Parameters:\n    user_id: str (required)\n        The user's ID (their email account, naming their user\n        circle). A user with no resolvable memberships returns an\n        empty list, not an error.\n\nQuery Parameters:\n    None\n\nRequest Body:\n    None\n\nResponses:\n    200 OK: dict\n        The user's memberships, sorted by absolute path. Paths\n        are derived from containment (root excluded; a\n        multi-parent circle appears once per parent chain).\n        Example:\n            {\n                \"user_id\": \"teacher@campus.test\",\n                \"memberships\": [\n                    {\n                        \"circle_id\": \"uid-circle-ab12cd34\",\n                        \"path\": \"timetable\",\n                        \"access_value\": 126,\n                        \"direct\": false,\n                        \"via\": [\"committees\", \"committees.timetabling\"]\n                    }\n                ]\n            }\n\n    401 Unauthorized: None\n        Returned if the request carries no valid authentication.\n\n    500 Internal Server Error: None\n        Returned if a storage-level error occurs while resolving.\n\nNotes:\n    - Reads stay open (no membership required), consistent with\n      the circles reads: the listing leaks nothing the members\n      listings do not.\n    - Resolution always goes through the shared membership\n      resolver (resources.circle.resolve_member) \u2014 the same\n      semantics as the enforcement gate and the probe.\n      access_value is the maximum across resolving paths;\n      \"direct\" flags an edge on the circle itself; \"via\" lists\n      the containment chain of circle names from the circle to\n      the member (empty when direct).\n    - User circles are excluded from the listing: membership in\n      someone's personal circle is not an authority.\n    - Emits no events.",

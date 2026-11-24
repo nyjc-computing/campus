@@ -1210,6 +1210,53 @@
         ]
       }
     },
+    "/auth/v1/directory/users/": {
+      "get": {
+        "description": "GET /directory/users\nAuthorization: the operator, or a client in AUTH_DIRECTORY_CLIENT_IDS.\n\nNo query parameters by design: filtering, scoping, and pagination\nare campus.api's job \u2014 it rewrites the query per the caller's\ncircles scope before serving (#1226).\n\nReturns: {\"users\": [User, ...]}",
+        "operationId": "auth_directory_list_users",
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List all users (read-only directory dump).",
+        "tags": [
+          "directory"
+        ]
+      }
+    },
+    "/auth/v1/directory/users/{user_id}/": {
+      "get": {
+        "description": "GET /directory/users/{user_id}\nAuthorization: the operator, or a client in AUTH_DIRECTORY_CLIENT_IDS.\n\nReturns: User",
+        "operationId": "auth_directory_get_user",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "email",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "Get one user (read-only directory record).",
+        "tags": [
+          "directory"
+        ]
+      }
+    },
     "/auth/v1/discord/authorize": {
       "get": {
         "operationId": "auth_discord_authorize",
@@ -3405,6 +3452,9 @@
     },
     {
       "name": "credentials"
+    },
+    {
+      "name": "directory"
     },
     {
       "name": "discord"
