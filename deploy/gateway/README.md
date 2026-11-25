@@ -8,12 +8,17 @@ application-side prerequisites (per-service session cookie names,
 
 ## Dispatch
 
-| Public path            | Upstream (HTTPS hairpin)                              | Notes |
+| Public path            | Upstream (private mesh)                               | Notes |
 |------------------------|--------------------------------------------------------|-------|
-| `/auth/*`              | `campusauth-development.up.railway.app`                | `/auth/v1/*` OAuth/users/sessions |
-| `/integrations/*`      | `campusauth-development.up.railway.app`                | public integrations catalog — mounted *outside* `/auth/v1`, easy to forget |
-| `/api/*`               | `campusapi-development.up.railway.app`                 | `/api/v1/*` |
-| `/audit/*`             | `campusaudit-development.up.railway.app`               | API + web UI + static (all audit surface already lives under `/audit/*`) |
+| `/auth/*`              | `${AUTH_HOST}` → `campus-auth-dev.railway.internal`    | `/auth/v1/*` OAuth/users/sessions |
+| `/integrations/*`      | `${AUTH_HOST}`                                          | public integrations catalog — mounted *outside* `/auth/v1`, easy to forget |
+| `/api/*`               | `${API_HOST}` → `campus-api-dev.railway.internal`      | `/api/v1/*` |
+| `/audit/*`             | `${AUDIT_HOST}` → `campus-audit-dev.railway.internal`  | API (+ audit web UI retired to campus-admin: its `/audit/*` UI paths 302 to admin's own domain) |
+| `/timetable/*`         | `${TIMETABLE_HOST}` → nyxchange-timetable-v2 (#1274)   | timetable portal (`/timetable/` namespace) |
+| `/apps/*`              | `${APPHOST_HOST}` → campus-apphost (#1274)             | embedded-app host (`/apps/` namespace) |
+| `/admin/*`             | `${ADMIN_HOST}` → campus-admin (#1274)                 | admin portal (`/admin/` namespace; home/sign-in/audit UI stay at admin's root) |
+| `/profile/*`           | `${PROFILE_HOST}` → campus-profile (#1274)             | profile portal (`/profile/` namespace) |
+| `/classroom/*`         | `${CLASSROOM_HOST}` → campus-classroom (#1274)         | classroom portal (`/classroom/` namespace) |
 | `/`                    | gateway-owned                                          | 302 → `/audit/` (relative Location) |
 | `/health`              | gateway-owned                                          | **gateway liveness only** (also the Railway healthcheck candidate) |
 
@@ -21,6 +26,57 @@ Paths pass through **unchanged** (`proxy_pass` with no URI part): each
 service's internal routes already carry its public prefix, and the test
 harness (`tests/fixtures/services.py`) runs this exact single-origin
 topology, so no app-side routing change is involved.
+
+## Downstream consumer apps (#1274)
+
+Each downstream app is routed under the namespace it already serves on
+its own deployment (verified by probing the dev domains 2026-11-25):
+`/timetable/` (nyxchange-timetable-v2), `/apps/` (campus-apphost),
+`/admin/` (campus-admin — e.g. `/admin/dashboard`; its home, sign-in and
+audit-UI surfaces live at its root and are not carved out of the gateway's
+root space), `/profile/`, `/classroom/`. A bare `/timetable` (no slash)
+gets a 308 to the slashed form instead of the gateway's `/` → `/audit/`
+bounce.
+
+**Per-environment wiring.** The upstreams read `TIMETABLE_HOST` /
+`APPHOST_HOST` / `ADMIN_HOST` / `PROFILE_HOST` / `CLASSROOM_HOST` (+`_PORT`,
+`8080` everywhere today) from gateway service variables. The Dockerfile
+ships `.invalid` placeholder `ENV` defaults, because the stock envsubst
+runner substitutes only *defined* variables — an undefined `${TIMETABLE_HOST}`
+would render literally and nginx would fail config load (gateway-wide
+outage). Where the vars are unset (production, currently) the config stays
+valid and those five paths just 502. Wiring an environment = set the vars
+on that environment's gateway service + redeploy; the vars must reference
+the environment's own mesh names.
+
+**Private mesh, not the public hairpin.** Railway's edge rejects
+Host-mismatched public requests with a plain nginx 404 on some services
+(observed on timetable/apphost/profile/classroom 2026-11-25 — admin's edge
+tolerated the same mismatch), so hairpinning with `Host: $host` is
+unreliable for this set; the mesh has no such check. Private names carry
+no `-dev` suffix (unlike the core trio's regularized `campus-auth-dev`
+aliases): `campus-admin.railway.internal`, `campus-apphost.railway.internal`,
+`campus-classroom.railway.internal`, `campus-profile.railway.internal`,
+`nyxchange-timetable-v2.railway.internal` — read each service's rendered
+`RAILWAY_PRIVATE_DOMAIN` when wiring, don't guess.
+
+**Known limitations (accepted for the dev wiring).**
+
+- The apps don't validate `Host`, but they generate login/OAuth redirects
+  from their `PUBLIC_URL` (their own domain), so an auth flow entered
+  through the gateway hands off to the origin domain mid-flow — same as
+  the core trio in the hairpin era. Keeping flows under the gateway
+  hostname is app-side URL plumbing (PUBLIC_URL/redirect-URI registry
+  updates), out of scope for #1274.
+- Campus.audit's retired web UI keeps the gateway's `/audit/` prefix;
+  admin's audit UI (also under `/audit/` *on admin*) is not routed here —
+  re-pointing `/audit/` at admin would strand campus.audit's
+  `/audit/v1/*` API.
+- Browser sessions for the five apps land in one cookie jar on the
+  gateway hostname; the apps don't set per-service cookie names the way
+  the core trio does (`SESSION_COOKIE_NAMES`), so logging into two of
+  them in one browser may thrash whichever share a default cookie name.
+  Same caveat as pre-#996, harmless for dev deep-links.
 
 ## Access logs carry no query strings (#1130)
 
@@ -58,38 +114,26 @@ TTL check remains future work under #1241.
 |-------------|------------------------------------------|---------|
 | `PORT`      | `8080`                                   | gateway's own listen port — the service domain's target port must match |
 | `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1`               | activates the stock `15-local-resolvers.envsh`, which exports `NGINX_LOCAL_RESOLVERS` |
+| `AUTH_HOST` / `API_HOST` / `AUDIT_HOST` | e.g. `campus-auth-dev.railway.internal` | core-trio private mesh names (set per environment since the 2026-11-19 flip) |
+| `AUTH_PORT` / `API_PORT` / `AUDIT_PORT` | `8080` | core-trio upstream ports |
+| `TIMETABLE_HOST` / `APPHOST_HOST` / `ADMIN_HOST` / `PROFILE_HOST` / `CLASSROOM_HOST` (+`_PORT`) | e.g. `campus-admin.railway.internal` | downstream-app upstreams (#1274); unset = Dockerfile `.invalid` placeholder, path 502s |
 
-(`AUTH_PORT` / `API_PORT` / `AUDIT_PORT` are not currently used — they
-belong to the private-upstream form documented below.)
+## Upstream choice: private networking (flipped 2026-11-19)
 
-## Upstream choice: public hairpin, not private networking (for now)
-
-The template proxies to the services' **public** domains over HTTPS
-(SNI on, `proxy_ssl_server_name`). Private networking
-(`*.railway.internal`) was investigated on 2026-10-29 and **does not
-currently work** from the gateway to the three services:
-
-- The private endpoints report `ACTIVE` with stable IPv6 addresses
-  (`campus-auth` / `campus-api` / `campusaudit.railway.internal`), and
-  each backend listens on `0.0.0.0:8080` (verified in gunicorn boot
-  logs).
-- Yet DNS inside the gateway consistently returned **different**
-  addresses than the live endpoints (same subnet, other interface IDs),
-  and every connect was `ECONNREFUSED` — 0/10 requests ever reached an
-  upstream. Not round-robin luck: dead addresses every time.
-- Caveat discovered along the way: Railway's private DNS serves IPv6
-  nameservers and nginx's `resolver` misparses bare IPv6 literals — the
-  stock `15-local-resolvers.envsh` brackets them; that part is solved
-  here and stays useful.
-
-The public hairpin is functionally identical for dispatch (Railway
-routes by SNI, not Host, so the backends still see
-`Host: campus-development.up.railway.app` and generate correct
-absolute URLs) at the cost of edge latency and a public round-trip.
-When private networking is resolved (Railway support / config),
-flip the three `set $*_upstream` lines in the template to the
-`http://…railway.internal:${*_PORT}` form kept in the comment there —
-no other change needed.
+The template proxies to the services' **private** mesh names
+(`http://${*_HOST}:${*_PORT}`), not the public domains. The public
+hairpin was the original form: private networking was investigated on
+2026-10-29 and did not work then (mesh DNS returned dead addresses,
+every connect `ECONNREFUSED`), so the gateway hairpinned over HTTPS
+until the 2026-11-19 service-rename + private-domain regularization
+made mesh names stable per environment. The hairpin also has a second,
+disqualifying problem for the downstream apps (#1274): Railway's edge
+rejects Host-mismatched public requests with a plain nginx 404 on some
+services, and the gateway always sends `Host: $host` (the gateway's own
+domain). One hairpin-era caveat that still applies and is solved here:
+Railway's private DNS serves IPv6 nameservers and nginx's `resolver`
+misparses bare IPv6 literals — the stock `15-local-resolvers.envsh`
+brackets them.
 
 ## Why per-request DNS resolution
 

@@ -40,14 +40,22 @@ Campus core — one Flask app per service, all built from this repo with
 |---|---|---|---|
 | campus.auth | campus.auth | campusauth-development.up.railway.app | gunicorn, 2 workers |
 | campus.api | campus.api | campusapi-development.up.railway.app | gunicorn |
-| campus.audit | campus.audit | campusaudit-development.up.railway.app | gunicorn; owns the audit web UI |
+| campus.audit | campus.audit | campusaudit-development.up.railway.app | gunicorn; API only — the audit web UI retired to campus-admin (audit's `/audit/*` UI paths 302 to admin's own domain) |
 | campus-gateway | `deploy/gateway/` nginx | campus-development.up.railway.app | unified host; see below |
 | campus.vault | campus.vault | — | secrets vault (shared across envs) |
 
 Backing stores: `campus.auth-postgres`, `campus.auth-mongodb`,
 `campus.api-postgres`, `campus.api-mongodb`, `campus.audit-postgres`
-(Railway images). Other project services (campus-classroom, campus-admin,
-campus-profile, …) deploy from their own repos into the same environment.
+(Railway images). Downstream consumer apps deploy from their own repos
+into the same environment:
+
+| Service | Public domain | Own namespace | Gateway path (#1274) |
+|---|---|---|---|
+| campus-admin | campus-admin-development.up.railway.app | `/admin/` (+ root portal, `/audit/` UI) | `/admin/*` |
+| campus-apphost | campus-apphost-development.up.railway.app | `/apps/` | `/apps/*` |
+| campus-classroom | campus-classroom-development.up.railway.app | `/classroom/` | `/classroom/*` |
+| campus-profile | campus-profile-development.up.railway.app | `/profile/` | `/profile/*` |
+| nyxchange-timetable-v2 | nyxchange-timetable-v2-development.up.railway.app | `/timetable/` | `/timetable/*` |
 
 Base URLs for inter-service clients are registered in
 `campus/config.py` (`BASE_URLS`) and consumed via `get_base_url()`.
@@ -58,21 +66,29 @@ Base URLs for inter-service clients are registered in
 and dispatches by path prefix:
 
 ```
-/integrations/, /auth/  → campus-auth.railway.internal:8080    (campus.auth)
-/api/                   → campus-api.railway.internal:8080     (campus.api)
-/audit/                 → campusaudit.railway.internal:8080    (campus.audit)
+/integrations/, /auth/  → campus-auth-dev.railway.internal:8080    (campus.auth)
+/api/                   → campus-api-dev.railway.internal:8080     (campus.api)
+/audit/                 → campus-audit-dev.railway.internal:8080   (campus.audit)
+/timetable/             → nyxchange-timetable-v2.railway.internal  (#1274)
+/apps/                  → campus-apphost.railway.internal          (#1274)
+/admin/                 → campus-admin.railway.internal            (#1274)
+/profile/               → campus-profile.railway.internal          (#1274)
+/classroom/             → campus-classroom.railway.internal        (#1274)
 /health                 → 200 "ok"        (gateway-owned)
 /                       → 302 /audit/     (gateway-owned)
 ```
 
 Upstreams resolve via the Railway mesh DNS on every request (nginx
-`resolver … valid=10s`), so redeploys of backends need no gateway change.
-The gateway is deployed from `deploy/gateway/` in this repo (rootDirectory +
-watch patterns scope its builds). The gateway is LIVE and dispatching to
-all three services on dev (end-to-end smoke green 2026-10-30); the
-per-service domains above remain the primary entrypoints until the
-single-hostname cutover tracked on issue #995 (`PUBLIC_PREFIX`,
-`SESSION_COOKIE_NAMES` prerequisites shipped in PR #996).
+`resolver … valid=10s`), so redeploys of backends need no gateway change;
+each app's mesh name is set per environment as a `*_HOST` variable on the
+gateway service. The gateway is deployed from `deploy/gateway/` in this
+repo (rootDirectory + watch patterns scope its builds). The gateway is
+LIVE: the core trio since 2026-10-30 (end-to-end smoke green), the five
+downstream apps since 2026-11-25 (#1274, dev only — production hasn't
+opted any in, where their paths 502 harmlessly). The per-service domains
+above remain the primary entrypoints until the single-hostname cutover
+tracked on issue #995 (`PUBLIC_PREFIX`, `SESSION_COOKIE_NAMES`
+prerequisites shipped in PR #996).
 
 ## Private networking rules (must-follow for every deployment)
 
