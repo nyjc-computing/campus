@@ -174,9 +174,9 @@ would override them):
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `SECRET_KEY` | `<secret>` | literal | Flask secret; per-service by design (must differ between services) |
 
-### campus-cleanup (cron job, not yet created)
+### campus-cleanup (cron job)
 
-The scheduled cleanup deployment (`campus.cleanup`, `Dockerfile.cleanup`).
+The scheduled cleanup deployment (`campus.cleanup`, `Dockerfile.cleanup`). Created on development 2026-11-25 (service id `c86b82af`, hourly cron `0 * * * *`, GitHub trigger `github@weekly` with auto-deploy on, restart NEVER, no domain/healthcheck); production wiring still pending (#1262).
 Batch job: no domain, no healthcheck; Railway cron starts it (≥5-minute
 minimum cadence, `railway cron run` for one-offs). Setup runbook:
 [docs/cleanup-deployment.md](cleanup-deployment.md). Target matrix —
@@ -187,6 +187,7 @@ Railway references resolve per environment:
 | `CLEANUP_JOB_AUDIT_POSTGRESDB_URI` | `${{"campus.audit-postgres".DATABASE_URL}}` | template | rate-limit bucket sweep; the `cleanup_runs` ledger home |
 | `CLEANUP_JOB_AUTH_POSTGRESDB_URI` | `${{"campus.auth-postgres".DATABASE_URL}}` | template | future auth-scope jobs |
 | `CLEANUP_JOB_AUTH_MONGODB_URI` | `${{"campus.auth-mongodb-dev".MONGO_URL}}` (prod: `campus.auth-mongodb`) | template | `auth_sessions` + `device_codes` sweeps |
+| `CLEANUP_JOB_AUTH_MONGODB_NAME` | `campus_auth` | literal | the Mongo database name — the backend resolves it separately from the URI (#1262 first-run finding) |
 | `DEPLOY` | `campus.cleanup` | literal | |
 | `ENV` | `${{shared.ENV}}` | template | |
 
