@@ -303,6 +303,17 @@ what deploys prod. Future releases:
    every prod app service has `checkSuites` enabled (2026-11-17), so a
    deployment only starts after the commit's GitHub checks pass. A
    forced `deploymentRedeploy` still bypasses the wait.
+
+   **Check EVERY app service's deployment row individually** after a
+   promotion: the trigger can land SKIPPED on several services at once
+   while others deploy cleanly (2026-11-25: the campus-model v0.2.7
+   promotion left campus.api/auth/gateway SKIPPED at the same instant
+   campus.audit deployed — the SKIPPED trap is per-service, not
+   fleet-wide). Recovery is `scripts/railway_deploy.sh <service>
+   production`, which re-triggers from source and polls; plain
+   `railway redeploy` rebuilds the ACTIVE (old) image, and the CLI's
+   `--yes` flag is required non-interactively. Verified smoke of the
+   promoted commit is what proves the recovery, not the SUCCESS row.
 5. Resync `weekly` (automated since 2026-11-25): the
    `backmerge-main-to-weekly.yml` workflow watches both branches and,
    whenever `main` has commits `weekly` lacks, opens an auto-merge PR
