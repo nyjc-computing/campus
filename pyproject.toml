@@ -22,8 +22,8 @@ python = ">=3.11.0,<3.15"
 campus-api-python = {url = "https://github.com/nyjc-computing/campus-api-python/releases/download/v0.10.13/campus_api_python-0.10.13-py3-none-any.whl"}
 # Stable kernel (campus.common) - consumed as the campus-common v0.5.1 release wheel (production token errors keep the oauth_error protocol code — RFC 8628 pollers need it; campus-common#11)
 campus-common = {url = "https://github.com/nyjc-computing/campus-common/releases/download/v0.5.1/campus_common-0.5.1-py3-none-any.whl"}
-# Domain models (campus.model) - consumed as the campus-model v0.2.6 release wheel (VenueBooking.status approval lifecycle, campus#1217)
-campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.2.6/campus_model-0.2.6-py3-none-any.whl"}
+# Domain models (campus.model) - consumed as the campus-model v0.2.7 release wheel (AuditApiKey.is_expired normalizes naive datetimes to UTC — a date-only mint expiry used to TypeError every auth'd request of that key, campus#1273)
+campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/download/v0.2.7/campus_model-0.2.7-py3-none-any.whl"}
 # Deployment glue (campus.deploy) - consumed as the campus-deploy v0.2.0 release wheel (audit-namespace reorg flask-campus#31: create_app calls campus.flask_campus.audit.init_tracing; requires flask-campus >= v0.2.0); nyxchange stays on v0.1.3
 campus-deploy = {url = "https://github.com/nyjc-computing/campus-deploy/releases/download/v0.2.0/campus_deploy-0.2.0-py3-none-any.whl"}
 # Flask consumer layer (campus.flask_campus + audit middleware) - consumed as the flask-campus v0.2.3 release wheel (pure repin to SDK v0.10.12 — the wheel-metadata rule; v0.2.2 made is_member resolve transitively through the SDK's shared resolver — gate parity with campus.api enforcement, campus#1202); the in-repo modules are removed
