@@ -283,30 +283,6 @@ class DeviceCodeResource:
             raise api_errors.InternalError.from_exception(e) from e
         return True
 
-    def sweep(
-            self,
-            *,
-            at_time: schema.DateTime | None = None
-    ) -> int:
-        """Delete expired device codes from the database.
-
-        Returns the number of deleted device codes.
-        """
-        expired_records = (
-            model.DeviceCode.from_storage(r)
-            for r in device_code_storage.get_matching({})
-        )
-        expired_codes = (
-            dc for dc in expired_records if dc.is_expired(at_time=at_time)
-        )
-        deletion_count = 0
-        for device_code in expired_codes:
-            device_code_storage.delete_by_id(device_code.id)
-            deletion_count += 1
-        return deletion_count
-
-
-
 
 # Singleton instance
 device_code = DeviceCodeResource()

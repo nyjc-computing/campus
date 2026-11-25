@@ -4,7 +4,7 @@
 
 [tool.poetry]
 name = "campus-suite"
-version = "0.36.0"
+version = "0.36.7"
 description = "Campus Suite - Complete education management platform deployment orchestrator and client library"
 authors = ["Ng Jun Siang <ngjunsiang@gmail.com>"]
 readme = "README.md"
@@ -28,9 +28,9 @@ campus-model = {url = "https://github.com/nyjc-computing/campus-model/releases/d
 campus-deploy = {url = "https://github.com/nyjc-computing/campus-deploy/releases/download/v0.2.0/campus_deploy-0.2.0-py3-none-any.whl"}
 # Flask consumer layer (campus.flask_campus + audit middleware) - consumed as the flask-campus v0.2.3 release wheel (pure repin to SDK v0.10.12 — the wheel-metadata rule; v0.2.2 made is_member resolve transitively through the SDK's shared resolver — gate parity with campus.api enforcement, campus#1202); the in-repo modules are removed
 flask-campus = {url = "https://github.com/nyjc-computing/flask-campus/releases/download/v0.2.4/flask_campus-0.2.4-py3-none-any.whl"}
-# Storage + webauth + services (campus.storage/webauth/services) - consumed as the campus-core v0.1.10 release wheel (postgres between operator, campus-core#3; v0.1.10 re-pins campus-model v0.2.5 per campus#1175); the in-repo packages are removed. The suite keeps its direct
+# Storage + webauth + services (campus.storage/webauth/services) - consumed as the campus-core v0.1.12 release wheel (adds TableInterface.aggregate() for the audit metrics epic campus#1243; v0.1.10 added the postgres between operator, campus-core#3); the in-repo packages are removed. The suite keeps its direct
 # psycopg2/pymongo/boto3 pins below (campus-core's drivers are extras; the suite needs all three).
-campus-core = {url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.11/campus_core-0.1.11-py3-none-any.whl"}
+campus-core = {url = "https://github.com/nyjc-computing/campus-core/releases/download/v0.1.12/campus_core-0.1.12-py3-none-any.whl"}
 
 # Client library dependencies (minimal for HTTP requests)
 bcrypt = "^5.0.0"

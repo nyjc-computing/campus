@@ -36,3 +36,10 @@
 - `AUTH_OPERATOR_CLIENT_IDS` — Client ids allowed on operator routes
 - `WORKSPACE_DOMAIN` — Google Workspace hostgate for identity logins; also supplies the domain for the hardcoded production super-admin (campus-admin@<domain>)
 - `PUBLIC_URL` — Canonical public origin for absolute URL generation (#653)
+
+## `campus.cleanup`
+
+- `CLEANUP_JOB_AUDIT_POSTGRESDB_URI` — The audit service's Postgres database (rate-limit bucket sweep; the cleanup_runs ledger)
+- `CLEANUP_JOB_AUTH_POSTGRESDB_URI` — The auth service's Postgres database (future auth-scope jobs)
+- `CLEANUP_JOB_AUTH_MONGODB_URI` — The auth service's Mongo database (auth_sessions and device_codes sweeps)
+- `CLEANUP_JOB_AUTH_MONGODB_NAME` — The auth service's Mongo database name (campus_auth); the backend resolves it separately from the URI

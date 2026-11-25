@@ -197,19 +197,41 @@ cannot take traffic — the failed deployment never passes its
 healthcheck, the previous deployment keeps serving, and the operator
 applies the pending migrations (admin UI or break-glass job) and
 redeploys. The gate never runs migrations; an unreachable ledger stays
-fail-open (warn only).
+fail-open (warn only). The development auto-apply does not run in the
+gate either — it is spawned onto a background thread after the app is
+built (see below).
 
 ### Development (Railway dev)
 
-Usually nothing to do: deploy and let startup initialization apply schema
-changes (see [When a migration is needed](#when-a-migration-is-needed)).
-Verify self-heal landed by exercising the affected flow (this is how 004
-was verified: a fresh device-authorize request succeeded and survived a
-redeploy).
+Usually nothing to do: deploy and let startup bring the service database
+up to date. Startup self-heal covers schema changes (init_from_model)
+and, since #1256, migrations too: a development deployment applies its
+own pending migrations at startup — on a background thread spawned by
+`create_app` (`runner.auto_apply_in_background()`, #1263), through the
+same ledger, advisory lock and hash guard as every other apply — schema
+migrations and data backfills alike. The thread is why it is not
+synchronous: Railway's 10 s healthcheck killed the first deployment of
+#1260's in-gate version (the backfill delayed `/health` past the
+timeout, the deployment failed and never re-booted, so the migration
+could never finish). A migration that raises is recorded FAILED and
+logged at ERROR (the boot continues; the next boot retries it and
+anything after it), an unreachable ledger logs a WARNING and the boot
+continues, and a hash-guard mismatch skips the auto-apply (run
+`apply --allow-hash-mismatch` consciously). Two replicas starting
+together converge on the advisory lock: one applies, the rest find the
+ledger up to date; every deployed dev service runs gunicorn
+`--preload`, so the thread is singular per replica. A deployment
+replaced mid-backfill kills the thread with its master — the next
+boot's thread resumes, skipping already-applied rows. Set
+`MIGRATIONS_AUTO_APPLY=0` on a
+deployment to opt out for one boot cycle (a known-bad pending revision
+waiting on a fix). Testing boots (the suites) never auto-apply: the
+env gate is `ENV == development` only.
 
-Manual runs are still needed on dev when startup init cannot produce the
-change (e.g. destructive DDL or a Mongo backfill) — follow the manual
-runbook below.
+While a startup apply runs, the admin Migrations view shows its ledger
+rows appear one by one (status reads do not take the advisory lock); a
+management-route apply triggered during a startup apply waits for the
+lock and is refused cleanly if the boot is still applying.
 
 ### Production-style environments (manual runs, admin-UI first)
 
@@ -388,6 +410,7 @@ up to date and `apply` is a no-op on dev. Statuses below verified as of
 | 010_create_access_grants | Postgres (auth) | `access_grants` store (#883/#884), backfilling and retiring `vault_access` | applied (2026-10-10, 1.2s; backfill verified — 48 vault grant rows) | applied — stamped 2026-11-16 (fresh grants seeded directly; nothing to backfill) |
 | 011_create_calendar_table | Postgres (api) | `calendar` table (school calendar, timetable-v2) | applied (self-healed by `campus.api` startup init) | applied 2026-11-16 (232 ms) — created in **campus.api's postgres** (where `campus.api` reads it, dev parity); the standup first created it in the auth DB per this row's pre-#1104 docstring and dropped it again (#1104) |
 | 012_add_apikey_trace_binds | Postgres (audit) | `apikeys.trace_user_id`/`trace_client_id` — nullable TEXT bind columns for #944 trace-read scoping (NULL = unscoped; no backfill wanted) | applied — 003 stamped as the audit-dev baseline + 012 applied 2026-11-17 via the runner over a tcp proxy; dev columns had been added by hand hours earlier, `IF NOT EXISTS` made the re-run a no-op | applied — same path on prod 2026-11-17 (user-authorized one-off tcp proxy); 003 stamped as baseline first (neither audit ledger had been baselined), 154 ms; 5 existing keys, all unscoped |
+| 014_backfill_span_stamps | Postgres (audit) | data-only, idempotent: backfill `tags.producer_id` (from the historical `audit.traces.ingest` event rows) and `tags.queue_ms` (from each span's `X-Request-Start`) onto stored spans (#1243/#1244); no DDL | pending — safe to run before or after the service deploys | pending |
 
 Per-DB ledger baselines (#1104): the **auth** ledger keeps the rows it
 has — its pre-#1104 rows for 001/002/003/011 are residue that

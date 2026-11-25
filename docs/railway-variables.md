@@ -94,6 +94,17 @@ would override them):
   `RAILWAY_ENVIRONMENT`, `RAILWAY_ENVIRONMENT_ID`,
   `RAILWAY_ENVIRONMENT_NAME`, `RAILWAY_SERVICE_NAME`, `RAILWAY_SERVICE_ID`,
   `RAILWAY_STATIC_URL`
+- Deployment/replica identity (fresh values per boot; probed 2026-11-24,
+  #1239): `RAILWAY_DEPLOYMENT_ID`, `RAILWAY_REPLICA_ID` (present even with a
+  single replica), `RAILWAY_REPLICA_INCARNATION` (== the container hostname,
+  `rep-<deployment8>-<uid>-<index>-<n>`), `RAILWAY_REPLICA_REGION`,
+  `RAILWAY_SNAPSHOT_ID`; GitHub-triggered deploys also get
+  `RAILWAY_GIT_COMMIT_SHA` / `RAILWAY_GIT_BRANCH` / `RAILWAY_GIT_AUTHOR` /
+  `RAILWAY_GIT_REPO_NAME` / `RAILWAY_GIT_REPO_OWNER` / `RAILWAY_GIT_COMMIT_MESSAGE`.
+  **No variable exposes the instance count** — count unique AAAA records for
+  `$RAILWAY_PRIVATE_DOMAIN` from inside the deployment, or query GraphQL
+  `deployment(id){ instances { id status } }` from outside (instance `id` ==
+  `RAILWAY_REPLICA_ID`); see the railway-ops skill.
 - Cross-service domain copies: `RAILWAY_SERVICE_<OTHER_SERVICE>_*_URL` —
   derived from every other service's public domain in the environment;
   Railway manages these (deleting a domain cascade-deletes its copies and
@@ -111,7 +122,6 @@ would override them):
 | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | producer key shared with campus.api |
 | `AUDIT_TRACING_ENABLED` | `1` | literal | audit span emission flag |
 | `AUTH_OPERATOR_CLIENT_IDS` | `${{campus-admin.CLIENT_ID}}` | template | operator gate (#854); stored unquoted by Railway's normalizer |
-| `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | dev superadmin nomination — INERT on dev since the 2026-11-24 hardcode: that identity's login is blocked on dev (403) and production derives the super-admin from `WORKSPACE_DOMAIN`; unset anytime, or repoint at a dev-only account |
 | `BASE_URL` | `${{shared.BASE_URL}}` | template | |
 | `CLIENT_ID` | `uid-client-761d9293-f4bf-4e` | literal | auth's own first-party OAuth client (minted by campus.auth; no Railway source) |
 | `CLIENT_SECRET` | `<secret>` | literal | pair of `CLIENT_ID`; rotate via campus CLI clients surface |
@@ -164,15 +174,41 @@ would override them):
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `SECRET_KEY` | `<secret>` | literal | Flask secret; per-service by design (must differ between services) |
 
+### campus-cleanup (cron job)
+
+The scheduled cleanup deployment (`campus.cleanup`, `Dockerfile.cleanup`). Created on development 2026-11-25 (service id `c86b82af`, hourly cron `0 * * * *`, GitHub trigger `github@weekly` with auto-deploy on, restart NEVER, no domain/healthcheck, instance limits 1 vCPU / 2 GB RAM per `docs/cleanup-deployment.md` §Railway setup); production wiring still pending (#1262).
+Batch job: no domain, no healthcheck; Railway cron starts it (≥5-minute
+minimum cadence, `railway cron run` for one-offs). Setup runbook:
+[docs/cleanup-deployment.md](cleanup-deployment.md). Target matrix —
+Railway references resolve per environment:
+
+| Variable | Target value | Kind | Notes |
+|---|---|---|---|
+| `CLEANUP_JOB_AUDIT_POSTGRESDB_URI` | `${{"campus.audit-postgres".DATABASE_URL}}` | template | rate-limit bucket sweep; the `cleanup_runs` ledger home |
+| `CLEANUP_JOB_AUTH_POSTGRESDB_URI` | `${{"campus.auth-postgres".DATABASE_URL}}` | template | future auth-scope jobs |
+| `CLEANUP_JOB_AUTH_MONGODB_URI` | `${{"campus.auth-mongodb-dev".MONGO_URL}}` (prod: `campus.auth-mongodb`) | template | `auth_sessions` + `device_codes` sweeps |
+| `CLEANUP_JOB_AUTH_MONGODB_NAME` | `campus_auth` | literal | the Mongo database name — the backend resolves it separately from the URI (#1262 first-run finding) |
+| `DEPLOY` | `campus.cleanup` | literal | |
+| `ENV` | `${{shared.ENV}}` | template | |
+
 ### campus-gateway
 
-The gateway reads upstreams from Railway-provided `RAILWAY_SERVICE_*_URL`
-copies plus these five literals. No shared/templated values.
+The gateway's nginx template resolves upstreams from per-environment
+literals (private mesh names + ports; flip 2026-11-19 — the
+Railway-provided `RAILWAY_SERVICE_*_URL` public-domain copies exist but
+no longer feed the config). Downstream-app hosts (#1274) follow the same
+pattern, set per environment; where absent, the image's `.invalid` ENV
+placeholders keep the config valid and those paths 502. No shared-layer
+values.
 
 | Variable | Stored value | Kind | Notes |
 |---|---|---|---|
-| `API_PORT` / `AUTH_PORT` / `AUDIT_PORT` | `8080` | literal | internal upstream ports |
-| `PORT` | `8080` | literal | public listen port |
+| `AUTH_HOST` / `API_HOST` / `AUDIT_HOST` | `campus-auth-dev` / `campus-api-dev` / `campus-audit-dev`.railway.internal | literal | core-trio private mesh names (regularized 2026-11-19; not derivable from the dotted service names) |
+| `AUTH_PORT` / `API_PORT` / `AUDIT_PORT` | `8080` | literal | core-trio upstream ports |
+| `TIMETABLE_HOST` / `APPHOST_HOST` / `ADMIN_HOST` / `PROFILE_HOST` / `CLASSROOM_HOST` | `nyxchange-timetable-v2` / `campus-apphost` / `campus-admin` / `campus-profile` / `campus-classroom`.railway.internal | literal | downstream-app mesh names (#1274, dev only — deliberately unset in production, where those paths 502 via the image placeholders); no `-dev` suffix, unlike the core trio |
+| `TIMETABLE_PORT` / `APPHOST_PORT` / `ADMIN_PORT` / `PROFILE_PORT` / `CLASSROOM_PORT` | `8080` | literal | downstream-app upstream ports |
+| `PORT` | `8080` | literal | gateway's own public listen port |
+| `PUBLIC_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` | template | |
 | `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1` | literal | mesh resolver wiring (see deploy/gateway/README.md) |
 
 ### campus-admin
@@ -374,7 +410,7 @@ bucket). Region `sin`, like the rest of the fleet.
 - `SECRET_KEY` — Flask signing secrets, unique per service by design.
 - Audit producer/operator keys (`AUDIT_API_KEY` copies besides the shared one,
   `AUDIT_OPERATOR_API_KEY`, `AUDIT_UI_API_KEY`) — issued by campus.audit's API.
-- Allowlists/emails (`AUTH_SUPER_ADMIN`, `AUDIT_ADMINS`, `AUTH_ADMINS`),
+- Allowlists/emails (`AUDIT_ADMINS`, `AUTH_ADMINS`),
   feature flags, ports, `GUNICORN_CMD_ARGS`, image-init literals on DBs,
   test-account credentials (shared layer).
 - `DEPLOY` on auth/api/audit — equals `RAILWAY_SERVICE_NAME`;
@@ -426,7 +462,6 @@ Service-specific variables:
 | campus.auth | `AUDIT_API_KEY` | `${{shared.AUDIT_API_KEY}}` | template | |
 | campus.auth | `AUDIT_TRACING_ENABLED` | `1` | literal | |
 | campus.auth | `AUTH_OPERATOR_CLIENT_IDS` | `${{"campus-admin".CLIENT_ID}}` | template | stored unquoted by normalizer |
-| campus.auth | `AUTH_SUPER_ADMIN` | `campus-admin@nyjc.edu.sg` | literal | IGNORED on prod (2026-11-24 hardcode: super-admin = `campus-admin@${{campus.auth.WORKSPACE_DOMAIN}}` in code); safe to unset — removed from the boot-gate required list |
 | campus.auth | `CLIENT_ID` | `uid-client-1a20f4a5` | literal | prod first-party client |
 | campus.auth | `CLIENT_SECRET` | `<secret>` | literal | |
 | campus.auth | `DEPLOY` | `campus.auth` | literal | vault label |
@@ -459,8 +494,10 @@ Service-specific variables:
 | campus.audit | `MIGRATION_BACKUP_BUCKET` | `campus-backups-prod` | literal | dedicated backups bucket |
 | campus.audit | `BUCKET_*` (5) | `${{"campus-backups-prod".…}}` | template | default bucket = backups bucket (audit has no app object storage) |
 | campus.audit | `SECRET_KEY` | `<secret>` | literal | |
+| campus-gateway | `AUTH_HOST` / `API_HOST` / `AUDIT_HOST` | prod mesh names (not audited here — superadmin sessions) | literal | required by the current template (2026-11-19 private-mesh flip): the running prod gateway proves they are set; scheme mirrors development with prod's own names |
 | campus-gateway | `API_PORT` / `AUTH_PORT` / `AUDIT_PORT` / `PORT` | `8080` | literal | |
 | campus-gateway | `NGINX_ENTRYPOINT_LOCAL_RESOLVERS` | `1` | literal | |
+| campus-gateway | `TIMETABLE_HOST` / `APPHOST_HOST` / `ADMIN_HOST` / `PROFILE_HOST` / `CLASSROOM_HOST` (+`_PORT`) | (deliberately absent) | — | #1274 downstream routing is dev-only; absent vars fall back to the image's `.invalid` placeholders (paths 502, config stays valid) |
 | campus-admin | `AUDIT_ADMINS` | `campus-admin@nyjc.edu.sg` | literal | differs from dev (no test account in prod) |
 | campus-admin | `AUDIT_API_KEY` / `AUDIT_UI_API_KEY` | `<secret>` | literal | |
 | campus-admin | `AUDIT_TRACING_ENABLED` | `1` | literal | |
@@ -557,3 +594,37 @@ absent from production service names.
   `POSTGRES_PASSWORD` to a self-reference (rendered empty) — caught in
   post-pass verification and corrected from the pre-change dump before any
   redeploy consumed it.
+- **2026-11-24** — `AUTH_SUPER_ADMIN` unset on campus.auth in BOTH
+  environments (the 2026-11-24 superadmin hardcode, PR #1234): production
+  derives the super-admin from `WORKSPACE_DOMAIN` in code and no longer
+  consults the nomination (also dropped from the production boot-gate
+  required list), and on development the hardcoded identity's login is
+  blocked outright, so the stored nomination had been inert. Variable
+  delete does not redeploy: the then-running deployments carry the baked
+  value until their next deploy, by which point the new code is live —
+  no window where a deployment both reads the nomination and runs the
+  old code.
+
+- **2026-11-25** — campus.api gained an OPTIONAL runtime knob,
+  `AUTH_INTROSPECTION_TTL_SECONDS` (PR #1258, the #1248 authenticate
+  cache): authenticate results are cached per credential digest in a
+  bounded per-worker LRU so a multi-span journey introspects its bearer
+  once per TTL instead of once per call (~150–240 ms round trip each).
+  **Unset on every service in both environments** — the inventories
+  above reflect actual stored values, and this knob is deliberately
+  absent from them. Code default is 30 s; `0` disables the cache. Only
+  set it to tune revoke-latency (lower) or cache duration (higher);
+  rejections are never cached, so a revocation is re-observed on every
+  call regardless of TTL.
+
+- **2026-11-25 (#1274)** — campus-gateway (development only) gained the
+  five downstream-app upstream pairs
+  (`TIMETABLE/APPHOST/ADMIN/PROFILE/CLASSROOM_HOST`+`_PORT`), routing the
+  consumer apps under the gateway hostname at the namespaces they serve
+  on their own deployments. The gateway section above was also
+  backfilled with the `AUTH_HOST`/`API_HOST`/`AUDIT_HOST` literals the
+  2026-11-19 private-mesh flip introduced (the inventory had never
+  recorded them). The variables doc's gateway rows in the production
+  section note the deliberate absence of the downstream pair there:
+  unset vars fall back to the Dockerfile's `.invalid` placeholders, so
+  prod's rendered config stays valid and those five paths 502.

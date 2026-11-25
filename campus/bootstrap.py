@@ -137,6 +137,17 @@ REQUIRED_ENV_VARS: dict[str, tuple[str, ...]] = {
         # canonical public origin (#653)
         "PUBLIC_URL",
     ),
+    "campus.cleanup": (
+        # NOT an HTTP service: the cron-scheduled cleanup deployment
+        # (python -m campus.cleanup, Dockerfile.cleanup) reaches several
+        # service databases through per-scope variables, swapped per
+        # scope exactly like the migrations break-glass job selects a
+        # service DB. Setup: docs/cleanup-deployment.md.
+        "CLEANUP_JOB_AUDIT_POSTGRESDB_URI",
+        "CLEANUP_JOB_AUTH_POSTGRESDB_URI",
+        "CLEANUP_JOB_AUTH_MONGODB_URI",
+        "CLEANUP_JOB_AUTH_MONGODB_NAME",
+    ),
 }
 
 

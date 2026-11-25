@@ -295,10 +295,16 @@ stateDiagram-v2
     Bound --> Swept: 10 min TTL
 ```
 
-- Session TTL (10 min) is enforced by the **sweep** job
-  (`POST /auth/v1/sessions/sweep`), not on every read.
+- Session TTL (10 min) is enforced by the **sweep**, not on every
+  read. The scheduled sweep runs on the cleanup deployment
+  (`campus.cleanup.jobs.sweep_auth_sessions`, #1249/#1253);
+  `POST /auth/v1/sessions/sweep` is the same implementation's manual,
+  on-demand trigger for operators and expires live sessions when
+  something invokes it.
 - The access token lives 7 days and is minted together with a refresh
   token (authorization-code exchange and device flow alike). The
+  server does not yet enforce that expiry: an access token keeps
+  authenticating until it is refreshed or revoked (#1254). The
   refresh token rotates on every refresh: `POST /auth/v1/oauth/token`
   with `grant_type=refresh_token` issues a new pair and deletes the
   old record, so refresh tokens are single-use (#678). Refreshing
@@ -430,8 +436,20 @@ CLIs and other input-constrained clients use RFC 8628 instead
    (Google-consent-style, #867) above the Authorize button, and an
    expired or already-used code gets a notice instead of an
    Authorize offer.
+   The page also shows a request-status strip: when the code was
+   requested, how long it stays valid, and a status badge (#1264).
+   When the code's validity limit passes while the page is open, the
+   badge turns into a flashing Expired and Authorize is disabled.
+   That is presentation only; both submit paths re-check the code's
+   state on the server.
 3. Submitting the user code binds `user_id` and marks the device code
-   `authorized`.
+   `authorized`. The page's script posts to
+   `POST /auth/v1/oauth/device/authorize`. Without JavaScript the form
+   posts to `POST /auth/v1/oauth/device` instead, which sends the
+   browser back to the code's page with `status=success`, or
+   `status=error&error_code=…`, in the query string. That redirect
+   target is built from the submitted code; nothing in the request
+   chooses it (#1266).
 4. The CLI polls `POST /auth/v1/oauth/token` with
    `grant_type=urn:ietf:params:oauth:grant-type:device_code` until it
    gets tokens (10 min code TTL, 5 s poll interval). Device-code
@@ -543,7 +561,8 @@ significant (Flask `strict_slashes` default: a missing slash 308s).
    logic lives in `campus/auth/resources/`, routes stay thin — put
    new behavior in the resource layer.
 9. **Auth session TTL is swept, not checked per-read**: a stale
-   session may pass validation until the next sweep.
+   session may pass validation until a sweep runs, and no scheduled
+   caller exists yet (#1253).
 10. **Google consent screens cannot tell you a user's Classroom
     role** (observed 2026-10-07 on dev): the `google.classroom`
     integration scope set — including `classroom.addons.teacher` and

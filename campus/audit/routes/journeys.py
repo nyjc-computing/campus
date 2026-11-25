@@ -25,7 +25,7 @@ bp = flask.Blueprint('audit_journeys', __name__, url_prefix='/journeys')
 
 
 @bp.get("/<journey_id>")
-@audit_events.audit_event("audit.traces.journey")
+@audit_events.audit_event("audit.traces.journey", bodies_on_success=False)
 @decorators.require_scopes("traces:read")
 def get_journey(journey_id: str) -> flask_campus.JsonResponse:
     """List the member traces of one journey, oldest first.

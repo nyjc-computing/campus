@@ -4,8 +4,9 @@ These tests verify that authentication operations emit proper audit events
 to the traces table for security monitoring and compliance.
 
 Audit Events Tested:
-- audit.apikeys.auth.success - Valid API key authentication
 - audit.apikeys.auth.failed - Invalid/missing API key
+- The route event that records a valid key (a successful
+  authentication writes no event of its own, campus#1243)
 
 File: tests/contract/audit/test_audit_auth_events.py
 Issue: #567
@@ -19,8 +20,13 @@ from tests.fixtures import services
 from tests.fixtures.audit_events import get_audit_spans, parse_audit_span_data
 
 
-class TestAuditAuthSuccessEvent(unittest.TestCase):
-    """Contract tests for audit.apikeys.auth.success audit event."""
+class TestAuditAuthSuccessWritesNoEvent(unittest.TestCase):
+    """A successful authentication writes no event of its own (#1243).
+
+    Every authenticated call already gets a route event that carries the
+    calling key, so the per-call audit.apikeys.auth.success row was a
+    second copy of each request. The route event is now the record.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -65,69 +71,34 @@ class TestAuditAuthSuccessEvent(unittest.TestCase):
             with suppress(campus.storage.errors.NotFoundError):
                 traces_storage.delete_by_id(span["id"])
 
-    def test_successful_authentication_emits_audit_event(self):
-        """Successful API key authentication emits audit.apikeys.auth.success event."""
-        # Make authenticated request to protected endpoint
+    def test_successful_authentication_writes_no_auth_success_event(self):
+        """A valid key leaves no audit.apikeys.auth.success row."""
         response = self.client.get(
             "/audit/v1/traces/",
             headers=self.auth_headers
         )
         self.assertEqual(response.status_code, 200)
 
-        # Verify audit event was emitted
-        events = get_audit_spans("audit.apikeys.auth.success")
-        self.assertGreater(len(events), 0, "No auth.success events found")
-
-        # Get the most recent event
-        event = events[0]
-
-        # Verify event structure (TraceSpan with audit event data)
-        self.assertIn("id", event)
-        self.assertIn("started_at", event)
-        self.assertIn("tags", event)
-
-        # Parse and verify event data from tags
-        data = parse_audit_span_data(event)
-        self.assertEqual(data["event_type"], "audit.apikeys.auth.success")
-        self.assertIn("api_key_id", data)
-        self.assertEqual(data["api_key_id"], self.api_key_id)
-        self.assertIn("client_ip", data)
-
-    def test_successful_authentication_includes_api_key_id(self):
-        """Auth success event includes the authenticated API key ID."""
-        # Make authenticated request to protected endpoint
-        response = self.client.get(
-            "/audit/v1/traces/",
-            headers=self.auth_headers
+        self.assertEqual(
+            get_audit_spans("audit.apikeys.auth.success"), [],
+            "auth.success events are no longer written",
         )
-        self.assertEqual(response.status_code, 200)
 
-        # Verify event includes api_key_id
-        events = get_audit_spans("audit.apikeys.auth.success")
-        self.assertGreater(len(events), 0, "No auth.success events found")
+    def test_the_route_event_records_the_api_key_id(self):
+        """The route event carries the authenticated API key ID."""
+        self.client.get("/audit/v1/traces/", headers=self.auth_headers)
 
-        # Get the most recent event
-        event = events[0]
-        data = parse_audit_span_data(event)
-        self.assertEqual(data["api_key_id"], self.api_key_id)
+        events = get_audit_spans("audit.traces.list")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["api_key_id"], self.api_key_id)
 
-    def test_successful_authentication_includes_client_ip(self):
-        """Auth success event includes client IP address."""
-        # Make authenticated request to protected endpoint
-        response = self.client.get(
-            "/audit/v1/traces/",
-            headers=self.auth_headers
-        )
-        self.assertEqual(response.status_code, 200)
+    def test_the_route_event_records_client_ip(self):
+        """The route event includes the client IP address."""
+        self.client.get("/audit/v1/traces/", headers=self.auth_headers)
 
-        # Verify event includes client_ip
-        events = get_audit_spans("audit.apikeys.auth.success")
-        self.assertGreater(len(events), 0)
-
-        data = parse_audit_span_data(events[0])
-        self.assertIn("client_ip", data)
-        # Test client uses localhost/127.0.0.1
-        self.assertIsNotNone(data["client_ip"])
+        events = get_audit_spans("audit.traces.list")
+        self.assertEqual(len(events), 1)
+        self.assertIsNotNone(events[0]["client_ip"])
 
 
 class TestAuditAuthFailedEvent(unittest.TestCase):

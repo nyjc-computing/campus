@@ -11,13 +11,14 @@ for the device authorization flow to work.
 """
 
 import flask
+import werkzeug
 
 import campus.config
 import campus.flask_campus as flask_campus
 import campus.model
 from campus.common import schema
 from campus.common.errors import api_errors, token_errors
-from campus.common.utils import secret, url
+from campus.common.utils import secret, url, utc_time
 
 from .. import authz, get_yapper, scopes
 from ..resources import app_credentials
@@ -99,6 +100,87 @@ def _describe_scope(scope: str) -> dict:
             "description": None,
         }
     return {"scope": scope, "label": scope, "description": None}
+
+
+# Status badge labels for the request strip on the device verification
+# page (#1264). The key is the page's reading of the code's state: a
+# code still "pending" in storage but past its expiry reads "expired".
+_REQUEST_STATE_LABELS = {
+    "pending": "Pending",
+    "expired": "Expired",
+    "already_used": "Already used",
+    "denied": "Denied",
+}
+
+
+def _utc_display(when: schema.DateTime) -> str:
+    """Render a DateTime as the page's no-script fallback (UTC)."""
+    return when.to_datetime().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+def _time_attribute(when: schema.DateTime) -> str:
+    """Render a DateTime for a `<time datetime>` attribute.
+
+    Millisecond precision: the stored timestamps carry microseconds,
+    which some browsers' date parser rejects.
+    """
+    return when.to_datetime().isoformat(timespec="milliseconds")
+
+
+def _describe_request(dc: campus.model.DeviceCode, state: str) -> dict:
+    """Return request-strip fields for the device verification page (#1264).
+
+    The page states when the device code was requested and how long it
+    stays valid. `validity_ms` is the time left on the code as the
+    server measures it at render time, None once the code is no longer
+    pending. The page's script counts that down instead of comparing
+    the browser clock to `expires_at`, so a wrong browser clock can
+    neither expire a live code early nor keep a dead one looking valid.
+    """
+    validity_ms = None
+    if state == "pending":
+        remaining = dc.expires_at.to_datetime() - utc_time.now()
+        validity_ms = round(remaining.total_seconds() * 1000)
+    return {
+        "state": state,
+        "label": _REQUEST_STATE_LABELS[state],
+        "requested_at": _utc_display(dc.created_at),
+        "requested_at_iso": _time_attribute(dc.created_at),
+        "expires_at": _utc_display(dc.expires_at) if dc.expires_at else None,
+        "expires_at_iso": _time_attribute(dc.expires_at) if dc.expires_at else None,
+        "validity_ms": validity_ms,
+    }
+
+
+def _back_to_verification_page(
+    user_code: str | None,
+    error_code: str | None = None,
+) -> werkzeug.Response:
+    """Send the no-JS form fallback back to the verification page (#1266).
+
+    `status=success`, or `status=error` with an `error_code`, drives the
+    page's fallback states. With a code the user lands on its pre-filled
+    page; without one, on the bare form.
+
+    The target is built here from the submitted code and never taken
+    from the request: a client-supplied target is an open redirect, and
+    appending "?status=" to the page's URL put a second "?" on the usual
+    `?user_code=` link, which dropped both the outcome and the code.
+    """
+    if error_code:
+        target = flask.url_for(
+            'auth.oauth.device_verification',
+            user_code=user_code,
+            status="error",
+            error_code=error_code,
+        )
+    else:
+        target = flask.url_for(
+            'auth.oauth.device_verification',
+            user_code=user_code,
+            status="success",
+        )
+    return flask.redirect(target)
 
 
 def _get_oauth_payload() -> dict:
@@ -707,11 +789,28 @@ def device_verification(user_code: str | None = None):
     GET /device?status=success - Shows success state (for no-JS fallback)
     GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
     POST /device - Handles form submission for non-JS clients
+
+    The POST sends the browser back to this page with the outcome in
+    the query string: `/device?user_code=<code>&status=success` after
+    an approval, or
+    `/device?user_code=<code>&status=error&error_code=<reason>` after
+    a refusal, where `<reason>` is `invalid_code`, `expired`,
+    `already_used` or `unknown`. A malformed code returns to the bare
+    page, `/device?status=error&error_code=invalid_code`. The target
+    is built from the submitted code; nothing in the request chooses
+    it (#1266).
+
+    For a pre-filled code the page also shows a request-status strip
+    (#1264): when the code was requested and how long it stays valid,
+    next to a status badge. The badge reads Expired for a code past its
+    validity limit; when the limit passes while the page is open, the
+    page's script flips the badge to it and disables Authorize. That is
+    presentation only: both submit paths re-check the code's state.
     """
     import html
     import re
 
-    from flask import redirect, render_template_string, request, session, url_for
+    from flask import render_template_string, request, session, url_for
 
     # Accept the user code from both the path and the query string:
     # verification_uri_complete is "/device?user_code=XXXX-XXXX", and the
@@ -762,32 +861,35 @@ def device_verification(user_code: str | None = None):
     # Handle POST for non-JS fallback
     if request.method == "POST":
         user_code_form = request.form.get('user_code', '').strip().upper()
-        redirect_url = request.form.get(
-            'redirect_url',
-            url.full_url_for('auth.oauth.device_verification')
+        # Validate user code format. A well-formed code sends the user
+        # back to its pre-filled page, a malformed one to the bare form.
+        # The pattern is the one real codes are generated with, so a
+        # code that fails it could never have matched a stored one.
+        page_code = (
+            user_code_form
+            if re.fullmatch(r"[A-Z0-9]{4}-[A-Z0-9]{4}", user_code_form)
+            else None
         )
-
-        # Validate user code format
-        if not user_code_form or len(user_code_form) != 9 or user_code_form[4] != '-':
-            return redirect(f"{redirect_url}?status=error&error_code=invalid_code")
+        if page_code is None:
+            return _back_to_verification_page(None, "invalid_code")
 
         # Try to authorize the device code
         try:
             dc = device_code_resource.get_by_user_code(user_code_form)
             if dc.state != "pending":
                 error_code = "expired" if dc.state == "expired" else "already_used"
-                return redirect(f"{redirect_url}?status=error&error_code={error_code}")
+                return _back_to_verification_page(page_code, error_code)
 
             device_code_resource.update(dc.id, user_id=str(user_id), state="authorized")
             get_yapper().emit('campus.oauth.device_authorize_submit', {
                 "device_code_id": str(dc.id),
                 "user_id": str(user_id),
             })
-            return redirect(f"{redirect_url}?status=success")
+            return _back_to_verification_page(page_code)
         except api_errors.NotFoundError:
-            return redirect(f"{redirect_url}?status=error&error_code=invalid_code")
+            return _back_to_verification_page(page_code, "invalid_code")
         except Exception:
-            return redirect(f"{redirect_url}?status=error&error_code=unknown")
+            return _back_to_verification_page(page_code, "unknown")
 
     # Check for query parameters for non-JS redirect states
     status = request.args.get('status')
@@ -818,10 +920,12 @@ def device_verification(user_code: str | None = None):
     consent_scopes: list[dict] | None = None
     consent_client_name: str | None = None
     consent_notice: str | None = None
+    request_status: dict | None = None
     if user_code:
         dc = device_code_resource.peek_by_user_code(user_code)
         if dc is not None:
             if dc.state == "pending" and not dc.is_expired():
+                request_state = "pending"
                 consent_scopes = [_describe_scope(s) for s in dc.scopes]
                 try:
                     consent_client_name = (
@@ -830,11 +934,15 @@ def device_verification(user_code: str | None = None):
                 except api_errors.NotFoundError:
                     consent_client_name = None
             elif dc.state == "denied":
+                request_state = "denied"
                 consent_notice = error_messages['denied']
             elif dc.state == "expired" or dc.is_expired():
+                request_state = "expired"
                 consent_notice = error_messages['expired']
             else:
+                request_state = "already_used"
                 consent_notice = error_messages['already_used']
+            request_status = _describe_request(dc, request_state)
 
     template = """
     <!DOCTYPE html>
@@ -1031,6 +1139,57 @@ def device_verification(user_code: str | None = None):
                 font-size: 12px;
                 line-height: 1.5;
             }
+            .request-status {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 6px 12px;
+                background: #f8f9ff;
+                border: 1px solid #d5dcf5;
+                border-radius: 8px;
+                padding: 10px 16px;
+                margin-bottom: 20px;
+                font-size: 13px;
+                color: #555;
+                line-height: 1.5;
+            }
+            .request-status time {
+                color: #333;
+                font-variant-numeric: tabular-nums;
+            }
+            .badge {
+                display: inline-block;
+                padding: 2px 10px;
+                border-radius: 999px;
+                font-size: 12px;
+                font-weight: 600;
+                white-space: nowrap;
+            }
+            .badge-pending {
+                background: #e3f6eb;
+                color: #1b7f4b;
+            }
+            .badge-already_used,
+            .badge-denied {
+                background: #eceef3;
+                color: #555;
+            }
+            .badge-expired {
+                background: #fee;
+                color: #c33;
+                animation: badge-flash 1s steps(1, end) infinite;
+            }
+            @keyframes badge-flash {
+                0%, 100% { background: #fee; color: #c33; }
+                50% { background: #c33; color: #fff; }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .badge-expired {
+                    animation: none;
+                    background: #c33;
+                    color: #fff;
+                }
+            }
             .spinner {
                 display: inline-block;
                 width: 16px;
@@ -1152,6 +1311,21 @@ def device_verification(user_code: str | None = None):
                 </div>
                 {% endif %}
 
+                {% if request_status %}
+                {% set req = request_status %}
+                <div class="request-status" id="requestStatus">
+                    <span id="statusBadge" class="badge badge-{{ req.state }}" data-state="{{ req.state }}"
+                        {% if req.validity_ms is not none %}data-validity-ms="{{ req.validity_ms }}"{% endif %}
+                        role="status">{{ req.label }}</span>
+                    <span class="request-times">
+                        Requested <time datetime="{{ req.requested_at_iso }}">{{ req.requested_at }}</time>
+                        {% if req.expires_at %}
+                        · valid until <time datetime="{{ req.expires_at_iso }}">{{ req.expires_at }}</time>
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
+
                 {% if consent_scopes %}
                 <div class="scopes" role="group" aria-label="Requested permissions">
                     <div class="scopes-title">
@@ -1171,9 +1345,9 @@ def device_verification(user_code: str | None = None):
                 </div>
                 {% endif %}
 
-                {% if consent_notice %}
-                <div class="alert error show" role="alert">{{ consent_notice }}</div>
-                {% endif %}
+                <div id="consentNotice" class="alert error{{ ' show' if consent_notice else '' }}" role="alert">
+                    {{ consent_notice or '' }}
+                </div>
 
                 <div id="errorAlert" class="alert error"></div>
                 <div id="successAlert" class="alert success"></div>
@@ -1199,7 +1373,6 @@ def device_verification(user_code: str | None = None):
                             required
                             {% if safe_user_code %}value="{{ safe_user_code }}"{% endif %}
                         >
-                        <input type="hidden" name="redirect_url" value="{{ request.url }}">
                     </div>
                     <button type="submit" class="btn" id="submitBtn"{% if consent_notice %} disabled{% endif %}>
                         Authorize
@@ -1218,6 +1391,7 @@ def device_verification(user_code: str | None = None):
             const submitBtn = document.getElementById('submitBtn');
             const errorAlert = document.getElementById('errorAlert');
             const successAlert = document.getElementById('successAlert');
+            const consentNotice = document.getElementById('consentNotice');
             const formView = document.getElementById('formView');
             const successView = document.getElementById('successView');
             const errorView = document.getElementById('errorView');
@@ -1302,12 +1476,12 @@ def device_verification(user_code: str | None = None):
                     } else {
                         const errorData = await authResponse.json();
                         handleError(errorData);
-                        submitBtn.disabled = false;
+                        submitBtn.disabled = isRequestExpired();
                         submitBtn.innerHTML = 'Authorize';
                     }
                 } catch (err) {
                     showAlert('error', errorMessages.network_error);
-                    submitBtn.disabled = false;
+                    submitBtn.disabled = isRequestExpired();
                     submitBtn.innerHTML = 'Authorize';
                 }
             }
@@ -1427,6 +1601,53 @@ def device_verification(user_code: str | None = None):
                 if (errorCode === 'expired') title = 'Code Expired';
                 showErrorState(title, message);
             }
+
+            // Request times are rendered in UTC for the no-script case;
+            // show them in the browser's time zone instead.
+            document.querySelectorAll('#requestStatus time').forEach(function(el) {
+                const local = new Date(el.getAttribute('datetime'));
+                if (!Number.isNaN(local.getTime())) {
+                    el.textContent = local.toLocaleString();
+                }
+            });
+
+            // Flip the status badge to Expired once the code's validity limit
+            // passes while the page is open. The time left is the server's
+            // measurement at render (data-validity-ms), not the browser clock
+            // against expires_at: a wrong clock must not expire a live code
+            // early or keep a dead one looking valid. Presentation only; both
+            // submit paths re-check the code's state on the server.
+            const statusBadge = document.getElementById('statusBadge');
+            const validityMs = statusBadge ? Number(statusBadge.dataset.validityMs) : NaN;
+
+            function isRequestExpired() {
+                return !!statusBadge && statusBadge.dataset.state === 'expired';
+            }
+
+            function markRequestExpired() {
+                statusBadge.textContent = 'Expired';
+                statusBadge.classList.replace('badge-pending', 'badge-expired');
+                statusBadge.dataset.state = 'expired';
+                consentNotice.textContent = errorMessages.expired;
+                consentNotice.classList.add('show');
+                submitBtn.disabled = true;
+            }
+
+            if (statusBadge && !isRequestExpired() && Number.isFinite(validityMs)) {
+                const deadline = Date.now() + validityMs;
+                const checkExpiry = function() {
+                    if (Date.now() < deadline) return;
+                    document.removeEventListener('visibilitychange', checkExpiry);
+                    // Nothing to flag once the request went through
+                    if (successView.classList.contains('hidden')) {
+                        markRequestExpired();
+                    }
+                };
+                // One timer is enough in the foreground; background tabs
+                // throttle timers, so re-check when the page is seen again.
+                setTimeout(checkExpiry, validityMs);
+                document.addEventListener('visibilitychange', checkExpiry);
+            }
         </script>
     </body>
     </html>
@@ -1447,6 +1668,7 @@ def device_verification(user_code: str | None = None):
         consent_scopes=consent_scopes,
         consent_client_name=consent_client_name,
         consent_notice=consent_notice,
+        request_status=request_status,
     )
 
 

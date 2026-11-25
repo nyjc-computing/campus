@@ -51,15 +51,12 @@ bucket_storage = campus.storage.tables.get_db("rate_limit_buckets")
 # tunes this via AUDIT_RATE_LIMIT_PER_MINUTE (#831).
 DEFAULT_RATE_LIMIT_PER_MINUTE = 600
 
-# A bucket idle for this long is deleted opportunistically. Refill
-# math treats a long-idle bucket as full regardless, so this is
-# hygiene only, not correctness.
+# A bucket idle for this long is stale: refill math treats a
+# long-idle bucket as full regardless, so sweeping it is hygiene only,
+# not correctness. The sweep runs on the cleanup deployment
+# (campus.cleanup.jobs.sweep_rate_limit_buckets), never on this
+# module — scheduled work must not touch the app services (#1249).
 BUCKET_TTL_SECONDS = 3600.0
-
-# How often (at most) stale buckets are swept, per worker.
-CLEANUP_INTERVAL_SECONDS = 3600.0
-
-_last_cleanup = 0.0
 
 
 def get_rate_limit_per_minute() -> int:
@@ -136,7 +133,6 @@ def consume_for_spans(
         the whole batch is allowed; retry_after is 0 unless denied.
     """
     now = time.time()
-    _maybe_cleanup(now)
 
     bucket_counts: dict[str, int] = {}
     for span in spans:
@@ -230,20 +226,6 @@ def _get_row(key: str) -> dict | None:
     """Fetch one bucket row, or None when the bucket is new."""
     rows = bucket_storage.get_matching({"id": key})
     return rows[0] if rows else None
-
-
-def _maybe_cleanup(now: float) -> None:
-    """Opportunistically sweep stale buckets, at most once per hour."""
-    global _last_cleanup
-    if now - _last_cleanup < CLEANUP_INTERVAL_SECONDS:
-        return
-    _last_cleanup = now
-    try:
-        bucket_storage.delete_matching({
-            "last_refill": campus.storage.lt(now - BUCKET_TTL_SECONDS),
-        })
-    except Exception:
-        logger.exception("rate limit bucket cleanup failed")
 
 
 def init_storage() -> None:

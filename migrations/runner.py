@@ -89,8 +89,15 @@ warn_if_pending() from main.create_app — one WARNING line naming every
 revision targeting THAT service's DB which the service's own ledger
 does not record as applied or historical (the #1104 scoping: api/audit
 boots used to find no ledger at all and warn about nothing). The check
-is fail-open (an unreachable ledger never blocks boot) and never runs
-anything: migrations stay manual, never auto-run from Campus apps.
+is fail-open (an unreachable ledger never blocks boot). Production
+migrations stay manual, never auto-run from Campus apps. Development
+is different since #1256: create_app spawns the service DB's pending
+migrations onto a background thread (auto_apply_in_background —
+fail-open, loud, same advisory lock), so dev deployments self-heal
+the ledger without delaying the first /health answer (#1263: a
+synchronous apply inside the gate was killed by Railway's 10 s
+healthcheck and the migration could never finish); testing boots are
+excluded by the env gate.
 
 The `_migrations` DDL deliberately does not go through
 PostgreSQLTable.init_from_schema: that entry point is production-blocked,
@@ -105,6 +112,7 @@ import logging
 import re
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -188,6 +196,20 @@ PENDING_WARN_ENVS = ("production",)
 # #1167: fail-closed production boot gate — set on production app
 # services only; unset on dev/test, where boot behavior is unchanged.
 MIGRATIONS_ENFORCED_ENVVAR = "MIGRATIONS_ENFORCED"
+
+# #1256: development deployments apply their own pending migrations at
+# startup, before the boot gate. Development only: production keeps
+# the operator-driven loop (the gate refuses to boot over pending
+# migrations; it never runs them), and testing boots — the test
+# suites — must never touch a real ledger.
+AUTO_APPLY_ENVS = ("development",)
+
+# Opt-out for one deployment while a known-bad pending revision waits
+# on a fix: set MIGRATIONS_AUTO_APPLY to one of these (case-insensitive)
+# and the startup auto-apply is skipped for that boot; the pending
+# check reverts to warn-only.
+MIGRATIONS_AUTO_APPLY_ENVVAR = "MIGRATIONS_AUTO_APPLY"
+AUTO_APPLY_OFF_VALUES = ("0", "false", "no", "off")
 
 
 @dataclass(frozen=True)
@@ -599,6 +621,163 @@ def hash_mismatches(
     return mismatches
 
 
+def auto_apply_pending(env_name: str | None = None,
+                       migrations_dir: Path | None = None,
+                       db: str | None = None) -> list[str]:
+    """Apply this service's pending migrations at startup on development (#1256).
+
+    boot_gate calls this before warn_if_pending. On development — and
+    nowhere else — a deployment brings its own service DB's ledger up
+    to date before anything reads it: schema migrations and data
+    backfills alike, which is what the protocol doc already expects of
+    dev ("the expectation is that migrations on development run by
+    themselves"). The scope is the DEPLOY-derived service DB, the same
+    one warn_if_pending reads. The runner's advisory lock makes two
+    replicas starting together converge — one applies, the other waits
+    up to APPLY_LOCK_WAIT_SECONDS and then boots over an up-to-date
+    ledger — and a management-route apply or the break-glass job
+    running at the same time simply delays the boot, never interleaves.
+
+    Fail-open like the pending check, but loud. A migration that
+    raises is recorded FAILED and logged at ERROR (later migrations
+    stay pending; the next boot retries). An unreachable ledger or any
+    other infrastructure error logs a WARNING and the boot continues.
+    A hash-guard mismatch skips the auto-apply entirely: the
+    immutability guard is never bypassed implicitly —
+    --allow-hash-mismatch stays a conscious manual act.
+
+    Returns the revisions applied ([] when none ran: not development,
+    opted out via MIGRATIONS_AUTO_APPLY, nothing pending, skipped, or
+    failed).
+    """
+    if env_name is None:
+        env_name = env.ENV
+    if env_name not in AUTO_APPLY_ENVS:
+        return []
+    off = env.get(MIGRATIONS_AUTO_APPLY_ENVVAR, "").strip().lower()
+    if off in AUTO_APPLY_OFF_VALUES:
+        logger.debug("startup auto-apply disabled by %s=%s",
+                     MIGRATIONS_AUTO_APPLY_ENVVAR, off)
+        return []
+    if db is None:
+        db = DEPLOY_TO_TARGET_DB.get(env.get("DEPLOY", "") or "",
+                                     DEFAULT_TARGET_DB)
+    applied: list[str] = []
+    try:
+        all_files = discover_migration_files(migrations_dir or MIGRATIONS_DIR)
+        files = filter_files_by_db(all_files, db)
+        conn = _connect()
+        try:
+            ensure(conn)
+            if not _acquire_apply_lock(conn):
+                logger.warning(
+                    "startup auto-apply: another migration run holds the "
+                    "advisory lock (waited %.0fs) — nothing applied this "
+                    "boot; that run covers the same ledger",
+                    APPLY_LOCK_WAIT_SECONDS,
+                )
+                return applied
+            try:
+                rows = _fetch_ledger_rows(conn)
+                mismatches = hash_mismatches(files, rows)
+                if mismatches:
+                    logger.warning(
+                        "startup auto-apply skipped: %d applied migration "
+                        "file(s) changed since application (%s) — run "
+                        "`python migrations/runner.py apply --db %s "
+                        "--allow-hash-mismatch` consciously",
+                        len(mismatches),
+                        ", ".join(f.revision for f, _, _ in mismatches),
+                        db,
+                    )
+                    return applied
+                targets = pending_for_apply(files, rows)
+                for file in targets:
+                    started = time.perf_counter()
+                    try:
+                        module = load_migration(file)
+                        run_upgrade(module, file)
+                    except Exception as e:  # noqa: BLE001 - recorded, then fail-open
+                        error = f"{type(e).__name__}: {e}"
+                        duration_ms = round(
+                            (time.perf_counter() - started) * 1000)
+                        _upsert_row(conn, file, FAILED, error=error,
+                                    duration_ms=duration_ms)
+                        logger.error(
+                            "startup auto-apply FAILED on %s (%s): %s — "
+                            "recorded; %d later migration(s) left pending; "
+                            "boot continues, the next boot retries",
+                            file.revision, file.filename, error,
+                            len(targets) - len(applied) - 1,
+                        )
+                        return applied
+                    else:
+                        duration_ms = round(
+                            (time.perf_counter() - started) * 1000)
+                        _upsert_row(conn, file, APPLIED,
+                                    duration_ms=duration_ms)
+                        applied.append(file.revision)
+                        logger.info("startup auto-applied %s (%s, %d ms)",
+                                    file.revision, file.filename, duration_ms)
+                if applied:
+                    logger.info("startup auto-apply: %d migration(s) "
+                                "applied to %s", len(applied), db)
+                return applied
+            finally:
+                _release_apply_lock(conn)
+        finally:
+            conn.close()
+    except Exception as e:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
+        logger.warning(
+            "startup auto-apply skipped (%s: %s) — boot continues; run "
+            "`python migrations/runner.py --db %s apply` in this "
+            "service's context to apply manually",
+            type(e).__name__, e, db,
+        )
+        return applied
+
+
+def auto_apply_in_background() -> threading.Thread | None:
+    """Spawn the startup auto-apply on a daemon thread (#1256, #1263).
+
+    main.create_app calls this after boot_gate(). The synchronous
+    version inside the gate delayed the first /health answer by the
+    whole backfill, and Railway's 10 s healthcheck killed exactly the
+    deployments that had real work to do — a failed deployment never
+    re-boots, so the migration could never complete (#1263). Behind a
+    healthy deployment the same fail-open apply converges: every job
+    is idempotent, and the advisory lock still serialises replicas and
+    retries.
+
+    Every deployed dev service runs gunicorn --preload, so
+    create_app executes once in the master: this thread is singular
+    per replica and workers fork without it. A deployment being
+    replaced mid-backfill kills the thread with the master; the next
+    boot's thread resumes (skipping already-applied rows).
+
+    Returns the started thread, or None when there is nothing to
+    spawn: outside development, opted out via MIGRATIONS_AUTO_APPLY,
+    or when the runner's imports are unavailable. The env checks run
+    synchronously so a opted-out boot spawns no thread at all;
+    auto_apply_pending re-checks them inside the thread.
+    """
+    if env.ENV not in AUTO_APPLY_ENVS:
+        return None
+    off = env.get(MIGRATIONS_AUTO_APPLY_ENVVAR, "").strip().lower()
+    if off in AUTO_APPLY_OFF_VALUES:
+        logger.debug("startup auto-apply disabled by %s=%s",
+                     MIGRATIONS_AUTO_APPLY_ENVVAR, off)
+        return None
+    worker = threading.Thread(
+        target=auto_apply_pending,
+        name="migrations-auto-apply",
+        daemon=True,
+    )
+    worker.start()
+    logger.debug("startup auto-apply running in the background")
+    return worker
+
+
 def warn_if_pending(env_name: str | None = None,
                     migrations_dir: Path | None = None,
                     db: str | None = None) -> list[str]:
@@ -682,9 +861,15 @@ def boot_gate() -> list[str]:
     previous deployment live — an out-of-order release merge
     self-heals once the pending migrations are applied and the service
     is redeployed. The gate never runs anything (apps never auto-run
-    migrations), and ledger failures stay fail-open via
+    migrations synchronously), and ledger failures stay fail-open via
     warn_if_pending: an unreachable ledger can warn, never block boot
     on its own. With the var unset (dev/test) the raise is unreachable.
+
+    The development auto-apply (#1256) does NOT run here: run
+    auto_apply_in_background() from create_app after the gate — a
+    synchronous call delayed the first /health by the whole backfill
+    and Railway's healthcheck killed exactly the deployments with real
+    work to do (#1263).
 
     Returns the outstanding revisions ([] outside production-style
     envs, when clean, or when the ledger is unreachable).

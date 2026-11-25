@@ -40,14 +40,22 @@ Campus core — one Flask app per service, all built from this repo with
 |---|---|---|---|
 | campus.auth | campus.auth | campusauth-development.up.railway.app | gunicorn, 2 workers |
 | campus.api | campus.api | campusapi-development.up.railway.app | gunicorn |
-| campus.audit | campus.audit | campusaudit-development.up.railway.app | gunicorn; owns the audit web UI |
+| campus.audit | campus.audit | campusaudit-development.up.railway.app | gunicorn; API only — the audit web UI retired to campus-admin (audit's `/audit/*` UI paths 302 to admin's own domain) |
 | campus-gateway | `deploy/gateway/` nginx | campus-development.up.railway.app | unified host; see below |
 | campus.vault | campus.vault | — | secrets vault (shared across envs) |
 
 Backing stores: `campus.auth-postgres`, `campus.auth-mongodb`,
 `campus.api-postgres`, `campus.api-mongodb`, `campus.audit-postgres`
-(Railway images). Other project services (campus-classroom, campus-admin,
-campus-profile, …) deploy from their own repos into the same environment.
+(Railway images). Downstream consumer apps deploy from their own repos
+into the same environment:
+
+| Service | Public domain | Own namespace | Gateway path (#1274) |
+|---|---|---|---|
+| campus-admin | campus-admin-development.up.railway.app | `/admin/` (+ root portal, `/audit/` UI) | `/admin/*` |
+| campus-apphost | campus-apphost-development.up.railway.app | `/apps/` | `/apps/*` |
+| campus-classroom | campus-classroom-development.up.railway.app | `/classroom/` | `/classroom/*` |
+| campus-profile | campus-profile-development.up.railway.app | `/profile/` | `/profile/*` |
+| nyxchange-timetable-v2 | nyxchange-timetable-v2-development.up.railway.app | `/timetable/` | `/timetable/*` |
 
 Base URLs for inter-service clients are registered in
 `campus/config.py` (`BASE_URLS`) and consumed via `get_base_url()`.
@@ -58,21 +66,29 @@ Base URLs for inter-service clients are registered in
 and dispatches by path prefix:
 
 ```
-/integrations/, /auth/  → campus-auth.railway.internal:8080    (campus.auth)
-/api/                   → campus-api.railway.internal:8080     (campus.api)
-/audit/                 → campusaudit.railway.internal:8080    (campus.audit)
+/integrations/, /auth/  → campus-auth-dev.railway.internal:8080    (campus.auth)
+/api/                   → campus-api-dev.railway.internal:8080     (campus.api)
+/audit/                 → campus-audit-dev.railway.internal:8080   (campus.audit)
+/timetable/             → nyxchange-timetable-v2.railway.internal  (#1274)
+/apps/                  → campus-apphost.railway.internal          (#1274)
+/admin/                 → campus-admin.railway.internal            (#1274)
+/profile/               → campus-profile.railway.internal          (#1274)
+/classroom/             → campus-classroom.railway.internal        (#1274)
 /health                 → 200 "ok"        (gateway-owned)
 /                       → 302 /audit/     (gateway-owned)
 ```
 
 Upstreams resolve via the Railway mesh DNS on every request (nginx
-`resolver … valid=10s`), so redeploys of backends need no gateway change.
-The gateway is deployed from `deploy/gateway/` in this repo (rootDirectory +
-watch patterns scope its builds). The gateway is LIVE and dispatching to
-all three services on dev (end-to-end smoke green 2026-10-30); the
-per-service domains above remain the primary entrypoints until the
-single-hostname cutover tracked on issue #995 (`PUBLIC_PREFIX`,
-`SESSION_COOKIE_NAMES` prerequisites shipped in PR #996).
+`resolver … valid=10s`), so redeploys of backends need no gateway change;
+each app's mesh name is set per environment as a `*_HOST` variable on the
+gateway service. The gateway is deployed from `deploy/gateway/` in this
+repo (rootDirectory + watch patterns scope its builds). The gateway is
+LIVE: the core trio since 2026-10-30 (end-to-end smoke green), the five
+downstream apps since 2026-11-25 (#1274, dev only — production hasn't
+opted any in, where their paths 502 harmlessly). The per-service domains
+above remain the primary entrypoints until the single-hostname cutover
+tracked on issue #995 (`PUBLIC_PREFIX`, `SESSION_COOKIE_NAMES`
+prerequisites shipped in PR #996).
 
 ## Private networking rules (must-follow for every deployment)
 
@@ -81,7 +97,13 @@ Railway's private network (the `*.railway.internal` mesh) is **IPv6-only**:
 - Services that accept mesh traffic must listen on IPv6 — gunicorn
   `--bind [::]:$PORT` (dual-stack; public IPv4 keeps working), MongoDB
   `mongod --ipv6 --bind_ip ::,0.0.0.0`. An app bound only to `0.0.0.0`
-  rejects mesh connections.
+  rejects mesh connections. The downstream consumer apps shipped
+  `0.0.0.0` binds (their Procfiles/instance commands predate this rule)
+  and were unreachable over the mesh until 2026-11-25, when their dev
+  instances got dual-stack `startCommand` overrides (#1274) — public
+  IPv4 kept working throughout. Their repos still define `0.0.0.0`
+  binds (upstream issues filed), and the production instances have not
+  been touched (the prod gateway doesn't route them).
 - Cross-service calls use `<name>.railway.internal:<port>` names
   (e.g. `campus.auth` → `auth-postgres.railway.internal:5432`); names are
   not mechanically derivable from service names, check the dashboard/API.
@@ -90,6 +112,75 @@ Railway's private network (the `*.railway.internal` mesh) is **IPv6-only**:
 - Postgres/MongoDB URIs for each service live in its Railway variables
   (`MONGODB_URI`, `POSTGRESDB_URI`, …); some one-off tooling uses the public
   TCP proxy instead (e.g. audit-postgres from a workstation).
+
+## In-deployment observability
+
+What a deployment can measure about itself (probed empirically 2026-11-24,
+#1239 — recipes and traps live in the railway-ops skill):
+
+- **Every replica is a dedicated microVM** (boot log: "Booting VM for
+  replica N"; kernel `6.18.60-railway`), sized to the service's instance
+  limits. The defaults are generous — 32 vCPU / 32 GB / pid limit 1000 —
+  and the guest sees its entitlement directly: `nproc` and
+  `os.cpu_count()` report the vCPU limit, `/proc/meminfo` reports the
+  memory limit. Worker sizing off `os.cpu_count()` is therefore
+  entitlement-correct, but a service with no limits set looks like a
+  32-core machine.
+- **CPU%**: sample `/sys/fs/cgroup/cpu.stat` and diff `usage_usec` against
+  wall time; `nr_throttled` / `throttled_usec` double as a CPU-starvation
+  signal. The other cgroup files (`cpu.max`, `memory.max` / `memory.current` /
+  `memory.peak`, `pids.*`) are **empty** — Railway sizes the VM instead of
+  enforcing cgroup quotas, so the quota-denominator question doesn't arise.
+- **RAM**: `/proc/meminfo` `MemAvailable` (VM headroom),
+  `/proc/self/status` `VmRSS` (process), `/sys/fs/cgroup/memory.stat`
+  (anon/file breakdown). psutil is not in the fleet images — parse the
+  files.
+- **Instance identity and count**: `RAILWAY_REPLICA_ID` names the replica;
+  no variable exposes the count. From inside, resolve
+  `$RAILWAY_PRIVATE_DOMAIN` — the mesh DNS returns one AAAA record per
+  live replica. From outside, GraphQL `deployment(id){ instances { id
+  status } }` lists them, and instance `id` == the in-guest
+  `RAILWAY_REPLICA_ID`.
+- **Scaling replicas** (e.g. for the multi-region failover pattern) needs
+  `numReplicas` AND `multiRegionConfig.<region>.numReplicas` set to the
+  same value — the per-region entry (default 1) silently overrides the
+  top-level field. Recipe in the railway-ops skill.
+- **Request arrival time**: Railway's edge stamps every public request with
+  `X-Request-Start` — Unix milliseconds for when the request was received
+  ([Specs & Limits](https://docs.railway.com/networking/public-networking/specs-and-limits)).
+  It is present on requests to the services' own domains as well. The
+  gateway passes it through; never stamp it there, because
+  `proxy_set_header` would overwrite the edge's earlier value (#1243). The
+  gap between that stamp and a service's first line of code is the queue
+  wait that WSGI cannot see by itself. A development sample on 2026-11-24
+  put it at 5–7 ms on campus.auth and campus-admin and at about 110 ms on
+  campus.audit (#1245); clock skew between the edge and the VM is part of
+  the measurement.
+
+## Sleep: outbound traffic keeps a service awake
+
+Railway's serverless deployments sleep on **outbound** traffic, not CPU:
+"Inactivity is based on the detection of any outbound packets, which could
+include network requests, database connections, or even NTP." A service is
+treated as inactive 5 minutes after its last packet and, because
+inactivity is sampled, sleeps somewhere between 5 and 10 minutes after it.
+Inbound traffic from the internet or from another service in the same
+project wakes it, and the first request to a slept service may get a 502
+([Deployments → Serverless](https://docs.railway.com/deployments/serverless)).
+
+The rule that follows: **no outbound packets except while serving an
+inbound request.** A timer may compute, sample and buffer locally; it must
+not send. A heartbeat thread, a connection pool with keep-alives, or a
+cron that pings a service every minute keeps it awake for good. Periodic
+work belongs in a Railway cron job, which starts on a schedule, runs and
+exits, or on the request path — never on a timer that sends (#1249).
+
+The fleet's scheduled work lives in exactly one place: the
+**campus-cleanup deployment** (`campus.cleanup`, built by
+`Dockerfile.cleanup`), a cron-scheduled batch service that starts,
+runs every registered cleanup job against the service databases
+directly, and exits — it never calls the app services, so it wakes
+nothing. Runbook: `docs/cleanup-deployment.md`.
 
 ## Build & runtime configuration
 

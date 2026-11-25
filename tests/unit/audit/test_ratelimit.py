@@ -9,6 +9,7 @@ Issue: #831 (Phase 3 of #538)
 """
 
 import unittest
+from unittest import mock
 
 RATE_TABLE = "rate_limit_buckets"
 
@@ -236,7 +237,9 @@ class TestTokenBucket(unittest.TestCase):
 
 
 class TestBucketCleanup(unittest.TestCase):
-    """Stale buckets are swept opportunistically."""
+    """Stale buckets are swept by the cleanup deployment
+    (campus.cleanup.jobs.sweep_rate_limit_buckets), never on the
+    ingest path (#1249)."""
 
     @classmethod
     def setUpClass(cls):
@@ -247,43 +250,63 @@ class TestBucketCleanup(unittest.TestCase):
 
     def setUp(self):
         self.ratelimit.bucket_storage.delete_matching({})
-        self.ratelimit._last_cleanup = 0.0
 
-    def test_stale_bucket_removed(self):
+    def _sweep(self, now):
+        from campus.cleanup import jobs
+
+        return jobs.sweep_rate_limit_buckets(now=now)
+
+    def test_stale_bucket_removed_and_counted(self):
         rl = self.ratelimit
         rl.bucket_storage.insert_one({
             "id": "user=old", "tokens": 1.0, "last_refill": 0.0,
         })
-        rl._maybe_cleanup(now=rl.BUCKET_TTL_SECONDS + 1.0)
-        rows = rl.bucket_storage.get_matching({"id": "user=old"})
-        self.assertEqual(rows, [])
+        deleted = self._sweep(rl.BUCKET_TTL_SECONDS + 1.0)
+        self.assertEqual(deleted, 1)
+        self.assertEqual(
+            rl.bucket_storage.get_matching({"id": "user=old"}), []
+        )
 
     def test_fresh_bucket_kept(self):
         rl = self.ratelimit
         rl.bucket_storage.insert_one({
             "id": "user=new", "tokens": 1.0, "last_refill": 1000.0,
         })
-        rl._maybe_cleanup(now=1001.0)
-        rows = rl.bucket_storage.get_matching({"id": "user=new"})
-        self.assertEqual(len(rows), 1)
+        deleted = self._sweep(1001.0)
+        self.assertEqual(deleted, 0)
+        self.assertEqual(
+            len(rl.bucket_storage.get_matching({"id": "user=new"})), 1
+        )
 
-    def test_cleanup_gated_by_interval(self):
+    def test_ttl_boundary_keeps_bucket(self):
+        """A bucket exactly at the TTL is not yet stale (strict lt)."""
         rl = self.ratelimit
         rl.bucket_storage.insert_one({
-            "id": "user=old", "tokens": 1.0, "last_refill": 0.0,
+            "id": "user=edge", "tokens": 1.0, "last_refill": 0.0,
         })
-        # First call marks the sweep time but the row is already stale
-        # relative to that same call, so it is removed.
-        rl._maybe_cleanup(now=rl.BUCKET_TTL_SECONDS + 1.0)
-        self.assertEqual(rl.bucket_storage.get_matching({"id": "user=old"}), [])
-        # Within the interval, a new stale row is left alone.
-        rl.bucket_storage.insert_one({
-            "id": "user=old2", "tokens": 1.0, "last_refill": 0.0,
-        })
-        rl._maybe_cleanup(now=rl.BUCKET_TTL_SECONDS + 2.0)
+        deleted = self._sweep(rl.BUCKET_TTL_SECONDS)
+        self.assertEqual(deleted, 0)
         self.assertEqual(
-            len(rl.bucket_storage.get_matching({"id": "user=old2"})), 1
+            len(rl.bucket_storage.get_matching({"id": "user=edge"})), 1
         )
+
+    def test_ingest_path_never_sweeps(self):
+        """The scheduled sweep moved off the ingest path (#1249):
+        consuming tokens must not delete anything."""
+        rl = self.ratelimit
+
+        class _Span:
+            client_id = "c1"
+            user_id = "u1"
+
+        rl.bucket_storage.insert_one({
+            "id": "client=c1;user=u1", "tokens": 10.0, "last_refill": 1000.0,
+        })
+        with mock.patch.object(rl.bucket_storage, "delete_by_id") as no_delete, \
+                mock.patch.object(rl.bucket_storage, "delete_matching") as no_bulk:
+            rl.consume_for_spans([_Span()])
+        no_delete.assert_not_called()
+        no_bulk.assert_not_called()
 
 
 if __name__ == "__main__":

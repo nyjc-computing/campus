@@ -11,6 +11,17 @@
 #   /api/*                    -> campus.api    (/api/v1)
 #   /audit/*                  -> campus.audit  (/audit/v1, web UI, static)
 #
+# Downstream consumer apps (#1274), each under the namespace it already
+# serves on its own deployment; an environment wires one in by setting
+# the matching *_HOST/*_PORT vars on the gateway service — where unset,
+# the Dockerfile ENV placeholders (.invalid names) keep the config
+# valid and those paths 502 harmlessly:
+#   /timetable/*              -> nyxchange-timetable-v2 (/timetable/)
+#   /apps/*                   -> campus-apphost         (/apps/)
+#   /admin/*                  -> campus-admin           (/admin/)
+#   /profile/*                -> campus-profile         (/profile/)
+#   /classroom/*              -> campus-classroom       (/classroom/)
+#
 # Root space: the gateway owns it. /health reports gateway liveness
 # only; per-service health appears at /auth/health, /api/health and
 # /audit/health once the services set PUBLIC_PREFIX (PR #996). Railway
@@ -53,6 +64,11 @@ server {
     proxy_set_header X-Forwarded-Proto https;
     proxy_set_header X-Forwarded-Host $host;
 
+    # X-Request-Start arrives from Railway's edge: Unix milliseconds for
+    # when the request was received. Do NOT stamp it here — proxy_set_header
+    # would overwrite that earlier value. Pass-through is the default.
+    # Consumers accept both this form and "t=<seconds.milliseconds>" (#1243).
+
     # Trace-ingestion batches and login form posts are small, but don't
     # let nginx's 1m default surprise anyone.
     client_max_body_size 10m;
@@ -79,6 +95,22 @@ server {
     set $api_upstream   "http://${API_HOST}:${API_PORT}";
     set $audit_upstream "http://${AUDIT_HOST}:${AUDIT_PORT}";
 
+    # Downstream consumer apps (#1274), same private-mesh form as the
+    # core trio — NOT the public hairpin: Railway's edge 404s
+    # Host-mismatched requests outright on some services (observed on
+    # timetable/apphost/profile/classroom 2026-11-25), so hairpinning
+    # with Host: $host is unreliable for them. Private names are
+    # <service-name>.railway.internal (no -dev suffix; verified per
+    # service via its rendered RAILWAY_PRIVATE_DOMAIN, 2026-11-25) and
+    # live in per-environment service variables — same rule as the core
+    # hosts above: no literals here, they rot. Unset vars fall back to
+    # the Dockerfile's .invalid placeholders (502, config stays valid).
+    set $timetable_upstream "http://${TIMETABLE_HOST}:${TIMETABLE_PORT}";
+    set $apphost_upstream   "http://${APPHOST_HOST}:${APPHOST_PORT}";
+    set $admin_upstream     "http://${ADMIN_HOST}:${ADMIN_PORT}";
+    set $profile_upstream   "http://${PROFILE_HOST}:${PROFILE_PORT}";
+    set $classroom_upstream "http://${CLASSROOM_HOST}:${CLASSROOM_PORT}";
+
     # SNI for the HTTPS upstreams (*.up.railway.app requires it).
     proxy_ssl_server_name on;
 
@@ -92,6 +124,22 @@ server {
     location /auth/         { proxy_pass $auth_upstream; }
     location /api/          { proxy_pass $api_upstream; }
     location /audit/        { proxy_pass $audit_upstream; }
+
+    # Downstream apps (#1274). The no-slash exact matches keep
+    # /timetable, /apps, … from falling through to the gateway-owned /
+    # (302 /audit/) — the apps' own canonical entries are the slashed
+    # forms; 308 preserves the method, absolute_redirect off keeps the
+    # Location relative to this host.
+    location = /timetable   { return 308 /timetable/; }
+    location /timetable/    { proxy_pass $timetable_upstream; }
+    location = /apps        { return 308 /apps/; }
+    location /apps/         { proxy_pass $apphost_upstream; }
+    location = /admin       { return 308 /admin/; }
+    location /admin/        { proxy_pass $admin_upstream; }
+    location = /profile     { return 308 /profile/; }
+    location /profile/      { proxy_pass $profile_upstream; }
+    location = /classroom   { return 308 /classroom/; }
+    location /classroom/    { proxy_pass $classroom_upstream; }
 
     # Gateway-owned shared root until the cutover decides otherwise
     # (#995): audit has the only real web UI, so it gets the redirect.
