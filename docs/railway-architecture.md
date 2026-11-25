@@ -75,7 +75,7 @@ and dispatches by path prefix:
 /profile/               → campus-profile.railway.internal          (#1274)
 /classroom/             → campus-classroom.railway.internal        (#1274)
 /health                 → 200 "ok"        (gateway-owned)
-/                       → 302 /audit/     (gateway-owned)
+/                       → Campus landing  (gateway-owned, static; #1292)
 ```
 
 Upstreams resolve via the Railway mesh DNS on every request (nginx

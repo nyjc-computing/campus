@@ -22,7 +22,8 @@
 #   /profile/*                -> campus-profile         (/profile/)
 #   /classroom/*              -> campus-classroom       (/classroom/)
 #
-# Root space: the gateway owns it. /health reports gateway liveness
+# Root space: the gateway owns it. / reports the Campus landing page
+# (static, from the image — #1292); /health reports gateway liveness
 # only; per-service health appears at /auth/health, /api/health and
 # /audit/health once the services set PUBLIC_PREFIX (PR #996). Railway
 # healthchecks for the gateway can point at /health.
@@ -141,14 +142,18 @@ server {
     location = /classroom   { return 308 /classroom/; }
     location /classroom/    { proxy_pass $classroom_upstream; }
 
-    # Gateway-owned shared root until the cutover decides otherwise
-    # (#995): audit has the only real web UI, so it gets the redirect.
+    # Gateway-owned root: /health reports gateway liveness only (the
+    # Railway healthcheck candidate), and / serves the Campus landing
+    # page (#1292) — a static, anonymous page from the image, so the
+    # root space never depends on an app being awake, logged in, or
+    # deployed (the old 302 /audit/ handed the front door to one app).
     location = /health {
         access_log off;
         default_type text/plain;
         return 200 "ok\n";
     }
     location = / {
-        return 302 /audit/;
+        root /usr/share/nginx/html;
+        try_files /campus-landing.html =500;
     }
 }

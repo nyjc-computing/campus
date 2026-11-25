@@ -19,7 +19,7 @@ application-side prerequisites (per-service session cookie names,
 | `/admin/*`             | `${ADMIN_HOST}` → campus-admin (#1274)                 | admin portal (`/admin/` namespace; home/sign-in/audit UI stay at admin's root) |
 | `/profile/*`           | `${PROFILE_HOST}` → campus-profile (#1274)             | profile portal (`/profile/` namespace) |
 | `/classroom/*`         | `${CLASSROOM_HOST}` → campus-classroom (#1274)         | classroom portal (`/classroom/` namespace) |
-| `/`                    | gateway-owned                                          | 302 → `/audit/` (relative Location) |
+| `/`                    | gateway-owned                                          | **Campus landing page** (#1292) — static, from the image; anonymous |
 | `/health`              | gateway-owned                                          | **gateway liveness only** (also the Railway healthcheck candidate) |
 
 Paths pass through **unchanged** (`proxy_pass` with no URI part): each
@@ -68,7 +68,8 @@ aliases): `campus-admin.railway.internal`, `campus-apphost.railway.internal`,
   sent to the app's **root-level** auth surface (`/login`, `/sign-in`,
   `/`) — none of which the gateway routes (four apps share those names,
   so they cannot be dispatched), and the gateway 404s them (timetable's
-  `/?next=…` lands on the gateway-owned `/` → `/audit/`). Signing in
+  `/?next=…` variant lands on the gateway-owned `/`, which since #1292
+  is the Campus landing page). Signing in
   happens on the app's own domain today; OAuth `redirect_uri`s are also
   registered per origin domain. Making flows self-contained under the
   gateway hostname is the per-app cutover recipe (distinct

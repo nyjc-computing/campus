@@ -51,5 +51,7 @@ ENV TIMETABLE_HOST=downstream-unrouted.invalid \
 RUN rm -f /etc/nginx/templates/default.conf.template \
           /etc/nginx/templates/campus-gateway.conf.template \
           /etc/nginx/conf.d/default.conf \
-          /etc/nginx/conf.d/campus-gateway.conf
+          /etc/nginx/conf.d/campus-gateway.conf \
+          /usr/share/nginx/html/campus-landing.html
 COPY campus-gateway.conf.template /etc/nginx/templates/campus-gateway.conf.template
+COPY campus-landing.html /usr/share/nginx/html/campus-landing.html
