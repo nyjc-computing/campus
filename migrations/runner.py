@@ -91,10 +91,13 @@ does not record as applied or historical (the #1104 scoping: api/audit
 boots used to find no ledger at all and warn about nothing). The check
 is fail-open (an unreachable ledger never blocks boot). Production
 migrations stay manual, never auto-run from Campus apps. Development
-is different since #1256: boot_gate() first applies the service DB's
-pending migrations there (auto_apply_pending — fail-open, loud, same
-advisory lock), so dev deployments self-heal the ledger; testing
-boots are excluded by the env gate.
+is different since #1256: create_app spawns the service DB's pending
+migrations onto a background thread (auto_apply_in_background —
+fail-open, loud, same advisory lock), so dev deployments self-heal
+the ledger without delaying the first /health answer (#1263: a
+synchronous apply inside the gate was killed by Railway's 10 s
+healthcheck and the migration could never finish); testing boots are
+excluded by the env gate.
 
 The `_migrations` DDL deliberately does not go through
 PostgreSQLTable.init_from_schema: that entry point is production-blocked,
@@ -109,6 +112,7 @@ import logging
 import re
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -733,6 +737,47 @@ def auto_apply_pending(env_name: str | None = None,
         return applied
 
 
+def auto_apply_in_background() -> threading.Thread | None:
+    """Spawn the startup auto-apply on a daemon thread (#1256, #1263).
+
+    main.create_app calls this after boot_gate(). The synchronous
+    version inside the gate delayed the first /health answer by the
+    whole backfill, and Railway's 10 s healthcheck killed exactly the
+    deployments that had real work to do — a failed deployment never
+    re-boots, so the migration could never complete (#1263). Behind a
+    healthy deployment the same fail-open apply converges: every job
+    is idempotent, and the advisory lock still serialises replicas and
+    retries.
+
+    Every deployed dev service runs gunicorn --preload, so
+    create_app executes once in the master: this thread is singular
+    per replica and workers fork without it. A deployment being
+    replaced mid-backfill kills the thread with the master; the next
+    boot's thread resumes (skipping already-applied rows).
+
+    Returns the started thread, or None when there is nothing to
+    spawn: outside development, opted out via MIGRATIONS_AUTO_APPLY,
+    or when the runner's imports are unavailable. The env checks run
+    synchronously so a opted-out boot spawns no thread at all;
+    auto_apply_pending re-checks them inside the thread.
+    """
+    if env.ENV not in AUTO_APPLY_ENVS:
+        return None
+    off = env.get(MIGRATIONS_AUTO_APPLY_ENVVAR, "").strip().lower()
+    if off in AUTO_APPLY_OFF_VALUES:
+        logger.debug("startup auto-apply disabled by %s=%s",
+                     MIGRATIONS_AUTO_APPLY_ENVVAR, off)
+        return None
+    worker = threading.Thread(
+        target=auto_apply_pending,
+        name="migrations-auto-apply",
+        daemon=True,
+    )
+    worker.start()
+    logger.debug("startup auto-apply running in the background")
+    return worker
+
+
 def warn_if_pending(env_name: str | None = None,
                     migrations_dir: Path | None = None,
                     db: str | None = None) -> list[str]:
@@ -804,30 +849,31 @@ def warn_if_pending(env_name: str | None = None,
 
 
 def boot_gate() -> list[str]:
-    """Startup pending-check; auto-applies on dev, refuses when enforced (#1167).
+    """Startup pending-check; refuses to boot when enforced (#1167).
 
     main.create_app calls this instead of warn_if_pending() directly.
-    #1256: on development the gate first applies this service's
-    pending migrations (auto_apply_pending — fail-open, loud), so a
-    dev deployment brings its own ledger up to date before anything
-    reads it; testing boots are excluded by auto_apply_pending's env
-    gate. The #747 warning behavior is unchanged: production-style
-    boots log one WARNING naming outstanding revisions targeting this
-    service's DB; dev/test boots return before touching the database.
-    When MIGRATIONS_ENFORCED is set (production app services) AND the
+    The #747 warning behavior is unchanged: production-style boots log
+    one WARNING naming outstanding revisions targeting this service's
+    DB; dev/test boots return before touching the database. When
+    MIGRATIONS_ENFORCED is set (production app services) AND the
     outstanding list is non-empty, raise RuntimeError naming them: the
     boot fails, the healthcheck never passes, and Railway keeps the
     previous deployment live — an out-of-order release merge
     self-heals once the pending migrations are applied and the service
-    is redeployed. The gate never runs anything in production (apps
-    there never auto-run migrations), and ledger failures stay
-    fail-open: an unreachable ledger can warn, never block boot on its
-    own. With the var unset (dev/test) the raise is unreachable.
+    is redeployed. The gate never runs anything (apps never auto-run
+    migrations synchronously), and ledger failures stay fail-open via
+    warn_if_pending: an unreachable ledger can warn, never block boot
+    on its own. With the var unset (dev/test) the raise is unreachable.
+
+    The development auto-apply (#1256) does NOT run here: run
+    auto_apply_in_background() from create_app after the gate — a
+    synchronous call delayed the first /health by the whole backfill
+    and Railway's healthcheck killed exactly the deployments with real
+    work to do (#1263).
 
     Returns the outstanding revisions ([] outside production-style
     envs, when clean, or when the ledger is unreachable).
     """
-    auto_apply_pending()
     outstanding = warn_if_pending()
     if not outstanding:
         return outstanding
