@@ -443,7 +443,13 @@ CLIs and other input-constrained clients use RFC 8628 instead
    That is presentation only; both submit paths re-check the code's
    state on the server.
 3. Submitting the user code binds `user_id` and marks the device code
-   `authorized`.
+   `authorized`. The page's script posts to
+   `POST /auth/v1/oauth/device/authorize`. Without JavaScript the form
+   posts to `POST /auth/v1/oauth/device` instead, which sends the
+   browser back to the code's page with `status=success`, or
+   `status=error&error_code=…`, in the query string. That redirect
+   target is built from the submitted code; nothing in the request
+   chooses it (#1266).
 4. The CLI polls `POST /auth/v1/oauth/token` with
    `grant_type=urn:ietf:params:oauth:grant-type:device_code` until it
    gets tokens (10 min code TTL, 5 s poll interval). Device-code
