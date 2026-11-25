@@ -153,6 +153,13 @@ cron that pings a service every minute keeps it awake for good. Periodic
 work belongs in a Railway cron job, which starts on a schedule, runs and
 exits, or on the request path — never on a timer that sends (#1249).
 
+The fleet's scheduled work lives in exactly one place: the
+**campus-cleanup deployment** (`campus.cleanup`, built by
+`Dockerfile.cleanup`), a cron-scheduled batch service that starts,
+runs every registered cleanup job against the service databases
+directly, and exits — it never calls the app services, so it wakes
+nothing. Runbook: `docs/cleanup-deployment.md`.
+
 ## Build & runtime configuration
 
 - Builder: Railpack (Nixpacks-compatible plan inferred from the repo;

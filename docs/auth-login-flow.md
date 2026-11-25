@@ -295,10 +295,12 @@ stateDiagram-v2
     Bound --> Swept: 10 min TTL
 ```
 
-- Session TTL (10 min) is enforced by the **sweep**
-  (`POST /auth/v1/sessions/sweep`), not on every read. Nothing calls
-  the sweep on a schedule today (#1253), so a stale session is removed
-  only when something invokes it.
+- Session TTL (10 min) is enforced by the **sweep**, not on every
+  read. The scheduled sweep runs on the cleanup deployment
+  (`campus.cleanup.jobs.sweep_auth_sessions`, #1249/#1253);
+  `POST /auth/v1/sessions/sweep` is the same implementation's manual,
+  on-demand trigger for operators and expires live sessions when
+  something invokes it.
 - The access token lives 7 days and is minted together with a refresh
   token (authorization-code exchange and device flow alike). The
   server does not yet enforce that expiry: an access token keeps

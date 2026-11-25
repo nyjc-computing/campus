@@ -326,6 +326,10 @@ deliberately not a key (ephemeral, unbounded cardinality).
   misconfiguration-detection signal.
 - Config: `AUDIT_RATE_LIMIT_PER_MINUTE` on **campus.audit** (default
   600, pending tuning against real dev traffic).
+- Stale buckets are deleted by the cleanup deployment
+  (`campus.cleanup.jobs.sweep_rate_limit_buckets`, buckets idle for
+  `BUCKET_TTL_SECONDS` = 1 h) — the sweep no longer runs inline on
+  ingest (#1249).
 - Producers keep failing open today; the follow-on campus-python
   circuit breaker (#831) will 503 producer requests while a bucket is
   tripped. Design:
