@@ -449,7 +449,12 @@ CLIs and other input-constrained clients use RFC 8628 instead
    browser back to the code's page with `status=success`, or
    `status=error&error_code=…`, in the query string. That redirect
    target is built from the submitted code; nothing in the request
-   chooses it (#1266).
+   chooses it (#1266). A code that is past its validity limit is
+   refused as `expired` on both paths, whether or not anything has
+   marked it yet (#1268). The server renders the outcome page itself,
+   so it is right without the page's script: an expired, used or
+   denied code shows the error with its message, and an invalid code
+   keeps the form so it can be corrected (#1279).
 4. The CLI polls `POST /auth/v1/oauth/token` with
    `grant_type=urn:ietf:params:oauth:grant-type:device_code` until it
    gets tokens (10 min code TTL, 5 s poll interval). Device-code
