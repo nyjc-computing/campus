@@ -1,0 +1,90 @@
+name: Back-merge main into weekly
+
+# After a release promotion (the weekly -> main PR merge), main carries a
+# merge commit weekly lacks. The `production` ruleset requires the next
+# promotion's head to be up to date with main, so weekly must re-absorb
+# main before then — historically a manual step that kept getting
+# forgotten (the 2026-11-24/25 window ran three --admin promotions with
+# no resync). This workflow does it: any push to either branch while
+# main is ahead opens an auto-merge PR carrying main back into weekly.
+#
+# Conflict-free by construction: direct pushes to main are forbidden by
+# docs/environment-access-policy.md and the ruleset locks the merge
+# method to "merge", so the only commits main can gain are promotion
+# merge commits — and a promotion merge commit's tree equals its weekly
+# parent, so this merge carries ancestry, never content.
+#
+# Requires the repo settings "Allow auto-merge" and "Allow GitHub
+# Actions to create and approve pull requests" (both enabled
+# 2026-11-25); without them the PR below cannot be created/merged by
+# GITHUB_TOKEN. Runs are serialized by the concurrency group; a run
+# whose resync PR is already open no-ops.
+
+on:
+  push:
+    branches: [main, weekly]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: backmerge-main-to-weekly
+  cancel-in-progress: false
+
+jobs:
+  backmerge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect divergence and duplicate resync PRs
+        id: need
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch origin main weekly
+          count="$(git rev-list --count origin/weekly..origin/main)"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "main is $count commit(s) ahead of weekly"
+          open="$(gh pr list --base weekly --state open \
+            --json title --jq '[.[].title | select(startswith("Back-merge main into weekly"))] | length')"
+          echo "open_resync_prs=$open" >> "$GITHUB_OUTPUT"
+          echo "open resync PRs: $open"
+
+      - name: Merge main into a back-merge branch off weekly
+        if: steps.need.outputs.count != '0' && steps.need.outputs.open_resync_prs == '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="back-merge/main-to-weekly/$(date -u +%Y%m%d-%H%M%S)"
+          echo "branch=$branch" >> "$GITHUB_ENV"
+          git switch -c "$branch" origin/weekly
+          git merge --no-edit origin/main
+
+      - name: Push the branch and open an auto-merge PR
+        if: steps.need.outputs.count != '0' && steps.need.outputs.open_resync_prs == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git push origin "$BRANCH"
+          gh pr create \
+            --base weekly \
+            --head "$BRANCH" \
+            --title "Back-merge main into weekly (automated post-promotion resync)" \
+            --body "Automated resync per docs/prod-rollout.md §6: carries main's promotion merge commits back into weekly so the next promotion satisfies the \`production\` ruleset's up-to-date policy. No content changes — the carried commits' trees equal their weekly parents." \
+            --repo "$GITHUB_REPOSITORY"
+          gh pr merge --merge --auto
+
+      - name: File an issue when the resync fails
+        if: failure() && steps.need.outputs.count != '0' && steps.need.outputs.open_resync_prs == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "Automated weekly resync failed (run ${{ github.run_id }})" \
+            --body "main is still ahead of weekly and the back-merge workflow could not complete. See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Manual fallback: \`git switch weekly && git merge --no-edit origin/main && git push\`."
