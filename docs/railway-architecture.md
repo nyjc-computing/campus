@@ -97,7 +97,13 @@ Railway's private network (the `*.railway.internal` mesh) is **IPv6-only**:
 - Services that accept mesh traffic must listen on IPv6 — gunicorn
   `--bind [::]:$PORT` (dual-stack; public IPv4 keeps working), MongoDB
   `mongod --ipv6 --bind_ip ::,0.0.0.0`. An app bound only to `0.0.0.0`
-  rejects mesh connections.
+  rejects mesh connections. The downstream consumer apps shipped
+  `0.0.0.0` binds (their Procfiles/instance commands predate this rule)
+  and were unreachable over the mesh until 2026-11-25, when their dev
+  instances got dual-stack `startCommand` overrides (#1274) — public
+  IPv4 kept working throughout. Their repos still define `0.0.0.0`
+  binds (upstream issues filed), and the production instances have not
+  been touched (the prod gateway doesn't route them).
 - Cross-service calls use `<name>.railway.internal:<port>` names
   (e.g. `campus.auth` → `auth-postgres.railway.internal:5432`); names are
   not mechanically derivable from service names, check the dashboard/API.
