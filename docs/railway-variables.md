@@ -174,6 +174,22 @@ would override them):
 | `PYTHON_VERSION` / `RAILPACK_PYTHON_VERSION` | `${{shared.…}}` | template | |
 | `SECRET_KEY` | `<secret>` | literal | Flask secret; per-service by design (must differ between services) |
 
+### campus-cleanup (cron job, not yet created)
+
+The scheduled cleanup deployment (`campus.cleanup`, `Dockerfile.cleanup`).
+Batch job: no domain, no healthcheck; Railway cron starts it (≥5-minute
+minimum cadence, `railway cron run` for one-offs). Setup runbook:
+[docs/cleanup-deployment.md](cleanup-deployment.md). Target matrix —
+Railway references resolve per environment:
+
+| Variable | Target value | Kind | Notes |
+|---|---|---|---|
+| `CLEANUP_JOB_AUDIT_POSTGRESDB_URI` | `${{"campus.audit-postgres".DATABASE_URL}}` | template | rate-limit bucket sweep; the `cleanup_runs` ledger home |
+| `CLEANUP_JOB_AUTH_POSTGRESDB_URI` | `${{"campus.auth-postgres".DATABASE_URL}}` | template | future auth-scope jobs |
+| `CLEANUP_JOB_AUTH_MONGODB_URI` | `${{"campus.auth-mongodb-dev".MONGO_URL}}` (prod: `campus.auth-mongodb`) | template | `auth_sessions` + `device_codes` sweeps |
+| `DEPLOY` | `campus.cleanup` | literal | |
+| `ENV` | `${{shared.ENV}}` | template | |
+
 ### campus-gateway
 
 The gateway reads upstreams from Railway-provided `RAILWAY_SERVICE_*_URL`

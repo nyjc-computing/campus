@@ -196,20 +196,36 @@ outstanding migrations remain, so a release merged before its migrations
 cannot take traffic — the failed deployment never passes its
 healthcheck, the previous deployment keeps serving, and the operator
 applies the pending migrations (admin UI or break-glass job) and
-redeploys. The gate never runs migrations; an unreachable ledger stays
-fail-open (warn only).
+redeploys. The gate never runs migrations in production; an unreachable
+ledger stays fail-open (warn only). On development the gate runs them:
+since #1256, `boot_gate()` first applies the deployment's own service
+database's pending migrations (see below) before the warning check
+reads the ledger.
 
 ### Development (Railway dev)
 
-Usually nothing to do: deploy and let startup initialization apply schema
-changes (see [When a migration is needed](#when-a-migration-is-needed)).
-Verify self-heal landed by exercising the affected flow (this is how 004
-was verified: a fresh device-authorize request succeeded and survived a
-redeploy).
+Usually nothing to do: deploy and let startup bring the service database
+up to date. Startup self-heal covers schema changes (init_from_model)
+and, since #1256, migrations too: a development deployment applies its
+own pending migrations at startup, before the boot gate
+(`runner.auto_apply_pending()`), through the same ledger, advisory lock
+and hash guard as every other apply — schema migrations and data
+backfills alike. A migration that raises is recorded FAILED and logged
+at ERROR (the boot continues; the next boot retries it and anything
+after it), an unreachable ledger logs a WARNING and the boot continues,
+and a hash-guard mismatch skips the auto-apply (run
+`apply --allow-hash-mismatch` consciously). Two replicas starting
+together converge on the advisory lock: one applies, the rest find the
+ledger up to date. A long backfill therefore delays the boot by its
+runtime — expected on dev. Set `MIGRATIONS_AUTO_APPLY=0` on a
+deployment to opt out for one boot cycle (a known-bad pending revision
+waiting on a fix). Testing boots (the suites) never auto-apply: the
+env gate is `ENV == development` only.
 
-Manual runs are still needed on dev when startup init cannot produce the
-change (e.g. destructive DDL or a Mongo backfill) — follow the manual
-runbook below.
+While a startup apply runs, the admin Migrations view shows its ledger
+rows appear one by one (status reads do not take the advisory lock); a
+management-route apply triggered during a startup apply waits for the
+lock and is refused cleanly if the boot is still applying.
 
 ### Production-style environments (manual runs, admin-UI first)
 

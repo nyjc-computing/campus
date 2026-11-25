@@ -93,6 +93,8 @@ def create_app(mode: str | None = None) -> flask.Flask:
     # the warn-always behavior and raises when MIGRATIONS_ENFORCED is
     # set and migrations are outstanding — that RuntimeError is
     # deliberately NOT swallowed here (fail-closed is the point).
+    # #1256: on development boot_gate first applies this service DB's
+    # pending migrations (fail-open, loud); production never auto-runs.
     try:
         from migrations import runner
     except Exception:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
