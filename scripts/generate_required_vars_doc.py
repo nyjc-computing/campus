@@ -57,6 +57,17 @@ def render() -> str:
                             "(campus-admin@<domain>)",
         "PUBLIC_URL": "Canonical public origin for absolute URL "
                       "generation (#653)",
+        # cleanup deployment (per-scope service databases)
+        "CLEANUP_JOB_AUDIT_POSTGRESDB_URI": "The audit service's Postgres "
+                                            "database (rate-limit bucket "
+                                            "sweep; the cleanup_runs "
+                                            "ledger)",
+        "CLEANUP_JOB_AUTH_POSTGRESDB_URI": "The auth service's Postgres "
+                                           "database (future auth-scope "
+                                           "jobs)",
+        "CLEANUP_JOB_AUTH_MONGODB_URI": "The auth service's Mongo database "
+                                        "(auth_sessions and device_codes "
+                                        "sweeps)",
     }
 
     lines = [

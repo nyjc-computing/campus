@@ -1,0 +1,17 @@
+# Scheduled-cleanup deployment image (audit-metrics epic, campus#1243:
+# the fleet's one cron-scheduled deployment, campus#1249/#1253). The
+# campus-cleanup Railway service builds THIS Dockerfile (builder =
+# Dockerfile, path = Dockerfile.cleanup): railpack ignores start
+# commands, so the job entrypoint must be the image CMD. Deploy
+# triggers: the Railway cron schedule fires it; `railway cron run`
+# triggers one off-schedule. Entrypoint contract: python -m campus.cleanup.
+#
+# Setup runbook (service creation, the CLEANUP_JOB_* variable matrix,
+# the cron schedule, reading the ledger): docs/cleanup-deployment.md.
+FROM python:3.13-slim
+
+WORKDIR /app
+COPY . .
+RUN pip install --no-cache-dir .
+
+CMD ["python", "-m", "campus.cleanup"]

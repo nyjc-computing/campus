@@ -81,28 +81,6 @@ class AuthSessionsResource:
         )
         return sessions
 
-    def sweep(
-            self,
-            *,
-            at_time: schema.DateTime | None = None
-    ) -> int:
-        """Delete expired sessions from the database.
-
-        Returns the number of deleted sessions.
-        """
-        expired_records = (
-            model.AuthSession.from_storage(r)
-            for r in session_storage.get_matching({})
-        )
-        expired_sessions = (
-            s for s in expired_records if s.is_expired(at_time=at_time)
-        )
-        deletion_count = 0
-        for session in expired_sessions:
-            session_storage.delete_by_id(session.id)
-            deletion_count += 1
-        return deletion_count
-
 
 class ProviderAuthSessionResource:
     """Represents a single auth session resource for a provider."""
