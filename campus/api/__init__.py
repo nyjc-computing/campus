@@ -8,7 +8,11 @@ Web API for Campus services.
 __all__ = ["init_app"]
 
 
+import collections
+import hashlib
 import logging
+import os
+import time
 from typing import Any
 
 import campus_python
@@ -77,9 +81,73 @@ _REJECTED_CREDENTIAL_ERRORS = (
     campus_python.errors.ValidationError,
 )
 
+# Introspection cache (#1248): campus tokens are opaque and validated
+# server-side, so every campus.api call paid a ~150–240 ms
+# /root/authenticate round trip — the 2026-11-24 classroom journey
+# investigation clocked a 10-span submit journey introspecting the same
+# bearer 8–11 times. Cache authenticate results per credential digest
+# for a short TTL. The tradeoff is explicit: a token revoked mid-TTL
+# stays accepted on this worker until its entry expires; set
+# AUTH_INTROSPECTION_TTL_SECONDS=0 to disable the cache entirely.
+_INTROSPECTION_TTL_SECONDS = 30.0
+_INTROSPECTION_CACHE_MAX = 4096
+_introspection_cache: "collections.OrderedDict[str, tuple[float, dict[str, Any]]]" = (
+    collections.OrderedDict()
+)
+
+
+def _introspection_ttl() -> float:
+    """Configured cache TTL in seconds (0 = cache disabled)."""
+    raw = os.environ.get("AUTH_INTROSPECTION_TTL_SECONDS", "")
+    try:
+        return max(float(raw), 0.0) if raw else _INTROSPECTION_TTL_SECONDS
+    except ValueError:
+        return _INTROSPECTION_TTL_SECONDS
+
+
+def _credential_key(kind: str, credential: str) -> str:
+    # Digest, never the raw credential: nothing here is long-lived, but
+    # a dump of this dict must not carry bearer tokens or secrets.
+    return kind + ":" + hashlib.sha256(credential.encode("utf-8")).hexdigest()
+
+
+def _cached_auth_result(key: str) -> dict[str, Any] | None:
+    """Live cached authenticate result for this credential, or None."""
+    ttl = _introspection_ttl()
+    if ttl <= 0:
+        return None
+    entry = _introspection_cache.get(key)
+    if entry is None:
+        return None
+    cached_at, result = entry
+    if time.monotonic() - cached_at > ttl:
+        _introspection_cache.pop(key, None)
+        return None
+    _introspection_cache.move_to_end(key)
+    # Copy: the caller owns its instance (it lands on flask.g).
+    return dict(result)
+
+
+def _remember_auth_result(key: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Cache and return an authenticate result (bounded LRU)."""
+    if _introspection_ttl() > 0:
+        _introspection_cache[key] = (time.monotonic(), result)
+        _introspection_cache.move_to_end(key)
+        while len(_introspection_cache) > _INTROSPECTION_CACHE_MAX:
+            _introspection_cache.popitem(last=False)
+    return dict(result)
+
 
 def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
-    """Authenticate using HTTP Basic Authentication."""
+    """Authenticate using HTTP Basic Authentication.
+
+    Results are cached per credential for the introspection TTL
+    (#1248) — a revoke takes up to one TTL to bite on this worker.
+    """
+    key = _credential_key("basic", f"{client_id}:{client_secret}")
+    cached = _cached_auth_result(key)
+    if cached is not None:
+        return cached
     try:
         auth_result = campus.auth.root.authenticate(
             client_id=schema.CampusID(client_id),
@@ -89,27 +157,37 @@ def basic_authenticate(client_id: str, client_secret: str) -> dict[str, Any]:
         raise api_errors.UnauthorizedError(
             "Invalid client credentials"
         ) from None
-    return {
+    return _remember_auth_result(key, {
         "client": auth_result["client"],
         "user": None,
-    }
+    })
 
 def bearer_authenticate(token: str) -> dict[str, Any]:
-    """Authenticate using HTTP Bearer Authentication."""
+    """Authenticate using HTTP Bearer Authentication.
+
+    Results are cached per token for the introspection TTL (#1248):
+    a multi-span journey introspects the same bearer once per TTL
+    instead of once per call; a revoke takes up to one TTL to bite
+    on this worker.
+    """
+    key = _credential_key("bearer", token)
+    cached = _cached_auth_result(key)
+    if cached is not None:
+        return cached
     try:
         auth_result = campus.auth.root.authenticate(token=token)
     except _REJECTED_CREDENTIAL_ERRORS:
         raise api_errors.UnauthorizedError(
             "Invalid access token"
         ) from None
-    return {
+    return _remember_auth_result(key, {
         "client": auth_result["client"],
         "user": auth_result.get("user"),
         # the token's granted scopes (#1183): the Authenticator
         # hydrates flask.g.current_scopes from this so route gates can
         # enforce the capability leg of the two-leg model (#865)
         "scopes": auth_result.get("scopes", []),
-    }
+    })
 
 # Create authenticator using campus_python
 campus_authenticator = Authenticator(
