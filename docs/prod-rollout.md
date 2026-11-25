@@ -285,10 +285,17 @@ are user-gated and called out.
 All four campus-suite prod instances now track `main`; a main push is
 what deploys prod. Future releases:
 
-1. PR `weekly` → `main` (CI runs on the PR).
+1. PR `weekly` → `main` (CI runs on the PR). Title it
+   "Promote weekly to main: <the carried highlights>"; the PR body is
+   the release record — list what the promotion carries, and when
+   migrations were involved, what was applied on prod with evidence
+   (the migration half of the runbook is
+   [migration-protocol.md](migration-protocol.md)).
 2. Merge needs `--admin`: main's branch policy blocks normal merges
-   even with every check green (#1115). Run `gh pr merge --merge
-   --admin` once CI is green.
+   even with every check green (#1115). **Verify
+   `gh pr checks <pr>` is all green first** — `--admin` bypasses the
+   checks too, so nobody else enforces this — then run
+   `gh pr merge --merge --admin`.
 3. If main was reconciled into weekly directly (push), update the PR
    branch first (`gh pr update-branch`) or the policy will refuse
    again.
@@ -307,10 +314,19 @@ what deploys prod. Future releases:
    files an issue; the manual fallback is
    `git switch weekly && git merge --no-edit origin/main && git push`.
    (The 2026-11-24/25 window ran three `--admin` promotions with no
-   resync — this step exists so that never recurs.)
+   resync — this step exists so that never recurs.) The resync PR is
+   authored by `github-actions[bot]`, so on a public repo its CI run
+   can sit in `action_required` until approved once per contributor:
+   `gh api -X POST repos/nyjc-computing/campus/actions/runs/<id>/approve`
+   (done once 2026-11-25; approvals are remembered).
 6. Smoke: gateway `/health`, `/api/openapi.json`, `/integrations/v1/`,
-   `/audit/v1/health`, auth `/health`, one device-flow + one browser
-   login.
+   `/audit/v1/health`, auth route check, one device-flow + one browser
+   login. (The "auth `/health`" item this list carried until
+   2026-11-25 was aspiration, not code: campus.auth has no health
+   route. Probe the gateway's auth route instead —
+   `curl -s https://nyjc-campus.up.railway.app/auth/v1/` should return
+   the structured auth error envelope, proving the route reaches a
+   live auth service.)
 
 Executed-cutover notes (2026-11-16/17): the branch flips happened
 *before* the merge, so Railway SKIPPED the stale-main deploys and kept

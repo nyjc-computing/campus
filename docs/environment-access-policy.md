@@ -70,6 +70,17 @@ gaps are tracked in
 ([#1121](https://github.com/nyjc-computing/campus/issues/1121) for the
 ruleset itself).
 
+**Automated post-promotion resync (2026-11-25, #1282):** the
+`backmerge-main-to-weekly.yml` workflow carries main's promotion merge
+commits back into `weekly` after every release, so the next promotion
+can satisfy the up-to-date policy without another bypass. It runs as
+`github-actions[bot]` and operates entirely inside the **`weekly`
+ruleset** — its PRs are created, checked, and merged like any other
+`weekly` PR, and no bypass was granted to the bot anywhere. Enabling it
+flipped two repo settings: `allow_auto_merge` and "Allow GitHub
+Actions to create and approve pull requests" (the latter is not
+API-settable and inherits the org policy; verified working live).
+
 **Ruling 2026-11-17 (access model):** campus-admin portal access will be
 relaxed to any account holding one or more access grants
 ([#1129](https://github.com/nyjc-computing/campus/issues/1129),
