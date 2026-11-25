@@ -436,6 +436,12 @@ CLIs and other input-constrained clients use RFC 8628 instead
    (Google-consent-style, #867) above the Authorize button, and an
    expired or already-used code gets a notice instead of an
    Authorize offer.
+   The page also shows a request-status strip: when the code was
+   requested, how long it stays valid, and a status badge (#1264).
+   When the code's validity limit passes while the page is open, the
+   badge turns into a flashing Expired and Authorize is disabled.
+   That is presentation only; both submit paths re-check the code's
+   state on the server.
 3. Submitting the user code binds `user_id` and marks the device code
    `authorized`.
 4. The CLI polls `POST /auth/v1/oauth/token` with
