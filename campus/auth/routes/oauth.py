@@ -11,6 +11,7 @@ for the device authorization flow to work.
 """
 
 import flask
+import werkzeug
 
 import campus.config
 import campus.flask_campus as flask_campus
@@ -149,6 +150,37 @@ def _describe_request(dc: campus.model.DeviceCode, state: str) -> dict:
         "expires_at_iso": _time_attribute(dc.expires_at) if dc.expires_at else None,
         "validity_ms": validity_ms,
     }
+
+
+def _back_to_verification_page(
+    user_code: str | None,
+    error_code: str | None = None,
+) -> werkzeug.Response:
+    """Send the no-JS form fallback back to the verification page (#1266).
+
+    `status=success`, or `status=error` with an `error_code`, drives the
+    page's fallback states. With a code the user lands on its pre-filled
+    page; without one, on the bare form.
+
+    The target is built here from the submitted code and never taken
+    from the request: a client-supplied target is an open redirect, and
+    appending "?status=" to the page's URL put a second "?" on the usual
+    `?user_code=` link, which dropped both the outcome and the code.
+    """
+    if error_code:
+        target = flask.url_for(
+            'auth.oauth.device_verification',
+            user_code=user_code,
+            status="error",
+            error_code=error_code,
+        )
+    else:
+        target = flask.url_for(
+            'auth.oauth.device_verification',
+            user_code=user_code,
+            status="success",
+        )
+    return flask.redirect(target)
 
 
 def _get_oauth_payload() -> dict:
@@ -758,6 +790,16 @@ def device_verification(user_code: str | None = None):
     GET /device?status=error&error_code=expired - Shows error state (for no-JS fallback)
     POST /device - Handles form submission for non-JS clients
 
+    The POST sends the browser back to this page with the outcome in
+    the query string: `/device?user_code=<code>&status=success` after
+    an approval, or
+    `/device?user_code=<code>&status=error&error_code=<reason>` after
+    a refusal, where `<reason>` is `invalid_code`, `expired`,
+    `already_used` or `unknown`. A malformed code returns to the bare
+    page, `/device?status=error&error_code=invalid_code`. The target
+    is built from the submitted code; nothing in the request chooses
+    it (#1266).
+
     For a pre-filled code the page also shows a request-status strip
     (#1264): when the code was requested and how long it stays valid,
     next to a status badge. The badge reads Expired for a code past its
@@ -768,7 +810,7 @@ def device_verification(user_code: str | None = None):
     import html
     import re
 
-    from flask import redirect, render_template_string, request, session, url_for
+    from flask import render_template_string, request, session, url_for
 
     # Accept the user code from both the path and the query string:
     # verification_uri_complete is "/device?user_code=XXXX-XXXX", and the
@@ -819,32 +861,35 @@ def device_verification(user_code: str | None = None):
     # Handle POST for non-JS fallback
     if request.method == "POST":
         user_code_form = request.form.get('user_code', '').strip().upper()
-        redirect_url = request.form.get(
-            'redirect_url',
-            url.full_url_for('auth.oauth.device_verification')
+        # Validate user code format. A well-formed code sends the user
+        # back to its pre-filled page, a malformed one to the bare form.
+        # The pattern is the one real codes are generated with, so a
+        # code that fails it could never have matched a stored one.
+        page_code = (
+            user_code_form
+            if re.fullmatch(r"[A-Z0-9]{4}-[A-Z0-9]{4}", user_code_form)
+            else None
         )
-
-        # Validate user code format
-        if not user_code_form or len(user_code_form) != 9 or user_code_form[4] != '-':
-            return redirect(f"{redirect_url}?status=error&error_code=invalid_code")
+        if page_code is None:
+            return _back_to_verification_page(None, "invalid_code")
 
         # Try to authorize the device code
         try:
             dc = device_code_resource.get_by_user_code(user_code_form)
             if dc.state != "pending":
                 error_code = "expired" if dc.state == "expired" else "already_used"
-                return redirect(f"{redirect_url}?status=error&error_code={error_code}")
+                return _back_to_verification_page(page_code, error_code)
 
             device_code_resource.update(dc.id, user_id=str(user_id), state="authorized")
             get_yapper().emit('campus.oauth.device_authorize_submit', {
                 "device_code_id": str(dc.id),
                 "user_id": str(user_id),
             })
-            return redirect(f"{redirect_url}?status=success")
+            return _back_to_verification_page(page_code)
         except api_errors.NotFoundError:
-            return redirect(f"{redirect_url}?status=error&error_code=invalid_code")
+            return _back_to_verification_page(page_code, "invalid_code")
         except Exception:
-            return redirect(f"{redirect_url}?status=error&error_code=unknown")
+            return _back_to_verification_page(page_code, "unknown")
 
     # Check for query parameters for non-JS redirect states
     status = request.args.get('status')
@@ -1328,7 +1373,6 @@ def device_verification(user_code: str | None = None):
                             required
                             {% if safe_user_code %}value="{{ safe_user_code }}"{% endif %}
                         >
-                        <input type="hidden" name="redirect_url" value="{{ request.url }}">
                     </div>
                     <button type="submit" class="btn" id="submitBtn"{% if consent_notice %} disabled{% endif %}>
                         Authorize
