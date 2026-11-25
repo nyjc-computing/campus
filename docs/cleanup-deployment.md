@@ -68,7 +68,16 @@ otherwise).
    hourly cadence suits the current jobs — nothing here is urgent
    (the cadence decision lives on #1249). `railway cron run` triggers
    one off-schedule run.
-4. **Variables** (Railway references resolve per environment):
+4. **Instance limits**: **1 vCPU / 2 GB RAM** — set on development
+   2026-11-25 and expected to match on production at wiring time. The
+   jobs are short, sequential sweeps; the default 32 vCPU / 32 GB
+   entitlement would be idle capacity the deployment is billed for on
+   every run (each replica is a dedicated microVM sized to these
+   limits — see `docs/railway-architecture.md` "What a deployment can
+   measure about itself"). API recipe (ids inside the input; the
+   Railway-usage UI shows GB-minutes as GB):
+   `railway api 'mutation($e:String!,$s:String!){ serviceInstanceLimitsUpdate(input:{environmentId:$e, serviceId:$s, vCPUs:1, memoryGB:2}) }'`.
+5. **Variables** (Railway references resolve per environment):
 
    | Variable | Value |
    |---|---|
@@ -82,7 +91,7 @@ otherwise).
    first deploy. `bootstrap.REQUIRED_ENV_VARS` validates them on
    production boots (#1108).
 
-5. **No domain, no healthcheck**: it is a batch job. A failed run
+6. **No domain, no healthcheck**: it is a batch job. A failed run
    exits nonzero → the deployment goes CRASHED → visible in the
    deploy history, like the break-glass migration job.
 
