@@ -196,28 +196,34 @@ outstanding migrations remain, so a release merged before its migrations
 cannot take traffic — the failed deployment never passes its
 healthcheck, the previous deployment keeps serving, and the operator
 applies the pending migrations (admin UI or break-glass job) and
-redeploys. The gate never runs migrations in production; an unreachable
-ledger stays fail-open (warn only). On development the gate runs them:
-since #1256, `boot_gate()` first applies the deployment's own service
-database's pending migrations (see below) before the warning check
-reads the ledger.
+redeploys. The gate never runs migrations; an unreachable ledger stays
+fail-open (warn only). The development auto-apply does not run in the
+gate either — it is spawned onto a background thread after the app is
+built (see below).
 
 ### Development (Railway dev)
 
 Usually nothing to do: deploy and let startup bring the service database
 up to date. Startup self-heal covers schema changes (init_from_model)
 and, since #1256, migrations too: a development deployment applies its
-own pending migrations at startup, before the boot gate
-(`runner.auto_apply_pending()`), through the same ledger, advisory lock
-and hash guard as every other apply — schema migrations and data
-backfills alike. A migration that raises is recorded FAILED and logged
-at ERROR (the boot continues; the next boot retries it and anything
-after it), an unreachable ledger logs a WARNING and the boot continues,
-and a hash-guard mismatch skips the auto-apply (run
+own pending migrations at startup — on a background thread spawned by
+`create_app` (`runner.auto_apply_in_background()`, #1263), through the
+same ledger, advisory lock and hash guard as every other apply — schema
+migrations and data backfills alike. The thread is why it is not
+synchronous: Railway's 10 s healthcheck killed the first deployment of
+#1260's in-gate version (the backfill delayed `/health` past the
+timeout, the deployment failed and never re-booted, so the migration
+could never finish). A migration that raises is recorded FAILED and
+logged at ERROR (the boot continues; the next boot retries it and
+anything after it), an unreachable ledger logs a WARNING and the boot
+continues, and a hash-guard mismatch skips the auto-apply (run
 `apply --allow-hash-mismatch` consciously). Two replicas starting
 together converge on the advisory lock: one applies, the rest find the
-ledger up to date. A long backfill therefore delays the boot by its
-runtime — expected on dev. Set `MIGRATIONS_AUTO_APPLY=0` on a
+ledger up to date; every deployed dev service runs gunicorn
+`--preload`, so the thread is singular per replica. A deployment
+replaced mid-backfill kills the thread with its master — the next
+boot's thread resumes, skipping already-applied rows. Set
+`MIGRATIONS_AUTO_APPLY=0` on a
 deployment to opt out for one boot cycle (a known-bad pending revision
 waiting on a fix). Testing boots (the suites) never auto-apply: the
 env gate is `ENV == development` only.

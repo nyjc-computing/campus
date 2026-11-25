@@ -93,14 +93,17 @@ def create_app(mode: str | None = None) -> flask.Flask:
     # the warn-always behavior and raises when MIGRATIONS_ENFORCED is
     # set and migrations are outstanding — that RuntimeError is
     # deliberately NOT swallowed here (fail-closed is the point).
-    # #1256: on development boot_gate first applies this service DB's
-    # pending migrations (fail-open, loud); production never auto-runs.
+    # #1256/#1263: on development the pending migrations apply on a
+    # background thread AFTER this returns, so /health answers while
+    # the backfill runs (a synchronous apply was killed by the 10 s
+    # healthcheck); production never auto-runs.
     try:
         from migrations import runner
     except Exception:  # noqa: BLE001 - fail-open: boot must not depend on the ledger
         logger.debug("migration pending-check unavailable", exc_info=True)
     else:
         runner.boot_gate()
+        runner.auto_apply_in_background()
     return app
 
 

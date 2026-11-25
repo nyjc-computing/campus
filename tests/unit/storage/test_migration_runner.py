@@ -1531,57 +1531,76 @@ class TestBootGate(unittest.TestCase):
 
     def test_no_db_touch_outside_production_even_when_enforced(self):
         def connect():
-            raise AssertionError("must not connect in testing")
+            raise AssertionError("must not connect outside production")
 
-        # Testing is outside both the warn envs and the auto-apply
-        # envs (#1256): a suite boot never touches a real ledger.
-        outstanding = self._gate({}, enforced=True, env_name="testing",
-                                 connect=connect)
-        self.assertEqual(outstanding, [])
+        # The gate itself connects only in the production-style warn
+        # envs: development and testing boots never touch a ledger
+        # from boot_gate (the dev auto-apply runs on its own thread,
+        # #1263, and re-checks the env itself).
+        for env_name in ("development", "testing"):
+            with self.subTest(env=env_name):
+                outstanding = self._gate({}, enforced=True,
+                                         env_name=env_name, connect=connect)
+                self.assertEqual(outstanding, [])
 
-    def test_development_gate_applies_before_checking(self):
-        # #1256: a development boot applies its own pending migrations
-        # at the gate, before anything reads the ledger — here, two
-        # real temp-dir migrations run through the fake connection.
-        (self.dir / "001_a.py").write_text("def upgrade():\n    pass\n",
-                                           encoding="utf-8")
-        (self.dir / "002_b.py").write_text("def upgrade():\n    pass\n",
-                                           encoding="utf-8")
-        from migrations.runner import MigrationFile
-        files = [MigrationFile(revision="001", filename="001_a.py"),
-                 MigrationFile(revision="002", filename="002_b.py")]
+
+class TestAutoApplyBackground(unittest.TestCase):
+    """The background-thread spawn (#1263): dev-only, opt-out, real
+    thread that runs auto_apply_pending."""
+
+    def _with_env(self, env_name="development", opt_out=None):
+        """Set ENV (and optionally the opt-out), restoring afterwards."""
         from campus.common import env
-        from migrations import runner
         original_env = os.environ.get("ENV")
-        env.set("ENV", "development")
-        try:
-            cursor = FakeCursor(fetchall_rows=[],
-                                fetchone_results=[(True,)])
-            conn = FakeConn(cursor)
-            with patch("migrations.runner._connect", return_value=conn), \
-                    patch("migrations.runner.discover_migration_files",
-                          return_value=files), \
-                    patch("migrations.runner.MIGRATIONS_DIR", self.dir), \
-                    patch("migrations.runner._get_user",
-                          return_value="tester"), \
-                    self.assertLogs(self.LOGGER, level="INFO") as captured:
-                outstanding = runner.boot_gate()
-        finally:
+        original_flag = os.environ.get("MIGRATIONS_AUTO_APPLY")
+        env.set("ENV", env_name)
+        if opt_out is not None:
+            env.set("MIGRATIONS_AUTO_APPLY", opt_out)
+
+        def _restore():
             if original_env is None:
                 env.delete("ENV")
             else:
                 env.set("ENV", original_env)
-        # warn_if_pending is dev-side silent: the gate returns clean
-        # even though the ledger was empty when the boot started.
-        self.assertEqual(outstanding, [])
-        inserts = [(sql, params) for sql, params in cursor.executed
-                   if "INSERT INTO" in sql]
-        self.assertEqual([params[0] for _, params in inserts],
-                         ["001", "002"])
-        self.assertEqual([params[2] for _, params in inserts],
-                         ["applied", "applied"])
-        self.assertTrue(any("startup auto-applied 001" in line
-                            for line in captured.output))
+            if opt_out is not None:
+                if original_flag is None:
+                    env.delete("MIGRATIONS_AUTO_APPLY")
+                else:
+                    env.set("MIGRATIONS_AUTO_APPLY", original_flag)
+
+        self.addCleanup(_restore)
+
+    def test_development_spawns_a_running_thread(self):
+        from migrations import runner
+
+        self._with_env("development")
+        calls = []
+        original = runner.auto_apply_pending
+        try:
+            runner.auto_apply_pending = lambda: calls.append(1)
+            worker = runner.auto_apply_in_background()
+            worker.join(timeout=5)
+        finally:
+            runner.auto_apply_pending = original
+        self.assertIsNotNone(worker)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(calls, [1])
+        self.assertEqual(worker.name, "migrations-auto-apply")
+        self.assertTrue(worker.daemon)
+
+    def test_noop_outside_development(self):
+        from migrations import runner
+
+        for env_name in ("production", "testing"):
+            with self.subTest(env=env_name):
+                self._with_env(env_name)
+                self.assertIsNone(runner.auto_apply_in_background())
+
+    def test_opt_out_spawns_nothing(self):
+        from migrations import runner
+
+        self._with_env("development", opt_out="0")
+        self.assertIsNone(runner.auto_apply_in_background())
 
 
 class TestAutoApply(TestApplyHarnessMixin, unittest.TestCase):
