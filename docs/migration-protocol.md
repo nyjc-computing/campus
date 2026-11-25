@@ -273,7 +273,16 @@ this surface (see
    grants-bearing admin opens the Migrations view and reviews the
    pending delta — revisions, file hashes, declared impact/backup
    scope. The plan delta is the approval artifact. Time the apply for
-   the lowest-usage window (end of day).
+   the lowest-usage window (end of day). For a migration that rewrites
+   existing rows, confirm the live table shape it assumes on that
+   environment before applying (`information_schema.columns`,
+   `pg_indexes`) and read the migration's own dry-run counts first. A
+   table's shape depends on how it was first created there — from the
+   model at startup, by a migration file, or by out-of-band bootstrap —
+   so the same table can differ between development and production, and
+   neither the ledger nor the plan delta records which. (Migration 014
+   was written and tested for both known shapes of `spans` for this
+   reason.)
 3. **Apply**: trigger from the view. Backups upload to the dedicated
    backups bucket (`MIGRATION_BACKUP_BUCKET`, credentials via
    `MIGRATION_BUCKET_*` overrides / the service's `BUCKET_*`) before
@@ -282,7 +291,8 @@ this surface (see
    failure records the ledger `failed` row and stops; abort takes
    effect between migrations. Verify: the ledger (view or
    `runner.py status`) shows applied, and the next app boots log no
-   pending WARNING.
+   pending WARNING. For a data migration, also spot-check rows it was
+   meant to change.
 4. **Merge** `weekly` → `main` once pending migrations are applied
    (the orderly path: migrate → merge → green deploy). Update the
    doc ledger mirror table in the PR that shipped the migration.
@@ -299,7 +309,9 @@ service cannot boot far enough to serve its own routes):
   environment (recipe: campus-deploy#4): explicit trigger only, builds
   from `weekly` (migrations run BEFORE the release merge), plan/apply
   modes selected at trigger time; `scripts/prod_migrate.sh plan|apply`
-  wraps the trigger-verify-poll loop.
+  in the **campus-deploy** repo (not this one) wraps the
+  trigger-verify-poll loop. `plan` is read-only and prints the pending
+  delta per service scope; `apply` runs auth → api → audit.
 - The direct runner: `railway ssh -s campus.<svc> -e production`; the
   repo is at `/app`; credentials resolve from the service's
   environment variables; `python migrations/runner.py --db <svc>
@@ -309,7 +321,11 @@ service cannot boot far enough to serve its own routes):
   2026-11-16 prod standup created the table in the auth DB). For data
   backfills, run the migration's own dry-run first. Note `railway
   ssh` needs port 22 egress AND account-token auth — blocked on the
-  office network (work from any network where SSH egress is open).
+  office network (work from any network where SSH egress is open). For
+  the Railway login traps, read the `railway-ops` skill's "Access
+  model" first: check the login with `railway status` (not `whoami`),
+  and run production commands as `env -u RAILWAY_TOKEN railway <cmd>`,
+  because a token in the environment overrides an interactive login.
 - Emergency-only: a temporary `ENV` flip + redeploy (mutates
   running-service config twice — reserved for superadmin recovery,
   never routine).
