@@ -5,6 +5,8 @@ diffing, apply targeting, hash-guard scanning), the stamp/ensure DB
 paths via a fake connection, and the apply loop with real (temp-dir)
 migration files — no live database. #1166 adds the apply advisory-lock
 exclusion and the between-migration cancel hook, tested the same way.
+#1256 adds the development startup auto-apply (TestAutoApply) and the
+gate-level ordering (TestBootGate).
 
 Note: this file lives under storage/ rather than a migrations/ test
 package because a tests/unit/migrations package would shadow the
@@ -1529,11 +1531,225 @@ class TestBootGate(unittest.TestCase):
 
     def test_no_db_touch_outside_production_even_when_enforced(self):
         def connect():
-            raise AssertionError("must not connect outside production")
+            raise AssertionError("must not connect in testing")
 
-        outstanding = self._gate({}, enforced=True, env_name="development",
+        # Testing is outside both the warn envs and the auto-apply
+        # envs (#1256): a suite boot never touches a real ledger.
+        outstanding = self._gate({}, enforced=True, env_name="testing",
                                  connect=connect)
         self.assertEqual(outstanding, [])
+
+    def test_development_gate_applies_before_checking(self):
+        # #1256: a development boot applies its own pending migrations
+        # at the gate, before anything reads the ledger — here, two
+        # real temp-dir migrations run through the fake connection.
+        (self.dir / "001_a.py").write_text("def upgrade():\n    pass\n",
+                                           encoding="utf-8")
+        (self.dir / "002_b.py").write_text("def upgrade():\n    pass\n",
+                                           encoding="utf-8")
+        from migrations.runner import MigrationFile
+        files = [MigrationFile(revision="001", filename="001_a.py"),
+                 MigrationFile(revision="002", filename="002_b.py")]
+        from campus.common import env
+        from migrations import runner
+        original_env = os.environ.get("ENV")
+        env.set("ENV", "development")
+        try:
+            cursor = FakeCursor(fetchall_rows=[],
+                                fetchone_results=[(True,)])
+            conn = FakeConn(cursor)
+            with patch("migrations.runner._connect", return_value=conn), \
+                    patch("migrations.runner.discover_migration_files",
+                          return_value=files), \
+                    patch("migrations.runner.MIGRATIONS_DIR", self.dir), \
+                    patch("migrations.runner._get_user",
+                          return_value="tester"), \
+                    self.assertLogs(self.LOGGER, level="INFO") as captured:
+                outstanding = runner.boot_gate()
+        finally:
+            if original_env is None:
+                env.delete("ENV")
+            else:
+                env.set("ENV", original_env)
+        # warn_if_pending is dev-side silent: the gate returns clean
+        # even though the ledger was empty when the boot started.
+        self.assertEqual(outstanding, [])
+        inserts = [(sql, params) for sql, params in cursor.executed
+                   if "INSERT INTO" in sql]
+        self.assertEqual([params[0] for _, params in inserts],
+                         ["001", "002"])
+        self.assertEqual([params[2] for _, params in inserts],
+                         ["applied", "applied"])
+        self.assertTrue(any("startup auto-applied 001" in line
+                            for line in captured.output))
+
+
+class TestAutoApply(TestApplyHarnessMixin, unittest.TestCase):
+    """Startup auto-apply on development (#1256): env gate, opt-out,
+    lock refusal, hash-guard skip, fail-open, loud failure."""
+
+    LOGGER = "migrations.runner"
+
+    def _run_auto(self, files, rows=None, env_name="development",
+                  fetchone_results=None, connect=None, opt_out=None):
+        """Run auto_apply_pending against a stubbed ledger.
+
+        Manages ENV and MIGRATIONS_AUTO_APPLY for the call, restoring
+        the previous values afterwards.
+        """
+        from campus.common import env
+        from migrations import runner
+        if fetchone_results is None:
+            # the apply advisory lock (#1166) succeeds on first poll
+            fetchone_results = [(True,)]
+        cursor = FakeCursor(fetchall_rows=rows or [],
+                            fetchone_results=fetchone_results)
+        conn = FakeConn(cursor)
+        original_env = os.environ.get("ENV")
+        original_flag = os.environ.get("MIGRATIONS_AUTO_APPLY")
+        env.set("ENV", env_name)
+        if opt_out is not None:
+            env.set("MIGRATIONS_AUTO_APPLY", opt_out)
+        try:
+            with patch("migrations.runner._connect",
+                       connect or (lambda: conn)), \
+                    patch("migrations.runner.discover_migration_files",
+                          return_value=files), \
+                    patch("migrations.runner.MIGRATIONS_DIR", self.dir), \
+                    patch("migrations.runner._get_user",
+                          return_value="tester"):
+                applied = runner.auto_apply_pending(env_name=env_name)
+        finally:
+            if original_env is None:
+                env.delete("ENV")
+            else:
+                env.set("ENV", original_env)
+            if opt_out is not None:
+                if original_flag is None:
+                    env.delete("MIGRATIONS_AUTO_APPLY")
+                else:
+                    env.set("MIGRATIONS_AUTO_APPLY", original_flag)
+        return applied, conn, cursor
+
+    def _inserts(self, cursor):
+        return [(sql, params) for sql, params in cursor.executed
+                if "INSERT INTO" in sql]
+
+    def test_applies_pending_in_order_on_development(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        self._write_migration("002_b.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_b.py"))
+        with self.assertLogs(self.LOGGER, level="INFO") as captured:
+            applied, _, cursor = self._run_auto(files)
+        self.assertEqual(applied, ["001", "002"])
+        inserts = self._inserts(cursor)
+        self.assertEqual([params[0] for _, params in inserts],
+                         ["001", "002"])
+        self.assertEqual([params[2] for _, params in inserts],
+                         ["applied", "applied"])
+        self.assertTrue(any("startup auto-applied 001" in line
+                            for line in captured.output))
+
+    def test_clean_ledger_applies_nothing(self):
+        from migrations.runner import APPLIED
+        self._write_migration("003_c.py", "():\n    pass\n")
+        files = self._files(("003", "003_c.py"))
+        rows = [_row("003", "003_c.py", status=APPLIED)]
+        applied, _, cursor = self._run_auto(files, rows=rows)
+        self.assertEqual(applied, [])
+        self.assertFalse(self._inserts(cursor))
+
+    def test_noop_outside_development(self):
+        def connect():
+            raise AssertionError("must not connect outside development")
+
+        self._write_migration("004_d.py", "():\n    pass\n")
+        files = self._files(("004", "004_d.py"))
+        for env_name in ("production", "testing", "staging"):
+            applied, _, _ = self._run_auto(files, env_name=env_name,
+                                           connect=connect)
+            self.assertEqual(applied, [])
+
+    def test_opt_out_var_disables(self):
+        self._write_migration("005_e.py", "():\n    pass\n")
+        files = self._files(("005", "005_e.py"))
+        for value in ("0", "false", "OFF", " No "):
+            with self.subTest(value=value):
+                applied, _, cursor = self._run_auto(files, opt_out=value)
+                self.assertEqual(applied, [])
+                self.assertFalse(self._inserts(cursor))
+
+    def test_opt_out_truthy_value_still_applies(self):
+        # the opt-out is opt-IN to disable: "1" is not an off value
+        self._write_migration("005_e.py", "():\n    pass\n")
+        files = self._files(("005", "005_e.py"))
+        applied, _, _ = self._run_auto(files, opt_out="1")
+        self.assertEqual(applied, ["005"])
+
+    def test_fail_open_when_ledger_unreachable(self):
+        def connect():
+            raise OSError("POSTGRESDB_URI unresolvable")
+
+        self._write_migration("005_e.py", "():\n    pass\n")
+        files = self._files(("005", "005_e.py"))
+        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+            applied, _, _ = self._run_auto(files, connect=connect)
+        self.assertEqual(applied, [])
+        self.assertTrue(any("startup auto-apply skipped" in line
+                            for line in captured.output))
+
+    def test_lock_busy_skips_loudly(self):
+        from migrations import runner
+        self._write_migration("005_e.py", "():\n    pass\n")
+        files = self._files(("005", "005_e.py"))
+        # the lock poll never succeeds; shrink the wait so the test
+        # does not sit for APPLY_LOCK_WAIT_SECONDS
+        original_wait = runner.APPLY_LOCK_WAIT_SECONDS
+        runner.APPLY_LOCK_WAIT_SECONDS = 0.1
+        try:
+            with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+                applied, _, cursor = self._run_auto(
+                    files, fetchone_results=[(False,)])
+        finally:
+            runner.APPLY_LOCK_WAIT_SECONDS = original_wait
+        self.assertEqual(applied, [])
+        self.assertFalse(self._inserts(cursor))
+        self.assertTrue(any("advisory lock" in line
+                            for line in captured.output))
+
+    def test_hash_mismatch_skips_without_applying(self):
+        from migrations.runner import APPLIED
+        self._write_migration("006_f.py", "():\n    pass\n")
+        files = self._files(("006", "006_f.py"))
+        rows = [_row("006", "006_f.py", status=APPLIED,
+                     file_hash="not-the-real-hash")]
+        with self.assertLogs(self.LOGGER, level="WARNING") as captured:
+            applied, _, cursor = self._run_auto(files, rows=rows)
+        self.assertEqual(applied, [])
+        self.assertFalse(self._inserts(cursor))
+        self.assertTrue(any("changed since application" in line
+                            for line in captured.output))
+
+    def test_failure_records_row_stops_and_is_loud(self):
+        self._write_migration("001_a.py", "():\n    pass\n")
+        self._write_migration("002_bad.py",
+                              "():\n    raise RuntimeError('boom')\n")
+        self._write_migration("003_c.py", "():\n    pass\n")
+        files = self._files(("001", "001_a.py"), ("002", "002_bad.py"),
+                            ("003", "003_c.py"))
+        with self.assertLogs(self.LOGGER, level="ERROR") as captured:
+            applied, _, cursor = self._run_auto(files)
+        # 001 applied; 002 failed loudly and was recorded; 003 untouched
+        self.assertEqual(applied, ["001"])
+        inserts = self._inserts(cursor)
+        self.assertEqual([params[0] for _, params in inserts],
+                         ["001", "002"])
+        self.assertEqual(inserts[1][1][2], "failed")
+        self.assertIn("boom", inserts[1][1][5])
+        failure_lines = [line for line in captured.output
+                         if "FAILED on 002" in line]
+        self.assertTrue(failure_lines)
+        self.assertIn("boot continues", failure_lines[-1])
 
 
 class TestRollback(TestApplyHarnessMixin, unittest.TestCase):
