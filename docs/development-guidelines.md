@@ -350,6 +350,38 @@ def create_apikey(**kwargs):
 - **Custom event types** - If you need different event types for success vs failure,
   use manual calls to `emit_audit_event()`
 
+### Session Cookie Naming
+
+Every browser-facing deployment must set a **distinct** Flask session
+cookie name. On shared hostnames (the campus-gateway topology, #995 and
+#1274) two apps using Flask's default `session` name silently clobber
+each other's sessions — the pre-#996 core-fleet session thrash, again.
+
+**Scheme: `campus_<app>_session`** — matching the core fleet's
+`campus_auth_session` / `campus_audit_session` (set via the
+`SESSION_COOKIE_NAMES` env consumed by `campus.deploy.create_app`, PR
+#996). Apps built on `flask_campus` (which don't run through
+`campus.deploy.create_app`) set the scheme directly:
+
+```python
+app.config["SESSION_COOKIE_NAME"] = "campus_classroom_session"
+```
+
+Agreed assignments:
+
+| App | Cookie name |
+|---|---|
+| campus.auth | `campus_auth_session` (live) |
+| campus.audit | `campus_audit_session` (live) |
+| campus-classroom | `campus_classroom_session` |
+| campus-apphost | `campus_apphost_session` |
+| campus-admin | `campus_admin_session` |
+| campus-profile | `campus_profile_session` |
+| nyxchange-timetable-v2 | `campus_timetable_session` |
+
+New browser-facing apps pick the next `campus_<app>_session` name at
+creation time — do not ship on Flask's default.
+
 ## Common Pitfalls
 
 ### Storage Initialization Order
