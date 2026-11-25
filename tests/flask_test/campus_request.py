@@ -11,17 +11,25 @@ Key features:
 - Looks up apps from global registry at request time
 - Implements full JsonClient protocol including auth methods
 - Supports routing to multiple Flask apps by base_url and path prefix
+- Mirrors CampusRequest._send()'s session credentials and 401 retry
 """
 
+from collections.abc import Callable
 from typing import Any, Self
 from urllib.parse import urljoin
 
 import flask
+from campus_python.json_client import _bearer_override, _session_hook
 from campus_python.json_client.interface import JsonClient
 
 from campus.model import HttpHeader
 
 from .response import FlaskTestResponse
+
+# _bearer_override/_session_hook are the SDK's context-local session state,
+# read by TestCampusRequest._send() exactly as CampusRequest._send() reads
+# it (campus-api-python#189). An SDK release that renames either fails the
+# import above, and with it every suite.
 
 # Global registry for test apps
 # Maps base_url to dict of path_prefix -> Flask app
@@ -90,6 +98,11 @@ class TestCampusRequest(JsonClient):
     - Routes requests dynamically based on base_url and path prefix
     - Looks up Flask app from registry using get_test_app()
     - Compatible with JsonClient protocol used by campus_python
+    - Credentials and the 401 retry are re-implemented in _send(), not
+      inherited: CampusRequest applies a session's bearer per request
+      from context-local state (#189), so a double that only honours
+      set_bearer_authorization() sends the ambient credential instead.
+      tests/unit/test_flask_test_transport.py pins the mirror.
 
     Initialization timing:
     - Can be instantiated BEFORE Flask apps are created
@@ -137,6 +150,10 @@ class TestCampusRequest(JsonClient):
 
         # Override headers for set_bearer_authorization/set_basic_authorization
         self._override_auth_headers: dict[str, str] | None = None
+        # Optional 401 auto-refresh hook (issue #89); see
+        # set_unauthorized_hook(). Off by default.
+        self._unauthorized_hook: Callable[[], str | None] | None = None
+        self._in_unauthorized_hook = False
 
         # Note: We do NOT look up app at initialization time!
         # Apps can be registered later via register_test_app()
@@ -208,7 +225,10 @@ class TestCampusRequest(JsonClient):
         """The current Authorization header value, or None when unset.
 
         Mirrors CampusRequest.authorization (sdk #119): peek the header
-        that would be sent, without changing client state.
+        that would be sent, without changing client state. As in
+        production that is the client's own header — a context-local
+        session bearer (#189) is applied per request in _send() and
+        does not show up here.
         """
         return self.headers.get("Authorization")
 
@@ -264,6 +284,87 @@ class TestCampusRequest(JsonClient):
             headers.setdefault(name, value)
         return headers
 
+    def set_unauthorized_hook(
+            self,
+            hook: Callable[[], str | None] | None,
+    ) -> None:
+        """Install a 401 auto-refresh hook (issue #89).
+
+        Mirrors CampusRequest.set_unauthorized_hook: a 401 response runs
+        the hook once, and a returned bearer token retries the request
+        once (see _send). None clears the hook.
+
+        Args:
+            hook: Callable returning the new bearer token, or None to
+                signal refresh failure. None clears the hook.
+        """
+        self._unauthorized_hook = hook
+
+    def _send(
+            self,
+            method: str,
+            path: str,
+            **kwargs: Any
+    ) -> FlaskTestResponse:
+        """Send one request, with one 401-triggered retry (issue #89).
+
+        Mirrors CampusRequest._send() — the one place the production
+        client decides which credential goes out and when a 401 is
+        retried — so keep the two in step:
+
+        - A context-local session override (campus-api-python#189) wins
+          over the client's own headers and is applied per request.
+          with_app_session()/with_user_session() no longer call
+          set_bearer_authorization(); they publish the bearer, and the
+          401 hook, on ContextVars that only _send() reads. A double
+          that ignores them sends the ambient credential instead: with
+          the fixture's ACCESS_TOKEN audit key that is "App credentials
+          for token audit_v1_... not found" (campus#1288).
+        - The retry is safe for non-idempotent requests: services
+          reject the bearer in a before_request authenticator before
+          any handler runs.
+        - A hook returning None leaves the first 401 in place, and a
+          second 401 is returned as-is.
+
+        Args:
+            method: HTTP verb
+            path: Request path
+            **kwargs: Flask test client keyword arguments (json, data,
+                content_type, query_string)
+
+        Returns:
+            FlaskTestResponse wrapping the test client response
+        """
+        test_client = self._get_app_for_request(path).test_client()
+        full_path = self._make_path(path)
+
+        def dispatch(override: str | None) -> flask.wrappers.Response:
+            kwargs["headers"] = self._get_auth_headers_dict()
+            if override is not None:
+                kwargs["headers"]["Authorization"] = f"Bearer {override}"
+            return test_client.open(full_path, method=method, **kwargs)
+
+        override = _bearer_override.get()
+        response = dispatch(override)
+        hook = _session_hook.get() or self._unauthorized_hook
+        if (
+                response.status_code == 401
+                and hook is not None
+                and not self._in_unauthorized_hook
+        ):
+            self._in_unauthorized_hook = True
+            try:
+                token = hook()
+            finally:
+                self._in_unauthorized_hook = False
+            if token:
+                if override is not None:
+                    _bearer_override.set(token)
+                else:
+                    self.set_bearer_authorization(token)
+                response = dispatch(_bearer_override.get())
+        return FlaskTestResponse(response)
+
     def get(self: Self, path: str, query: dict[str, Any] | None = None) -> FlaskTestResponse:
         """Sends a GET request.
 
@@ -274,21 +375,12 @@ class TestCampusRequest(JsonClient):
         Returns:
             FlaskTestResponse wrapping the test client response
         """
-        app = self._get_app_for_request(path)
-        test_client = app.test_client()
-        full_path = self._make_path(path)
-
-        response = test_client.get(
-            full_path,
-            query_string=query,
-            headers=self._get_auth_headers_dict()
-        )
-        return FlaskTestResponse(response)
+        return self._send("GET", path, query_string=query)
 
     def post(
-        self: Self,
-        path: str,
-        json: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            json: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a POST request.
 
@@ -299,49 +391,34 @@ class TestCampusRequest(JsonClient):
         Returns:
             FlaskTestResponse wrapping the test client response
         """
-        app = self._get_app_for_request(path)
-        test_client = app.test_client()
-        full_path = self._make_path(path)
-
-        response = test_client.post(
-            full_path,
-            json=json,
-            content_type='application/json',
-            headers=self._get_auth_headers_dict()
-        )
-        return FlaskTestResponse(response)
+        return self._send("POST", path, json=json, content_type='application/json')
 
     def put(
-        self: Self,
-        path: str,
-        json: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            json: dict[str, Any] | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PUT request.
 
         Args:
             path: Request path
             json: Optional JSON body
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
         """
-        app = self._get_app_for_request(path)
-        test_client = app.test_client()
-        full_path = self._make_path(path)
-
-        response = test_client.put(
-            full_path,
-            json=json,
-            content_type='application/json',
-            headers=self._get_auth_headers_dict()
+        return self._send(
+            "PUT", path, json=json, content_type='application/json', query_string=query
         )
-        return FlaskTestResponse(response)
 
     def put_data(
-        self: Self,
-        path: str,
-        data: bytes | str,
-        content_type: str | None = None
+            self: Self,
+            path: str,
+            data: bytes | str,
+            content_type: str | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PUT request with a raw body.
 
@@ -354,30 +431,21 @@ class TestCampusRequest(JsonClient):
             data: Raw request body
             content_type: Content-Type header for the body, or None to
                 leave it to Flask's default handling
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
         """
-        app = self._get_app_for_request(path)
-        test_client = app.test_client()
-        full_path = self._make_path(path)
-
-        headers = self._get_auth_headers_dict()
-        if content_type:
-            headers["Content-Type"] = content_type
-        response = test_client.put(
-            full_path,
-            data=data,
-            headers=headers
+        return self._send(
+            "PUT", path, data=data, content_type=content_type, query_string=query
         )
-        return FlaskTestResponse(response)
 
     def post_data(
-        self: Self,
-        path: str,
-        data: bytes | str,
-        content_type: str | None = None,
-        query: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            data: bytes | str,
+            content_type: str | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a POST request with a raw body.
 
@@ -386,72 +454,49 @@ class TestCampusRequest(JsonClient):
         attachment uploads carry the bytes with ?filename= in the
         query string.
         """
-        app = self._get_app_for_request(path)
-        test_client = app.test_client()
-        full_path = self._make_path(path)
-
-        headers = self._get_auth_headers_dict()
-        if content_type:
-            headers["Content-Type"] = content_type
-        response = test_client.post(
-            full_path,
-            data=data,
-            query=query,
-            headers=headers
+        return self._send(
+            "POST", path, data=data, content_type=content_type, query_string=query
         )
-        return FlaskTestResponse(response)
 
     def delete(
-        self: Self,
-        path: str,
-        json: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            json: dict[str, Any] | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a DELETE request.
 
         Args:
             path: Request path
             json: Optional JSON body
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
         """
-        app = self._get_app_for_request(path)
-        test_client = app.test_client()
-        full_path = self._make_path(path)
-
-        response = test_client.delete(
-            full_path,
-            json=json,
-            content_type='application/json',
-            headers=self._get_auth_headers_dict()
+        return self._send(
+            "DELETE", path, json=json, content_type='application/json', query_string=query
         )
-        return FlaskTestResponse(response)
 
     def patch(
-        self: Self,
-        path: str,
-        json: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            json: dict[str, Any] | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PATCH request.
 
         Args:
             path: Request path
             json: Optional JSON body
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
         """
-        app = self._get_app_for_request(path)
-        test_client = app.test_client()
-        full_path = self._make_path(path)
-
-        response = test_client.patch(
-            full_path,
-            json=json,
-            content_type='application/json',
-            headers=self._get_auth_headers_dict()
+        return self._send(
+            "PATCH", path, json=json, content_type='application/json', query_string=query
         )
-        return FlaskTestResponse(response)
 
 
 def patch_campus_python() -> None:
