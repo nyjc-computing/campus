@@ -176,7 +176,7 @@ would override them):
 
 ### campus-cleanup (cron job)
 
-The scheduled cleanup deployment (`campus.cleanup`, `Dockerfile.cleanup`). Created on development 2026-11-25 (service id `c86b82af`, hourly cron `0 * * * *`, GitHub trigger `github@weekly` with auto-deploy on, restart NEVER, no domain/healthcheck); production wiring still pending (#1262).
+The scheduled cleanup deployment (`campus.cleanup`, `Dockerfile.cleanup`). Created on development 2026-11-25 (service id `c86b82af`, hourly cron `0 * * * *`, GitHub trigger `github@weekly` with auto-deploy on, restart NEVER, no domain/healthcheck, instance limits 1 vCPU / 2 GB RAM per `docs/cleanup-deployment.md` §Railway setup); production wiring still pending (#1262).
 Batch job: no domain, no healthcheck; Railway cron starts it (≥5-minute
 minimum cadence, `railway cron run` for one-offs). Setup runbook:
 [docs/cleanup-deployment.md](cleanup-deployment.md). Target matrix —
