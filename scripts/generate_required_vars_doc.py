@@ -68,6 +68,10 @@ def render() -> str:
         "CLEANUP_JOB_AUTH_MONGODB_URI": "The auth service's Mongo database "
                                         "(auth_sessions and device_codes "
                                         "sweeps)",
+        "CLEANUP_JOB_AUTH_MONGODB_NAME": "The auth service's Mongo database "
+                                         "name (campus_auth); the backend "
+                                         "resolves it separately from the "
+                                         "URI",
     }
 
     lines = [

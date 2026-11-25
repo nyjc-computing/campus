@@ -74,7 +74,10 @@ CREATE TABLE IF NOT EXISTS "{LEDGER_TABLE}" (
 
 # Scope -> the process env the storage layer resolves per connection.
 # Values are the CLEANUP_JOB_* variables set on the deployment (Railway
-# references to each service's databases). Scopes run in this dict's
+# references to each service's databases). Mongo scopes must carry
+# MONGODB_NAME too — the backend resolves the database name separately
+# from the URI (found live: the first run's auth jobs failed with
+# "Secret 'MONGODB_NAME' not found"). Scopes run in this dict's
 # order; every scope a selected job needs is wired before any of its
 # jobs run.
 SCOPES: dict[str, dict[str, str]] = {
@@ -82,8 +85,13 @@ SCOPES: dict[str, dict[str, str]] = {
     "auth": {
         "POSTGRESDB_URI": "CLEANUP_JOB_AUTH_POSTGRESDB_URI",
         "MONGODB_URI": "CLEANUP_JOB_AUTH_MONGODB_URI",
+        "MONGODB_NAME": "CLEANUP_JOB_AUTH_MONGODB_NAME",
     },
 }
+
+# Storage-resolved env names: a scope drops any of these it does not
+# declare, so it never sees a previous scope's databases.
+STORAGE_ENV_NAMES = ("POSTGRESDB_URI", "MONGODB_URI", "MONGODB_NAME")
 
 
 @dataclass(frozen=True)
@@ -229,7 +237,7 @@ def _apply_scope_env(scope: str) -> None:
                 "(docs/cleanup-deployment.md has the variable matrix)"
             )
         os.environ[var] = value
-    for var in ("POSTGRESDB_URI", "MONGODB_URI"):
+    for var in STORAGE_ENV_NAMES:
         if var not in declared:
             os.environ.pop(var, None)
 

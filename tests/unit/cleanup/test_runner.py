@@ -59,6 +59,7 @@ def _stub_job(name, scope, *, rows=0, error=None):
         calls.append({
             "POSTGRESDB_URI": os.environ.get("POSTGRESDB_URI"),
             "MONGODB_URI": os.environ.get("MONGODB_URI"),
+            "MONGODB_NAME": os.environ.get("MONGODB_NAME"),
         })
         if error is not None:
             raise error
@@ -88,6 +89,7 @@ class TestRun(unittest.TestCase):
             "auth": {
                 "POSTGRESDB_URI": "TEST_CLEANUP_AUTH_PG",
                 "MONGODB_URI": "TEST_CLEANUP_AUTH_MONGO",
+                "MONGODB_NAME": "TEST_CLEANUP_AUTH_NAME",
             },
         }
         sources = {source for mapping in fake.values()
@@ -101,7 +103,7 @@ class TestRun(unittest.TestCase):
             cleanup.SCOPES = old_scopes
             for source in sources:
                 os.environ.pop(source, None)
-            for var in ("POSTGRESDB_URI", "MONGODB_URI"):
+            for var in ("POSTGRESDB_URI", "MONGODB_URI", "MONGODB_NAME"):
                 os.environ.pop(var, None)
 
         self.addCleanup(_restore)
@@ -188,9 +190,11 @@ class TestRun(unittest.TestCase):
         audit_uri = "postgres://audit-test"
         auth_pg = "postgres://auth-test"
         auth_mongo = "mongodb://auth-test"
+        auth_name = "campus_auth"
         os.environ["CLEANUP_JOB_AUDIT_POSTGRESDB_URI"] = audit_uri
         os.environ["CLEANUP_JOB_AUTH_POSTGRESDB_URI"] = auth_pg
         os.environ["CLEANUP_JOB_AUTH_MONGODB_URI"] = auth_mongo
+        os.environ["CLEANUP_JOB_AUTH_MONGODB_NAME"] = auth_name
         try:
             exit_code = run(
                 ledger_conn=conn, job_list=(job_audit, job_auth))
@@ -198,14 +202,18 @@ class TestRun(unittest.TestCase):
             for var in ("CLEANUP_JOB_AUDIT_POSTGRESDB_URI",
                         "CLEANUP_JOB_AUTH_POSTGRESDB_URI",
                         "CLEANUP_JOB_AUTH_MONGODB_URI",
-                        "POSTGRESDB_URI", "MONGODB_URI"):
+                        "CLEANUP_JOB_AUTH_MONGODB_NAME",
+                        "POSTGRESDB_URI", "MONGODB_URI", "MONGODB_NAME"):
                 os.environ.pop(var, None)
         self.assertEqual(exit_code, 0)
         self.assertEqual(calls_audit[0]["POSTGRESDB_URI"], audit_uri)
-        # the audit scope drops MONGODB_URI: it declares no Mongo
+        # the audit scope drops the Mongo env: it declares no Mongo
         self.assertIsNone(calls_audit[0]["MONGODB_URI"])
+        self.assertIsNone(calls_audit[0]["MONGODB_NAME"])
         self.assertEqual(calls_auth[0]["POSTGRESDB_URI"], auth_pg)
         self.assertEqual(calls_auth[0]["MONGODB_URI"], auth_mongo)
+        # the Mongo backend resolves the database name separately
+        self.assertEqual(calls_auth[0]["MONGODB_NAME"], auth_name)
 
     def test_empty_selection_is_a_success(self):
         from campus.cleanup import run

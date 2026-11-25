@@ -146,6 +146,7 @@ REQUIRED_ENV_VARS: dict[str, tuple[str, ...]] = {
         "CLEANUP_JOB_AUDIT_POSTGRESDB_URI",
         "CLEANUP_JOB_AUTH_POSTGRESDB_URI",
         "CLEANUP_JOB_AUTH_MONGODB_URI",
+        "CLEANUP_JOB_AUTH_MONGODB_NAME",
     ),
 }
 

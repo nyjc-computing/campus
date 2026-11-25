@@ -13,10 +13,18 @@ debug and proceeds.
 """
 
 import argparse
+import logging
 import sys
 
 
 def main(argv: list[str] | None = None) -> int:
+    # The runner logs the per-job counts and errors at INFO/ERROR; a
+    # cron container has no other logging setup, and a silent
+    # successful run hid the first one's outcome (#1262 wiring).
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     parser = argparse.ArgumentParser(
         prog="python -m campus.cleanup",
         description="Run the campus cleanup jobs (the fleet's one "
