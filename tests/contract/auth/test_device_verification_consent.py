@@ -15,13 +15,26 @@ Contract invariants:
   scopes the same way.
 - An expired or already-used code shows a terminal notice and
   disables Authorize instead of offering it.
+- A pre-filled page states when the code was requested and how long it
+  stays valid, next to a status badge (#1264). For a pending code the
+  badge carries the time left as the server measured it at render;
+  for a code past its validity limit the badge already reads Expired,
+  so the page is right without its script.
 """
 
+import re
 import unittest
+from datetime import datetime
 
 from tests.fixtures import services
 
 MANAGEMENT_SCOPES = "clients:read clients:write clients:admin"
+
+STATUS_BADGE = re.compile(
+    r'<span id="statusBadge" class="badge badge-(?P<state>\w+)" data-state="(?P=state)"'
+    r'(?P<attrs>[^>]*)role="status">(?P<label>[^<]+)</span>'
+)
+TIME_ELEMENT = re.compile(r'<time datetime="([^"]+)">([^<]+)</time>')
 
 
 class TestDeviceVerificationConsentContract(unittest.TestCase):
@@ -72,6 +85,106 @@ class TestDeviceVerificationConsentContract(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 200)
         return response.get_data(as_text=True)
+
+    @staticmethod
+    def _at_millisecond(when) -> datetime:
+        """A stored DateTime truncated to what a <time datetime> carries."""
+        parsed = when.to_datetime()
+        return parsed.replace(microsecond=parsed.microsecond // 1000 * 1000)
+
+    def test_pending_code_states_when_it_was_requested(self):
+        """A pending page shows the badge, the request time and the validity (#1264).
+
+        The times must be the stored record's, so the page cannot
+        disagree with when the server will expire the code. The time
+        left is what the page's script counts down to flip the badge:
+        positive for a just-created code and never more than the TTL.
+        """
+        import campus.config
+        from campus.auth.resources import device_code as device_code_resource
+
+        create_data = self._create_device_code()
+        dc = device_code_resource.peek_by_user_code(create_data["user_code"])
+        assert dc is not None
+
+        page = self._get_verification_page(create_data["user_code"])
+
+        badge = STATUS_BADGE.search(page)
+        self.assertIsNotNone(badge, "status badge missing from the page")
+        self.assertEqual(badge.group("state"), "pending")
+        self.assertEqual(badge.group("label"), "Pending")
+        validity_ms = re.search(r'data-validity-ms="(\d+)"', badge.group("attrs"))
+        self.assertIsNotNone(validity_ms, "pending badge must carry the time left")
+        ttl_ms = campus.config.DEFAULT_DEVICE_CODE_EXPIRY_SECONDS * 1000
+        self.assertGreater(int(validity_ms.group(1)), 0)
+        self.assertLessEqual(int(validity_ms.group(1)), ttl_ms)
+
+        times = TIME_ELEMENT.findall(page)
+        self.assertEqual([iso for iso, _ in times], [
+            self._at_millisecond(dc.created_at).isoformat(timespec="milliseconds"),
+            self._at_millisecond(dc.expires_at).isoformat(timespec="milliseconds"),
+        ])
+        # Without its script the page still shows both times, in UTC
+        self.assertEqual([text for _, text in times], [
+            self._at_millisecond(dc.created_at).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            self._at_millisecond(dc.expires_at).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        ])
+        # The script reveals the expired notice here when the limit passes
+        self.assertIn('id="consentNotice"', page)
+
+    def test_expired_code_renders_expired_badge(self):
+        """A code past its limit renders the Expired badge, with nothing to count down.
+
+        Covers both ways a code can be expired: still "pending" in
+        storage but past its expiry, and already flipped to "expired".
+        """
+        from campus.auth.resources import device_code as device_code_resource
+        from campus.common import schema
+
+        create_data = self._create_device_code()
+        dc = device_code_resource.peek_by_user_code(create_data["user_code"])
+        assert dc is not None
+        device_code_resource.update(
+            dc.id,
+            expires_at=str(
+                schema.DateTime.utcafter(schema.DateTime.utcnow(), seconds=-60)
+            ),
+        )
+
+        for stored_state in ("pending", "expired"):
+            with self.subTest(stored_state=stored_state):
+                if stored_state == "expired":
+                    device_code_resource.update(dc.id, state="expired")
+                page = self._get_verification_page(create_data["user_code"])
+
+                badge = STATUS_BADGE.search(page)
+                self.assertIsNotNone(badge, "status badge missing from the page")
+                self.assertEqual(badge.group("state"), "expired")
+                self.assertEqual(badge.group("label"), "Expired")
+                self.assertNotIn("data-validity-ms", badge.group("attrs"))
+
+    def test_already_used_code_renders_used_badge(self):
+        """An already-used code renders the badge as Already used."""
+        create_data = self._create_device_code()
+
+        with self.app.test_client() as client:
+            with client.session_transaction() as sess:
+                sess['user_id'] = 'contract.test@campus.test'
+            authorize_response = client.post(
+                "/auth/v1/oauth/device/authorize",
+                json={
+                    "user_code": create_data["user_code"],
+                    "user_id": "contract.test@campus.test",
+                }
+            )
+        self.assertEqual(authorize_response.status_code, 200)
+
+        page = self._get_verification_page(create_data["user_code"])
+
+        badge = STATUS_BADGE.search(page)
+        self.assertIsNotNone(badge, "status badge missing from the page")
+        self.assertEqual(badge.group("state"), "already_used")
+        self.assertEqual(badge.group("label"), "Already used")
 
     def test_requested_scopes_render_for_scope_style_device_code(self):
         """A --scope-style device code renders its scopes (#867).
@@ -172,6 +285,9 @@ class TestDeviceVerificationConsentContract(unittest.TestCase):
 
         self.assertNotIn("is requesting permission to", page)
         self.assertNotIn('id="submitBtn" disabled', page)
+        # Nor the request-status strip, which reads the same record
+        self.assertNotIn('id="statusBadge"', page)
+        self.assertNotIn("<time ", page)
 
 
 if __name__ == "__main__":
