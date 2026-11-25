@@ -284,6 +284,15 @@ Two ways to give a person browser access:
   read-scoped mints without `apikeys:write` or `traces:write` refuse
   to start without one.
 
+Expiry strings are stored verbatim — pass a full ISO-8601 timestamp
+with offset (e.g. `2026-12-01T00:00:00Z`). A date-only string like
+`2026-11-26` is accepted and parses to an offset-naive datetime; since
+campus-model v0.2.7 the expiry comparison normalizes that to UTC
+(campus#1273: naive expiries used to TypeError at authentication,
+500ing every request that presented the key before any scope check —
+the failure surfaced only in the service logs, so a "traces read is
+broken" conclusion cost half a day to disprove).
+
 An audit API key is a bearer credential: **an unscoped key holder can
 read every trace in the deployment**; a bind-carrying key is forced
 to its bind on every read surface, whatever the caller asks for
