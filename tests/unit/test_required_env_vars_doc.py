@@ -40,7 +40,7 @@ class TestRequiredEnvVarsDoc(unittest.TestCase):
         from campus import bootstrap
         self.assertEqual(
             set(bootstrap.REQUIRED_ENV_VARS),
-            {"campus.auth", "campus.api", "campus.audit"},
+            {"campus.auth", "campus.api", "campus.audit", "campus.cleanup"},
         )
         for mode, required in bootstrap.REQUIRED_ENV_VARS.items():
             self.assertTrue(required, f"{mode} declares nothing")

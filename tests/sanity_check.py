@@ -113,6 +113,7 @@ class TestRequiredDeploymentFiles(unittest.TestCase):
             "wsgi.py",
             "pyproject.toml",
             "poetry.lock",
+            "Dockerfile.cleanup",
         ]
 
         missing_files = []

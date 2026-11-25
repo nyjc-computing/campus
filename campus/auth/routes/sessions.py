@@ -20,6 +20,7 @@ import contextlib
 
 import flask
 
+import campus.cleanup.jobs
 import campus.config
 import campus.flask_campus as flask_campus
 from campus.common import schema
@@ -167,8 +168,15 @@ def sweep(at_time: schema.DateTime | None = None) -> flask_campus.JsonResponse:
     server clock: the sweep deletes every session expired by then, so a
     future moment would delete live sessions. The tolerance covers a
     caller's clock running slightly fast.
+
+    This is the manual/on-demand trigger for the operator. The
+    scheduled sweep runs on the cleanup deployment
+    (campus.cleanup.jobs.sweep_auth_sessions) — the same
+    implementation, on the fleet's cron schedule (#1249); nothing
+    periodic ever runs inside this service.
     """
-    swept_count = session_resource.sweep(at_time=_sweep_moment(at_time))
+    swept_count = campus.cleanup.jobs.sweep_auth_sessions(
+        at_time=_sweep_moment(at_time))
     get_yapper().emit('campus.sessions.sweep')
     return {"swept_count": swept_count}, 200
 

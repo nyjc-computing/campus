@@ -154,8 +154,19 @@ memoryGB})`; read back with `serviceInstanceLimits` (returns
   packet (network requests, DB connections, even NTP) — CPU% is not the
   signal, and there is no documented CPU-based replica autoscaler (the
   replica count is a manual setting). Any timer that talks keeps it
-  awake: background work goes in a Railway cron job (native, ≥5 min apart,
-  `railway cron run` for a one-off) or rides on inbound requests (#1249).
+  awake: background work goes in the cron-scheduled **campus-cleanup**
+  deployment (`Dockerfile.cleanup`, batch job that talks to the service
+  DBs directly and never calls the app services — docs/cleanup-deployment.md;
+  native Railway cron, ≥5 min apart, `railway cron run` for a one-off)
+  or rides on inbound requests (#1249).
+- **Job SUCCESS ≠ job completion**: Railway marks a batch deployment
+  SUCCESS when the container STARTS (observed live 2026-11-25 with the
+  campus-migrate job mid-backfill). For long jobs, poll the deployment
+  LOG for the runner's completion lines or the ledger — never the
+  deployment status — and never redeploy the service while it runs:
+  a new deployment STOPS the running one (cost: a killed 014 apply at
+  ~8% done, redone from scratch — the migration was idempotent, which
+  is why that ended in recovery, not damage).
 - **Probing recipe** (`railway ssh` is BLOCKED from the office host —
   `ssh.railway.com:22` connection timeout even with a valid personal
   login; it's port filtering, not auth):
