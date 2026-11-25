@@ -75,6 +75,7 @@ otherwise).
    | `CLEANUP_JOB_AUDIT_POSTGRESDB_URI` | `${{campus.audit-postgres.DATABASE_URL}}` |
    | `CLEANUP_JOB_AUTH_POSTGRESDB_URI` | `${{campus.auth-postgres.DATABASE_URL}}` |
    | `CLEANUP_JOB_AUTH_MONGODB_URI` | `${{campus.auth-mongodb.MONGODB_URI}}` |
+   | `CLEANUP_JOB_AUTH_MONGODB_NAME` | `campus_auth` (literal — the Mongo database name; the backend resolves it separately from the URI) |
 
    `DEPLOY=campus.cleanup` for self-documentation. Credentials-before-
    first-boot rules apply (#1105): wire the references before the
