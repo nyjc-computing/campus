@@ -312,15 +312,17 @@ class TestCampusRequest(JsonClient):
         return FlaskTestResponse(response)
 
     def put(
-        self: Self,
-        path: str,
-        json: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            json: dict[str, Any] | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PUT request.
 
         Args:
             path: Request path
             json: Optional JSON body
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
@@ -332,16 +334,18 @@ class TestCampusRequest(JsonClient):
         response = test_client.put(
             full_path,
             json=json,
+            query_string=query,
             content_type='application/json',
             headers=self._get_auth_headers_dict()
         )
         return FlaskTestResponse(response)
 
     def put_data(
-        self: Self,
-        path: str,
-        data: bytes | str,
-        content_type: str | None = None
+            self: Self,
+            path: str,
+            data: bytes | str,
+            content_type: str | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PUT request with a raw body.
 
@@ -354,6 +358,7 @@ class TestCampusRequest(JsonClient):
             data: Raw request body
             content_type: Content-Type header for the body, or None to
                 leave it to Flask's default handling
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
@@ -365,9 +370,11 @@ class TestCampusRequest(JsonClient):
         headers = self._get_auth_headers_dict()
         if content_type:
             headers["Content-Type"] = content_type
+        # The Flask test client's query parameter is `query_string`
         response = test_client.put(
             full_path,
             data=data,
+            query_string=query,
             headers=headers
         )
         return FlaskTestResponse(response)
@@ -393,24 +400,27 @@ class TestCampusRequest(JsonClient):
         headers = self._get_auth_headers_dict()
         if content_type:
             headers["Content-Type"] = content_type
+        # The Flask test client's query parameter is `query_string`
         response = test_client.post(
             full_path,
             data=data,
-            query=query,
+            query_string=query,
             headers=headers
         )
         return FlaskTestResponse(response)
 
     def delete(
-        self: Self,
-        path: str,
-        json: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            json: dict[str, Any] | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a DELETE request.
 
         Args:
             path: Request path
             json: Optional JSON body
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
@@ -422,21 +432,24 @@ class TestCampusRequest(JsonClient):
         response = test_client.delete(
             full_path,
             json=json,
+            query_string=query,
             content_type='application/json',
             headers=self._get_auth_headers_dict()
         )
         return FlaskTestResponse(response)
 
     def patch(
-        self: Self,
-        path: str,
-        json: dict[str, Any] | None = None
+            self: Self,
+            path: str,
+            json: dict[str, Any] | None = None,
+            query: dict[str, Any] | None = None
     ) -> FlaskTestResponse:
         """Sends a PATCH request.
 
         Args:
             path: Request path
             json: Optional JSON body
+            query: Optional query parameters
 
         Returns:
             FlaskTestResponse wrapping the test client response
@@ -448,6 +461,7 @@ class TestCampusRequest(JsonClient):
         response = test_client.patch(
             full_path,
             json=json,
+            query_string=query,
             content_type='application/json',
             headers=self._get_auth_headers_dict()
         )
