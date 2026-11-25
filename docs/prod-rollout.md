@@ -296,7 +296,19 @@ what deploys prod. Future releases:
    every prod app service has `checkSuites` enabled (2026-11-17), so a
    deployment only starts after the commit's GitHub checks pass. A
    forced `deploymentRedeploy` still bypasses the wait.
-5. Smoke: gateway `/health`, `/api/openapi.json`, `/integrations/v1/`,
+5. Resync `weekly` (automated since 2026-11-25): the
+   `backmerge-main-to-weekly.yml` workflow watches both branches and,
+   whenever `main` has commits `weekly` lacks, opens an auto-merge PR
+   carrying them back — conflict-free by construction, since a
+   promotion merge commit's tree equals its `weekly` parent. It fires
+   on the promotion merge itself (and on any push to either branch
+   while diverged); confirm it worked afterwards with
+   `git rev-list --count origin/weekly..origin/main` = 0. A failed run
+   files an issue; the manual fallback is
+   `git switch weekly && git merge --no-edit origin/main && git push`.
+   (The 2026-11-24/25 window ran three `--admin` promotions with no
+   resync — this step exists so that never recurs.)
+6. Smoke: gateway `/health`, `/api/openapi.json`, `/integrations/v1/`,
    `/audit/v1/health`, auth `/health`, one device-flow + one browser
    login.
 
