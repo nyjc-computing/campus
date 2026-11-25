@@ -60,23 +60,36 @@ aliases): `campus-admin.railway.internal`, `campus-apphost.railway.internal`,
 `nyxchange-timetable-v2.railway.internal` — read each service's rendered
 `RAILWAY_PRIVATE_DOMAIN` when wiring, don't guess.
 
-**Known limitations (accepted for the dev wiring).**
+**Known limitations (observed in the 2026-11-25 dev smoke, #1274).**
 
-- The apps don't validate `Host`, but they generate login/OAuth redirects
-  from their `PUBLIC_URL` (their own domain), so an auth flow entered
-  through the gateway hands off to the origin domain mid-flow — same as
-  the core trio in the hairpin era. Keeping flows under the gateway
-  hostname is app-side URL plumbing (PUBLIC_URL/redirect-URI registry
-  updates), out of scope for #1274.
-- Campus.audit's retired web UI keeps the gateway's `/audit/` prefix;
-  admin's audit UI (also under `/audit/` *on admin*) is not routed here —
-  re-pointing `/audit/` at admin would strand campus.audit's
-  `/audit/v1/*` API.
-- Browser sessions for the five apps land in one cookie jar on the
-  gateway hostname; the apps don't set per-service cookie names the way
-  the core trio does (`SESSION_COOKIE_NAMES`), so logging into two of
-  them in one browser may thrash whichever share a default cookie name.
-  Same caveat as pre-#996, harmless for dev deep-links.
+- **Signed-out flows hit unrouted auth paths.** The apps build redirects
+  from the request host (not their `PUBLIC_URL`), so a signed-out visitor
+  to `/timetable/`, `/profile/`, `/classroom/` or `/admin/dashboard` is
+  sent to the app's **root-level** auth surface (`/login`, `/sign-in`,
+  `/`) — none of which the gateway routes (four apps share those names,
+  so they cannot be dispatched), and the gateway 404s them (timetable's
+  `/?next=…` lands on the gateway-owned `/` → `/audit/`). Signing in
+  happens on the app's own domain today; OAuth `redirect_uri`s are also
+  registered per origin domain. Making flows self-contained under the
+  gateway hostname is the per-app cutover recipe (distinct
+  `SESSION_COOKIE_NAMES` + routable login surfaces + redirect-URI
+  re-registration) — app-side work, out of scope for #1274.
+- **Session cookies thrash across apps** on the shared gateway host:
+  the downstream apps don't set per-service cookie names the way the
+  core trio does (`SESSION_COOKIE_NAMES`), and four of them share
+  Flask's default name — signing into two apps in one browser clobbers
+  whichever share it. Same caveat as pre-#996.
+- **`/apps/` is the anonymously usable surface today** (campus-apphost
+  serves it signed-out); the other four namespaces behave exactly as
+  they do on their own domains, which signed-out currently means a
+  login redirect into the 404s described above.
+- campus-admin's audit UI keeps its own domain: the gateway's `/audit/`
+  stays pointed at campus.audit (its API lives at `/audit/v1/*`);
+  re-pointing `/audit/` at admin would strand the API. Admin's
+  namespaced surface (`/admin/dashboard`, …) is routed; its root-level
+  home/sign-in/resources surfaces are not — bare `/admin/` and `/admin`
+  404 faithfully (the origin 404s them too; the canonical entry is
+  `/admin/dashboard`).
 
 ## Access logs carry no query strings (#1130)
 
