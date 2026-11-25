@@ -183,6 +183,25 @@ def _back_to_verification_page(
     return flask.redirect(target)
 
 
+def _expired_user_code() -> api_errors.ConflictError:
+    """The refusal for a user code past its validity limit (#1268).
+
+    Raised whether the lookup found the code already marked `expired`
+    or marked it itself because it is past `expires_at`.
+    """
+    return api_errors.ConflictError(
+        "This user code has expired. Please restart the authentication "
+        "process on your CLI application to get a new code.",
+        error_code="expired",
+        state="expired",
+    )
+
+
+# Error codes on the device verification page that leave nothing to
+# submit again: the code is expired, already used, or denied (#1279).
+_TERMINAL_ERROR_CODES = frozenset({"expired", "already_used", "denied"})
+
+
 def _get_oauth_payload() -> dict:
     """Get request payload for OAuth endpoints.
 
@@ -800,6 +819,12 @@ def device_verification(user_code: str | None = None):
     is built from the submitted code; nothing in the request chooses
     it (#1266).
 
+    The server renders those outcome states itself, so they are right
+    without the page's script (#1279). An error with nothing left to
+    submit — the code is expired, already used or denied — shows the
+    error view with its message. An error the user can retry from, such
+    as an invalid code, keeps the form with a single alert.
+
     For a pre-filled code the page also shows a request-status strip
     (#1264): when the code was requested and how long it stays valid,
     next to a status badge. The badge reads Expired for a code past its
@@ -886,6 +911,9 @@ def device_verification(user_code: str | None = None):
                 "user_id": str(user_id),
             })
             return _back_to_verification_page(page_code)
+        except api_errors.InvalidRequestError:
+            # A code past its expiry, which the lookup has marked
+            return _back_to_verification_page(page_code, "expired")
         except api_errors.NotFoundError:
             return _back_to_verification_page(page_code, "invalid_code")
         except Exception:
@@ -905,6 +933,19 @@ def device_verification(user_code: str | None = None):
         'network_error': 'Network error. Please check your connection and try again.',
         'unknown': 'An unexpected error occurred. Please try again.'
     }
+
+    # The no-script states (#1279). The page's script does this for a
+    # submitted form; without it the server has to. An error with
+    # nothing left to submit — the code is expired, used or denied —
+    # gets the error view alone, with the real message. Any other error
+    # keeps the form, with one alert beside it.
+    terminal_error = status == 'error' and error_code in _TERMINAL_ERROR_CODES
+    error_title = 'Code Expired' if error_code == 'expired' else 'Authorization Failed'
+    error_message = (
+        error_messages.get(error_code or "", error_messages['unknown'])
+        if status == 'error'
+        else 'An error occurred during authorization.'
+    )
 
     # Escape user_code for safe HTML attribute use
     safe_user_code = html.escape(user_code) if user_code else None
@@ -1287,17 +1328,18 @@ def device_verification(user_code: str | None = None):
             </div>
 
             <!-- Error State View -->
-            <div id="errorView" class="state-view {{ 'hidden' if status != 'error' else '' }}" role="alert" aria-live="assertive">
+            <div id="errorView" class="state-view {{ '' if terminal_error else 'hidden' }}" role="alert" aria-live="assertive">
                 <div class="error-icon"></div>
-                <h2 id="errorTitle">Authorization Failed</h2>
-                <p id="errorMessage">An error occurred during authorization.</p>
-                <button type="button" class="btn" onclick="location.reload()" style="margin-top: 16px;">
+                <h2 id="errorTitle">{{ error_title }}</h2>
+                <p id="errorMessage">{{ error_message }}</p>
+                <!-- Only a script can act on it, so only a script shows it -->
+                <button type="button" class="btn" id="tryAgainBtn" onclick="location.reload()" style="margin-top: 16px;" hidden>
                     Try Again
                 </button>
             </div>
 
             <!-- Form View -->
-            <div id="formView" class="form-container {{ 'hidden' if status == 'success' else '' }}">
+            <div id="formView" class="form-container {{ 'hidden' if status == 'success' or terminal_error else '' }}">
                 <div class="instructions">
                     Your CLI application should have displayed a code.
                     Enter that code below to complete the authentication process.
@@ -1355,7 +1397,7 @@ def device_verification(user_code: str | None = None):
                 <!-- Non-JS fallback for showing query param errors -->
                 {% if status == 'error' %}
                 <div class="alert error show">
-                    {{ error_messages.get(error_code, 'An error occurred during authorization.') }}
+                    {{ error_message }}
                 </div>
                 {% endif %}
 
@@ -1516,9 +1558,12 @@ def device_verification(user_code: str | None = None):
             function handleError(errorData) {
                 let message = errorMessages.unknown;
                 let stateTitle = 'Authorization Failed';
+                let state = null;
 
                 if (errorData.error) {
-                    const errorCode = errorData.error.state || errorData.error.code;
+                    // The error envelope keeps the code's state under details
+                    state = errorData.error.details && errorData.error.details.state;
+                    const errorCode = state || errorData.error.code;
                     const errorMsg = errorData.error.message || errorData.error.description;
 
                     if (errorMsg) {
@@ -1538,7 +1583,7 @@ def device_verification(user_code: str | None = None):
                 showAlert('error', message);
 
                 // Also show error state for severe errors
-                if (errorData.error && (errorData.error.state === 'expired' || errorData.error.state === 'denied' || errorData.error.state === 'already_used')) {
+                if (state === 'expired' || state === 'denied' || state === 'already_used') {
                     showErrorState(stateTitle, message);
                 }
             }
@@ -1588,18 +1633,20 @@ def device_verification(user_code: str | None = None):
             // bound device grants to whatever SSO session the browser held,
             // with no chance to check).
 
-            // Handle URL-based error states for non-JS redirects
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlStatus = urlParams.get('status');
-            const errorCode = urlParams.get('error_code');
+            // Handle the URL-based success state of the no-JS redirect. An
+            // error carried in the URL is already rendered by the server
+            // (#1279): the error view, or the form with its alert when
+            // there is something left to retry.
+            const urlStatus = new URLSearchParams(window.location.search).get('status');
 
             if (urlStatus === 'success') {
                 showSuccessState();
-            } else if (urlStatus === 'error' && errorCode) {
-                const message = errorMessages[errorCode] || errorMessages.unknown;
-                let title = 'Authorization Failed';
-                if (errorCode === 'expired') title = 'Code Expired';
-                showErrorState(title, message);
+            }
+
+            // Try Again only knows how to reload, so the script shows it
+            const tryAgainBtn = document.getElementById('tryAgainBtn');
+            if (tryAgainBtn) {
+                tryAgainBtn.hidden = false;
             }
 
             // Request times are rendered in UTC for the no-script case;
@@ -1658,7 +1705,9 @@ def device_verification(user_code: str | None = None):
         safe_user_code=safe_user_code,
         status=status,
         error_code=error_code,
-        error_messages=error_messages,
+        terminal_error=terminal_error,
+        error_title=error_title,
+        error_message=error_message,
         session_user_id=str(user_id) if user_id else None,
         users_me_url=url.full_url_for('auth.oauth.users_me'),
         device_authorize_url=url.full_url_for(
@@ -1698,7 +1747,8 @@ def device_authorize_submit(
 
     Error responses return appropriate error codes for the frontend to handle:
     - invalid_code: The user code doesn't exist
-    - expired: This user code has expired
+    - expired: This user code has expired — whether it was already marked
+      so, or is past its validity limit when submitted (#1268)
     - already_used: This user code has already been used/authorized
     - denied: The authorization was denied
     - 403 Forbidden: The user_id names the hardcoded production
@@ -1722,6 +1772,9 @@ def device_authorize_submit(
 
     try:
         dc = device_code_resource.get_by_user_code(user_code)
+    except api_errors.InvalidRequestError:
+        # A code past its expiry, which the lookup has marked
+        raise _expired_user_code() from None
     except api_errors.NotFoundError:
         raise api_errors.NotFoundError(
             "Invalid user code. Please check and try again.",
@@ -1730,11 +1783,7 @@ def device_authorize_submit(
 
     # Check the state of the device code and provide appropriate error codes
     if dc.state == "expired":
-        raise api_errors.ConflictError(
-            "This user code has expired. Please restart the authentication process on your CLI application to get a new code.",
-            error_code="expired",
-            state="expired"
-        )
+        raise _expired_user_code()
     elif dc.state == "denied":
         raise api_errors.ConflictError(
             "This authorization was previously denied. Please restart the process on your CLI application.",

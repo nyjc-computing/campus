@@ -132,7 +132,12 @@ class DeviceCodeResource:
             DeviceCode instance
 
         Raises:
-            api_errors.NotFoundError: If user code not found
+            api_errors.NotFoundError: If no record holds this user code
+            api_errors.InvalidRequestError: If the user code has
+                expired. Its state is set to "expired" first. Expired is
+                a different error from unknown so that callers can tell
+                an expired code from a mistyped one (#1268), as they
+                already can for `get_by_device_code`.
         """
         import logging
         logger = logging.getLogger(__name__)
@@ -155,9 +160,8 @@ class DeviceCodeResource:
                 device_code_obj.id,
                 {"state": "expired"}
             )
-            raise api_errors.NotFoundError(
-                "This user code has expired",
-                user_code=user_code
+            raise api_errors.InvalidRequestError(
+                "This user code has expired"
             )
 
         return device_code_obj
