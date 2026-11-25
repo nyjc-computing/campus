@@ -141,7 +141,7 @@ Accepts a single span or a batch. Returns `201 Created` with inserted span IDs o
 
 Query params: `since`, `until`, `limit` (default 50).
 
-Response includes a pagination cursor (`cursor.next`, `cursor.has_more`) based on keyset pagination over `started_at`. Pagination is not yet functional but the cursor is present in all responses to allow clients to adopt it without API changes.
+Response includes a pagination cursor (`cursor.next`, `cursor.has_more`) based on keyset pagination over `started_at`. **Shipped**: pagination is functional, and continuation pages honor every other query filter — the caller's `since`/`until` bound is merged with the cursor's upper bound rather than replaced by it (continuation pages leaking past `since` were caught by the 2026-11-24 classroom journey investigation and fixed in PR #1246).
 
 JSON response:
 
@@ -281,9 +281,9 @@ Query endpoints are rate-limited per API key to prevent dashboard polling or run
 
 Exceeded limits return `429 Too Many Requests` with a `Retry-After` header. Implementation uses a simple sliding window counter per API key, stored in-memory (no external dependency like Redis needed at this scale).
 
-### 9.7 Pagination (Future)
+### 9.7 Pagination
 
-All list endpoints return cursor objects now. When implemented, pagination uses keyset pagination over `started_at` via a `cursor` query parameter. No endpoint signature changes required.
+All list endpoints return cursor objects. **Shipped**: keyset pagination over `started_at` via the `cursor` query parameter; continuation pages merge the caller's time filters with the cursor bound (see the Traces section). No endpoint signature changes were required.
 
 ### 9.8 W3C Trace Context (Future)
 

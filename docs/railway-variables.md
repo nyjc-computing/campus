@@ -576,3 +576,15 @@ absent from production service names.
   value until their next deploy, by which point the new code is live —
   no window where a deployment both reads the nomination and runs the
   old code.
+
+- **2026-11-25** — campus.api gained an OPTIONAL runtime knob,
+  `AUTH_INTROSPECTION_TTL_SECONDS` (PR #1258, the #1248 authenticate
+  cache): authenticate results are cached per credential digest in a
+  bounded per-worker LRU so a multi-span journey introspects its bearer
+  once per TTL instead of once per call (~150–240 ms round trip each).
+  **Unset on every service in both environments** — the inventories
+  above reflect actual stored values, and this knob is deliberately
+  absent from them. Code default is 30 s; `0` disables the cache. Only
+  set it to tune revoke-latency (lower) or cache duration (higher);
+  rejections are never cached, so a revocation is re-observed on every
+  call regardless of TTL.
