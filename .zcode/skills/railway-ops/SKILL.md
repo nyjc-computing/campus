@@ -255,6 +255,15 @@ memoryGB})`; read back with `serviceInstanceLimits` (returns
   `scripts/railway_deploy.sh <svc> <env>` — a config change alone does
   not redeploy. With a healthcheck set, deploy SUCCESS means `/health`
   answered: "actually serving", not merely "container up".
+- **Unsetting an instance `startCommand`** (handing the start command
+  back to repo-derived config — Procfile/railpack): `startCommand: null`
+  returns `true` but **silently does nothing** (hit 2026-11-26 dropping
+  the downstream bind overrides, campus#1295 Phase 0 — readback still
+  showed the old command). Set it to the **empty string** instead: that
+  stores `''`, and the next deploy falls back to the repo's own start
+  definition. Verify with the `serviceInstance{startCommand}` readback,
+  then redeploy — with no healthcheck configured, SUCCESS means
+  "container started", so also probe a real route.
 - Deploy-failure **notifications** remain dashboard-only: the API's
   `notificationRuleCreate` takes an undocumented
   `NotificationChannelConfig` scalar (blind-guessing its JSON shape is
