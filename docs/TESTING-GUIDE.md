@@ -224,9 +224,25 @@ reverse), this is the machinery involved:
   `PUBLIC_URL` (required since #652) — the fixture sets both to
   `campus.test`; the path prefix selects the app.
 - **Outgoing auth headers:** `TestCampusRequest` attaches credentials in
-  this precedence: `ACCESS_TOKEN` (Bearer) first, then
-  `CLIENT_ID`/`CLIENT_SECRET` (Basic). The fixture sets `ACCESS_TOKEN`
-  to the audit API key so the audit client can ingest spans.
+  this precedence: an active session's bearer (next bullet), then an
+  explicit `set_bearer_authorization()`/`set_basic_authorization()`,
+  then `ACCESS_TOKEN` (Bearer), then `CLIENT_ID`/`CLIENT_SECRET`
+  (Basic). The fixture sets `ACCESS_TOKEN` to the audit API key so the
+  audit client can ingest spans — which is why a session call that
+  loses its bearer fails as `App credentials for token audit_v1_… not
+  found`.
+- **Session credentials are context-local (SDK ≥ v0.11.1,
+  campus-api-python#189):** `with_app_session()`/`with_user_session()`
+  no longer call `set_bearer_authorization()`. They publish the bearer
+  and the 401 refresh hook on ContextVars that only the production
+  `CampusRequest._send()` reads. `TestCampusRequest._send()` mirrors
+  that method by hand — credentials, override precedence, the single
+  401 retry — and `tests/unit/test_flask_test_transport.py` pins the
+  mirror. When an SDK bump changes the transport, update the double in
+  the same relock: Integration Tests are non-blocking on `weekly`, so
+  a drifted double does not stop the merge (campus#1288 shipped SDK
+  v0.11.2 with the double still on the old contract, and every
+  `with_app_session()` read 401'd).
 - **Error fidelity:** `tests/flask_test/response.py` raises the same
   `campus_python.errors` classes as production `raise_for_status()`
   (via `APIError.with_status_code`). If you change one, change both.

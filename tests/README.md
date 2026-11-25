@@ -70,6 +70,11 @@ probe-script skeleton.
   raises the same `campus_python.errors` classes (via
   `APIError.with_status_code`) that the production client raises, so product
   error-handling code behaves identically under test routing and over the wire.
+  `tests/flask_test/campus_request.py` likewise mirrors
+  `CampusRequest._send()` — a session's context-local bearer and 401 hook
+  (SDK #189) included — and its verb signatures must match the `JsonClient`
+  ABC. `tests/unit/test_flask_test_transport.py` pins both; extend it in the
+  same change as any SDK transport bump.
 
 ### Auditing Skip Markers
 
