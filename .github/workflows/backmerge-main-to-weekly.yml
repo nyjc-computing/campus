@@ -62,7 +62,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="back-merge/main-to-weekly/$(date -u +%Y%m%d-%H%M%S)"
-          echo "branch=$branch" >> "$GITHUB_ENV"
+          echo "BRANCH=$branch" >> "$GITHUB_ENV"
           git switch -c "$branch" origin/weekly
           git merge --no-edit origin/main
 
