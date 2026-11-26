@@ -132,15 +132,54 @@ server {
     # forms; 308 preserves the method, absolute_redirect off keeps the
     # Location relative to this host.
     location = /timetable   { return 308 /timetable/; }
-    location /timetable/    { proxy_pass $timetable_upstream; }
-    location = /apps        { return 308 /apps/; }
-    location /apps/         { proxy_pass $apphost_upstream; }
-    location = /admin       { return 308 /admin/; }
-    location /admin/        { proxy_pass $admin_upstream; }
-    location = /profile     { return 308 /profile/; }
-    location /profile/      { proxy_pass $profile_upstream; }
-    location = /classroom   { return 308 /classroom/; }
-    location /classroom/    { proxy_pass $classroom_upstream; }
+    location /timetable/    {
+        # The mounted consumer apps read X-Forwarded-Prefix into
+        # SCRIPT_NAME (flask_campus >= 0.2.8 PrefixFix, fc#50), so every
+        # url_for they emit — static, links, the auth blueprint — is
+        # namespace-aware. X-Forwarded-Prefix goes ONLY on these
+        # locations: the core trio route path-first and already run
+        # ProxyFix; a prefix header there would double-apply
+        # (/auth/auth/v1/...). Location-level proxy_set_header replaces
+        # the inherited set, so the full block is re-declared.
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /timetable;
+        proxy_pass $timetable_upstream;
+    }
+    location /apps/         {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /apps;
+        proxy_pass $apphost_upstream;
+    }
+    location /admin/        {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /admin;
+        proxy_pass $admin_upstream;
+    }
+    location /profile/      {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /profile;
+        proxy_pass $profile_upstream;
+    }
+    location /classroom/    {
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /classroom;
+        proxy_pass $classroom_upstream;
+    }
 
     # Gateway-owned root: /health reports gateway liveness only (the
     # Railway healthcheck candidate), and / serves the Campus landing
