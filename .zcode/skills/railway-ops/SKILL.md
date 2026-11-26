@@ -391,25 +391,3 @@ runs as a child process (exports lost), executable `*.envsh` is sourced
 to conf.d — the gateway build `rm`s stock templates before COPY. nginx `set`
 directives re-assign silently: never leave duplicate upstream `set` lines in
 a template (that was PR #1014's 502 bug).
-
-## Agent workflow cost — index (2026-11-26 incident)
-
-The gateway downstream rollout (campus#1295) burned disproportionate
-agent tokens on per-session fleet re-derivation, ad-hoc script
-composition, heredoc/write-path fights, and a patch-then-generalize
-arc (three mount patches superseded by flask_campus PrefixFix, fc#50).
-Full write-up: [docs/incidents/2026-11-26-agent-token-bloat.md]
-(../../incidents/2026-11-26-agent-token-bloat.md) — INDEX ONLY here.
-
-Landed tools (use, don't re-compose): `scripts/railway_wait_deploy.py`
-(poll a service set to SUCCESS after a timestamp) and
-`scripts/railway_set_redirect_uris.py` (operator-principal
-redirect_uri setter, exact-set verify). Fleet snapshots (stable
-service IDs / architecture tables) are deliberately NOT maintained —
-service IDs and the deployment architecture are not stable yet; do
-bounded per-session re-derivation and revisit only when the fleet
-shape settles. Shell rules from the incident: avoid heredocs (Write
-tool + `-F body=@file`), GitHub writes via `gh api` REST, `docker run`
-always `-d`, and prod gateway deploys are EXPLICIT
-(`scripts/railway_deploy.sh campus-gateway production` — no autodeploy
-on main pushes).
