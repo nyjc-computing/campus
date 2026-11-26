@@ -19,6 +19,7 @@ application-side prerequisites (per-service session cookie names,
 | `/admin/*`             | `${ADMIN_HOST}` → campus-admin (#1274)                 | admin portal (`/admin/` namespace; home/sign-in/audit UI stay at admin's root) |
 | `/profile/*`           | `${PROFILE_HOST}` → campus-profile (#1274)             | profile portal (`/profile/` namespace) |
 | `/classroom/*`         | `${CLASSROOM_HOST}` → campus-classroom (#1274)         | classroom portal (`/classroom/` namespace) |
+| `/<ns>/static/*`       | same upstream as `/<ns>/*`, path rewritten to `/static/*` | the mounted apps emit host-root static URLs from `url_for('static')`; longest-prefix match (#1295) |
 | `/`                    | gateway-owned                                          | **Campus landing page** (#1292) — static, from the image; anonymous |
 | `/health`              | gateway-owned                                          | **gateway liveness only** (also the Railway healthcheck candidate) |
 
