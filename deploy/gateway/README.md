@@ -27,6 +27,16 @@ service's internal routes already carry its public prefix, and the test
 harness (`tests/fixtures/services.py`) runs this exact single-origin
 topology, so no app-side routing change is involved.
 
+**`X-Forwarded-Prefix` on the consumer locations only** (flask-campus
+v0.2.8, fc#50): the mounted consumer apps move it into `SCRIPT_NAME`,
+so every `url_for` they emit — static assets, links, the auth
+blueprint — is namespace-aware (`/<ns>/...`). This replaced the per-app
+`login_prefix`/`static_url_path` mounts: the namespace is the gateway's
+to declare. It is deliberately **not** sent to the core trio
+(`auth/api/audit` route path-first and already run ProxyFix — a prefix
+header there would double-apply). Apps older than flask_campus 0.2.8
+ignore the header, so the rollout is order-safe.
+
 ## Downstream consumer apps (#1274)
 
 Each downstream app is routed under the namespace it already serves on
