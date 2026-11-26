@@ -296,6 +296,23 @@ what deploys prod. Future releases:
    `gh pr checks <pr>` is all green first** — `--admin` bypasses the
    checks too, so nobody else enforces this — then run
    `gh pr merge --merge --admin`.
+   **Never add `--delete-branch` to the promotion merge** (2026-11-26
+   incident): the flag deleted the remote **`weekly` branch** — the
+   development fleet's autodeploy target. `weekly` is a permanent
+   integration branch, not a feature branch; the delete-the-head-branch
+   habit applies to feature-branch PRs only. Merges go through the PR
+   exactly as written above — no extra flags, no manual or ad-hoc
+   merges of the promotion.
+
+   Restoration recipe (lossless, zero downtime — applied within the
+   hour in that incident): the promotion merge commit's **second parent
+   is exactly weekly's pre-deletion tip**, so
+   `git push origin '<promotion-sha>^2:refs/heads/weekly'` recreates
+   the branch with nothing lost; then merge the automated resync PR
+   (#1308 in that incident) to carry main's promotion merge back into
+   weekly. Detection: worktree creation fails with
+   "couldn't find remote ref weekly", or
+   `git ls-remote origin refs/heads/weekly` returns empty.
 3. If main was reconciled into weekly directly (push), update the PR
    branch first (`gh pr update-branch`) or the policy will refuse
    again.
