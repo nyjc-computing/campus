@@ -27,6 +27,21 @@ disagrees with the code, the code wins — please fix the doc.
 > The raw steps below are the wire protocol; Flask apps get them from
 > `OAuthLoginManager` (see `src/campus/flask_campus/README.md` in the [flask-campus](https://github.com/nyjc-computing/flask-campus) dist).
 
+## Gateway namespacing (URL shapes)
+
+Consumer apps are mounted under a gateway namespace (`/timetable/`,
+`/apps/`, …): the gateway forwards the full request path and sets
+`X-Forwarded-Prefix`, which flask_campus (≥ 0.2.8) moves into
+`SCRIPT_NAME` — apps route unprefixed and emit namespace-prefixed URLs
+behind the gateway, root-relative on their own origin. The absolute
+URLs in this flow (the `redirect_uri` a client requests, auth's Google
+federated callback) are built from each service's `PUBLIC_URL` and are
+therefore independent of the host the request arrived on. Because the
+finalize callback's emitted shape follows the arrival shape, campus
+OAuth clients register both `{origin}/finalize_login` and
+`{origin}/{ns}/finalize_login` per reachable origin. Normative
+reference: [url-namespacing.md](url-namespacing.md).
+
 ## Who does what
 
 Four actors participate:

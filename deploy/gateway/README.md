@@ -70,30 +70,33 @@ aliases): `campus-admin.railway.internal`, `campus-apphost.railway.internal`,
 `nyxchange-timetable-v2.railway.internal` — read each service's rendered
 `RAILWAY_PRIVATE_DOMAIN` when wiring, don't guess.
 
-**Known limitations (observed in the 2026-11-25 dev smoke, #1274).**
+**Namespace behavior of consumer apps** (supersedes the 2026-11-25
+"Known limitations" smoke notes, most of which the prefix mount has
+resolved — normative reference: [docs/url-namespacing.md](../../docs/url-namespacing.md)).
 
-- **Signed-out flows hit unrouted auth paths.** The apps build redirects
-  from the request host (not their `PUBLIC_URL`), so a signed-out visitor
-  to `/timetable/`, `/profile/`, `/classroom/` or `/admin/dashboard` is
-  sent to the app's **root-level** auth surface (`/login`, `/sign-in`,
-  `/`) — none of which the gateway routes (four apps share those names,
-  so they cannot be dispatched), and the gateway 404s them (timetable's
-  `/?next=…` variant lands on the gateway-owned `/`, which since #1292
-  is the Campus landing page). Signing in
-  happens on the app's own domain today; OAuth `redirect_uri`s are also
-  registered per origin domain. Making flows self-contained under the
-  gateway hostname is the per-app cutover recipe (distinct
-  `SESSION_COOKIE_NAMES` + routable login surfaces + redirect-URI
-  re-registration) — app-side work, out of scope for #1274.
-- **Session cookies thrash across apps** on the shared gateway host:
-  the downstream apps don't set per-service cookie names the way the
-  core trio does (`SESSION_COOKIE_NAMES`), and four of them share
-  Flask's default name — signing into two apps in one browser clobbers
-  whichever share it. Same caveat as pre-#996.
+- **Prefix-mounted apps (flask-campus ≥ 0.2.8, root-first) are fully
+  functional behind the gateway, signed-out flows included.** The
+  gateway sets `X-Forwarded-Prefix` on the consumer locations;
+  flask_campus turns it into `SCRIPT_NAME`, so the app's root-level
+  auth surface matches and emits as `/{ns}/login`, `/{ns}/static/…`
+  here. nyxchange-timetable-v2 is the first adopter (ttv2#194; its own
+  timetable blueprint's root-first conversion is in flight).
+- **Consumers still on flask-campus 0.2.7** (campus-admin,
+  campus-profile, campus-classroom) ignore the header. A signed-out
+  visitor to their namespaces is redirected to a root-level auth path
+  (`/login`, `/sign-in`) that the gateway cannot route (four apps share
+  those names), and the gateway 404s it; signing in happens on the
+  app's own domain until that app adopts the pattern
+  ([docs/url-namespacing.md](../../docs/url-namespacing.md) onboarding
+  checklist). Their `redirect_uri`s also need both origin-shapes only
+  at adoption time.
+- **Session cookies** follow the fleet scheme (campus#1290): each
+  consumer must set a distinct cookie name (timetable uses
+  `campus_timetable_session`). A consumer still on Flask's default
+  `session` name clobbers and is clobbered by the others sharing the
+  gateway host.
 - **`/apps/` is the anonymously usable surface today** (campus-apphost
-  serves it signed-out); the other four namespaces behave exactly as
-  they do on their own domains, which signed-out currently means a
-  login redirect into the 404s described above.
+  serves it signed-out).
 - campus-admin's audit UI keeps its own domain: the gateway's `/audit/`
   stays pointed at campus.audit (its API lives at `/audit/v1/*`);
   re-pointing `/audit/` at admin would strand the API. Admin's
