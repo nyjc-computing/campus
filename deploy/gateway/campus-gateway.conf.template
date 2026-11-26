@@ -22,7 +22,8 @@
 #   /profile/*                -> campus-profile         (/profile/)
 #   /classroom/*              -> campus-classroom       (/classroom/)
 #
-# Root space: the gateway owns it. /health reports gateway liveness
+# Root space: the gateway owns it. / reports the Campus landing page
+# (static, from the image — #1292); /health reports gateway liveness
 # only; per-service health appears at /auth/health, /api/health and
 # /audit/health once the services set PUBLIC_PREFIX (PR #996). Railway
 # healthchecks for the gateway can point at /health.
@@ -141,14 +142,48 @@ server {
     location = /classroom   { return 308 /classroom/; }
     location /classroom/    { proxy_pass $classroom_upstream; }
 
-    # Gateway-owned shared root until the cutover decides otherwise
-    # (#995): audit has the only real web UI, so it gets the redirect.
+    # Static assets for the mounted consumer apps (#1295): these were
+    # built root-first, so url_for('static') emits host-root
+    # /static/... regardless of the namespace they are served under —
+    # unrouted at the gateway (the unstyled /timetable page, 2026-11-26).
+    # Rewrite the namespaced path back to the app's root-level static
+    # route; longest-prefix matching keeps these ahead of the plain
+    # namespace locations above. The login_prefix mount and every other
+    # app URL are blueprint/app routes under the namespace and need no
+    # rewrite.
+    location /timetable/static/ {
+        rewrite ^/timetable/static/(.*)$ /static/$1 break;
+        proxy_pass $timetable_upstream;
+    }
+    location /apps/static/ {
+        rewrite ^/apps/static/(.*)$ /static/$1 break;
+        proxy_pass $apphost_upstream;
+    }
+    location /admin/static/ {
+        rewrite ^/admin/static/(.*)$ /static/$1 break;
+        proxy_pass $admin_upstream;
+    }
+    location /profile/static/ {
+        rewrite ^/profile/static/(.*)$ /static/$1 break;
+        proxy_pass $profile_upstream;
+    }
+    location /classroom/static/ {
+        rewrite ^/classroom/static/(.*)$ /static/$1 break;
+        proxy_pass $classroom_upstream;
+    }
+
+    # Gateway-owned root: /health reports gateway liveness only (the
+    # Railway healthcheck candidate), and / serves the Campus landing
+    # page (#1292) — a static, anonymous page from the image, so the
+    # root space never depends on an app being awake, logged in, or
+    # deployed (the old 302 /audit/ handed the front door to one app).
     location = /health {
         access_log off;
         default_type text/plain;
         return 200 "ok\n";
     }
     location = / {
-        return 302 /audit/;
+        root /usr/share/nginx/html;
+        try_files /campus-landing.html =500;
     }
 }

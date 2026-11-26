@@ -43,6 +43,13 @@ def configure_for_testing(app: flask.Flask) -> None:
             'storage_mode': 'test' if is_test_mode() else 'production'
         }, 200
 
+    # The fleet's common liveness endpoint (#842): Railway healthchecks
+    # and the campus-gateway expect GET /health on every deployment, so
+    # the harness registers the same route production serves instead of
+    # only the test-namespace alias above (#1294). Idempotent.
+    from campus import deploy
+    deploy.register_health(app)
+
     # Initialize error handling (but don't override deployment-specific routes)
     import campus.common.errors
     campus.common.errors.init_app(app)
