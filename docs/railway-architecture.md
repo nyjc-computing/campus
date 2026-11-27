@@ -98,12 +98,22 @@ Railway's private network (the `*.railway.internal` mesh) is **IPv6-only**:
   `--bind [::]:$PORT` (dual-stack; public IPv4 keeps working), MongoDB
   `mongod --ipv6 --bind_ip ::,0.0.0.0`. An app bound only to `0.0.0.0`
   rejects mesh connections. The downstream consumer apps shipped
-  `0.0.0.0` binds (their Procfiles/instance commands predate this rule)
-  and were unreachable over the mesh until 2026-11-25, when their dev
-  instances got dual-stack `startCommand` overrides (#1274) — public
-  IPv4 kept working throughout. Their repos still define `0.0.0.0`
-  binds (upstream issues filed), and the production instances have not
-  been touched (the prod gateway doesn't route them).
+  `0.0.0.0` binds (their start commands predate this rule) and were
+  unreachable over the mesh until 2026-11-25, when dual-stack binds
+  landed fleet-wide (#1274: dev `startCommand` overrides first, then
+  the repos' own Procfiles flipped to `[::]` — campus-profile#75,
+  campus-classroom#159, campus-admin#98, nyxchange-timetable-v2#181).
+  On 2026-11-27 the ownership flipped again, fleet-wide (#1295):
+  start commands are **platform-side** `startCommand` instance
+  overrides and the in-repo Procfiles are being removed — Railpack
+  [deprecates Procfiles](https://railpack.com/config/procfile)
+  (campus-profile done: profile PR #82; classroom+apphost
+  campus-classroom#163, admin campus-admin#100, timetable
+  nyxchange-timetable-v2#209). Production is mid-rollout: timetable's
+  prod override is dual-stack, admin's prod instance still carries a
+  pre-cutover IPv4-only override (latent until the prod gateway routes
+  `/admin/`, #1293), and classroom/apphost prod are Procfile-driven
+  pending their overrides.
 - Cross-service calls use `<name>.railway.internal:<port>` names
   (e.g. `campus.auth` → `auth-postgres.railway.internal:5432`); names are
   not mechanically derivable from service names, check the dashboard/API.
@@ -187,8 +197,15 @@ nothing. Runbook: `docs/cleanup-deployment.md`.
 - Builder: Railpack (Nixpacks-compatible plan inferred from the repo;
   `railway.json` is NOT read by Railpack — use `railpack.json` or
   service-level settings). gunicorn comes from `pyproject.toml`.
-- Start commands are set per service instance (environment-scoped);
-  all instances (dev and production) bind `[::]` for the IPv6-only
-  private mesh.
+- Start commands are set **platform-side**, per service instance
+  (environment-scoped): the 2026-11-27 fleet decision (#1295) keeps
+  them as `startCommand` instance overrides — do NOT add a Procfile or
+  rely on one existing (Railpack deprecates Procfiles); the repos'
+  Procfiles are being removed (campus-profile PR #82,
+  campus-classroom#163, campus-admin#100, nyxchange-timetable-v2#209).
+  All instances (dev and production) bind `[::]` for the IPv6-only
+  private mesh. Railpack reads `railpack.json`
+  (`deploy.startCommand`) — the intended home for start commands once
+  services move to dedicated deployment repos.
 - Health checks: `GET /health` on every Flask app (#842 convention); the
   gateway serves its own `/health`.

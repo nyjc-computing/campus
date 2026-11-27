@@ -723,5 +723,31 @@ class TestTimetableLessongroupReuseContract(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
 
 
+    def test_members_route_lists_the_roster(self):
+        """GET /<id>/members answers the file-derived roster rows,
+        projected to (lessongroup_id, ade_participant) — the read
+        surface for ttv2's teacher browse (#175 stopgap)."""
+        created = self._create_timetable(
+            "members-v1.xml", ["25A-Math", "25A-Phy"]
+        )
+        response = self.client.get(
+            f"/api/v1/timetable/{created['id']}/members",
+            headers=self.auth_headers
+        )
+        self.assertEqual(response.status_code, 200)
+        members = response.get_json()["members"]
+        by_participant = {m["ade_participant"]: m["lessongroup_id"]
+                          for m in members}
+        # One row per member, keyed verbatim from the payload.
+        self.assertEqual(
+            sorted(by_participant),
+            ["2510-25A-Math", "2510-25A-Phy"]
+        )
+        labels = self._entries(created["id"])
+        group_ids = {e["lessongroup_id"] for e in labels}
+        for lessongroup_id in by_participant.values():
+            self.assertIn(lessongroup_id, group_ids)
+
+
 if __name__ == '__main__':
     unittest.main()

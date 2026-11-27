@@ -44,6 +44,20 @@ The gateway path-dispatches
    templates, or tests — every emitted URL goes through `url_for` or
    endpoint names. (A literal `/timetable/…` in a template is the
    doubled-URL bug.)
+   The same ban covers the flask_campus blueprint paths themselves, with
+   a different failure mode: **never hardcode `/login`, `/logout` or
+   `/finalize_login` in a template or script.** A namespace literal
+   doubles under `SCRIPT_NAME`; a root literal stays root behind the
+   gateway, where it is unroutable — the Sign In button pointing at
+   `</login>` on `campus-dev.nyjc.app/admin/` (campus-admin#108,
+   campus-classroom#166/#167). `url_for('auth.login')` /
+   `url_for('auth.logout')` is the only namespacing-aware spelling;
+   client-side links can't call it, so the template injects the URL
+   (`const CAMPUS_LOGIN_URL = {{ url_for('auth.login') | tojson }}`) and
+   the JS composes `next` from `location`. App-section paths under the
+   app's own namespace root (`/admin/auth/…`, `/apps/…`) are the
+   exception: they resolve identically on origin and gateway and may
+   stay literal.
 2. **Receive unprefixed.** PrefixFix
    ([flask_campus.prefix](https://github.com/nyjc-computing/flask-campus),
    installed by `init_app` since 0.2.8) moves `X-Forwarded-Prefix` into
