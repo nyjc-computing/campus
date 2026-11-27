@@ -164,7 +164,13 @@ See the [campus-api-python repository](https://github.com/nyjc-computing/campus-
 Set environment variables in Railway dashboard:
 - `DEPLOY=campus.auth`, `campus.api`, or `campus.audit`
 - `PUBLIC_URL=https://${{RAILWAY_PUBLIC_DOMAIN}}`
-- Start command: `gunicorn --bind "0.0.0.0:$PORT" --timeout 120 wsgi:app`
+- Start command: `gunicorn --bind "[::]:$PORT" --timeout 120 wsgi:app`
+  (dual-stack — the mesh is IPv6-only; a `0.0.0.0` bind rejects mesh
+  connections). Start commands are **platform-side** `startCommand`
+  instance overrides set per environment — never a Procfile (Railpack
+  deprecates Procfiles; #1295, see
+  [railway-architecture.md](railway-architecture.md), "Build & runtime
+  configuration").
 
 On the **campus.auth** service, configure the operator allowlist
 (read at request time, comma-separated, unset/empty = fail-closed
