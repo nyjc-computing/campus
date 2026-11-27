@@ -343,7 +343,32 @@ def get_timetable_entries(timetable_id: schema.CampusID) -> flask_campus.JsonRes
     """
     result = timetable_resource[timetable_id].entries.list()
     return {'entries': [entry.to_resource() for entry in result]}, 200
-    
+
+
+@bp.get('/<timetable_id>/members')
+@flask_campus.unpack_request
+def get_timetable_members(timetable_id: schema.CampusID) -> flask_campus.JsonResponse:
+    """List the version's lesson-group members (the file-derived roster).
+
+    Method:
+        GET /timetable/<timetable_id>/members
+
+    Path Parameters:
+        timetable_id: CampusID
+            The ID of the timetable to retrieve.
+
+    Responses:
+        200 OK: dict
+            {"members": [{lessongroup_id, ade_participant}, ...]}
+
+    The roster is written from lessongroups[].members at timetable
+    creation; ade_participant carries the XML participant id verbatim.
+    Reads are authenticated-principal only, like the entries and
+    metadata reads — browse consumers (Search Time Tables, ttv2#175
+    stopgap) key groups by these values verbatim.
+    """
+    return {'members': timetable_resource.list_members(timetable_id)}, 200
+
 
 @bp.get('/<timetable_id>/metadata')
 @flask_campus.unpack_request

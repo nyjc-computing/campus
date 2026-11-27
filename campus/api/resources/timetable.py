@@ -231,6 +231,30 @@ class TimetablesResource:
         """
         return TimetableResource(timetable_id)
 
+    def list_members(self, timetable_id: schema.CampusID) -> list[dict]:
+        """The version's lesson-group roster, one row per member.
+
+        The file-derived timetable_lessongroupmembers rows, projected
+        to (lessongroup_id, ade_participant): ade_participant carries
+        the XML participant id verbatim (teacher entity names in this
+        year's exports; campus ids once import-time resolution lands —
+        ttv2#174). Browse consumers (Search Time Tables, ttv2#175
+        stopgap) key groups by these values verbatim.
+        """
+        try:
+            rows = timetable_lessongroupmembers_table.get_matching(
+                {"timetable_id": timetable_id}
+            )
+        except campus.storage.errors.StorageError as e:
+            raise api_errors.InternalError.from_exception(e) from e
+        return [
+            {
+                "lessongroup_id": schema.CampusID(row["lessongroup_id"]),
+                "ade_participant": schema.String(row["ade_participant"]),
+            }
+            for row in rows
+        ]
+
     def list(self, **filters: typing.Any) -> list[model.TimetableMetadata]:
         """List timetables matching the provided filters.
 
