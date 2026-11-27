@@ -24,8 +24,12 @@ SCOPE_SEP = " "
 
 
 def _get_redirect_uri() -> schema.Url:
-    """Get redirect URI with runtime env access."""
-    return schema.Url(url.canonical_origin() + f"/auth/{PROVIDER}/callback")
+    """Get redirect URI with runtime env access.
+
+    The proxy blueprints mount under the auth blueprint's /auth/v1
+    prefix — the redirect_uri must name a route that exists (#1327).
+    """
+    return schema.Url(url.canonical_origin() + f"/auth/v1/{PROVIDER}/callback")
 
 
 def get_proxy() -> "DiscordAuthPoxy":
