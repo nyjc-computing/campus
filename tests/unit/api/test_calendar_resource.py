@@ -60,6 +60,14 @@ class TestCalendarResource(unittest.TestCase):
         with self.assertRaises(api_errors.InvalidRequestError):
             self.calendar.upsert_date(self._date(3, 1), j2_code="free")
 
+    def test_special_timetable_day_type_is_accepted(self):
+        date_key = self._date(10, 7)
+        record = self.calendar.upsert_date(
+            date_key, j1_code="Special Time Table", j2_code="Special Time Table"
+        )
+        self.assertEqual(record["j1_code"], "Special Time Table")
+        self.assertEqual(record["j2_code"], "Special Time Table")
+
     def test_range_reads_filter_inclusively_and_sort(self):
         for month, day in ((1, 11), (1, 12), (1, 13)):
             self.calendar.upsert_date(

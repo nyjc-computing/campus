@@ -36,14 +36,17 @@ calendar_table = campus.storage.get_table("calendar")
 # The service extends the model's TT-cycle vocabulary (the ten TT days
 # + "Free") with the whole-school day types the committee picks from
 # the same dropdowns: School Holiday (students and teaching staff off,
-# admin staff in), Public Holiday (everyone off), and Independent
-# Learning Day (students off, teaching staff in). Admin staff are not
-# represented in calendar rows, so these codes are what such a date
-# shows instead of lessons.
+# admin staff in), Public Holiday (everyone off), Independent
+# Learning Day (students off, teaching staff in), and Special Time
+# Table (the date runs a special timetable — the committee's post-exam
+# calendars; which VERSION runs is still the pointer trail's business).
+# Admin staff are not represented in calendar rows, so these codes are
+# what such a date shows instead of lessons.
 DAY_TYPE_CODES: tuple[str, ...] = (
     "School Holiday",
     "Public Holiday",
     "Independent Learning Day",
+    "Special Time Table",
 )
 CALENDAR_CODE_VOCABULARY: tuple[str, ...] = (
     tuple(DAY_CODE_VOCABULARY) + DAY_TYPE_CODES
