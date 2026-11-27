@@ -101,7 +101,8 @@ def upsert_calendar_bulk(days: list[dict]) -> flask_campus.JsonResponse:
             Each row: {date (or id), j1_code?, j2_code?, term_week?} —
             codes from CALENDAR_CODE_VOCABULARY ("Mon A".."Fri B",
             "Free", "School Holiday", "Public Holiday", "Independent
-            Learning Day") or null; `date` is `YYYY-MM-DD`.
+            Learning Day", "Special Time Table") or null; `date` is
+            `YYYY-MM-DD`.
 
     Responses:
         200 OK: dict
@@ -148,8 +149,9 @@ def upsert_calendar_date(
     Body Parameters:
         j1_code: str | None (optional)
             JC1's TT day code, from the vocabulary ("Mon A".."Fri B",
-            "Free"); null leaves the field unset (a day with no
-            lessons).
+            "Free", or a whole-school day type such as "School
+            Holiday" / "Special Time Table"); null leaves the field
+            unset (a day with no lessons).
         j2_code: str | None (optional)
             JC2's TT day code, same rules.
         term_week: str | None (optional)
