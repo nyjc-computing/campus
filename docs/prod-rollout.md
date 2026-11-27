@@ -177,7 +177,11 @@ are user-gated and called out.
    DB URIs as references (`${{"campus.auth-postgres".DATABASE_URL}}`
    — **quoted** service names; unquoted dotted names resolve empty,
    and EMPTY fails the boot check too).
-3. Start command binds `[::]` (mesh is IPv6-only). Set the
+3. Start command binds `[::]` (mesh is IPv6-only) and is set
+   **platform-side** — a `startCommand` instance override, not a
+   Procfile (Railpack deprecates Procfiles; fleet decision 2026-11-27,
+   #1295 — see railway-architecture.md, "Build & runtime
+   configuration"). Set the
    healthcheck: `healthcheckPath: /health` + `healthcheckTimeout: 10`
    on the instance (every app service has the #842 `/health` route;
    auth/api/audit/gateway carry it in BOTH environments since #1107 —
