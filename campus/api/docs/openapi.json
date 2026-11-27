@@ -104,7 +104,7 @@
   "info": {
     "description": "Campus API for managing educational resources.\n\n## Error Responses\n\nAll error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.\n\n## Error Codes\n\nCommon error codes:\n- `INVALID_REQUEST` (400): Malformed or invalid request\n- `UNAUTHORIZED` (401): Missing or invalid authentication\n- `FORBIDDEN` (403): Insufficient permissions\n- `NOT_FOUND` (404): Resource not found\n- `VALIDATION_FAILED` (422): Request validation failed with field-level errors\n- `CONFLICT` (409): Resource state conflict\n- `INTERNAL_ERROR` (500): Unexpected server error\n- `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later\n\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
     "title": "Campus API",
-    "version": "0.36.8"
+    "version": "0.37.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -664,7 +664,7 @@
         ]
       },
       "put": {
-        "description": "Every row is validated before any write, so a bad row anywhere\nleaves the calendar untouched. Rows carrying a date that already\nhas a calendar row are updated in place; the rest are created.\n\nMethod:\n    PUT /calendar/\n\nBody Parameters:\n    days: list[dict]\n        Each row: {date (or id), j1_code?, j2_code?, term_week?} \u2014\n        codes from CALENDAR_CODE_VOCABULARY (\"Mon A\"..\"Fri B\",\n        \"Free\", \"School Holiday\", \"Public Holiday\", \"Independent\n        Learning Day\") or null; `date` is `YYYY-MM-DD`.\n\nResponses:\n    200 OK: dict\n        {\"upserted\": n, \"days\": [written rows, ordered by date]}.\n\n    400 Bad Request: dict\n        A malformed row, an unknown day code, or a duplicate date\n        in the payload.",
+        "description": "Every row is validated before any write, so a bad row anywhere\nleaves the calendar untouched. Rows carrying a date that already\nhas a calendar row are updated in place; the rest are created.\n\nMethod:\n    PUT /calendar/\n\nBody Parameters:\n    days: list[dict]\n        Each row: {date (or id), j1_code?, j2_code?, term_week?} \u2014\n        codes from CALENDAR_CODE_VOCABULARY (\"Mon A\"..\"Fri B\",\n        \"Free\", \"School Holiday\", \"Public Holiday\", \"Independent\n        Learning Day\", \"Special Time Table\") or null; `date` is\n        `YYYY-MM-DD`.\n\nResponses:\n    200 OK: dict\n        {\"upserted\": n, \"days\": [written rows, ordered by date]}.\n\n    400 Bad Request: dict\n        A malformed row, an unknown day code, or a duplicate date\n        in the payload.",
         "operationId": "api_v1_calendar_upsert_calendar_bulk",
         "requestBody": {
           "content": {
@@ -755,7 +755,7 @@
         ]
       },
       "put": {
-        "description": "The day editor's save: both cohorts' codes commit together (v1\nsemantics \u2014 one press saves both dropdowns). The write is\nidempotent. Changing a day-code changes which TT day runs on that\ndate; it does not change which version runs \u2014 the timetable\npointers own that.\n\nMethod:\n    PUT /calendar/{date}\n\nPath Parameters:\n    date: str\n        The calendar date (`YYYY-MM-DD`).\n\nBody Parameters:\n    j1_code: str | None (optional)\n        JC1's TT day code, from the vocabulary (\"Mon A\"..\"Fri B\",\n        \"Free\"); null leaves the field unset (a day with no\n        lessons).\n    j2_code: str | None (optional)\n        JC2's TT day code, same rules.\n    term_week: str | None (optional)\n        Term-week label (e.g. \"T1 W2\"), display data.\n\nResponses:\n    200 OK: dict\n        The written row ({id, j1_code, j2_code, term_week}).\n\n    400 Bad Request: dict\n        A malformed date or an unknown day code.\n\n    403 Forbidden: dict\n        The caller is not a member of the `timetable.admin` circle\n        (only user tokens are eligible).",
+        "description": "The day editor's save: both cohorts' codes commit together (v1\nsemantics \u2014 one press saves both dropdowns). The write is\nidempotent. Changing a day-code changes which TT day runs on that\ndate; it does not change which version runs \u2014 the timetable\npointers own that.\n\nMethod:\n    PUT /calendar/{date}\n\nPath Parameters:\n    date: str\n        The calendar date (`YYYY-MM-DD`).\n\nBody Parameters:\n    j1_code: str | None (optional)\n        JC1's TT day code, from the vocabulary (\"Mon A\"..\"Fri B\",\n        \"Free\", or a whole-school day type such as \"School\n        Holiday\" / \"Special Time Table\"); null leaves the field\n        unset (a day with no lessons).\n    j2_code: str | None (optional)\n        JC2's TT day code, same rules.\n    term_week: str | None (optional)\n        Term-week label (e.g. \"T1 W2\"), display data.\n\nResponses:\n    200 OK: dict\n        The written row ({id, j1_code, j2_code, term_week}).\n\n    400 Bad Request: dict\n        A malformed date or an unknown day code.\n\n    403 Forbidden: dict\n        The caller is not a member of the `timetable.admin` circle\n        (only user tokens are eligible).",
         "operationId": "api_v1_calendar_upsert_calendar_date",
         "parameters": [
           {
