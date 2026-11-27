@@ -104,7 +104,7 @@
   "info": {
     "description": "Campus API for managing educational resources.\n\n## Error Responses\n\nAll error responses follow a consistent envelope format. See the `ErrorEnvelope` schema for details.\n\n## Error Codes\n\nCommon error codes:\n- `INVALID_REQUEST` (400): Malformed or invalid request\n- `UNAUTHORIZED` (401): Missing or invalid authentication\n- `FORBIDDEN` (403): Insufficient permissions\n- `NOT_FOUND` (404): Resource not found\n- `VALIDATION_FAILED` (422): Request validation failed with field-level errors\n- `CONFLICT` (409): Resource state conflict\n- `INTERNAL_ERROR` (500): Unexpected server error\n- `SERVICE_UNAVAILABLE` (503): Required dependency is down; retry later\n\n\n## Trailing slashes\n\nPaths are listed exactly as routed (Flask): a path shown with a trailing slash must be requested with it \u2014 the no-slash variant answers with a 308 redirect.",
     "title": "Campus API",
-    "version": "0.37.0"
+    "version": "0.37.1"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -2666,6 +2666,34 @@
           }
         },
         "summary": "List all timetable entries for a specific timetable and user.",
+        "tags": [
+          "timetable"
+        ]
+      }
+    },
+    "/api/v1/timetable/{timetable_id}/members": {
+      "get": {
+        "description": "Method:\n    GET /timetable/<timetable_id>/members\n\nPath Parameters:\n    timetable_id: CampusID\n        The ID of the timetable to retrieve.\n\nResponses:\n    200 OK: dict\n        {\"members\": [{lessongroup_id, ade_participant}, ...]}\n\nThe roster is written from lessongroups[].members at timetable\ncreation; ade_participant carries the XML participant id verbatim.\nReads are authenticated-principal only, like the entries and\nmetadata reads \u2014 browse consumers (Search Time Tables, ttv2#175\nstopgap) key groups by these values verbatim.",
+        "operationId": "api_v1_timetable_get_timetable_members",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "timetable_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "summary": "List the version's lesson-group members (the file-derived roster).",
         "tags": [
           "timetable"
         ]
